@@ -1,1190 +1,38 @@
 /**
- * ============================================================================
- *  ECU LAB — an engine management / tuning simulator
- * ============================================================================
+ * ECU LAB — the application shell and screens.
  *
- *  WHAT THIS IS
- *  A teaching simulator. The player designs an engine, edits the same three
- *  calibration tables a real tuner edits (airflow, spark, fuel), runs a dyno
- *  pull, and reads a log explaining what went right or wrong. There is also a
- *  live engine that idles, revs and can stall in real time.
+ * WHAT THIS FILE IS
+ * Presentation only. It reads the simulation's output but contains no physics — if
+ * you find yourself doing engineering maths in here, it belongs in `src/sim/`
+ * instead. That separation is what keeps the physics testable in plain Node.
  *
- *  DESIGN RULE
- *  Nothing "adds horsepower". Every part changes airflow, pressure, temperature
- *  or fuel delivery, and power is whatever falls out of the physics. If you add
- *  a feature, add it as a physical mechanism, not as a bonus multiplier.
+ * LAYOUT
+ * Shared primitives first, then the screens. Screens are plain conditional blocks
+ * inside one component, each marked with a banner comment.
  *
- *  UNITS — the simulation works in real engineering units throughout:
- *    pressure kPa · temperature K · air & fuel mass grams · time ms
- *    energy J · torque Nm internally (converted to lb-ft only for display)
- *    MEP values Pa · airflow g/s · power W (converted to hp for display)
- *
- *  MAP OF THIS FILE
- *    1. Tables & options        — the editable calibration data and part lists
- *    2. Physical constants      — real, cited values (gas constant, LHV, ...)
- *    3. COEFF                   — every empirical/tuned coefficient, in one place
- *    4. Small math helpers      — clamp, interpolation, run grouping
- *    5. Engine architecture     — bore/stroke/cam/spring -> derived properties
- *    6. Airflow model           — computeHardwareVE: hardware -> VE table
- *    7. Advisors                — what the hardware now wants vs. what you have
- *    8. Scoring                 — tuning score, engineer score, pull score
- *    9. Core physics            — evaluatePoint: one operating point, fully solved
- *   10. Dyno sweep              — simulateSweep: a pull + the event log
- *   11. Live engine             — real-time crank dynamics + ECU control loop
- *   12. UI                      — design tokens, components, screens
- *
- *  WHERE TO START IF YOU ARE NEW
- *    - evaluatePoint() is the heart of it. Everything else feeds it or displays
- *      its output. It is commented step by step in the order an ECU works.
- *    - To change how the engine behaves, adjust COEFF — not the formulas.
- *    - To add a part, add it to the option list and make it change VE, knock
- *      margin, or fuel delivery. Never make it add power directly.
- *
- *  TESTING
- *    The simulation is pure functions with no React dependency, so it can be
- *    exercised in plain Node by exporting from this file. Physics changes should
- *    be checked against a before/after fingerprint of several engine
- *    configurations rather than a single dyno number.
- * ============================================================================
+ * KNOWN WORK IN PROGRESS
+ * This file is still the original single-component app. Decomposing it into
+ * `ui/primitives/` and `ui/screens/` is tracked as follow-up work — see CONTRIBUTING.
  */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Gauge, Grid3x3, Zap, Droplets, Wind, Activity, RotateCcw, Play, AlertTriangle, Info, Wrench, Settings, Package, Flame, ChevronDown, Trophy, TrendingUp, BookOpen, Fuel } from 'lucide-react';
-
-// ============================================================
-// ENGINE ARCHITECTURE — bore, stroke, compression, materials and
-// configuration are player-editable and feed real physics below,
-// the way Automation's engine designer works. Nothing here names
-// a real production engine.
-// ============================================================
-// Real ECU tables include an idle breakpoint — without one, idle has to borrow the
-// lowest cruise cell, which forces a wrong value into a cell that should hold cruise
-// advance. 800 RPM is the idle row.
-// Bump this whenever the build changes. It is shown on the start screen and in
-// the header so a tester can confirm which version they are actually running.
-const BUILD_VERSION = 'v1.0';
-
-// ============================================================
-// 1. TABLES & OPTIONS — the calibration data the player edits,
-//    and the hardware they can choose from.
-// ============================================================
-const RPM = [800, 1500, 2500, 3500, 4500, 5500, 6500, 7500];
-// LOAD AXIS = MANIFOLD ABSOLUTE PRESSURE in kPa, the axis real speed-density ECUs
-// actually use (HP Tuners indexes VE by RPM x MAP; throttle-% indexing is "Alpha-N",
-// the uncommon older method). ~101 kPa is atmospheric, so the top two rows are only
-// reached under boost, and low rows are part-throttle vacuum.
-const LOAD = [200, 150, 100, 70, 40, 20];
-
-const DEFAULT_VE = [
-  [60, 70, 84, 95, 104, 101, 94, 84],
-  [58, 68, 82, 93, 102, 99, 92, 82],
-  [55, 65, 78, 88, 96, 92, 85, 75],
-  [49, 58, 70, 80, 87, 84, 77, 68],
-  [38, 45, 55, 63, 69, 66, 61, 53],
-  [29, 34, 42, 48, 52, 50, 46, 40],
-];
-const DEFAULT_TIMING = [
-  [10, 14, 20, 26, 30, 32, 33, 34],
-  [10, 14, 20, 26, 30, 32, 33, 34],
-  [10, 14, 20, 26, 30, 32, 33, 34],
-  [14, 22, 28, 33, 36, 37, 38, 39],
-  [16, 30, 36, 40, 42, 43, 43, 43],
-  [14, 34, 40, 44, 46, 47, 47, 47],
-];
-const DEFAULT_AFR = [
-  [13.2, 12.8, 12.6, 12.6, 12.6, 12.8, 13.0, 13.2],
-  [13.2, 12.8, 12.6, 12.6, 12.6, 12.8, 13.0, 13.2],
-  [13.2, 12.8, 12.6, 12.6, 12.6, 12.8, 13.0, 13.2],
-  [14.5, 14.0, 13.8, 13.6, 13.6, 13.8, 14.0, 14.2],
-  [14.7, 14.7, 14.7, 14.7, 14.7, 14.7, 14.7, 14.7],
-  [14.7, 14.7, 14.7, 14.7, 14.7, 14.7, 14.7, 14.7],
-];
-const DEFAULT_BOOST = [0, 0, 0, 0, 0, 0, 0, 0];
-const DEFAULT_ENGINE_CONFIG = { configuration: 'V6', bore: 95.5, stroke: 81.4, compression: 10.3, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 210, springRate: 50 };
-const DEFAULT_MODS = { intake: false, exhaust: false, headers: false, intercooler: false };
-
-// Base knock-limited timing envelope at WOT, 91 octane, N/A, no boost, calibrated
-// against a naturally-aspirated ~3.5L, ~10.3:1, aluminum-head V6 baseline — the
-// architecture panel then adjusts this up or down from what you actually build.
-const BASE_KNOCK_LIMIT_91 = [20, 22, 26, 30, 33, 35, 37, 39];
-
-// ============================================================
-// PHYSICAL CONSTANTS — the sim now works in real engineering units
-// (grams of air per cylinder per cycle, injector pulse width in ms,
-// joules of fuel energy) rather than dimensionless indices, so the
-// numbers it reports are the same ones a real ECU and dyno report.
-// ============================================================
-// ============================================================
-// 2. PHYSICAL CONSTANTS — real measured values, not tuning knobs.
-// ============================================================
-const R_AIR = 287;          // specific gas constant for air, J/(kg·K)
-const BARO_KPA = 101.325;   // sea-level ambient
-const AMBIENT_K = 298;      // 25 °C ambient
-const PSI_TO_KPA = 6.895;
-const GAMMA_EXP = 0.286;    // (γ−1)/γ for air
-const COMP_ISEN_EFF = 0.70; // typical turbo compressor isentropic efficiency
-const IC_EFFECTIVENESS = 0.70;
-const OTTO_REALIZATION = 0.685; // fraction of ideal Otto realised as INDICATED work
-const DRIVETRAIN_EFF = 0.85;   // crank → wheel
-const INJ_DEADTIME_MS = 1.0;   // injector opening latency at ~13.5V
-const CHAR_SCALE = 0.3; // how strongly bore:stroke ratio biases the powerband
-
-// ============================================================
-// CALIBRATION COEFFICIENTS
-// ------------------------------------------------------------
-// Every empirically-tuned number in the simulation lives here, in one place, so a
-// contributor can find and adjust the model without hunting through formulas.
-// Each is annotated with what it represents and roughly why it has the value it has.
-// Nothing below this block should contain a bare magic number.
-// ============================================================
-const COEFF = {
-  // --- Friction & pumping (mean effective pressures, Pa) ---
-  RUBBING_BASE_PA: 45000,      // rubbing FMEP at zero RPM
-  RUBBING_PER_RPM: 6.5,        // rubbing FMEP rise per RPM
-  SPRING_FMEP_PER_RATE: 190,   // extra FMEP per point of valve spring rate above stock
-  SPRING_RPM_BIAS: 0.6,        // how much of spring drag scales with RPM (rest is constant)
-
-  // --- Combustion efficiency roll-off ---
-  // Torque falls as a parabola either side of MBT. 0.0016 gives roughly a 4% loss at
-  // 5 deg from MBT, which matches published spark-sweep curves closely enough.
-  TIMING_FALLOFF: 0.0016,
-  // Same idea for mixture: ~2% loss one full AFR point off best power.
-  AFR_FALLOFF: 0.022,
-  EFFICIENCY_FLOOR: 0.55,      // neither term is allowed to drive output below this
-
-  // --- Knock envelope (all in crank degrees) ---
-  KNOCK_CHARGE_GAIN: 14,       // deg of margin gained/lost per unit of charge index
-  KNOCK_CHARGE_RATIO_GAIN: 10, // deg gained as charge falls below reference (inverse law)
-  KNOCK_CHARGE_REF: 0.90,      // charge index treated as the calibration reference point
-  KNOCK_LEAN_PENALTY: 2.5,     // deg lost per AFR point leaner than best power
-  KNOCK_RICH_BONUS: 1.0,       // deg gained per AFR point richer (capped)
-  KNOCK_RICH_CAP: 2,
-  KNOCK_IAT_PER_C: 0.08,       // deg lost per degree C of charge temp above ambient
-  KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
-  MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
-
-  // --- Wear rates (percent of component life per pull) ---
-  WEAR_KNOCK: 0.06,            // per degree of retard, per logged point
-  WEAR_LEAN: 0.15,
-  WEAR_VALVE_LEAN_BOOST: 0.4,
-  WEAR_RICH_BORE_WASH: 0.9,    // per unit of lambda below the rich threshold
-  WEAR_BEARING_PER_PSI: 0.10,
-
-  // --- Camshaft & valvetrain ---
-  CAM_PEAK_SHIFT_PER_DEG: 32,  // RPM the VE peak moves per degree of extra duration
-  CAM_OVERLAP_PER_DEG: 0.55,   // overlap degrees gained per degree of duration
-  CAM_FLOW_GAIN_PER_DEG: 0.0015,
-  FLOAT_BASE_RPM: 7950,        // float speed at stock cam and stock springs
-  FLOAT_PER_SPRING_RATE: 58,
-  FLOAT_PER_CAM_DEG: 14,
-  FLOAT_COLLAPSE_RPM: 1100,    // RPM band over which filling collapses past float
-  FLOAT_COLLAPSE_FLOOR: 0.30,
-
-  // --- Mixture targets ---
-  BEST_AFR_NA: 12.85,          // lambda ~0.87, mid of the published best-torque band
-  BEST_AFR_BOOST_SHIFT: 0.08,  // AFR richer per psi of boost
-  BEST_AFR_BOOST_CAP: 0.65,    // richest the target is allowed to shift (lambda ~0.83)
-  RICH_DAMAGE_LAMBDA: 0.75,    // below this under load, unburnt fuel starts causing harm
-  LEAN_DAMAGE_AFR: 15.2,
-
-  // --- Idle control (live engine) ---
-  IDLE_AIR_GAIN_UP: 0.012,     // air is added far faster than removed (dashpot)
-  IDLE_AIR_GAIN_DOWN: 0.0008,
-  IDLE_AIR_DAMP: 0.004,
-  IDLE_SPARK_GAIN: 0.022,      // spark gives instant torque authority; air is slow
-  IDLE_SPARK_LIMIT: 14,
-  IDLE_BLEED_RATE: 0.06,       // how fast the idle valve returns to base off-idle
-
-  // --- Volumetric efficiency modifiers ---
-  VE_PER_COMPRESSION_POINT: 0.005, // less clearance volume = less residual dilution
-  VE_ALUMINIUM_HEAD_GAIN: 1.015,   // cooler chamber = denser incoming charge
-  VE_E85_CHARGE_COOLING: 1.03,     // high latent heat of vaporisation densifies charge
-  VE_EXHAUST_UNDERSIZE: 0.08,      // top-end VE lost per inch undersized
-  VE_EXHAUST_OVERSIZE: 0.05,       // low-end VE lost per inch oversized (scavenging)
-  VE_TURBINE_BACKPRESSURE: 0.97,   // baseline cost of having a turbine in the stream
-
-  // --- Fuel trims ---
-  STFT_GAIN: 42,
-  LTFT_LEARN_RATE: 0.004,
-  TRIM_LIMIT: 25,
-};
-
-const CYL_COUNT = { I4: 4, V6: 6, V8: 8 };
-const CONFIG_OPTS = ['I4', 'V6', 'V8'];
-const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];
-
-// Octane raises the knock ceiling. Separately, a fuel's STOICHIOMETRIC POINT sets how
-// much fuel volume is needed for the same lambda: gasoline is ~14.7:1, E85 is ~9.8:1,
-// so E85 needs roughly 1.43x the injector flow for an identical lambda target. That is
-// why E85 is not a free upgrade — it buys big knock margin but costs fuel system
-// headroom, and undersized injectors will run out much sooner on it.
-// Each fuel carries its real stoichiometric ratio, liquid density and lower heating
-// value. Fuel MASS is derived from air mass and lambda; injector VOLUME from density;
-// released ENERGY from LHV. E85 needs ~1.5x the volume of gasoline at the same lambda
-// but has ~2/3 the energy per kg — those two nearly cancel, which is exactly why E85
-// makes similar power per unit of air while demanding a much bigger fuel system.
-const OCTANE_OPTS = [
-  { label: '91', bonus: 0, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '93', bonus: 3, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '100', bonus: 8, stoich: 14.6, density: 0.750, lhv: 43.5e6 },
-  { label: 'E85', bonus: 14, stoich: 9.8, density: 0.782, lhv: 29.2e6 },
-];
-// Real static flow ratings. Duty cycle is now computed from actual required pulse
-// width against the time available per engine cycle, not a capacity index.
-const INJECTOR_OPTS = [
-  { label: '315cc (stock)', cc: 315 },
-  { label: '440cc', cc: 440 },
-  { label: '550cc', cc: 550 },
-  { label: '650cc', cc: 650 },
-  { label: '850cc', cc: 850 },
-];
-// Turbine sizing trades spool speed against top-end flow — small spins up fast but
-// chokes the exhaust side at high RPM; large is laggy but flows more up top.
-const TURBINE_OPTS = [
-  { label: 'Small — quick spool', spoolRange: 1200, topEndMult: -0.05 },
-  { label: 'Medium — balanced', spoolRange: 1800, topEndMult: 0 },
-  { label: 'Large — top-end', spoolRange: 2600, topEndMult: 0.05 },
-];
-// Compressor sizing sets a practical boost ceiling before it's pushed outside its
-// efficient range (surge/choke) — running past it makes hot, knock-prone air.
-const COMPRESSOR_OPTS = [
-  { label: 'Small', boostCeiling: 12, lagAdd: -150 },
-  { label: 'Medium', boostCeiling: 20, lagAdd: 0 },
-  { label: 'Large', boostCeiling: 30, lagAdd: 250 },
-];
-// Exhaust diameter isn't simply "bigger is better" — undersized chokes high-RPM
-// flow, oversized loses low-RPM scavenging velocity. Ideal scales with displacement.
-const EXHAUST_DIA_OPTS = [
-  { label: '2.5"', dia: 2.5 },
-  { label: '3.0"', dia: 3.0 },
-  { label: '3.5"', dia: 3.5 },
-  { label: '4.0"', dia: 4.0 },
-];
-
-// Real exhaust sizing follows POWER, not displacement alone — the long-standing
-// shop rule is about one inch of total pipe diameter per 100 crank horsepower.
-// Boost roughly scales power with pressure ratio, so a boosted build genuinely
-// needs more pipe than the same engine naturally aspirated.
-function idealExhaustDiameter(displacementL, peakBoostPsi = 0) {
-  const naCrankHp = displacementL * 82;
-  const estCrankHp = naCrankHp * (1 + Math.max(0, peakBoostPsi) / 14.7);
-  return clamp(estCrankHp / 100, 2.0, 5.0);
-}
-const MOD_BONUS = {
-  intake: [0, 0, 0, 1, 2, 3, 3, 4],
-  exhaust: [0, 0, 1, 2, 3, 4, 5, 6],
-  headers: [0, 1, 2, 4, 6, 8, 9, 10],
-};
-const MOD_INFO = {
-  intake: { label: 'Cold Air Intake', blurb: 'Mostly a top-end gain — but the larger MAF housing needs a rescale or it will run lean.' },
-  exhaust: { label: 'Cat-Back Exhaust', blurb: 'Frees up mid-to-high RPM flow; modest gain, good sound.' },
-  headers: { label: 'Long-Tube Headers', blurb: 'The biggest single N/A bolt-on gain, spread across the mid-to-upper range.' },
-};
-
-// ============================================================
-// 4. SMALL MATH HELPERS
-// ============================================================
-const clone2D = (arr) => arr.map((r) => [...r]);
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-function heat(value, min, max) {
-  const t = clamp((value - min) / (max - min), 0, 1);
-  const hue = 214 - t * 214;
-  return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
-}
-function interp1(bp, vals, x) {
-  if (x <= bp[0]) return vals[0];
-  if (x >= bp[bp.length - 1]) return vals[vals.length - 1];
-  for (let i = 0; i < bp.length - 1; i++) {
-    if (x >= bp[i] && x <= bp[i + 1]) {
-      const t = (x - bp[i]) / (bp[i + 1] - bp[i]);
-      return vals[i] + t * (vals[i + 1] - vals[i]);
-    }
-  }
-  return vals[vals.length - 1];
-}
-function groupRuns(points, predicate) {
-  const runs = [];
-  let current = null;
-  points.forEach((p, i) => {
-    if (predicate(p)) { if (!current) current = { start: i, end: i }; else current.end = i; }
-    else if (current) { runs.push(current); current = null; }
-  });
-  if (current) runs.push(current);
-  return runs.map((r) => points.slice(r.start, r.end + 1));
-}
-// Best-power mixture is NOT a single number. Research and tuner practice put naturally
-// aspirated best torque near lambda 0.85-0.92 (~12.5-13.5:1 on gasoline) and forced
-// induction meaningfully richer, near lambda 0.82-0.85 (~12.0-12.5:1) — the extra fuel
-// under boost is charge cooling, bought deliberately to hold off knock. This returns the
-// gasoline-equivalent AFR that makes best power at a given boost level.
-// Compressing air heats it. Real compressors are ~70% isentropically efficient, so
-// charge temp rises faster than ideal. An intercooler recovers most of that back
-// toward ambient. Charge temp then feeds BOTH air density (via ideal gas law) and
-// knock margin — the same coupling that exists on a real engine.
-function chargeTempK(boostPsi, intercooler) {
-  if (boostPsi <= 0) return AMBIENT_K;
-  const pressureRatio = (BARO_KPA + boostPsi * PSI_TO_KPA) / BARO_KPA;
-  const tCompressed = AMBIENT_K * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF);
-  return intercooler ? AMBIENT_K + (tCompressed - AMBIENT_K) * (1 - IC_EFFECTIVENESS) : tCompressed;
-}
-
-// Manifold pressure is the real load signal. Throttle sets how much of atmospheric
-// pressure reaches the manifold; boost adds on top of that. Everything downstream
-// indexes off MAP, exactly as a speed-density ECU does.
-// ============================================================
-// CAMSHAFT & VALVE SPRINGS
-// Duration is how long (in crank degrees) a valve stays open. A longer cam holds
-// the intake valve open later into the compression stroke, so at low RPM some
-// charge is pushed back out — but at high RPM the extra open time is exactly what
-// lets the cylinder keep filling. That is why a big cam trades bottom end for top
-// end and shifts the whole torque curve upward in RPM.
-const CAM_BASE_DURATION = 210;
-
-function camPeakShiftRpm(camDuration) {
-  return (camDuration - CAM_BASE_DURATION) * COEFF.CAM_PEAK_SHIFT_PER_DEG; // where the VE peak moves to
-}
-// Valve overlap — both valves open together around TDC — scales with duration and
-// is what makes a big cam idle rough and lose manifold vacuum.
-function camOverlapDeg(camDuration) {
-  return Math.max(0, (camDuration - CAM_BASE_DURATION) * COEFF.CAM_OVERLAP_PER_DEG);
-}
-// Springs must close the valve faster than the cam ramp as RPM climbs. Past their
-// limit the valve "floats" — it stops following the lobe, so the cylinder cannot
-// fill and power falls off a cliff. Bigger cams need stiffer springs.
-function valveFloatRpm(springRate, camDuration) {
-  return COEFF.FLOAT_BASE_RPM + (springRate - 50) * COEFF.FLOAT_PER_SPRING_RATE - (camDuration - CAM_BASE_DURATION) * COEFF.FLOAT_PER_CAM_DEG;
-}
-// Stiffer springs cost real parasitic power to compress, every cycle.
-function springFrictionPa(springRate) {
-  return Math.max(0, (springRate - 50) * COEFF.SPRING_FMEP_PER_RATE);
-}
-
-function computeManifold(rpm, loadKpa, turboOn, boostTarget, turbine, compressor) {
-  const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
-  const effectiveSpoolRange = Math.max(400, turbine.spoolRange + compressor.lagAdd);
-  const spool = clamp((rpm - 1500) / effectiveSpoolRange, 0, 1);
-  const boostPsi = turboOn ? boostTarget * spool * Math.pow(throttleFrac, 2) : 0;
-  const mapKpa = Math.min(loadKpa, BARO_KPA) + boostPsi * PSI_TO_KPA;
-  return { mapKpa, boostPsi, throttleFrac, spool };
-}
-
-function bestPowerAfr(boostPsi) {
-  return COEFF.BEST_AFR_NA - clamp(boostPsi * COEFF.BEST_AFR_BOOST_SHIFT, 0, COEFF.BEST_AFR_BOOST_CAP);
-}
-
-function charMultiplier(rpm, ratio) {
-  const norm = (rpm - 4500) / 3000; // -1 at 1500rpm, +1 at 7500rpm
-  return 1 + (ratio - 1) * CHAR_SCALE * norm;
-}
-
-// Bore/stroke ratio bias is now baked directly into the VISIBLE VE table (not a
-// hidden multiplier at sim time) — so changing bore/stroke on BUILD actually moves
-// the numbers you see and edit on the VE tab, the way a real hardware change would
-// show up the next time a tuner logs airflow. Uses the same validated bias formula
-// that used to run invisibly inside evaluatePoint.
-// ============================================================
-// 6. AIRFLOW MODEL — hardware in, VE table out. This is the only
-//    place hardware is allowed to change how the engine breathes.
-// ============================================================
-function computeHardwareVE(cfg, mods, hw = {}) {
-  const { turboOn = false, turbine = null, exhaustDia = null, fuel = null } = hw;
-  const ratio = cfg.bore / cfg.stroke;
-  const cyl = CYL_COUNT[cfg.configuration];
-  const displacementL = (Math.PI / 4 * Math.pow(cfg.bore / 10, 2) * (cfg.stroke / 10) * cyl) / 1000;
-  const perCylL = displacementL / cyl;
-  const idealDia = 2.2 + displacementL * 0.25;
-  const diaError = exhaustDia != null ? exhaustDia - idealDia : 0;
-
-  // Smaller individual cylinders carry proportionally more valve area for their
-  // volume, so they keep filling better at high RPM. Big single cylinders fall off.
-  const cylBreathing = clamp((0.62 - perCylL) * 0.10, -0.05, 0.05);
-
-  // Higher compression means less clearance volume, so less burnt gas is left
-  // behind to dilute the incoming charge — a small but real VE gain.
-  const crFactor = 1 + (cfg.compression - 10.3) * COEFF.VE_PER_COMPRESSION_POINT;
-
-  // An aluminium head runs cooler, so the incoming charge picks up less heat on
-  // the way in and stays denser.
-  const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
-
-  // Fuels with high latent heat of vaporisation cool the charge as they evaporate,
-  // which raises density. E85 is markedly better at this than gasoline.
-  const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
-
-  // Camshaft: shifting where the VE peak sits is the honest way to model duration.
-  // A longer cam is evaluated as if the engine were running SLOWER than it is, so
-  // the whole breathing curve slides up the RPM range — top end gained, bottom lost.
-  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
-  const springRate = cfg.springRate ?? 50;
-  const camShift = camPeakShiftRpm(camDuration);
-  const flowGain = 1 + (camDuration - CAM_BASE_DURATION) * COEFF.CAM_FLOW_GAIN_PER_DEG; // more open time = more flow area-seconds
-  const floatRpm = valveFloatRpm(springRate, camDuration);
-
-  return DEFAULT_VE.map((row, ri) => row.map((v, ci) => {
-    const rpm = RPM[ci];
-    const norm = (rpm - 4500) / 3000;      // -1 at 1500, +1 at 7500
-    const loadScale = clamp(LOAD[ri] / BARO_KPA, 0, 1);
-
-    // Sample the baseline breathing curve at the cam-shifted engine speed.
-    const camRpm = clamp(rpm - camShift, 1200, 8200);
-    const baseVe = interp1(RPM, row, camRpm);
-    let val = baseVe * flowGain * charMultiplier(rpm, ratio);
-
-    // Valve float: past the spring's limit the valve stops following the lobe and
-    // cylinder filling collapses. This is the cliff you feel at the top of an
-    // over-cammed, under-sprung engine.
-    if (rpm > floatRpm) val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
-    val *= 1 + cylBreathing * Math.max(0, norm);
-    val *= crFactor * headFactor * fuelFactor;
-
-    // Bolt-ons: measured airflow gains, weighted toward the RPM where they work.
-    if (mods.intake) val += MOD_BONUS.intake[ci] * loadScale;
-    if (mods.exhaust) val += MOD_BONUS.exhaust[ci] * loadScale;
-    if (mods.headers) val += MOD_BONUS.headers[ci] * loadScale;
-
-    // Exhaust diameter: undersized chokes the top end, oversized kills low-RPM
-    // scavenging velocity. Both directions cost VE, in different places.
-    if (diaError < 0) val *= 1 + diaError * COEFF.VE_EXHAUST_UNDERSIZE * Math.max(0, norm);
-    else if (diaError > 0) val *= 1 - diaError * COEFF.VE_EXHAUST_OVERSIZE * Math.max(0, -norm);
-
-    // A turbine in the exhaust stream is a restriction. Small housings choke the
-    // top end; large ones flow better up high but hurt low-RPM scavenging.
-    if (turboOn && turbine) {
-      val *= 1 + turbine.topEndMult * Math.max(0, norm);
-      val *= COEFF.VE_TURBINE_BACKPRESSURE;
-    }
-
-    return Number(clamp(val, 10, 130).toFixed(1));
-  }));
-}
-
-// In Manual mode the player's VE table is frozen while hardware changes around it.
-// This compares what they have against what the current hardware would actually
-// flow, and turns the gap into specific, cell-level tuning advice — the same thing
-// a tuner would conclude after re-logging airflow following a parts change.
-// ============================================================
-// 7. ADVISORS — compare what the hardware now wants against what
-//    the player's tables actually say. These never edit anything.
-// ============================================================
-function veRecommendations(currentVe, cfg, mods, hw) {
-  const target = computeHardwareVE(cfg, mods, hw);
-  const recs = [];
-  const wotRow = 2; // the ~100 kPa (WOT, naturally aspirated) row
-  const deltas = RPM.map((rpm, ci) => ({
-    rpm,
-    pct: ((target[wotRow][ci] - currentVe[wotRow][ci]) / Math.max(1, currentVe[wotRow][ci])) * 100,
-    from: currentVe[wotRow][ci],
-    to: target[wotRow][ci],
-  }));
-
-  const notable = deltas.filter((d) => Math.abs(d.pct) >= 2.5);
-  if (notable.length === 0) {
-    return { inSync: true, recs: [], deltas, maxAbs: Math.max(...deltas.map((d) => Math.abs(d.pct))) };
-  }
-
-  const low = notable.filter((d) => d.rpm <= 3500);
-  const mid = notable.filter((d) => d.rpm > 3500 && d.rpm < 6500);
-  const high = notable.filter((d) => d.rpm >= 6500);
-
-  const band = (arr, name) => {
-    if (!arr.length) return;
-    const avg = arr.reduce((a, b) => a + b.pct, 0) / arr.length;
-    const dir = avg > 0 ? 'raise' : 'lower';
-    recs.push({
-      band: name,
-      rpmText: arr.length === 1 ? `${arr[0].rpm} RPM` : `${arr[0].rpm}–${arr[arr.length - 1].rpm} RPM`,
-      pct: avg,
-      text: `${dir === 'raise' ? 'Raise' : 'Lower'} the ${name} cells by about ${Math.abs(avg).toFixed(0)}% — your hardware ${avg > 0 ? 'now flows more air here than your table assumes' : 'flows less air here than your table assumes'}.`,
-      cells: arr.map((d) => `${d.rpm} RPM: ${d.from} → ${d.to}`),
-    });
-  };
-  band(low, 'low-RPM');
-  band(mid, 'mid-range');
-  band(high, 'top-end');
-
-  return { inSync: false, recs, deltas, maxAbs: Math.max(...deltas.map((d) => Math.abs(d.pct))) };
-}
-
-// Turns bore/stroke/compression/materials/configuration into the physics deltas
-// used by evaluatePoint. This is the whole "engine designer" payoff.
-// ============================================================
-// 5. ENGINE ARCHITECTURE — turns the player's short-block design
-//    into the derived properties the physics needs.
-// ============================================================
-function deriveEngine(cfg) {
-  const cyl = CYL_COUNT[cfg.configuration];
-  const boreCm = cfg.bore / 10, strokeCm = cfg.stroke / 10;
-  const displacementL = (Math.PI / 4 * boreCm * boreCm * strokeCm * cyl) / 1000;
-  const ratio = cfg.bore / cfg.stroke;
-  const perCylL = displacementL / cyl;
-  const configKnockBonus = perCylL < 0.5 ? 1 : perCylL > 0.7 ? -1 : 0;
-  const materialKnockBonus = cfg.headMaterial === 'Cast Iron' ? -1.5 : 0;
-  const compressionKnockAdj = (10.3 - cfg.compression) * 2.0;
-  // Thermal efficiency comes from the ideal Otto cycle for this compression ratio,
-  // scaled by what real engines actually realize.
-  const ottoIdeal = 1 - 1 / Math.pow(cfg.compression, 0.35);
-  // INDICATED efficiency — work done on the piston, before friction and pumping
-  // are paid for. Brake (usable) output is computed later as IMEP minus FMEP.
-  const thermalEff = ottoIdeal * OTTO_REALIZATION;
-  const torqueScale = displacementL / 3.5;
-  const bearingWearMult = cfg.blockMaterial === 'Cast Iron' ? 0.85 : 1.0;
-  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
-  const springRate = cfg.springRate ?? 50;
-  const overlapDeg = camOverlapDeg(camDuration);
-  const floatRpm = valveFloatRpm(springRate, camDuration);
-  const springPa = springFrictionPa(springRate);
-  const character = ratio > 1.08 ? 'Oversquare — revs and breathes higher' : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
-  return { cyl, displacementL, ratio, configKnockBonus, materialKnockBonus, compressionKnockAdj, thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL, camDuration, springRate, overlapDeg, floatRpm, springPa };
-}
-
-// Hardware changes invalidate a CALIBRATION but do not rewrite it — that is real,
-// and it is the central lesson of the app. So spark and fuel never auto-change.
-// Instead this reports what the current hardware would actually tolerate, cell by
-// cell, so the player can see where their tune has gone stale and fix it themselves.
-function calibrationAdvice({ ve, timing, afr, derived, octaneBonus, fuel, mods, turboOn, boostCurve, compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase }) {
-  const spark = [], fuelAdv = [];
-  // Only advise on load the engine can actually reach. A naturally aspirated build
-  // never sees 150 or 200 kPa, so flagging those rows would be pure noise.
-  const maxReachable = BARO_KPA + (turboOn ? Math.max(...boostCurve) * PSI_TO_KPA : 0) + 2;
-  LOAD.forEach((mapRow, ri) => {
-    if (mapRow > maxReachable) return;
-    RPM.forEach((rpm, ci) => {
-      const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-      const man = computeManifold(rpm, Math.min(mapRow, BARO_KPA), turboOn, boostTarget, turbine, compressor);
-      const useMap = mapRow > BARO_KPA ? mapRow : man.mapKpa;
-      const boostPsi = Math.max(0, (useMap - BARO_KPA) / PSI_TO_KPA);
-      const pt = evaluatePoint({
-        rpm, mapKpa: useMap, boostPsi, throttleFrac: clamp(useMap / BARO_KPA, 0, 1),
-        veVal: ve[ri][ci], timingVal: timing[ri][ci], afrCommanded: afr[ri][ci],
-        octaneBonus, fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
-        injectorCc, ecuInjectorCc, derived, compressor,
-      });
-      // Leave ~1.5 deg of safety under the calculated knock limit, as a tuner would.
-      const safeTiming = Math.round((pt.threshold - 1.5) * 2) / 2;
-      spark.push({ ri, ci, rpm, map: mapRow, current: timing[ri][ci], suggested: safeTiming,
-        delta: +(safeTiming - timing[ri][ci]).toFixed(1), knocking: pt.knock });
-      fuelAdv.push({ ri, ci, rpm, map: mapRow, current: afr[ri][ci], suggested: +pt.bestAfr.toFixed(1),
-        delta: +(pt.bestAfr - afr[ri][ci]).toFixed(1), duty: pt.duty });
-    });
-  });
-  const overAdvanced = spark.filter((c) => c.delta < -1.0);
-  const underAdvanced = spark.filter((c) => c.delta > 3.0);
-  const wrongMix = fuelAdv.filter((c) => c.map >= 85 && Math.abs(c.delta) > 0.45);
-  return { spark, fuelAdv, overAdvanced, underAdvanced, wrongMix };
-}
-
-// ============================================================
-// SCORING — graded once per pull. Tuning Score reflects how clean
-// the calibration is (fewer/less severe pull-log events = higher);
-// Engineer Score reflects how coherent the BUILD hardware choices
-// are with each other, independent of how well it is tuned.
-// ============================================================
-function computeTuningScore(result) {
-  let score = 100;
-  const deductions = [];
-  result.events.forEach((e) => {
-    const d = e.impact ?? 5;
-    score -= d;
-    deductions.push(`-${d}  ${e.msg}`);
-  });
-  score = clamp(Math.round(score), 0, 100);
-  const label = score >= 90 ? 'Dialed In' : score >= 75 ? 'Solid' : score >= 55 ? 'Rough Edges' : score >= 30 ? 'Risky' : 'Dangerous';
-  return { score, label, deductions };
-}
-
-function computeEngineerScore({ engineConfig, turboOn, turbine, compressor, exhaustDiaError, dutyPreview, displacementL }) {
-  let score = 100;
-  const deductions = [];
-  if (turboOn && engineConfig.compression > 10.5) { score -= 15; deductions.push('-15 High static compression fights boost pressure'); }
-  if (!turboOn && engineConfig.compression < 9.0) { score -= 10; deductions.push('-10 Low compression leaves naturally-aspirated efficiency on the table'); }
-  const highHeat = engineConfig.compression > 11.5 || (turboOn && compressor.boostCeiling > 20);
-  if (highHeat && engineConfig.headMaterial === 'Cast Iron') { score -= 10; deductions.push('-10 High heat load without an aluminum head for cooling'); }
-  if (turboOn) {
-    if (displacementL < 3.0 && (turbine.label.includes('Large') || compressor.label === 'Large')) { score -= 8; deductions.push('-8 Turbo sized large for this displacement — expect heavy lag'); }
-    if (displacementL > 4.2 && (turbine.label.includes('Small') || compressor.label === 'Small')) { score -= 8; deductions.push('-8 Turbo sized small for this displacement — will choke the top end'); }
-  }
-  if (Math.abs(exhaustDiaError) > 0.3) { score -= 8; deductions.push('-8 Exhaust diameter poorly matched to displacement'); }
-  if (dutyPreview > 95) { score -= 12; deductions.push('-12 Injectors undersized for current demand'); }
-  score = clamp(Math.round(score), 0, 100);
-  const label = score >= 90 ? 'Sound Engineering' : score >= 75 ? 'Reasonable' : score >= 55 ? 'Some Mismatches' : score >= 30 ? 'Poorly Matched' : 'Fighting Itself';
-  return { score, label, deductions };
-}
-
-// PULL SCORE — the uncapped, competitive number. Tuning/Engineer scores above are
-// 0-100 cleanliness grades (easy to read at a glance); Pull Score turns those grades
-// into a points total that rewards actually making real power, not just staying
-// clean at idle. A big, dirty pull can still out-score a small, spotless one — same
-// tension a real tuner balances between safety margin and output.
-function computePullScore({ peakHp, peakTq, tuningScore, engineerScore }) {
-  const cleanlinessMult = 0.35 + 0.65 * (tuningScore / 100);
-  const engineeringMult = 0.7 + 0.3 * (engineerScore / 100);
-  const raw = (peakHp * 1.0 + peakTq * 0.6) * cleanlinessMult * engineeringMult;
-  return Math.round(raw);
-}
-
-// ============================================================
-// SIMULATION CORE — one pure function per RPM point, called in a
-// loop by the full dyno sweep. Nothing here runs, and no result
-// exists, until an actual pull is triggered — the sandbox never
-// shows simulated outcomes without a pull behind them.
-// ============================================================
-function evaluatePoint({ rpm, mapKpa, boostPsi, throttleFrac, veVal, timingVal, afrCommanded,
-                        octaneBonus, fuel, mods, mafScalar, mafErrorBase,
-                        injectorCc, ecuInjectorCc, derived, compressor }) {
-  const norm = (rpm - 4500) / 3000;
-  const compressorOver = boostPsi > compressor.boostCeiling;
-  const chargeK = chargeTempK(boostPsi, mods.intercooler);
-  const chargeC = chargeK - 273.15;
-
-  // --- AIR CHARGE: ideal gas law. MAP already carries load, so VE is used purely
-  // as an efficiency term here — no separate throttle multiplier (that would
-  // double-count load, which is exactly the Alpha-N mistake).
-  const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
-  const airDensity = (mapKpa * 1000) / (R_AIR * chargeK);
-  const airChargeG = (veVal / 100) * vCylM3 * airDensity * 1000;
-  const mafGps = (airChargeG * derived.cyl * (rpm / 2)) / 60;
-
-  // --- MAF error / fuel trim. Open loop above ~85 kPa (near WOT).
-  const netFactor = mafErrorBase * mafScalar;
-  const openLoop = mapKpa >= 85;
-  const effFactor = 1 + (netFactor - 1) * (openLoop ? 1 : 0.25);
-  const trimPct = (effFactor - 1) * 100;
-
-  // --- FUEL MASS from lambda and the fuel's own stoichiometric ratio.
-  const lambdaCommanded = (afrCommanded / 14.7) / effFactor;
-  const fuelMassG = airChargeG / (lambdaCommanded * fuel.stoich);
-
-  // --- INJECTOR: the ECU computes pulse width for the injector size it has been
-  // TOLD it has. Fit bigger injectors without rescaling and every pulse delivers
-  // proportionally more fuel than intended — the classic "went rich after
-  // upgrading injectors" mistake real tuners fix with a scaling constant.
-  const ecuGramsPerMs = (ecuInjectorCc * fuel.density) / 60000;
-  const actualGramsPerMs = (injectorCc * fuel.density) / 60000;
-  const cycleTimeMs = 120000 / rpm;
-  const pulseWidthMs = fuelMassG / ecuGramsPerMs + INJ_DEADTIME_MS;
-  const maxPulseMs = cycleTimeMs * 0.9;
-  const dutyPct = clamp((pulseWidthMs / cycleTimeMs) * 100, 0, 220);
-
-  const cappedPw = Math.min(pulseWidthMs, maxPulseMs);
-  const fuelLimited = pulseWidthMs > maxPulseMs;
-  const deliveredFuelG = Math.max(1e-6, (cappedPw - INJ_DEADTIME_MS) * actualGramsPerMs);
-  const lambdaActual = airChargeG / (deliveredFuelG * fuel.stoich);
-  const actualAfr = lambdaActual * 14.7;
-
-  // --- KNOCK ENVELOPE. MAP now drives the load term directly: low manifold
-  // pressure means low cylinder pressure and lots of spare timing margin.
-  const bestAfr = bestPowerAfr(boostPsi);
-  const afrDelta = actualAfr - bestAfr;
-  // Knock is driven by how much charge is actually TRAPPED in the cylinder, not by
-  // manifold pressure alone. Two engines at the same MAP but different volumetric
-  // efficiency see different peak pressures — which is exactly why a big-cam engine
-  // that breathes better also needs a few degrees less timing than a stock one.
-  const chargeIndex = (veVal / 100) * (mapKpa / BARO_KPA);
-  // Knock margin is not linear in charge. Doubling the trapped mass roughly doubles
-  // peak pressure, so margin scales with the RATIO of charge to the reference, not
-  // the difference. At deep vacuum an engine effectively cannot knock at all — which
-  // is why factory cruise maps carry 40-50 deg of advance and never complain.
-  const loadBonus = chargeIndex >= COEFF.KNOCK_CHARGE_REF
-    ? (COEFF.KNOCK_CHARGE_REF - chargeIndex) * COEFF.KNOCK_CHARGE_GAIN
-    : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, 0.04) - 1) * COEFF.KNOCK_CHARGE_RATIO_GAIN;
-  const overBoost = Math.max(0, boostPsi - compressor.boostCeiling);
-  const iatPenalty = Math.max(0, chargeC - 25) * COEFF.KNOCK_IAT_PER_C;
-  const modsThresholdBonus = (mods.headers ? 1.5 : 0) + (mods.exhaust ? 0.5 : 0);
-  let threshold = interp1(RPM, BASE_KNOCK_LIMIT_91, rpm) + octaneBonus + loadBonus + modsThresholdBonus
-    + derived.configKnockBonus + derived.materialKnockBonus + derived.compressionKnockAdj
-    - iatPenalty - overBoost * COEFF.KNOCK_OVERBOOST_PENALTY;
-  // A lean mixture only threatens knock when there is real cylinder pressure behind
-  // it. At light cruise (low MAP) an engine happily runs 14.7:1 with 40 deg of
-  // advance and never knocks — which is exactly why factory cruise maps look like
-  // that. Under boost the same leanness is dangerous. So scale the mixture terms
-  // by charge pressure rather than applying them flat.
-  const pressureFactor = clamp(Math.pow(mapKpa / BARO_KPA, 1.5), 0.05, 2.6);
-  threshold -= Math.max(0, afrDelta) * COEFF.KNOCK_LEAN_PENALTY * pressureFactor;
-  threshold += Math.min(COEFF.KNOCK_RICH_CAP, Math.max(0, -afrDelta) * COEFF.KNOCK_RICH_BONUS) * clamp(pressureFactor, 0.3, 1.5);
-
-  const margin = threshold - timingVal;
-  const knockPull = margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0;
-  const usedTiming = timingVal - knockPull;
-
-  // --- COMBUSTION -> TORQUE
-  const mbtIdeal = 24 + ((rpm - 1500) / 6000) * 12 - (mapKpa / BARO_KPA) * 6;
-  const timingEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.TIMING_FALLOFF * Math.pow(usedTiming - mbtIdeal, 2));
-  const afrEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.AFR_FALLOFF * Math.pow(actualAfr - bestAfr, 2));
-  const burnedFuelG = Math.min(deliveredFuelG, airChargeG / fuel.stoich);
-  const energyJ = (burnedFuelG / 1000) * fuel.lhv;
-
-  // INDICATED work on the piston, expressed as a mean effective pressure.
-  const indicatedJ = energyJ * derived.thermalEff * timingEff * afrEff;
-  const imepPa = indicatedJ / vCylM3;
-
-  // The engine must pay for its own rubbing friction and for pumping air past a
-  // partly closed throttle before anything reaches the crank. Pumping loss is the
-  // vacuum it is working against — which is precisely why part-throttle running is
-  // inefficient and why a throttled engine brakes itself on overrun.
-  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0) + pumpingFmepPa(mapKpa);
-  const bmepPa = imepPa - fmepPa;
-
-  // T = BMEP x Vd / (4*pi) for a four-stroke; power follows from torque.
-  const torqueNmCrank = (bmepPa * (derived.displacementL / 1000)) / (4 * Math.PI);
-  const powerW = torqueNmCrank * (2 * Math.PI * rpm / 60);
-  const hp = (powerW / 745.7) * DRIVETRAIN_EFF;
-  const torque = torqueNmCrank * 0.7376 * DRIVETRAIN_EFF;
-  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : 0;
-
-  const egtProxy = knockPull * 22 + Math.max(0, actualAfr - bestAfr) * 45 + boostPsi * 6;
-  const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
-  // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes
-  // the oil film off the bores, fouls plugs, dumps raw fuel into the catalyst and
-  // costs real power — a genuinely damaging condition, just a slower one than knock.
-  const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
-  const valveRisk = leanRisk && boostPsi > 3;
-  const mafFlag = Math.abs(trimPct) > 8 && (mods.intake || mods.turboFitted);
-  const injMismatch = Math.abs(injectorCc / ecuInjectorCc - 1) > 0.05;
-
-  return {
-    rpm, hp: Math.round(hp), torque: Math.round(torque),
-    ve: Number(veVal.toFixed(1)),
-    afr: Number(actualAfr.toFixed(2)), afrCommanded: Number(afrCommanded.toFixed(2)),
-    lambda: Number(lambdaActual.toFixed(3)),
-    timing: Number(usedTiming.toFixed(1)), commandedTiming: Number(timingVal.toFixed(1)),
-    duty: Math.round(dutyPct), pw: Number(pulseWidthMs.toFixed(2)),
-    maf: Number(mafGps.toFixed(1)), map: Number(mapKpa.toFixed(0)),
-    iat: Number(chargeC.toFixed(0)), airCharge: Number(airChargeG.toFixed(3)),
-    boostPsi: Number(boostPsi.toFixed(1)), trimPct: Number(trimPct.toFixed(1)),
-    threshold: Number(threshold.toFixed(1)), margin: Number(margin.toFixed(1)),
-    chargeIndex: Number(chargeIndex.toFixed(3)),
-    mbtIdeal: Number(mbtIdeal.toFixed(1)), timingEff, afrEff, openLoop,
-    egt: Math.round(720 + egtProxy),
-    imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
-    fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: Number(bsfc.toFixed(3)),
-    bestAfr: Number(bestAfr.toFixed(2)),
-    knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk, mafFlag, compressorOver, injMismatch,
-  };
-}
-
-function simulateSweep({ loadKpa, ve, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel,
-                        fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-                        turbine, compressor, exhaustDiaError }) {
-  let mafErrorBase = 1.0;
-  if (mods.intake) mafErrorBase *= 0.90;
-  if (turboOn) mafErrorBase *= 0.92;
-  const needsMafRecal = mods.intake || turboOn;
-  const modsWithTurbo = { ...mods, turboFitted: turboOn };
-
-  const points = [];
-  for (let rpm = 1500; rpm <= 7500; rpm += 100) {
-    const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-    const man = computeManifold(rpm, loadKpa, turboOn, boostTarget, turbine, compressor);
-    // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
-    // calibration up into the high-MAP rows automatically.
-    const veVal = interp2(ve, rpm, man.mapKpa);
-    const timingVal = interp2(timing, rpm, man.mapKpa);
-    const afrCommanded = interp2(afr, rpm, man.mapKpa);
-    points.push(evaluatePoint({
-      rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi, throttleFrac: man.throttleFrac,
-      veVal, timingVal, afrCommanded, octaneBonus, fuel, mods: modsWithTurbo,
-      mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-    }));
-  }
-
-  let pistonWear = 0, valveWear = 0;
-  points.forEach((p) => {
-    if (p.knock) pistonWear += p.knockPull * COEFF.WEAR_KNOCK;
-    if (p.leanRisk) { if (p.valveRisk) valveWear += COEFF.WEAR_VALVE_LEAN_BOOST; else pistonWear += COEFF.WEAR_LEAN; }
-    // Bore wash: unburnt fuel stripping the cylinder film is a ring/bore wear mode.
-    if (p.richRisk) pistonWear += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
-  });
-  const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
-  const bearingWear = (turboOn ? avgBoost * COEFF.WEAR_BEARING_PER_PSI : (loadKpa >= 100 ? 0.15 : 0.05)) * derived.bearingWearMult;
-  const wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
-
-  const events = [];
-  const rangeLabel = (run) => (run[0].rpm === run[run.length - 1].rpm ? `${run[0].rpm} RPM` : `${run[0].rpm}–${run[run.length - 1].rpm} RPM`);
-  const rangeFrac = (run) => run.length / points.length; // how much of the full sweep this run covers
-
-  groupRuns(points, (p) => p.knock).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.knockPull > a.knockPull ? b : a));
-    const avgPull = run.reduce((s, p) => s + p.knockPull, 0) / run.length;
-    const boosted = run.some((p) => p.boostPsi >= 1);
-    const leanContrib = Math.max(0, peak.afr - peak.bestAfr) * 2.5;
-    const causes = [];
-    if (boosted) causes.push(`boost (up to ${Math.max(...run.map((p) => p.boostPsi)).toFixed(1)} psi here) eating into your margin`);
-    if (leanContrib >= 1.5) causes.push(`the mixture running leaner than the ${peak.bestAfr}:1 best-power target here (peak ${peak.afr.toFixed(1)}:1)${peak.fuelLimited ? ', partly from injectors maxing out' : ''}`);
-    if (causes.length === 0) causes.push(`the commanded timing itself being too aggressive for ${octaneLabel} octane and this compression ratio at this load`);
-    const suggestedTiming = Math.max(-5, Math.round((peak.threshold - 1) * 2) / 2);
-    const impact = Math.max(5, Math.round((10 + avgPull * 7) * (0.3 + 0.7 * rangeFrac(run))));
-    events.push({
-      type: 'knock', severity: 3, impact,
-      msg: `Knock across ${rangeLabel(run)} — ECU pulled up to ${peak.knockPull.toFixed(1)}° (peak near ${peak.rpm} RPM)`,
-      cause: `Caused by ${causes.join(' and ')}. This spans ${Math.round(rangeFrac(run) * 100)}% of the RPM sweep${avgPull >= 2 ? `, averaging ${avgPull.toFixed(1)}° of retard — tuners treat anything sustained above about 2° as a prelude to expensive engine damage, not an acceptable operating point` : ''}.`,
-      fix: `On TIMING, pull the cells around ${peak.rpm} RPM / ${Math.round(loadKpa)} kPa toward ${suggestedTiming}° or less.${boosted ? ' Or back off boost in that range on BUILD.' : ''}${leanContrib >= 1.5 ? ` Or richen AFR toward ${peak.bestAfr}:1 there.` : ''} Higher octane, lower compression, or an aluminum head on BUILD also buy margin.`,
-    });
-  });
-  groupRuns(points, (p) => p.fuelLimited).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.duty > a.duty ? b : a));
-    const impact = Math.max(4, Math.round(10 * (0.3 + 0.7 * rangeFrac(run))));
-    events.push({
-      type: 'fuel', severity: 2, impact,
-      msg: `Injectors maxed across ${rangeLabel(run)} (up to ${peak.duty}% duty) — mixture leaned to ${peak.afr.toFixed(1)}:1`,
-      cause: `Required pulse width (${peak.pw} ms) exceeds 90% of the ${(120000 / peak.rpm).toFixed(1)} ms available per engine cycle at ${peak.rpm} RPM, so the ${injectorLabel} injectors physically cannot deliver the commanded fuel.${fuel.stoich < 12 ? ` ${octaneLabel} needs roughly ${(14.7 / fuel.stoich).toFixed(2)}× the fuel volume of gasoline at the same lambda — a big part of why you ran out here.` : ''}`,
-      fix: `On FUEL, step up to a larger injector, or lower VE/boost in this range so demand fits under the current injectors' capacity.${fuel.stoich < 12 ? ' Switching back to a gasoline blend would also cut fuel volume sharply — at the cost of knock margin.' : ''}`,
-    });
-  });
-  groupRuns(points, (p) => p.leanRisk && !p.valveRisk).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.afr > a.afr ? b : a));
-    const impact = Math.max(4, Math.round(10 * (0.3 + 0.7 * rangeFrac(run))));
-    events.push({
-      type: 'lean', severity: 2, impact,
-      msg: `Lean mixture (up to ${peak.afr.toFixed(1)}:1) across ${rangeLabel(run)} under load`,
-      cause: peak.fuelLimited ? `This is the injector-duty limit above showing up as heat risk, not a bad AFR table entry.` : `The AFR target itself is set leaner than is safe for ${Math.round(loadKpa)} kPa in this range.`,
-      fix: peak.fuelLimited ? `Upgrade injectors on FUEL, or lower VE/boost so demand fits within current capacity.` : `On AFR, richen the cells in this range — best power here is near ${peak.bestAfr}:1${peak.boostPsi > 1 ? ' (richer than the N/A ideal, because boost needs the charge cooling)' : ''}.`,
-    });
-  });
-  groupRuns(points, (p) => p.valveRisk).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.afr > a.afr ? b : a));
-    const overage = Math.min(1, Math.max(0, peak.afr - 15.2) / 6);
-    const impact = Math.max(6, Math.round(18 * (0.25 + 0.75 * rangeFrac(run)) * (0.4 + 0.6 * overage)));
-    events.push({
-      type: 'valve', severity: 3, impact,
-      msg: `Lean-under-boost across ${rangeLabel(run)} (up to ${peak.afr.toFixed(1)}:1 at ${peak.boostPsi.toFixed(1)} psi) — elevated EGT, valve risk`,
-      cause: `Boost raises cylinder pressure and heat at the same time the mixture goes lean — that combination burns exhaust valves over repeated pulls, separately from detonation. This spans ${Math.round(rangeFrac(run) * 100)}% of the sweep.`,
-      fix: `Richen AFR under boost in this range, confirm injectors are not maxed (FUEL tab), or add an intercooler.`,
-    });
-  });
-  groupRuns(points, (p) => p.richRisk).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.lambda < a.lambda ? b : a));
-    const sev = clamp((0.75 - peak.lambda) / 0.35, 0, 1);
-    const impact = Math.max(6, Math.round((12 + sev * 26) * (0.35 + 0.65 * rangeFrac(run))));
-    events.push({
-      type: 'rich', severity: 3, impact,
-      msg: `Dangerously rich across ${rangeLabel(run)} — down to lambda ${peak.lambda.toFixed(2)} (${peak.afr.toFixed(1)}:1)`,
-      cause: `Far more fuel is being delivered than the available air can burn. Raw fuel washes the oil film off the cylinder walls, fouls plugs, and passes into the exhaust. It also costs a lot of power — the mixture is well past the point where extra fuel helps.`,
-      fix: `Check the ECU Injector Size on FUEL matches the injectors actually fitted, verify the MAF scalar, then lean the AFR cells in this range back toward ${peak.bestAfr}:1.`,
-    });
-  });
-  groupRuns(points, (p) => p.mafFlag).forEach((run) => {
-    const avgTrim = run.reduce((s, p) => s + p.trimPct, 0) / run.length;
-    const direction = avgTrim > 0 ? 'lean' : 'rich';
-    const source = mods.intake && turboOn ? 'the bigger intake and turbo plumbing' : mods.intake ? 'the bigger intake' : 'the turbo plumbing';
-    const impact = Math.round(8 * (0.3 + 0.7 * rangeFrac(run)));
-    events.push({
-      type: 'maf', severity: 1, impact,
-      msg: `MAF trim averaging ${avgTrim > 0 ? '+' : ''}${avgTrim.toFixed(0)}% across ${rangeLabel(run)} — running ${direction}`,
-      cause: `${source.charAt(0).toUpperCase() + source.slice(1)} changed how much air reads across the MAF sensor at a given flow rate, and the ECU has not been rescaled for it.`,
-      fix: `On ECU, adjust the MAF Scalar and re-run the pull — watch the AFR trace (actual vs. commanded) until they line up.`,
-    });
-  });
-  groupRuns(points, (p) => p.compressorOver).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.boostPsi > a.boostPsi ? b : a));
-    const impact = Math.round(10 * (0.3 + 0.7 * rangeFrac(run)));
-    events.push({
-      type: 'compressor', severity: 2, impact,
-      msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
-      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map, making hotter, less dense, more knock-prone air.`,
-      fix: `On BUILD, size up the compressor, or lower the boost target for this RPM range.`,
-    });
-  });
-  const injRatio = injectorCc / ecuInjectorCc;
-  if (Math.abs(injRatio - 1) > 0.05) {
-    const richLean = injRatio > 1 ? 'rich' : 'lean';
-    events.push({
-      type: 'injscale', severity: 3, impact: Math.round(clamp(14 + Math.abs(injRatio - 1) * 22, 14, 40)),
-      msg: `Injector scaling mismatch — ECU is calibrated for ${ecuInjectorCc}cc but ${injectorCc}cc are fitted`,
-      cause: `The ECU calculates pulse width for a ${ecuInjectorCc}cc injector. With ${injectorCc}cc actually fitted, every pulse delivers about ${(injRatio * 100).toFixed(0)}% of the intended fuel, so the whole tune runs ${richLean} no matter what your AFR table asks for.`,
-      fix: `On FUEL, set the ECU Injector Size to ${injectorCc}cc to match the hardware. Real tuning software calls this the injector scaling constant (UpRev's K-fuel multiplier, HP Tuners' injector flow rate) — it must always be updated when injectors change.`,
-    });
-  }
-  // A big cam's real cost is rarely peak-power knock — it is everything below the
-  // power band: reversion, lost vacuum, lumpy idle, and a much narrower usable range.
-  // This is a HARDWARE trade-off, not a calibration fault, so it is flagged as an
-  // advisory rather than something the player can tune away.
-  // Valve float is a hard mechanical limit — the springs cannot close the valves fast
-  // enough, so cylinder filling collapses. No calibration change touches this.
-  const floatRpm = derived.floatRpm || 99999;
-  if (floatRpm < 7500) {
-    const lost = points.filter((p) => p.rpm > floatRpm);
-    events.push({
-      type: 'float', severity: 3, impact: Math.round(clamp((7500 - floatRpm) / 45, 8, 34)),
-      msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * 100} RPM of the pull`,
-      cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
-      fix: `Raise the valve spring rate on BUILD until float sits above your ${7500} RPM redline, or fit a milder cam. No amount of table tuning can fix this — the valvetrain is simply not keeping up.`,
-    });
-  }
-
-  const overlap = derived.overlapDeg || 0;
-  if (overlap > 10) {
-    const lowTq = points.find((p) => p.rpm === 2500)?.torque ?? 0;
-    const peakTqPt = points.reduce((a, b) => (b.torque > a.torque ? b : a));
-    events.push({
-      type: 'cam', severity: 1, impact: Math.round(clamp(overlap * 0.35, 4, 14)),
-      msg: `Large camshaft (${derived.camDuration}°, ${overlap.toFixed(0)}° overlap) — powerband moved up, low end given away`,
-      cause: `At ${overlap.toFixed(0)}° of overlap both valves are open together long enough that at low RPM exhaust pushes back into the intake (reversion) and fresh charge escapes out the exhaust. Torque at 2500 RPM is down to ${lowTq} lb-ft while peak torque has moved to ${peakTqPt.rpm} RPM. Expect a lumpy idle, weak manifold vacuum and poorer driveability off boost.`,
-      fix: `This is a hardware trade-off, not a tuning fault — you cannot calibrate it away. If the low end matters, fit a milder cam. If you want this cam, make sure the valve springs suit it (float at ${Math.round(derived.floatRpm)} RPM) and expect to gear the car for the higher powerband.`,
-    });
-  }
-  if (turboOn && avgBoost > 6) {
-    const impact = Math.round(6 * Math.min(1.5, avgBoost / 10));
-    events.push({
-      type: 'bearing', severity: 1, impact,
-      msg: `Sustained boost load through the pull (avg ${avgBoost.toFixed(1)} psi) — bottom-end stress accumulating`,
-      cause: `Cylinder pressure under boost stresses rod and main bearings even without knock.`,
-      fix: `Keep boost near 8-10 psi unless the block has been built for more, and do not hold WOT pulls longer than needed.`,
-    });
-  }
-  events.sort((a, b) => (b.impact ?? b.severity) - (a.impact ?? a.severity));
-
-  const peakHp = Math.max(...points.map((p) => p.hp));
-  const peakTq = Math.max(...points.map((p) => p.torque));
-  return { points, events, wear, peakHp, peakTq, loadKpa, needsMafRecal };
-}
-
-// ============================================================
-// LIVE ENGINE — a continuously running rotational-dynamics model.
-// Unlike the dyno sweep (which evaluates steady-state points), this
-// integrates real crankshaft physics in time: the engine accelerates
-// because combustion torque exceeds friction torque, idles because
-// the ECU trims air to hold a target, and stalls if it does not.
-// ============================================================
-const ENGINE_INERTIA = 0.18;   // kg·m², crank + flywheel + damper
-const IDLE_TARGET_RPM = 800;
-const CRANK_RPM = 260;         // starter cranking speed
-const STALL_RPM = 380;
-const REDLINE_CUT = 7600;      // fuel cut, as a real rev limiter does
-
-// 2D interpolation across both RPM and load — real ECUs interpolate
-// between table breakpoints rather than snapping to the nearest cell.
-function interp2(table, rpm, loadPct) {
-  const rowVals = LOAD.map((_, ri) => interp1(RPM, table[ri], rpm));
-  const loadsAsc = [...LOAD].reverse();
-  const valsAsc = [...rowVals].reverse();
-  return interp1(loadsAsc, valsAsc, loadPct);
-}
-
-// Friction + pumping losses, expressed as FMEP. Rises with engine speed,
-// and is what the engine must overcome before any torque reaches the wheels.
-// Engine braking has two separate sources, and modelling only one made coast-down
-// far too slow. RUBBING friction rises with speed. PUMPING loss is the work the
-// engine does dragging air past a closed throttle — proportional to the vacuum it
-// is pulling (barometric minus MAP). On a closed throttle at high RPM the pumping
-// term dominates, which is exactly why a real engine drops revs so briskly.
-// Torque from a mean effective pressure: T = MEP x Vd / (4*pi) for a 4-stroke.
-// Rubbing (mechanical) friction as a mean effective pressure. Rises with engine
-// speed, and with valve spring load if stiffer springs are fitted.
-function rubbingFmepPa(rpm, springPa = 0) {
-  const rpmShare = (1 - COEFF.SPRING_RPM_BIAS) + COEFF.SPRING_RPM_BIAS * (rpm / 7500);
-  return COEFF.RUBBING_BASE_PA + rpm * COEFF.RUBBING_PER_RPM + springPa * rpmShare;
-}
-
-// Pumping loss: the work spent dragging air past a partly closed throttle. This is
-// the vacuum the engine is fighting, and it dominates engine braking on overrun.
-function pumpingFmepPa(mapKpa) {
-  return Math.max(0, (BARO_KPA - mapKpa) * 1000);
-}
-
-// Total parasitic torque, for the live engine's cranking drag.
-// T = MEP x Vd / (4*pi) for a four-stroke.
-function frictionTorqueNm(rpm, displacementL, mapKpa = BARO_KPA, springPa = 0) {
-  const fmep = rubbingFmepPa(rpm, springPa) + pumpingFmepPa(mapKpa);
-  return (fmep * (displacementL / 1000)) / (4 * Math.PI);
-}
-
-// A simulated sensor: real ones are noisy and lag behind the true value.
-function sensorRead(prev, trueVal, lagFactor, noiseAmp) {
-  const lagged = prev + (trueVal - prev) * lagFactor;
-  return lagged + (Math.random() - 0.5) * 2 * noiseAmp;
-}
-
-function makeLiveState() {
-  return {
-    running: false, cranking: false, rpm: 0, omega: 0,
-    idleTrim: 5, stft: 0, ltft: 0,
-    coolantC: 20, oilC: 20, knockCount: 0, fuelCut: false, dfco: false, limiterCut: false,
-    sensedRpm: 0, sensedMaf: 0, sensedMap: 101, sensedIat: 25,
-    sensedLambda: 1.0, sensedCoolant: 20, elapsed: 0,
-  };
-}
-
-// One integration step of the live engine + one pass of the ECU control loop.
-function liveStep(st, dt, input, cfg) {
-  const s = { ...st };
-  const { ve, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
-          turboOn, boostCurve, octaneBonus, turbine, compressor, exhaustDiaError } = cfg;
-
-  s.prevRpm = st.rpm;
-  s.elapsed += dt;
-
-  // ---- starter / stall handling ----
-  if (s.cranking && s.rpm > 450) { s.cranking = false; s.running = true; }
-  if (s.running && s.rpm < STALL_RPM) { s.running = false; s.fuelCut = false; }
-
-  // ---- ECU idle air control (PI holding target idle) ----
-  const userThrottle = input.throttle;
-  if (s.running && userThrottle < 3) {
-    if (s.rpm < 2000) {
-      // Near idle: closed-loop control. Air is added far faster than it is
-      // removed (a dashpot), so the engine catches itself instead of stalling.
-      const err = IDLE_TARGET_RPM - s.rpm;
-      const gain = err > 0 ? COEFF.IDLE_AIR_GAIN_UP : COEFF.IDLE_AIR_GAIN_DOWN;
-      const damp = (s.rpm - (s.prevRpm ?? s.rpm)) * COEFF.IDLE_AIR_DAMP;
-      s.idleTrim = clamp(s.idleTrim + err * gain * (dt / 0.05) - damp, 1, 34);
-    } else {
-      // Coasting down off-idle: bleed the idle valve back toward its base
-      // position so the engine can actually decelerate.
-      s.idleTrim += (3 - s.idleTrim) * COEFF.IDLE_BLEED_RATE * (dt / 0.05);
-    }
-  }
-  const coldEnrich = s.coolantC < 80 ? 1 + (80 - s.coolantC) * 0.004 : 1;
-  const effThrottle = clamp(Math.max(userThrottle, s.running ? s.idleTrim : 0), 0, 100);
-
-  // ---- rev limiter + deceleration fuel cut-off (DFCO) ----
-  // Real ECUs shut the injectors off completely on a closed throttle above idle:
-  // the engine is being driven by its own inertia, so burning fuel there is pure
-  // waste. It is also why a real engine drops back to idle briskly instead of
-  // hanging. Fuel is restored with hysteresis before the engine can stall.
-  const overrun = s.running && userThrottle < 3 && s.rpm > (s.dfco ? 1600 : 1850) && s.coolantC > 45;
-  s.dfco = overrun;
-  // A real rev limiter is a hysteresis loop, not a ceiling: fuel is cut at the
-  // limit, revs fall, fuel is restored a few hundred RPM lower, and the engine
-  // climbs back into the cut. That rapid cut-restore cycle IS the bounce you hear.
-  if (s.running) {
-    if (s.rpm >= REDLINE_CUT) s.limiterCut = true;
-    else if (s.rpm < REDLINE_CUT - 320) s.limiterCut = false;
-  } else s.limiterCut = false;
-  s.fuelCut = (s.running && s.limiterCut) || overrun;
-
-  // ---- combustion torque from the same physics the dyno uses ----
-  let crankNm = 0, pt = null;
-  if ((s.running || s.cranking) && s.rpm > 100) {
-    const rpmClamped = clamp(s.rpm, 700, 7500);
-    // Throttle opening sets manifold pressure — but so does ENGINE SPEED. A nearly
-    // closed throttle at high RPM pulls far harder vacuum than the same opening at
-    // idle, because the engine is trying to pump much more air through the same
-    // restriction. That rpm term is what lets the engine decelerate on a closed
-    // throttle instead of sustaining itself at redline.
-    const aFrac = clamp(effThrottle, 0, 100) / 100;
-    const nFrac = clamp(rpmClamped / 7500, 0, 1.2);
-    // Valve overlap lets exhaust back into the intake at low speed, so a big cam
-    // simply cannot pull strong manifold vacuum at idle. That lost vacuum is why
-    // cammed engines idle high and lumpy.
-    const overlapBleed = (derived.overlapDeg || 0) * 0.0042;
-    const loadKpa = BARO_KPA * clamp(
-      0.18 + overlapBleed + 0.82 * Math.pow(aFrac, 0.75) - 0.28 * nFrac * Math.pow(1 - aFrac, 2),
-      0.12, 1
-    );
-    const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
-    const man = computeManifold(rpmClamped, loadKpa, turboOn, boostTarget, turbine, compressor);
-    const veVal = interp2(ve, rpmClamped, man.mapKpa);
-    // Spark-based idle stabilisation: the air path is slow (throttle -> manifold
-    // -> cylinder takes several cycles), so real ECUs hold idle with IGNITION
-    // timing, which changes torque on the very next firing event. Air trim handles
-    // the slow drift; spark handles the fast corrections.
-    let idleSpark = 0;
-    if (s.running && userThrottle < 3 && s.rpm < 1600) {
-      idleSpark = clamp((IDLE_TARGET_RPM - s.rpm) * COEFF.IDLE_SPARK_GAIN, -COEFF.IDLE_SPARK_LIMIT, COEFF.IDLE_SPARK_LIMIT);
-    }
-    const timingVal = interp2(timing, rpmClamped, man.mapKpa) + idleSpark;
-    const afrCmd = interp2(afr, rpmClamped, man.mapKpa) / coldEnrich;
-    pt = evaluatePoint({
-      rpm: rpmClamped, mapKpa: man.mapKpa, boostPsi: man.boostPsi, throttleFrac: man.throttleFrac,
-      veVal, timingVal, afrCommanded: afrCmd, octaneBonus, fuel,
-      mods: { ...mods, turboFitted: turboOn },
-      mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
-      mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-    });
-    // evaluatePoint already returns BRAKE torque — friction and pumping are
-    // subtracted inside it — so we must not deduct them again here.
-    if (!s.fuelCut && !s.cranking) {
-      crankNm = pt.torque / 0.7376 / DRIVETRAIN_EFF;
-    } else if (!s.cranking) {
-      // Fuel cut: no combustion at all, so the engine is being motored against its
-      // own friction and pumping losses. That is engine braking, for real.
-      crankNm = -(pt.fmep * 100000 * (derived.displacementL / 1000)) / (4 * Math.PI);
-    }
-    if (pt.knock) s.knockCount += pt.knockPull * dt * 8;
-  }
-
-  // ---- rotational dynamics ----
-  const starterNm = s.cranking ? 180 : 0;
-  // Cranking has no combustion, so the starter works against motoring friction.
-  const crankingDrag = s.cranking ? frictionTorqueNm(Math.max(s.rpm, 0), derived.displacementL, pt ? pt.map : BARO_KPA) : 0;
-  const netNm = crankNm + starterNm - crankingDrag - (s.running ? input.load : 0);
-  const alpha = netNm / ENGINE_INERTIA;
-  s.omega = Math.max(0, s.omega + alpha * dt);
-  s.rpm = s.omega * 60 / (2 * Math.PI);
-  if (!s.running && !s.cranking) s.rpm = Math.max(0, s.rpm - 900 * dt);
-  s.omega = s.rpm * 2 * Math.PI / 60;
-
-  // ---- thermal model ----
-  if (s.running) {
-    const heatIn = 0.9 + (crankNm / 200) * 3.2;
-    s.coolantC = Math.min(95, s.coolantC + heatIn * dt * (s.coolantC < 88 ? 1 : 0.15));
-    s.oilC = Math.min(110, s.oilC + heatIn * dt * 0.7);
-  } else {
-    s.coolantC = Math.max(20, s.coolantC - 0.35 * dt);
-    s.oilC = Math.max(20, s.oilC - 0.3 * dt);
-  }
-
-  // ---- ECU closed-loop fuel trims ----
-  // Only at part throttle: at WOT the ECU goes open-loop and stops
-  // correcting, which is exactly when MAF scaling errors bite.
-  const closedLoop = s.running && pt && !pt.openLoop && s.coolantC > 45;
-  if (closedLoop && pt) {
-    const lambdaErr = pt.lambda - 1.0;
-    s.stft = clamp(s.stft + lambdaErr * COEFF.STFT_GAIN * (dt / 0.05) * 0.25, -COEFF.TRIM_LIMIT, COEFF.TRIM_LIMIT);
-    s.ltft = clamp(s.ltft + s.stft * COEFF.LTFT_LEARN_RATE * (dt / 0.05), -COEFF.TRIM_LIMIT, COEFF.TRIM_LIMIT);
-  } else if (s.running) {
-    s.stft += (0 - s.stft) * 0.06;
-  }
-
-  // ---- simulated sensors: lag + noise ----
-  const lag = clamp(dt / 0.09, 0, 1);
-  const lopeAmp = s.running && s.rpm < 1500 ? (derived.overlapDeg || 0) * 0.9 : 0;
-  s.lope = lopeAmp;
-  s.sensedRpm = sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
-  s.sensedMaf = sensorRead(s.sensedMaf, pt ? pt.maf : 0, lag * 0.8, 1.4);
-  s.sensedMap = sensorRead(s.sensedMap, pt ? pt.map : BARO_KPA, lag, 0.7);
-  s.sensedIat = sensorRead(s.sensedIat, pt ? pt.iat : 25, 0.05, 0.3);
-  s.sensedLambda = sensorRead(s.sensedLambda, pt && s.running && !s.fuelCut ? pt.lambda : 1.6, lag * 0.5, 0.008);
-  s.sensedCoolant = sensorRead(s.sensedCoolant, s.coolantC, 0.08, 0.25);
-  s.live = pt;
-  s.effThrottle = effThrottle;
-  s.closedLoop = closedLoop;
-  return s;
-}
-// ============================================================
-// 12. USER INTERFACE
-// ------------------------------------------------------------
-// Everything below is presentation. It reads the simulation's output but never
-// contains physics — if you find yourself doing engineering maths down here, it
-// belongs in the simulation section above instead.
-//
-// Layout: a design-token object (T), then small shared primitives, then the
-// screens. Screens are plain conditional blocks inside one component; each is
-// marked with a banner comment.
-// ============================================================
-
-// ============================================================
-// DESIGN SYSTEM — a small, named token set applied everywhere
-// below through shared primitives, instead of one-off inline
-// styles per screen. This is what makes the UI read as one
-// coherent product instead of a stack of separately-styled forms.
-// ============================================================
-const T = {
-  bg: '#0a0d11', panel: '#12161c', panel2: '#181d24', panelHi: '#1e242c',
-  line: '#242b34', lineHi: '#33404d',
-  ink: '#eef2f5', ink2: '#8b96a3', ink3: '#57616c',
-  amber: '#ff6a2c', amberInk: '#ffab7a', amberBg: '#2a1810',
-  cyan: '#3ec8ff', cyanBg: '#0f2530',
-  violet: '#b083ff', violetBg: '#211a30',
-  green: '#39d980', greenBg: '#0f2418',
-  yellow: '#ffc94d', yellowBg: '#2a2110',
-  red: '#ff5252', redBg: '#2a1414',
-  mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-};
-const statusColor = (v) => (v >= 90 ? T.green : v >= 55 ? T.yellow : T.red);
+import {
+  Gauge, Grid3x3, Zap, Droplets, Wind, Activity, RotateCcw, Play, AlertTriangle, Info,
+  Wrench, Settings, Package, Flame, ChevronDown, Trophy, TrendingUp, BookOpen, Fuel,
+} from 'lucide-react';
+
+import {
+  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR, DEFAULT_BOOST,
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, EXHAUST_DIA_OPTS, INJ_DEADTIME_MS,
+  INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS, PSI_TO_KPA, R_AIR, RPM,
+  TURBINE_OPTS, calibrationAdvice, chargeTempK, clamp, clone2D, computeEngineerScore,
+  computeHardwareVE, computePullScore, computeTuningScore, deriveEngine,
+  idealExhaustDiameter, interp2, liveStep, makeLiveState, simulateSweep, veRecommendations
+} from '../sim/index.js';
+import { T, heat, statusColor } from './theme.js';
+import { BUILD_VERSION } from '../version.js';
+import { loadCareer, saveCareer } from '../storage.js';
 
 const Eyebrow = ({ children, icon: Icon }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -1320,7 +168,7 @@ const JOURNEY = [
     cta: 'Finish — let me explore freely', next: null },
 ];
 
-function JourneyBanner({ step, onAdvance, onDismiss, onGoto }) {
+function JourneyBanner({ step, onAdvance, onDismiss }) {
   const j = JOURNEY[step];
   if (!j) return null;
   return (
@@ -1419,7 +267,7 @@ function Tach({ rpm, cylinders, running }) {
 }
 
 // ============================================================
-function TuningGrid({ data, setData, min, max, decimals, selection, setSelection }) {
+function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
   const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
   const selectCell = (row, col) => setSelection({ type: 'cell', row, col });
   const selectRow = (row) => setSelection({ type: 'row', row });
@@ -1476,7 +324,7 @@ function TuningGrid({ data, setData, min, max, decimals, selection, setSelection
 // Reference data for a selected cell. Deliberately DESCRIPTIVE, not predictive:
 // it tells you what this parameter does and what range is normal here, but never
 // simulates an outcome — only a real dyno pull produces results in this sandbox.
-function cellReference(kind, row, col, value, turboOn) {
+function cellReference(kind, row, col, value) {
   const rpm = RPM[col], map = LOAD[row];
   const boosted = map > 105, wot = map >= 95, cruise = map <= 70;
   const highRpm = rpm >= 5500, lowRpm = rpm <= 2500;
@@ -1507,7 +355,7 @@ function cellReference(kind, row, col, value, turboOn) {
   };
 }
 
-function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind, turboOn }) {
+function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind }) {
   if (!selection) return null;
   let current;
   if (selection.type === 'cell') current = data[selection.row][selection.col];
@@ -1547,7 +395,7 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
         <button onClick={onClose} style={{ color: T.ink2, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 7, fontSize: 11.5, fontWeight: 700, padding: '8px 14px' }}>DONE</button>
       </div>
       {selection.type === 'cell' && kind && (() => {
-        const ref = cellReference(kind, selection.row, selection.col, current, turboOn);
+        const ref = cellReference(kind, selection.row, selection.col, current);
         return (
           <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px', marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: '#a5aebb' }}>
             <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} kPa</div>
@@ -1864,9 +712,10 @@ export default function EngineManagementSandbox() {
     } catch { return null; }
   };
 
-  const persistCareer = async (best, total, pulls) => {
-    try { await window.storage.set('career', JSON.stringify({ best, total, pulls })); } catch { /* best-effort */ }
-  };
+  // Persistence goes through the storage adapter, which picks whichever backend is
+  // available (artifact host, localStorage, or in-memory) so career stats survive a
+  // refresh wherever the app is deployed.
+  const persistCareer = (best, total, pulls) => saveCareer({ best, total, pulls });
 
   const doRun = () => {
     const a = ensureAudio();
@@ -1959,15 +808,13 @@ export default function EngineManagementSandbox() {
 
   // Career stats persist across sessions so the high score is worth chasing.
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      try {
-        const res = await window.storage.get('career');
-        if (res?.value) {
-          const c = JSON.parse(res.value);
-          setBestScore(c.best ?? 0); setTotalScore(c.total ?? 0); setPullCount(c.pulls ?? 0);
-        }
-      } catch { /* no saved career yet — start fresh */ }
+      const c = await loadCareer();
+      if (cancelled) return;
+      setBestScore(c.best); setTotalScore(c.total); setPullCount(c.pulls);
     })();
+    return () => { cancelled = true; };
   }, []);
 
   const chartData = useMemo(() => {
@@ -2687,7 +1534,7 @@ export default function EngineManagementSandbox() {
             <div style={{ padding: '16px 16px 0' }}>
               <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12, lineHeight: 1.5 }}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
-              <TuningGrid data={ve} setData={setVe} min={10} max={130} decimals={0} {...gridProps} />
+              <TuningGrid data={ve} min={10} max={130} decimals={0} {...gridProps} />
 
               {veAdvice && (
                 veAdvice.inSync ? (
@@ -2725,7 +1572,7 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={ve} setData={setVe} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" turboOn={turboOn} />
+            <SelectionDock data={ve} setData={setVe} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />
           </>
         )}
 
@@ -2734,7 +1581,7 @@ export default function EngineManagementSandbox() {
             <div style={{ padding: '16px 16px 0' }}>
               <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12 }}>Degrees of spark advance before top dead center (° BTDC).</div>
-              <TuningGrid data={timing} setData={setTiming} min={-5} max={50} decimals={0} {...gridProps} />
+              <TuningGrid data={timing} min={-5} max={50} decimals={0} {...gridProps} />
               {calAdvice.overAdvanced.length > 0 ? (
                 <div style={{ background: T.redBg, border: `1px solid #3a2020`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
                   <div style={{ fontSize: 10, letterSpacing: 1, color: '#ff9d9d', fontWeight: 800, marginBottom: 7 }}>
@@ -2773,7 +1620,7 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={timing} setData={setTiming} selection={selection} min={-5} max={50} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" turboOn={turboOn} />
+            <SelectionDock data={timing} setData={setTiming} selection={selection} min={-5} max={50} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
           </>
         )}
 
@@ -2782,7 +1629,7 @@ export default function EngineManagementSandbox() {
             <div style={{ padding: '16px 16px 0' }}>
               <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12, lineHeight: 1.5 }}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-              <TuningGrid data={afr} setData={setAfr} min={10} max={18} decimals={1} {...gridProps} />
+              <TuningGrid data={afr} min={10} max={18} decimals={1} {...gridProps} />
               {calAdvice.wrongMix.length > 0 && (
                 <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
                   <div style={{ fontSize: 10, letterSpacing: 1, color: T.amberInk, fontWeight: 800, marginBottom: 7 }}>
@@ -2808,7 +1655,7 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={afr} setData={setAfr} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" turboOn={turboOn} />
+            <SelectionDock data={afr} setData={setAfr} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
           </>
         )}
 
