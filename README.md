@@ -2,14 +2,13 @@
 
 ### An engine management and tuning simulator, created by **CaribouTuning**.
 
-> **This is CaribouTuning's app.** He designed it, built it, and wrote the engine
+> **CaribouTuning** Designed it, and wrote the engine
 > model — the physics, the calibration tables, the pull log, the teaching material,
 > the whole thing. Every number this simulator produces comes from his work.
 >
-> **Turtle.GTI** is hosting the repository and handling the engineering scaffolding
-> around it: packaging it as a project, adding the test suite, and setting up CI, so
-> the app has somewhere to live and grow. A collaboration — with the credit for what
-> ECU Lab *is* belonging to CaribouTuning.
+> **Turtle.GTI** is hosting the repository and handling the engineering, scaffolding,
+> and scaling around it: packaging it as a project, adding the test suite, and setting up
+> CI, so the app has somewhere to live and grow.
 
 Design an engine, edit the same three calibration tables a real tuner edits, run a dyno
 pull, and read a log that explains what went right or wrong.
