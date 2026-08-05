@@ -11,6 +11,10 @@
     "volumetric-efficiency",
     "education"
   ],
+  "author": "CaribouTuning",
+  "contributors": [
+    "Turtle.GTI (repository, tests, build tooling)"
+  ],
   "license": "MIT",
   "type": "module",
   "private": false,

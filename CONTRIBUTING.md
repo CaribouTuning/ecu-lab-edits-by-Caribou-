@@ -3,6 +3,11 @@
 Thanks for being here. This project is a teaching tool, so contributions that make the
 physics more honest or the explanations clearer are worth as much as new features.
 
+**ECU Lab was created by CaribouTuning** — the engine model and everything it teaches
+are his work. Turtle.GTI maintains the repository, tests and tooling. When a change
+touches the physics or the teaching material, CaribouTuning's read on it is the one
+that settles it; he is the domain authority here.
+
 ## The one rule that matters
 
 **Nothing adds horsepower.**

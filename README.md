@@ -1,8 +1,18 @@
 # ECU Lab
 
-An engine management and tuning simulator. Design an engine, edit the same three
-calibration tables a real tuner edits, run a dyno pull, and read a log that explains
-what went right or wrong.
+### An engine management and tuning simulator, created by **CaribouTuning**.
+
+> **This is CaribouTuning's app.** He designed it, built it, and wrote the engine
+> model — the physics, the calibration tables, the pull log, the teaching material,
+> the whole thing. Every number this simulator produces comes from his work.
+>
+> **Turtle.GTI** is hosting the repository and handling the engineering scaffolding
+> around it: packaging it as a project, adding the test suite, and setting up CI, so
+> the app has somewhere to live and grow. A collaboration — with the credit for what
+> ECU Lab *is* belonging to CaribouTuning.
+
+Design an engine, edit the same three calibration tables a real tuner edits, run a dyno
+pull, and read a log that explains what went right or wrong.
 
 It is a teaching tool, not a game with a horsepower slider.
 
@@ -106,9 +116,26 @@ Working and playable. Known gaps and planned work are tracked in
 UI is still one large component pending decomposition, accessibility needs work, and
 the VE histogram workflow has a known correctness bug that is being fixed.
 
+## Credits
+
+**ECU Lab was created by [CaribouTuning](#credits).**
+
+The simulator is his. The engine model, the calibration tables, the knock envelope, the
+pull log, the scoring, the tutorial and the design — all of it originated with him, and
+the domain knowledge behind it is his too. Anything this app teaches, it teaches because
+he knew it first.
+
+| | |
+|---|---|
+| **CaribouTuning** | Creator and author. Engine model, physics, calibration design, UI, teaching material. |
+| **Turtle.GTI** | Repository, build tooling, test suite, CI, packaging. |
+
+Contributions from anyone else are very welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Licence
 
-[MIT](LICENSE).
+[MIT](LICENSE) — copyright Caribou Tuning.
 
 ## A note on real engines
 
