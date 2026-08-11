@@ -24,11 +24,12 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR, DEFAULT_BOOST,
-  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, EXHAUST_DIA_OPTS, INJ_DEADTIME_MS,
-  INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS, PSI_TO_KPA, R_AIR, RPM,
-  TURBINE_OPTS, calibrationAdvice, chargeTempK, clamp, clone2D, computeEngineerScore,
-  computeHardwareVE, computePullScore, computeTuningScore, deriveEngine,
-  idealExhaustDiameter, interp2, liveStep, makeLiveState, simulateSweep, veRecommendations
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
+  INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS, PSI_TO_KPA,
+  R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
+  computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
+  deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
+  simulateSweep, veRecommendations
 } from '../sim/index.js';
 import { T, heat, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -543,6 +544,11 @@ export default function EngineManagementSandbox() {
   const [pullCount, setPullCount] = useState(0);
   const [turbineIdx, setTurbineIdx] = useState(1);
   const [compressorIdx, setCompressorIdx] = useState(1);
+  // Which factory preset (if any) is currently loaded stock. Cleared the moment any
+  // Engine Architecture control is hand-edited, and offered as a warning prompt
+  // before a loaded tune with logged pulls gets overwritten.
+  const [presetId, setPresetId] = useState(null);
+  const [presetPrompt, setPresetPrompt] = useState(null);
   // Pinned by diameter, not by position: adding sizes to the catalogue must not
   // silently change which pipe a new build starts with.
   const [exhaustDiaIdx, setExhaustDiaIdx] = useState(
@@ -656,7 +662,46 @@ export default function EngineManagementSandbox() {
     setMods(DEFAULT_MODS); setMafScalar(1.0);
   };
   const repairEngine = () => setHealth({ piston: 100, bearing: 100, valve: 100 });
-  const setCfg = (patch) => setEngineConfig((c) => ({ ...c, ...patch }));
+  const setCfg = (patch) => {
+    setEngineConfig((c) => ({ ...c, ...patch }));
+    // Any hand edit means this is no longer a factory engine. Say so rather than
+    // continuing to display a name the build no longer matches.
+    setPresetId(null);
+  };
+
+  /** Whether the player has calibration work a preset would overwrite. */
+  const hasTuningWork = () => pullCount > 0;
+
+  const applyEnginePreset = (preset) => {
+    const p = applyPreset(preset);
+    setEngineConfig(p.engineConfig);
+    setMods(p.mods);
+    setTurboOn(p.turboOn);
+    setBoostCurve(p.boostCurve);
+    setTurbineIdx(p.turbineIdx);
+    setCompressorIdx(p.compressorIdx);
+    setInjIdx(p.injIdx);
+    setEcuInjectorCc(p.ecuInjectorCc);
+    setOctaneIdx(p.octaneIdx);
+    setExhaustDiaIdx(p.exhaustDiaIdx);
+    setVe(p.ve);
+    setTiming(p.timing);
+    setAfr(p.afr);
+    // The preset's AFR table already bakes in a correction for the MAF error that
+    // the mod set implies (see factoryCalibration in src/sim/presets.js) — that
+    // correction is only valid at the neutral scalar. Loading a preset while a
+    // player has this dragged away from 1.0 would otherwise silently double-correct
+    // the mixture the very next pull.
+    setMafScalar(1.0);
+    setPresetId(p.presetId);
+    setSelection(null);
+    setPresetPrompt(null);
+  };
+
+  const choosePreset = (preset) => {
+    if (hasTuningWork()) setPresetPrompt(preset);
+    else applyEnginePreset(preset);
+  };
 
   const ensureAudio = () => {
     if (audioRef.current) return audioRef.current;
@@ -975,7 +1020,10 @@ export default function EngineManagementSandbox() {
 
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   const overallColor = statusColor(overallHealth);
-  const engineName = `${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
+  const activePreset = presetId ? presetById(presetId) : null;
+  const engineName = activePreset
+    ? activePreset.name
+    : `${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
 
   // Four top-level destinations instead of seven. The three tuning tables and the
   // fuel/ECU controls now live under TUNE as sub-views — same depth, far less to
@@ -1304,6 +1352,57 @@ export default function EngineManagementSandbox() {
               icon={Settings} label="Engine Architecture"
               sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
             >
+              <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
+              <PickList
+                options={[
+                  ...ENGINE_PRESETS.map((p) => ({ label: `${p.name} · ${p.factory.crankHp} hp`, value: p.id })),
+                  { label: 'Custom build', value: '__custom__' },
+                ]}
+                value={presetId ?? '__custom__'}
+                onChange={(v) => {
+                  if (v === '__custom__') { setPresetId(null); return; }
+                  const p = ENGINE_PRESETS.find((e) => e.id === v);
+                  if (p) choosePreset(p);
+                }}
+              />
+              {activePreset && (
+                <Panel tight style={{ marginBottom: 13 }}>
+                  <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>{activePreset.blurb}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 4, fontWeight: 600 }}>
+                    <span>FACTORY RATING</span>
+                    <span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>
+                      {activePreset.factory.crankHp} hp · {activePreset.factory.crankTq} lb-ft
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 600 }}>
+                    <span>YOUR LAST PULL</span>
+                    <span style={{ color: result ? T.amberInk : T.ink3, fontWeight: 800, fontFamily: T.mono }}>
+                      {result ? `${result.peakHp} whp · ${result.peakTq} lb-ft` : 'no pull logged'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 7, lineHeight: 1.5 }}>
+                    Factory figures are at the crank; the dyno here reads at the wheels, so expect roughly 15% less. The factory calibration is deliberately conservative — beating it is the exercise.
+                  </div>
+                </Panel>
+              )}
+              {!presetId && (
+                <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
+              )}
+              {presetPrompt && (
+                <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px' }}>
+                  <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.5, marginBottom: 9 }}>
+                    <b style={{ color: T.amberInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
+                  </div>
+                  <div style={{ display: 'flex', gap: 7 }}>
+                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.amber, color: '#2a1206', fontWeight: 800, fontSize: 12 }}>
+                      LOAD {presetPrompt.name.toUpperCase()}
+                    </button>
+                    <button onClick={() => setPresetPrompt(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
+                      CANCEL
+                    </button>
+                  </div>
+                </div>
+              )}
               <Panel tight style={{ marginBottom: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>DISPLACEMENT</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.displacementL.toFixed(2)} L</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>BORE : STROKE</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.ratio.toFixed(3)}</span></div>
