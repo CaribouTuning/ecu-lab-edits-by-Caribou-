@@ -2083,6 +2083,16 @@ export default function EngineManagementSandbox() {
                             {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
                           </Panel>
                         )}
+                        {scores.tuning.advisories?.length > 0 && (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink3, fontWeight: 800, marginBottom: 4 }}>
+                              HARDWARE TRADE-OFFS · NOT SCORED
+                            </div>
+                            {scores.tuning.advisories.map((a, i) => (
+                              <div key={i} style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>{a}</div>
+                            ))}
+                          </div>
+                        )}
                   </>
                 )}
               </>

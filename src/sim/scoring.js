@@ -15,15 +15,45 @@
 import { clamp } from './math.js';
 
 /**
+ * Event types that represent a CALIBRATION fault — something the player can fix by
+ * editing a table. These, and only these, move the Tuning Score.
+ *
+ * The complement (`cam`, `float`, `bearing`) are hardware consequences. The cam
+ * event's own advice text reads "This is a hardware trade-off, not a tuning fault —
+ * you cannot calibrate it away", and deducting for it made a perfectly calibrated
+ * engine unable to score 100 for reasons no table edit could address. Hardware
+ * coherence is what the Engineer Score is for.
+ *
+ * Unlisted types count as calibration faults, so a newly added fault is never
+ * silently worth zero.
+ */
+export const CALIBRATION_EVENT_TYPES = new Set([
+  'knock', 'fuel', 'lean', 'valve', 'rich', 'maf', 'injscale', 'compressor',
+]);
+
+/**
+ * The known hardware-consequence types — the actual complement of
+ * `CALIBRATION_EVENT_TYPES` among today's events. Kept as an explicit list (rather
+ * than "anything not in CALIBRATION_EVENT_TYPES") so a brand-new event type that
+ * nobody has classified yet defaults to deducting, not to a free pass.
+ */
+const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing']);
+
+/**
  * Grades how clean a calibration is, from the pull's event log.
  *
- * @param {{events: {impact?: number, msg: string}[]}} result a completed sweep
- * @returns {{score: number, label: string, deductions: string[]}}
+ * @param {{events: {type?: string, impact?: number, msg: string}[]}} result a completed sweep
+ * @returns {{score: number, label: string, deductions: string[], advisories: string[]}}
  */
 export function computeTuningScore(result) {
   let score = 100;
   const deductions = [];
+  const advisories = [];
   result.events.forEach((e) => {
+    if (HARDWARE_EVENT_TYPES.has(e.type)) {
+      advisories.push(e.msg);
+      return;
+    }
     const d = e.impact ?? 5;
     score -= d;
     deductions.push(`-${d}  ${e.msg}`);
@@ -33,7 +63,7 @@ export function computeTuningScore(result) {
     : score >= 75 ? 'Solid'
     : score >= 55 ? 'Rough Edges'
     : score >= 30 ? 'Risky' : 'Dangerous';
-  return { score, label, deductions };
+  return { score, label, deductions, advisories };
 }
 
 /**
