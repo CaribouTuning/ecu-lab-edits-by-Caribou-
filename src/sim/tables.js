@@ -58,9 +58,13 @@ export const DEFAULT_BOOST = RPM.map(() => 0);
 
 /**
  * Stock short-block design. Nothing here names a real production engine.
- * @type {import('./engine.js').EngineConfig}
+ *
+ * Frozen: this object is handed straight to React state, and a caller doing
+ * `Object.assign(cfg, patch)` — exactly what preset code reaches for — would
+ * otherwise corrupt the module-level default for the whole session.
+ * @type {Readonly<import('./engine.js').EngineConfig>}
  */
-export const DEFAULT_ENGINE_CONFIG = {
+export const DEFAULT_ENGINE_CONFIG = Object.freeze({
   configuration: 'V6',
   bore: 95.5,
   stroke: 81.4,
@@ -69,10 +73,10 @@ export const DEFAULT_ENGINE_CONFIG = {
   headMaterial: 'Aluminum',
   camDuration: 210,
   springRate: 50,
-};
+});
 
-/** No bolt-ons fitted. */
-export const DEFAULT_MODS = { intake: false, exhaust: false, headers: false, intercooler: false };
+/** No bolt-ons fitted. Frozen for the same reason as the engine config above. */
+export const DEFAULT_MODS = Object.freeze({ intake: false, exhaust: false, headers: false, intercooler: false });
 
 /**
  * Base knock-limited timing envelope at WOT, 91 octane, naturally aspirated.

@@ -16,6 +16,7 @@ import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
 import { computeManifold } from './manifold.js';
 import { evaluatePoint } from './point.js';
+import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
 
 /** Crank + flywheel + damper rotational inertia, kg·m². */
@@ -72,6 +73,7 @@ export function liveStep(st, dt, input, cfg) {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
     mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
   } = cfg;
+  if (turboOn) assertBoostCurve(boostCurve);
 
   s.prevRpm = st.rpm;
   s.elapsed += dt;

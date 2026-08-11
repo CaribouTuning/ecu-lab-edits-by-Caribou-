@@ -320,3 +320,29 @@ describe('#4 exhaust sizing has one formula and a reachable target', () => {
     expect(ve(ideal + 1.5)[wotRow][lowCol]).toBeLessThan(ve(ideal)[wotRow][lowCol]);
   });
 });
+
+describe('preset-readiness hardening', () => {
+  it('freezes the shared default engine config so callers cannot corrupt it', () => {
+    expect(Object.isFrozen(S.DEFAULT_ENGINE_CONFIG)).toBe(true);
+    expect(Object.isFrozen(S.DEFAULT_MODS)).toBe(true);
+  });
+
+  it('rejects a boost curve that does not match the RPM axis', () => {
+    const cfg = S.DEFAULT_ENGINE_CONFIG;
+    const derived = S.deriveEngine(cfg);
+    const run = (boostCurve) => S.simulateSweep({
+      loadKpa: 100,
+      ve: S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}),
+      timing: S.clone2D(S.DEFAULT_TIMING),
+      afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: true, boostCurve,
+      octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 550, ecuInjectorCc: 550, injectorLabel: '550cc',
+      mods: S.DEFAULT_MODS, mafScalar: 1, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    });
+    // Seven entries for an eight-point axis is the exact bug that once shipped.
+    expect(() => run([0, 0, 3, 6, 8, 8, 8])).toThrow(/boost curve/i);
+    expect(() => run(S.RPM.map(() => 8))).not.toThrow();
+  });
+});

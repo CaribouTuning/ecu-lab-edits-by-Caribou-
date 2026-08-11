@@ -21,6 +21,30 @@ export const SWEEP_END_RPM = 7500;
 export const SWEEP_STEP_RPM = 100;
 
 /**
+ * Guards the one input that has already broken this simulation once.
+ *
+ * The UI builds every boost curve with `RPM.map(...)`, but preset data is a second
+ * source of curves. A short array silently interpolates to `undefined` and puts NaN
+ * through every downstream formula, so fail loudly at the boundary instead.
+ *
+ * @param {number[]} boostCurve
+ * @throws {Error} if the curve does not match the RPM axis
+ */
+export function assertBoostCurve(boostCurve) {
+  if (!Array.isArray(boostCurve) || boostCurve.length !== RPM.length) {
+    throw new Error(
+      `boost curve must have ${RPM.length} entries, one per RPM breakpoint — got ${
+        Array.isArray(boostCurve) ? boostCurve.length : typeof boostCurve
+      }. Build it with RPM.map(...).`,
+    );
+  }
+  const bad = boostCurve.findIndex((v) => !Number.isFinite(v));
+  if (bad !== -1) {
+    throw new Error(`boost curve entry ${bad} is not a finite number: ${boostCurve[bad]}`);
+  }
+}
+
+/**
  * Runs a full dyno pull and produces the datalog, event log, wear and peak figures.
  *
  * @param {object} input
@@ -31,6 +55,7 @@ export function simulateSweep({
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor,
 }) {
+  if (turboOn) assertBoostCurve(boostCurve);
   let mafErrorBase = 1.0;
   if (mods.intake) mafErrorBase *= 0.90;
   if (turboOn) mafErrorBase *= 0.92;
