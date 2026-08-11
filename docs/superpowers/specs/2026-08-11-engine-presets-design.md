@@ -42,11 +42,18 @@ starting point rather than an optimum.
 | Compression | 10.6:1 | 10.2:1 | 9.6:1 | 9.6:1 |
 | Induction | naturally aspirated | twin-turbo, 8.7 psi | IS20 turbo | IS38 turbo, 17.4 psi |
 | Block / head | aluminium / aluminium | aluminium / aluminium | cast iron / aluminium | cast iron / aluminium |
-| Factory power | 306 hp @ 6800 | 302 hp @ 5800 | 220 hp | 292 hp |
-| Factory torque | 268 lb-ft @ 4800 | 295 lb-ft, 1400-5000 | 258 lb-ft from 1500 | 280 lb-ft |
+| Factory power | 306 hp @ 6800 | 302 hp @ 5800 | 220 hp @ 4700-6200 | 292 hp @ 5400-6500 |
+| Factory torque | 268 lb-ft @ 4800 | 295 lb-ft, 1400-5000 | 258 lb-ft from 1500 | 280 lb-ft from 1800 |
 | Redline | 7500 | 7000 | 6500 | 6800 |
 
 Sources are recorded inline in `presets.js` beside each figure.
+
+**Point ratings vs band ratings.** The two six-cylinders are rated at a single RPM;
+both EA888.3 variants are rated across a plateau, as most modern turbo engines are.
+`factory.crankHpRpm` therefore holds either a number or a `[lo, hi]` band, and the
+validation test asserts accordingly — within +/-500 RPM of a point rating, or
+anywhere inside the band for a band rating. Collapsing a plateau to its midpoint
+would invent precision the manufacturer never published.
 
 Two EA888.3 variants ship deliberately: same short block, different turbo and
 calibration, two very different cars. That contrast is the clearest demonstration in
@@ -257,7 +264,8 @@ Per preset, run a full sweep with its generated factory calibration and assert:
 
 - peak wheel horsepower within **+/-5%** of `factory.crankHp * DRIVETRAIN_EFF`
 - peak wheel torque within **+/-10%** of `factory.crankTq * DRIVETRAIN_EFF`
-- peak-power RPM within **+/-500 RPM** of `factory.crankHpRpm`
+- peak-power RPM within **+/-500 RPM** of `factory.crankHpRpm` when that is a point
+  rating, or **inside the band** when it is a `[lo, hi]` plateau
 - **zero knock events** — a factory calibration does not knock
 - injector duty below 90% everywhere
 
