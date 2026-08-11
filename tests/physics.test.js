@@ -397,3 +397,48 @@ describe('table axes stay consistent', () => {
     for (let i = 1; i < S.LOAD.length; i++) expect(S.LOAD[i]).toBeLessThan(S.LOAD[i - 1]);
   });
 });
+
+describe('knock threshold, as a shared function', () => {
+  const base = {
+    rpm: 5500, mapKpa: S.BARO_KPA, veActual: 95, chargeC: 25,
+    actualAfr: 12.85, bestAfr: 12.85, boostPsi: 0, octaneBonus: 0,
+    mods: NO_MODS, derived: S.deriveEngine(STOCK), compressor: S.COMPRESSOR_OPTS[1],
+  };
+
+  it('agrees exactly with the threshold evaluatePoint reports', () => {
+    const p = point({ rpm: 5500, veVal: 95, afrCommanded: 12.85, timingVal: 20 });
+    expect(S.knockThreshold({ ...base, actualAfr: p.afr, bestAfr: p.bestAfr, veActual: p.ve }))
+      .toBeCloseTo(p.threshold, 1);
+  });
+
+  it('gives more margin at lower charge', () => {
+    const light = S.knockThreshold({ ...base, mapKpa: 40, veActual: 55 });
+    const heavy = S.knockThreshold({ ...base, mapKpa: 150, veActual: 105, boostPsi: 7 });
+    expect(light).toBeGreaterThan(heavy);
+  });
+
+  it('gives more margin on higher octane', () => {
+    expect(S.knockThreshold({ ...base, octaneBonus: 14 }))
+      .toBeGreaterThan(S.knockThreshold({ ...base, octaneBonus: 0 }));
+  });
+
+  it('penalises a lean mixture only when there is cylinder pressure behind it', () => {
+    const leanAtLoad = S.knockThreshold({ ...base, actualAfr: 15.5 });
+    const richAtLoad = S.knockThreshold({ ...base, actualAfr: 12.0 });
+    expect(leanAtLoad).toBeLessThan(richAtLoad);
+    // At deep vacuum the same leanness barely matters.
+    const leanCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 15.5 });
+    const richCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 12.0 });
+    expect(Math.abs(leanCruise - richCruise)).toBeLessThan(Math.abs(leanAtLoad - richAtLoad));
+  });
+});
+
+describe('MBT timing', () => {
+  it('needs more advance at higher RPM', () => {
+    expect(S.mbtTiming(7000, S.BARO_KPA)).toBeGreaterThan(S.mbtTiming(2000, S.BARO_KPA));
+  });
+
+  it('needs less advance at higher load, because a denser charge burns faster', () => {
+    expect(S.mbtTiming(5000, 200)).toBeLessThan(S.mbtTiming(5000, 40));
+  });
+});

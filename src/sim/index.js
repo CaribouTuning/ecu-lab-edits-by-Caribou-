@@ -17,6 +17,7 @@ export * from './math.js';
 export * from './thermo.js';
 export * from './friction.js';
 export * from './engine.js';
+export * from './knock.js';
 export * from './manifold.js';
 export * from './airflow.js';
 export * from './point.js';
