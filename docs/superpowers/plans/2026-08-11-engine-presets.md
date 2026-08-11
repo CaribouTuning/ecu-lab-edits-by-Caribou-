@@ -18,7 +18,8 @@
 - **`src/sim/` must not import React.** The physics layer stays testable in plain Node.
 - **Never update the fingerprint fixture just to make CI green** (`tests/fingerprint.js:20-22`). Every refresh in this plan comes with an explicit diff review step naming what is allowed to move.
 - **The simulation stays JavaScript.** It runs client-side in the browser. Python is used only for the offline analysis harness in Task 7.
-- Run `npm run lint` and `npm run typecheck` before every commit. Both are currently clean and must stay clean.
+- Run `npm run lint` and `npm run typecheck` before every commit. Both are currently clean and must stay clean. **Every commit leaves `npm test` green.**
+- **The physics baseline is a Nissan VQ35DE Rev-Up.** `DEFAULT_ENGINE_CONFIG` (95.5 x 81.4 mm, 10.3:1) and `BASE_KNOCK_LIMIT_91` were calibrated against that engine, even though `tables.js` says it names no production engine. This matters when fitting presets: **expected model error scales with distance from that baseline.** A VQ35HR is nearly on top of it and should land within a couple of percent; a 2.0 L turbo four is far from it and is where error will concentrate. If a preset misses its target, check whether the miss scales with that distance before suspecting the preset data.
 
 ---
 
@@ -1132,11 +1133,16 @@ unchanged everywhere, and only the new derived field moved the hash."
 
 ---
 
-### Task 6: The presets module
+### Task 6: The presets module, fitted to factory figures
+
+This task ends with every preset validating against its real published rating and the whole suite green. It is deliberately the largest task in the plan: the calibration generator and the data it generates from cannot be judged apart, because a generator that produces wrong numbers is not a working generator.
 
 **Files:**
 - Create: `src/sim/presets.js`
+- Create: `tests/presets.test.js`
+- Create: `scripts/analyze_presets.py`
 - Modify: `src/sim/index.js`
+- Modify: `.gitignore`
 
 **Interfaces:**
 - Consumes: `computeHardwareVE`, `knockThreshold`, `mbtTiming`, `bestPowerAfr`, `deriveEngine`, `RPM`, `LOAD`, `chargeTempK`, `OCTANE_OPTS`, `TURBINE_OPTS`, `COMPRESSOR_OPTS`, `INJECTOR_OPTS`, `EXHAUST_DIA_OPTS`, `clamp`
@@ -1553,44 +1559,12 @@ In `src/sim/index.js`, add after the `sweep.js` line:
 export * from './presets.js';
 ```
 
-- [ ] **Step 5: Run the tests**
+- [ ] **Step 5: Run the tests to see where the presets stand**
 
 Run: `npx vitest run tests/presets.test.js`
-Expected: The data integrity tests PASS. The factory-figure tests **may fail** — that is expected at this point and is what Task 7 exists to resolve. Record the actual numbers.
+Expected: The data integrity tests PASS. The factory-figure tests **will likely fail** at this point — the remaining steps of this task exist to resolve that. Record the actual numbers before continuing. **Do not commit yet**; this task commits once, green, at the end.
 
-- [ ] **Step 6: Commit the module before tuning it**
-
-```bash
-npm run lint && npm run typecheck
-git add src/sim/presets.js src/sim/index.js tests/presets.test.js
-git commit -m "Add engine presets with generated factory calibrations
-
-Four real engines with published specifications, each sourced inline. The
-calibration is generated from the physics rather than hand-authored: VE from the
-hardware, fuel from best-power lambda above the open-loop threshold, and spark
-at MBT or the knock limit minus a 2-degree factory margin — which is what a
-production calibration actually is.
-
-Factory-figure validation is committed alongside and is not yet passing for
-every preset. Reconciling that is the next commit, and the constraint is that it
-happens through auditable coefficients or a documented tolerance, never a
-per-engine multiplier."
-```
-
----
-
-### Task 7: Fit the presets to their factory figures
-
-**Files:**
-- Create: `scripts/analyze_presets.py`
-- Modify: `src/sim/presets.js` (data only)
-- Modify: `tests/presets.test.js` (tolerances, only if justified)
-
-**Interfaces:**
-- Consumes: `ENGINE_PRESETS`, `applyPreset`, `simulateSweep` from Task 6
-- Produces: a passing `tests/presets.test.js`
-
-- [ ] **Step 1: Write the analysis harness**
+- [ ] **Step 6: Write the analysis harness**
 
 Create `scripts/analyze_presets.py`:
 
@@ -1742,14 +1716,16 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 2: Run it to see where each preset stands**
+- [ ] **Step 7: Run it to see where each preset stands**
 
 ```bash
 python3 scripts/analyze_presets.py
 ```
 Expected: a table with a signed error percentage per preset, and `<-- FIX` beside any that miss.
 
-- [ ] **Step 3: Ignore the generated plot output**
+**Expected error pattern.** The physics baseline is a Nissan VQ35DE Rev-Up (95.5 x 81.4 mm, 10.3:1), so accuracy degrades with distance from it. Predicted difficulty, easiest first: VQ35HR (same short block, should already be within a few percent) → N54 (same displacement class, different induction) → the two EA888.3 variants (half the displacement, heavily boosted, furthest from baseline). If the error does **not** follow that ordering, something is wrong with the preset data rather than with model reach.
+
+- [ ] **Step 8: Ignore the generated plot output**
 
 Add to `.gitignore`:
 
@@ -1757,7 +1733,7 @@ Add to `.gitignore`:
 preset-curves.png
 ```
 
-- [ ] **Step 4: Adjust preset DATA only, and re-measure**
+- [ ] **Step 9: Adjust preset DATA only, and re-measure**
 
 For each preset outside tolerance, adjust **only the preset's own data** in `src/sim/presets.js` — these are genuine per-engine unknowns, not fudge factors:
 
@@ -1770,7 +1746,7 @@ Re-run `python3 scripts/analyze_presets.py` after each change. Work one preset a
 
 **Do not** change `coefficients.js` to make a single preset fit — a coefficient is global and would move every other engine and the fingerprint. If no data adjustment brings a preset inside tolerance, that is a real finding: stop, and take one of the two documented routes below.
 
-- [ ] **Step 5: If a preset still cannot reach its figure**
+- [ ] **Step 10: If a preset still cannot reach its figure**
 
 Only these two resolutions are permitted:
 
@@ -1779,32 +1755,39 @@ Only these two resolutions are permitted:
 
 A per-engine multiplier is not an option. `src/sim/airflow.js:5-7` forbids it, and the spec commits against it.
 
-- [ ] **Step 6: Run the full suite**
+- [ ] **Step 11: Run the full suite**
 
 ```bash
 npm test
 ```
-Expected: PASS, all suites. The fingerprint should be untouched — this task changes preset data only, and no fingerprint configuration references presets.
+Expected: PASS, all suites including every factory-figure assertion. The fingerprint should be untouched — this task adds a new module and no fingerprint configuration references presets.
 
-- [ ] **Step 7: Lint, typecheck, commit**
+- [ ] **Step 12: Lint, typecheck, commit**
 
 ```bash
 npm run lint && npm run typecheck
-git add src/sim/presets.js tests/presets.test.js scripts/analyze_presets.py .gitignore
-git commit -m "Fit the engine presets to their published factory figures
+git add src/sim/presets.js src/sim/index.js tests/presets.test.js scripts/analyze_presets.py .gitignore
+git commit -m "Add engine presets with generated, validated factory calibrations
 
-Adds a Python harness that runs each preset through the real simulation and
-compares the whole curve — not just peak — against the factory rating, since an
-engine can hit peak power with the wrong curve shape.
+Four real engines with published specifications, each sourced inline. The
+calibration is generated from the physics rather than hand-authored: VE from the
+hardware, fuel from best-power lambda above the open-loop threshold, and spark
+at MBT or the knock limit minus a 2-degree factory margin — which is what a
+production calibration actually is.
 
-Only per-engine unknowns were adjusted: boost curve shape, cam duration, spring
-rate and part sizing. No coefficient was bent to fit a single engine and no
-per-engine multiplier was added."
+Every preset validates against its real published rating, so 'factory
+calibration' is a falsifiable claim rather than a label. A Python harness
+compares whole curves, not just peaks, since an engine can hit peak power with
+entirely the wrong curve shape.
+
+Only per-engine unknowns were adjusted to reach those figures: boost curve
+shape, cam duration, spring rate and part sizing. No coefficient was bent to fit
+a single engine and no per-engine multiplier was added."
 ```
 
 ---
 
-### Task 8: Preset picker in the UI
+### Task 7: Preset picker in the UI
 
 **Files:**
 - Modify: `src/ui/EcuLab.jsx` (imports, state, `setCfg`, `engineName`, Engine Architecture section)
@@ -1995,7 +1978,7 @@ to beat."
 | I6 + main bearings + balance shafts | 4 |
 | Baseline anchored at V6 | 4, Step 9 |
 | Per-engine redline | 5 |
-| UI picker, preset-aware naming, factory panel, overwrite warning | 8 |
+| UI picker, preset-aware naming, factory panel, overwrite warning | 7 |
 | Bug 1: Tuning Score | 2 |
 | Bug 2: dead argument | 1 |
 | Bug 3: boost validation | 1 |
@@ -2003,12 +1986,14 @@ to beat."
 | `tests/presets.test.js` | 6 |
 | Point vs band ratings | 6 (data), 6 (test) |
 | Fingerprint refresh with reviewed diff | 2, 4, 5 |
-| Python harness | 7 |
+| Python harness | 6 |
 
 No gaps.
 
 **Placeholder scan:** No TBD, TODO, "similar to Task N", or "add error handling" steps. Every code step contains complete code.
 
-**Type consistency:** `applyPreset` returns the same field names consumed in Task 7's harness and Task 8's handler (`presetId`, `engineConfig`, `boostCurve`, `injIdx`, `ecuInjectorCc`, `octaneIdx`, `exhaustDiaIdx`, `turbineIdx`, `compressorIdx`, `ve`, `timing`, `afr`). `knockThreshold`'s parameter object is identical in Task 3's definition, Task 3's test, and Task 6's caller. `rubbingFmepPa(rpm, springPa, arch)` matches between Task 4's definition and both call sites. `bearingFmepPa` and `balanceShaftFrac` are spelled consistently across `engine.js`, `friction.js`, `point.js` and `live.js`.
+**Type consistency:** `applyPreset` returns the same field names consumed in Task 6's harness and Task 7's handler (`presetId`, `engineConfig`, `boostCurve`, `injIdx`, `ecuInjectorCc`, `octaneIdx`, `exhaustDiaIdx`, `turbineIdx`, `compressorIdx`, `ve`, `timing`, `afr`). `knockThreshold`'s parameter object is identical in Task 3's definition, Task 3's test, and Task 6's caller. `rubbingFmepPa(rpm, springPa, arch)` matches between Task 4's definition and both call sites. `bearingFmepPa` and `balanceShaftFrac` are spelled consistently across `engine.js`, `friction.js`, `point.js` and `live.js`.
 
-**One deliberate ordering note:** Task 6 commits with tests that may not yet pass, and Task 7 makes them pass. This is intentional — it separates "the mechanism exists" from "the data is fitted", so a reviewer can judge the generator independently of the tuning. Task 7 is not optional and the branch is not mergeable until it lands.
+**Task sizing note:** Task 6 is deliberately the largest task here, covering both the calibration generator and the fitting of preset data to real figures. These were originally separate tasks, merged because splitting them would have left one intentionally-red commit mid-branch. A generator that produces wrong numbers is not a working generator, so the two are not independently reviewable in any case.
+
+**Every commit on this branch leaves `npm test` green.**
