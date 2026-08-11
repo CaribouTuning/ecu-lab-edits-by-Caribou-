@@ -442,3 +442,53 @@ describe('MBT timing', () => {
     expect(S.mbtTiming(5000, 200)).toBeLessThan(S.mbtTiming(5000, 40));
   });
 });
+
+describe('engine configuration and friction', () => {
+  const at = (configuration, over = {}) => S.deriveEngine({ ...STOCK, configuration, ...over });
+
+  it('knows an inline six has six cylinders', () => {
+    expect(S.CYL_COUNT.I6).toBe(6);
+    expect(S.CONFIG_OPTS).toContain('I6');
+  });
+
+  it('charges an inline six for its seven main bearings against a V6 four', () => {
+    // Architectural fact, not a preference: I6 = 7 mains, V6 = 4.
+    expect(S.MAIN_BEARINGS.I6).toBe(7);
+    expect(S.MAIN_BEARINGS.V6).toBe(4);
+    expect(at('I6').bearingFmepPa).toBeGreaterThan(at('V6').bearingFmepPa);
+  });
+
+  it('leaves the V6 baseline at zero so existing builds do not move', () => {
+    expect(at('V6').bearingFmepPa).toBe(0);
+    expect(at('V6').balanceShaftFrac).toBe(0);
+  });
+
+  it('charges a large four for its balance shafts, and a six for none', () => {
+    // A 2.0 L I4 carries balance shafts; the EA888.3 has two. An I6 is inherently
+    // balanced and needs none.
+    expect(S.hasBalanceShafts('I4', 2.0)).toBe(true);
+    expect(S.hasBalanceShafts('I6', 3.0)).toBe(false);
+    expect(S.hasBalanceShafts('V6', 3.5)).toBe(false);
+    // A small four does not need them either.
+    expect(S.hasBalanceShafts('I4', 1.2)).toBe(false);
+  });
+
+  it('makes an inline six cost slightly more friction than a V6 of equal size', () => {
+    const i6 = at('I6');
+    const v6 = at('V6');
+    const arch = (d) => ({ bearingFmepPa: d.bearingFmepPa, balanceShaftFrac: d.balanceShaftFrac });
+    expect(S.rubbingFmepPa(6000, 0, arch(i6))).toBeGreaterThan(S.rubbingFmepPa(6000, 0, arch(v6)));
+  });
+
+  it('keeps the friction penalty small enough to be a trade-off, not a verdict', () => {
+    const i6 = at('I6');
+    const arch = { bearingFmepPa: i6.bearingFmepPa, balanceShaftFrac: i6.balanceShaftFrac };
+    const penalty = S.rubbingFmepPa(6000, 0, arch) / S.rubbingFmepPa(6000, 0) - 1;
+    expect(penalty).toBeGreaterThan(0.02);
+    expect(penalty).toBeLessThan(0.20);
+  });
+
+  it('defaults to no architecture penalty when none is supplied', () => {
+    expect(S.rubbingFmepPa(6000, 0)).toBe(S.rubbingFmepPa(6000, 0, { bearingFmepPa: 0, balanceShaftFrac: 0 }));
+  });
+});

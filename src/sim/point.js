@@ -137,7 +137,9 @@ export function evaluatePoint({
   // partly closed throttle before anything reaches the crank. Pumping loss is the
   // vacuum it is working against — which is precisely why part-throttle running is
   // inefficient and why a throttled engine brakes itself on overrun.
-  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0) + pumpingFmepPa(mapKpa);
+  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0, {
+    bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
+  }) + pumpingFmepPa(mapKpa);
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.

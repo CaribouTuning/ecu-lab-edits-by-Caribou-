@@ -6,10 +6,49 @@
 import { clamp } from './math.js';
 
 /** Cylinder count per configuration. */
-export const CYL_COUNT = { I4: 4, V6: 6, V8: 8 };
+export const CYL_COUNT = { I4: 4, I6: 6, V6: 6, V8: 8 };
 
 /** Selectable engine configurations. */
-export const CONFIG_OPTS = ['I4', 'V6', 'V8'];
+export const CONFIG_OPTS = ['I4', 'I6', 'V6', 'V8'];
+
+/**
+ * Crankshaft main bearing count per configuration.
+ *
+ * An architectural fact, not a tuning knob: an inline engine carries a main between
+ * every pair of cylinders plus one at each end, while a V shares a journal between
+ * opposing cylinders. So an inline six runs seven mains where a V6 runs four.
+ *
+ * Crankshaft bearings are a real share of engine friction — published breakdowns put
+ * the crankshaft group anywhere from ~9% of friction power to ~25%, rising with
+ * speed. That is why the inline six's superior balance is not a free lunch: it pays
+ * for its extra bearings every revolution.
+ */
+export const MAIN_BEARINGS = { I4: 5, I6: 7, V6: 4, V8: 5 };
+
+/** Main bearing count treated as the calibration baseline (the stock V6). */
+export const BASELINE_MAIN_BEARINGS = MAIN_BEARINGS.V6;
+
+/**
+ * Whether this architecture needs balance shafts.
+ *
+ * An inline six is inherently balanced in both primary and secondary order and needs
+ * none — that is its genuine mechanical advantage. A cross-plane V8 and a 60-degree
+ * V6 likewise run without them. A four-cylinder above roughly 1.8 L has a secondary
+ * imbalance large enough that manufacturers fit a pair of counter-rotating shafts;
+ * the EA888.3 has exactly that, two chain-driven shafts in the crankcase.
+ *
+ * Those shafts cost real friction. The National Academies' fuel-economy technology
+ * report records that Ford's removal of the balance shaft from its 1.0 L three
+ * cylinder "reduced friction by 6 percent", which is what sizes
+ * {@link COEFF.FMEP_BALANCE_SHAFT_FRAC}.
+ *
+ * @param {string} configuration engine layout
+ * @param {number} displacementL total displacement, litres
+ * @returns {boolean}
+ */
+export function hasBalanceShafts(configuration, displacementL) {
+  return configuration === 'I4' && displacementL >= 1.8;
+}
 
 /** Selectable block and head materials. */
 export const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];

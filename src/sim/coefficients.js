@@ -20,6 +20,15 @@ export const COEFF = {
   RUBBING_PER_RPM: 6.5,        // rubbing FMEP rise per RPM
   SPRING_FMEP_PER_RATE: 190,   // extra FMEP per point of valve spring rate above stock
   SPRING_RPM_BIAS: 0.6,        // how much of spring drag scales with RPM (rest is constant)
+  // Extra rubbing FMEP per main bearing beyond the V6 baseline of four.
+  // Anchored arithmetically rather than guessed: total rubbing FMEP at 6000 RPM is
+  // about 84 kPa, published breakdowns put the crankshaft group near 15% of friction
+  // (~12.6 kPa), and the baseline carries four mains — so roughly 3 kPa each.
+  FMEP_PER_MAIN_BEARING_PA: 3000,
+  // Fraction of rubbing friction added by a balance shaft pair. The National
+  // Academies' fuel-economy report records a measured 6% friction reduction when
+  // Ford deleted the balance shaft from its 1.0 L three-cylinder.
+  FMEP_BALANCE_SHAFT_FRAC: 0.06,
 
   // --- Combustion efficiency roll-off ---
   // Torque falls as a parabola either side of MBT. 0.0016 gives roughly a 4% loss at

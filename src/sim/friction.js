@@ -14,15 +14,20 @@ import { COEFF } from './coefficients.js';
 /**
  * Rubbing (mechanical) friction as a mean effective pressure.
  *
- * Rises with engine speed, and with valve spring load if stiffer springs are fitted.
+ * Rises with engine speed, with valve spring load if stiffer springs are fitted, and
+ * with the engine's architecture — main bearing count and any balance shafts.
  *
  * @param {number} rpm engine speed
  * @param {number} [springPa] extra FMEP from valve springs, Pa
+ * @param {{bearingFmepPa?: number, balanceShaftFrac?: number}} [arch] architecture friction
  * @returns {number} rubbing FMEP, Pa
  */
-export function rubbingFmepPa(rpm, springPa = 0) {
+export function rubbingFmepPa(rpm, springPa = 0, arch = {}) {
+  const { bearingFmepPa = 0, balanceShaftFrac = 0 } = arch;
   const rpmShare = (1 - COEFF.SPRING_RPM_BIAS) + COEFF.SPRING_RPM_BIAS * (rpm / 7500);
-  return COEFF.RUBBING_BASE_PA + rpm * COEFF.RUBBING_PER_RPM + springPa * rpmShare;
+  const base = COEFF.RUBBING_BASE_PA + rpm * COEFF.RUBBING_PER_RPM + springPa * rpmShare
+    + bearingFmepPa;
+  return base * (1 + balanceShaftFrac);
 }
 
 /**
@@ -47,9 +52,10 @@ export function pumpingFmepPa(mapKpa) {
  * @param {number} displacementL displacement, litres
  * @param {number} [mapKpa] manifold absolute pressure, kPa
  * @param {number} [springPa] extra FMEP from valve springs, Pa
+ * @param {{bearingFmepPa?: number, balanceShaftFrac?: number}} [arch] architecture friction
  * @returns {number} friction torque, Nm
  */
-export function frictionTorqueNm(rpm, displacementL, mapKpa = BARO_KPA, springPa = 0) {
-  const fmep = rubbingFmepPa(rpm, springPa) + pumpingFmepPa(mapKpa);
+export function frictionTorqueNm(rpm, displacementL, mapKpa = BARO_KPA, springPa = 0, arch = {}) {
+  const fmep = rubbingFmepPa(rpm, springPa, arch) + pumpingFmepPa(mapKpa);
   return (fmep * (displacementL / 1000)) / (4 * Math.PI);
 }

@@ -173,7 +173,9 @@ export function liveStep(st, dt, input, cfg) {
   const starterNm = s.cranking ? 180 : 0;
   // Cranking has no combustion, so the starter works against motoring friction.
   const crankingDrag = s.cranking
-    ? frictionTorqueNm(Math.max(s.rpm, 0), derived.displacementL, pt ? pt.map : BARO_KPA)
+    ? frictionTorqueNm(Math.max(s.rpm, 0), derived.displacementL, pt ? pt.map : BARO_KPA, 0, {
+        bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
+      })
     : 0;
   const netNm = crankNm + starterNm - crankingDrag - (s.running ? input.load : 0);
   const alpha = netNm / ENGINE_INERTIA;

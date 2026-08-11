@@ -8,7 +8,7 @@
 
 import { CHAR_SCALE, OTTO_REALIZATION } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { CYL_COUNT } from './hardware.js';
+import { BASELINE_MAIN_BEARINGS, CYL_COUNT, MAIN_BEARINGS, hasBalanceShafts } from './hardware.js';
 
 /** Stock camshaft duration, crank degrees. */
 export const CAM_BASE_DURATION = 210;
@@ -82,7 +82,7 @@ export function charMultiplier(rpm, ratio) {
 
 /**
  * @typedef {object} EngineConfig
- * @property {'I4'|'V6'|'V8'} configuration
+ * @property {'I4'|'I6'|'V6'|'V8'} configuration
  * @property {number} bore mm
  * @property {number} stroke mm
  * @property {number} compression static compression ratio
@@ -111,6 +111,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} floatRpm valve float speed, RPM
  * @property {number} springPa spring friction FMEP, Pa
+ * @property {number} bearingFmepPa extra rubbing FMEP from main bearing count, Pa
+ * @property {number} balanceShaftFrac fraction of rubbing friction added by balance shafts
  */
 
 /**
@@ -137,6 +139,13 @@ export function deriveEngine(cfg) {
   const thermalEff = ottoIdeal * OTTO_REALIZATION;
   const torqueScale = displacementL / 3.5;
   const bearingWearMult = cfg.blockMaterial === 'Cast Iron' ? 0.85 : 1.0;
+  // Architecture friction. Zeroed at the V6 baseline so existing builds do not move:
+  // an inline six pays for its seven mains, a large four pays for its balance shafts,
+  // and the inline six's real advantage is over the four, not over the V6.
+  const bearingFmepPa = (MAIN_BEARINGS[cfg.configuration] - BASELINE_MAIN_BEARINGS)
+    * COEFF.FMEP_PER_MAIN_BEARING_PA;
+  const balanceShaftFrac = hasBalanceShafts(cfg.configuration, displacementL)
+    ? COEFF.FMEP_BALANCE_SHAFT_FRAC : 0;
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
   const springRate = cfg.springRate ?? 50;
   const overlapDeg = camOverlapDeg(camDuration);
@@ -149,5 +158,6 @@ export function deriveEngine(cfg) {
     cyl, displacementL, ratio, configKnockBonus, materialKnockBonus, compressionKnockAdj,
     thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
+    bearingFmepPa, balanceShaftFrac,
   };
 }
