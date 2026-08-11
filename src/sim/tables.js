@@ -73,6 +73,7 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
   headMaterial: 'Aluminum',
   camDuration: 210,
   springRate: 50,
+  redline: 7500,
 });
 
 /** No bolt-ons fitted. Frozen for the same reason as the engine config above. */

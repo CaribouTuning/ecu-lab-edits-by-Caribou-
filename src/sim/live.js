@@ -27,8 +27,10 @@ export const IDLE_TARGET_RPM = 800;
 export const CRANK_RPM = 260;
 /** Below this the engine has stalled, RPM. */
 export const STALL_RPM = 380;
-/** Rev limiter fuel cut, RPM. */
+/** Default rev limiter fuel cut, RPM, when an engine states no redline. */
 export const REDLINE_CUT = 7600;
+/** How far past the redline the limiter cuts fuel. */
+export const LIMITER_OVERSHOOT_RPM = 100;
 
 /**
  * A simulated sensor: real ones are noisy and lag behind the true value.
@@ -74,6 +76,8 @@ export function liveStep(st, dt, input, cfg) {
     mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
   } = cfg;
   if (turboOn) assertBoostCurve(boostCurve);
+  const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
+  const limiterCutRpm = redline + LIMITER_OVERSHOOT_RPM;
 
   s.prevRpm = st.rpm;
   s.elapsed += dt;
@@ -112,15 +116,15 @@ export function liveStep(st, dt, input, cfg) {
   // revs fall, fuel is restored a few hundred RPM lower, and the engine climbs back
   // into the cut. That rapid cut-restore cycle IS the bounce you hear.
   if (s.running) {
-    if (s.rpm >= REDLINE_CUT) s.limiterCut = true;
-    else if (s.rpm < REDLINE_CUT - 320) s.limiterCut = false;
+    if (s.rpm >= limiterCutRpm) s.limiterCut = true;
+    else if (s.rpm < limiterCutRpm - 320) s.limiterCut = false;
   } else s.limiterCut = false;
   s.fuelCut = (s.running && s.limiterCut) || overrun;
 
   // ---- combustion torque from the same physics the dyno uses ----
   let crankNm = 0, pt = null;
   if ((s.running || s.cranking) && s.rpm > 100) {
-    const rpmClamped = clamp(s.rpm, 700, 7500);
+    const rpmClamped = clamp(s.rpm, 700, redline);
     // Throttle opening sets manifold pressure — but so does ENGINE SPEED. A nearly
     // closed throttle at high RPM pulls far harder vacuum than the same opening at
     // idle, because the engine is trying to pump much more air through the same

@@ -13,6 +13,9 @@ import { BASELINE_MAIN_BEARINGS, CYL_COUNT, MAIN_BEARINGS, hasBalanceShafts } fr
 /** Stock camshaft duration, crank degrees. */
 export const CAM_BASE_DURATION = 210;
 
+/** Rev limit assumed when an engine does not state one. */
+export const DEFAULT_REDLINE_RPM = 7500;
+
 /**
  * How far the VE peak moves for a given cam duration.
  *
@@ -90,6 +93,7 @@ export function charMultiplier(rpm, ratio) {
  * @property {'Cast Iron'|'Aluminum'} headMaterial
  * @property {number} [camDuration] crank degrees
  * @property {number} [springRate] valve spring rate
+ * @property {number} [redline] rev limit, RPM
  */
 
 /**
@@ -113,6 +117,7 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} springPa spring friction FMEP, Pa
  * @property {number} bearingFmepPa extra rubbing FMEP from main bearing count, Pa
  * @property {number} balanceShaftFrac fraction of rubbing friction added by balance shafts
+ * @property {number} redline rev limit, RPM
  */
 
 /**
@@ -151,6 +156,7 @@ export function deriveEngine(cfg) {
   const overlapDeg = camOverlapDeg(camDuration);
   const floatRpm = valveFloatRpm(springRate, camDuration);
   const springPa = springFrictionPa(springRate);
+  const redline = cfg.redline ?? DEFAULT_REDLINE_RPM;
   const character = ratio > 1.08
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
@@ -158,6 +164,6 @@ export function deriveEngine(cfg) {
     cyl, displacementL, ratio, configKnockBonus, materialKnockBonus, compressionKnockAdj,
     thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
-    bearingFmepPa, balanceShaftFrac,
+    bearingFmepPa, balanceShaftFrac, redline,
   };
 }

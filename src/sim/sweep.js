@@ -63,7 +63,8 @@ export function simulateSweep({
   const modsWithTurbo = { ...mods, turboFitted: turboOn };
 
   const points = [];
-  for (let rpm = SWEEP_START_RPM; rpm <= SWEEP_END_RPM; rpm += SWEEP_STEP_RPM) {
+  const endRpm = derived.redline ?? SWEEP_END_RPM;
+  for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
     const man = computeManifold(rpm, loadKpa, turboOn, boostTarget, turbine, compressor);
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
@@ -211,13 +212,13 @@ export function simulateSweep({
   // Valve float is a hard mechanical limit — the springs cannot close the valves fast
   // enough, so cylinder filling collapses. No calibration change touches this.
   const floatRpm = derived.floatRpm || 99999;
-  if (floatRpm < SWEEP_END_RPM) {
+  if (floatRpm < endRpm) {
     const lost = points.filter((p) => p.rpm > floatRpm);
     events.push({
-      type: 'float', severity: 3, impact: Math.round(clamp((SWEEP_END_RPM - floatRpm) / 45, 8, 34)),
+      type: 'float', severity: 3, impact: Math.round(clamp((endRpm - floatRpm) / 45, 8, 34)),
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
-      fix: `Raise the valve spring rate on BUILD until float sits above your ${SWEEP_END_RPM} RPM redline, or fit a milder cam. No amount of table tuning can fix this — the valvetrain is simply not keeping up.`,
+      fix: `Raise the valve spring rate on BUILD until float sits above your ${endRpm} RPM redline, or fit a milder cam. No amount of table tuning can fix this — the valvetrain is simply not keeping up.`,
     });
   }
 

@@ -492,3 +492,50 @@ describe('engine configuration and friction', () => {
     expect(S.rubbingFmepPa(6000, 0)).toBe(S.rubbingFmepPa(6000, 0, { bearingFmepPa: 0, balanceShaftFrac: 0 }));
   });
 });
+
+describe('per-engine redline', () => {
+  const sweepTo = (redline) => {
+    const cfg = { ...STOCK, redline };
+    const derived = S.deriveEngine(cfg);
+    return S.simulateSweep({
+      loadKpa: 100,
+      ve: S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}),
+      timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: false, boostCurve: S.RPM.map(() => 0),
+      octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 550, ecuInjectorCc: 550, injectorLabel: '550cc',
+      mods: S.DEFAULT_MODS, mafScalar: 1, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    });
+  };
+
+  it('defaults to 7500 so existing builds are unaffected', () => {
+    expect(S.deriveEngine(STOCK).redline).toBe(7500);
+    expect(sweepTo(undefined).points.at(-1).rpm).toBe(7500);
+  });
+
+  it('ends the pull at the engine redline', () => {
+    const r = sweepTo(6500);
+    expect(r.points.at(-1).rpm).toBe(6500);
+    expect(r.points.every((p) => p.rpm <= 6500)).toBe(true);
+  });
+
+  it('reports valve float against the engine own redline, not a fixed 7500', () => {
+    // springRate: 53 (not 25 — a 25 rate here drops floatRpm to ~5380, well below 6500,
+    // which would defeat the point of this test) puts float just above 7000.
+    const cfg = { ...STOCK, redline: 6500, camDuration: 290, springRate: 53 };
+    const derived = S.deriveEngine(cfg);
+    // Float sits near 7000 here — above a 6500 redline, so it must NOT be reported.
+    expect(derived.floatRpm).toBeGreaterThan(6500);
+    const r = S.simulateSweep({
+      loadKpa: 100, ve: S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}),
+      timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: false, boostCurve: S.RPM.map(() => 0),
+      octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 550, ecuInjectorCc: 550, injectorLabel: '550cc',
+      mods: S.DEFAULT_MODS, mafScalar: 1, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    });
+    expect(r.events.some((e) => e.type === 'float')).toBe(false);
+  });
+});
