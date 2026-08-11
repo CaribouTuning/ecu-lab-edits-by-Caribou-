@@ -45,6 +45,27 @@ export function assertBoostCurve(boostCurve) {
 }
 
 /**
+ * Systematic MAF misread introduced by hardware that changes airflow characteristics
+ * downstream of the sensor — a bigger intake or turbo plumbing — before the ECU has
+ * been recalibrated for it.
+ *
+ * Exported so the factory calibration generator in `presets.js` can pre-compensate for
+ * exactly this error the same way a real ECU's characterized MAF transfer function
+ * would, rather than guessing at a second copy of this formula — the drift risk
+ * `knockThreshold` was extracted to `knock.js` to avoid.
+ *
+ * @param {{intake: boolean}} mods bolt-ons fitted
+ * @param {boolean} turboOn whether a turbo is fitted
+ * @returns {number} multiplier applied to true airflow to get the MAF's reading
+ */
+export function mafErrorFactor(mods, turboOn) {
+  let base = 1.0;
+  if (mods.intake) base *= COEFF.MAF_ERROR_INTAKE;
+  if (turboOn) base *= COEFF.MAF_ERROR_TURBO;
+  return base;
+}
+
+/**
  * Runs a full dyno pull and produces the datalog, event log, wear and peak figures.
  *
  * @param {object} input
@@ -56,9 +77,7 @@ export function simulateSweep({
   turbine, compressor,
 }) {
   if (turboOn) assertBoostCurve(boostCurve);
-  let mafErrorBase = 1.0;
-  if (mods.intake) mafErrorBase *= 0.90;
-  if (turboOn) mafErrorBase *= 0.92;
+  const mafErrorBase = mafErrorFactor(mods, turboOn);
   const needsMafRecal = mods.intake || turboOn;
   const modsWithTurbo = { ...mods, turboFitted: turboOn };
 

@@ -93,4 +93,12 @@ export const COEFF = {
   STFT_GAIN: 42,
   LTFT_LEARN_RATE: 0.004,
   TRIM_LIMIT: 25,
+
+  // --- MAF measurement error ---
+  // A bigger intake housing or turbo plumbing changes the airflow profile across the
+  // sensor, so a MAF calibrated for stock hardware under-reads once either is fitted.
+  // Values are illustrative of the real-world magnitude tuners correct for with a MAF
+  // scalar or transfer-function rescale, not measurements of a specific part.
+  MAF_ERROR_INTAKE: 0.90,
+  MAF_ERROR_TURBO: 0.92,
 };

@@ -22,6 +22,7 @@ export * from './manifold.js';
 export * from './airflow.js';
 export * from './point.js';
 export * from './sweep.js';
+export * from './presets.js';
 export * from './live.js';
 export * from './advisors.js';
 export * from './scoring.js';
