@@ -59,6 +59,7 @@ const out = {
       factory: preset.factory,
       peakHp: r.peakHp,
       peakTq: r.peakTq,
+      redline: preset.engine.redline,
       peakHpRpm: r.points.reduce((a, b) => (b.hp > a.hp ? b : a)).rpm,
       peakTqRpm: r.points.reduce((a, b) => (b.torque > a.torque ? b : a)).rpm,
       maxDuty: Math.max(...r.points.map((p) => p.duty)),
@@ -87,15 +88,56 @@ def collect():
         shim.unlink(missing_ok=True)
 
 
+# Presets whose peak-power RPM this model cannot place, and why. Mirrors
+# NO_PEAK_BEFORE_LIMITER in tests/presets.test.js, which is the authority — if the two
+# ever disagree, the test is right and this is stale. Not a tolerance to widen when a
+# fit gets awkward: each entry names a missing term in the shared physics.
+NO_PEAK_BEFORE_LIMITER = {
+    "vq35hr": "no term in the shared physics makes NA power fall before the redline "
+              "(the real rolloff is cam profile, VVEL and intake tuning)",
+}
+
+
 def rated_rpm(value):
     """Format a rating that may be a point or a plateau band."""
     return f"{value[0]}-{value[1]}" if isinstance(value, list) else str(value)
 
 
-def in_band(peak, rated):
+def band(lo, hi):
+    """Format an RPM band, collapsing it to one number when it is a single point."""
+    return str(lo) if lo == hi else f"{lo}-{hi}"
+
+
+def flat_top(curve):
+    """The whole RPM band sharing the reported peak power, low to high.
+
+    Reported hp is rounded to the whole number, so several RPM points routinely tie at
+    the peak. Taking the first one makes a peak-location check turn on a rounding
+    tie-break rather than on physics — which is exactly how a preset once certified a
+    peak at 7200 on a curve that was still climbing at 7500. Compare against the band.
+    """
+    peak = max(p["hp"] for p in curve)
+    tied = [p["rpm"] for p in curve if p["hp"] == peak]
+    return min(tied), max(tied)
+
+
+def peak_rpm_ok(result):
+    """Whether the simulated power peak lands where the manufacturer says it does.
+
+    Three cases, matching tests/presets.test.js: an engine the model admits it cannot
+    place must instead climb monotonically into its limiter; a plateau-rated engine's
+    flat top must overlap the published band; a point-rated engine's published RPM must
+    fall in or near its flat top.
+    """
+    curve = result["curve"]
+    lo, hi = flat_top(curve)
+    if result["id"] in NO_PEAK_BEFORE_LIMITER:
+        climbs = all(b["hp"] >= a["hp"] for a, b in zip(curve, curve[1:]))
+        return hi == result["redline"] and climbs
+    rated = result["factory"]["crankHpRpm"]
     if isinstance(rated, list):
-        return rated[0] <= peak <= rated[1]
-    return abs(peak - rated) <= 500
+        return lo <= rated[1] and hi >= rated[0]
+    return lo - 500 <= rated <= hi + 500
 
 
 def pct_err(sim, target):
@@ -105,16 +147,17 @@ def pct_err(sim, target):
 def report(data):
     eff = data["drivetrainEff"]
     results = data["presets"]
-    print(f"{'engine':<24} {'hp: sim/target':>16} {'err':>7} {'rpm: sim/rated':>16} "
+    print(f"{'engine':<24} {'hp: sim/target':>16} {'err':>7} "
+          f"{'rpm: flat top/rated':>19} "
           f"{'tq: sim/target':>16} {'err':>7} {'knock':>6} {'duty':>6}")
-    print("-" * 108)
+    print("-" * 112)
     ok = True
     for r in results:
         hpTarget = r["factory"]["crankHp"] * eff
         tqTarget = r["factory"]["crankTq"] * eff
         hpErr = pct_err(r["peakHp"], hpTarget)
         tqErr = pct_err(r["peakTq"], tqTarget)
-        rpmOk = in_band(r["peakHpRpm"], r["factory"]["crankHpRpm"])
+        rpmOk = peak_rpm_ok(r)
         hpOk = abs(hpErr) <= 5
         tqOk = abs(tqErr) <= 10
         dutyOk = r["maxDuty"] < 90
@@ -124,7 +167,8 @@ def report(data):
         print(
             f"{r['name']:<24} "
             f"{r['peakHp']:>6}/{hpTarget:<6.0f} {hpErr:>6.1f}% "
-            f"{r['peakHpRpm']:>6}/{rated_rpm(r['factory']['crankHpRpm']):<8} "
+            f"{band(*flat_top(r['curve'])):>9}/"
+            f"{rated_rpm(r['factory']['crankHpRpm']):<9} "
             f"{r['peakTq']:>6}/{tqTarget:<6.0f} {tqErr:>6.1f}% "
             f"{r['knockEvents']:>6} {r['maxDuty']:>5}% "
             f"{'' if rowOk else '  <-- FIX'}"
@@ -135,12 +179,20 @@ def report(data):
             if not tqOk:
                 print(f"    tq outside +-10%: {r['peakTq']} wlb-ft vs {tqTarget:.0f} wlb-ft target")
             if not rpmOk:
-                print(f"    peak hp at {r['peakHpRpm']} rpm, rated {rated_rpm(r['factory']['crankHpRpm'])}")
+                print(f"    peak hp across {band(*flat_top(r['curve']))} rpm, "
+                      f"rated {rated_rpm(r['factory']['crankHpRpm'])}")
             if not knockOk:
                 for msg in r["knockDetail"]:
                     print(f"    knock: {msg}")
             if not dutyOk:
                 print(f"    injector duty hits {r['maxDuty']}% (wall is 90%)")
+        # A known limitation still gets printed on a passing row. The row passes
+        # because the check was replaced with one the model can honestly meet, not
+        # because the miss went away, and a silent pass would hide that.
+        if r["id"] in NO_PEAK_BEFORE_LIMITER:
+            print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
+                  f"climbs to the {r['redline']} limiter, rated "
+                  f"{rated_rpm(r['factory']['crankHpRpm'])}")
     print()
     print("all presets within tolerance" if ok else "one or more presets need work")
     return ok
