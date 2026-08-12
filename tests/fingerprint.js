@@ -183,6 +183,23 @@ export function buildFingerprint(S) {
     }
   }
 
+  // ---- factoryCalibration: the generated VE/timing/AFR surface for every shipped
+  // preset. This is what actually exercises tuned constants that live in
+  // src/sim/presets.js itself (FACTORY_KNOCK_MARGIN_DEG, OPEN_LOOP_KPA) — numbers that
+  // move the dyno figures but sit outside COEFF and outside any other section of this
+  // matrix, so nothing above catches them moving. Gating the whole generated surface
+  // rather than the constants individually means a future constant added to the
+  // generator is covered automatically, with no matching addition required here.
+  out.factoryCalibration = {};
+  for (const preset of S.ENGINE_PRESETS) {
+    const { ve, timing, afr } = S.factoryCalibration(preset);
+    out.factoryCalibration[preset.id] = {
+      ve: ve.map((row) => row.map(r6)),
+      timing: timing.map((row) => row.map(r6)),
+      afr: afr.map((row) => row.map(r6)),
+    };
+  }
+
   // ---- helpers ----
   out.helpers = {
     interp1: [1000, 1500, 3000, 4500, 6000, 7500, 9000].map((x) => r6(S.interp1(S.RPM, S.DEFAULT_TIMING[0], x))),

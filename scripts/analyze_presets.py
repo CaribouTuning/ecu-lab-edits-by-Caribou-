@@ -60,8 +60,6 @@ const out = {
       peakHp: r.peakHp,
       peakTq: r.peakTq,
       redline: preset.engine.redline,
-      peakHpRpm: r.points.reduce((a, b) => (b.hp > a.hp ? b : a)).rpm,
-      peakTqRpm: r.points.reduce((a, b) => (b.torque > a.torque ? b : a)).rpm,
       maxDuty: Math.max(...r.points.map((p) => p.duty)),
       knockEvents: r.events.filter((e) => e.type === 'knock').length,
       knockDetail: r.events.filter((e) => e.type === 'knock').map((e) => e.msg),
@@ -121,6 +119,21 @@ def flat_top(curve):
     return min(tied), max(tied)
 
 
+def climbs_to_limiter(result):
+    """Whether the power curve is still climbing when it reaches this engine's own
+    redline — the shape the NO_PEAK_BEFORE_LIMITER exception exists to describe.
+
+    Shared by peak_rpm_ok (which uses it to decide the row passes) and report (which
+    uses it to decide whether the exception's note still describes reality). If this
+    ever goes false for a preset still listed in NO_PEAK_BEFORE_LIMITER, the model has
+    grown a term that makes NA power fall off, and the entry is stale.
+    """
+    curve = result["curve"]
+    lo, hi = flat_top(curve)
+    climbs = all(b["hp"] >= a["hp"] for a, b in zip(curve, curve[1:]))
+    return hi == result["redline"] and climbs
+
+
 def peak_rpm_ok(result):
     """Whether the simulated power peak lands where the manufacturer says it does.
 
@@ -129,11 +142,10 @@ def peak_rpm_ok(result):
     flat top must overlap the published band; a point-rated engine's published RPM must
     fall in or near its flat top.
     """
+    if result["id"] in NO_PEAK_BEFORE_LIMITER:
+        return climbs_to_limiter(result)
     curve = result["curve"]
     lo, hi = flat_top(curve)
-    if result["id"] in NO_PEAK_BEFORE_LIMITER:
-        climbs = all(b["hp"] >= a["hp"] for a, b in zip(curve, curve[1:]))
-        return hi == result["redline"] and climbs
     rated = result["factory"]["crankHpRpm"]
     if isinstance(rated, list):
         return lo <= rated[1] and hi >= rated[0]
@@ -188,11 +200,20 @@ def report(data):
                 print(f"    injector duty hits {r['maxDuty']}% (wall is 90%)")
         # A known limitation still gets printed on a passing row. The row passes
         # because the check was replaced with one the model can honestly meet, not
-        # because the miss went away, and a silent pass would hide that.
+        # because the miss went away, and a silent pass would hide that. But only say
+        # "climbs to the limiter" when it actually still does — if the row failed
+        # because the engine stopped climbing, printing that sentence unconditionally
+        # would contradict the "peak hp across ..." line printed just above it.
         if r["id"] in NO_PEAK_BEFORE_LIMITER:
-            print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
-                  f"climbs to the {r['redline']} limiter, rated "
-                  f"{rated_rpm(r['factory']['crankHpRpm'])}")
+            if climbs_to_limiter(r):
+                print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
+                      f"climbs to the {r['redline']} limiter, rated "
+                      f"{rated_rpm(r['factory']['crankHpRpm'])}")
+            else:
+                print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
+                      f"but the curve no longer climbs to the {r['redline']} limiter — "
+                      f"the limitation this entry describes appears to have been resolved; "
+                      f"delete {r['id']!r} from NO_PEAK_BEFORE_LIMITER instead of keeping this note.")
     print()
     print("all presets within tolerance" if ok else "one or more presets need work")
     return ok

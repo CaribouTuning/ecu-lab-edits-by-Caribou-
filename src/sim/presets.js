@@ -79,12 +79,18 @@ export const ENGINE_PRESETS = [
       // Bore, stroke, compression and redline above are published figures and do not
       // move. `camDuration` and `springRate` are not published, so they are where this
       // preset is fitted — 228° is simply the duration that best fits power and torque
-      // at the same time (+2.2% and -3.9% against the published ratings at the wheels;
-      // milder cams lose power faster than they gain torque, bigger ones the reverse).
+      // at the same time (+2.2% and -3.9% against the published ratings at the wheels).
+      // Torque is not what caps this fit — in the fitted range it bottoms out near
+      // 220° (213.65 wlb-ft) and RISES in both directions: 216.2 at 224°, 217.4 at
+      // 226°, 218.8 at 228°. Bigger cams gain power and torque both. What actually
+      // bounds the fit is the ±5% power ceiling and the cam-overlap advisory, which
+      // starts firing at 229° (11.00° overlap, vs. 9.90° at 228° — the last duration
+      // with an empty event log).
       // `springRate` 68 is set well above the 50 baseline purely to carry that cam:
-      // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline, the
-      // same margin the other three presets have. No pull should ever show a `float`
-      // event on this engine — if one appears, that is a bug, not "the character".
+      // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline —
+      // comparable to (not the same as) the margin the other three presets carry:
+      // 1330 / 1682 / 1382 RPM. No pull should ever show a `float` event on this
+      // engine — if one appears, that is a bug, not "the character".
       //
       // WHAT THIS PRESET DOES NOT REPRODUCE: the real engine makes peak power at 6800
       // and falls away after it. Simulated power does not fall at all — it climbs

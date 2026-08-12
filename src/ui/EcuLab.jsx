@@ -241,9 +241,12 @@ function DialMark({ size = 64, pct = 0.62, live = false }) {
   );
 }
 
-function Tach({ rpm, cylinders, running }) {
-  const pct = clamp(rpm / 7500, 0, 1);
-  const zoneColor = pct > 0.93 ? T.red : pct > 0.75 ? T.yellow : T.green;
+function Tach({ rpm, cylinders, running, fullScaleRpm }) {
+  const pct = clamp(rpm / fullScaleRpm, 0, 1);
+  // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
+  // sits at pct ≈ 0.909 regardless of engine — the red zone has to start at or just
+  // below that, not above it, or the needle never shows red at the engine's own redline.
+  const zoneColor = pct > 0.9 ? T.red : pct > 0.75 ? T.yellow : T.green;
   return (
     <Panel style={{ textAlign: 'center', background: T.panel }}>
       <style>{`@keyframes cylpulse{0%,100%{opacity:.25;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}`}</style>
@@ -428,7 +431,7 @@ const TUTORIAL_STEPS = [
   { title: 'Three tables, three jobs',
     body: 'On TUNE: AIR (volumetric efficiency — how well each cylinder fills), SPARK (ignition timing in degrees before top dead center), FUEL (target air-fuel ratio). Rows are manifold pressure in kPa, columns are RPM — the same axes real speed-density tuning software uses.' },
   { title: 'Nothing is simulated until you pull',
-    body: 'No preview, no live guess. Press RUN DYNO PULL on DYNO and the engine sweeps 800 to 7500 RPM, producing a real datalog. That is the only way to find out what your changes did — exactly like a real dyno session.' },
+    body: 'No preview, no live guess. Press RUN DYNO PULL on DYNO and the engine sweeps 1500 RPM to its own redline, producing a real datalog. That is the only way to find out what your changes did — exactly like a real dyno session.' },
   { title: 'Read the log before touching anything',
     body: 'Every pull produces a Pull Log. Each problem gets a plain-language Why (what physically caused it) and a Try (what to change). The datalog next to it shows commanded vs. actual for timing and mixture. A gap between those two columns is the ECU telling you something.' },
   { title: 'Change one thing, then pull again',
@@ -1953,7 +1956,7 @@ export default function EngineManagementSandbox() {
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
 
-            <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} /></div>
+            <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 
             <button onClick={doRun} disabled={running} style={{
               width: '100%', padding: '15px 0', borderRadius: 12, border: 'none', marginBottom: 16,
