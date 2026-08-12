@@ -52,6 +52,35 @@ npm run build     # make sure it still builds
 
 CI runs all four on every PR.
 
+`main` is protected: every change lands through a pull request with CI green and the
+branch up to date. That applies to maintainers too — nobody pushes to `main` directly.
+
+## Releasing
+
+**Merging to `main` means "this is good". Tagging means "this is live".**
+
+`main` is always deployable but is not itself deployed, so finished work can sit there
+unpublished until it is worth a release. Publishing is a tag push:
+
+```bash
+git checkout main && git pull
+npm version minor        # or patch/major — writes package.json and makes the tag
+git push --follow-tags
+```
+
+That fires `.github/workflows/deploy.yml`, which reruns the tests, builds, and
+publishes to GitHub Pages.
+
+`npm version` also runs `scripts/sync-version.js`, which regenerates `src/version.js`
+— the `BUILD_VERSION` shown in the app header and quoted in bug reports — from
+`package.json`, and stages it into the release commit. **Do not edit `src/version.js`
+by hand**; it is generated, and a build that misreports its own version makes every bug
+report from it untrustworthy.
+
+If a deploy fails for reasons that are not the code's fault, re-run the Deploy workflow
+from the Actions tab rather than moving the tag. A tag should keep meaning the commit it
+originally meant.
+
 ## The fingerprint test
 
 `tests/fingerprint.test.js` hashes the whole simulation across a large matrix of
