@@ -78,10 +78,12 @@ export function computeEngineerScore({
     score -= 10; deductions.push('-10 High heat load without an aluminum head for cooling');
   }
   if (turboOn) {
-    if (displacementL < 3.0 && (turbine.label.includes('Large') || compressor.label === 'Large')) {
+    // Matched on `size`, never on `label`: labels are display copy, and rewording one
+    // for the UI must not move the score. See TURBINE_OPTS in hardware.js.
+    if (displacementL < 3.0 && (turbine.size === 'large' || compressor.size === 'large')) {
       score -= 8; deductions.push('-8 Turbo sized large for this displacement — expect heavy lag');
     }
-    if (displacementL > 4.2 && (turbine.label.includes('Small') || compressor.label === 'Small')) {
+    if (displacementL > 4.2 && (turbine.size === 'small' || compressor.size === 'small')) {
       score -= 8; deductions.push('-8 Turbo sized small for this displacement — will choke the top end');
     }
   }
