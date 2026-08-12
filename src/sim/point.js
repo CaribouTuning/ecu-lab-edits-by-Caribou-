@@ -10,14 +10,12 @@
  * physics layer testable in plain Node.
  */
 
-import {
-  BARO_KPA, DRIVETRAIN_EFF, INJ_DEADTIME_MS, R_AIR,
-} from './constants.js';
+import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { rubbingFmepPa, pumpingFmepPa } from './friction.js';
+import { chargeIndexOf, knockThreshold, mbtTiming } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
-import { clamp, interp1 } from './math.js';
-import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
+import { clamp } from './math.js';
 import { chargeTempK } from './thermo.js';
 
 /**
@@ -111,46 +109,21 @@ export function evaluatePoint({
   const lambdaActual = airChargeG / (deliveredFuelG * fuel.stoich);
   const actualAfr = lambdaActual * 14.7;
 
-  // --- KNOCK ENVELOPE. MAP drives the load term directly: low manifold pressure
-  // means low cylinder pressure and lots of spare timing margin.
+  // --- KNOCK ENVELOPE. Shared with the factory calibration generator so the ECU and
+  // the calibration cannot disagree about what this engine tolerates.
   const bestAfr = bestPowerAfr(boostPsi);
-  const afrDelta = actualAfr - bestAfr;
-  // Knock is driven by how much charge is actually TRAPPED in the cylinder, not by
-  // manifold pressure alone. Two engines at the same MAP but different volumetric
-  // efficiency see different peak pressures — which is exactly why a big-cam engine
-  // that breathes better also needs a few degrees less timing than a stock one.
-  // Uses ACTUAL filling: knock is caused by the charge really in the cylinder, and the
-  // end gas does not care what the ECU's table claims.
-  const chargeIndex = (veActual / 100) * (mapKpa / BARO_KPA);
-  // Knock margin is not linear in charge. Doubling the trapped mass roughly doubles
-  // peak pressure, so margin scales with the RATIO of charge to the reference, not
-  // the difference. At deep vacuum an engine effectively cannot knock at all — which
-  // is why factory cruise maps carry 40-50 deg of advance and never complain.
-  const loadBonus = chargeIndex >= COEFF.KNOCK_CHARGE_REF
-    ? (COEFF.KNOCK_CHARGE_REF - chargeIndex) * COEFF.KNOCK_CHARGE_GAIN
-    : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, 0.04) - 1) * COEFF.KNOCK_CHARGE_RATIO_GAIN;
-  const overBoost = Math.max(0, boostPsi - compressor.boostCeiling);
-  const iatPenalty = Math.max(0, chargeC - 25) * COEFF.KNOCK_IAT_PER_C;
-  const modsThresholdBonus = (mods.headers ? 1.5 : 0) + (mods.exhaust ? 0.5 : 0);
-  let threshold = interp1(RPM, BASE_KNOCK_LIMIT_91, rpm) + octaneBonus + loadBonus + modsThresholdBonus
-    + derived.configKnockBonus + derived.materialKnockBonus + derived.compressionKnockAdj
-    - iatPenalty - overBoost * COEFF.KNOCK_OVERBOOST_PENALTY;
-  // A lean mixture only threatens knock when there is real cylinder pressure behind
-  // it. At light cruise (low MAP) an engine happily runs 14.7:1 with 40 deg of advance
-  // and never knocks — which is exactly why factory cruise maps look like that. Under
-  // boost the same leanness is dangerous. So scale the mixture terms by charge
-  // pressure rather than applying them flat.
-  const pressureFactor = clamp(Math.pow(mapKpa / BARO_KPA, 1.5), 0.05, 2.6);
-  threshold -= Math.max(0, afrDelta) * COEFF.KNOCK_LEAN_PENALTY * pressureFactor;
-  threshold += Math.min(COEFF.KNOCK_RICH_CAP, Math.max(0, -afrDelta) * COEFF.KNOCK_RICH_BONUS)
-    * clamp(pressureFactor, 0.3, 1.5);
+  const chargeIndex = chargeIndexOf(veActual, mapKpa);
+  const threshold = knockThreshold({
+    rpm, mapKpa, veActual, chargeC, actualAfr, bestAfr, boostPsi,
+    octaneBonus, mods, derived, compressor,
+  });
 
   const margin = threshold - timingVal;
   const knockPull = margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0;
   const usedTiming = timingVal - knockPull;
 
   // --- COMBUSTION -> TORQUE
-  const mbtIdeal = 24 + ((rpm - 1500) / 6000) * 12 - (mapKpa / BARO_KPA) * 6;
+  const mbtIdeal = mbtTiming(rpm, mapKpa);
   const timingEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.TIMING_FALLOFF * Math.pow(usedTiming - mbtIdeal, 2));
   const afrEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.AFR_FALLOFF * Math.pow(actualAfr - bestAfr, 2));
   const burnedFuelG = Math.min(deliveredFuelG, airChargeG / fuel.stoich);
@@ -164,7 +137,9 @@ export function evaluatePoint({
   // partly closed throttle before anything reaches the crank. Pumping loss is the
   // vacuum it is working against — which is precisely why part-throttle running is
   // inefficient and why a throttled engine brakes itself on overrun.
-  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0) + pumpingFmepPa(mapKpa);
+  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0, {
+    bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
+  }) + pumpingFmepPa(mapKpa);
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.

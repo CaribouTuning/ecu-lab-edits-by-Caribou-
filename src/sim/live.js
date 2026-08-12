@@ -16,6 +16,7 @@ import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
 import { computeManifold } from './manifold.js';
 import { evaluatePoint } from './point.js';
+import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
 
 /** Crank + flywheel + damper rotational inertia, kg·m². */
@@ -26,8 +27,10 @@ export const IDLE_TARGET_RPM = 800;
 export const CRANK_RPM = 260;
 /** Below this the engine has stalled, RPM. */
 export const STALL_RPM = 380;
-/** Rev limiter fuel cut, RPM. */
+/** Default rev limiter fuel cut, RPM, when an engine states no redline. */
 export const REDLINE_CUT = 7600;
+/** How far past the redline the limiter cuts fuel. */
+export const LIMITER_OVERSHOOT_RPM = 100;
 
 /**
  * A simulated sensor: real ones are noisy and lag behind the true value.
@@ -72,6 +75,9 @@ export function liveStep(st, dt, input, cfg) {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
     mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
   } = cfg;
+  if (turboOn) assertBoostCurve(boostCurve);
+  const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
+  const limiterCutRpm = redline + LIMITER_OVERSHOOT_RPM;
 
   s.prevRpm = st.rpm;
   s.elapsed += dt;
@@ -110,22 +116,24 @@ export function liveStep(st, dt, input, cfg) {
   // revs fall, fuel is restored a few hundred RPM lower, and the engine climbs back
   // into the cut. That rapid cut-restore cycle IS the bounce you hear.
   if (s.running) {
-    if (s.rpm >= REDLINE_CUT) s.limiterCut = true;
-    else if (s.rpm < REDLINE_CUT - 320) s.limiterCut = false;
+    if (s.rpm >= limiterCutRpm) s.limiterCut = true;
+    else if (s.rpm < limiterCutRpm - 320) s.limiterCut = false;
   } else s.limiterCut = false;
   s.fuelCut = (s.running && s.limiterCut) || overrun;
 
   // ---- combustion torque from the same physics the dyno uses ----
   let crankNm = 0, pt = null;
   if ((s.running || s.cranking) && s.rpm > 100) {
-    const rpmClamped = clamp(s.rpm, 700, 7500);
+    const rpmClamped = clamp(s.rpm, 700, redline);
     // Throttle opening sets manifold pressure — but so does ENGINE SPEED. A nearly
     // closed throttle at high RPM pulls far harder vacuum than the same opening at
     // idle, because the engine is trying to pump much more air through the same
     // restriction. That rpm term is what lets the engine decelerate on a closed
     // throttle instead of sustaining itself at redline.
     const aFrac = clamp(effThrottle, 0, 100) / 100;
-    const nFrac = clamp(rpmClamped / 7500, 0, 1.2);
+    // Normalised against a fixed RPM datum, not this engine's redline — see
+    // COEFF.MANIFOLD_VACUUM_RPM_NORM in coefficients.js for why that is deliberate.
+    const nFrac = clamp(rpmClamped / COEFF.MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
     // Valve overlap lets exhaust back into the intake at low speed, so a big cam
     // simply cannot pull strong manifold vacuum at idle. That lost vacuum is why
     // cammed engines idle high and lumpy.
@@ -171,7 +179,9 @@ export function liveStep(st, dt, input, cfg) {
   const starterNm = s.cranking ? 180 : 0;
   // Cranking has no combustion, so the starter works against motoring friction.
   const crankingDrag = s.cranking
-    ? frictionTorqueNm(Math.max(s.rpm, 0), derived.displacementL, pt ? pt.map : BARO_KPA)
+    ? frictionTorqueNm(Math.max(s.rpm, 0), derived.displacementL, pt ? pt.map : BARO_KPA, 0, {
+        bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
+      })
     : 0;
   const netNm = crankNm + starterNm - crankingDrag - (s.running ? input.load : 0);
   const alpha = netNm / ENGINE_INERTIA;

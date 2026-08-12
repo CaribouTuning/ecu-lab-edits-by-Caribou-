@@ -33,6 +33,7 @@ const roundAll = (obj) => Object.fromEntries(
 export const FINGERPRINT_CONFIGS = {
   stockV6:     { configuration: 'V6', bore: 95.5, stroke: 81.4, compression: 10.3, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 210, springRate: 50 },
   smallI4:     { configuration: 'I4', bore: 82.0, stroke: 78.0, compression: 11.5, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 220, springRate: 60 },
+  turboI6:     { configuration: 'I6', bore: 84.0, stroke: 89.6, compression: 10.2, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 216, springRate: 55 },
   bigV8:       { configuration: 'V8', bore: 103.0, stroke: 92.0, compression: 9.5, blockMaterial: 'Cast Iron', headMaterial: 'Cast Iron', camDuration: 200, springRate: 45 },
   cammedV8:    { configuration: 'V8', bore: 101.6, stroke: 88.4, compression: 11.0, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 280, springRate: 90 },
   floatTrap:   { configuration: 'V6', bore: 95.5, stroke: 81.4, compression: 10.3, blockMaterial: 'Aluminum', headMaterial: 'Aluminum', camDuration: 290, springRate: 25 },
@@ -180,6 +181,23 @@ export function buildFingerprint(S) {
         }
       }
     }
+  }
+
+  // ---- factoryCalibration: the generated VE/timing/AFR surface for every shipped
+  // preset. This is what actually exercises tuned constants that live in
+  // src/sim/presets.js itself (FACTORY_KNOCK_MARGIN_DEG, OPEN_LOOP_KPA) — numbers that
+  // move the dyno figures but sit outside COEFF and outside any other section of this
+  // matrix, so nothing above catches them moving. Gating the whole generated surface
+  // rather than the constants individually means a future constant added to the
+  // generator is covered automatically, with no matching addition required here.
+  out.factoryCalibration = {};
+  for (const preset of S.ENGINE_PRESETS) {
+    const { ve, timing, afr } = S.factoryCalibration(preset);
+    out.factoryCalibration[preset.id] = {
+      ve: ve.map((row) => row.map(r6)),
+      timing: timing.map((row) => row.map(r6)),
+      afr: afr.map((row) => row.map(r6)),
+    };
   }
 
   // ---- helpers ----

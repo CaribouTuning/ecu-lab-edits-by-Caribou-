@@ -21,6 +21,51 @@ export const SWEEP_END_RPM = 7500;
 export const SWEEP_STEP_RPM = 100;
 
 /**
+ * Guards the one input that has already broken this simulation once.
+ *
+ * The UI builds every boost curve with `RPM.map(...)`, but preset data is a second
+ * source of curves. A short array silently interpolates to `undefined` and puts NaN
+ * through every downstream formula, so fail loudly at the boundary instead.
+ *
+ * @param {number[]} boostCurve
+ * @throws {Error} if the curve does not match the RPM axis
+ */
+export function assertBoostCurve(boostCurve) {
+  if (!Array.isArray(boostCurve) || boostCurve.length !== RPM.length) {
+    throw new Error(
+      `boost curve must have ${RPM.length} entries, one per RPM breakpoint — got ${
+        Array.isArray(boostCurve) ? boostCurve.length : typeof boostCurve
+      }. Build it with RPM.map(...).`,
+    );
+  }
+  const bad = boostCurve.findIndex((v) => !Number.isFinite(v));
+  if (bad !== -1) {
+    throw new Error(`boost curve entry ${bad} is not a finite number: ${boostCurve[bad]}`);
+  }
+}
+
+/**
+ * Systematic MAF misread introduced by hardware that changes airflow characteristics
+ * downstream of the sensor — a bigger intake or turbo plumbing — before the ECU has
+ * been recalibrated for it.
+ *
+ * Exported so the factory calibration generator in `presets.js` can pre-compensate for
+ * exactly this error the same way a real ECU's characterized MAF transfer function
+ * would, rather than guessing at a second copy of this formula — the drift risk
+ * `knockThreshold` was extracted to `knock.js` to avoid.
+ *
+ * @param {{intake: boolean}} mods bolt-ons fitted
+ * @param {boolean} turboOn whether a turbo is fitted
+ * @returns {number} multiplier applied to true airflow to get the MAF's reading
+ */
+export function mafErrorFactor(mods, turboOn) {
+  let base = 1.0;
+  if (mods.intake) base *= COEFF.MAF_ERROR_INTAKE;
+  if (turboOn) base *= COEFF.MAF_ERROR_TURBO;
+  return base;
+}
+
+/**
  * Runs a full dyno pull and produces the datalog, event log, wear and peak figures.
  *
  * @param {object} input
@@ -31,14 +76,14 @@ export function simulateSweep({
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor,
 }) {
-  let mafErrorBase = 1.0;
-  if (mods.intake) mafErrorBase *= 0.90;
-  if (turboOn) mafErrorBase *= 0.92;
+  if (turboOn) assertBoostCurve(boostCurve);
+  const mafErrorBase = mafErrorFactor(mods, turboOn);
   const needsMafRecal = mods.intake || turboOn;
   const modsWithTurbo = { ...mods, turboFitted: turboOn };
 
   const points = [];
-  for (let rpm = SWEEP_START_RPM; rpm <= SWEEP_END_RPM; rpm += SWEEP_STEP_RPM) {
+  const endRpm = derived.redline ?? SWEEP_END_RPM;
+  for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
     const man = computeManifold(rpm, loadKpa, turboOn, boostTarget, turbine, compressor);
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
@@ -186,13 +231,13 @@ export function simulateSweep({
   // Valve float is a hard mechanical limit — the springs cannot close the valves fast
   // enough, so cylinder filling collapses. No calibration change touches this.
   const floatRpm = derived.floatRpm || 99999;
-  if (floatRpm < SWEEP_END_RPM) {
+  if (floatRpm < endRpm) {
     const lost = points.filter((p) => p.rpm > floatRpm);
     events.push({
-      type: 'float', severity: 3, impact: Math.round(clamp((SWEEP_END_RPM - floatRpm) / 45, 8, 34)),
+      type: 'float', severity: 3, impact: Math.round(clamp((endRpm - floatRpm) / 45, 8, 34)),
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
-      fix: `Raise the valve spring rate on BUILD until float sits above your ${SWEEP_END_RPM} RPM redline, or fit a milder cam. No amount of table tuning can fix this — the valvetrain is simply not keeping up.`,
+      fix: `Raise the valve spring rate on BUILD until float sits above your ${endRpm} RPM redline, or fit a milder cam. No amount of table tuning can fix this — the valvetrain is simply not keeping up.`,
     });
   }
 

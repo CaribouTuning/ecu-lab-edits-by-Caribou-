@@ -20,6 +20,18 @@ export const COEFF = {
   RUBBING_PER_RPM: 6.5,        // rubbing FMEP rise per RPM
   SPRING_FMEP_PER_RATE: 190,   // extra FMEP per point of valve spring rate above stock
   SPRING_RPM_BIAS: 0.6,        // how much of spring drag scales with RPM (rest is constant)
+  // Extra rubbing FMEP per main bearing beyond the V6 baseline of four.
+  // Anchored arithmetically rather than guessed: total rubbing FMEP at 6000 RPM is
+  // about 84 kPa, published breakdowns put the crankshaft group near 15% of friction
+  // (~12.6 kPa), and the baseline carries four mains — so roughly 3 kPa each.
+  FMEP_PER_MAIN_BEARING_PA: 3000,
+  // Fraction of rubbing friction added by a balance shaft pair. The National
+  // Academies' fuel-economy report records a measured 6% friction reduction when
+  // Ford deleted the balance shaft from its 1.0 L three-cylinder. That measurement
+  // is a SINGLE shaft on a 1.0 L I3; this coefficient is applied here to TWIN-shaft
+  // 1.8 L+ I4s (see hasBalanceShafts in hardware.js), which is an extrapolation
+  // beyond the source, not a like-for-like figure.
+  FMEP_BALANCE_SHAFT_FRAC: 0.06,
 
   // --- Combustion efficiency roll-off ---
   // Torque falls as a parabola either side of MBT. 0.0016 gives roughly a 4% loss at
@@ -84,4 +96,26 @@ export const COEFF = {
   STFT_GAIN: 42,
   LTFT_LEARN_RATE: 0.004,
   TRIM_LIMIT: 25,
+
+  // --- MAF measurement error ---
+  // A bigger intake housing or turbo plumbing changes the airflow profile across the
+  // sensor, so a MAF calibrated for stock hardware under-reads once either is fitted.
+  // Values are illustrative of the real-world magnitude tuners correct for with a MAF
+  // scalar or transfer-function rescale, not measurements of a specific part.
+  MAF_ERROR_INTAKE: 0.90,
+  MAF_ERROR_TURBO: 0.92,
+
+  // --- Manifold vacuum model ---
+  // RPM normalisation datum for the engine-speed term in the manifold vacuum model
+  // (`live.js`'s `nFrac`, how hard the engine pulls vacuum through a given throttle
+  // opening). This is DELIBERATELY a fixed absolute RPM, not the per-engine redline:
+  // it calibrates how fast a generic engine pumps air, which does not change just
+  // because a build has a taller or shorter rev limit. Do not wire this to
+  // `derived.redline`.
+  //
+  // Today's max shippable redline (7500, see `DEFAULT_REDLINE_RPM` in `engine.js` and
+  // the RPM axis in `tables.js`) equals this datum, so the resulting `nFrac` never
+  // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
+  // currently unreachable headroom, not a live limit.
+  MANIFOLD_VACUUM_RPM_NORM: 7500,
 };

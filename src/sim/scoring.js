@@ -15,15 +15,34 @@
 import { clamp } from './math.js';
 
 /**
+ * The known hardware-consequence types (`cam`, `float`, `bearing`) — the only event
+ * types that do NOT move the Tuning Score. The cam event's own advice text reads
+ * "This is a hardware trade-off, not a tuning fault — you cannot calibrate it away",
+ * and deducting for it made a perfectly calibrated engine unable to score 100 for
+ * reasons no table edit could address. Hardware coherence is what the Engineer Score
+ * is for.
+ *
+ * Kept as an explicit list (rather than a CALIBRATION_EVENT_TYPES allowlist inverted
+ * at read time) so a brand-new event type that nobody has classified yet defaults to
+ * deducting from the Tuning Score, not to a free pass.
+ */
+const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing']);
+
+/**
  * Grades how clean a calibration is, from the pull's event log.
  *
- * @param {{events: {impact?: number, msg: string}[]}} result a completed sweep
- * @returns {{score: number, label: string, deductions: string[]}}
+ * @param {{events: {type?: string, impact?: number, msg: string}[]}} result a completed sweep
+ * @returns {{score: number, label: string, deductions: string[], advisories: string[]}}
  */
 export function computeTuningScore(result) {
   let score = 100;
   const deductions = [];
+  const advisories = [];
   result.events.forEach((e) => {
+    if (HARDWARE_EVENT_TYPES.has(e.type)) {
+      advisories.push(e.msg);
+      return;
+    }
     const d = e.impact ?? 5;
     score -= d;
     deductions.push(`-${d}  ${e.msg}`);
@@ -33,7 +52,7 @@ export function computeTuningScore(result) {
     : score >= 75 ? 'Solid'
     : score >= 55 ? 'Rough Edges'
     : score >= 30 ? 'Risky' : 'Dangerous';
-  return { score, label, deductions };
+  return { score, label, deductions, advisories };
 }
 
 /**

@@ -397,3 +397,145 @@ describe('table axes stay consistent', () => {
     for (let i = 1; i < S.LOAD.length; i++) expect(S.LOAD[i]).toBeLessThan(S.LOAD[i - 1]);
   });
 });
+
+describe('knock threshold, as a shared function', () => {
+  const base = {
+    rpm: 5500, mapKpa: S.BARO_KPA, veActual: 95, chargeC: 25,
+    actualAfr: 12.85, bestAfr: 12.85, boostPsi: 0, octaneBonus: 0,
+    mods: NO_MODS, derived: S.deriveEngine(STOCK), compressor: S.COMPRESSOR_OPTS[1],
+  };
+
+  it('agrees exactly with the threshold evaluatePoint reports', () => {
+    const p = point({ rpm: 5500, veVal: 95, afrCommanded: 12.85, timingVal: 20 });
+    expect(S.knockThreshold({ ...base, actualAfr: p.afr, bestAfr: p.bestAfr, veActual: p.ve }))
+      .toBeCloseTo(p.threshold, 1);
+  });
+
+  it('gives more margin at lower charge', () => {
+    const light = S.knockThreshold({ ...base, mapKpa: 40, veActual: 55 });
+    const heavy = S.knockThreshold({ ...base, mapKpa: 150, veActual: 105, boostPsi: 7 });
+    expect(light).toBeGreaterThan(heavy);
+  });
+
+  it('gives more margin on higher octane', () => {
+    expect(S.knockThreshold({ ...base, octaneBonus: 14 }))
+      .toBeGreaterThan(S.knockThreshold({ ...base, octaneBonus: 0 }));
+  });
+
+  it('penalises a lean mixture only when there is cylinder pressure behind it', () => {
+    const leanAtLoad = S.knockThreshold({ ...base, actualAfr: 15.5 });
+    const richAtLoad = S.knockThreshold({ ...base, actualAfr: 12.0 });
+    expect(leanAtLoad).toBeLessThan(richAtLoad);
+    // At deep vacuum the same leanness barely matters.
+    const leanCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 15.5 });
+    const richCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 12.0 });
+    expect(Math.abs(leanCruise - richCruise)).toBeLessThan(Math.abs(leanAtLoad - richAtLoad));
+  });
+});
+
+describe('MBT timing', () => {
+  it('needs more advance at higher RPM', () => {
+    expect(S.mbtTiming(7000, S.BARO_KPA)).toBeGreaterThan(S.mbtTiming(2000, S.BARO_KPA));
+  });
+
+  it('needs less advance at higher load, because a denser charge burns faster', () => {
+    expect(S.mbtTiming(5000, 200)).toBeLessThan(S.mbtTiming(5000, 40));
+  });
+});
+
+describe('engine configuration and friction', () => {
+  const at = (configuration, over = {}) => S.deriveEngine({ ...STOCK, configuration, ...over });
+
+  it('knows an inline six has six cylinders', () => {
+    expect(S.CYL_COUNT.I6).toBe(6);
+    expect(S.CONFIG_OPTS).toContain('I6');
+  });
+
+  it('charges an inline six for its seven main bearings against a V6 four', () => {
+    // Architectural fact, not a preference: I6 = 7 mains, V6 = 4.
+    expect(S.MAIN_BEARINGS.I6).toBe(7);
+    expect(S.MAIN_BEARINGS.V6).toBe(4);
+    expect(at('I6').bearingFmepPa).toBeGreaterThan(at('V6').bearingFmepPa);
+  });
+
+  it('leaves the V6 baseline at zero so existing builds do not move', () => {
+    expect(at('V6').bearingFmepPa).toBe(0);
+    expect(at('V6').balanceShaftFrac).toBe(0);
+  });
+
+  it('charges a large four for its balance shafts, and a six for none', () => {
+    // A 2.0 L I4 carries balance shafts; the EA888.3 has two. An I6 is inherently
+    // balanced and needs none.
+    expect(S.hasBalanceShafts('I4', 2.0)).toBe(true);
+    expect(S.hasBalanceShafts('I6', 3.0)).toBe(false);
+    expect(S.hasBalanceShafts('V6', 3.5)).toBe(false);
+    // A small four does not need them either.
+    expect(S.hasBalanceShafts('I4', 1.2)).toBe(false);
+  });
+
+  it('makes an inline six cost slightly more friction than a V6 of equal size', () => {
+    const i6 = at('I6');
+    const v6 = at('V6');
+    const arch = (d) => ({ bearingFmepPa: d.bearingFmepPa, balanceShaftFrac: d.balanceShaftFrac });
+    expect(S.rubbingFmepPa(6000, 0, arch(i6))).toBeGreaterThan(S.rubbingFmepPa(6000, 0, arch(v6)));
+  });
+
+  it('keeps the friction penalty small enough to be a trade-off, not a verdict', () => {
+    const i6 = at('I6');
+    const arch = { bearingFmepPa: i6.bearingFmepPa, balanceShaftFrac: i6.balanceShaftFrac };
+    const penalty = S.rubbingFmepPa(6000, 0, arch) / S.rubbingFmepPa(6000, 0) - 1;
+    expect(penalty).toBeGreaterThan(0.02);
+    expect(penalty).toBeLessThan(0.20);
+  });
+
+  it('defaults to no architecture penalty when none is supplied', () => {
+    expect(S.rubbingFmepPa(6000, 0)).toBe(S.rubbingFmepPa(6000, 0, { bearingFmepPa: 0, balanceShaftFrac: 0 }));
+  });
+});
+
+describe('per-engine redline', () => {
+  const sweepTo = (redline) => {
+    const cfg = { ...STOCK, redline };
+    const derived = S.deriveEngine(cfg);
+    return S.simulateSweep({
+      loadKpa: 100,
+      ve: S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}),
+      timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: false, boostCurve: S.RPM.map(() => 0),
+      octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 550, ecuInjectorCc: 550, injectorLabel: '550cc',
+      mods: S.DEFAULT_MODS, mafScalar: 1, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    });
+  };
+
+  it('defaults to 7500 so existing builds are unaffected', () => {
+    expect(S.deriveEngine(STOCK).redline).toBe(7500);
+    expect(sweepTo(undefined).points.at(-1).rpm).toBe(7500);
+  });
+
+  it('ends the pull at the engine redline', () => {
+    const r = sweepTo(6500);
+    expect(r.points.at(-1).rpm).toBe(6500);
+    expect(r.points.every((p) => p.rpm <= 6500)).toBe(true);
+  });
+
+  it("reports valve float against the engine's own redline, not a fixed 7500", () => {
+    // springRate: 53 (not 25 — a 25 rate here drops floatRpm to ~5380, well below 6500,
+    // which would defeat the point of this test) puts float just above 7000.
+    const cfg = { ...STOCK, redline: 6500, camDuration: 290, springRate: 53 };
+    const derived = S.deriveEngine(cfg);
+    // Float sits near 7000 here — above a 6500 redline, so it must NOT be reported.
+    expect(derived.floatRpm).toBeGreaterThan(6500);
+    const r = S.simulateSweep({
+      loadKpa: 100, ve: S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}),
+      timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: false, boostCurve: S.RPM.map(() => 0),
+      octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 550, ecuInjectorCc: 550, injectorLabel: '550cc',
+      mods: S.DEFAULT_MODS, mafScalar: 1, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    });
+    expect(r.events.some((e) => e.type === 'float')).toBe(false);
+  });
+});
