@@ -56,6 +56,12 @@ measuring coherence; it is measuring one number in a vacuum.
   (`src/sim/engine.js:87-97`), and adding one would touch the presets, the UI and the
   knock model. This design gets the DI-era engines out of trouble through levers
   already present in the build rather than by inventing new state.
+
+  Tracked as **#24**, which is the real fix. This design uses octane and intercooling
+  as stand-ins for a mechanism the model cannot currently see, and
+  `COMPRESSION_BOOST_BASE` is a compromise value chosen to accommodate DI engines it
+  has no way to identify. Once #24 lands, that constant should key off injection type
+  directly and this rule should be revisited.
 - **The naturally-aspirated low-compression rule** at `scoring.js:73-75`. Untouched.
 - **The other bare literals in `scoring.js`.** Only the constants this change
   introduces move to `coefficients.js`. The wider pattern is issues #10 and #11.
