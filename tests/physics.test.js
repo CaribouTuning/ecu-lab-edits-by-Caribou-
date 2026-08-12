@@ -539,3 +539,16 @@ describe('per-engine redline', () => {
     expect(r.events.some((e) => e.type === 'float')).toBe(false);
   });
 });
+
+describe('hardware option catalogues', () => {
+  const SIZES = ['small', 'medium', 'large'];
+
+  // The Engineer Score branches on `size`, never on `label` — labels are display copy
+  // and must stay free to reword. A newly added option that forgot `size` would drop
+  // silently out of the sizing checks, so assert the field is always there.
+  it.each([['TURBINE_OPTS'], ['COMPRESSOR_OPTS']])('gives every %s entry a valid size', (name) => {
+    for (const opt of S[name]) {
+      expect(SIZES, `${name} entry "${opt.label}" has size ${String(opt.size)}`).toContain(opt.size);
+    }
+  });
+});

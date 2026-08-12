@@ -92,21 +92,26 @@ export const INJECTOR_OPTS = [
 /**
  * Turbine sizing trades spool speed against top-end flow — small spins up fast but
  * chokes the exhaust side at high RPM; large is laggy but flows more up top.
+ *
+ * `size` is the stable id the Engineer Score matches on. `label` is display copy and
+ * may be reworded freely; simulation logic must never read it.
  */
 export const TURBINE_OPTS = [
-  { label: 'Small — quick spool', spoolRange: 1200, topEndMult: -0.05 },
-  { label: 'Medium — balanced', spoolRange: 1800, topEndMult: 0 },
-  { label: 'Large — top-end', spoolRange: 2600, topEndMult: 0.05 },
+  { label: 'Small — quick spool', size: 'small', spoolRange: 1200, topEndMult: -0.05 },
+  { label: 'Medium — balanced', size: 'medium', spoolRange: 1800, topEndMult: 0 },
+  { label: 'Large — top-end', size: 'large', spoolRange: 2600, topEndMult: 0.05 },
 ];
 
 /**
  * Compressor sizing sets a practical boost ceiling before it is pushed outside its
  * efficient range (surge/choke) — running past it makes hot, knock-prone air.
+ *
+ * `size` is the stable id the Engineer Score matches on; see {@link TURBINE_OPTS}.
  */
 export const COMPRESSOR_OPTS = [
-  { label: 'Small', boostCeiling: 12, lagAdd: -150 },
-  { label: 'Medium', boostCeiling: 20, lagAdd: 0 },
-  { label: 'Large', boostCeiling: 30, lagAdd: 250 },
+  { label: 'Small', size: 'small', boostCeiling: 12, lagAdd: -150 },
+  { label: 'Medium', size: 'medium', boostCeiling: 20, lagAdd: 0 },
+  { label: 'Large', size: 'large', boostCeiling: 30, lagAdd: 250 },
 ];
 
 /**
