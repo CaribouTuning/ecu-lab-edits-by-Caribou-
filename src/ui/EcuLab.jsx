@@ -605,6 +605,15 @@ export default function EngineManagementSandbox() {
 
   const octaneBonus = OCTANE_OPTS[octaneIdx].bonus;
   const engineDerived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
+  // The live tach needle and the dyno chart's RPM axis both used to top out at a
+  // hardcoded 7500 — correct only for the one preset whose redline happened to match
+  // it. Key them off this engine's own redline instead, each with headroom sized for
+  // what it actually needs to show: the tach has to leave room for the rev limiter's
+  // overshoot bounce (liveStep cuts fuel at redline + 100 RPM) without pegging, while
+  // the dyno chart's sweep data never exceeds redline at all, so it only needs enough
+  // padding that the last point isn't jammed against the axis edge.
+  const tachFullScaleRpm = engineDerived.redline * 1.1;
+  const dynoChartMaxRpm = engineDerived.redline * 1.05;
   const idealExhaustDia = useMemo(() => idealExhaustDiameter(engineDerived.displacementL, turboOn ? Math.max(...boostCurve) : 0), [engineDerived, turboOn, boostCurve]);
   const exhaustDiaError = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia - idealExhaustDia;
   const mafErrorBase = useMemo(() => {
@@ -1135,7 +1144,7 @@ export default function EngineManagementSandbox() {
               <Panel style={{ background: T.panel, marginBottom: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <DialMark size={104} pct={clamp(live.sensedRpm / 7500, 0, 1)} live />
+                    <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
                     <div style={{ position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
                       <div style={{ fontSize: 17, fontWeight: 800, fontFamily: T.mono, color: live.fuelCut ? T.red : T.ink }}>{Math.round(live.sensedRpm)}</div>
                       <div style={{ fontSize: 7, color: T.ink3, letterSpacing: 1, fontWeight: 700 }}>RPM</div>
@@ -1144,7 +1153,7 @@ export default function EngineManagementSandbox() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 11, color: T.ink2, marginBottom: 8, lineHeight: 1.5 }}>
                       {live.running
-                        ? (live.rpm > 7500 ? 'Rev limiter — fuel cut to protect the engine.'
+                        ? (live.limiterCut ? 'Rev limiter — fuel cut to protect the engine.'
                           : live.dfco ? 'Overrun fuel cut — injectors off while coasting down. Real ECUs do this; it costs nothing to spin.'
                           : live.coolantC < 70 ? 'Warming up — the ECU is running extra fuel until it reaches temperature.'
                           : live.closedLoop ? 'Warm and in closed loop — the ECU is trimming fuel against the O2 sensor.'
@@ -2008,7 +2017,7 @@ export default function EngineManagementSandbox() {
                   <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
                       <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, 7500]} />
+                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
                       <YAxis stroke={T.ink3} fontSize={10} />
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -2025,7 +2034,7 @@ export default function EngineManagementSandbox() {
                   <ResponsiveContainer width="100%" height={180}>
                     <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
                       <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, 7500]} />
+                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
                       <YAxis stroke={T.ink3} fontSize={10} />
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />

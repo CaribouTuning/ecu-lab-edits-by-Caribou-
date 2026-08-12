@@ -104,25 +104,18 @@ export const COEFF = {
   // scalar or transfer-function rescale, not measurements of a specific part.
   MAF_ERROR_INTAKE: 0.90,
   MAF_ERROR_TURBO: 0.92,
-};
 
-/**
- * RPM normalisation datum for the engine-speed term in the manifold vacuum model
- * (`live.js`'s `nFrac`, how hard the engine pulls vacuum through a given throttle
- * opening). This is DELIBERATELY a fixed absolute RPM, not the per-engine redline:
- * it calibrates how fast a generic engine pumps air, which does not change just
- * because a build has a taller or shorter rev limit. Do not wire this to
- * `derived.redline`.
- *
- * Today's max shippable redline (7500, see `DEFAULT_REDLINE_RPM` in `engine.js` and
- * the RPM axis in `tables.js`) equals this datum, so the resulting `nFrac` never
- * exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
- * currently unreachable headroom, not a live limit.
- *
- * Kept as its own export rather than a `COEFF` entry on purpose: `COEFF` is
- * empirically-tuned physics, and the whole object is dumped verbatim into the
- * behavioural fingerprint so any tuned number gets a mandatory reviewed diff. This
- * is a structural/UI normalisation constant, not a tuned physics number, so it does
- * not belong in that audit surface.
- */
-export const MANIFOLD_VACUUM_RPM_NORM = 7500;
+  // --- Manifold vacuum model ---
+  // RPM normalisation datum for the engine-speed term in the manifold vacuum model
+  // (`live.js`'s `nFrac`, how hard the engine pulls vacuum through a given throttle
+  // opening). This is DELIBERATELY a fixed absolute RPM, not the per-engine redline:
+  // it calibrates how fast a generic engine pumps air, which does not change just
+  // because a build has a taller or shorter rev limit. Do not wire this to
+  // `derived.redline`.
+  //
+  // Today's max shippable redline (7500, see `DEFAULT_REDLINE_RPM` in `engine.js` and
+  // the RPM axis in `tables.js`) equals this datum, so the resulting `nFrac` never
+  // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
+  // currently unreachable headroom, not a live limit.
+  MANIFOLD_VACUUM_RPM_NORM: 7500,
+};

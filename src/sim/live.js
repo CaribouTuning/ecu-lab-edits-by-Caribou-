@@ -11,7 +11,7 @@
  */
 
 import { BARO_KPA, DRIVETRAIN_EFF } from './constants.js';
-import { COEFF, MANIFOLD_VACUUM_RPM_NORM } from './coefficients.js';
+import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
 import { computeManifold } from './manifold.js';
@@ -132,8 +132,8 @@ export function liveStep(st, dt, input, cfg) {
     // throttle instead of sustaining itself at redline.
     const aFrac = clamp(effThrottle, 0, 100) / 100;
     // Normalised against a fixed RPM datum, not this engine's redline — see
-    // MANIFOLD_VACUUM_RPM_NORM in coefficients.js for why that is deliberate.
-    const nFrac = clamp(rpmClamped / MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
+    // COEFF.MANIFOLD_VACUUM_RPM_NORM in coefficients.js for why that is deliberate.
+    const nFrac = clamp(rpmClamped / COEFF.MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
     // Valve overlap lets exhaust back into the intake at low speed, so a big cam
     // simply cannot pull strong manifold vacuum at idle. That lost vacuum is why
     // cammed engines idle high and lumpy.

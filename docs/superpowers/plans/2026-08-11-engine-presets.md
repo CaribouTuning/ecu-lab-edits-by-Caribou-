@@ -236,7 +236,7 @@ The score labelled "how clean the calibration is" currently deducts for hardware
 
 **Interfaces:**
 - Consumes: events produced by `simulateSweep`, each carrying `type`, `impact`, `severity`, `msg`, `cause`, `fix`
-- Produces: `CALIBRATION_EVENT_TYPES` (a `Set`), and `computeTuningScore` returning an additional `advisories: string[]` field alongside the existing `score`, `label`, `deductions`
+- Produces: `computeTuningScore` returning an additional `advisories: string[]` field alongside the existing `score`, `label`, `deductions`
 
 - [ ] **Step 1: Write the failing test**
 
