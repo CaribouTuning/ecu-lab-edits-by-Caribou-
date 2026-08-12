@@ -71,13 +71,18 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,          // 95.5 x 81.4 mm
       compression: 10.6,                 // 10.6:1
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
-      // A big enough cam to make the VQ35HR's real high-revving character (VVEL
-      // variable lift, in reality) show up as top-end breathing in this model. The
-      // spring rate is deliberately below the stock 50 baseline: this cam needs a
-      // float ceiling in the mid-7000s, not the high-8000s a stiffer spring would
-      // give it, so the pull actually rolls over before the 7500 RPM sweep end the
-      // way a real dyno chart does, instead of climbing straight to the redline.
-      camDuration: 232, springRate: 42,
+      // The real VQ35HR's top-end rolloff comes from cam profile, VVEL variable lift
+      // and intake tuning, not from the valvetrain failing — it revs cleanly to its
+      // 7500 redline every time. So the powerband shape here is modelled with
+      // `camDuration` alone: 218 (a mild step up from the 210 baseline, not the big
+      // 232 this preset shipped with) is enough to shift `camPeakShiftRpm` so peak VE
+      // — and with it peak power — lands near the published 6800 RPM instead of
+      // climbing straight to the sweep end. `springRate` is set well ABOVE stock (65
+      // vs 50) purely so the valvetrain has margin for that cam: it puts
+      // `valveFloatRpm` at ~8700, over 1200 RPM clear of the 7500 redline, matching
+      // the margin the other three presets carry. No pull should ever show a `float`
+      // event on this engine — if one appears, that is a bug, not "the character".
+      camDuration: 218, springRate: 65,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
