@@ -33,6 +33,11 @@ import { LOAD, RPM } from './tables.js';
  * Manufacturers leave margin for fuel quality, altitude, heat soak and engine
  * wear — they do not calibrate to the edge the way a dyno tune can. This margin is
  * why the factory tune is beatable, which is the whole exercise.
+ *
+ * Exported deliberately, not because anything outside this module currently imports
+ * it: it is part of this module's documented interface (the number a reader or a
+ * future test needs to know "how much margin is a factory tune leaving on the
+ * table"), not leftover surface.
  */
 export const FACTORY_KNOCK_MARGIN_DEG = 2;
 
@@ -214,8 +219,13 @@ export function factoryCalibration(preset) {
   const hw = hardwareFor(preset);
   const ve = computeHardwareVE(preset.engine, preset.mods, hw);
 
-  /** Boost actually present at this cell, from the preset's own curve. */
-  const boostAt = (rpm, mapKpa) => (preset.induction.turboOn && mapKpa > BARO_KPA
+  // Boost actually present at this cell, derived from the LOAD (MAP) axis rather than
+  // from the preset's boost curve keyed by RPM. A generated table must be a valid,
+  // self-consistent surface at every MAP cell regardless of what boost the preset's
+  // curve happens to produce at a given RPM, so this reads pressure back off the axis
+  // the table is actually indexed by. `_rpm` is unused for that reason, kept only so
+  // every call site can pass the same (rpm, mapKpa) shape as the other per-cell helpers.
+  const boostAt = (_rpm, mapKpa) => (preset.induction.turboOn && mapKpa > BARO_KPA
     ? Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA)
     : 0);
 

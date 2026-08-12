@@ -520,7 +520,7 @@ describe('per-engine redline', () => {
     expect(r.points.every((p) => p.rpm <= 6500)).toBe(true);
   });
 
-  it('reports valve float against the engine own redline, not a fixed 7500', () => {
+  it("reports valve float against the engine's own redline, not a fixed 7500", () => {
     // springRate: 53 (not 25 — a 25 rate here drops floatRpm to ~5380, well below 6500,
     // which would defeat the point of this test) puts float just above 7000.
     const cfg = { ...STOCK, redline: 6500, camDuration: 290, springRate: 53 };

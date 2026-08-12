@@ -15,27 +15,16 @@
 import { clamp } from './math.js';
 
 /**
- * Event types that represent a CALIBRATION fault — something the player can fix by
- * editing a table. These, and only these, move the Tuning Score.
+ * The known hardware-consequence types (`cam`, `float`, `bearing`) — the only event
+ * types that do NOT move the Tuning Score. The cam event's own advice text reads
+ * "This is a hardware trade-off, not a tuning fault — you cannot calibrate it away",
+ * and deducting for it made a perfectly calibrated engine unable to score 100 for
+ * reasons no table edit could address. Hardware coherence is what the Engineer Score
+ * is for.
  *
- * The complement (`cam`, `float`, `bearing`) are hardware consequences. The cam
- * event's own advice text reads "This is a hardware trade-off, not a tuning fault —
- * you cannot calibrate it away", and deducting for it made a perfectly calibrated
- * engine unable to score 100 for reasons no table edit could address. Hardware
- * coherence is what the Engineer Score is for.
- *
- * Unlisted types count as calibration faults, so a newly added fault is never
- * silently worth zero.
- */
-export const CALIBRATION_EVENT_TYPES = new Set([
-  'knock', 'fuel', 'lean', 'valve', 'rich', 'maf', 'injscale', 'compressor',
-]);
-
-/**
- * The known hardware-consequence types — the actual complement of
- * `CALIBRATION_EVENT_TYPES` among today's events. Kept as an explicit list (rather
- * than "anything not in CALIBRATION_EVENT_TYPES") so a brand-new event type that
- * nobody has classified yet defaults to deducting, not to a free pass.
+ * Kept as an explicit list (rather than a CALIBRATION_EVENT_TYPES allowlist inverted
+ * at read time) so a brand-new event type that nobody has classified yet defaults to
+ * deducting from the Tuning Score, not to a free pass.
  */
 const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing']);
 

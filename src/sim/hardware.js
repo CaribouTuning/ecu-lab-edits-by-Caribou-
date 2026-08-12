@@ -39,8 +39,8 @@ export const BASELINE_MAIN_BEARINGS = MAIN_BEARINGS.V6;
  *
  * Those shafts cost real friction. The National Academies' fuel-economy technology
  * report records that Ford's removal of the balance shaft from its 1.0 L three
- * cylinder "reduced friction by 6 percent", which is what sizes
- * {@link COEFF.FMEP_BALANCE_SHAFT_FRAC}.
+ * cylinder "reduced friction by 6 percent", which is what sizes the
+ * FMEP_BALANCE_SHAFT_FRAC coefficient in coefficients.js.
  *
  * @param {string} configuration engine layout
  * @param {number} displacementL total displacement, litres
