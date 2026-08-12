@@ -60,22 +60,37 @@ branch up to date. That applies to maintainers too — nobody pushes to `main` d
 **Merging to `main` means "this is good". Tagging means "this is live".**
 
 `main` is always deployable but is not itself deployed, so finished work can sit there
-unpublished until it is worth a release. Publishing is a tag push:
+unpublished until it is worth a release.
+
+The version bump is an ordinary pull request — `main` takes no direct pushes, from
+anyone. So do **not** use a bare `npm version`, which commits and tags straight onto
+`main` and will simply be rejected on push. Bump on a branch instead:
 
 ```bash
 git checkout main && git pull
-npm version minor        # or patch/major — writes package.json and makes the tag
-git push --follow-tags
+git checkout -b release/v1.3.0
+npm version minor --no-git-tag-version   # patch/major as appropriate; no commit, no tag
+git commit -am "Release v1.3.0"
+gh pr create --title "Release v1.3.0"
 ```
 
-That fires `.github/workflows/deploy.yml`, which reruns the tests, builds, and
+Once that PR is merged, tag the merge commit and push the tag. Tags are not governed by
+the branch rules, so this push is the one that goes direct:
+
+```bash
+git checkout main && git pull
+git tag v1.3.0
+git push origin v1.3.0
+```
+
+The tag fires `.github/workflows/deploy.yml`, which reruns the tests, builds, and
 publishes to GitHub Pages.
 
-`npm version` also runs `scripts/sync-version.js`, which regenerates `src/version.js`
-— the `BUILD_VERSION` shown in the app header and quoted in bug reports — from
-`package.json`, and stages it into the release commit. **Do not edit `src/version.js`
-by hand**; it is generated, and a build that misreports its own version makes every bug
-report from it untrustworthy.
+`--no-git-tag-version` suppresses the commit and tag but still runs npm's `version`
+lifecycle hook, so `scripts/sync-version.js` regenerates `src/version.js` — the
+`BUILD_VERSION` shown in the app header and quoted in bug reports — from
+`package.json`. **Do not edit `src/version.js` by hand**; it is generated, and a build
+that misreports its own version makes every bug report from it untrustworthy.
 
 If a deploy fails for reasons that are not the code's fault, re-run the Deploy workflow
 from the Actions tab rather than moving the tag. A tag should keep meaning the commit it
