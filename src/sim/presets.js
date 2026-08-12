@@ -76,18 +76,31 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,          // 95.5 x 81.4 mm
       compression: 10.6,                 // 10.6:1
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
-      // The real VQ35HR's top-end rolloff comes from cam profile, VVEL variable lift
-      // and intake tuning, not from the valvetrain failing — it revs cleanly to its
-      // 7500 redline every time. So the powerband shape here is modelled with
-      // `camDuration` alone: 218 (a mild step up from the 210 baseline, not the big
-      // 232 this preset shipped with) is enough to shift `camPeakShiftRpm` so peak VE
-      // — and with it peak power — lands near the published 6800 RPM instead of
-      // climbing straight to the sweep end. `springRate` is set well ABOVE stock (65
-      // vs 50) purely so the valvetrain has margin for that cam: it puts
-      // `valveFloatRpm` at ~8700, over 1200 RPM clear of the 7500 redline, matching
-      // the margin the other three presets carry. No pull should ever show a `float`
+      // Bore, stroke, compression and redline above are published figures and do not
+      // move. `camDuration` and `springRate` are not published, so they are where this
+      // preset is fitted — 228° is simply the duration that best fits power and torque
+      // at the same time (+2.2% and -3.9% against the published ratings at the wheels;
+      // milder cams lose power faster than they gain torque, bigger ones the reverse).
+      // `springRate` 68 is set well above the 50 baseline purely to carry that cam:
+      // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline, the
+      // same margin the other three presets have. No pull should ever show a `float`
       // event on this engine — if one appears, that is a bug, not "the character".
-      camDuration: 218, springRate: 65,
+      //
+      // WHAT THIS PRESET DOES NOT REPRODUCE: the real engine makes peak power at 6800
+      // and falls away after it. Simulated power does not fall at all — it climbs
+      // monotonically into the 7500 limiter, so peak power reads 7500, 700 RPM high,
+      // and peak torque sits at 5500 against a published 4800. That is a limit of the
+      // shared physics, not of this data: the real rolloff comes from cam profile,
+      // VVEL variable lift and intake-tract tuning, and the model has no term for any
+      // of them, so at every duration that reaches this engine's rating VE is still
+      // rising at the redline. The three boosted presets roll over only because their
+      // factory boost curves taper; nothing tapers on a naturally aspirated engine
+      // here. Shaping the top end with valve float instead (a 42 spring rate, which is
+      // what this preset shipped with) did place the peak, at the cost of modelling a
+      // healthy valvetrain as a failing one — that is not coming back.
+      // `tests/presets.test.js` asserts the climb-to-limiter rather than a peak
+      // location, and says the same thing there.
+      camDuration: 228, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
