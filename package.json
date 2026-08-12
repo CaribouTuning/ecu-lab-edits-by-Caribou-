@@ -28,6 +28,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:fingerprint:update": "node scripts/update-fingerprint.js",
+    "version": "node scripts/sync-version.js && git add src/version.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
