@@ -131,19 +131,43 @@ export const COEFF = {
   // 91 and it is charged 2 points — deliberately, because that combination is a
   // genuinely compromised build rather than a factory one.
   //
-  // The band sits high because direct injection sprays after the intake valve closes,
-  // so the fuel's latent heat cools the TRAPPED charge during compression and buys real
-  // knock margin — which is precisely why those engines can run compression that would
-  // have been reckless on a port-injected engine. This model has no separate term for
-  // that, so the base carries it implicitly and imprecisely: a port-injected engine gets
-  // the same allowance, which it has not earned. Issue #24 tracks modelling injection
-  // type properly; once it lands, this should key off it instead of averaging over it.
+  // The band sits high because direct injection, at the wide-open-throttle homogeneous-
+  // charge conditions this rule grades, sprays fuel into the cylinder early in the
+  // intake stroke while the valve is still open, giving it time to mix. The fuel
+  // evaporates INSIDE the cylinder instead of in the intake port, so its latent heat is
+  // pulled from the TRAPPED charge rather than from the port walls and the back of the
+  // intake valve, and that buys real knock margin — precisely why those engines can run
+  // compression that would have been reckless on a port-injected engine. (Spraying after
+  // the intake valve closes is stratified lean-burn, used at light load to save fuel;
+  // doing that at full load would starve the mixture of time to prepare and ruin it.)
+  // This model has no separate term for that, so the base carries it implicitly and
+  // imprecisely: a port-injected engine gets the same allowance, which it has not
+  // earned. Issue #24 tracks modelling injection type properly; once it lands, this
+  // should key off it instead of averaging over it.
+  //
+  // This headroom is deliberately boost-LEVEL-independent: `computeEngineerScore` gates
+  // the whole rule on whether the build is making any boost at all (`peakBoostPsi > 0`),
+  // but does not scale the headroom by how much. A build making 3 psi and one making 24
+  // psi are judged by the same ceiling here — that is a known simplification, not an
+  // oversight, and scaling headroom with boost level is deferred to a separate issue.
   COMPRESSION_BOOST_BASE: 10.8,
-  // Extra static compression supported per degree of octane knock bonus. At 0.1, E85
-  // (+14 deg) is worth 1.4 points of compression, about the real spread between a
-  // pump-gas build and an E85 one.
+  // Extra static compression supported per degree of octane knock bonus. Deliberately a
+  // steep discount off the model's own physics currency, not a fresh guess: engine.js's
+  // `compressionKnockAdj = (10.3 - CR) * 2.0` prices one point of compression at 2
+  // degrees of knock margin, so E85's +14 degree bonus is worth 7 points of compression
+  // in that same currency. Paying out the full 7 here would bill the octane decision
+  // twice — once in the physics, which already retimes the tune and logs knock events
+  // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
+  // a 5x discount, on purpose.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
-  // Extra static compression supported by intercooler charge cooling, in points.
+  // Extra static compression supported by intercooler charge cooling, in points. Same
+  // ~5x discount as COMPRESSION_PER_OCTANE_DEG and for the same reason: at 15 psi,
+  // `chargeTempK` (thermo.js) takes charge temperature from about 397 K to 328 K, which
+  // at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is roughly 5.6 degrees of knock margin —
+  // about 2.8 points of compression in the physics' own currency. Paying the full 2.8
+  // here would bill the intercooler decision twice, once in the physics and once in the
+  // score, so 0.4 pays out about a fifth of it instead, consistent with the discount
+  // above.
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
   // Engineer Score points charged per point of compression past that headroom, and the
   // most this rule will ever deduct. The cap equals the flat penalty this rule replaced,

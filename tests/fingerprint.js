@@ -156,7 +156,7 @@ export function buildFingerprint(S) {
               });
               const tuning = S.computeTuningScore(r);
               const engineer = S.computeEngineerScore({
-                engineConfig: cfg, turboOn,
+                engineConfig: cfg, turboOn, peakBoostPsi: Math.max(...boostCurve),
                 turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
                 exhaustDiaError: 0.1, dutyPreview: 80, displacementL: derived.displacementL,
                 fuel: S.OCTANE_OPTS[fi], mods,

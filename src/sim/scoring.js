@@ -63,11 +63,23 @@ export function computeTuningScore(result) {
  * `fuel` and `mods` are required rather than optional. Defaulting them would silently
  * assume 91 octane and no intercooler at any call site that forgot to pass them — the
  * harshest possible headroom, and a wrong answer that looks entirely plausible on
- * screen. The JSDoc below is what makes `tsc --checkJs` catch the omission instead.
+ * screen. `peakBoostPsi` is required for the same reason, but in the opposite
+ * direction: defaulting it to 0 would silently skip the static-compression-under-boost
+ * rule at any call site that forgot to pass it, rather than over-penalise.
+ *
+ * The JSDoc below is what makes `tsc --checkJs` catch an omission — but only for the
+ * typechecked callers, i.e. the test suite. `src/ui` is excluded from `tsconfig.json`
+ * (see its `include`), so the two UI call sites — the ones where an omission would
+ * actually reach a player — are invisible to the typechecker. There, the failure mode
+ * is a runtime `TypeError` inside a render-path memo instead.
  *
  * @param {object} input
  * @param {import('./engine.js').EngineConfig} input.engineConfig
  * @param {boolean} input.turboOn
+ * @param {number} input.peakBoostPsi peak boost across the curve, psi. Gates the
+ *   static-compression-under-boost rule so it never fires on a boosted build making no
+ *   boost — see COEFF.COMPRESSION_BOOST_BASE for why the headroom itself does not also
+ *   scale with this value
  * @param {{size: string}} input.turbine
  * @param {{size: string, boostCeiling: number}} input.compressor
  * @param {number} input.exhaustDiaError inches the fitted pipe differs from ideal
@@ -78,12 +90,19 @@ export function computeTuningScore(result) {
  * @returns {{score: number, label: string, deductions: string[]}}
  */
 export function computeEngineerScore({
-  engineConfig, turboOn, turbine, compressor, exhaustDiaError, dutyPreview, displacementL,
-  fuel, mods,
+  engineConfig, turboOn, peakBoostPsi, turbine, compressor, exhaustDiaError, dutyPreview,
+  displacementL, fuel, mods,
 }) {
   let score = 100;
   const deductions = [];
-  if (turboOn) {
+  if (turboOn && peakBoostPsi > 0) {
+    // Gated on actually making boost, not just having the hardware fitted: a turbo kit
+    // with the boost curve zeroed out (reachable from the UI's "ZERO" button) runs like
+    // an N/A engine, and `chargeTempK` returns ambient at zero boost regardless of
+    // whether an intercooler is fitted — so crediting intercooler headroom, or charging
+    // a compression penalty, on a build making no boost would be judging hardware that
+    // is not doing anything.
+    //
     // Static compression is not dangerous on its own. What decides whether it survives
     // boost is how much knock margin the rest of the build brings, and octane and charge
     // cooling are the two levers the player actually has — so the ceiling moves with
@@ -101,14 +120,18 @@ export function computeEngineerScore({
       const d = Math.round(Math.min(
         over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
       ));
-      // A build a few hundredths over rounds to zero, and `-0 ...` in the deduction list
-      // would be nonsense on screen. It is also the right answer: barely over is not a
-      // mistake worth naming.
+      // This is float safety, not a "barely over" case: the compression slider steps in
+      // 0.1 and every preset compression is a multiple of 0.1, so a build a few
+      // hundredths over headroom does not occur in practice. What does occur is
+      // `10.8 + 0.3 + 0.4` evaluating to 11.500000000000002 — a build sitting exactly on
+      // the boundary (11.5:1 on 93 octane with an intercooler) must land just UNDER
+      // headroom rather than pick up a `-0 ...` deduction from 2e-15 of rounding noise.
       if (d > 0) {
         const cooling = mods.intercooler ? 'an intercooler' : 'no charge cooling';
         score -= d;
         deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
-          + `outruns what this build supports under boost on ${fuel.label} with ${cooling}`);
+          + `outruns the knock margin this build supports under boost on ${fuel.label} `
+          + `with ${cooling} — higher octane or charge cooling would buy it back`);
       }
     }
   }

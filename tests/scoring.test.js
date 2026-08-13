@@ -57,6 +57,7 @@ describe('computeEngineerScore turbo sizing', () => {
   const build = (over = {}) => S.computeEngineerScore({
     engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.5, headMaterial: 'Aluminum' },
     turboOn: true,
+    peakBoostPsi: 10,
     turbine: S.TURBINE_OPTS[1],
     compressor: S.COMPRESSOR_OPTS[1],
     exhaustDiaError: 0,
@@ -122,8 +123,9 @@ describe('computeEngineerScore static compression under boost', () => {
    * rule and would muddy every assertion below.
    */
   const build = (over = {}) => S.computeEngineerScore({
-    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.5 },
+    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.5, headMaterial: 'Aluminum' },
     turboOn: true,
+    peakBoostPsi: 10,
     turbine: S.TURBINE_OPTS[1],
     compressor: S.COMPRESSOR_OPTS[1],
     exhaustDiaError: 0,
@@ -135,7 +137,7 @@ describe('computeEngineerScore static compression under boost', () => {
   });
 
   const at = (compression, over = {}) => build({
-    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression }, ...over,
+    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression, headMaterial: 'Aluminum' }, ...over,
   });
   const hit = (r) => r.deductions.find((d) => /static compression/.test(d));
   /** Safe because `build()` is otherwise clean — nothing else deducts. */
@@ -181,5 +183,20 @@ describe('computeEngineerScore static compression under boost', () => {
 
   it('says nothing about static compression on a naturally-aspirated build', () => {
     expect(hit(at(13.0, { turboOn: false }))).toBeUndefined();
+  });
+
+  // `chargeTempK` does nothing at zero boost, and a turbo kit with the boost curve
+  // zeroed out (the UI's "ZERO" button) makes none — so this build must be judged like
+  // the N/A engine it is currently behaving as, not billed for compression it is not
+  // actually running into boosted cylinder pressure with.
+  it('takes no compression deduction on a turbocharged build making zero peak boost', () => {
+    expect(hit(at(13.0, { peakBoostPsi: 0 }))).toBeUndefined();
+  });
+
+  // Pins which way the float noise falls: `10.8 + 0.3 + 0.4` evaluates to
+  // 11.500000000000002 in floating point, so a build sitting exactly on the boundary
+  // depends on that noise landing the right way rather than on an exact `over === 0`.
+  it('keeps a build exactly at the 93-plus-intercooler boundary clear of the deduction', () => {
+    expect(hit(at(11.5, { fuel: P93, mods: COOLED }))).toBeUndefined();
   });
 });

@@ -18,10 +18,14 @@ if (turboOn && engineConfig.compression > 10.5) {
 
 `src/sim/scoring.js:70-72`
 
-That threshold encodes port-injection-era practice. Direct injection sprays fuel into
-the cylinder after the intake valve closes, and the charge cooling from in-cylinder
-evaporation buys real knock margin — which is exactly why modern DI turbo engines run
-static compression that would have been reckless on a port-injected engine. The BMW
+That threshold encodes port-injection-era practice. At the wide-open-throttle
+homogeneous-charge conditions this rule grades, direct injection sprays fuel into the
+cylinder early in the intake stroke, while the valve is still open, so the fuel
+evaporates INSIDE the cylinder instead of in the intake port. Its latent heat is pulled
+from the trapped charge rather than from the port walls and the back of the intake
+valve, and that in-cylinder evaporation buys real knock margin — which is exactly why
+modern DI turbo engines run static compression that would have been reckless on a
+port-injected engine. The BMW
 B58 and the Toyota/BMW 2.0 T both ship at 11.0:1. Under the current rule each of them
 reads as a 15-point engineering mistake.
 

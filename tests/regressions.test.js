@@ -266,7 +266,7 @@ describe('#4 exhaust sizing has one formula and a reachable target', () => {
     const nearest = options.reduce((a, c) => (Math.abs(c - ideal) < Math.abs(a - ideal) ? c : a));
 
     const score = S.computeEngineerScore({
-      engineConfig: { ...STOCK, compression: 9.5 }, turboOn: true,
+      engineConfig: { ...STOCK, compression: 9.5 }, turboOn: true, peakBoostPsi: 10,
       turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
       exhaustDiaError: nearest - ideal, dutyPreview: 80, displacementL: derived.displacementL,
       fuel: S.OCTANE_OPTS[0], mods: S.DEFAULT_MODS,

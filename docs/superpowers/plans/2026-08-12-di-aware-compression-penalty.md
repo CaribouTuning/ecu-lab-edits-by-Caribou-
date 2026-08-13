@@ -59,9 +59,12 @@ In `src/sim/coefficients.js`, insert immediately before the closing `};` of the 
   // before the Engineer Score calls the combination incoherent.
   //
   // Deliberately ABOVE the 10.2-11.0 band that factory direct-injection turbo engines
-  // actually ship at (BMW N54 10.2, BMW B58 11.0, Toyota/BMW 2.0 T 11.0). Direct
-  // injection sprays after the intake valve closes, so the fuel's latent heat cools the
-  // TRAPPED charge during compression and buys real knock margin — which is precisely
+  // actually ship at (BMW N54 10.2, BMW B58 11.0, Toyota/BMW 2.0 T 11.0). At the
+  // wide-open-throttle homogeneous-charge conditions this rule grades, direct injection
+  // sprays fuel into the cylinder early in the intake stroke, while the valve is still
+  // open, so the fuel evaporates INSIDE the cylinder instead of in the intake port. Its
+  // latent heat is pulled from the TRAPPED charge rather than from the port walls and
+  // the back of the intake valve, and that buys real knock margin — which is precisely
   // why those engines can run compression that would have been reckless on a
   // port-injected engine. This model has no separate term for that, so the base carries
   // it implicitly. Issue #24 tracks modelling injection type properly; once it lands,
