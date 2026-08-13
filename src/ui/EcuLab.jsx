@@ -1795,7 +1795,7 @@ export default function EngineManagementSandbox() {
                 </div>
               ) : calAdvice.pastMbt.length > 0 ? (
                 <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: '#a5aebb', lineHeight: 1.5 }}>
-                  <b style={{ color: T.amberInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees buy nothing. Not dangerous here: the knock limit at this load is a long way above. Pulling them back costs no power and buys margin.
+                  <b style={{ color: T.amberInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
                 </div>
               ) : (
                 <div style={{ background: T.greenBg, border: '1px solid #1f4a30', borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.green }}>
