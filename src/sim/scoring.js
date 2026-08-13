@@ -97,11 +97,14 @@ export function computeEngineerScore({
   const deductions = [];
   if (turboOn && peakBoostPsi > 0) {
     // Gated on actually making boost, not just having the hardware fitted: a turbo kit
-    // with the boost curve zeroed out (reachable from the UI's "ZERO" button) runs like
-    // an N/A engine, and `chargeTempK` returns ambient at zero boost regardless of
-    // whether an intercooler is fitted — so crediting intercooler headroom, or charging
-    // a compression penalty, on a build making no boost would be judging hardware that
-    // is not doing anything.
+    // with the boost curve zeroed out (reachable from the UI's "ZERO" button) has no
+    // boosted cylinder pressure for static compression to fight, and `chargeTempK`
+    // returns ambient unconditionally at `boostPsi <= 0` regardless of whether an
+    // intercooler is fitted — so there is no charge cooling to credit either. This gate
+    // only says this rule has nothing to judge at zero boost; it does not reclassify
+    // the build as naturally aspirated, and the other turbo-specific rules below (the
+    // heat-load rule's `compressor.boostCeiling > 20` half, and both turbo-sizing
+    // rules) still fire on it.
     //
     // Static compression is not dangerous on its own. What decides whether it survives
     // boost is how much knock margin the rest of the build brings, and octane and charge
@@ -120,12 +123,16 @@ export function computeEngineerScore({
       const d = Math.round(Math.min(
         over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
       ));
-      // This is float safety, not a "barely over" case: the compression slider steps in
-      // 0.1 and every preset compression is a multiple of 0.1, so a build a few
-      // hundredths over headroom does not occur in practice. What does occur is
-      // `10.8 + 0.3 + 0.4` evaluating to 11.500000000000002 — a build sitting exactly on
-      // the boundary (11.5:1 on 93 octane with an intercooler) must land just UNDER
-      // headroom rather than pick up a `-0 ...` deduction from 2e-15 of rounding noise.
+      // No input currently reachable from the UI drives `d` to zero here: across the
+      // full reachable space (the 8.5-13.0 slider in its 0.1 steps, crossed with every
+      // OCTANE_OPTS bonus and intercooler on/off, plus every preset compression) no
+      // combination lands `over > 0` with `d <= 0`. That is not what this guard is for,
+      // though — it is a backstop against a finer slider step or a new fuel option
+      // someday producing a build that clears `over > 0` by a sliver too small to round
+      // to a whole point, so this is what keeps a `-0 ...` entry from ever reaching the
+      // deduction list. It is not what keeps the 11.5:1/93-octane/intercooler boundary
+      // build clean — that build computes `over` as -1.776e-15 and is rejected by the
+      // `over > 0` check above, never reaching this line.
       if (d > 0) {
         const cooling = mods.intercooler ? 'an intercooler' : 'no charge cooling';
         score -= d;

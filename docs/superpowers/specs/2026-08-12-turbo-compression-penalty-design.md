@@ -76,22 +76,39 @@ measuring coherence; it is measuring one number in a vacuum.
 
 ## The rule
 
-Inside the existing `if (turboOn)` block in `computeEngineerScore`:
+Its own `if (turboOn && peakBoostPsi > 0)` block in `computeEngineerScore`, positioned
+before the naturally-aspirated low-compression rule so deduction ordering is preserved:
 
 ```js
-const headroom = COEFF.COMPRESSION_BOOST_BASE
-  + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG
-  + (mods.intercooler ? COEFF.COMPRESSION_INTERCOOLER_GAIN : 0);
-const over = engineConfig.compression - headroom;
-if (over > 0) {
-  const d = Math.round(Math.min(over * COEFF.COMPRESSION_PENALTY_PER_POINT,
-                                COEFF.COMPRESSION_PENALTY_CAP));
-  if (d > 0) { score -= d; deductions.push(`-${d}  ...`); }
+if (turboOn && peakBoostPsi > 0) {
+  const headroom = COEFF.COMPRESSION_BOOST_BASE
+    + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG
+    + (mods.intercooler ? COEFF.COMPRESSION_INTERCOOLER_GAIN : 0);
+  const over = engineConfig.compression - headroom;
+  if (over > 0) {
+    const d = Math.round(Math.min(over * COEFF.COMPRESSION_PENALTY_PER_POINT,
+                                  COEFF.COMPRESSION_PENALTY_CAP));
+    if (d > 0) { score -= d; deductions.push(`-${d}  ...`); }
+  }
 }
 ```
 
-The `d > 0` guard is not decoration. A build a few hundredths over rounds to zero, and
-a `-0` entry in the deduction list would be nonsense on screen.
+The `peakBoostPsi > 0` gate matters on its own terms: a turbo kit with the boost curve
+zeroed out (reachable from the UI's "ZERO" button) has no boosted cylinder pressure for
+static compression to fight, and `chargeTempK` returns ambient unconditionally at
+`boostPsi <= 0` regardless of whether an intercooler is fitted, so there is no charge
+cooling to credit either. It does not reclassify the build as naturally aspirated —
+the low-compression N/A rule stays skipped, and the heat-load and turbo-sizing rules
+still apply to it.
+
+The `d > 0` guard is a backstop, not something the reachable input space currently
+exercises. Enumerating the full reachable space — the 8.5-13.0 slider in its 0.1 steps,
+crossed with every `OCTANE_OPTS` bonus and intercooler on/off, plus every preset
+compression — turns up no combination where `over > 0` and `d <= 0`. The guard exists so
+that a finer slider step or a new fuel option cannot someday ship a `-0 ...` entry to the
+deduction list. It is not what keeps the 11.5:1/93-octane/intercooler boundary build
+clean: that build computes `over` as -1.776e-15 and is rejected by the `over > 0` check
+above, never reaching this guard.
 
 ### What the headroom comes out at
 
@@ -152,32 +169,41 @@ port-injected engine receives the same allowance without having earned it. That
 imprecision is the cost of deferring #24, and it should be named rather than papered
 over.
 
-`COMPRESSION_PER_OCTANE_DEG` at 0.1 makes E85 (+14 degrees of bonus) worth 1.4 points
-of compression, which is about the real spread between a pump-gas build and an E85 one.
+`COMPRESSION_PER_OCTANE_DEG` at 0.1 makes E85 (+14 degrees of bonus) worth 1.4 points of
+compression — a deliberate 5x discount against the ~7 points of knock margin the physics
+itself already grants a compression point at this rate (`compressionKnockAdj` in
+engine.js), not a claim about real-world pump-gas-to-E85 spreads. The physics already
+charges for the octane decision once; billing the score too at full price would double
+it, so the score pays out only a fifth of what the physics would credit.
 
 `scoring.js` does not currently import `COEFF`; it will.
 
-## Threading `fuel` and `mods` through
+## Threading `fuel`, `mods` and `peakBoostPsi` through
 
-`computeEngineerScore` gains `fuel` and `mods` as **required** inputs.
+`computeEngineerScore` gains `fuel` and `mods` as **required** inputs, and gains
+`peakBoostPsi` as a required input as well so the rule can gate itself on a boosted
+build actually making boost rather than firing on hardware sitting idle.
 
 Not optional, and not defaulted. A default would silently assume 91-octane-and-no-
-intercooler at any call site that forgot to pass them — the harshest headroom, and a
-wrong answer that looks entirely plausible. Required parameters make an omission a
-visible failure instead.
+intercooler at any call site that forgot to pass `fuel`/`mods` — the harshest headroom,
+and a wrong answer that looks entirely plausible. Defaulting `peakBoostPsi` to 0 would
+fail the opposite way: it would silently skip the rule at any call site that forgot to
+pass it, rather than over-penalise. Required parameters make either omission a visible
+failure instead.
 
 The function's JSDoc is currently a bare `@param {object} input`, so `tsc --checkJs`
 cannot catch a missing field. It gets tightened to name the fields it destructures,
 which is what makes "required" mean something.
 
-Four call sites, all of which already have both values in scope:
+Four call sites, all of which already have `fuel` and `mods` in scope, and all of which
+already compute a boost figure they can pass as `peakBoostPsi`:
 
 | Call site | Note |
 |---|---|
-| `src/ui/EcuLab.jsx:861` | inside the pull handler; `fuel` and `mods` are already passed to `simulateSweep` immediately above |
-| `src/ui/EcuLab.jsx:990` | the `scores` memo — **`fuel` and `mods` must be added to the dependency array**, or the Engineer Score goes stale when the player switches fuel or fits an intercooler |
-| `tests/fingerprint.js:158` | the matrix already has `mods` and `S.OCTANE_OPTS[fi]` in hand |
-| `tests/regressions.test.js:268` | exhaust-diameter test; pass a coherent fuel and mod set so the compression rule stays silent |
+| `src/ui/EcuLab.jsx:861` | inside the pull handler; `fuel`, `mods` and `turboOn ? Math.max(...boostCurve) : 0` are already passed to `simulateSweep` immediately above |
+| `src/ui/EcuLab.jsx:990` | the `scores` memo — **`fuel`, `mods` and `boostCurve` must be added to the dependency array**, or the Engineer Score goes stale when the player switches fuel, fits an intercooler, or edits the boost curve |
+| `tests/fingerprint.js:158` | the matrix already has `mods`, `S.OCTANE_OPTS[fi]` and a peak boost figure in hand |
+| `tests/regressions.test.js:268` | exhaust-diameter test; pass a coherent fuel, mod set and nonzero peak boost so the compression rule stays silent |
 
 The stale-memo hazard at `:990` is the one genuine bug risk in this change. The memo
 recomputes on `engineConfig`, `turboOn`, `turbineIdx`, `compressorIdx`,

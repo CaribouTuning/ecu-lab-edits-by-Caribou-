@@ -186,16 +186,20 @@ describe('computeEngineerScore static compression under boost', () => {
   });
 
   // `chargeTempK` does nothing at zero boost, and a turbo kit with the boost curve
-  // zeroed out (the UI's "ZERO" button) makes none — so this build must be judged like
-  // the N/A engine it is currently behaving as, not billed for compression it is not
-  // actually running into boosted cylinder pressure with.
+  // zeroed out (the UI's "ZERO" button) makes none — so there is no boosted cylinder
+  // pressure for compression to fight and no charge cooling to credit, and this rule
+  // has nothing to judge. That is narrower than "runs like an N/A engine": the
+  // naturally-aspirated low-compression rule is still skipped, and the heat-load and
+  // turbo-sizing rules still apply to a zeroed-boost turbo build.
   it('takes no compression deduction on a turbocharged build making zero peak boost', () => {
     expect(hit(at(13.0, { peakBoostPsi: 0 }))).toBeUndefined();
   });
 
-  // Pins which way the float noise falls: `10.8 + 0.3 + 0.4` evaluates to
-  // 11.500000000000002 in floating point, so a build sitting exactly on the boundary
-  // depends on that noise landing the right way rather than on an exact `over === 0`.
+  // Pins the outer boundary, not the `d > 0` guard: `10.8 + 0.3 + 0.4` evaluates to
+  // 11.500000000000002 in floating point, so this build computes `over` as a tiny
+  // negative number and is rejected by `over > 0` before the guard is ever reached.
+  // This would fail if the intercooler credit were removed or a constant moved enough
+  // to push `over` positive.
   it('keeps a build exactly at the 93-plus-intercooler boundary clear of the deduction', () => {
     expect(hit(at(11.5, { fuel: P93, mods: COOLED }))).toBeUndefined();
   });

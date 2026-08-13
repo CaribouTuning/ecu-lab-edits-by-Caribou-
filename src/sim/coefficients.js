@@ -160,14 +160,17 @@ export const COEFF = {
   // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
   // a 5x discount, on purpose.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
-  // Extra static compression supported by intercooler charge cooling, in points. Same
-  // ~5x discount as COMPRESSION_PER_OCTANE_DEG and for the same reason: at 15 psi,
-  // `chargeTempK` (thermo.js) takes charge temperature from about 397 K to 328 K, which
-  // at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is roughly 5.6 degrees of knock margin —
-  // about 2.8 points of compression in the physics' own currency. Paying the full 2.8
-  // here would bill the intercooler decision twice, once in the physics and once in the
-  // score, so 0.4 pays out about a fifth of it instead, consistent with the discount
-  // above.
+  // Extra static compression supported by intercooler charge cooling, in points.
+  // Discounted on the same principle as COMPRESSION_PER_OCTANE_DEG — the physics
+  // already charges for this once, so the score should not bill it again at full price
+  // — but not by the same factor. At 15 psi, `chargeTempK` (thermo.js) takes charge
+  // temperature from 397.23 K with no intercooler to 327.77 K with one, a 69.46 °C
+  // delta, which at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is 5.56 degrees of knock
+  // margin — 2.78 points of compression in the physics' own currency (2 degrees per
+  // compression point, the same rate `compressionKnockAdj` in engine.js uses). Paying
+  // the full 2.78 here would bill the intercooler decision twice, once in the physics
+  // and once in the score, so 0.4 pays out about a seventh of it instead — roughly a 7x
+  // discount, steeper than COMPRESSION_PER_OCTANE_DEG's 5x (1.4 of 7).
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
   // Engineer Score points charged per point of compression past that headroom, and the
   // most this rule will ever deduct. The cap equals the flat penalty this rule replaced,

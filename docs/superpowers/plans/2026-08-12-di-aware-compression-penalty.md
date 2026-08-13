@@ -58,21 +58,34 @@ In `src/sim/coefficients.js`, insert immediately before the closing `};` of the 
   // Static compression a boosted build carries on 91 octane with no charge cooling
   // before the Engineer Score calls the combination incoherent.
   //
-  // Deliberately ABOVE the 10.2-11.0 band that factory direct-injection turbo engines
-  // actually ship at (BMW N54 10.2, BMW B58 11.0, Toyota/BMW 2.0 T 11.0). At the
-  // wide-open-throttle homogeneous-charge conditions this rule grades, direct injection
-  // sprays fuel into the cylinder early in the intake stroke, while the valve is still
-  // open, so the fuel evaporates INSIDE the cylinder instead of in the intake port. Its
-  // latent heat is pulled from the TRAPPED charge rather than from the port walls and
-  // the back of the intake valve, and that buys real knock margin — which is precisely
-  // why those engines can run compression that would have been reckless on a
-  // port-injected engine. This model has no separate term for that, so the base carries
-  // it implicitly. Issue #24 tracks modelling injection type properly; once it lands,
-  // this should key off injection type instead of accommodating it blindly.
+  // Factory direct-injection turbo engines ship across a 10.2-11.0 band (BMW N54 10.2,
+  // BMW B58 11.0, Toyota/BMW 2.0 T 11.0). This base clears the BOTTOM of that band on
+  // its own; the top of it is cleared by the octane and charge-cooling credits below,
+  // not by this number. 10.8 + 0.3 (93 octane) + 0.4 (intercooler) = 11.5, which is how
+  // a B58 as actually sold comes out unpenalised. Strip the intercooler and drop it to
+  // 91 and it is charged 2 points — deliberately, because that combination is a
+  // genuinely compromised build rather than a factory one.
+  //
+  // The band sits high because direct injection, at the wide-open-throttle homogeneous-
+  // charge conditions this rule grades, sprays fuel into the cylinder early in the
+  // intake stroke while the valve is still open, giving it time to mix. The fuel
+  // evaporates INSIDE the cylinder instead of in the intake port, so its latent heat is
+  // pulled from the TRAPPED charge rather than from the port walls and the back of the
+  // intake valve, and that buys real knock margin — precisely why those engines can run
+  // compression that would have been reckless on a port-injected engine. This model has
+  // no separate term for that, so the base carries it implicitly and imprecisely: a
+  // port-injected engine gets the same allowance, which it has not earned. Issue #24
+  // tracks modelling injection type properly; once it lands, this should key off it
+  // instead of averaging over it.
   COMPRESSION_BOOST_BASE: 10.8,
-  // Extra static compression supported per degree of octane knock bonus. At 0.1, E85
-  // (+14 deg) is worth 1.4 points of compression, about the real spread between a
-  // pump-gas build and an E85 one.
+  // Extra static compression supported per degree of octane knock bonus. Deliberately a
+  // steep discount off the model's own physics currency, not a fresh guess: engine.js's
+  // `compressionKnockAdj = (10.3 - CR) * 2.0` prices one point of compression at 2
+  // degrees of knock margin, so E85's +14 degree bonus is worth 7 points of compression
+  // in that same currency. Paying out the full 7 here would bill the octane decision
+  // twice — once in the physics, which already retimes the tune and logs knock events
+  // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
+  // a 5x discount, on purpose.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
   // Extra static compression supported by intercooler charge cooling, in points.
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
