@@ -859,8 +859,9 @@ export default function EngineManagementSandbox() {
     }));
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
-      engineConfig, turboOn, turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
-      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL,
+      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
+      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
     const nextBest = Math.max(bestScore, pull);
@@ -988,12 +989,13 @@ export default function EngineManagementSandbox() {
     if (!result || running) return null;
     const tuning = computeTuningScore(result);
     const engineer = computeEngineerScore({
-      engineConfig, turboOn, turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
-      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL,
+      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
+      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: result.peakHp, peakTq: result.peakTq, tuningScore: tuning.score, engineerScore: engineer.score });
     return { tuning, engineer, pull };
-  }, [result, running, engineConfig, turboOn, turbineIdx, compressorIdx, exhaustDiaError, dutyPreview, engineDerived]);
+  }, [result, running, engineConfig, turboOn, turbineIdx, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.

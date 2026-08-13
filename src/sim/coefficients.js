@@ -118,4 +118,64 @@ export const COEFF = {
   // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
   // currently unreachable headroom, not a live limit.
   MANIFOLD_VACUUM_RPM_NORM: 7500,
+
+  // --- Engineer Score: static compression under boost ---
+  // Static compression a boosted build carries on 91 octane with no charge cooling
+  // before the Engineer Score calls the combination incoherent.
+  //
+  // Factory direct-injection turbo engines ship across a 10.2-11.0 band (BMW N54 10.2,
+  // BMW B58 11.0, Toyota/BMW 2.0 T 11.0). This base clears the BOTTOM of that band on
+  // its own; the top of it is cleared by the octane and charge-cooling credits below,
+  // not by this number. 10.8 + 0.3 (93 octane) + 0.4 (intercooler) = 11.5, which is how
+  // a B58 as actually sold comes out unpenalised. Strip the intercooler and drop it to
+  // 91 and it is charged 2 points — deliberately, because that combination is a
+  // genuinely compromised build rather than a factory one.
+  //
+  // The band sits high because direct injection, at the wide-open-throttle homogeneous-
+  // charge conditions this rule grades, sprays fuel into the cylinder early in the
+  // intake stroke while the valve is still open, giving it time to mix. The fuel
+  // evaporates INSIDE the cylinder instead of in the intake port, so its latent heat is
+  // pulled from the TRAPPED charge rather than from the port walls and the back of the
+  // intake valve, and that buys real knock margin — precisely why those engines can run
+  // compression that would have been reckless on a port-injected engine. (Spraying after
+  // the intake valve closes is stratified lean-burn, used at light load to save fuel;
+  // doing that at full load would starve the mixture of time to prepare and ruin it.)
+  // This model has no separate term for that, so the base carries it implicitly and
+  // imprecisely: a port-injected engine gets the same allowance, which it has not
+  // earned. Issue #24 tracks modelling injection type properly; once it lands, this
+  // should key off it instead of averaging over it.
+  //
+  // This headroom is deliberately boost-LEVEL-independent: `computeEngineerScore` gates
+  // the whole rule on whether the build is making any boost at all (`peakBoostPsi > 0`),
+  // but does not scale the headroom by how much. A build making 3 psi and one making 24
+  // psi are judged by the same ceiling here — that is a known simplification, not an
+  // oversight, and scaling headroom with boost level is deferred to a separate issue.
+  COMPRESSION_BOOST_BASE: 10.8,
+  // Extra static compression supported per degree of octane knock bonus. Deliberately a
+  // steep discount off the model's own physics currency, not a fresh guess: engine.js's
+  // `compressionKnockAdj = (10.3 - CR) * 2.0` prices one point of compression at 2
+  // degrees of knock margin, so E85's +14 degree bonus is worth 7 points of compression
+  // in that same currency. Paying out the full 7 here would bill the octane decision
+  // twice — once in the physics, which already retimes the tune and logs knock events
+  // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
+  // a 5x discount, on purpose.
+  COMPRESSION_PER_OCTANE_DEG: 0.1,
+  // Extra static compression supported by intercooler charge cooling, in points.
+  // Discounted on the same principle as COMPRESSION_PER_OCTANE_DEG — the physics
+  // already charges for this once, so the score should not bill it again at full price
+  // — but not by the same factor. At 15 psi, `chargeTempK` (thermo.js) takes charge
+  // temperature from 397.23 K with no intercooler to 327.77 K with one, a 69.46 °C
+  // delta, which at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is 5.56 degrees of knock
+  // margin — 2.78 points of compression in the physics' own currency (2 degrees per
+  // compression point, the same rate `compressionKnockAdj` in engine.js uses). Paying
+  // the full 2.78 here would bill the intercooler decision twice, once in the physics
+  // and once in the score, so 0.4 pays out about a seventh of it instead — roughly a 7x
+  // discount, steeper than COMPRESSION_PER_OCTANE_DEG's 5x (1.4 of 7).
+  COMPRESSION_INTERCOOLER_GAIN: 0.4,
+  // Engineer Score points charged per point of compression past that headroom, and the
+  // most this rule will ever deduct. The cap equals the flat penalty this rule replaced,
+  // so the new rule is never harsher than its predecessor — it only stops charging that
+  // maximum to builds that did not earn it.
+  COMPRESSION_PENALTY_PER_POINT: 10,
+  COMPRESSION_PENALTY_CAP: 15,
 };
