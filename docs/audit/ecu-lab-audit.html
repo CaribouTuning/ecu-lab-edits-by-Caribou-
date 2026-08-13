@@ -1,0 +1,941 @@
+<title>Bench to Bay</title>
+<style>
+  /* Tokens mirror src/ui/theme.js so this reads as part of ECU Lab, not a stranger.
+     Light is a cool paper counterpart with the accent darkened for contrast. */
+  :root {
+    --bg: #f4f6f8;
+    --panel: #ffffff;
+    --panel2: #eef1f5;
+    --line: #d8dee6;
+    --line-hi: #b9c3ce;
+    --ink: #12171d;
+    --ink2: #4d5866;
+    --ink3: #78838f;
+    --amber: #c1441a;
+    --amber-ink: #8f3210;
+    --amber-bg: #fbeee8;
+    --cyan: #0d6f96;
+    --cyan-bg: #e5f1f7;
+    --violet: #6b48b8;
+    --green: #17743f;
+    --green-bg: #e6f3ea;
+    --yellow: #8a6300;
+    --yellow-bg: #fbf1da;
+    --red: #b8241f;
+    --red-bg: #fbeae9;
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0a0d11;
+      --panel: #12161c;
+      --panel2: #181d24;
+      --line: #242b34;
+      --line-hi: #33404d;
+      --ink: #eef2f5;
+      --ink2: #8b96a3;
+      --ink3: #57616c;
+      --amber: #ff6a2c;
+      --amber-ink: #ffab7a;
+      --amber-bg: #2a1810;
+      --cyan: #3ec8ff;
+      --cyan-bg: #0f2530;
+      --violet: #b083ff;
+      --green: #39d980;
+      --green-bg: #0f2418;
+      --yellow: #ffc94d;
+      --yellow-bg: #2a2110;
+      --red: #ff5252;
+      --red-bg: #2a1414;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a0d11;
+    --panel: #12161c;
+    --panel2: #181d24;
+    --line: #242b34;
+    --line-hi: #33404d;
+    --ink: #eef2f5;
+    --ink2: #8b96a3;
+    --ink3: #57616c;
+    --amber: #ff6a2c;
+    --amber-ink: #ffab7a;
+    --amber-bg: #2a1810;
+    --cyan: #3ec8ff;
+    --cyan-bg: #0f2530;
+    --violet: #b083ff;
+    --green: #39d980;
+    --green-bg: #0f2418;
+    --yellow: #ffc94d;
+    --yellow-bg: #2a2110;
+    --red: #ff5252;
+    --red-bg: #2a1414;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 20px 96px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .prose { max-width: 68ch; }
+
+  /* ---- masthead ---- */
+  header.mast {
+    padding: 56px 0 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+    font-weight: 700;
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(30px, 5.2vw, 46px);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  .standfirst { font-size: 18px; color: var(--ink2); margin: 0; max-width: 62ch; }
+
+  .sources {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-top: 26px;
+    font-family: var(--mono); font-size: 11.5px;
+  }
+  .sources span {
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 11px; color: var(--ink2); background: var(--panel);
+  }
+
+  /* ---- sections ---- */
+  section { margin: 0 0 52px; }
+  h2 {
+    font-family: var(--mono);
+    font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink2); font-weight: 700;
+    margin: 0 0 6px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .n { color: var(--amber); font-variant-numeric: tabular-nums; }
+  h3 {
+    font-family: var(--mono); font-size: 17px; font-weight: 700;
+    letter-spacing: -0.01em; margin: 30px 0 8px; text-wrap: balance;
+  }
+  p { margin: 0 0 14px; }
+  a { color: var(--cyan); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  strong { color: var(--ink); font-weight: 650; }
+  code {
+    font-family: var(--mono); font-size: 0.875em;
+    background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; color: var(--ink);
+    white-space: nowrap;
+  }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink3); }
+
+  .lede { font-size: 17.5px; color: var(--ink); }
+
+  /* ---- finding cards ---- */
+  .find {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--sev, var(--line-hi));
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+  }
+  .find.sev-high { --sev: var(--red); }
+  .find.sev-med  { --sev: var(--yellow); }
+  .find.sev-low  { --sev: var(--cyan); }
+  .find.sev-ok   { --sev: var(--green); }
+  .find-head {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    gap: 10px; margin-bottom: 8px;
+  }
+  .find-head h4 {
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    margin: 0; letter-spacing: -0.01em; flex: 1 1 320px;
+  }
+  .chip {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+  }
+  .chip.high { background: var(--red-bg); color: var(--red); }
+  .chip.med  { background: var(--yellow-bg); color: var(--yellow); }
+  .chip.low  { background: var(--cyan-bg); color: var(--cyan); }
+  .chip.ok   { background: var(--green-bg); color: var(--green); }
+  .find p { margin: 0 0 10px; font-size: 15px; color: var(--ink2); }
+  .find p:last-child { margin-bottom: 0; }
+  .find p strong { color: var(--ink); }
+  .loc {
+    font-family: var(--mono); font-size: 12px; color: var(--ink3);
+    display: block; margin-bottom: 8px;
+  }
+  .fix {
+    border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 12px;
+    font-size: 14.5px;
+  }
+  .fix b {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--amber); display: block; margin-bottom: 3px;
+  }
+
+  /* ---- tables ---- */
+  .tw { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink2); font-weight: 700;
+    background: var(--panel2); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td code { white-space: nowrap; }
+
+  /* ---- signal chain ---- */
+  .chain {
+    display: flex; flex-wrap: wrap; align-items: stretch; gap: 0;
+    margin: 22px 0 10px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .node {
+    flex: 1 1 150px; min-width: 150px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 13px;
+  }
+  .node.gpl { border-color: var(--violet); }
+  .node.hw { border-style: dashed; }
+  .node .t {
+    font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    margin-bottom: 4px; display: block;
+  }
+  .node .d { font-size: 12px; color: var(--ink2); line-height: 1.45; }
+  .node .lic {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-top: 7px; color: var(--violet);
+  }
+  .node .lic.mit { color: var(--green); }
+  .arrow {
+    align-self: center; padding: 0 9px; color: var(--ink3);
+    font-family: var(--mono); font-size: 13px; white-space: nowrap;
+  }
+
+  /* ---- phases ---- */
+  .phase {
+    display: grid; grid-template-columns: 62px 1fr; gap: 20px;
+    padding: 22px 0; border-top: 1px solid var(--line);
+  }
+  .phase:last-of-type { border-bottom: 1px solid var(--line); }
+  .pnum {
+    font-family: var(--mono); font-size: 30px; font-weight: 700;
+    color: var(--amber); line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .pnum small { display: block; font-size: 9.5px; letter-spacing: 0.12em; color: var(--ink3); margin-top: 6px; }
+  .phase h3 { margin: -4px 0 6px; }
+  .phase p { font-size: 15px; color: var(--ink2); }
+  .phase p strong { color: var(--ink); }
+  .gate {
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 9px 12px; font-size: 13.5px; color: var(--ink2); margin-top: 12px;
+  }
+  .gate b {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--green); margin-right: 8px;
+  }
+
+  .callout {
+    background: var(--amber-bg); border: 1px solid var(--amber);
+    border-radius: 8px; padding: 16px 18px; margin: 22px 0;
+  }
+  .callout .t {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--amber-ink); font-weight: 700; margin-bottom: 7px;
+  }
+  .callout p { margin: 0 0 10px; font-size: 15px; }
+  .callout p:last-child { margin-bottom: 0; }
+
+  footer {
+    margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 12px; color: var(--ink3);
+  }
+  @media (max-width: 620px) {
+    .phase { grid-template-columns: 1fr; gap: 8px; }
+    .pnum small { display: inline; margin-left: 10px; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">Code audit &amp; integration plan</p>
+  <h1>Bench to Bay</h1>
+  <p class="standfirst">
+    What ECU Lab's physics and ECU model would need to become an accurate tuning
+    simulator — and what it would take to put a real Nissan ECU on the other end of it.
+  </p>
+  <div class="sources">
+    <span>DNiev/ecu-lab @ 2f40731</span>
+    <span>+ PR #31 (peak pressure)</span>
+    <span>fenugrec/nisprog</span>
+    <span>fenugrec/npkern</span>
+    <span>6,457 lines src · 176 tests</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="n">01</span> Verdict</h2>
+  <div class="prose">
+    <p class="lede">
+      The model is unusually honest for a tuning game and unusually principled for a
+      hobby codebase — real gas laws, a genuine two-VE split, no per-part horsepower
+      bonuses, and a fingerprint test that makes physics changes a reviewed act. That
+      discipline is the asset. It is also the thing that caps the current design.
+    </p>
+    <p>
+      Every combustion result comes from <strong>one algebraic step per operating
+      point</strong>: fuel energy multiplied by three efficiency scalars. There is no
+      crank angle, no pressure trace, no burn duration. Roughly a dozen empirical
+      coefficients exist to paper over that missing dimension, and each one has to be
+      hand-fitted and defended in a comment. "Extremely accurate" is not reachable by
+      adding a fourteenth coefficient — it needs a crank-angle-resolved core that makes
+      most of them fall out as consequences instead of inputs.
+    </p>
+    <p>
+      The second gap is bigger for the nisprog goal. <strong>There is no ECU in this
+      codebase.</strong> There is a physics function with fuel arithmetic inlined in it.
+      No scheduler, no sensor pipeline, no diagnostics, no calibration format, no bytes.
+      A real ECU is exactly those things, and the integration target is a real ECU.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">02</span> What already works</h2>
+  <div class="prose">
+    <p>
+      Worth stating plainly, because the plan below preserves all of it and none of it
+      is common:
+    </p>
+    <ul>
+      <li><strong>The two-VE split</strong> (<code>veActual</code> vs <code>veVal</code>)
+        is the real basis of closed-loop VE tuning, and collapsing it is the mistake most
+        sims make. The fuel-trim histogram has genuine signal to read.</li>
+      <li><strong>Load axis is MAP, not throttle.</strong> Speed-density indexing matches
+        what real calibration tools do.</li>
+      <li><strong>Presets are falsifiable.</strong> Four production engines reproduced
+        from published specs through shared physics, validated in CI, with the model's
+        own failures documented in <code>NO_PEAK_BEFORE_LIMITER</code> rather than
+        tolerance-widened away.</li>
+      <li><strong>The fingerprint.</strong> 504 sweeps hashed; a coefficient cannot move
+        silently. This is the single most valuable thing in the repo for what comes next
+        — a physics rewrite is only safe because this exists.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">03</span> Physics findings</h2>
+  <p class="prose">Ranked by how much they cap accuracy, not by effort.</p>
+
+  <div class="find sev-high">
+    <div class="find-head">
+      <h4>No crank-angle resolution — combustion is one multiply</h4>
+      <span class="chip high">Structural</span>
+    </div>
+    <span class="loc">src/sim/point.js:127–135</span>
+    <p>
+      <code>timingEff</code> and <code>afrEff</code> are parabolas centred on an MBT
+      estimate, multiplied into fuel energy to make IMEP. Real IMEP is
+      <code>∮p dV</code> over a cycle. Without a pressure trace the model cannot produce
+      burn duration, real MBT, peak-pressure location, end-gas history, or exhaust
+      temperature — so each of those is either absent or a hand-fitted proxy.
+    </p>
+    <p>
+      This is the root cause of at least four findings below. It is why
+      <code>TIMING_FALLOFF</code>, <code>AFR_FALLOFF</code>, <code>EFFICIENCY_FLOOR</code>,
+      <code>OTTO_REALIZATION</code>, the whole peak-pressure phasing block and the EGT
+      proxy all have to exist as separate tuned numbers.
+    </p>
+    <div class="fix"><b>Direction</b>
+      A two-zone Wiebe heat-release model on a 1° crank grid. Burn duration and phasing
+      become state; MBT stops being a correlation and becomes the timing that puts 50%
+      mass-burned near 8–10° ATDC; IMEP comes from integration; peak pressure and its
+      location come free. Perhaps 200 lines, and it retires more coefficients than it adds.
+    </div>
+  </div>
+
+  <div class="find sev-high">
+    <div class="find-head">
+      <h4>Knock is a threshold comparison, not an autoignition model</h4>
+      <span class="chip high">Accuracy</span>
+    </div>
+    <span class="loc">src/sim/knock.js:47–79</span>
+    <p>
+      Knock margin is a base table plus eight additive corrections — octane, charge index,
+      IAT, compression, head material, cylinder size, headers, exhaust — each independently
+      fitted. Real knock is an <strong>induction-time integral</strong>: the end gas
+      autoignites when <code>∫dt/τ</code> reaches 1, with τ from an Arrhenius correlation
+      in pressure, temperature and octane number (Douaud–Eyzat is the standard form).
+    </p>
+    <p>
+      The additive form cannot express the interactions that matter most to a tuner —
+      why a hot intercooler-less charge at 20 psi is far worse than the sum of "hot" and
+      "boosted", or why slower burn (retarded timing) gives the end gas <em>more</em>
+      time to autoignite even as peak pressure falls.
+    </p>
+    <div class="fix"><b>Direction</b>
+      With a pressure trace in hand, Livengood–Wu integration over the end gas replaces
+      most of <code>knockThreshold</code>. Octane becomes a real fuel property rather than
+      a degrees-of-margin bonus, and compression, boost, IAT and charge cooling stop
+      needing separate hand-priced terms.
+    </div>
+  </div>
+
+  <div class="find sev-high">
+    <div class="find-head">
+      <h4>Pumping work is clamped to zero under boost, and exhaust backpressure has no pressure term at all</h4>
+      <span class="chip high">Accuracy</span>
+    </div>
+    <span class="loc">src/sim/friction.js:42–44 · src/sim/airflow.js:105–108</span>
+    <p>
+      <code>pumpingFmepPa</code> returns <code>max(0, BARO − MAP)</code>. Above
+      atmospheric that is zero, so a boosted engine pays no pumping term whatsoever. The
+      turbine's restriction is modelled only as a 3% VE multiplier
+      (<code>VE_TURBINE_BACKPRESSURE</code>).
+    </p>
+    <p>
+      In reality PMEP is <code>P_exhaust − P_intake</code>, and on a turbo engine exhaust
+      manifold pressure commonly runs <strong>1.5–2× boost pressure</strong> with a small
+      or choked turbine. That is a first-order torque loss, the main reason turbine sizing
+      matters, and a major driver of residual gas — which then drives knock. The model
+      currently has boost as almost pure upside.
+    </p>
+    <div class="fix"><b>Direction</b>
+      Model exhaust manifold pressure from turbine flow and size, let PMEP go properly
+      negative, and feed EMP into a residual-fraction estimate that reaches the knock
+      model. Turbine choice starts costing what it costs in reality.
+    </div>
+  </div>
+
+  <div class="find sev-med">
+    <div class="find-head">
+      <h4>The turbo is a boost target with a spool ramp, not a matched machine</h4>
+      <span class="chip med">Accuracy</span>
+    </div>
+    <span class="loc">src/sim/manifold.js:32–39 · src/sim/hardware.js:99–115</span>
+    <p>
+      Boost is <code>target × spool × throttle²</code>, where spool is a linear RPM ramp.
+      There is no compressor map, no efficiency island, no surge or choke line, no
+      wastegate, no shaft inertia, and no energy balance between turbine and compressor.
+      <code>boostCeiling</code> stands in for the entire map. The result: boost is
+      whatever the player asks for, and the only penalty for asking too much is a fixed
+      knock deduction.
+    </p>
+    <div class="fix"><b>Direction</b>
+      A real compressor map (pressure ratio vs corrected mass flow, with efficiency
+      contours) plus turbine power matching. Boost then becomes an <em>outcome</em> of
+      the hardware and the wastegate duty the player sets — which is what tuning a boost
+      controller actually is.
+    </div>
+  </div>
+
+  <div class="find sev-med">
+    <div class="find-head">
+      <h4>Charge temperature ignores everything except compression</h4>
+      <span class="chip med">Accuracy</span>
+    </div>
+    <span class="loc">src/sim/thermo.js:21–26</span>
+    <p>
+      <code>chargeTempK</code> returns ambient exactly whenever boost ≤ 0. A naturally
+      aspirated engine therefore never experiences heat soak, port heating, hot-side
+      radiation, or residual-gas mixing — the charge at IVC is meaningfully hotter than
+      IAT in every real engine, and that difference is what the knock model needs.
+      Ambient itself is a fixed 298 K at fixed sea-level pressure, so altitude and
+      weather — both first-order tuning variables, and both things a real ECU corrects
+      for — do not exist.
+    </p>
+    <div class="fix"><b>Direction</b>
+      Split IAT (sensor) from trapped-charge temperature (physics): mix intake charge with
+      residual mass at exhaust temperature, add a wall heat-transfer term. Make baro and
+      ambient inputs, then the ECU model can have the baro correction real ECUs have.
+    </div>
+  </div>
+
+  <div class="find sev-med">
+    <div class="find-head">
+      <h4>Fuel delivery is idealised in the three places tuners actually get bitten</h4>
+      <span class="chip med">Fidelity</span>
+    </div>
+    <span class="loc">src/sim/point.js:99–110 · src/sim/constants.js:45</span>
+    <p>
+      Injector deadtime is one constant (<code>1.0 ms</code>) — in reality it is a table
+      against battery voltage and fuel pressure, and getting it wrong is the classic
+      cause of idle and low-load mixture errors after an injector swap. There is no
+      small-pulse nonlinearity, so big injectors carry none of their real low-load
+      penalty. Fuel pressure and its differential across the rail are absent, so a
+      returnless system under boost never leans out.
+    </p>
+    <div class="fix"><b>Direction</b>
+      Deadtime as a voltage table, a low-pulse linearity curve per injector, and rail
+      differential pressure as a modelled quantity. All three are cheap and all three are
+      things a tuner must get right.
+    </div>
+  </div>
+
+  <div class="find sev-low">
+    <div class="find-head">
+      <h4>MAF error is a flat scalar, so the rescale lesson is easier than reality</h4>
+      <span class="chip low">Fidelity</span>
+    </div>
+    <span class="loc">src/sim/sweep.js:61–66</span>
+    <p>
+      A bigger intake multiplies true airflow by 0.90 at every flow rate. Real MAF error
+      from a housing change is a <em>shape</em> change in the transfer function — often a
+      few percent mid-range and much worse at the extremes — which is precisely why a
+      single scalar cannot fix it and why real tuners rescale the curve point by point.
+      The app teaches the scalar workflow because the model only has a scalar to teach.
+    </p>
+    <div class="fix"><b>Direction</b>
+      Make the MAF a voltage-vs-flow transfer function, and hardware distort its shape.
+      The rescale then becomes the multi-point job it really is — and matches the MAF
+      table you would edit in a Nissan ROM.
+    </div>
+  </div>
+
+  <div class="find sev-low">
+    <div class="find-head">
+      <h4>Ideal-cycle efficiency uses an exponent that is not the ideal cycle's</h4>
+      <span class="chip low">Cosmetic</span>
+    </div>
+    <span class="loc">src/sim/engine.js:142</span>
+    <p>
+      <code>ottoIdeal = 1 − 1/CR^0.35</code>. The ideal Otto cycle uses γ−1 = 0.4 for air;
+      0.35 is a reasonable stand-in for real burned-gas properties, but it is presented as
+      the ideal cycle and then multiplied by a second realisation factor of 0.685. Two
+      fudge factors stacked where one physical statement would do. Harmless today,
+      confusing to anyone deriving from it.
+    </p>
+    <div class="fix"><b>Direction</b>
+      A Wiebe core makes this moot — indicated efficiency becomes an output. Until then,
+      say plainly in the comment that 0.35 is an empirical γ−1 for burned gas, not the
+      textbook value.
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">04</span> The ECU is missing</h2>
+  <div class="prose">
+    <p>
+      This is the finding that matters most for where you are going. The app's ECU is
+      about forty lines: a fuel calculation inlined in <code>evaluatePoint</code>, plus
+      idle control, DFCO, a rev limiter and fuel trims in <code>live.js</code>. There is
+      no ECU object, no separable ECU module, and nothing that resembles ECU
+      architecture. Grep the simulation layer and you will not find a diagnostic trouble
+      code, a task scheduler, a transient fuel term, or a single byte of calibration data.
+    </p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead>
+        <tr><th>Real ECU subsystem</th><th>In ECU Lab</th><th>Why it matters for real tuning</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Task scheduler</strong><br>time-based + crank-synchronous</td>
+          <td>None — one algebraic pass per point</td>
+          <td>Every transient behaviour, and every "why did it do that for 40 ms" question, lives here</td>
+        </tr>
+        <tr>
+          <td><strong>Load index</strong><br>Nissan <code>Tp = K × Qa/N</code></td>
+          <td>MAP in kPa</td>
+          <td>Nissan tables are indexed by Tp. If the target is Nissan ROMs, the sim's axis is the wrong quantity</td>
+        </tr>
+        <tr>
+          <td><strong>Calibration format</strong><br>integers + scaling, fixed axes</td>
+          <td>JS floats, one shared 8×6 grid</td>
+          <td>A ROM map is 16-bit with a scale and offset. Float tables cannot round-trip to a real ECU</td>
+        </tr>
+        <tr>
+          <td><strong>Transient fuel</strong><br>wall-wetting, accel enrichment</td>
+          <td>Absent</td>
+          <td>The tip-in stumble is the most common real-world driveability complaint</td>
+        </tr>
+        <tr>
+          <td><strong>Knock control</strong><br>window, filter, retard/restore ramp</td>
+          <td>Instantaneous analytic retard</td>
+          <td>Real knock control has dynamics you tune; here it resolves within one point</td>
+        </tr>
+        <tr>
+          <td><strong>Diagnostics</strong><br>DTCs, MIL, freeze frame, limp</td>
+          <td>Absent</td>
+          <td>The feedback channel a real tuner reads first, and free teaching material</td>
+        </tr>
+        <tr>
+          <td><strong>Closed loop</strong><br>switching O2, catalyst protection</td>
+          <td>Single trim pair on lambda</td>
+          <td>Narrowband switching behaviour is what fuel trims actually come from</td>
+        </tr>
+        <tr>
+          <td><strong>Adaptives</strong><br>idle learn, knock learn, cell-based trims</td>
+          <td>LTFT only</td>
+          <td>Explains why a car behaves differently after a reflash clears learned values</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <div class="t">The load-axis decision comes first</div>
+    <p>
+      Everything downstream depends on it. ECU Lab is a <strong>GM/HP&nbsp;Tuners-shaped
+      speed-density sim</strong> — VE indexed by RPM × MAP. Nissan SH705x ECUs, the ones
+      nisprog talks to, are <strong>mass-airflow machines</strong>: the MAF reads air
+      mass, <code>Tp</code> (basic injection pulse width) is derived as
+      <code>K × Qa/N</code>, and fuel, timing and knock tables are indexed by Tp and
+      engine speed.
+    </p>
+    <p>
+      If a player is going to learn on the simulator and then tune a real 350Z, the
+      simulator has to teach the axis they will actually meet. That argues for making the
+      ECU model pluggable — a speed-density personality and a Nissan MAF/Tp personality
+      over the same physics — rather than converting the app to one and losing the other.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">05</span> What proves accuracy today</h2>
+  <div class="prose">
+    <p>
+      The fingerprint proves <em>stability</em> — that numbers did not move unnoticed. The
+      preset tests prove <em>plausibility</em> at four points: peak power and peak torque
+      for four engines, within ±5% and ±10%. Nothing in the repo compares the model to a
+      measured curve, a real datalog, or a second implementation.
+    </p>
+    <p>
+      That is the right test suite for a teaching toy and an insufficient one for
+      "extremely accurate". A model can hit four published peaks and still have the wrong
+      curve shape between them, the wrong response to a timing change, and the wrong
+      knock onset — none of which any current test would notice.
+    </p>
+    <p>
+      <strong>The missing asset is a validation corpus.</strong> Real dyno curves and real
+      datalogs, checked into the repo, with error metrics computed in CI: RMSE on the
+      torque curve rather than its peak, predicted-vs-logged AFR, predicted-vs-logged
+      knock retard. That corpus is also the thing that turns the nisprog integration from
+      a feature into an accuracy engine — see phase 3.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">06</span> nisprog and npkern, as they actually are</h2>
+  <div class="prose">
+    <p>
+      Read the source rather than the summary, because three properties decide the whole
+      integration design.
+    </p>
+
+    <h3>What they give you</h3>
+    <p>
+      <strong>npkern</strong> is a small program uploaded into the ECU's RAM that takes
+      over the running ECU and serves an extended ISO&nbsp;14230 command set over the
+      K&nbsp;line. The commands that matter:
+    </p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>SID</th><th>Command</th><th>What it unlocks for you</th></tr></thead>
+        <tbody>
+          <tr><td class="num">0x23</td><td>ReadMemByAddress, ≤251 B</td><td><strong>Live datalogging from ECU RAM</strong> — the accuracy flywheel</td></tr>
+          <tr><td class="num">0xBD</td><td>Fast dump, ROM or EEPROM</td><td>Whole-ROM read at ~5.4 kB/s vs ~100 B/s without the kernel</td></tr>
+          <tr><td class="num">0xBC</td><td>Unprotect / erase block / write 128 B + CRC</td><td>Reflash, selectively by erase block</td></tr>
+          <tr><td class="num">0xBE</td><td>Set baud (BRR divisor), CRC ROM chunks</td><td>62500 bps comms; fast verify without a full re-read</td></tr>
+          <tr><td class="num">0x3D</td><td>WriteMemByAddress — RAM only</td><td>RAM patching; <em>not</em> a route to live map editing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>nisprog</strong> is the host side: connection, the Nissan seed–key security
+      algorithms (<code>genkey1</code>/<code>genkey2</code> in <code>nis_backend.c</code>),
+      kernel upload, and the flash workflow. It builds on freediag for the K-line
+      transport.
+    </p>
+
+    <h3>Constraint 1 — licence</h3>
+    <p>
+      Both are <strong>GPLv3</strong>; ECU Lab is <strong>MIT</strong>. Linking nisprog's
+      code into the app makes the whole app GPLv3. That is a real decision with real
+      consequences, not a formality, and it has to be made before any code is written.
+      The architecture in the next section is shaped primarily by this.
+    </p>
+
+    <h3>Constraint 2 — a browser cannot drive a K line</h3>
+    <p>
+      ISO 14230 needs a 5-baud or fast-init wake pattern with tens-of-milliseconds
+      precision, then byte-level timing (P1–P4) inside a few ms, then a mid-session baud
+      change to 62500. Web Serial can open a port, but a JavaScript event loop cannot be
+      trusted with initialisation timing, and nisprog's "dumb" interface support bit-bangs
+      init through DTR/RTS. <strong>A native helper process is not optional.</strong>
+    </p>
+
+    <h3>Constraint 3 — flash wear forbids the obvious product</h3>
+    <p>
+      npkern's own README: these parts are rated around <strong>one hundred write
+      cycles</strong>, and it explicitly warns against live-tuning applications. The
+      natural feature — "edit a map, hit flash, drive, repeat" — would consume an ECU's
+      rated endurance in an afternoon. Any real-hardware feature has to be designed
+      around a <em>flash budget</em>, with iteration happening in the simulator and only
+      validated tunes reaching the car.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">07</span> Proposed architecture</h2>
+  <p class="prose">
+    One boundary does three jobs at once: it keeps GPL code out of the MIT app, puts
+    real-time serial work in a process that can do it, and gives the dangerous operations
+    a single choke point to gate.
+  </p>
+
+  <div class="chain">
+    <div class="node">
+      <span class="t">ECU Lab (web)</span>
+      <span class="d">Physics, ECU model, curriculum, map editors, tune diffing</span>
+      <span class="lic mit">MIT · unchanged</span>
+    </div>
+    <div class="arrow">→<br>ws://localhost</div>
+    <div class="node gpl">
+      <span class="t">Garage Bridge</span>
+      <span class="d">Separate binary. Wraps nisprog/freediag. JSON-RPC over a local WebSocket</span>
+      <span class="lic">GPLv3 · own repo</span>
+    </div>
+    <div class="arrow">→<br>K line</div>
+    <div class="node hw">
+      <span class="t">Interface + ECU</span>
+      <span class="d">FTDI K-line adapter; npkern running in ECU RAM</span>
+      <span class="lic">GPLv3 payload</span>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>
+      Two separate programs exchanging messages over a socket is the arrangement least
+      likely to make the web app a derivative work — but this is a call for a lawyer, not
+      for me, and the honest summary is that the FSF and industry practice disagree at the
+      margins. <strong>Get an opinion before shipping, not after.</strong> The fallback if
+      the answer is unfavourable is clean: relicense the desktop distribution as GPLv3 and
+      keep the web simulator MIT.
+    </p>
+    <p>
+      A side benefit worth naming: everything in phases 1 and 2 below runs entirely in the
+      browser with no bridge, no hardware and no risk — and that is where most of the user
+      value is.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">08</span> The plan</h2>
+  <p class="prose">
+    Six phases. The order is deliberate: each one is useful shipped alone, and each earns
+    the right to the next. Nothing touches a real ECU until phase 4.
+  </p>
+
+  <div class="phase">
+    <div class="pnum">0<small>FOUNDATION</small></div>
+    <div>
+      <h3>Give the ECU a body</h3>
+      <p>
+        Extract the ECU from the physics. A <code>src/ecu/</code> module with an explicit
+        scheduler (10 ms / 100 ms / per-event tasks), a sensor pipeline with conversion and
+        rationality checks, and fuel, spark, idle and knock as separate strategies. The
+        physics keeps its current interface; the ECU becomes something you can swap.
+      </p>
+      <p>
+        Then define an <strong>ECU personality</strong>: the object that says how load is
+        computed, what the tables are indexed by, and how values are quantised. Ship two —
+        the current speed-density one, and a Nissan MAF/Tp one.
+      </p>
+      <div class="gate"><b>Gate</b> The fingerprint is unchanged for the speed-density personality. A refactor that moves a number is a bug.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">1<small>PHYSICS</small></div>
+    <div>
+      <h3>Crank-angle core</h3>
+      <p>
+        Wiebe heat release on a 1° grid; IMEP by integration; Livengood–Wu end-gas
+        autoignition replacing the knock threshold; EMP and honest PMEP; residual mixing
+        into charge temperature. Retire the coefficients this makes redundant, and let the
+        fingerprint report exactly what moved.
+      </p>
+      <p>
+        <strong>This is the phase that decides whether "extremely accurate" is a slogan or
+        a claim.</strong> It is also the one that most needs phase 2 to exist first, so run
+        them together if you can.
+      </p>
+      <div class="gate"><b>Gate</b> Every preset still lands within its published tolerance, with the new core and fewer free parameters than before.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">2<small>EVIDENCE</small></div>
+    <div>
+      <h3>Validation corpus</h3>
+      <p>
+        Check real dyno curves and real datalogs into the repo. Add a harness that replays
+        a log through the model and reports error metrics — torque-curve RMSE, AFR error,
+        knock-retard agreement — as CI output alongside the fingerprint. Accuracy stops
+        being an opinion and becomes a number that can regress.
+      </p>
+      <div class="gate"><b>Gate</b> Published error metrics for at least three engines, with the worst case stated in the README rather than buried.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">3<small>BYTES</small></div>
+    <div>
+      <h3>ROM domain model — offline, no hardware</h3>
+      <p>
+        A definition format (map address, axes, scaling, units — the job RomRaider defs and
+        TunerPro XDFs do), a binary loader, checksum handling, and map editors that read a
+        real ROM in the browser. <strong>Open a real 350Z ROM and see its real maps, with
+        the simulator predicting what an edit does.</strong>
+      </p>
+      <p>
+        No serial port, no risk, and it is probably the single highest-value feature in
+        this plan. It also forces the quantisation work from phase 0 to be real.
+      </p>
+      <div class="gate"><b>Gate</b> Load a stock ROM, edit a map, write it out, and have the bytes differ only where intended with the checksum correct.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">4<small>HARDWARE</small></div>
+    <div>
+      <h3>Garage Bridge — read only, first</h3>
+      <p>
+        Ship the bridge with connect, identify, and <strong>read</strong> — ROM dump and
+        the 0x23 RAM-read datalogging stream. No erase, no write, not even behind a flag.
+        A read-only release proves the transport, the timing and the hardware matrix while
+        it is impossible to brick anything.
+      </p>
+      <p>
+        Then wire the datalog stream into the phase 2 harness. Now every user with a car is
+        contributing validation data, and the simulator's accuracy improves because people
+        are using it.
+      </p>
+      <div class="gate"><b>Gate</b> A dump that byte-matches a known-good ROM, on at least two ECU types, from at least two adapters.</div>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="pnum">5<small>WRITE</small></div>
+    <div>
+      <h3>Guided reflash</h3>
+      <p>
+        Flash last, wrapped in the safety design the constraints demand: mandatory original
+        dump held before the first write, verify-after-write by CRC, a visible
+        <strong>flash-cycle budget</strong> per ECU against the ~100-cycle rating,
+        power-loss warnings, and a recovery path documented before the feature ships.
+      </p>
+      <p>
+        This is also where "after learning" becomes real: gate write access behind
+        completion of the simulator curriculum. The person who has never seen what
+        detonation does to a piston in the sim does not get to send bytes to their car.
+      </p>
+      <div class="gate"><b>Gate</b> Legal opinion on the licence boundary, and a written recovery procedure, both landed before the first public build.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">09</span> Decisions I need from you</h2>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Decision</th><th>Why it blocks</th><th>My recommendation</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Licence stance</strong></td>
+          <td>Shapes the architecture before any code exists</td>
+          <td>Keep the web app MIT; bridge in its own GPLv3 repo; get an opinion early</td>
+        </tr>
+        <tr>
+          <td><strong>Target ECU family</strong></td>
+          <td>Decides the load axis, table formats and definitions</td>
+          <td>Nissan SH7055/7058 — it is what nisprog supports and what npkern is written for</td>
+        </tr>
+        <tr>
+          <td><strong>Keep generic sim, or converge on Nissan?</strong></td>
+          <td>One codebase cannot be both by accident</td>
+          <td>Pluggable ECU personalities; the generic sim stays the teaching front door</td>
+        </tr>
+        <tr>
+          <td><strong>Desktop shell</strong></td>
+          <td>Bridge needs a distribution story</td>
+          <td>Tauri sidecar — small binary, and the web app stays the same web app</td>
+        </tr>
+        <tr>
+          <td><strong>Physics rewrite appetite</strong></td>
+          <td>Phase 1 is weeks, not days, and moves every number</td>
+          <td>Do it — with the fingerprint and a validation corpus it is safe, and without it the ceiling stays where it is</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">10</span> Risks worth naming now</h2>
+  <div class="prose">
+    <ul>
+      <li><strong>Bricking someone's ECU.</strong> The mitigations in phase 5 are the
+        minimum, not a nice-to-have. A recovery procedure has to exist before the first
+        write ships.</li>
+      <li><strong>Flash endurance is a hard budget.</strong> Design the product around it
+        from the start; retrofitting a cycle counter after users have burned their ECUs is
+        too late.</li>
+      <li><strong>Legality varies.</strong> Reflashing may be illegal on road vehicles in
+        the user's jurisdiction and will affect emissions compliance. Say so in the
+        product, once, clearly, and do not bury it.</li>
+      <li><strong>Licence drift.</strong> The boundary only holds if it is maintained.
+        One convenience import of GPL code into the web app collapses it.</li>
+      <li><strong>Scope.</strong> Phases 0–3 are a substantial project on their own and
+        deliver most of the value. Phases 4–5 are where the risk concentrates. It is
+        entirely reasonable to ship 0–3 and stop to reassess.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  Audit of DNiev/ecu-lab at 2f40731 plus the pending peak-cylinder-pressure work.
+  External repositories read at HEAD: fenugrec/nisprog, fenugrec/npkern (both GPLv3).
+  File references are to the audited revision.
+</footer>
+
+</div>
