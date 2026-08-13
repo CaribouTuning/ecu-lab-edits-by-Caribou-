@@ -52,12 +52,68 @@ export const COEFF = {
   KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
   MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
 
+  // --- Peak cylinder pressure (see pressure.js) ---
+  // Polytropic exponent for the compression stroke. The isentropic value for air is
+  // 1.4; real cylinders lose heat to the walls and leak past the rings on the way up,
+  // and measured motoring traces sit around 1.30-1.35. 1.32 is the middle of that.
+  PEAK_POLYTROPIC_N: 1.32,
+  // How much combustion multiplies the motored (compression-only) pressure at MBT
+  // spark. Published pressure traces for a wide-open-throttle spark-ignition engine
+  // put peak firing pressure at roughly 2x-2.5x the motored peak; 2.2 lands a stock
+  // 10.3:1 naturally aspirated engine near 50 bar at wide-open throttle, which is
+  // where real measurements put it.
+  PEAK_COMBUSTION_RISE: 2.2,
+  // Advancing past MBT keeps raising peak pressure while torque falls — about 1.5% per
+  // degree, capped, because the burn cannot start before there is a charge to burn.
+  PEAK_ADVANCE_RISE_PER_DEG: 0.015,
+  PEAK_ADVANCE_CAP_DEG: 10,
+  // Retarding from MBT moves the pressure peak later, onto a descending piston in a
+  // growing volume. Spark-sweep traces lose roughly 2-3% of peak pressure per degree;
+  // the floor is where the burn is so late that it is finishing into the exhaust
+  // stroke and peak pressure is barely above the motored value.
+  PEAK_RETARD_FALL_PER_DEG: 0.025,
+  PEAK_RETARD_FLOOR: 0.45,
+  // Peak cylinder pressure a stock bottom end — cast pistons, powdered-metal rods,
+  // production rod bolts — survives indefinitely. Above it, damage accumulates whether
+  // or not the mixture ever detonates. Anchored against what the shipped presets
+  // actually produce: the most heavily boosted factory engine in the app (the Golf R's
+  // EA888.3 at 17 psi) peaks at about 95 bar on its own factory calibration, so this
+  // sits clear of every production engine here while still catching the builds that
+  // stack big static compression on top of big boost.
+  PEAK_PRESSURE_LIMIT_BAR: 110,
+
   // --- Wear rates (percent of component life per pull) ---
   WEAR_KNOCK: 0.06,            // per degree of retard, per logged point
   WEAR_LEAN: 0.15,
   WEAR_VALVE_LEAN_BOOST: 0.4,
   WEAR_RICH_BORE_WASH: 0.9,    // per unit of lambda below the rich threshold
-  WEAR_BEARING_PER_PSI: 0.10,
+  // Piston, rod and rod-bolt damage per bar of peak pressure past
+  // PEAK_PRESSURE_LIMIT_BAR, per logged point. A build sitting 20 bar over the limit
+  // across a whole sweep spends about 5% of piston life per pull — serious, but slower
+  // than sustained detonation, which is the right ordering: overload cracks a ring land
+  // over a season of pulls, knock does it in an afternoon.
+  WEAR_PISTON_PER_BAR: 0.004,
+  // Rod and main bearings are loaded by peak cylinder pressure on every firing stroke,
+  // so their wear tracks the pull's AVERAGE peak pressure rather than boost. Boost was
+  // the old proxy for this and it was a bad one: it charged a 9.5:1 engine and a 12.5:1
+  // engine the same amount for the same manifold pressure, when the second is putting
+  // half again as much load through the same bearings.
+  //
+  // Calibrated to leave the previous boost-based numbers roughly where they were for
+  // the builds that already existed — a stock naturally aspirated pull at wide-open
+  // throttle still costs about 0.15, and the N54 preset still costs about 0.6 — so
+  // what this change moves is the RELATIONSHIP to compression, not the overall rate.
+  // One case does move: a part-throttle pull now costs nothing at all, where the old
+  // boost-based expression charged a flat 0.05. That is deliberate. Below this
+  // threshold the bearings are inside what their oil film carries indefinitely, and an
+  // engine held at 40 kPa is not spending bearing life in any way worth modelling.
+  BEARING_PRESSURE_FREE_BAR: 38,
+  WEAR_BEARING_PER_BAR: 0.03,
+  // Average peak pressure above which the pull log raises the bottom-end advisory.
+  // About 40% above what a healthy naturally aspirated engine puts through its
+  // bearings at wide-open throttle, so the advisory means "this is boosted-engine
+  // loading now", not "you drove it".
+  BEARING_EVENT_BAR: 60,
 
   // --- Camshaft & valvetrain ---
   CAM_PEAK_SHIFT_PER_DEG: 32,  // RPM the VE peak moves per degree of extra duration

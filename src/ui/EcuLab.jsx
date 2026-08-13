@@ -2063,7 +2063,7 @@ export default function EngineManagementSandbox() {
                       {RPM.map((r) => {
                         const p = result.points.find((pt) => pt.rpm === r);
                         if (!p) return null;
-                        const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk;
+                        const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
                         const warn = !bad && (p.duty > 85 || p.egt > 870);
                         const edge = bad ? T.red : warn ? T.yellow : T.line;
 
@@ -2088,6 +2088,11 @@ export default function EngineManagementSandbox() {
                           { k: 'Heat', asked: null, got: `${p.egt}°C`,
                             note: `intake charge ${p.iat}°C${p.egt > 950 ? ' · exhaust running hot' : ''}`,
                             ok: p.egt <= 950 },
+                          { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
+                            note: p.pressureRisk
+                              ? 'past what stock pistons and rods take — a mechanical limit, not detonation'
+                              : `what ${p.map} kPa becomes at the top of the stroke, burning at ${p.timing}°`,
+                            ok: !p.pressureRisk },
                         ];
 
                         return (
@@ -2123,6 +2128,7 @@ export default function EngineManagementSandbox() {
                       <br /><br /><b style={{ color: T.ink }}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
                       <br /><br /><b style={{ color: T.ink }}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
                       <br /><br /><b style={{ color: T.ink }}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
+                      <br /><br /><b style={{ color: T.ink }}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
                     </ExpandableInfo>
 
                     <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
@@ -2187,7 +2193,7 @@ export default function EngineManagementSandbox() {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {result.events.map((e, i) => {
-                          const isDanger = e.type === 'knock' || e.type === 'valve' || e.type === 'rich' || e.type === 'injscale' || e.type === 'float';
+                          const isDanger = e.type === 'knock' || e.type === 'valve' || e.type === 'rich' || e.type === 'injscale' || e.type === 'float' || e.type === 'pressure';
                           const isWarn = e.type === 'lean' || e.type === 'fuel' || e.type === 'compressor' || e.type === 'cam';
                           const isViolet = e.type === 'maf';
                           const bg = isDanger ? T.redBg : isWarn ? T.yellowBg : isViolet ? T.violetBg : T.panel2;
