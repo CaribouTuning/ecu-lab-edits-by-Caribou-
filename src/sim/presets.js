@@ -145,6 +145,128 @@ export const ENGINE_PRESETS = [
     mods: { intake: false, exhaust: false, headers: false, intercooler: true },
   },
   {
+    id: 'b58-m0',
+    name: 'BMW B58B30M0',
+    manufacturer: 'BMW',
+    years: '2016-2018',
+    blurb: 'One twin-scroll turbo where the N54 ran two, and 11.0:1 compression no 2006 turbo engine could have run — two BMW turbo-six generations apart. Load it next to the N54 to see what a decade of combustion development actually bought.',
+    factory: {
+      crankHp: 320, crankHpRpm: [5500, 6500],  // plateau-rated
+      crankTq: 330, crankTqRpm: 1380,          // 330 lb-ft, flat 1380-5000
+      displacementL: 3.00,
+    },
+    engine: {
+      configuration: 'I6',
+      bore: 82.0, stroke: 94.6,          // 82 x 94.6 mm
+      compression: 11.0,                 // 11.0:1 — higher than the N54, two generations back
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      // Bore, stroke, compression and redline are published and do not move.
+      // `camDuration` and `springRate` are not published in terms comparable to this
+      // model, so they are free to be fitted — see the VQ35HR comment above for the
+      // same arrangement and why it is not a fudge factor. In the event neither had to
+      // move: this engine's peak torque is set almost entirely by manifold pressure.
+      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque at
+      // the 3700 breakpoint, baseline 296 wlb-ft at camDuration 214): swapping duration
+      // 212->214->216 moves it only 297->296->296, about 0-1 wlb-ft per 2°, while +1 psi
+      // of boost at the 3500 breakpoint, the 4500 breakpoint, or added across the whole
+      // curve each move it 296->306/308/308 — 10-12 wlb-ft per psi. So the boost curve
+      // below is what was actually fitted. 214° sits just below the N54's 216° and
+      // carries 2.20° of overlap, well inside the advisory.
+      // `springRate` 60 puts `valveFloatRpm` at ~8474, 1474 RPM clear of the 7000
+      // limiter — the same order of margin the other presets carry (1242-1682). No
+      // pull on a healthy engine should ever log a `float` event.
+      camDuration: 214, springRate: 60,
+      redline: 7000,
+    },
+    induction: {
+      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      // One twin-scroll turbo rather than the N54's pair. A twin-scroll housing keeps
+      // the exhaust pulses of the two cylinder groups separated right up to the
+      // turbine, so a single larger turbo spools nearly as early as two small ones —
+      // which is why peak boost is commanded from just above idle and the torque
+      // plateau is rated from 1380. It then tapers toward redline for the same reasons
+      // the N54's does: backpressure and heat.
+      //
+      // PEAK is the published figure — 13 psi, ~0.9 bar — and does not move. The SHAPE
+      // across RPM is not published, and it is the only thing fitted here: 13 psi held
+      // to 2500, then a taper down to about 6.75 psi at the 7000 limiter (the curve's
+      // last node, 6.5, sits at 7500 and is never reached — redline cuts the pull
+      // first). That taper is steeper than the
+      // real engine's, and deliberately so. This model was calibrated on a naturally
+      // aspirated V6, and it reports more torque per unit of manifold pressure than a
+      // real high-compression boosted six makes — hold 13 psi flat to 4500 here and the
+      // pull returns 342 wlb-ft against a 281 target. Everything above the torque peak
+      // is where that error can be absorbed without contradicting a published number,
+      // so that is where it is absorbed.
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 13 : r < 4500 ? 11
+        : r < 5500 ? 9 : r < 6500 ? 8 : r < 7500 ? 7 : 6.5)),
+    },
+    parts: { injectorIdx: 3, exhaustDiaIdx: 2, octaneIdx: 1 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  },
+  {
+    id: 'b58-m1',
+    name: 'BMW B58B30M1',
+    manufacturer: 'BMW',
+    years: '2019-present',
+    blurb: 'The same three litres with more boost and a far sharper calibration — 382 hp from an identical short block. What the Golf R is to the GTI, one engine family later.',
+    factory: {
+      crankHp: 382, crankHpRpm: 5800,   // 382 hp @ 5800 rpm
+      crankTq: 369, crankTqRpm: 1800,   // 369 lb-ft, flat 1800-5000
+      displacementL: 3.00,
+    },
+    engine: {
+      configuration: 'I6',
+      bore: 82.0, stroke: 94.6,
+      compression: 11.0,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      // Same short block, so bore, stroke and compression are the M0's. The revised
+      // engine's sharper calibration is carried by a slightly longer duration and the
+      // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
+      camDuration: 218, springRate: 62,
+      redline: 7000,
+    },
+    induction: {
+      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      // The revised engine runs meaningfully more boost than the M0 through the same
+      // architecture — roughly 1.2 bar against 0.9. Nothing about the short block
+      // changed, which is the entire lesson of shipping both.
+      //
+      // Peak is the published 17 psi and does not move; as on the M0, only the taper is
+      // fitted, and it absorbs the same model error the M0's does (see that comment
+      // above) — this physics reports more torque per unit of manifold pressure than
+      // an 11.0:1 boosted six really makes, and the taper is where the excess is
+      // absorbed without contradicting a published number. It is a far gentler taper
+      // than the M0's: 17 psi held to 2500 — as on the M0, the last node carrying peak
+      // is 2500, not 3500, so the plateau is already falling by 3000 (15.5 psi) — then
+      // tapering to about 10.75 psi at the 7000 limiter (the curve's last node, 10.5,
+      // sits at 7500 and is never reached), against the M0's 13 held to the same 2500
+      // and tapering to about 6.75 at its own 7000 limiter. The two engines differ in
+      // the DEPTH of the taper, not in where it starts — but that depth is still NOT
+      // the same relationship the Golf R has to the GTI
+      // below. Each retained-boost figure is that engine's boost curve linearly
+      // interpolated at its own redline (the same way the sim samples it), divided by
+      // its peak boost — not the value written last in each curve's ternary, which
+      // sits at the 7500 breakpoint, past every one of these four engines' redlines,
+      // and so is never itself sampled: the Golf R interpolates to 15.2 psi at its
+      // 6800 limiter, 15.2/17 = 89% of peak; the GTI's 6500 limiter lands exactly on
+      // an RPM breakpoint at 8.5 psi, 8.5/14 = 61% (coincidentally the same number as
+      // that curve's final ternary clause); and the M1 interpolates to 10.75 psi at
+      // its 7000 limiter, 10.75/17 = 63% — still on the GTI's side of that split, not
+      // the Golf R's. The real reason the M1 needs a gentler taper is a fitting
+      // constraint, not a wastegate schedule: its power target is 19% above the
+      // M0's while its torque target is only 12% above, so less of the M0's curve can be
+      // cut before power falls out of tolerance. Together the two published targets
+      // give a 62 hp gap (382-320); the two simulated curves give 47 whp (324-277) —
+      // the model doesn't reproduce the full published gap, but the direction and most
+      // of the magnitude are there.
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 17 : r < 4500 ? 14
+        : r < 6500 ? 12 : r < 7500 ? 11 : 10.5)),
+    },
+    parts: { injectorIdx: 4, exhaustDiaIdx: 2, octaneIdx: 1 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  },
+  {
     id: 'ea888-gti',
     name: 'VW EA888.3 (GTI)',
     manufacturer: 'Volkswagen',

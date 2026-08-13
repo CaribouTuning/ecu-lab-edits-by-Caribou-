@@ -35,10 +35,10 @@ function pullFor(preset) {
 }
 
 describe('preset data integrity', () => {
-  it('ships the four engines', () => {
-    expect(S.ENGINE_PRESETS).toHaveLength(4);
+  it('ships the six engines', () => {
+    expect(S.ENGINE_PRESETS).toHaveLength(6);
     expect(S.ENGINE_PRESETS.map((p) => p.id)).toEqual([
-      'vq35hr', 'n54', 'ea888-gti', 'ea888-r',
+      'vq35hr', 'n54', 'b58-m0', 'b58-m1', 'ea888-gti', 'ea888-r',
     ]);
   });
 
