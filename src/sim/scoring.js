@@ -16,18 +16,27 @@ import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 /**
- * The known hardware-consequence types (`cam`, `float`, `bearing`) — the only event
- * types that do NOT move the Tuning Score. The cam event's own advice text reads
- * "This is a hardware trade-off, not a tuning fault — you cannot calibrate it away",
- * and deducting for it made a perfectly calibrated engine unable to score 100 for
- * reasons no table edit could address. Hardware coherence is what the Engineer Score
- * is for.
+ * The known hardware-consequence types (`cam`, `float`, `bearing`, `pressure`) — the
+ * only event types that do NOT move the Tuning Score. The cam event's own advice text
+ * reads "This is a hardware trade-off, not a tuning fault — you cannot calibrate it
+ * away", and deducting for it made a perfectly calibrated engine unable to score 100
+ * for reasons no table edit could address. Hardware coherence is what the Engineer
+ * Score is for.
+ *
+ * `pressure` belongs here for the same reason, and the reason is worth stating because
+ * it is the one entry that looks arguable: spark timing does move peak cylinder
+ * pressure, so part of it IS tunable. But a build stacking high static compression on
+ * high boost is over the mechanical limit at MBT and cannot table-edit its way back
+ * under — only compression, boost or stronger parts get it there, all three of which
+ * are BUILD decisions. Charging the Tuning Score for it would deduct from a flawless
+ * calibration for a choice the calibration did not make. The cost that rule does carry
+ * is real and lands elsewhere: piston and bearing life, in `simulateSweep`'s wear.
  *
  * Kept as an explicit list (rather than a CALIBRATION_EVENT_TYPES allowlist inverted
  * at read time) so a brand-new event type that nobody has classified yet defaults to
  * deducting from the Tuning Score, not to a free pass.
  */
-const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing']);
+const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing', 'pressure']);
 
 /**
  * Grades how clean a calibration is, from the pull's event log.

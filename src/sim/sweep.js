@@ -110,10 +110,24 @@ export function simulateSweep({
     }
     // Bore wash: unburnt fuel stripping the cylinder film is a ring/bore wear mode.
     if (p.richRisk) pistonWear += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
+    // Mechanical overload: past a certain peak cylinder pressure the piston crown, the
+    // ring lands and the rod are simply out of strength. This is a SEPARATE failure
+    // mode from knock — a tune can be perfectly knock-free and still be pounding the
+    // bottom end apart, which is what happens when a high-octane fuel is used to make
+    // high static compression survivable under boost.
+    if (p.pressureRisk) {
+      pistonWear += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
+    }
   });
   const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
-  const bearingWear = (turboOn ? avgBoost * COEFF.WEAR_BEARING_PER_PSI : (loadKpa >= 100 ? 0.15 : 0.05))
-    * derived.bearingWearMult;
+  const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
+  // Bearings are loaded by peak cylinder pressure on every firing stroke, so they are
+  // charged for the pressure the whole pull averaged — not for boost, which was only
+  // ever a proxy for it and one that ignored static compression entirely. Block
+  // material still modulates it: an iron block holds its main bores rounder under load
+  // than an aluminium one, which is `bearingWearMult`'s whole job.
+  const bearingWear = Math.max(0, avgPeakPressure - COEFF.BEARING_PRESSURE_FREE_BAR)
+    * COEFF.WEAR_BEARING_PER_BAR * derived.bearingWearMult;
   const wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
 
   const events = [];
@@ -139,6 +153,22 @@ export function simulateSweep({
       msg: `Knock across ${rangeLabel(run)} — ECU pulled up to ${peak.knockPull.toFixed(1)}° (peak near ${peak.rpm} RPM)`,
       cause: `Caused by ${causes.join(' and ')}. This spans ${Math.round(rangeFrac(run) * 100)}% of the RPM sweep${avgPull >= 2 ? `, averaging ${avgPull.toFixed(1)}° of retard — tuners treat anything sustained above about 2° as a prelude to expensive engine damage, not an acceptable operating point` : ''}.`,
       fix: `On TIMING, pull the cells around ${peak.rpm} RPM / ${Math.round(loadKpa)} kPa toward ${suggestedTiming}° or less.${boosted ? ' Or back off boost in that range on BUILD.' : ''}${leanContrib >= 1.5 ? ` Or richen AFR toward ${peak.bestAfr}:1 there.` : ''} Higher octane, lower compression, or an aluminum head on BUILD also buy margin.`,
+    });
+  });
+
+  // Mechanical overload, reported separately from knock because it is a separate
+  // failure and — crucially — because the levers that fix it are different ones. Every
+  // other cylinder-pressure event in this log can be answered with octane; this one
+  // cannot, and saying so is the entire teaching value of the event.
+  groupRuns(points, (p) => p.pressureRisk).forEach((run) => {
+    const peak = run.reduce((a, b) => (b.peakPressure > a.peakPressure ? b : a));
+    const over = peak.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR;
+    const impact = Math.round(clamp(10 + over * 0.7, 10, 34) * (0.35 + 0.65 * rangeFrac(run)));
+    events.push({
+      type: 'pressure', severity: 3, impact,
+      msg: `Peak cylinder pressure past what the bottom end takes across ${rangeLabel(run)} — up to ${peak.peakPressure.toFixed(0)} bar near ${peak.rpm} RPM`,
+      cause: `${derived.compression.toFixed(1)}:1 static compression multiplies whatever the manifold sends it, and it is being sent ${Math.round(peak.map)} kPa at ${peak.ve.toFixed(0)}% VE${peak.boostPsi >= 1 ? ` (${peak.boostPsi.toFixed(1)} psi of boost)` : ''} — about ${peak.peakPressure.toFixed(0)} bar at the top of the stroke, against roughly ${COEFF.PEAK_PRESSURE_LIMIT_BAR} bar for stock cast pistons and production rods. This is not detonation: the mixture is burning normally and the ECU has nothing to detect. It is simply more force than the parts are built to pass, on every firing stroke, for ${Math.round(rangeFrac(run) * 100)}% of the sweep.`,
+      fix: `Lower static compression on BUILD, or take boost out of this range so the same compression has less to multiply. Forged pistons and rods are the hardware answer if you want to keep both. Higher octane will NOT help here — it buys knock margin, not rod strength, so a big-octane fuel just removes the knock that was warning you and leaves the load exactly where it was.`,
     });
   });
 
@@ -257,13 +287,17 @@ export function simulateSweep({
     });
   }
 
-  if (turboOn && avgBoost > 6) {
-    const impact = Math.round(6 * Math.min(1.5, avgBoost / 10));
+  // Keyed on the pressure the bearings actually see rather than on boost, so it fires
+  // for the reason the wear number now moves. A high-compression naturally aspirated
+  // engine can reach this without a turbo, and a knock-limited boosted one can stay
+  // under it because the retard the ECU pulled took the pressure peak with it.
+  if (avgPeakPressure > COEFF.BEARING_EVENT_BAR) {
+    const impact = Math.round(clamp((avgPeakPressure - COEFF.BEARING_EVENT_BAR) * 0.25, 3, 9));
     events.push({
       type: 'bearing', severity: 1, impact,
-      msg: `Sustained boost load through the pull (avg ${avgBoost.toFixed(1)} psi) — bottom-end stress accumulating`,
-      cause: `Cylinder pressure under boost stresses rod and main bearings even without knock.`,
-      fix: `Keep boost near 8-10 psi unless the block has been built for more, and do not hold WOT pulls longer than needed.`,
+      msg: `Sustained cylinder pressure through the pull (averaging ${avgPeakPressure.toFixed(0)} bar peak) — bottom-end stress accumulating`,
+      cause: `Peak cylinder pressure is carried by the rod into the rod and main bearings on every firing stroke, knock or no knock. ${turboOn ? `${avgBoost.toFixed(1)} psi of average boost against ` : `Running this much load against `}${derived.compression.toFixed(1)}:1 static compression is what puts it there — compression multiplies manifold pressure, so both halves of that pair count.`,
+      fix: `Back off boost, or lower static compression, unless the bottom end has been built for it. An iron block holds its main bores rounder under this load than an aluminium one, and either way there is no calibration change that removes the force — only ones that reduce it.`,
     });
   }
 

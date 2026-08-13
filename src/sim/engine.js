@@ -101,6 +101,7 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} cyl cylinder count
  * @property {number} displacementL total displacement, litres
  * @property {number} ratio bore ÷ stroke
+ * @property {number} compression static compression ratio, carried through unchanged
  * @property {number} configKnockBonus knock margin from cylinder size, degrees
  * @property {number} materialKnockBonus knock margin from head material, degrees
  * @property {number} compressionKnockAdj knock margin from compression ratio, degrees
@@ -160,8 +161,14 @@ export function deriveEngine(cfg) {
   const character = ratio > 1.08
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
+  // Compression is passed through rather than only being folded into the two terms
+  // derived from it above. `peakPressureBar` needs the ratio itself — a knock-margin
+  // delta cannot be un-mixed back into one — and every call site already hands
+  // `evaluatePoint` a `derived`, so carrying it here keeps the config object out of
+  // the per-point signature.
   return {
-    cyl, displacementL, ratio, configKnockBonus, materialKnockBonus, compressionKnockAdj,
+    cyl, displacementL, ratio, compression: cfg.compression,
+    configKnockBonus, materialKnockBonus, compressionKnockAdj,
     thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,

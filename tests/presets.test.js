@@ -179,6 +179,15 @@ describe('factory calibration validates against real published figures', () => {
       it('keeps injectors under the duty wall', () => {
         expect(Math.max(...r.points.map((p) => p.duty))).toBeLessThan(90);
       });
+
+      it('stays inside its own bottom end — a production engine is not overloaded', () => {
+        // The peak-pressure limit is calibrated against these engines, so this is the
+        // test that keeps that calibration honest: if a coefficient change ever puts a
+        // factory calibration over the limit, the limit is wrong, not the engine.
+        expect(r.events.filter((e) => e.type === 'pressure')).toHaveLength(0);
+        expect(Math.max(...r.points.map((p) => p.peakPressure)))
+          .toBeLessThan(S.COEFF.PEAK_PRESSURE_LIMIT_BAR);
+      });
     });
   });
 });
