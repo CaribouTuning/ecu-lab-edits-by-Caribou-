@@ -648,3 +648,20 @@ describe('the spark advisor', () => {
     for (const c of a.pastMbt) expect(c.knockLimited).toBe(false);
   });
 });
+
+describe('BSFC reporting', () => {
+  it('reports a real figure whenever the engine is making power', () => {
+    const p = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+    expect(p.hp).toBeGreaterThan(0);
+    expect(p.bsfc).toBeGreaterThan(0);
+  });
+
+  // A BSFC of 0.000 lb/hr/hp would be an engine making power from no fuel. On overrun
+  // and at deep vacuum the engine is being motored, and there is no such thing as a
+  // brake-specific figure there — the honest answer is "no reading", not zero.
+  it('reports no reading at all when the engine is not making power', () => {
+    const motoring = point({ rpm: 2500, mapKpa: 20, veVal: 42, timingVal: 40, afrCommanded: 14.7 });
+    expect(motoring.hp).toBeLessThanOrEqual(0);
+    expect(motoring.bsfc).toBeNull();
+  });
+});
