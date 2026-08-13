@@ -441,6 +441,42 @@ describe('MBT timing', () => {
   it('needs less advance at higher load, because a denser charge burns faster', () => {
     expect(S.mbtTiming(5000, 200)).toBeLessThan(S.mbtTiming(5000, 40));
   });
+
+  // The defect this model was written to fix: the old linear term spanned only 6
+  // degrees across the whole load range, so it put cruise MBT around 25 deg. Real
+  // factory cruise maps carry 40-50, because a thin charge burns slowly and must be
+  // lit much earlier. See knock.js's own comment on the light-load knock margin.
+  it('puts cruise MBT in the 40-50 deg band real calibrations use', () => {
+    const cruise = S.mbtTiming(2500, 20);
+    expect(cruise).toBeGreaterThan(40);
+    expect(cruise).toBeLessThan(50);
+  });
+
+  it('spans far more than the old six degrees between cruise and wide-open throttle', () => {
+    const span = S.mbtTiming(2500, 20) - S.mbtTiming(2500, S.BARO_KPA);
+    expect(span).toBeGreaterThan(15);
+  });
+
+  it('leaves wide-open-throttle MBT where it was, so NA dyno power does not move', () => {
+    // The burn model is calibrated to reproduce the old curve exactly at atmospheric
+    // pressure. This is what keeps the change off the headline number.
+    expect(S.mbtTiming(5500, S.BARO_KPA)).toBeCloseTo(26.0, 1);
+    expect(S.mbtTiming(1500, S.BARO_KPA)).toBeCloseTo(18.0, 1);
+  });
+
+  it('never leaves the range a production calibration could use', () => {
+    for (const rpm of [500, 800, 2500, 5500, 9000]) {
+      for (const map of [5, 20, 40, 101.325, 150, 300]) {
+        const mbt = S.mbtTiming(rpm, map);
+        expect(mbt).toBeGreaterThanOrEqual(S.COEFF.MBT_MIN_DEG);
+        expect(mbt).toBeLessThanOrEqual(S.COEFF.MBT_MAX_DEG);
+      }
+    }
+  });
+
+  it('stays finite at zero manifold pressure', () => {
+    expect(Number.isFinite(S.mbtTiming(2500, 0))).toBe(true);
+  });
 });
 
 describe('engine configuration and friction', () => {
