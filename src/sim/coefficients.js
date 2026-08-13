@@ -118,4 +118,30 @@ export const COEFF = {
   // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
   // currently unreachable headroom, not a live limit.
   MANIFOLD_VACUUM_RPM_NORM: 7500,
+
+  // --- Engineer Score: static compression under boost ---
+  // Static compression a boosted build carries on 91 octane with no charge cooling
+  // before the Engineer Score calls the combination incoherent.
+  //
+  // Deliberately ABOVE the 10.2-11.0 band that factory direct-injection turbo engines
+  // actually ship at (BMW N54 10.2, BMW B58 11.0, Toyota/BMW 2.0 T 11.0). Direct
+  // injection sprays after the intake valve closes, so the fuel's latent heat cools the
+  // TRAPPED charge during compression and buys real knock margin — which is precisely
+  // why those engines can run compression that would have been reckless on a
+  // port-injected engine. This model has no separate term for that, so the base carries
+  // it implicitly. Issue #24 tracks modelling injection type properly; once it lands,
+  // this should key off injection type instead of accommodating it blindly.
+  COMPRESSION_BOOST_BASE: 10.8,
+  // Extra static compression supported per degree of octane knock bonus. At 0.1, E85
+  // (+14 deg) is worth 1.4 points of compression, about the real spread between a
+  // pump-gas build and an E85 one.
+  COMPRESSION_PER_OCTANE_DEG: 0.1,
+  // Extra static compression supported by intercooler charge cooling, in points.
+  COMPRESSION_INTERCOOLER_GAIN: 0.4,
+  // Engineer Score points charged per point of compression past that headroom, and the
+  // most this rule will ever deduct. The cap equals the flat penalty this rule replaced,
+  // so the new rule is never harsher than its predecessor — it only stops charging that
+  // maximum to builds that did not earn it.
+  COMPRESSION_PENALTY_PER_POINT: 10,
+  COMPRESSION_PENALTY_CAP: 15,
 };
