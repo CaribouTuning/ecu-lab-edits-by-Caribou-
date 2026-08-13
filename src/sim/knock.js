@@ -14,7 +14,7 @@
  * (`Math.max(0, x)` clamping a term to non-negative), neither of which is a knob.
  */
 
-import { BARO_KPA } from './constants.js';
+import { AMBIENT_C, BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp, interp1 } from './math.js';
 import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
@@ -71,7 +71,13 @@ export function knockThreshold({
     : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, COEFF.KNOCK_CHARGE_INDEX_FLOOR) - 1)
       * COEFF.KNOCK_CHARGE_RATIO_GAIN;
   const overBoost = Math.max(0, boostPsi - compressor.boostCeiling);
-  const iatPenalty = Math.max(0, chargeC - COEFF.KNOCK_IAT_REF_C) * COEFF.KNOCK_IAT_PER_C;
+  // Charge heat is charged for from AMBIENT_C, not from a datum of its own. This used
+  // to read `chargeC - 25` while ambient elsewhere in the model was 24.85 °C, so every
+  // boosted point was measured against a datum 0.15 °C too high and under-charged by
+  // 0.012 deg. Off boost the two agree — `chargeTempK` returns exactly AMBIENT_K and
+  // the `max(0, ...)` floor made both readings zero — which is why the disagreement
+  // survived: it was invisible on precisely the pulls a reader would check it against.
+  const iatPenalty = Math.max(0, chargeC - AMBIENT_C) * COEFF.KNOCK_IAT_PER_C;
   const modsThresholdBonus = (mods.headers ? COEFF.KNOCK_HEADERS_BONUS : 0)
     + (mods.exhaust ? COEFF.KNOCK_EXHAUST_BONUS : 0);
   let threshold = interp1(RPM, BASE_KNOCK_LIMIT_91, rpm) + octaneBonus + loadBonus + modsThresholdBonus

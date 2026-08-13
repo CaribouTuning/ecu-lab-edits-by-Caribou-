@@ -48,18 +48,13 @@ export const COEFF = {
   KNOCK_LEAN_PENALTY: 2.5,     // deg lost per AFR point leaner than best power
   KNOCK_RICH_BONUS: 1.0,       // deg gained per AFR point richer (capped)
   KNOCK_RICH_CAP: 2,
-  KNOCK_IAT_PER_C: 0.08,       // deg lost per degree C of charge temp above ambient
+  // Deg lost per degree C of charge temperature above ambient. The datum this counts
+  // from is AMBIENT_C (constants.js), not a number of its own: "above ambient" has to
+  // mean above the ambient the rest of the model uses, or the two disagree. See the
+  // note in knock.js for the 25 °C literal this replaced.
+  KNOCK_IAT_PER_C: 0.08,
   KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
   MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
-  // Charge temperature at which the IAT penalty starts counting, degrees C.
-  //
-  // This is 25, not the 24.85 that AMBIENT_K (298 K) actually works out to, and it must
-  // stay 25 unless you mean to move the dyno numbers: `chargeTempK` returns exactly
-  // AMBIENT_K off boost, so a naturally aspirated engine sits 0.15 °C below this datum
-  // and is charged nothing. Deriving this from AMBIENT_K to "make it consistent" would
-  // put every off-boost point 0.012 deg into penalty and shift the whole matrix for no
-  // physical reason. The rounding is the point.
-  KNOCK_IAT_REF_C: 25,
   // Knock margin bought by exhaust work, degrees. Headers are worth more than a
   // cat-back because they attack the part that matters — less residual exhaust gas left
   // in the cylinder to preheat the incoming charge, rather than just less restriction
@@ -280,10 +275,10 @@ export const COEFF = {
   // oversight, and scaling headroom with boost level is deferred to a separate issue.
   COMPRESSION_BOOST_BASE: 10.8,
   // Extra static compression supported per degree of octane knock bonus. Deliberately a
-  // steep discount off the model's own physics currency, not a fresh guess: engine.js's
-  // `compressionKnockAdj = (10.3 - CR) * 2.0` prices one point of compression at 2
-  // degrees of knock margin, so E85's +14 degree bonus is worth 7 points of compression
-  // in that same currency. Paying out the full 7 here would bill the octane decision
+  // steep discount off the model's own physics currency, not a fresh guess:
+  // KNOCK_DEG_PER_COMPRESSION_POINT above prices one point of compression at 2 degrees
+  // of knock margin, so E85's +14 degree bonus is worth 7 points of compression in that
+  // same currency. Paying out the full 7 here would bill the octane decision
   // twice — once in the physics, which already retimes the tune and logs knock events
   // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
   // a 5x discount, on purpose.
@@ -294,8 +289,8 @@ export const COEFF = {
   // — but not by the same factor. At 15 psi, `chargeTempK` (thermo.js) takes charge
   // temperature from 397.23 K with no intercooler to 327.77 K with one, a 69.46 °C
   // delta, which at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is 5.56 degrees of knock
-  // margin — 2.78 points of compression in the physics' own currency (2 degrees per
-  // compression point, the same rate `compressionKnockAdj` in engine.js uses). Paying
+  // margin — 2.78 points of compression in the physics' own currency (again
+  // KNOCK_DEG_PER_COMPRESSION_POINT, 2 degrees per point). Paying
   // the full 2.78 here would bill the intercooler decision twice, once in the physics
   // and once in the score, so 0.4 pays out about a seventh of it instead — roughly a 7x
   // discount, steeper than COMPRESSION_PER_OCTANE_DEG's 5x (1.4 of 7).
