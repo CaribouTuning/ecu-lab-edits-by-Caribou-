@@ -81,10 +81,69 @@ In `src/sim/coefficients.js`, insert immediately before the closing `};` of the 
   COMPRESSION_PENALTY_CAP: 15,
 ```
 
-- [ ] **Step 2: Verify nothing changed behaviourally**
+- [ ] **Step 2: Verify no simulated value moved**
 
 Run: `npm test`
-Expected: PASS, all files. The fingerprint test in particular must still pass — these constants are not read by anything yet, so the hash cannot have moved. If the fingerprint fails here, something else in the working tree is dirty; stop and find out what.
+Expected: every file PASSES **except** `tests/fingerprint.test.js`, which fails on a hash mismatch.
+
+That failure is correct and expected. `tests/fingerprint.js:216` dumps the whole `COEFF` object into the hashed fingerprint (`out.constants = { RPM, LOAD, COEFF }`), precisely so that a typo'd or silently-changed coefficient is caught. Adding keys to `COEFF` therefore moves the hash even when nothing reads them.
+
+What must be true is stronger than "the hash moved": the change must be **additive only**. Verify it, do not assume it:
+
+```bash
+mkdir -p /tmp/fp
+cat > /tmp/fp/gen.mjs <<'GEN'
+import * as S from '/Users/danny/Desktop/Projects/cariboutuning/src/sim/index.js';
+import { buildFingerprint, serialiseFingerprint } from '/Users/danny/Desktop/Projects/cariboutuning/tests/fingerprint.js';
+import { writeFileSync } from 'node:fs';
+writeFileSync(process.argv[2], serialiseFingerprint(buildFingerprint(S)));
+GEN
+cat > /tmp/fp/leafdiff.mjs <<'DIFF'
+import { readFileSync } from 'node:fs';
+const [, , bp, ap] = process.argv;
+const flat = (o, p = '', out = {}) => {
+  if (o && typeof o === 'object' && !Array.isArray(o)) {
+    for (const k of Object.keys(o)) flat(o[k], p ? `${p}.${k}` : k, out);
+  } else out[p] = JSON.stringify(o);
+  return out;
+};
+const b = flat(JSON.parse(readFileSync(bp, 'utf8')));
+const a = flat(JSON.parse(readFileSync(ap, 'utf8')));
+const added = [], removed = [], changed = [];
+for (const k of Object.keys(a)) if (!(k in b)) added.push(k);
+for (const k of Object.keys(b)) {
+  if (!(k in a)) { removed.push(k); continue; }
+  if (a[k] !== b[k]) changed.push(`${k}: ${b[k]} -> ${a[k]}`);
+}
+console.log(`leaf keys before=${Object.keys(b).length} after=${Object.keys(a).length}`);
+console.log(`added=${added.length} removed=${removed.length} CHANGED=${changed.length}`);
+added.forEach((k) => console.log(`  + ${k}`));
+removed.forEach((k) => console.log(`  - ${k}`));
+changed.slice(0, 15).forEach((c) => console.log(`  ~ ${c}`));
+DIFF
+node /tmp/fp/gen.mjs /tmp/fp/t1-after.json
+git worktree add --quiet /tmp/fp/base HEAD
+node --input-type=module -e "
+import { buildFingerprint, serialiseFingerprint } from '/tmp/fp/base/tests/fingerprint.js';
+import * as S from '/tmp/fp/base/src/sim/index.js';
+import { writeFileSync } from 'node:fs';
+writeFileSync('/tmp/fp/t1-before.json', serialiseFingerprint(buildFingerprint(S)));
+"
+git worktree remove --force /tmp/fp/base
+node /tmp/fp/leafdiff.mjs /tmp/fp/t1-before.json /tmp/fp/t1-after.json
+```
+
+Expected: `added=5 removed=0 CHANGED=0`, and the five added keys are exactly the five new `constants.COEFF.COMPRESSION_*` entries.
+
+**If `CHANGED` is anything but 0, stop.** A simulated value moved, which means something other than the constant block was touched.
+
+- [ ] **Step 2b: Refresh the fixture**
+
+Only after Step 2 shows `CHANGED=0`:
+
+Run: `node scripts/update-fingerprint.js`
+Then: `npm test`
+Expected: PASS, all files.
 
 - [ ] **Step 3: Lint and typecheck**
 
@@ -94,7 +153,7 @@ Expected: both exit 0, no output.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/sim/coefficients.js
+git add src/sim/coefficients.js tests/fixtures/fingerprint.sha256
 git commit -m "Add compression-under-boost coefficients for the Engineer Score
 
 Five constants, no reader yet. Split out so the values can be reviewed on
@@ -458,74 +517,72 @@ Refs #3"
 
 No physics formula was touched, so this is a much stronger check than "the hash changed, as predicted": every torque, power, wear and event figure in the fingerprint must come back **byte-identical**, and only `engineer.score`, `engineer.label` and the derived `pull` may move. Anything else moving means Task 2 broke something.
 
-- [ ] **Step 1: Capture the baseline report from the pre-change tree**
+- [ ] **Step 1: Capture both reports**
+
+Task 2 is already committed by the time you run this, so `git stash` would be a no-op — the baseline has to come from the Task 1 commit, in a throwaway worktree that leaves your working tree alone. Substitute the real Task 1 SHA for `<TASK1_SHA>` (find it with `git log --oneline -5`; it is the commit titled "Add compression-under-boost coefficients for the Engineer Score").
 
 ```bash
 mkdir -p /tmp/fp
-git stash push --include-untracked
-node scripts/update-fingerprint.js --report
-mv fingerprint.report.json /tmp/fp/before.json
-git stash pop
-```
-
-Expected: `wrote .../fingerprint.report.json` then `fingerprint updated: <hash>`, where `<hash>` matches the committed contents of `tests/fixtures/fingerprint.sha256` — the stashed tree is the pre-change tree, so the hash cannot have moved and the fixture is rewritten with the value it already had. Confirm with `git status --short`, which must not list `tests/fixtures/fingerprint.sha256` as modified at this point.
-
-- [ ] **Step 2: Capture the post-change report**
-
-```bash
+git worktree add --quiet /tmp/fp/base <TASK1_SHA>
+node --input-type=module -e "
+import { buildFingerprint, serialiseFingerprint } from '/tmp/fp/base/tests/fingerprint.js';
+import * as S from '/tmp/fp/base/src/sim/index.js';
+import { writeFileSync } from 'node:fs';
+writeFileSync('/tmp/fp/before.json', serialiseFingerprint(buildFingerprint(S)));
+"
+git worktree remove --force /tmp/fp/base
 node scripts/update-fingerprint.js --report
 mv fingerprint.report.json /tmp/fp/after.json
 ```
 
-Expected: `fingerprint updated: <hash>` with a **different** hash than Step 1, and `tests/fixtures/fingerprint.sha256` now shows as modified.
+Expected: `fingerprint updated: <hash>`, a hash different from the committed one, and `tests/fixtures/fingerprint.sha256` now showing as modified.
 
-- [ ] **Step 3: Write the diff checker**
+- [ ] **Step 2: Write the leaf-level diff checker**
 
-Create `/tmp/fp/diff.mjs` (a scratch file — do not commit it):
+Create `/tmp/fp/diff.mjs` (a scratch file — do not commit it). This flattens both reports to leaf paths and classifies every difference, so nothing can hide inside a nested object:
 
 ```js
 import { readFileSync } from 'node:fs';
 
-const [, , beforePath, afterPath] = process.argv;
-const before = JSON.parse(readFileSync(beforePath, 'utf8'));
-const after = JSON.parse(readFileSync(afterPath, 'utf8'));
+const [, , bp, ap] = process.argv;
+const flat = (o, p = '', out = {}) => {
+  if (o && typeof o === 'object' && !Array.isArray(o)) {
+    for (const k of Object.keys(o)) flat(o[k], p ? `${p}.${k}` : k, out);
+  } else out[p] = JSON.stringify(o);
+  return out;
+};
+const b = flat(JSON.parse(readFileSync(bp, 'utf8')));
+const a = flat(JSON.parse(readFileSync(ap, 'utf8')));
 
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const unexpected = [];
-const moved = [];
+const allowed = /^simulateSweep\.[^.]+\.(engineer\.(score|label)|pull)$/;
+const moved = [], unexpected = [], structural = [];
 
-for (const section of Object.keys(before)) {
-  for (const key of Object.keys(before[section])) {
-    const b = before[section][key];
-    const a = after[section][key];
-    if (same(a, b)) continue;
-    if (section !== 'simulateSweep') { unexpected.push(`${section}|${key}`); continue; }
-    for (const field of Object.keys(b)) {
-      if (same(b[field], a[field])) continue;
-      if (field === 'engineer' || field === 'pull') {
-        moved.push(`${key}  engineer ${b.engineer.score} -> ${a.engineer.score}`);
-      } else {
-        unexpected.push(`${section}|${key}|${field}`);
-      }
-    }
-  }
+for (const k of Object.keys(a)) if (!(k in b)) structural.push(`+ ${k}`);
+for (const k of Object.keys(b)) {
+  if (!(k in a)) { structural.push(`- ${k}`); continue; }
+  if (a[k] === b[k]) continue;
+  (allowed.test(k) ? moved : unexpected).push(`${k}: ${b[k]} -> ${a[k]}`);
 }
 
-const configs = new Set(moved.map((m) => m.split('|')[0]));
-console.log(`engineer/pull entries moved: ${moved.length}`);
-console.log(`configs affected: ${[...configs].join(', ') || '(none)'}`);
+const config = (line) => line.split('.')[1].split('|')[0];
+const configs = new Set(moved.map(config));
+console.log(`leaf keys: ${Object.keys(b).length} -> ${Object.keys(a).length}`);
+console.log(`engineer/pull leaves moved: ${moved.length}`);
+console.log(`configs affected: ${[...configs].sort().join(', ') || '(none)'}`);
 console.log(`UNEXPECTED changes: ${unexpected.length}`);
-for (const u of unexpected.slice(0, 20)) console.log(`  ${u}`);
-console.log('\nsample:');
-for (const m of moved.slice(0, 8)) console.log(`  ${m}`);
-process.exit(unexpected.length === 0 ? 0 : 1);
+console.log(`STRUCTURAL changes: ${structural.length}`);
+unexpected.slice(0, 20).forEach((u) => console.log(`  ~ ${u}`));
+structural.slice(0, 20).forEach((s) => console.log(`  ${s}`));
+console.log('\nsample of intended movement:');
+moved.slice(0, 8).forEach((m) => console.log(`  ${m}`));
+process.exit(unexpected.length === 0 && structural.length === 0 ? 0 : 1);
 ```
 
-- [ ] **Step 4: Run it and read the result**
+- [ ] **Step 3: Run it and read the result**
 
 Run: `node /tmp/fp/diff.mjs /tmp/fp/before.json /tmp/fp/after.json`
 
-Expected: `UNEXPECTED changes: 0`, and `configs affected` listing **only** `smallI4`, `cammedV8` and `undersquare`. Per the spec, `turboI6` (10.2:1), `stockV6` (10.3:1), `floatTrap` (10.3:1) and `bigV8` (9.5:1) all sit under the base headroom on every fuel and must not appear.
+Expected: `UNEXPECTED changes: 0`, `STRUCTURAL changes: 0`, and `configs affected` listing **only** `smallI4`, `cammedV8` and `undersquare`. Per the spec, `turboI6` (10.2:1), `stockV6` (10.3:1), `floatTrap` (10.3:1) and `bigV8` (9.5:1) all sit under the base headroom on every fuel and must not appear.
 
 **If `UNEXPECTED changes` is anything but 0, stop.** A moved torque, wear or event figure means Task 2 changed physics it had no business touching. Do not commit the fixture; find the cause first.
 
@@ -533,12 +590,12 @@ Expected: `UNEXPECTED changes: 0`, and `configs affected` listing **only** `smal
 
 Save this command's output — it goes in the PR body in Task 4.
 
-- [ ] **Step 5: Verify the fingerprint test now passes**
+- [ ] **Step 4: Verify the fingerprint test now passes**
 
 Run: `npm test`
 Expected: PASS, all files including `tests/fingerprint.test.js`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add tests/fixtures/fingerprint.sha256
@@ -595,7 +652,7 @@ A rebase produces a new tree, so the pre-rebase green says nothing about it. If 
 git push -u origin feat/3-di-aware-compression-penalty
 ```
 
-Then open the PR with a body covering: what changed and why the 10.5 cliff was wrong; the headroom table from the spec showing the N54, B58 and 2.0 T all landing clean; the severity table; the stale-memo fix as a secondary defect found in passing; the fingerprint report diff output saved in Task 3, Step 4; and `Closes #3` plus a pointer to #24 as the real DI fix.
+Then open the PR with a body covering: what changed and why the 10.5 cliff was wrong; the headroom table from the spec showing the N54, B58 and 2.0 T all landing clean; the severity table; the stale-memo fix as a secondary defect found in passing; the fingerprint report diff output saved in Task 3, Step 3; and `Closes #3` plus a pointer to #24 as the real DI fix.
 
 - [ ] **Step 5: Check for a queued auto-merge**
 
