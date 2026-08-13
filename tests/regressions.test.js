@@ -269,6 +269,7 @@ describe('#4 exhaust sizing has one formula and a reachable target', () => {
       engineConfig: { ...STOCK, compression: 9.5 }, turboOn: true,
       turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
       exhaustDiaError: nearest - ideal, dutyPreview: 80, displacementL: derived.displacementL,
+      fuel: S.OCTANE_OPTS[0], mods: S.DEFAULT_MODS,
     });
     expect(score.deductions.join(' ')).not.toMatch(/Exhaust diameter/);
   });

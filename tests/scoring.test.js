@@ -62,6 +62,11 @@ describe('computeEngineerScore turbo sizing', () => {
     exhaustDiaError: 0,
     dutyPreview: 50,
     displacementL: 3.5,
+    // 9.5:1 sits well under the base headroom (10.8) on any fuel, so 91 octane and no
+    // intercooler keep this block's builds "otherwise clean" without engaging the rule
+    // this block is not testing.
+    fuel: S.OCTANE_OPTS[0],
+    mods: S.DEFAULT_MODS,
     ...over,
   });
 
@@ -102,5 +107,79 @@ describe('computeEngineerScore turbo sizing', () => {
       compressor: { ...SMALL_COMPRESSOR, label: 'Compact — fast spool' },
     });
     expect(smallOnBig.score).toBe(92);
+  });
+});
+
+describe('computeEngineerScore static compression under boost', () => {
+  const [P91, P93, , E85] = S.OCTANE_OPTS;
+  const NO_COOLER = { ...S.DEFAULT_MODS, intercooler: false };
+  const COOLED = { ...S.DEFAULT_MODS, intercooler: true };
+
+  /**
+   * A boosted build that is coherent in every respect EXCEPT the one under test, so the
+   * only deduction that can appear is the compression one. Aluminium head throughout,
+   * because a high-compression build on a cast iron head trips the separate heat-load
+   * rule and would muddy every assertion below.
+   */
+  const build = (over = {}) => S.computeEngineerScore({
+    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.5 },
+    turboOn: true,
+    turbine: S.TURBINE_OPTS[1],
+    compressor: S.COMPRESSOR_OPTS[1],
+    exhaustDiaError: 0,
+    dutyPreview: 50,
+    displacementL: 3.5,
+    fuel: P91,
+    mods: NO_COOLER,
+    ...over,
+  });
+
+  const at = (compression, over = {}) => build({
+    engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression }, ...over,
+  });
+  const hit = (r) => r.deductions.find((d) => /static compression/.test(d));
+  /** Safe because `build()` is otherwise clean — nothing else deducts. */
+  const cost = (r) => 100 - r.score;
+
+  // The regression this whole change exists for. A B58 or a Toyota/BMW 2.0 T is
+  // 11.0:1 from the factory, and the old rule called that a 15-point mistake.
+  it('leaves a factory-shaped DI turbo build unpenalised', () => {
+    expect(hit(at(11.0, { fuel: P93, mods: COOLED }))).toBeUndefined();
+  });
+
+  // Guards the shipped presets specifically, from the preset data itself rather than
+  // from hand-copied numbers, so a preset edit cannot quietly walk back into the rule.
+  it('keeps the N54 preset clear of the compression deduction', () => {
+    const n54 = S.presetById('n54');
+    const r = build({
+      engineConfig: n54.engine,
+      fuel: S.OCTANE_OPTS[n54.parts.octaneIdx],
+      mods: n54.mods,
+    });
+    expect(hit(r)).toBeUndefined();
+  });
+
+  it('lets fuel octane buy compression headroom', () => {
+    expect(hit(at(11.5, { fuel: P91 }))).toBeDefined();
+    expect(hit(at(11.5, { fuel: E85 }))).toBeUndefined();
+  });
+
+  it('lets charge cooling buy compression headroom', () => {
+    expect(hit(at(11.3, { fuel: P93, mods: NO_COOLER }))).toBeDefined();
+    expect(hit(at(11.3, { fuel: P93, mods: COOLED }))).toBeUndefined();
+  });
+
+  // The property the old cliff lacked entirely: 10.51:1 and 13.0:1 were charged the same.
+  it('scales the deduction with how far over the build sits', () => {
+    expect(cost(at(12.0))).toBeGreaterThan(cost(at(11.5)));
+    expect(cost(at(11.5))).toBeGreaterThan(cost(at(11.0)));
+  });
+
+  it('never deducts more than the flat penalty it replaced, even at the slider maximum', () => {
+    expect(cost(at(13.0))).toBeLessThanOrEqual(15);
+  });
+
+  it('says nothing about static compression on a naturally-aspirated build', () => {
+    expect(hit(at(13.0, { turboOn: false }))).toBeUndefined();
   });
 });

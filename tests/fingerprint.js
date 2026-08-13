@@ -159,6 +159,7 @@ export function buildFingerprint(S) {
                 engineConfig: cfg, turboOn,
                 turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
                 exhaustDiaError: 0.1, dutyPreview: 80, displacementL: derived.displacementL,
+                fuel: S.OCTANE_OPTS[fi], mods,
               });
               const key = `${cname}|${bname}|${mname}|${S.OCTANE_OPTS[fi].label}|${injectorCc}/${ecuInjectorCc}|${loadKpa}kPa`;
               out.simulateSweep[key] = {

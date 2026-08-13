@@ -12,6 +12,7 @@
  * one — the same tension a real tuner balances between safety margin and output.
  */
 
+import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 /**
@@ -59,16 +60,57 @@ export function computeTuningScore(result) {
  * Grades how coherent the hardware choices are with each other, independent of how
  * well the engine is tuned.
  *
+ * `fuel` and `mods` are required rather than optional. Defaulting them would silently
+ * assume 91 octane and no intercooler at any call site that forgot to pass them — the
+ * harshest possible headroom, and a wrong answer that looks entirely plausible on
+ * screen. The JSDoc below is what makes `tsc --checkJs` catch the omission instead.
+ *
  * @param {object} input
+ * @param {import('./engine.js').EngineConfig} input.engineConfig
+ * @param {boolean} input.turboOn
+ * @param {{size: string}} input.turbine
+ * @param {{size: string, boostCeiling: number}} input.compressor
+ * @param {number} input.exhaustDiaError inches the fitted pipe differs from ideal
+ * @param {number} input.dutyPreview injector duty at current demand, percent
+ * @param {number} input.displacementL
+ * @param {{label: string, bonus: number}} input.fuel the octane option fitted
+ * @param {{intercooler: boolean}} input.mods bolt-ons fitted
  * @returns {{score: number, label: string, deductions: string[]}}
  */
 export function computeEngineerScore({
   engineConfig, turboOn, turbine, compressor, exhaustDiaError, dutyPreview, displacementL,
+  fuel, mods,
 }) {
   let score = 100;
   const deductions = [];
-  if (turboOn && engineConfig.compression > 10.5) {
-    score -= 15; deductions.push('-15 High static compression fights boost pressure');
+  if (turboOn) {
+    // Static compression is not dangerous on its own. What decides whether it survives
+    // boost is how much knock margin the rest of the build brings, and octane and charge
+    // cooling are the two levers the player actually has — so the ceiling moves with
+    // them instead of sitting at one number for every build.
+    //
+    // The physics already charges for compression separately: `compressionKnockAdj` in
+    // engine.js costs knock margin, the tune goes knock-limited, and the Tuning Score
+    // deducts for the events that follow. This rule is deliberately gentler than the
+    // flat penalty it replaced so the same decision is not billed twice at full price.
+    const headroom = COEFF.COMPRESSION_BOOST_BASE
+      + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG
+      + (mods.intercooler ? COEFF.COMPRESSION_INTERCOOLER_GAIN : 0);
+    const over = engineConfig.compression - headroom;
+    if (over > 0) {
+      const d = Math.round(Math.min(
+        over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
+      ));
+      // A build a few hundredths over rounds to zero, and `-0 ...` in the deduction list
+      // would be nonsense on screen. It is also the right answer: barely over is not a
+      // mistake worth naming.
+      if (d > 0) {
+        const cooling = mods.intercooler ? 'an intercooler' : 'no charge cooling';
+        score -= d;
+        deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
+          + `outruns what this build supports under boost on ${fuel.label} with ${cooling}`);
+      }
+    }
   }
   if (!turboOn && engineConfig.compression < 9.0) {
     score -= 10; deductions.push('-10 Low compression leaves naturally-aspirated efficiency on the table');
