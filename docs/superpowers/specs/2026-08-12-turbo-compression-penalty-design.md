@@ -135,9 +135,18 @@ of the file:
 | `COMPRESSION_PENALTY_CAP` | 15 | most this rule ever deducts |
 
 `COMPRESSION_BOOST_BASE` gets the longest comment, because "why 10.8 and not 10.5" is
-the whole issue: it sits deliberately above the 10.2–11.0 band factory DI turbo engines
-ship at, since in-cylinder injection buys knock margin this model has no separate term
-for.
+the whole issue. Note carefully what the base does and does not do: **10.8 clears the
+bottom of the 10.2–11.0 factory DI band on its own, not the top of it.** The top is
+cleared by the octane and cooling credits — 10.8 + 0.3 + 0.4 = 11.5 — which is how a
+B58 as actually sold comes out unpenalised. An 11.0:1 build stripped to 91 octane with
+no intercooler is still charged 2 points, deliberately: that combination is a
+compromised build, not a factory one.
+
+The base sits where it does because in-cylinder injection buys knock margin this model
+has no separate term for, so the base carries it implicitly *and imprecisely* — a
+port-injected engine receives the same allowance without having earned it. That
+imprecision is the cost of deferring #24, and it should be named rather than papered
+over.
 
 `COMPRESSION_PER_OCTANE_DEG` at 0.1 makes E85 (+14 degrees of bonus) worth 1.4 points
 of compression, which is about the real spread between a pump-gas build and an E85 one.
