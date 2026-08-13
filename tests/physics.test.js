@@ -139,6 +139,28 @@ describe('air charge and fuelling', () => {
     expect(hot.airCharge).toBeLessThan(cool.airCharge);
   });
 
+  it('measures charge heat from the one ambient the whole model uses', () => {
+    // The knock model charges for charge temperature "above ambient". Ambient has to
+    // mean the same thing here as it does in `chargeTempK`, or a boosted engine is
+    // graded against a datum the rest of the physics does not share — which is exactly
+    // what a stray `25` in knock.js used to do against AMBIENT_K's 24.85 °C.
+    expect(S.AMBIENT_C).toBe(S.AMBIENT_K - S.KELVIN_OFFSET);
+    // Off boost the charge sits exactly at ambient, so the penalty is exactly nothing.
+    expect(point({ mapKpa: S.BARO_KPA }).iat).toBe(Math.round(S.AMBIENT_C));
+    const knockArgs = {
+      rpm: 5500, mapKpa: 200, veActual: 95, actualAfr: 12.6, bestAfr: 12.6,
+      boostPsi: 14, octaneBonus: 0, mods: NO_MODS,
+      derived: S.deriveEngine(STOCK), compressor: S.COMPRESSOR_OPTS[1],
+    };
+    const atAmbient = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C });
+    const oneDegHotter = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C + 1 });
+    const oneDegCooler = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C - 1 });
+    // Hotter costs margin at the documented rate; cooler than ambient earns nothing
+    // back, because the penalty is floored rather than turning into a bonus.
+    expect(atAmbient - oneDegHotter).toBeCloseTo(S.COEFF.KNOCK_IAT_PER_C, 10);
+    expect(oneDegCooler).toBe(atAmbient);
+  });
+
   it('needs roughly 1.5x the fuel volume on E85 at the same lambda', () => {
     const gas = point({ fuel: S.OCTANE_OPTS[0] });
     const e85 = point({ fuel: S.OCTANE_OPTS[3] });

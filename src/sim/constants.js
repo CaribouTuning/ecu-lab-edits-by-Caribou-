@@ -17,8 +17,21 @@ export const R_AIR = 287;
 /** Sea-level ambient pressure, kPa. */
 export const BARO_KPA = 101.325;
 
-/** Ambient air temperature, K (25 °C). */
+/** Kelvin to Celsius offset. */
+export const KELVIN_OFFSET = 273.15;
+
+/** Ambient air temperature, K. */
 export const AMBIENT_K = 298;
+
+/**
+ * The same ambient temperature in Celsius, 24.85 °C.
+ *
+ * Derived rather than written out, because two places used to state ambient
+ * independently — `AMBIENT_K` here and a bare `25` in the knock model's IAT penalty —
+ * and they did not agree. Everything that needs ambient in Celsius must come through
+ * this, so the model cannot hold two ambients at once.
+ */
+export const AMBIENT_C = AMBIENT_K - KELVIN_OFFSET;
 
 /** Pounds per square inch to kilopascals. */
 export const PSI_TO_KPA = 6.895;
