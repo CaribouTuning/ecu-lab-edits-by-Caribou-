@@ -22,6 +22,11 @@ Copied from `CONTRIBUTING.md` and the spec. Every task's requirements implicitly
 - Match surrounding code style — deliberately plain, no clever abstractions.
 - Baseline before any change: `npm test` = **158 tests passing across 6 files**.
 
+**Two adjudications made before execution**, where this plan and the constraints above pull against each other. Both were decided by the repository owner; they are not oversights, and a reviewer should treat them as settled:
+
+1. **Task 2's wide-open-throttle assertion is an exact magnitude on purpose.** `toBeCloseTo(26.0, 1)` would normally violate "intent tests never assert magnitudes". It is kept because it pins the single property that de-risks this change — that NA dyno power does not move — and a relationship assertion cannot express that. It is an invariant pin, not a tuning magnitude.
+2. **Task 3's constants stay in `advisors.js`, not `coefficients.js`.** They are advisory and reporting thresholds rather than physics, and the file already holds `WOT_ROW` and `VE_NOTABLE_PCT` locally for exactly that reason. Following the file's own established pattern beats a strict reading that would mix UI thresholds into the physics coefficients.
+
 ## File Structure
 
 | File | Responsibility | Change |
