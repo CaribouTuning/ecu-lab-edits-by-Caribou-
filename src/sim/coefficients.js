@@ -41,7 +41,7 @@ export const COEFF = {
   AFR_FALLOFF: 0.022,
   EFFICIENCY_FLOOR: 0.55,      // neither term is allowed to drive output below this
 
-  // --- Knock envelope (all in crank degrees) ---
+  // --- Knock envelope: margins and penalties (all in crank degrees) ---
   KNOCK_CHARGE_GAIN: 14,       // deg of margin gained/lost per unit of charge index
   KNOCK_CHARGE_RATIO_GAIN: 10, // deg gained as charge falls below reference (inverse law)
   KNOCK_CHARGE_REF: 0.90,      // charge index treated as the calibration reference point
@@ -51,6 +51,78 @@ export const COEFF = {
   KNOCK_IAT_PER_C: 0.08,       // deg lost per degree C of charge temp above ambient
   KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
   MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
+  // Charge temperature at which the IAT penalty starts counting, degrees C.
+  //
+  // This is 25, not the 24.85 that AMBIENT_K (298 K) actually works out to, and it must
+  // stay 25 unless you mean to move the dyno numbers: `chargeTempK` returns exactly
+  // AMBIENT_K off boost, so a naturally aspirated engine sits 0.15 °C below this datum
+  // and is charged nothing. Deriving this from AMBIENT_K to "make it consistent" would
+  // put every off-boost point 0.012 deg into penalty and shift the whole matrix for no
+  // physical reason. The rounding is the point.
+  KNOCK_IAT_REF_C: 25,
+  // Knock margin bought by exhaust work, degrees. Headers are worth more than a
+  // cat-back because they attack the part that matters — less residual exhaust gas left
+  // in the cylinder to preheat the incoming charge, rather than just less restriction
+  // downstream of the turbine or cat.
+  KNOCK_HEADERS_BONUS: 1.5,
+  KNOCK_EXHAUST_BONUS: 0.5,
+  // Knock margin from cylinder size. A small cylinder has a shorter flame path from
+  // plug to the far side of the bore, so the end gas spends less time being compressed
+  // and heated before the flame front reaches it — the reason motorcycle engines run
+  // compression ratios a big-bore V8 could not touch. Litres per cylinder, and the
+  // margin either side of the band between them.
+  KNOCK_SMALL_CYL_L: 0.5,
+  KNOCK_LARGE_CYL_L: 0.7,
+  KNOCK_SMALL_CYL_BONUS: 1,
+  KNOCK_LARGE_CYL_PENALTY: -1,
+  // Knock margin lost to a cast iron head, degrees. Iron conducts roughly a third of
+  // what aluminium does, so the chamber runs hotter and the end gas with it.
+  KNOCK_IRON_HEAD_PENALTY: -1.5,
+  // Static compression the base knock table (BASE_KNOCK_LIMIT_91 in tables.js) is
+  // written for, and the margin each point of compression above or below it is worth.
+  //
+  // Two degrees per point is the model's exchange rate between compression and knock
+  // margin, and it is quoted by name in the Engineer Score comments below
+  // (COMPRESSION_PER_OCTANE_DEG, COMPRESSION_INTERCOOLER_GAIN) to price their own
+  // discounts. Changing it moves those two rules as well, even though they do not read
+  // it directly — one of the reasons it belongs here rather than inline in engine.js.
+  KNOCK_COMPRESSION_REF: 10.3,
+  KNOCK_DEG_PER_COMPRESSION_POINT: 2.0,
+
+  // --- Knock envelope: shape of the load and pressure terms (dimensionless) ---
+  // Smallest charge index the inverse load law will divide by. At deep vacuum the
+  // computed margin runs away toward infinity, which is directionally right — a
+  // cruising engine genuinely cannot knock — but needs a floor to stay finite.
+  //
+  // No operating point the app can reach comes near this: it would take under about
+  // 4 kPa of manifold pressure at 100% VE. It is a guard, and it is here rather than
+  // inline precisely because an unreachable literal is one a fingerprint diff cannot
+  // police. In COEFF it is at least in the constants dump.
+  KNOCK_CHARGE_INDEX_FLOOR: 0.04,
+  // How hard the mixture terms scale with cylinder pressure. Lean mixtures and rich
+  // mixtures only matter for knock when there is real pressure behind them, and the
+  // relationship is steeper than linear — hence the 1.5 power of the pressure ratio.
+  KNOCK_PRESSURE_EXP: 1.5,
+  // Bounds on that pressure factor. The floor is unreachable in the app (it needs
+  // manifold pressure under about 14 kPa); the ceiling binds regularly under boost and
+  // is what stops a high-boost lean condition from being charged without limit.
+  KNOCK_PRESSURE_MIN: 0.05,
+  KNOCK_PRESSURE_MAX: 2.6,
+  // The rich-mixture bonus is scaled by the same pressure factor but on a narrower
+  // band: charge cooling from extra fuel does something even at light load, and does
+  // not keep scaling all the way up to the lean penalty's ceiling.
+  KNOCK_RICH_PRESSURE_MIN: 0.3,
+  KNOCK_RICH_PRESSURE_MAX: 1.5,
+
+  // --- MBT timing (crank degrees) ---
+  // Minimum spark for best torque, as a plane in RPM and load: a base value at the
+  // bottom of the rev range, rising across the range because there is less time for
+  // the burn, and falling with load because a denser charge burns faster.
+  MBT_BASE_DEG: 24,
+  MBT_RPM_REF: 1500,           // RPM the base value is quoted at (the sweep start)
+  MBT_RPM_SPAN: 6000,          // RPM over which the full advance gain is paid out
+  MBT_RPM_GAIN_DEG: 12,        // deg gained across that span
+  MBT_LOAD_RETARD_DEG: 6,      // deg given back at one atmosphere of manifold pressure
 
   // --- Peak cylinder pressure (see pressure.js) ---
   // Polytropic exponent for the compression stroke. The isentropic value for air is
