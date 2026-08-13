@@ -588,3 +588,63 @@ describe('hardware option catalogues', () => {
     }
   });
 });
+
+describe('the spark advisor', () => {
+  /** Advice for a stock, naturally aspirated build on its own factory tables. */
+  function advice(overrides = {}) {
+    return S.calibrationAdvice({
+      ve: S.DEFAULT_VE, veTruth: S.DEFAULT_VE, timing: S.DEFAULT_TIMING, afr: S.DEFAULT_AFR,
+      derived: S.deriveEngine(STOCK), octaneBonus: S.OCTANE_OPTS[0].bonus,
+      fuel: S.OCTANE_OPTS[0], mods: NO_MODS, turboOn: false, boostCurve: S.DEFAULT_BOOST,
+      compressor: S.COMPRESSOR_OPTS[1], turbine: S.TURBINE_OPTS[1],
+      injectorCc: 315, ecuInjectorCc: 315, mafScalar: 1, mafErrorBase: 1,
+      ...overrides,
+    });
+  }
+
+  // The defect from issue #4: at 20 kPa the knock limit runs past 160 deg, and the
+  // advisor was handing that straight to the player as a spark recommendation.
+  it('never recommends more advance than the charge can actually use', () => {
+    for (const c of advice().spark) {
+      expect(c.suggested).toBeLessThanOrEqual(c.mbt + 0.5);
+    }
+  });
+
+  it('never recommends more advance than a production table could hold', () => {
+    for (const c of advice().spark) {
+      expect(c.suggested).toBeLessThanOrEqual(50);
+      expect(c.suggested).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('still respects the knock limit where knock is what binds', () => {
+    // Under boost the knock limit falls below MBT, and it must be the one that wins.
+    const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 12) });
+    const knockBound = boosted.spark.filter((c) => c.knockLimited);
+    expect(knockBound.length).toBeGreaterThan(0);
+    for (const c of knockBound) expect(c.suggested).toBeLessThan(c.mbt);
+  });
+
+  it('does not call a stock calibration dangerous', () => {
+    // The red panel means "your hardware will not tolerate this". A factory tune on
+    // factory hardware must never trip it.
+    expect(advice().overAdvanced).toHaveLength(0);
+  });
+
+  it('separates advance that is dangerous from advance that is merely wasted', () => {
+    const a = advice();
+    // A cell past the knock limit is reported as dangerous only, never as both.
+    const ids = (arr) => new Set(arr.map((c) => `${c.ri}:${c.ci}`));
+    const over = ids(a.overAdvanced), past = ids(a.pastMbt);
+    for (const id of over) expect(past.has(id)).toBe(false);
+  });
+
+  it('reports the stock light-load cells as past peak torque, not as knock risk', () => {
+    // The stock table runs 40-47 deg at 20 kPa where MBT is in the low 40s, so a few
+    // of those cells genuinely are past MBT — but the knock limit there is over 100,
+    // so none of them are dangerous.
+    const a = advice();
+    expect(a.pastMbt.length).toBeGreaterThan(0);
+    for (const c of a.pastMbt) expect(c.knockLimited).toBe(false);
+  });
+});
