@@ -80,7 +80,28 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,
       compression: 10.3,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
-      camDuration: 210, springRate: 50,
+      // Bore, stroke, compression and redline above are published figures and do not
+      // move. `camDuration` and `springRate` are not published — Nissan states only that
+      // the Rev-Up revised the cams and raised the limit — so they are where this preset
+      // is fitted, exactly as `vq35hr` below is fitted.
+      //
+      // 220° is the duration that centres the power fit: 256 whp against a 255 target
+      // (+0.4%), with torque at 214 wlb-ft (-3.2%). Do not read the old 210° here as a
+      // published number — it was the generic custom-build default left in place, and it
+      // landed at -4.7%, three quarters of a horsepower inside the ±5% test floor. That
+      // is not a fit, it is a coin toss against the next coefficient change, and the
+      // physics has moved three times recently. Nothing else in the range is a trap:
+      // 208-226° is event-free end to end, so the fit is bounded by the power band
+      // alone (-5.5% at 208°, +3.5% at 226°) rather than by an advisory.
+      //
+      // `springRate` 60 does not change power — it only sets where the valvetrain gives
+      // up. It buys `valveFloatRpm` ~8390, about 1390 RPM clear of the 7000 redline,
+      // which sits mid-pack against the rest of the set: 1242 (vq35hr), 1330 (n54),
+      // 1382 (ea888-r), 1474 (b58-m0), 1534 (b58-m1), 1682 (ea888-gti). At the 50
+      // baseline this engine would sit at 810, the thinnest in the set for no reason
+      // other than inheriting a default. No pull should ever show a `float` event here —
+      // if one appears, that is a bug, not "the character".
+      camDuration: 220, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
