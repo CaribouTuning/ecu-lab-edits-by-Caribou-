@@ -148,7 +148,10 @@ export function evaluatePoint({
   const powerW = torqueNmCrank * (2 * Math.PI * rpm / 60);
   const hp = (powerW / 745.7) * DRIVETRAIN_EFF;
   const torque = torqueNmCrank * 0.7376 * DRIVETRAIN_EFF;
-  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : 0;
+  // Brake-specific fuel consumption is fuel per unit of work OUT. On overrun and in
+  // deep vacuum there is no work out — the engine is being motored — so the quantity is
+  // undefined, not zero. Zero would read as an engine making power from no fuel.
+  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure
   // is what it costs the metal to give it. The two are related but not the same, and
@@ -188,7 +191,7 @@ export function evaluatePoint({
     mbtIdeal: Number(mbtIdeal.toFixed(1)), timingEff, afrEff, openLoop,
     egt: Math.round(720 + egtProxy),
     imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
-    fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: Number(bsfc.toFixed(3)),
+    fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
     bestAfr: Number(bestAfr.toFixed(2)),
     peakPressure: Number(peakPressure.toFixed(1)),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,

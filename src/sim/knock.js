@@ -16,15 +16,28 @@ import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
 /**
  * Minimum spark for best torque, degrees BTDC.
  *
- * Higher RPM needs more advance because there is less time for the burn; higher
- * load needs less because a denser charge burns faster.
+ * Derived from burn duration rather than fitted directly. Combustion takes a roughly
+ * fixed number of crank degrees for a given charge, so the timing that extracts the
+ * most work is the one that lands 50% mass-fraction-burned just after TDC — early
+ * enough that peak pressure arrives while the piston can still be pushed on, late
+ * enough that it is not fighting the crank on the way up.
+ *
+ * Two things stretch the burn out. Revs: the flame does not speed up in proportion to
+ * engine speed, so it occupies more DEGREES the faster you spin. And dilution: a
+ * part-throttle charge is thin and slow-burning, which is why a factory cruise map
+ * carries 40-50 degrees of advance and never knocks, while the same engine at wide-open
+ * throttle wants barely half that.
  *
  * @param {number} rpm engine speed
  * @param {number} mapKpa manifold absolute pressure, kPa
- * @returns {number} degrees BTDC
+ * @returns {number} degrees BTDC, within [COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG]
  */
 export function mbtTiming(rpm, mapKpa) {
-  return 24 + ((rpm - 1500) / 6000) * 12 - (mapKpa / BARO_KPA) * 6;
+  const pressureRatio = Math.max(mapKpa / BARO_KPA, COEFF.BURN_RATIO_FLOOR);
+  // Crank degrees from spark to 50% mass fraction burned.
+  const theta50 = (COEFF.BURN_REF_DEG + ((rpm - 1500) / 6000) * COEFF.BURN_RPM_GAIN)
+    * Math.pow(1 / pressureRatio, COEFF.BURN_DILUTION_EXP);
+  return clamp(theta50 - COEFF.MFB50_ATDC_DEG, COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG);
 }
 
 /**

@@ -41,6 +41,38 @@ export const COEFF = {
   AFR_FALLOFF: 0.022,
   EFFICIENCY_FLOOR: 0.55,      // neither term is allowed to drive output below this
 
+  // --- Burn duration, which is what MBT actually tracks ---
+  // MBT is not a curve fitted to a dyno; it is the advance that puts 50% of the mass
+  // fraction burned just after TDC, where the expansion stroke can still use the
+  // pressure. So model the burn and derive the timing from it.
+  //
+  // The interval from spark to 50% MFB, in crank degrees, at 1500 rpm and atmospheric
+  // pressure. Combined with MFB50_ATDC_DEG below this reproduces the old model's
+  // wide-open-throttle numbers exactly, which is deliberate: the light-load end was
+  // wrong, the WOT end was not, and NA dyno power must not move.
+  BURN_REF_DEG: 26.5,
+  // Extra crank degrees of burn per 6000 rpm. Turbulence speeds the burn up in real
+  // time as the engine spins faster, but not fast enough to keep pace with the crank,
+  // so the burn occupies more DEGREES the higher you rev.
+  BURN_RPM_GAIN: 12,
+  // How sharply a thinning charge slows the burn, as an exponent on the inverse
+  // pressure ratio. A part-throttle charge is dilute and low in turbulence, so its
+  // flame travels slowly and must be lit much earlier — which is exactly why factory
+  // cruise maps carry 40-50 deg of advance and never complain. 0.36 puts 20 kPa cruise
+  // at ~43 deg while leaving atmospheric untouched.
+  BURN_DILUTION_EXP: 0.36,
+  // Lowest pressure ratio the burn model will extrapolate to. Below this the inverse
+  // law runs away, and no engine operates there under power anyway.
+  BURN_RATIO_FLOOR: 0.05,
+  // Where 50% of the charge should have burned, in degrees AFTER top dead center.
+  // Textbook optimum is 8-10 deg ATDC across a wide range of engines.
+  MFB50_ATDC_DEG: 8.5,
+  // The range a production spark table could actually command. The burn model is an
+  // extrapolation at its extremes; these stop it producing timing no calibration would
+  // ever contain.
+  MBT_MIN_DEG: 10,
+  MBT_MAX_DEG: 50,
+
   // --- Knock envelope (all in crank degrees) ---
   KNOCK_CHARGE_GAIN: 14,       // deg of margin gained/lost per unit of charge index
   KNOCK_CHARGE_RATIO_GAIN: 10, // deg gained as charge falls below reference (inverse law)
