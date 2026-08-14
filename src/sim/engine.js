@@ -6,7 +6,7 @@
  * player-editable and feed real physics downstream.
  */
 
-import { CHAR_SCALE, OTTO_REALIZATION } from './constants.js';
+import { CHAR_SCALE } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { BASELINE_MAIN_BEARINGS, CYL_COUNT, MAIN_BEARINGS, hasBalanceShafts } from './hardware.js';
 
@@ -105,8 +105,6 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} bore cylinder bore, mm
  * @property {number} boreFlameFactor flame-travel scaling from bore, 1 at the reference
  * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
- * @property {number} thermalEff indicated thermal efficiency
- * @property {number} ottoIdeal ideal Otto-cycle efficiency
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
  * @property {number} bearingWearMult block material wear multiplier
  * @property {string} character human-readable bore/stroke description
@@ -143,12 +141,11 @@ export function deriveEngine(cfg) {
   const boreFlameFactor = cfg.bore / COEFF.BORE_FLAME_REF_MM;
   // An iron head runs a hotter chamber, so the charge in it starts compression hotter.
   const chamberOffsetK = cfg.headMaterial === 'Cast Iron' ? COEFF.IRON_HEAD_CHAMBER_K : 0;
-  // Thermal efficiency comes from the ideal Otto cycle for this compression ratio,
-  // scaled by what real engines actually realize.
-  const ottoIdeal = 1 - 1 / Math.pow(cfg.compression, 0.35);
-  // INDICATED efficiency — work done on the piston, before friction and pumping are
-  // paid for. Brake (usable) output is computed later as IMEP minus FMEP.
-  const thermalEff = ottoIdeal * OTTO_REALIZATION;
+  // No thermal-efficiency term any more. Indicated efficiency used to be an ideal
+  // Otto-cycle number scaled by a realisation factor, multiplied into fuel energy to get
+  // work. The cycle model produces it instead: compression changes the clearance volume,
+  // which changes the expansion the integration runs over, and efficiency is whatever
+  // comes out. Two fitted constants became a consequence of the geometry.
   const torqueScale = displacementL / 3.5;
   const bearingWearMult = cfg.blockMaterial === 'Cast Iron' ? 0.85 : 1.0;
   // Architecture friction. Zeroed at the V6 baseline so existing builds do not move:
@@ -168,14 +165,14 @@ export function deriveEngine(cfg) {
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
   // Compression is passed through rather than only being folded into the two terms
-  // derived from it above. `peakPressureBar` needs the ratio itself — a knock-margin
-  // delta cannot be un-mixed back into one — and every call site already hands
+  // derived from it above. The cycle model needs the ratio itself, to size the clearance
+  // volume it integrates over, and every call site already hands
   // `evaluatePoint` a `derived`, so carrying it here keeps the config object out of
   // the per-point signature.
   return {
     cyl, displacementL, ratio, compression: cfg.compression, bore: cfg.bore,
     boreFlameFactor, chamberOffsetK,
-    thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
+    torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,
   };

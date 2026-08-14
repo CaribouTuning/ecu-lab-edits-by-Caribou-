@@ -47,10 +47,16 @@ describe('engine architecture', () => {
     expect(big).toBeGreaterThan(small);
   });
 
-  it('raises thermal efficiency with compression ratio', () => {
-    const low = S.deriveEngine({ ...STOCK, compression: 8.5 }).thermalEff;
-    const high = S.deriveEngine({ ...STOCK, compression: 13.0 }).thermalEff;
-    expect(high).toBeGreaterThan(low);
+  it('extracts more work from the same fuel at higher compression', () => {
+    // This used to assert an `ottoIdeal × realisation` field on the derived engine.
+    // Nothing computes efficiency that way any more — a smaller clearance volume means a
+    // longer expansion, and the cycle integrates what follows — so assert the thing that
+    // actually matters: more compression, more indicated work per unit of fuel burned.
+    const efficiency = (compression) => {
+      const p = point({ cfg: { ...STOCK, compression }, fuel: S.OCTANE_OPTS[2], timingVal: 20 });
+      return p.imep / p.airCharge;
+    };
+    expect(efficiency(13.0)).toBeGreaterThan(efficiency(8.5));
   });
 
   it('classifies bore/stroke character', () => {

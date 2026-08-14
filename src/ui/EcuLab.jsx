@@ -1347,14 +1347,16 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
 
               <ExpandableInfo title="11. Step 5 — from combustion to torque at the wheels">
-                Fuel energy becomes indicated work on the piston, then the engine pays its own bills:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>η = (1 − 1/CR^0.35) × 0.685</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = fuelMass × LHV × η × timingEff × afrEff ÷ V_cyl</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>FMEP = rubbing friction + pumping loss + spring load</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − FMEP</span><br />
+                Fuel energy becomes indicated work on the piston, then the engine pays its own bills. The work is not estimated — the simulator integrates one cylinder through the closed part of its cycle, two crank degrees at a time:
+                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dQ = Wiebe burn fraction × fuel energy</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dp = (γ−1)/V × dQ − γ × p/V × dV</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = ∮ p dV ÷ V_cyl</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PMEP = exhaust pressure − intake pressure</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − friction − PMEP</span><br />
                 <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>torque = BMEP × Vd ÷ 4π</span>
-                <br /><br />The first line is ideal Otto-cycle efficiency for your compression ratio, scaled to what real engines actually achieve. So raising compression makes power through genuine thermodynamics.
-                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. It is why fuel consumption per horsepower gets much worse at light load, and why a throttled engine brakes itself on overrun.
+                <br /><br /><b style={{ color: T.ink }}>Why integrate instead of multiply?</b> Because spark timing does not scale the work done — it moves <i>when</i> the heat arrives relative to a piston that is somewhere different at every crank angle. Burn too early and rising pressure fights the piston still coming up. Too late and the burn happens into a cylinder already expanding. MBT is where those two losses balance, and it falls out of the integration rather than being looked up.
+                <br /><br />Raising compression makes power the honest way here: a smaller clearance volume means a longer expansion, and the integral simply comes out bigger.
+                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
               </ExpandableInfo>
 
               <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>

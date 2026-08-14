@@ -82,11 +82,3 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
 
 /** No bolt-ons fitted. Frozen for the same reason as the engine config above. */
 export const DEFAULT_MODS = Object.freeze({ intake: false, exhaust: false, headers: false, intercooler: false });
-
-/**
- * Base knock-limited timing envelope at WOT, 91 octane, naturally aspirated.
- *
- * Calibrated against a ~3.5 L, ~10.3:1, aluminium-head V6 baseline. The architecture
- * the player builds then adjusts this up or down from there.
- */
-export const BASE_KNOCK_LIMIT_91 = [20, 22, 26, 30, 33, 35, 37, 39];

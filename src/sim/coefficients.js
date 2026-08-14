@@ -263,20 +263,6 @@ export const COEFF = {
   MBT_MIN_DEG: 10,
   MBT_MAX_DEG: 50,
 
-  // --- Knock envelope (all in crank degrees) ---
-  // --- Knock envelope: margins and penalties (all in crank degrees) ---
-  KNOCK_CHARGE_GAIN: 14,       // deg of margin gained/lost per unit of charge index
-  KNOCK_CHARGE_RATIO_GAIN: 10, // deg gained as charge falls below reference (inverse law)
-  KNOCK_CHARGE_REF: 0.90,      // charge index treated as the calibration reference point
-  KNOCK_LEAN_PENALTY: 2.5,     // deg lost per AFR point leaner than best power
-  KNOCK_RICH_BONUS: 1.0,       // deg gained per AFR point richer (capped)
-  KNOCK_RICH_CAP: 2,
-  // Deg lost per degree C of charge temperature above ambient. The datum this counts
-  // from is AMBIENT_C (constants.js), not a number of its own: "above ambient" has to
-  // mean above the ambient the rest of the model uses, or the two disagree. See the
-  // note in knock.js for the 25 °C literal this replaced.
-  KNOCK_IAT_PER_C: 0.08,
-  KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
   MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
   // Bore the burn-duration model is written for, mm. Flame travel scales with bore: a
   // big cylinder takes longer to burn through, which is why a large-bore V8 is more
@@ -291,67 +277,8 @@ export const COEFF = {
   // is what makes it reach the autoignition integral the way it does in reality.
   IRON_HEAD_CHAMBER_K: 22,
 
-  // --- Peak cylinder pressure ---
-  // The empirical peak-pressure estimate that used to live here — a polytropic guess
-  // scaled by a combustion-rise factor and a spark-phasing factor, six coefficients in
-  // all — is gone. Peak pressure and the crank angle it occurs at are now read directly
-  // off the integrated trace in `cycle.js`, which is also where indicated work comes
-  // from, so the two can no longer disagree about the same combustion event.
-  //
-  // Two degrees per point is the model's exchange rate between compression and knock
-  // margin, and it is quoted by name in the Engineer Score comments below
-  // (COMPRESSION_PER_OCTANE_DEG, COMPRESSION_INTERCOOLER_GAIN) to price their own
-  // discounts. Changing it moves those two rules as well, even though they do not read
-  // it directly — one of the reasons it belongs here rather than inline in engine.js.
-  KNOCK_COMPRESSION_REF: 10.3,
-  KNOCK_DEG_PER_COMPRESSION_POINT: 2.0,
 
-  // --- Knock envelope: shape of the load and pressure terms (dimensionless) ---
-  // Smallest charge index the inverse load law will divide by. At deep vacuum the
-  // computed margin runs away toward infinity, which is directionally right — a
-  // cruising engine genuinely cannot knock — but needs a floor to stay finite.
-  //
-  // No operating point the app can reach comes near this: it would take under about
-  // 4 kPa of manifold pressure at 100% VE. It is a guard, and it is here rather than
-  // inline precisely because an unreachable literal is one a fingerprint diff cannot
-  // police. In COEFF it is at least in the constants dump.
-  KNOCK_CHARGE_INDEX_FLOOR: 0.04,
-  // How hard the mixture terms scale with cylinder pressure. Lean mixtures and rich
-  // mixtures only matter for knock when there is real pressure behind them, and the
-  // relationship is steeper than linear — hence the 1.5 power of the pressure ratio.
-  KNOCK_PRESSURE_EXP: 1.5,
-  // Bounds on that pressure factor. The floor is unreachable in the app (it needs
-  // manifold pressure under about 14 kPa); the ceiling binds regularly under boost and
-  // is what stops a high-boost lean condition from being charged without limit.
-  KNOCK_PRESSURE_MIN: 0.05,
-  KNOCK_PRESSURE_MAX: 2.6,
-  // The rich-mixture bonus is scaled by the same pressure factor but on a narrower
-  // band: charge cooling from extra fuel does something even at light load, and does
-  // not keep scaling all the way up to the lean penalty's ceiling.
-  KNOCK_RICH_PRESSURE_MIN: 0.3,
-  KNOCK_RICH_PRESSURE_MAX: 1.5,
 
-  // --- Peak cylinder pressure (see pressure.js) ---
-  // Polytropic exponent for the compression stroke. The isentropic value for air is
-  // 1.4; real cylinders lose heat to the walls and leak past the rings on the way up,
-  // and measured motoring traces sit around 1.30-1.35. 1.32 is the middle of that.
-  PEAK_POLYTROPIC_N: 1.32,
-  // How much combustion multiplies the motored (compression-only) pressure at MBT
-  // spark. Published pressure traces for a wide-open-throttle spark-ignition engine
-  // put peak firing pressure at roughly 2x-2.5x the motored peak; 2.2 lands a stock
-  // 10.3:1 naturally aspirated engine near 50 bar at wide-open throttle, which is
-  // where real measurements put it.
-  PEAK_COMBUSTION_RISE: 2.2,
-  // Advancing past MBT keeps raising peak pressure while torque falls — about 1.5% per
-  // degree, capped, because the burn cannot start before there is a charge to burn.
-  PEAK_ADVANCE_RISE_PER_DEG: 0.015,
-  PEAK_ADVANCE_CAP_DEG: 10,
-  // Retarding from MBT moves the pressure peak later, onto a descending piston in a
-  // growing volume. Spark-sweep traces lose roughly 2-3% of peak pressure per degree;
-  // the floor is where the burn is so late that it is finishing into the exhaust
-  // stroke and peak pressure is barely above the motored value.
-  PEAK_RETARD_FALL_PER_DEG: 0.025,
-  PEAK_RETARD_FLOOR: 0.45,
   // Peak cylinder pressure a stock bottom end — cast pistons, powdered-metal rods,
   // production rod bolts — survives indefinitely. Above it, damage accumulates whether
   // or not the mixture ever detonates.
@@ -501,10 +428,16 @@ export const COEFF = {
   // oversight, and scaling headroom with boost level is deferred to a separate issue.
   COMPRESSION_BOOST_BASE: 10.8,
   // Extra static compression supported per degree of octane knock bonus. Deliberately a
-  // steep discount off the model's own physics currency, not a fresh guess:
-  // KNOCK_DEG_PER_COMPRESSION_POINT above prices one point of compression at 2 degrees
-  // of knock margin, so E85's +14 degree bonus is worth 7 points of compression in that
-  // same currency. Paying out the full 7 here would bill the octane decision
+  // steep discount off the model's own physics currency, not a fresh guess. When this
+  // was set, compression was priced at a flat 2 degrees of knock margin per point, so
+  // E85's +14 degree bonus was worth 7 points of compression in that same currency.
+  //
+  // THAT EXCHANGE RATE NO LONGER EXISTS as a constant. The crank-angle cycle produces
+  // compression's knock cost emergently, and it is not a fixed rate — it steepens with
+  // boost and charge heat, which is the whole point of modelling it. These discounts are
+  // inherited from the flat-rate era and are due a revalidation against the cycle; they
+  // are left as they are here because changing them is a scoring decision, not a physics
+  // one, and belongs in its own change with its own review. Paying out the full 7 here would bill the octane decision
   // twice — once in the physics, which already retimes the tune and logs knock events
   // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
   // a 5x discount, on purpose.
@@ -515,8 +448,9 @@ export const COEFF = {
   // — but not by the same factor. At 15 psi, `chargeTempK` (thermo.js) takes charge
   // temperature from 397.23 K with no intercooler to 327.77 K with one, a 69.46 °C
   // delta, which at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is 5.56 degrees of knock
-  // margin — 2.78 points of compression in the physics' own currency (again
-  // KNOCK_DEG_PER_COMPRESSION_POINT, 2 degrees per point). Paying
+  // margin — 2.78 points of compression at the flat 2-degrees-per-point rate that
+  // applied when this was set (see the note above: the cycle no longer works in that
+  // currency). Paying
   // the full 2.78 here would bill the intercooler decision twice, once in the physics
   // and once in the score, so 0.4 pays out about a seventh of it instead — roughly a 7x
   // discount, steeper than COMPRESSION_PER_OCTANE_DEG's 5x (1.4 of 7).

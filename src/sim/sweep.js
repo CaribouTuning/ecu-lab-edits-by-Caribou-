@@ -51,8 +51,8 @@ export function assertBoostCurve(boostCurve) {
  *
  * Exported so the factory calibration generator in `presets.js` can pre-compensate for
  * exactly this error the same way a real ECU's characterized MAF transfer function
- * would, rather than guessing at a second copy of this formula — the drift risk
- * `knockThreshold` was extracted to `knock.js` to avoid.
+ * would, rather than guessing at a second copy of this formula — the same drift risk that
+ * keeps the cycle model in one place for the ECU and the calibration generator both.
  *
  * @param {{intake: boolean}} mods bolt-ons fitted
  * @param {boolean} turboOn whether a turbo is fitted
@@ -72,7 +72,7 @@ export function mafErrorFactor(mods, turboOn) {
  * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean}}
  */
 export function simulateSweep({
-  loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel,
+  loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor,
 }) {
@@ -96,7 +96,7 @@ export function simulateSweep({
     const afrCommanded = interp2(afr, rpm, man.mapKpa);
     points.push(evaluatePoint({
       rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
-      veVal, veActualVal, timingVal, afrCommanded, octaneBonus, fuel, mods: modsWithTurbo,
+      veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
       mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
       turbine: turboOn ? turbine : null,
     }));

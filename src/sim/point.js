@@ -41,9 +41,10 @@ import { chargeTempK } from './thermo.js';
  * @property {number} injectorCc injector size actually fitted, cc/min
  * @property {number} ecuInjectorCc injector size the ECU believes is fitted, cc/min
  * @property {import('./engine.js').DerivedEngine} derived
- * @property {number} [octaneBonus] legacy knock-margin bonus. Accepted so existing
- *   call sites keep type-checking, and deliberately unused: octane is now a fuel
- *   property read by the autoignition model, not a margin added after the fact
+ * @property {number} [octaneBonus] legacy knock-margin bonus, accepted and ignored.
+ *   Octane is now a fuel PROPERTY (`fuel.octane`) read by the autoignition model, not a
+ *   margin added after the fact. Callers may still pass this — the UI and the tests do —
+ *   and nothing reads it. `fuel.bonus` is still live, but only in the Engineer Score
  * @property {{boostCeiling: number}} compressor
  * @property {{size: string}|null} [turbine] turbine in the exhaust stream, if any. Null
  *   means no turbine, which is the correct state for a naturally aspirated engine —

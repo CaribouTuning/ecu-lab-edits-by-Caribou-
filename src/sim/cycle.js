@@ -318,7 +318,7 @@ export function trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3 }) {
  * Builds the cycle inputs for one operating point.
  *
  * Shared by the ECU's per-point solve and by the factory calibration generator, for the
- * same reason `knockThreshold` was extracted before it: two copies of this setup would
+ * reason every shared formula in this codebase is shared: two copies of this setup would
  * drift, and then the generated calibration would be knock-limited against a slightly
  * different engine than the one the player drives.
  *

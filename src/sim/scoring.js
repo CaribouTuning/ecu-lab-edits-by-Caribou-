@@ -120,8 +120,9 @@ export function computeEngineerScore({
     // cooling are the two levers the player actually has — so the ceiling moves with
     // them instead of sitting at one number for every build.
     //
-    // The physics already charges for compression separately: `compressionKnockAdj` in
-    // engine.js costs knock margin, the tune goes knock-limited, and the Tuning Score
+    // The physics already charges for compression separately: it shortens the clearance
+    // volume the cycle integrates over, which raises peak pressure and shortens the
+    // ignition delay of the end gas, so the tune goes knock-limited and the Tuning Score
     // deducts for the events that follow. This rule is deliberately gentler than the
     // flat penalty it replaced so the same decision is not billed twice at full price.
     const headroom = COEFF.COMPRESSION_BOOST_BASE

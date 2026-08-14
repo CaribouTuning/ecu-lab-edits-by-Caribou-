@@ -73,7 +73,7 @@ export function liveStep(st, dt, input, cfg) {
   const s = { ...st };
   const {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-    mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
+    mafErrorBase, turboOn, boostCurve, turbine, compressor,
   } = cfg;
   if (turboOn) assertBoostCurve(boostCurve);
   const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
@@ -158,7 +158,7 @@ export function liveStep(st, dt, input, cfg) {
     const afrCmd = interp2(afr, rpmClamped, man.mapKpa) / coldEnrich;
     pt = evaluatePoint({
       rpm: rpmClamped, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
-      veVal, veActualVal, timingVal, afrCommanded: afrCmd, octaneBonus, fuel,
+      veVal, veActualVal, timingVal, afrCommanded: afrCmd, fuel,
       mods: { ...mods, turboFitted: turboOn },
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
