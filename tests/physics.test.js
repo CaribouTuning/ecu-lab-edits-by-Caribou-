@@ -831,31 +831,69 @@ describe('the spark advisor', () => {
     for (const c of knocking) expect(pastIds.has(`${c.ri}:${c.ci}`)).toBe(false);
   });
 
-  it('does not call a factory spark table wasteful on the engine it was written for', () => {
-    // `factoryCalibration` writes spark from the same min(MBT, knock ceiling) rule the
-    // advisor now advises against, and both take MBT at the table row's own pressure.
-    // If they disagreed on that basis the advisor would contradict a table the app
-    // itself produced — which it did, flagging 21 of 32 cells on every boosted preset.
-    //
-    // This asserts only the MBT half. The knock half is NOT yet in agreement: the
-    // advisor evaluates the knock threshold at the manifold pressure `solveInduction`
-    // produces, while the generator evaluates it at the row pressure, so the highest
-    // boost preset still trips `overAdvanced` on its own table. That is pre-existing
-    // and filed separately; it is not what this test is guarding.
+  /** The advice the app itself would show for a preset, wired exactly as EcuLab wires it. */
+  function factoryAdvice(preset) {
+    const p = S.applyPreset(preset);
+    return S.calibrationAdvice({
+      ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+      derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+      mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+      compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      turbine: S.presetTurbine(preset),
+      injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+      mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+    });
+  }
+
+  // The single most important property this advisor has: it must not contradict a
+  // calibration the app itself generated. `factoryCalibration` and `calibrationAdvice`
+  // are two consumers of one physics model, and if they disagree the player is told the
+  // shipped engine is mistuned before they have touched anything.
+  //
+  // All three categories are asserted, because all three broke separately:
+  //   pastMbt        needed both sides to take MBT at the row's own pressure
+  //   overAdvanced   needed the knock half to use the row pressure too, instead of the
+  //                  manifold pressure the induction solve produced — on the Golf R that
+  //                  meant judging the 100 kPa row at 200 kPa
+  //   wrongMix       needed mixture judged on what was DELIVERED, since a factory fuel
+  //                  table is written pre-corrected for its own MAF error
+  it('never contradicts the factory calibration the app generated', () => {
     for (const preset of S.ENGINE_PRESETS) {
-      const p = S.applyPreset(preset);
-      const fuel = S.OCTANE_OPTS[p.octaneIdx];
-      const a = S.calibrationAdvice({
-        ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
-        derived: S.deriveEngine(p.engineConfig), octaneBonus: fuel.bonus, fuel,
-        mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
-        compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
-        turbine: S.TURBINE_OPTS[p.turbineIdx],
-        injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-        mafScalar: 1, mafErrorBase: 1,
-      });
-      expect(a.pastMbt, `${preset.id} called its own factory spark table wasteful`).toHaveLength(0);
+      const a = factoryAdvice(preset);
+      expect(a.spark.length, `${preset.id} advised on no cells at all`).toBeGreaterThan(0);
+      expect(a.pastMbt, `${preset.id}: own spark table called wasteful`).toHaveLength(0);
+      expect(a.overAdvanced, `${preset.id}: own spark table called dangerous`).toHaveLength(0);
+      expect(a.wrongMix, `${preset.id}: own fuel table called off-target`).toHaveLength(0);
     }
+  });
+
+  it('does not judge cells the engine cannot reach at that engine speed', () => {
+    // A turbo build never sees 200 kPa at 800 RPM. Those cells sit at the spark table's
+    // 5 degree floor and their knock ceiling at idle speed is near zero, so judging them
+    // reported the factory table as detonating at an impossible operating point.
+    const golfR = S.ENGINE_PRESETS.find((p) => p.id === 'ea888-r');
+    const p = S.applyPreset(golfR);
+    const idleAtFullBoost = factoryAdvice(golfR).spark
+      .filter((c) => c.rpm === 800 && c.map > S.BARO_KPA + Math.min(...p.boostCurve) * S.PSI_TO_KPA);
+    expect(idleAtFullBoost).toHaveLength(0);
+  });
+
+  it('still catches a fuel table that is genuinely off, and by the right amount', () => {
+    // The delivered-not-commanded fix must not have made the mixture check blind. A
+    // table leaned by a known offset has to come back asking for exactly that offset.
+    const preset = S.ENGINE_PRESETS.find((p) => p.id === 'vq35hr');
+    const p = S.applyPreset(preset);
+    const a = S.calibrationAdvice({
+      ve: p.ve, veTruth: p.ve, timing: p.timing,
+      afr: p.afr.map((row) => row.map((v) => v + 1.5)),
+      derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+      mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+      compressor: S.COMPRESSOR_OPTS[p.compressorIdx], turbine: S.presetTurbine(preset),
+      injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+      mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+    });
+    expect(a.wrongMix.length).toBeGreaterThan(0);
+    for (const c of a.wrongMix) expect(c.delta).toBeCloseTo(-1.5, 1);
   });
 
   it('is self-consistent — taking its own advice leaves nothing left to complain about', () => {

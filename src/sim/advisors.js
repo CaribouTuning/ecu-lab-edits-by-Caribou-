@@ -12,9 +12,8 @@ import { computeHardwareVE } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { chargeTempK, exhaustTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
-import { clamp, interp1, interp2 } from './math.js';
-import { solveInduction } from './turbo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
+import { clamp, interp1 } from './math.js';
 import { evaluatePoint } from './point.js';
 import { LOAD, RPM } from './tables.js';
 
@@ -100,25 +99,39 @@ export function calibrationAdvice({
   compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
 }) {
   const spark = [], fuelAdv = [];
-  // Only advise on load the engine can actually reach. A naturally aspirated build
-  // never sees 150 or 200 kPa, so flagging those rows would be pure noise.
-  const maxReachable = BARO_KPA + (turboOn ? Math.max(...boostCurve) * PSI_TO_KPA : 0) + 2;
+  // Only advise on load the engine can actually reach — AT THIS ENGINE SPEED. A
+  // naturally aspirated build never sees 150 or 200 kPa anywhere, and a turbo build
+  // never sees them at 800 RPM either: the boost curve says how much the controller is
+  // even asking for at each speed.
+  //
+  // The gate used to be per-ROW, against the PEAK of the boost curve, which let the
+  // 200 kPa row be judged at idle. Those cells are clamped to the table's 5 degree
+  // floor and their knock ceiling at 800 RPM is near zero — the end gas spends an age
+  // under pressure when the crank is barely turning — so the advisor reported the
+  // factory table as dangerously over-advanced at an operating point the engine cannot
+  // physically occupy. An advisor that cries wolf about impossible cells trains the
+  // player to ignore it on the real ones.
+  const reachableKpa = (rpm) => BARO_KPA + 2
+    + (turboOn ? Math.max(0, interp1(RPM, boostCurve, rpm)) * PSI_TO_KPA : 0);
   LOAD.forEach((mapRow, ri) => {
-    if (mapRow > maxReachable) return;
     RPM.forEach((rpm, ci) => {
-      const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-      const man = solveInduction({
-        rpm, loadKpa: Math.min(mapRow, BARO_KPA), turboOn, boostTargetPsi: boostTarget,
-        turbine, compressor,
-        veAt: (mapKpa) => interp2(veTruth ?? ve, rpm, mapKpa),
-        derived,
-        intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
-        lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
-      });
-      const useMap = mapRow > BARO_KPA ? mapRow : man.mapKpa;
-      const boostPsi = Math.max(0, (useMap - BARO_KPA) / PSI_TO_KPA);
+      if (mapRow > reachableKpa(rpm)) return;
+      // EVERY cell is judged at ITS OWN ROW PRESSURE. A spark table is indexed by
+      // manifold pressure, so the 100 kPa row IS the calibration for 100 kPa — what the
+      // throttle happens to be doing when the engine passes through that row is not a
+      // property of the cell.
+      //
+      // This used to run the induction solve first and evaluate at the manifold pressure
+      // it produced, which on a boosted engine meant the 100 kPa row was judged at full
+      // boost — 200 kPa on the Golf R. The advisor then flagged cells of the factory
+      // table THE APP ITSELF GENERATED as over-advanced, because `factoryCalibration`
+      // wrote them at the row pressure and the advisor was reading them at double it.
+      // Both halves of this function already used the row pressure for MBT; the knock
+      // half now does too, and the three producers of a spark opinion — the generator,
+      // the advisor and the running ECU — finally ask one question of one model.
+      const boostPsi = Math.max(0, (mapRow - BARO_KPA) / PSI_TO_KPA);
       const pt = evaluatePoint({
-        rpm, mapKpa: useMap, boostPsi,
+        rpm, mapKpa: mapRow, boostPsi,
         veVal: ve[ri][ci], veActualVal: veTruth?.[ri]?.[ci],
         timingVal: timing[ri][ci], afrCommanded: afr[ri][ci],
         fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
@@ -182,9 +195,26 @@ export function calibrationAdvice({
         mbt: Number(mbt.toFixed(1)), knockCeiling: Number(knockCeiling.toFixed(1)),
         knockLimited,
       });
+      // Mixture advice is judged on what the engine DELIVERED, not on what the table
+      // commanded — and the suggestion is the commanded number that would deliver the
+      // target, which is the number the player has to type into the cell.
+      //
+      // Those are the same thing only when the ECU's fuel maths is perfect. It is not:
+      // a MAF that under-reads, or an injector the ECU has the wrong size for, puts a
+      // fixed multiplier between commanded and delivered, and a real factory table is
+      // written PRE-CORRECTED for it. Comparing the target against the commanded number
+      // therefore flagged every boosted preset's own factory fuel table — the Golf R
+      // commands 11.22 at 5000 RPM and full boost and delivers 12.20, which is its
+      // best-power target to the hundredth, and the advisor called it a whole point off.
+      // Scaling by the delivered/target ratio prices the error the engine actually made.
+      const mixScale = pt.bestAfr / Math.max(0.1, pt.afr);
+      const suggestedAfr = afr[ri][ci] * mixScale;
       fuelAdv.push({
-        ri, ci, rpm, map: mapRow, current: afr[ri][ci], suggested: Number(pt.bestAfr.toFixed(1)),
-        delta: Number((pt.bestAfr - afr[ri][ci]).toFixed(1)), duty: pt.duty,
+        ri, ci, rpm, map: mapRow, current: afr[ri][ci],
+        suggested: Number(suggestedAfr.toFixed(1)),
+        delta: Number((suggestedAfr - afr[ri][ci]).toFixed(1)),
+        delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)),
+        duty: pt.duty,
       });
     });
   });

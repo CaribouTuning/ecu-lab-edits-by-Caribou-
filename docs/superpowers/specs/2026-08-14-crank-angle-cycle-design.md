@@ -183,6 +183,29 @@ quantity the code claimed to model and did not:
 
 None of the three moved a preset outside tolerance.
 
+Two more turned up in the spark advisor, both cases of it contradicting a calibration the
+app itself generated — the same class of false alarm #34 was written to remove:
+
+- **Boosted rows were judged at the wrong pressure.** The advisor ran the induction solve
+  first and evaluated the knock threshold at the manifold pressure it produced, so on the
+  Golf R the 100 kPa row was judged at 200 kPa. `factoryCalibration` writes that cell for
+  100 kPa. The advisor's own MBT half already used the row pressure; the knock half now
+  does too, and `solveInduction` is gone from the advisor entirely. A spark table is
+  indexed by manifold pressure — the row *is* the operating point.
+- **Impossible cells were judged at all.** The reachability gate was per-row against the
+  *peak* of the boost curve, so the 200 kPa row was evaluated at 800 RPM, where the knock
+  ceiling is near zero because the end gas spends an age under pressure. It is now
+  per-cell against the boost curve at that engine speed.
+- **Mixture was judged on what was commanded, not what was delivered.** A factory fuel
+  table is written pre-corrected for its own MAF error, so the Golf R commands 11.22 at
+  5000 RPM and full boost and *delivers* 12.20 — its best-power target to the hundredth.
+  The advisor called it a point off. It now compares delivered against target and suggests
+  the commanded number that would land there, which is the number the player has to type.
+
+All three spark and fuel categories are now empty on all five presets' own factory
+calibrations, and a test asserts it. `underAdvanced` is deliberately *not* empty: a factory
+tune is conservative, and showing that headroom is the point of the app.
+
 Remaining simplifications, stated rather than hidden:
 
 - No compressor map. Efficiency is one number per compressor rather than a field of
@@ -210,7 +233,9 @@ borrowing 110–130 bar directly would put the overload out of reach.
 
 ## Cost
 
-The test suite goes from 3s to ~74s, almost entirely the fingerprint matrix running a
+The test suite goes from 3s to ~60s, almost entirely the fingerprint matrix running a
 knock-limit bisection and an induction solve per point across roughly 34,000 cycles.
-User-facing paths are unaffected: one dyno sweep is 44 ms, the calibration advisor 12 ms,
-and a live-engine frame 0.28 ms against a 50 ms budget at 20 Hz.
+User-facing paths are unaffected: one dyno sweep is 62 ms, the calibration advisor 16 ms,
+and a live-engine frame 0.17 ms against a 50 ms budget at 20 Hz. The advisor got cheaper
+rather than dearer despite the heavier physics, because dropping the induction solve took
+one solve per table cell out of it.

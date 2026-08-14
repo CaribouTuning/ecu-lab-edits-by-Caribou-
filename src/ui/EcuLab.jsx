@@ -1833,11 +1833,11 @@ export default function EngineManagementSandbox() {
                     {calAdvice.wrongMix.length} HIGH-LOAD CELLS OFF BEST POWER
                   </div>
                   <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.55, marginBottom: 8 }}>
-                    Best-power mixture shifts with boost — richer as cylinder pressure rises. At these points your target is off what this build wants:
+                    Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b style={{ color: T.ink }}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
                   </div>
                   {calAdvice.wrongMix.slice(0, 5).map((c, i) => (
                     <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: c.delta < 0 ? '#ff9d9d' : T.cyan, marginBottom: 2 }}>
-                      {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'}
+                      {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'} · delivered {c.delivered}, wants {c.target}
                     </div>
                   ))}
                   {calAdvice.wrongMix.length > 5 && <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 3 }}>…and {calAdvice.wrongMix.length - 5} more</div>}
