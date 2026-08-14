@@ -162,6 +162,7 @@ export function liveStep(st, dt, input, cfg) {
       mods: { ...mods, turboFitted: turboOn },
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
+      turbine: turboOn ? turbine : null,
     });
     // evaluatePoint already returns BRAKE torque — friction and pumping are subtracted
     // inside it — so we must not deduct them again here.

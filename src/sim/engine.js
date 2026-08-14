@@ -102,9 +102,9 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} displacementL total displacement, litres
  * @property {number} ratio bore ÷ stroke
  * @property {number} compression static compression ratio, carried through unchanged
- * @property {number} configKnockBonus knock margin from cylinder size, degrees
- * @property {number} materialKnockBonus knock margin from head material, degrees
- * @property {number} compressionKnockAdj knock margin from compression ratio, degrees
+ * @property {number} bore cylinder bore, mm
+ * @property {number} boreFlameFactor flame-travel scaling from bore, 1 at the reference
+ * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
  * @property {number} thermalEff indicated thermal efficiency
  * @property {number} ottoIdeal ideal Otto-cycle efficiency
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
@@ -134,15 +134,15 @@ export function deriveEngine(cfg) {
   const displacementL = (Math.PI / 4 * boreCm * boreCm * strokeCm * cyl) / 1000;
   const ratio = cfg.bore / cfg.stroke;
   const perCylL = displacementL / cyl;
-  // The three knock terms an engine's ARCHITECTURE decides, as opposed to the ones its
-  // operating point decides. They are applied in `knockThreshold` (knock.js) and their
-  // coefficients live alongside the rest of the knock envelope in coefficients.js, so
-  // the whole envelope can be read in one place rather than half here and half there.
-  const configKnockBonus = perCylL < COEFF.KNOCK_SMALL_CYL_L ? COEFF.KNOCK_SMALL_CYL_BONUS
-    : perCylL > COEFF.KNOCK_LARGE_CYL_L ? COEFF.KNOCK_LARGE_CYL_PENALTY : 0;
-  const materialKnockBonus = cfg.headMaterial === 'Cast Iron' ? COEFF.KNOCK_IRON_HEAD_PENALTY : 0;
-  const compressionKnockAdj = (COEFF.KNOCK_COMPRESSION_REF - cfg.compression)
-    * COEFF.KNOCK_DEG_PER_COMPRESSION_POINT;
+  // What the ARCHITECTURE contributes to combustion, expressed as the two physical
+  // quantities the cycle model reads rather than as bonuses in degrees. Compression
+  // needs no term at all any more: it changes the clearance volume, and the cycle
+  // integrates what follows.
+  //
+  // Flame travel scales with bore, so a big cylinder burns slower.
+  const boreFlameFactor = cfg.bore / COEFF.BORE_FLAME_REF_MM;
+  // An iron head runs a hotter chamber, so the charge in it starts compression hotter.
+  const chamberOffsetK = cfg.headMaterial === 'Cast Iron' ? COEFF.IRON_HEAD_CHAMBER_K : 0;
   // Thermal efficiency comes from the ideal Otto cycle for this compression ratio,
   // scaled by what real engines actually realize.
   const ottoIdeal = 1 - 1 / Math.pow(cfg.compression, 0.35);
@@ -173,8 +173,8 @@ export function deriveEngine(cfg) {
   // `evaluatePoint` a `derived`, so carrying it here keeps the config object out of
   // the per-point signature.
   return {
-    cyl, displacementL, ratio, compression: cfg.compression,
-    configKnockBonus, materialKnockBonus, compressionKnockAdj,
+    cyl, displacementL, ratio, compression: cfg.compression, bore: cfg.bore,
+    boreFlameFactor, chamberOffsetK,
     thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,

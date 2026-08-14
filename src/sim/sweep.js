@@ -98,6 +98,7 @@ export function simulateSweep({
       rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
       veVal, veActualVal, timingVal, afrCommanded, octaneBonus, fuel, mods: modsWithTurbo,
       mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
+      turbine: turboOn ? turbine : null,
     }));
   }
 

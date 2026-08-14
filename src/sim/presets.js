@@ -16,10 +16,16 @@
  * coefficient change can never leave a stale calibration behind.
  */
 
-import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS } from './hardware.js';
-import { BARO_KPA, KELVIN_OFFSET, PSI_TO_KPA } from './constants.js';
+import {
+  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS,
+  turbineBackpressureRelief,
+} from './hardware.js';
+import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { COEFF } from './coefficients.js';
 import { computeHardwareVE } from './airflow.js';
-import { knockThreshold, mbtTiming } from './knock.js';
+import { chargeIndexOf } from './knock.js';
+import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
+import { exhaustManifoldKpa } from './friction.js';
 import { bestPowerAfr } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK } from './thermo.js';
@@ -234,7 +240,6 @@ function hardwareFor(preset) {
 export function factoryCalibration(preset) {
   const derived = deriveEngine(preset.engine);
   const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
-  const compressor = COMPRESSOR_OPTS[preset.induction.compressorIdx];
   const hw = hardwareFor(preset);
   const ve = computeHardwareVE(preset.engine, preset.mods, hw);
 
@@ -270,17 +275,31 @@ export function factoryCalibration(preset) {
   // evaluated against the mixture the engine will ACTUALLY see (best-power AFR, since
   // the fuel table above is what puts it there) rather than the richer commanded
   // number, which is only an artifact of pre-compensating the MAF.
+  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+  const turbine = preset.induction.turboOn ? TURBINE_OPTS[preset.induction.turbineIdx] : null;
+
   const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
     const boostPsi = boostAt(rpm, loadKpa);
     const trueBestAfr = bestPowerAfr(boostPsi);
-    const threshold = knockThreshold({
-      rpm, mapKpa: loadKpa, veActual: ve[ri][ci],
-      chargeC: chargeTempK(boostPsi, preset.mods.intercooler) - KELVIN_OFFSET,
-      actualAfr: trueBestAfr, bestAfr: trueBestAfr, boostPsi,
-      octaneBonus: fuel.bonus, mods: preset.mods, derived, compressor,
+    const lambda = trueBestAfr / 14.7;
+    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
+    const veActual = ve[ri][ci];
+    const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
+    const empKpa = exhaustManifoldKpa({
+      boostPsi, turboOn: preset.induction.turboOn,
+      turbineRelief: turbineBackpressureRelief(turbine),
+      flowFrac: chargeIndexOf(veActual, loadKpa) * (rpm / COEFF.EMP_FLOW_REF_RPM),
     });
-    const safe = threshold - FACTORY_KNOCK_MARGIN_DEG;
-    return Number(clamp(Math.min(mbtTiming(rpm, loadKpa), safe), 5, 50).toFixed(1));
+    // The generator asks the physics the same question the running ECU asks — how much
+    // spark will this cylinder take — by solving the same cycle. A second, simpler
+    // knock estimate here would drift from the one the player then drives against.
+    const cyc = cycleInputsFor({
+      rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
+      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      lambda, fuel, derived,
+    });
+    const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
+    return Number(clamp(Math.min(mbtFromBurn(cyc.burnDeg), safe), 5, 50).toFixed(1));
   }));
 
   return { ve, timing, afr };

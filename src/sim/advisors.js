@@ -98,6 +98,7 @@ export function calibrationAdvice({
         timingVal: timing[ri][ci], afrCommanded: afr[ri][ci],
         octaneBonus, fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
         injectorCc, ecuInjectorCc, derived, compressor,
+        turbine: turboOn ? turbine : null,
       });
       // Leave ~1.5 deg of safety under the calculated knock limit, as a tuner would.
       const safeTiming = Math.round((pt.threshold - 1.5) * 2) / 2;

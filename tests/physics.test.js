@@ -58,10 +58,18 @@ describe('engine architecture', () => {
     expect(S.deriveEngine({ ...STOCK, bore: 80, stroke: 100 }).character).toMatch(/Undersquare/);
   });
 
-  it('costs knock margin for a cast iron head', () => {
-    const alu = S.deriveEngine({ ...STOCK, headMaterial: 'Aluminum' }).materialKnockBonus;
-    const iron = S.deriveEngine({ ...STOCK, headMaterial: 'Cast Iron' }).materialKnockBonus;
-    expect(iron).toBeLessThan(alu);
+  it('runs a hotter chamber with a cast iron head, and pays for it in knock margin', () => {
+    const alu = S.deriveEngine({ ...STOCK, headMaterial: 'Aluminum' });
+    const iron = S.deriveEngine({ ...STOCK, headMaterial: 'Cast Iron' });
+    expect(iron.chamberOffsetK).toBeGreaterThan(alu.chamberOffsetK);
+    // And it reaches knock the way it does in reality — through charge temperature,
+    // not through a bonus subtracted after the fact.
+    const boosted = {
+      mapKpa: 190, boostPsi: 13, veVal: 100,
+      mods: { ...NO_MODS, intercooler: true, turboFitted: true },
+    };
+    expect(point({ ...boosted, cfg: { ...STOCK, headMaterial: 'Cast Iron' } }).threshold)
+      .toBeLessThan(point({ ...boosted, cfg: { ...STOCK, headMaterial: 'Aluminum' } }).threshold);
   });
 
   it('lowers valve float speed with a bigger cam, and raises it with stiffer springs', () => {
@@ -147,18 +155,13 @@ describe('air charge and fuelling', () => {
     expect(S.AMBIENT_C).toBe(S.AMBIENT_K - S.KELVIN_OFFSET);
     // Off boost the charge sits exactly at ambient, so the penalty is exactly nothing.
     expect(point({ mapKpa: S.BARO_KPA }).iat).toBe(Math.round(S.AMBIENT_C));
-    const knockArgs = {
-      rpm: 5500, mapKpa: 200, veActual: 95, actualAfr: 12.6, bestAfr: 12.6,
-      boostPsi: 14, octaneBonus: 0, mods: NO_MODS,
-      derived: S.deriveEngine(STOCK), compressor: S.COMPRESSOR_OPTS[1],
-    };
-    const atAmbient = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C });
-    const oneDegHotter = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C + 1 });
-    const oneDegCooler = S.knockThreshold({ ...knockArgs, chargeC: S.AMBIENT_C - 1 });
-    // Hotter costs margin at the documented rate; cooler than ambient earns nothing
-    // back, because the penalty is floored rather than turning into a bonus.
-    expect(atAmbient - oneDegHotter).toBeCloseTo(S.COEFF.KNOCK_IAT_PER_C, 10);
-    expect(oneDegCooler).toBe(atAmbient);
+    // And a hotter charge costs knock margin, measured through the cycle: charge heat
+    // now reaches knock by raising the temperature the end gas starts compression from,
+    // not by subtracting a fitted number of degrees.
+    const hot = point({ mapKpa: 190, boostPsi: 13, veVal: 100, mods: { ...NO_MODS, intercooler: false, turboFitted: true } });
+    const cool = point({ mapKpa: 190, boostPsi: 13, veVal: 100, mods: { ...NO_MODS, intercooler: true, turboFitted: true } });
+    expect(cool.iat).toBeLessThan(hot.iat);
+    expect(cool.threshold).toBeGreaterThan(hot.threshold);
   });
 
   it('needs roughly 1.5x the fuel volume on E85 at the same lambda', () => {
@@ -276,46 +279,35 @@ describe('torque production', () => {
 });
 
 describe('peak cylinder pressure', () => {
-  /** The four inputs `peakPressureBar` takes, with a wide-open-throttle default. */
-  const press = (o = {}) => S.peakPressureBar({
-    compression: 10.3, mapKpa: S.BARO_KPA, veActual: 95,
-    usedTiming: 24, mbtIdeal: 24, ...o,
-  });
-
   it('rises with static compression at identical manifold pressure', () => {
-    expect(press({ compression: 12.5 })).toBeGreaterThan(press({ compression: 9.5 }));
+    const low = point({ cfg: { ...STOCK, compression: 9.0 } }).peakPressure;
+    const high = point({ cfg: { ...STOCK, compression: 12.5 }, fuel: S.OCTANE_OPTS[2] }).peakPressure;
+    expect(high).toBeGreaterThan(low);
   });
 
   it('rises with manifold pressure and with trapped charge separately', () => {
-    expect(press({ mapKpa: 200 })).toBeGreaterThan(press({ mapKpa: 100 }));
-    expect(press({ veActual: 115 })).toBeGreaterThan(press({ veActual: 85 }));
+    // Held at a timing both points can actually run, on a fuel with margin — otherwise
+    // the boosted point is knock-limited and the comparison measures spark retard
+    // instead of manifold pressure.
+    const at = (o) => point({ timingVal: 12, fuel: S.OCTANE_OPTS[2], ...o }).peakPressure;
+    expect(at({ mapKpa: 190, boostPsi: 13, mods: { ...NO_MODS, intercooler: true, turboFitted: true } }))
+      .toBeGreaterThan(at({}));
+    expect(at({ veVal: 115 })).toBeGreaterThan(at({ veVal: 85 }));
   });
 
-  it('multiplies rather than adds — compression is worth more under boost', () => {
-    const naGain = press({ compression: 12.5 }) - press({ compression: 9.5 });
-    const boostGain = press({ compression: 12.5, mapKpa: 200 }) - press({ compression: 9.5, mapKpa: 200 });
-    expect(boostGain).toBeGreaterThan(naGain);
-  });
-
-  it('falls when spark is retarded from MBT', () => {
-    expect(press({ usedTiming: 12 })).toBeLessThan(press({ usedTiming: 24 }));
-  });
-
-  it('keeps climbing past MBT, where torque is already falling', () => {
-    // The over-advanced tune: more stress, less power. Capped, because the burn cannot
-    // start before there is a charge to burn.
-    expect(press({ usedTiming: 30 })).toBeGreaterThan(press({ usedTiming: 24 }));
-    expect(press({ usedTiming: 60 })).toBe(press({ usedTiming: 34 }));
+  it('falls when spark is retarded, and peaks later in the stroke', () => {
+    const advanced = point({ timingVal: 24, fuel: S.OCTANE_OPTS[2] });
+    const retarded = point({ timingVal: 10, fuel: S.OCTANE_OPTS[2] });
+    expect(retarded.peakPressure).toBeLessThan(advanced.peakPressure);
+    expect(retarded.peakPressureDeg).toBeGreaterThan(advanced.peakPressureDeg);
   });
 
   it('lands in the range real engines measure', () => {
     // Not a magnitude lock — a plausibility band. A naturally aspirated engine at
-    // wide-open throttle peaks near 50-60 bar; 20 psi of boost roughly doubles it.
-    const na = press();
-    expect(na).toBeGreaterThan(35);
-    expect(na).toBeLessThan(70);
-    const boosted = press({ mapKpa: S.BARO_KPA + 20 * S.PSI_TO_KPA });
-    expect(boosted).toBeGreaterThan(na * 1.8);
+    // wide-open throttle peaks near 50-80 bar.
+    const na = point().peakPressure;
+    expect(na).toBeGreaterThan(40);
+    expect(na).toBeLessThan(95);
   });
 
   it('reports itself in the datalog, with the overload flag', () => {
@@ -323,8 +315,12 @@ describe('peak cylinder pressure', () => {
     expect(mild.peakPressure).toBeGreaterThan(0);
     expect(mild.pressureRisk).toBe(false);
     const brutal = point({
-      cfg: { ...STOCK, compression: 13.0 },
-      mapKpa: S.BARO_KPA + 22 * S.PSI_TO_KPA, veVal: 110,
+      cfg: { ...STOCK, compression: 12.5 }, fuel: S.OCTANE_OPTS[3],
+      mapKpa: S.BARO_KPA + 12 * S.PSI_TO_KPA, veVal: 105, timingVal: 20,
+      mods: { ...NO_MODS, intercooler: true, turboFitted: true },
+      // E85 at this airflow needs real injectors; the stock 315s would run out of pulse
+      // width and lean the mixture out, which would make this a fuelling test instead.
+      injectorCc: 850, ecuInjectorCc: 850,
     });
     expect(brutal.peakPressure).toBeGreaterThan(mild.peakPressure);
     expect(brutal.pressureRisk).toBe(true);
@@ -414,10 +410,10 @@ describe('dyno sweep', () => {
     expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
   });
 
-  it('charges the bearings for a high-compression naturally aspirated engine too', () => {
-    const low = stockPull({ cfg: { ...STOCK, compression: 9.0 } });
-    const high = stockPull({ cfg: { ...STOCK, compression: 12.5 } });
-    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
+  it('leaves a stock naturally aspirated pull essentially free of bearing wear', () => {
+    // Below the pressure a stock bottom end carries indefinitely, nothing accumulates —
+    // an engine driven hard once is not spending bearing life in any measurable way.
+    expect(stockPull({ cfg: { ...STOCK, compression: 9.0 } }).wear.bearing).toBe(0);
   });
 
   it('raises the overload event only once the parts are actually over their limit', () => {
@@ -425,7 +421,10 @@ describe('dyno sweep', () => {
     expect(sane.events.some((e) => e.type === 'pressure')).toBe(false);
     const overloaded = stockPull({
       cfg: { ...STOCK, compression: 12.5 },
-      turboOn: true, boostCurve: [0, 4, 12, 20, 24, 25, 25, 25],
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
+      turboOn: true, boostCurve: [0, 4, 12, 16, 18, 18, 18, 18],
+      injectorCc: 850, ecuInjectorCc: 850,
+      sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
     });
     expect(overloaded.events.some((e) => e.type === 'pressure')).toBe(true);
     expect(overloaded.wear.piston).toBeGreaterThan(sane.wear.piston);
@@ -500,48 +499,100 @@ describe('table axes stay consistent', () => {
   });
 });
 
-describe('knock threshold, as a shared function', () => {
-  const base = {
-    rpm: 5500, mapKpa: S.BARO_KPA, veActual: 95, chargeC: 25,
-    actualAfr: 12.85, bestAfr: 12.85, boostPsi: 0, octaneBonus: 0,
-    mods: NO_MODS, derived: S.deriveEngine(STOCK), compressor: S.COMPRESSOR_OPTS[1],
-  };
-
-  it('agrees exactly with the threshold evaluatePoint reports', () => {
-    const p = point({ rpm: 5500, veVal: 95, afrCommanded: 12.85, timingVal: 20 });
-    expect(S.knockThreshold({ ...base, actualAfr: p.afr, bestAfr: p.bestAfr, veActual: p.ve }))
-      .toBeCloseTo(p.threshold, 1);
+describe('the engine cycle', () => {
+  const cyc = (o = {}) => S.cycleInputsFor({
+    rpm: 5500, mapKpa: S.BARO_KPA, empKpa: 110, intakeK: 320,
+    airChargeG: 0.65, burnedFuelG: 0.05, lambda: 0.88,
+    fuel: S.OCTANE_OPTS[0], derived: S.deriveEngine(STOCK), ...o,
   });
 
-  it('gives more margin at lower charge', () => {
-    const light = S.knockThreshold({ ...base, mapKpa: 40, veActual: 55 });
-    const heavy = S.knockThreshold({ ...base, mapKpa: 150, veActual: 105, boostPsi: 7 });
-    expect(light).toBeGreaterThan(heavy);
+  it('computes an effective compression ratio below the static one', () => {
+    // The piston does not start compressing until the intake valve shuts, so trapped
+    // volume is larger than swept-plus-clearance and effective compression is lower.
+    const c = cyc();
+    expect(c.effectiveCr).toBeLessThan(STOCK.compression);
+    expect(c.effectiveCr).toBeGreaterThan(STOCK.compression * 0.8);
   });
 
-  it('gives more margin on higher octane', () => {
-    expect(S.knockThreshold({ ...base, octaneBonus: 14 }))
-      .toBeGreaterThan(S.knockThreshold({ ...base, octaneBonus: 0 }));
+  it('shuts the intake valve later with a longer camshaft, dropping effective compression', () => {
+    const mild = cyc({ derived: S.deriveEngine({ ...STOCK, camDuration: 200 }) });
+    const wild = cyc({ derived: S.deriveEngine({ ...STOCK, camDuration: 280 }) });
+    expect(S.ivcAfterBdcDeg(280)).toBeGreaterThan(S.ivcAfterBdcDeg(200));
+    expect(wild.effectiveCr).toBeLessThan(mild.effectiveCr);
   });
 
-  it('penalises a lean mixture only when there is cylinder pressure behind it', () => {
-    const leanAtLoad = S.knockThreshold({ ...base, actualAfr: 15.5 });
-    const richAtLoad = S.knockThreshold({ ...base, actualAfr: 12.0 });
-    expect(leanAtLoad).toBeLessThan(richAtLoad);
-    // At deep vacuum the same leanness barely matters.
-    const leanCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 15.5 });
-    const richCruise = S.knockThreshold({ ...base, mapKpa: 30, veActual: 45, actualAfr: 12.0 });
-    expect(Math.abs(leanCruise - richCruise)).toBeLessThan(Math.abs(leanAtLoad - richAtLoad));
+  it('puts the pressure peak after TDC, and moves it with spark', () => {
+    const early = S.runCycle({ ...cyc(), sparkBtdc: 30 });
+    const late = S.runCycle({ ...cyc(), sparkBtdc: 12 });
+    expect(early.peakPressureDeg).toBeGreaterThan(0);
+    expect(early.peakPressureDeg).toBeLessThan(late.peakPressureDeg);
+    expect(early.peakPressurePa).toBeGreaterThan(late.peakPressurePa);
+  });
+
+  it('produces best work near MBT and less either side — the whole point of a trace', () => {
+    const work = (t) => S.runCycle({ ...cyc(), sparkBtdc: t }).imepGrossPa;
+    const mbt = S.mbtFromBurn(cyc().burnDeg);
+    expect(work(mbt)).toBeGreaterThan(work(mbt - 12));
+    expect(work(mbt)).toBeGreaterThan(work(mbt + 12));
+  });
+
+  it('burns slower when the charge is diluted or the mixture is off best', () => {
+    const base = S.burnDurationDeg({ rpm: 4000, lambda: 0.9, residualFrac: 0.05 });
+    expect(S.burnDurationDeg({ rpm: 4000, lambda: 0.9, residualFrac: 0.25 })).toBeGreaterThan(base);
+    expect(S.burnDurationDeg({ rpm: 4000, lambda: 1.3, residualFrac: 0.05 })).toBeGreaterThan(base);
+    expect(S.burnDurationDeg({ rpm: 4000, lambda: 0.65, residualFrac: 0.05 })).toBeGreaterThan(base);
+  });
+
+  it('burns slower across a bigger bore', () => {
+    const small = S.deriveEngine({ ...STOCK, bore: 80 }).boreFlameFactor;
+    const big = S.deriveEngine({ ...STOCK, bore: 104 }).boreFlameFactor;
+    expect(big).toBeGreaterThan(small);
+    expect(cyc({ derived: S.deriveEngine({ ...STOCK, bore: 104 }) }).burnDeg)
+      .toBeGreaterThan(cyc({ derived: S.deriveEngine({ ...STOCK, bore: 80 }) }).burnDeg);
+  });
+
+  it('finds a knock limit that falls as compression rises', () => {
+    const low = S.knockLimitedSpark(cyc({ derived: S.deriveEngine({ ...STOCK, compression: 9.0 }) }));
+    const high = S.knockLimitedSpark(cyc({ derived: S.deriveEngine({ ...STOCK, compression: 12.5 }) }));
+    expect(high).toBeLessThan(low);
+  });
+
+  it('finds a knock limit that rises with octane', () => {
+    const boosted = { mapKpa: 190, empKpa: 250, airChargeG: 1.2, burnedFuelG: 0.095 };
+    const pump = S.knockLimitedSpark(cyc({ ...boosted, fuel: S.OCTANE_OPTS[0] }));
+    const race = S.knockLimitedSpark(cyc({ ...boosted, fuel: S.OCTANE_OPTS[2] }));
+    expect(race).toBeGreaterThan(pump);
+  });
+
+  it('reports the limit as the FIRST onset of knock, not a later one', () => {
+    // The autoignition integral is not monotonic at extreme advance, so a naive search
+    // can land past a knocking region. Everything at or below the reported limit must
+    // actually be knock-free.
+    const c = cyc({ mapKpa: 190, empKpa: 250, airChargeG: 1.2, burnedFuelG: 0.095 });
+    const limit = S.knockLimitedSpark(c);
+    for (let t = S.COEFF.KNOCK_SEARCH_MIN_BTDC; t <= limit; t += 2) {
+      expect(S.runCycle({ ...c, sparkBtdc: t }).knockIntegral, `knocks at ${t} deg`).toBeLessThan(1);
+    }
   });
 });
 
 describe('MBT timing', () => {
-  it('needs more advance at higher RPM', () => {
-    expect(S.mbtTiming(7000, S.BARO_KPA)).toBeGreaterThan(S.mbtTiming(2000, S.BARO_KPA));
+  it('is the timing that centres the burn just after TDC', () => {
+    const burnDeg = 45;
+    const mbt = S.mbtFromBurn(burnDeg);
+    const c = {
+      rpm: 4000, trappedPa: 100000, trappedK: 330, heatJ: 1400,
+      clearanceM3: 6.3e-5, sweptM3: 5.8e-4, rodRatio: S.COEFF.ROD_RATIO,
+      ivcAbdc: 45, burnDeg, octaneNumber: 100, sparkBtdc: mbt,
+    };
+    // Within one integration step of the target — the trace is sampled every
+    // CYCLE_STEP_DEG degrees, so it cannot land closer than that by construction.
+    expect(Math.abs(S.runCycle(c).mfb50Deg - S.COEFF.MBT_MFB50_ATDC))
+      .toBeLessThanOrEqual(S.COEFF.CYCLE_STEP_DEG);
   });
 
-  it('needs less advance at higher load, because a denser charge burns faster', () => {
-    expect(S.mbtTiming(5000, 200)).toBeLessThan(S.mbtTiming(5000, 40));
+  it('needs more advance when the burn is slower', () => {
+    expect(S.mbtFromBurn(60)).toBeGreaterThan(S.mbtFromBurn(40));
   });
 });
 

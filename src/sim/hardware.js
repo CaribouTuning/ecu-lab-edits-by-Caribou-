@@ -3,6 +3,7 @@
  * specifications that make each choice a trade-off rather than an upgrade.
  */
 
+import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 /** Cylinder count per configuration. */
@@ -69,10 +70,15 @@ export const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];
  * makes similar power per unit of air while demanding a much bigger fuel system.
  */
 export const OCTANE_OPTS = [
-  { label: '91', bonus: 0, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '93', bonus: 3, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '100', bonus: 8, stoich: 14.6, density: 0.750, lhv: 43.5e6 },
-  { label: 'E85', bonus: 14, stoich: 9.8, density: 0.782, lhv: 29.2e6 },
+  { label: '91', bonus: 0, octane: 91, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  { label: '93', bonus: 3, octane: 93, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  { label: '100', bonus: 8, octane: 100, stoich: 14.6, density: 0.750, lhv: 43.5e6 },
+  // E85's pump antiknock index is usually quoted around 100-105 AKI. The autoignition
+  // model uses `octane` directly, so this number now does real work: it is the fuel
+  // property the ignition-delay correlation reads. `bonus` is the older
+  // degrees-of-margin figure, kept because the Engineer Score still prices its
+  // compression headroom in it.
+  { label: 'E85', bonus: 14, octane: 105, stoich: 9.8, density: 0.782, lhv: 29.2e6 },
 ];
 
 /**
@@ -101,6 +107,25 @@ export const TURBINE_OPTS = [
   { label: 'Medium — balanced', size: 'medium', spoolRange: 1800, topEndMult: 0 },
   { label: 'Large — top-end', size: 'large', spoolRange: 2600, topEndMult: 0.05 },
 ];
+
+/**
+ * How much exhaust backpressure a turbine housing relieves, relative to medium.
+ *
+ * The turbine makes its power by throttling the exhaust, so housing size is a direct
+ * trade: the small housing that spools early is the same one that pins exhaust manifold
+ * pressure well above boost and costs pumping work all the way to the redline. This is
+ * the other half of the sizing decision that used to show up only as a top-end VE
+ * multiplier.
+ *
+ * @param {{size: string}|null} turbine the fitted turbine, or null for none
+ * @returns {number} fraction of turbine backpressure relieved, may be negative
+ */
+export function turbineBackpressureRelief(turbine) {
+  if (!turbine) return 0;
+  if (turbine.size === 'large') return COEFF.EMP_TURBINE_SIZE_RELIEF;
+  if (turbine.size === 'small') return -COEFF.EMP_TURBINE_SIZE_RELIEF;
+  return 0;
+}
 
 /**
  * Compressor sizing sets a practical boost ceiling before it is pushed outside its
