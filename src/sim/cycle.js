@@ -19,17 +19,22 @@
  * and here it falls out of the integration instead of being asserted.
  *
  * WHAT THIS MODEL IS
- * A single-zone, two-gamma, finite-heat-release cycle — the standard first engineering
- * model above an air-standard cycle, and the same one used to teach the subject:
+ * A TWO-ZONE, finite-heat-release cycle. Burned and unburned gas share a pressure but
+ * carry their own temperatures, which is what lets the model say anything honest about
+ * end-gas heating and exhaust temperature:
  *
  *   - Volume from the slider-crank equation, so rod length and stroke matter.
  *   - Heat release from a Wiebe function, the empirical S-curve that real mass-fraction-
  *     burned traces follow closely.
- *   - First law per crank degree: dp = (γ-1)/V · dQ − γ · p/V · dV.
+ *   - Pressure from the first law over both zones: dp = (γ-1)/V · dQ − γ · p/V · dV.
  *   - Work by trapezoidal integration of p dV, giving gross indicated MEP directly.
- *   - The unburned end gas tracked isentropically, feeding an autoignition integral.
+ *   - UNBURNED zone compressed isentropically by that pressure, less its wall loss.
+ *   - BURNED zone from an open-system enthalpy balance: charge crosses the flame at the
+ *     unburned temperature, brings its fuel energy, then does displacement work and
+ *     loses heat to the wall.
  *   - Wall heat transfer from the Woschni correlation, per crank degree, against a
  *     chamber area that grows as the piston uncovers the liner.
+ *   - Crevice volume as real geometry, and blowby as real lost mass.
  *
  * THE END GAS, AND WHY ENGINE SPEED MATTERS TWICE
  * The unburned charge ahead of the flame is compressed by the pressure the burned gas is
@@ -45,15 +50,15 @@
  * that trade are here now.
  *
  * WHAT IT IS NOT
- * Not a CFD or multi-zone model. There is no flame-front geometry, no crevice volume as
- * real geometry, no blowby, and no cycle-to-cycle variation. Being single-zone, it does
- * not track burned-gas temperature, which is why the end gas needs a one-coefficient
- * flame-heating term where a two-zone model would compute one. Those are the honest
- * next steps, not hidden assumptions.
+ * Not CFD. There is no flame-front geometry, so how much of the burned zone's heat the
+ * end gas feels is one coefficient (ENDGAS_FLAME_COUPLING) rather than a radiation view
+ * factor. The two zones are well-stirred: no boundary layer, no temperature profile
+ * within either. Composition is frozen apart from the two gammas, so dissociation is a
+ * fixed effective gamma plus a ceiling rather than an equilibrium solve.
  */
 
 import { COEFF } from './coefficients.js';
-import { KPA_PER_BAR, R_AIR } from './constants.js';
+import { BARO_KPA, KPA_PER_BAR, R_AIR } from './constants.js';
 import { clamp } from './math.js';
 import { evaporativeCoolingK, residualFraction, trappedChargeK } from './thermo.js';
 
@@ -118,10 +123,16 @@ export function ivcAfterBdcDeg(camDuration) {
  * @returns {number} burn duration, crank degrees
  */
 export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1 }) {
-  // Mixture: fastest a little rich of stoichiometric, slower in both directions. This
-  // is why a lean cruise mixture needs so much more advance than a WOT power mixture.
-  const lambdaOff = Math.abs(lambda - COEFF.BURN_FASTEST_LAMBDA);
-  const mixtureFactor = 1 + lambdaOff * lambdaOff * COEFF.BURN_LAMBDA_PENALTY;
+  // Mixture: fastest a little rich of stoichiometric, slower in both directions — but
+  // NOT symmetrically. Laminar flame speed falls away far faster on the lean side, where
+  // there is surplus air to heat and nothing extra burning to heat it, than on the rich
+  // side, where the surplus fuel at least keeps the flame temperature up. Treating the
+  // two the same made a lean charge burn almost as fast as a rich one, which is what let
+  // the model conclude that lean-under-load was SAFER — the burn stayed short, so the end
+  // gas had no more time to light itself. It is not safer, and the asymmetry is why.
+  const lambdaOff = lambda - COEFF.BURN_FASTEST_LAMBDA;
+  const penalty = lambdaOff > 0 ? COEFF.BURN_LAMBDA_PENALTY_LEAN : COEFF.BURN_LAMBDA_PENALTY_RICH;
+  const mixtureFactor = 1 + lambdaOff * lambdaOff * penalty;
   // Dilution: residual burned gas has no oxygen and absorbs heat, so the flame crawls.
   const dilutionFactor = 1 + residualFrac * COEFF.BURN_RESIDUAL_PENALTY;
   const speedFactor = 1 + (rpm - COEFF.BURN_RPM_REF) * COEFF.BURN_PER_RPM;
@@ -155,6 +166,9 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} peakPressurePa highest cylinder pressure reached
  * @property {number} peakPressureDeg crank angle of that peak, degrees ATDC
  * @property {number} peakEndGasK hottest the unburned end gas got
+ * @property {number} peakBurnedK hottest the burned zone got — the flame temperature
+ * @property {number} exhaustK gas temperature at the port, after blowdown
+ * @property {number} blowbyFrac charge lost past the rings over the closed period
  * @property {number} knockIntegral Livengood-Wu autoignition integral; ≥ 1 means knock
  * @property {number} mfb50Deg crank angle of 50% mass burned, degrees ATDC
  */
@@ -167,7 +181,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  */
 export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
-  clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber, lambda = 0.9,
+  clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
@@ -193,10 +207,16 @@ export function runCycle({
   // the octane and scale part of the ignition-delay correlation.
   const tauFuelTerm = COEFF.KNOCK_TAU_SCALE * COEFF.KNOCK_DE_A
     * Math.pow(octaneNumber / 100, COEFF.KNOCK_DE_B);
-  // How hot the burned gas behind the flame front is running, relative to its hottest.
-  // Peaks just lean of stoichiometric and heats the end gas on top of compression.
-  const lambdaOffPeak = (lambda - COEFF.FLAME_TEMP_PEAK_LAMBDA) / COEFF.FLAME_TEMP_WIDTH;
-  const flameHeating = 1 + COEFF.ENDGAS_FLAME_TEMP_GAIN * Math.exp(-lambdaOffPeak * lambdaOffPeak);
+  // Specific heats for the two zones, from their gammas.
+  const cvU = R_AIR / (COEFF.GAMMA_UNBURNED - 1);
+  const cpU = cvU + R_AIR;
+  const cpB = R_AIR / (COEFF.GAMMA_BURNED - 1) + R_AIR;
+  // Energy the fuel releases per kg of charge that burns.
+  const qPerKg = trappedMassKg > 0 ? heatJ / trappedMassKg : 0;
+  // Crevices: the piston top-land gap and the head gasket bore. Gas pushed in there sits
+  // at wall temperature and takes no part in combustion, then comes back out on
+  // expansion. This is where most unburnt hydrocarbon actually comes from.
+  const creviceM3 = clearanceM3 * COEFF.CREVICE_VOLUME_FRAC;
 
   let p = trappedPa;
   let v = cylinderVolumeM3(thetaStart, clearanceM3, sweptM3, rodRatio);
@@ -204,14 +224,19 @@ export function runCycle({
   let peakPressurePa = p;
   let peakPressureDeg = thetaStart;
   let peakEndGasK = trappedK;
+  let peakBurnedK = trappedK;
   let knockIntegral = 0;
   let mfb50Deg = burnStart + burnDeg / 2;
   let prevBurned = 0;
   let crossed50 = false;
-  // Heat the unburned charge has given up to the chamber wall by this point in the
-  // cycle, as a temperature the end gas is BELOW its adiabatic value. See the note at
-  // the accumulation site: this is what makes the knock limit's speed dependence real
-  // rather than pure dwell time.
+  // The two zones. Unburned starts as the whole charge at the trapped state; burned
+  // starts empty and is seeded at the first step that burns anything.
+  let tU = trappedK;
+  let tB = trappedK;
+  // Charge blown past the rings, as a fraction of what was trapped. Real and permanent:
+  // it never does work on the piston and never comes back.
+  let blowbyFrac = 0;
+  // Heat the unburned zone has given up to the wall so far, as degrees below adiabatic.
   let endGasCoolK = 0;
 
   /** Wiebe mass fraction burned at a crank angle. */
@@ -243,7 +268,8 @@ export function runCycle({
     // per unit volume and loses proportionally more; a slow-turning engine holds hot gas
     // against the walls for longer and loses more; a boosted engine at high pressure
     // loses more still. Those are real, and a fixed fraction expressed none of them.
-    const tGas = (p * v) / (trappedMassKg * R_AIR);
+    const chargeKg = trappedMassKg * (1 - blowbyFrac);
+    const tGas = (p * v) / (chargeKg * R_AIR);
     // Exposed area: head, piston crown, and the liner the piston has uncovered.
     const strokeFrac = Math.max(0, (v - clearanceM3) / sweptM3);
     const areaM2 = 2 * boreAreaM2 + Math.PI * boreM * strokeM * strokeFrac;
@@ -262,25 +288,67 @@ export function runCycle({
     const dtS = step / (6 * Math.max(rpm, 1));
     const dQwall = hCoeff * areaM2 * (tGas - COEFF.WALL_TEMP_K) * dtS;
 
-    // First law for a single zone: pressure rises with heat added, falls as the volume
-    // grows, and falls again with whatever the walls took.
-    const dp = ((gamma - 1) / v) * (dQ - dQwall) - (gamma * p * (vNext - v)) / v;
+    // First law over both zones together: pressure rises with heat added, falls as the
+    // volume grows, and falls again with whatever the walls took. Gas hiding in the
+    // crevices is at wall temperature and out of the working volume.
+    const workingV = Math.max(v - creviceM3, clearanceM3 * 0.1);
+    const dp = ((gamma - 1) / workingV) * (dQ - dQwall) - (gamma * p * (vNext - v)) / workingV;
     const pNext = Math.max(1, p + dp);
 
     // Work on the piston, trapezoidal.
     work += ((p + pNext) / 2) * (vNext - v);
 
-    // --- END GAS AND AUTOIGNITION. See "THE END GAS" in the module docblock for why
-    // this is compression MINUS wall loss rather than compression alone.
+    // --- BLOWBY. Flow past the rings scales with the pressure ratio across them, so it
+    // is a peak-pressure phenomenon: negligible at cruise, real at 70 bar. The mass is
+    // gone for good, which is why a tired ring pack costs power everywhere at once.
+    blowbyFrac += COEFF.BLOWBY_PER_BAR_S * (pNext / (KPA_PER_BAR * 1000)) * dtS;
+
+    // --- THE TWO ZONES.
+    //
+    // UNBURNED: compressed isentropically by whatever the burned gas is doing to the
+    // pressure, less the heat it gives up to the wall. Its share of the wall area and of
+    // the mass are both roughly (1 - burned), so those cancel and what is left is the
+    // same Woschni coefficient against the unburned charge's own heat capacity.
+    tU = trappedK * Math.pow(pNext / trappedPa, (COEFF.GAMMA_UNBURNED - 1) / COEFF.GAMMA_UNBURNED)
+      - endGasCoolK;
+    endGasCoolK += (hCoeff * areaM2 * Math.max(0, tU - COEFF.WALL_TEMP_K) * dtS)
+      / Math.max(1e-9, chargeKg * cvU);
+    tU = Math.max(COEFF.WALL_TEMP_K, tU);
+
+    // BURNED: an energy balance on the burned mass. Fresh charge crosses the flame at the
+    // unburned temperature and brings its fuel energy with it; the zone then does
+    // displacement work as the pressure changes and loses its own share to the wall.
+    // This is what the old `flameHeating` coefficient was standing in for — burned-gas
+    // temperature really does peak just lean of stoichiometric, and now it does so
+    // because there is exactly enough oxygen to burn everything, not because a Gaussian
+    // said so.
+    if (burned > 0) {
+      const dBurned = burned - prevBurned;
+      // Seed the zone at the unburned temperature the instant it first has mass in it,
+      // so the first step's balance is not dividing into an empty zone.
+      if (prevBurned <= 0) tB = tU;
+      // Open-system enthalpy balance, per kg of TOTAL charge:
+      //   x·cp_b·dT_b = (x·R·T_b/p)·dp + dx·(h_in − h_b) + q_released − q_wall
+      // Everything below is that, term by term.
+      const flowWork = (burned * R_AIR * tB / Math.max(p, 1)) * (pNext - p);
+      const enthalpyIn = dBurned * (cpU * tU - cpB * tB);
+      const released = dBurned * qPerKg;
+      const qWallB = (hCoeff * areaM2 * burned * Math.max(0, tB - COEFF.WALL_TEMP_K) * dtS)
+        / Math.max(1e-9, chargeKg);
+      // Heat capacity rises with temperature — vibrational modes and dissociation — which
+      // is what keeps flame temperature from collapsing either side of stoichiometric.
+      const cpBhot = cpB * (1 + COEFF.CP_BURNED_TEMP_RISE
+        * Math.max(0, tB - COEFF.CP_BURNED_REF_K) / 1000);
+      tB += (flowWork + enthalpyIn + released - qWallB) / (burned * cpBhot);
+      tB = clamp(tB, tU, COEFF.BURNED_GAS_MAX_K);
+      if (tB > peakBurnedK) peakBurnedK = tB;
+    }
+
+    // --- AUTOIGNITION of what is left unburned. The end gas is heated by compression AND
+    // by the burned gas right behind the flame front, which the two-zone temperature now
+    // gives directly rather than through a fitted multiplier.
     if (burned < COEFF.KNOCK_ENDGAS_BURN_LIMIT) {
-      const adiabaticK = trappedK * flameHeating
-        * Math.pow(pNext / trappedPa, (COEFF.GAMMA_UNBURNED - 1) / COEFF.GAMMA_UNBURNED);
-      // The unburned zone's share of the wall area and of the trapped mass are both
-      // roughly (1 - burned), so they cancel: the same Woschni coefficient over the same
-      // area, against the unburned charge's own heat capacity.
-      endGasCoolK += (hCoeff * areaM2 * (adiabaticK - COEFF.WALL_TEMP_K) * dtS
-        * COEFF.ENDGAS_WALL_AREA_FRAC) / (trappedMassKg * COEFF.CHARGE_CP);
-      const endGasK = Math.max(trappedK, adiabaticK - endGasCoolK);
+      const endGasK = tU + (tB - tU) * burned * COEFF.ENDGAS_FLAME_COUPLING;
       if (endGasK > peakEndGasK) peakEndGasK = endGasK;
       // Douaud & Eyzat ignition delay: how long this mixture survives at this pressure
       // and temperature before lighting itself. Octane enters here as a fuel property.
@@ -299,11 +367,24 @@ export function runCycle({
     prevBurned = burned;
   }
 
+  // Exhaust temperature, from the cycle's own state at exhaust valve open rather than
+  // from a correlation. What leaves the port is the burned zone after blowdown to the
+  // manifold: an irreversible expansion from cylinder pressure, which cools it. This is
+  // the number the turbine should see; `exhaustTempK` in thermo.js is the estimate used
+  // only where the answer is needed BEFORE the cycle can be run.
+  const blowdownK = tB * Math.pow(
+    Math.max(0.05, BARO_KPA * 1000 / Math.max(p, 1)),
+    (COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED,
+  );
+
   return {
     imepGrossPa: work / sweptM3,
     peakPressurePa,
     peakPressureDeg,
     peakEndGasK,
+    peakBurnedK,
+    exhaustK: Math.max(COEFF.WALL_TEMP_K, blowdownK),
+    blowbyFrac,
     knockIntegral,
     mfb50Deg,
   };
@@ -433,7 +514,12 @@ export function cycleInputsFor({
   // temperature below is what the thermal history and the end gas run on.
   const trappedPa = ((airChargeG / 1000) * R_AIR * cooledK) / vIvc;
 
-  const totalMassKg = (airChargeG / 1000) / Math.max(0.05, 1 - residualFrac);
+  // Everything in the cylinder that has heat capacity: fresh air, the residual it mixed
+  // with, AND the fuel vapour. Counting the fuel matters — it is why a rich mixture burns
+  // cooler even though it releases the same heat. Past stoichiometric the extra fuel
+  // finds no oxygen, so it adds mass to warm without adding energy, and flame temperature
+  // falls. Leave it out and over-fuelling looks thermally free.
+  const totalMassKg = ((airChargeG + fuelIn) / 1000) / Math.max(0.05, 1 - residualFrac);
 
   return {
     rpm,

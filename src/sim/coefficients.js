@@ -107,7 +107,14 @@ export const COEFF = {
   // Lambda that burns fastest. Flame speed peaks slightly rich of stoichiometric, near
   // lambda 0.9, which is a large part of why best-torque mixture is rich of stoich.
   BURN_FASTEST_LAMBDA: 0.9,
-  BURN_LAMBDA_PENALTY: 1.4,
+  // How sharply the burn slows either side of that, and it is NOT symmetric. Published
+  // laminar flame speeds for gasoline fall roughly twice as fast per unit of lambda on
+  // the lean side as on the rich: surplus air is inert mass to heat, where surplus fuel
+  // at least keeps flame temperature up. A symmetric penalty made lean-under-load look
+  // SAFE — the burn stayed short, so the end gas never got the extra dwell that actually
+  // kills pistons. That is the single most dangerous thing this model could teach.
+  BURN_LAMBDA_PENALTY_RICH: 1.4,
+  BURN_LAMBDA_PENALTY_LEAN: 4.2,
   // Residual burned gas carries no oxygen and soaks up heat, so it slows the flame
   // sharply. This is the mechanism behind a big cam's lumpy idle: overlap traps
   // residuals, the burn drags out, and combustion becomes unstable.
@@ -123,6 +130,20 @@ export const COEFF = {
   // volumes, quench layers at the walls, and the last of the charge that never reaches
   // the flame. It is not a fudge factor; it is why an engine has hydrocarbon emissions.
   COMBUSTION_COMPLETENESS: 0.97,
+  // --- Crevice volume and blowby ---
+  // The piston top-land gap, the ring-groove clearance and the head gasket bore, as a
+  // fraction of the clearance volume. Published figures for production engines run
+  // 1.5-3% of clearance. Gas driven in there sits at wall temperature, takes no part in
+  // combustion, and comes back out during expansion too late and too cold to burn — it
+  // is where most unburnt hydrocarbon actually comes from, and it is why
+  // COMBUSTION_COMPLETENESS above is not 1.
+  CREVICE_VOLUME_FRAC: 0.022,
+  // Charge lost past the rings per second, per bar of cylinder pressure. Production
+  // engines lose roughly half a percent to one percent of trapped mass per cycle at full
+  // load; this reproduces that and, unlike a flat fraction, scales with pressure — so
+  // blowby is negligible at cruise and real at 70 bar, which is why a tired ring pack
+  // shows up under boost first.
+  BLOWBY_PER_BAR_S: 0.00025,
 
   // --- Engine cycle: autoignition (Douaud & Eyzat) ---
   // Ignition delay correlation: tau[ms] = A · (ON/100)^B · p[atm]^-N · exp(E/T[K]),
@@ -162,41 +183,26 @@ export const COEFF = {
   KNOCK_DE_B: 3.402,
   KNOCK_DE_N: 1.7,
   KNOCK_DE_E: 3800,
-  // End-gas heating from the flame, as a function of mixture.
-  //
-  // A single-zone trace derives end-gas temperature from PRESSURE alone, which misses
-  // the other thing heating it: radiation and conduction from the burned gas right
-  // behind the flame front. Burned-gas temperature peaks slightly LEAN of
-  // stoichiometric — near lambda 1.05, where there is just enough oxygen to burn
-  // everything and no surplus fuel or air left over to absorb heat.
-  //
-  // Without this term the model got lean mixtures backwards: less fuel means less heat
-  // release and a lower peak pressure, so a lean charge looked SAFER, when in reality
-  // lean-under-load is one of the fastest ways to hole a piston. This restores that,
-  // and it is why the rich mixture a tuner commands at wide-open throttle is a
-  // knock-control measure and not just insurance.
-  //
-  // A two-zone model tracking burned-gas temperature properly is the real answer; this
-  // is a one-coefficient stand-in for it, applied to the end gas as a temperature
-  // multiplier peaking at the lambda where flame temperature does.
-  ENDGAS_FLAME_TEMP_GAIN: 0.07,
-  FLAME_TEMP_PEAK_LAMBDA: 1.05,
-  FLAME_TEMP_WIDTH: 0.28,
-  // Share of the chamber wall area the UNBURNED zone exchanges heat through, for the
-  // end gas's own wall-cooling term. A single-zone cycle does not know where the flame
-  // front is, so it cannot know how much wall the end gas actually touches; this is that
-  // unknown, named and priced in one place.
-  //
-  // It exists because the end gas is not adiabatic, and at low engine speed that is the
-  // dominant effect. The autoignition integral accumulates in milliseconds, so a 1900 RPM
-  // cycle gives the end gas three times the dwell of a 5500 RPM one — but it also gives
-  // it three times as long to shed heat into a 450 K head. Modelling only the dwell side
-  // made the knock limit collapse at low speed: a B58B30M1 at 11:1 and 16.6 psi came out
-  // unable to take the spark table's 5 degree floor at 1900 RPM, when the real engine
-  // makes its rated torque right there on pump gas. Production boosted engines reaching
-  // peak torque by 1800-2000 RPM is the anchor here, and it is a strong one — nearly every
-  // turbocharged car sold does it.
-  ENDGAS_WALL_AREA_FRAC: 0.55,
+  // How much of the burned zone's temperature the end gas actually feels, per unit of
+  // mass already burned. The two zones share a pressure but not a boundary layer: the
+  // unburned charge is heated by radiation and conduction from the flame front, not by
+  // mixing with it. This replaces a three-coefficient Gaussian in lambda — burned-gas
+  // temperature now peaks just lean of stoichiometric because that is where there is
+  // exactly enough oxygen to burn everything, which the energy balance produces on its
+  // own rather than being told.
+  ENDGAS_FLAME_COUPLING: 0.035,
+  // Ceiling on burned-gas temperature, K. Above roughly this, dissociation absorbs
+  // essentially all further heat release, which a fixed-gamma zone cannot represent —
+  // so it is capped rather than allowed to run away on a rich, dense charge.
+  BURNED_GAS_MAX_K: 2900,
+  // Burned-gas heat capacity rises with temperature: vibrational modes come alive and
+  // CO2 and H2O begin to dissociate, both of which soak up heat that would otherwise
+  // show as temperature. Frozen composition cannot express that, so flame temperature
+  // fell off far too steeply either side of stoichiometric — a 5% lean mixture lost over
+  // 100 K where a real one loses nearer 40. This flattens the peak the way dissociation
+  // really does, per 1000 K above the reference.
+  CP_BURNED_TEMP_RISE: 0.30,
+  CP_BURNED_REF_K: 1800,
   // Stop accumulating once this much of the charge has burned: past it there is
   // essentially no unburned end gas left to autoignite.
   KNOCK_ENDGAS_BURN_LIMIT: 0.95,
@@ -296,6 +302,39 @@ export const COEFF = {
   // exhaust around the turbine to hold boost down. This is why a larger turbine is worth
   // power even at the same boost: it spends more of its life gated.
   WASTEGATE_RELIEF: 0.55,
+  // --- Compressor map (see compressorMap in turbo.js) ---
+  // How sharply efficiency falls away from the island centre, and how much a unit of
+  // normalised pressure-ratio error costs relative to a unit of flow error. Real islands
+  // are taller than they are wide — a compressor tolerates being off-flow better than it
+  // tolerates being asked for a pressure ratio it was not designed for.
+  MAP_EFF_FALLOFF: 0.28,
+  MAP_PR_WEIGHT: 1.9,
+  // Efficiency floor. Even a badly mismatched compressor moves some air; this stops the
+  // power balance dividing by nothing at the extremes.
+  MAP_EFF_FLOOR: 0.30,
+  // What crossing a limit line costs. Neither is a gentle roll-off: a surging compressor
+  // has detached, reversing flow and is not pumping, and a choked one is putting its
+  // shaft work into heating the air rather than compressing it.
+  SURGE_EFF_PENALTY: 0.55,
+  CHOKE_EFF_PENALTY: 0.70,
+  // Pressure ratio below which surge is not a meaningful condition — near atmospheric
+  // there is no pressure for the flow to reverse against.
+  SURGE_MIN_PR: 1.15,
+  // --- Turbo shaft inertia (live engine only) ---
+  // Time constant for boost to reach the steady-state balance, seconds, at FULL exhaust
+  // flow. Divided by how much flow there actually is, so spool-up is slow off idle and
+  // quick at high load — which is the real mechanism: the shaft accelerates on surplus
+  // turbine power, and there is very little of that at low flow. Scaled per housing by
+  // TURBINE_OPTS.inertiaScale, because a big wheel has more rotating mass to move.
+  //
+  // A dyno sweep does NOT see this. Each point of a steady-state pull is held until it
+  // settles, which is what makes it a steady-state measurement; only the live engine has
+  // a transient to lag through.
+  TURBO_SPOOL_TAU_S: 0.16,
+  // Coming down is faster than going up: close the throttle and the compressor is pumping
+  // against a shut plate with nothing driving it. The asymmetry is why the second of two
+  // closely spaced shifts feels stronger than the first.
+  TURBO_DECAY_TAU_S: 0.22,
 
   // --- Exhaust gas temperature ---
   // An estimate, not a measurement: the turbine energy balance needs a temperature

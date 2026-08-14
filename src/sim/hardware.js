@@ -117,23 +117,49 @@ export const INJECTOR_OPTS = [
  * work — bigger wheels are more efficient as well as less restrictive.
  */
 export const TURBINE_OPTS = [
-  { label: 'Small — quick spool', size: 'small', topEndMult: -0.05, effectiveAreaM2: 0.00153, turbineEff: 0.68 },
-  { label: 'Medium — balanced', size: 'medium', topEndMult: 0, effectiveAreaM2: 0.00243, turbineEff: 0.72 },
-  { label: 'Large — top-end', size: 'large', topEndMult: 0.05, effectiveAreaM2: 0.00360, turbineEff: 0.75 },
+  { label: 'Small — quick spool', size: 'small', topEndMult: -0.05, effectiveAreaM2: 0.00153, turbineEff: 0.68, inertiaScale: 0.55 },
+  { label: 'Medium — balanced', size: 'medium', topEndMult: 0, effectiveAreaM2: 0.00243, turbineEff: 0.72, inertiaScale: 1.0 },
+  { label: 'Large — top-end', size: 'large', topEndMult: 0.05, effectiveAreaM2: 0.00360, turbineEff: 0.75, inertiaScale: 1.9 },
 ];
 
 /**
- * Compressor sizing sets a practical boost ceiling before it is pushed outside its
- * efficient range (surge/choke) — running past it makes hot, knock-prone air.
+ * Compressors, each carrying a MAP rather than a single efficiency number.
+ *
+ * A real compressor map is a field of efficiency islands bounded by a surge line on the
+ * left and a choke line on the right, and where you sit on it is the whole of turbo
+ * matching. Reducing it to one efficiency plus a `boostCeiling` meant a compressor was
+ * only ever "good for N psi" — it could not express the two failure modes that actually
+ * bound the hardware:
+ *
+ *   SURGE. Too little flow for the pressure ratio you are asking for. The flow detaches
+ *   and reverses, and the compressor hammers. This is what an oversized turbo does at
+ *   low RPM, and it is why a big turbo on a small engine is not simply "laggy".
+ *   CHOKE. The inducer hits Mach 1 and no more air goes through at any shaft speed. The
+ *   efficiency collapses and everything past that point is heat, not boost.
+ *
+ * Each entry is a parametric island: peak efficiency `etaMax` sits at corrected flow
+ * `pkFlowKgS` and pressure ratio `pkPr`, and efficiency falls off elliptically away from
+ * it. `surgeSlope` is the flow the surge line demands per unit of pressure ratio above
+ * one; `chokeFlowKgS` is where the inducer runs out.
  *
  * `size` is the stable id the Engineer Score matches on; see {@link TURBINE_OPTS}.
- * `compressorEff` is how much of the shaft work it turns into pressure; `lagAdd` is gone
- * with the spool ramp that used it.
+ * `boostCeiling` is retained because the Engineer Score and the datalog's
+ * `compressorOver` flag are written against it, but it is no longer what limits the
+ * physics — the map is.
  */
 export const COMPRESSOR_OPTS = [
-  { label: 'Small', size: 'small', boostCeiling: 12, compressorEff: 0.72 },
-  { label: 'Medium', size: 'medium', boostCeiling: 20, compressorEff: 0.74 },
-  { label: 'Large', size: 'large', boostCeiling: 30, compressorEff: 0.76 },
+  {
+    label: 'Small', size: 'small', boostCeiling: 12,
+    etaMax: 0.76, pkFlowKgS: 0.11, pkPr: 1.8, surgeSlope: 0.075, chokeFlowKgS: 0.19,
+  },
+  {
+    label: 'Medium', size: 'medium', boostCeiling: 20,
+    etaMax: 0.78, pkFlowKgS: 0.18, pkPr: 2.1, surgeSlope: 0.105, chokeFlowKgS: 0.32,
+  },
+  {
+    label: 'Large', size: 'large', boostCeiling: 30,
+    etaMax: 0.80, pkFlowKgS: 0.28, pkPr: 2.4, surgeSlope: 0.150, chokeFlowKgS: 0.50,
+  },
 ];
 
 /**

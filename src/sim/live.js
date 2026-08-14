@@ -10,7 +10,7 @@
  * sensor noise. Tests that need determinism should stub `Math.random`.
  */
 
-import { BARO_KPA, DRIVETRAIN_EFF } from './constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
@@ -53,7 +53,7 @@ export function sensorRead(prev, trueVal, lagFactor, noiseAmp) {
  */
 export function makeLiveState() {
   return {
-    running: false, cranking: false, rpm: 0, omega: 0,
+    running: false, cranking: false, rpm: 0, omega: 0, boostPsi: 0,
     idleTrim: 5, stft: 0, ltft: 0,
     coolantC: 20, oilC: 20, knockCount: 0, fuelCut: false, dfco: false, limiterCut: false,
     sensedRpm: 0, sensedMaf: 0, sensedMap: 101, sensedIat: 25,
@@ -144,13 +144,42 @@ export function liveStep(st, dt, input, cfg) {
       0.12, 1,
     );
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
-    const man = solveInduction({
+    const steady = solveInduction({
       rpm: rpmClamped, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
       veAt: (mapKpa) => interp2(veTruth ?? ve, rpmClamped, mapKpa),
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
     });
+    // --- SHAFT INERTIA. The steady-state balance says where the turbo ENDS UP; a real
+    // one has to spin a wheel up to get there, and that takes time proportional to the
+    // rotating inertia and inversely proportional to the exhaust energy available. This
+    // is turbo lag, and it is the one thing about a turbo that a driver feels before
+    // anything else.
+    //
+    // Spooling UP is energy-limited: the shaft accelerates on surplus turbine power, so
+    // it is slow at low exhaust flow and fast at high. Spooling DOWN is quicker — close
+    // the throttle and the compressor is pumping against a shut plate with no drive
+    // behind it. The asymmetry is why the second of two closely spaced shifts feels
+    // stronger than the first.
+    //
+    // Only the live engine sees this. A dyno sweep is a steady-state measurement by
+    // definition: each point is held until it settles, so it reads the balance directly.
+    const spooling = steady.boostPsi > s.boostPsi;
+    const flowFrac = clamp(rpmClamped / Math.max(1, derived.redline) * aFrac, 0.02, 1);
+    const tau = spooling
+      ? COEFF.TURBO_SPOOL_TAU_S / Math.max(0.05, flowFrac) * turbine.inertiaScale
+      : COEFF.TURBO_DECAY_TAU_S;
+    const boostPsi = turboOn
+      ? s.boostPsi + (steady.boostPsi - s.boostPsi) * clamp(dt / Math.max(dt, tau), 0, 1)
+      : 0;
+    s.boostPsi = boostPsi;
+    const man = {
+      ...steady,
+      boostPsi,
+      mapKpa: Math.min(loadKpa, BARO_KPA) + boostPsi * PSI_TO_KPA,
+      boostShortfallPsi: Math.max(0, boostTarget - boostPsi),
+    };
     const veVal = interp2(ve, rpmClamped, man.mapKpa);
     const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
     // Spark-based idle stabilisation: the air path is slow (throttle -> manifold ->

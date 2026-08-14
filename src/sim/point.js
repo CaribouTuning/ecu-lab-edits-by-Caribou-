@@ -192,15 +192,13 @@ export function evaluatePoint({
   const peakPressure = paToBar(cycle.peakPressurePa);
   const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
 
-  // EGT comes from the SAME correlation the turbine ran on, with the knock retard the
-  // ECU actually pulled now folded in — that is the term the turbine estimate could not
-  // include, because backpressure has to be solved before the knock limit is known.
-  // Previously this was a separate ad-hoc expression, so the gauge and the turbine
-  // disagreed about the temperature of the same gas.
-  const egtK = exhaustTempK({
-    chargeIndex, lambda: lambdaActual, knockRetardDeg: knockPull,
-  });
-  const egtC = egtK - KELVIN_OFFSET;
+  // EGT is the CYCLE's own answer — the burned zone at exhaust valve open, blown down to
+  // the manifold — not a correlation. Retarded spark shows up here for the real reason
+  // rather than through a per-degree coefficient: the burn finishes later into the
+  // expansion, so there is less time left to extract work from it and the gas leaves
+  // hotter. `exhaustTempK` survives only where an answer is needed BEFORE the cycle can
+  // run, which is the turbine backpressure that this point's own cycle depends on.
+  const egtC = cycle.exhaustK - KELVIN_OFFSET;
   const egtRisk = egtC > COEFF.EGT_LIMIT_C;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
   // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes the
