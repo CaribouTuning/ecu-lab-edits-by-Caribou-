@@ -11,10 +11,16 @@ yet; see "What is not built" at the end.
 
 | | |
 |---|---|
-| CPU | Renesas (Hitachi) SH7055 |
-| ROM | 512 kB internal flash, big-endian |
+| CPU | Renesas (Hitachi) SH705x — **SH7058 on 2005-2006 Rev-Up cars** |
+| ROM | 1024 kB on SH7058 (512 kB on SH7055), big-endian |
 | Diagnostics | K line, ISO 14230 (KWP2000) |
 | Flash endurance | **~100 write cycles**, per Renesas |
+
+**Check which one you have before dumping.** The community definitions record the
+2006 Rev-Up ECUs (`23710-CF43D`, `CF40E`) as SH7058 with a 1 MB ROM, so
+`setdev 7058` and `npk_SH7058.bin` are the right choices there. Earlier Z33s use
+the SH7055. Getting this wrong gives you a dump of the wrong length, which is the
+easiest way to spot it. See `docs/rom/z33-definitions.md`.
 
 The 2007+ cars (VQ35HR, 370Z, G37) moved diagnostics to CAN and **cannot** be
 reached by these tools at all. If you ever put this on a different car, check that
@@ -86,10 +92,10 @@ Once connected:
 
 ```
 gk                       # guess the seed/key set for your ECUID
-setdev 7055
+setdev 7058              # 7055 on earlier cars - check first
 npconf p3 0              # usually faster and more reliable
-runkernel npkern.bin     # from npkern/precompiled/npk_SH7055_18.bin or _35.bin
-dm stock-original.bin 0 0    # dump the entire 512 kB ROM
+runkernel npkern.bin     # npkern/precompiled/npk_SH7058.bin for a Rev-Up
+dm stock-original.bin 0 0    # dump the entire ROM
 ```
 
 **Dump it twice, to two different files, and compare them.** A dump that does not
@@ -102,9 +108,10 @@ the only thing standing between you and a boat anchor.
 
 ### Which kernel binary
 
-`npkern/precompiled/` has `npk_SH7055_18.bin` and `npk_SH7055_35.bin` — the 180 nm
-and 350 nm variants of the SH7055, which have different flash backends. If you are
-only dumping, either will read; get the right one before you ever write.
+`npkern/precompiled/` ships `npk_SH7058.bin`, plus `npk_SH7055_18.bin` and
+`npk_SH7055_35.bin` — the 180 nm and 350 nm variants of the SH7055, which have
+different flash backends. For a 2006 Rev-Up use the SH7058 kernel. If you are only
+dumping, an SH7055 mismatch simply fails to run; get it right before you ever write.
 
 ## What this repo does with the dump
 
@@ -112,11 +119,12 @@ Once you have `stock-original.bin`, the `src/rom/` layer in this repository read
 it offline — real maps, real scaling, real axes, no hardware attached and nothing
 that can damage anything. See `docs/rom/README.md`.
 
-## What is not built yet
+## What is and is not built
 
-- **No serial bridge.** This repo cannot talk to the cable. Dumping is done with
-  nisprog at the command line, as above. A local bridge process is the next
-  hardware-side piece; see the phase plan in `docs/audit/ecu-lab-audit.html`.
+- **A read-only bridge now exists.** `bridge/` runs nisprog for you and reads the
+  ROM straight into the app's ROM screen, so the command line above is the
+  fallback rather than the only route. It cannot write to an ECU. See
+  `bridge/README.md` and `docs/hardware/building-nisprog.md`.
 - **No flashing, from here.** Deliberately. Writing needs a verified transport, a
   held original dump, CRC verify-after-write, a flash-cycle budget and a written
   recovery procedure — and none of those exist yet.

@@ -69,6 +69,18 @@ export const WRITE_COMMANDS = new Map([
   // Subaru SSM. Out of scope here; a smaller command surface is a safer one.
   ['spconn', 'Subaru protocol, out of scope for this bridge'],
   ['sprunkernel', 'Subaru protocol, out of scope for this bridge'],
+
+  // freediag's own escape hatches, found by running the real binary's `help`.
+  // `source` is the important one: it executes commands from a file, so allowing
+  // it would hand the whole allowlist away in a single call. The rest can put
+  // arbitrary traffic on the bus. All of these would be refused by the allowlist
+  // anyway — they are named so the refusal explains itself.
+  ['source', 'executes commands from a file, which would bypass this allowlist entirely'],
+  ['test', 'sends arbitrary diagnostic requests'],
+  ['diag', 'sends arbitrary diagnostic requests'],
+  ['vw', 'another manufacturer\'s command set, out of scope'],
+  ['850', 'another manufacturer\'s command set, out of scope'],
+  ['dyno', 'freediag dyno subsystem, out of scope'],
 ]);
 
 /**

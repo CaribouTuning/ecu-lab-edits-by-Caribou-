@@ -44,6 +44,20 @@ describe('the read-only gate', () => {
     }
   });
 
+  it('refuses source, which would hand away the whole allowlist in one call', () => {
+    // freediag's `source <file>` executes commands from a file. Found by running
+    // the real binary's help; it is the one bypass that matters.
+    const verdict = checkCommand('source /tmp/commands.txt');
+    expect(verdict.allowed).toBe(false);
+    expect(verdict.reason).toMatch(/bypass this allowlist/);
+  });
+
+  it('refuses freediag subsystems that can put arbitrary traffic on the bus', () => {
+    for (const command of ['test 1', 'diag foo', 'vw bar', '850 baz', 'dyno x']) {
+      expect(checkCommand(command).allowed, command).toBe(false);
+    }
+  });
+
   it('refuses the undocumented test command', () => {
     // `npt` runs whatever the nisprog author left in there. Unknown effects on an
     // engine controller is not a risk worth taking for a convenience.
@@ -137,6 +151,15 @@ describe('the nisprog driver', () => {
     np.on('output', (line) => seen.push(line));
     await expect(np.send('writevin ABC')).rejects.toThrow();
     expect(seen.join('\n')).not.toMatch(/writevin/);
+  });
+
+  it('strips the command echo freediag prints when stdin is a pipe', async () => {
+    np = fakeNisprog();
+    await np.start();
+    const output = await np.send('setdev 7055');
+    // The reply must be the answer, not the question repeated back.
+    expect(output.startsWith('setdev 7055')).toBe(false);
+    expect(output).toMatch(/^ok: setdev 7055/);
   });
 
   it('times out rather than hanging when no prompt comes back', async () => {

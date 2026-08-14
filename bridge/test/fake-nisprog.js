@@ -38,6 +38,11 @@ process.stdin.on('data', (chunk) => {
 function handle(line) {
   const [command, ...rest] = line.split(/\s+/);
 
+  // Real freediag echoes the command back when stdin is a pipe rather than a
+  // terminal, so the double does too — otherwise the driver's echo stripping
+  // would go untested.
+  process.stdout.write(line + '\n');
+
   if (command === 'quit' || command === 'exit') {
     process.exit(0);
   }

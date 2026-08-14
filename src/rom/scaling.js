@@ -116,7 +116,12 @@ function tokenize(src) {
     const ch = src[i];
     if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
       i++;
-    } else if (ch >= '0' && ch <= '9') {
+    } else if (
+      (ch >= '0' && ch <= '9') ||
+      // Real definitions write ".5" and ".0078125" without a leading zero, so a
+      // dot that is followed by a digit starts a number.
+      (ch === '.' && src[i + 1] >= '0' && src[i + 1] <= '9')
+    ) {
       let j = i;
       while (j < src.length && /[0-9.eE]/.test(src[j])) {
         // Accept the sign of an exponent, but only right after an e/E, so that

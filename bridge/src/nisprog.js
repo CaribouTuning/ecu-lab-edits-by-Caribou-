@@ -31,9 +31,10 @@ import { checkCommand } from './safety.js';
 /**
  * Default prompt matcher.
  *
- * freediag's CLI prints a prompt made of the current command level, ending in
- * `>`. Matching "some word characters, then `>`, then optional spaces, at the end
- * of what we have buffered" is deliberately loose: being too specific here means
+ * Verified against nisprog v1.05 built from source: the prompt is the literal
+ * `nisprog> `, printed without a trailing newline. Submenus change the leading
+ * word, so this stays loose — "some word characters, then `>`, then optional
+ * spaces, at the end of what we have buffered". Being too specific here means
  * every command times out on a version we did not anticipate.
  */
 export const DEFAULT_PROMPT = /(^|\n)[\w .-]*>\s*$/;
@@ -70,6 +71,14 @@ export class Nisprog extends EventEmitter {
     this.pending = null;
     /** Commands wait their turn; nisprog has one stdin and no request ids. */
     this.queue = Promise.resolve();
+    /**
+     * The command currently in flight.
+     *
+     * When stdin is a pipe rather than a terminal, freediag's line reader echoes
+     * each command back before answering it, so the first line of every reply is
+     * the command itself. Keeping it here lets that echo be stripped.
+     */
+    this.inFlight = null;
     this.exited = null;
   }
 
@@ -134,7 +143,17 @@ export class Nisprog extends EventEmitter {
     if (!this.pending) return;
     if (!this.prompt.test(this.buffer)) return;
 
-    const output = this.buffer.replace(this.prompt, '').trim();
+    let output = this.buffer.replace(this.prompt, '').trim();
+
+    // Drop the echoed command, but only when it is exactly what we sent —
+    // never guess, or a line of real output could be swallowed.
+    if (this.inFlight) {
+      if (output === this.inFlight) output = '';
+      else if (output.startsWith(this.inFlight + '\n')) {
+        output = output.slice(this.inFlight.length + 1);
+      }
+    }
+
     const { resolve, timer } = this.pending;
     clearTimeout(timer);
     this.pending = null;
@@ -185,6 +204,7 @@ export class Nisprog extends EventEmitter {
     const run = async () => {
       if (!this.running) throw new NisprogError('nisprog is not running');
       this.buffer = '';
+      this.inFlight = line.trim();
       const waiting = this.#awaitPrompt(options.timeoutMs ?? this.defaultTimeoutMs);
       this.child.stdin.write(line.trim() + '\n');
       return waiting;
@@ -192,7 +212,10 @@ export class Nisprog extends EventEmitter {
 
     // Chain onto the queue, and keep the queue alive when a command fails.
     const result = this.queue.then(run, run);
-    this.queue = result.then(() => undefined, () => undefined);
+    this.queue = result.then(
+      (value) => { this.inFlight = null; return value; },
+      () => { this.inFlight = null; }
+    ).then(() => undefined, () => undefined);
     return result;
   }
 

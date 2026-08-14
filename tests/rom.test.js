@@ -583,6 +583,113 @@ describe('RomRaider import', () => {
     expect(definition.maps.map((m) => m.id)).toContain('Rev limiter');
   });
 
+  /* ---------------------------------------------------------------- *
+   * The shape real Nissan definitions actually have
+   *
+   * Written from github.com/murphyslaw05/NissanDefs, which is what you would
+   * actually use on a 350Z. It differs from the fixture above in three ways that
+   * each broke the importer when it first met a real file:
+   *
+   *   - a template ROM carries table sizes, storage types, scalings and axis
+   *     names but NO addresses; a child ROM supplies only the addresses
+   *   - scalings are inline <scaling> children, not named references
+   *   - the attributes are `expression` / `to_byte`, not `toexpr` / `frexpr`,
+   *     and numbers are written ".5" with no leading zero
+   * ---------------------------------------------------------------- */
+
+  const NISSAN_SHAPED = `<?xml version="1.0" encoding="utf-8"?>
+<roms>
+  <rom>
+    <romid><xmlid>TEMPLATE</xmlid></romid>
+    <table type="3D" name="Fuel Target" category="Fuel" storagetype="uint8" endian="big" sizex="8" sizey="4">
+      <scaling units="AFR(Gasoline Scale)" expression="14.7/(x*.0078125)" to_byte="(14.7/x)/.0078125" format="0.00" />
+      <table type="X Axis" name="RPM" storagetype="uint8" endian="big">
+        <scaling units="RPM" expression="x*50" to_byte="x/50" format="0" />
+      </table>
+      <table type="Y Axis" name="Load" storagetype="uint8" endian="big">
+        <scaling units="Load" expression="x*0.151875" to_byte="x/0.151875" format="0.00" />
+      </table>
+    </table>
+    <table type="3D" name="Intake Cam" category="Cams" storagetype="uint8" endian="big" sizex="8" sizey="4">
+      <scaling units="Degrees Advance" expression="(x-128)*.5" to_byte="(x/.5)+128" format="0.0" />
+    </table>
+  </rom>
+
+  <rom base="TEMPLATE">
+    <romid>
+      <xmlid>CF43D</xmlid>
+      <make>Nissan</make><model>350Z</model><year>06</year><transmission>MT</transmission>
+      <memmodel>SH7058</memmodel><filesize>4kb</filesize><ecuid>CF43D</ecuid>
+    </romid>
+    <table name="Fuel Target" storageaddress="0x400">
+      <table type="X Axis" storageaddress="0x300"/>
+      <table type="Y Axis" storageaddress="0x320"/>
+    </table>
+    <table name="Intake Cam" storageaddress="0x500"/>
+  </rom>
+</roms>`;
+
+  it('assembles a table from a template that has no addresses', () => {
+    const { definition, problems } = importRomRaider(NISSAN_SHAPED, { romId: 'CF43D' });
+    expect(problems).toEqual([]);
+
+    const fuel = definition.maps.find((m) => m.id === 'Fuel Target');
+    // The sizes come from the template, the address from the child. Getting this
+    // wrong yields a 1x1 map that reads one plausible-looking byte.
+    expect(fuel?.rows).toBe(4);
+    expect(fuel?.cols).toBe(8);
+    expect(fuel?.address).toBe(0x400);
+    expect(fuel?.category).toBe('Fuel');
+  });
+
+  it('reads inline scalings written with expression/to_byte', () => {
+    const { definition } = importRomRaider(NISSAN_SHAPED, { romId: 'CF43D' });
+    const fuel = definition.maps.find((m) => m.id === 'Fuel Target');
+    // Stoichiometric gasoline: raw 128 is 14.7:1, and it must round-trip.
+    expect(fuel?.scaling.toReal(128)).toBeCloseTo(14.7, 3);
+    expect(fuel?.scaling.toRaw(14.7)).toBeCloseTo(128, 3);
+    expect(fuel?.scaling.units).toBe('AFR(Gasoline Scale)');
+    expect(fuel?.scaling.decimals).toBe(2);
+  });
+
+  it('parses numbers written without a leading zero', () => {
+    // ".5" and ".0078125" appear throughout real definitions. Rejecting them
+    // silently cost seven tables the first time this met a real file.
+    expect(compileExpression('(x-128)*.5')(138)).toBeCloseTo(5);
+    expect(compileExpression('x*.0078125')(128)).toBeCloseTo(1);
+
+    const { definition } = importRomRaider(NISSAN_SHAPED, { romId: 'CF43D' });
+    const cam = definition.maps.find((m) => m.id === 'Intake Cam');
+    expect(cam?.scaling.toReal(128)).toBe(0);
+    expect(cam?.scaling.toReal(138)).toBe(5);
+  });
+
+  it('inherits axes from the template and addresses from the child', () => {
+    const { definition } = importRomRaider(NISSAN_SHAPED, { romId: 'CF43D' });
+    const fuel = definition.maps.find((m) => m.id === 'Fuel Target');
+    expect(fuel?.xAxis?.name).toBe('RPM');
+    expect(fuel?.xAxis?.address).toBe(0x300);
+    expect(fuel?.xAxis?.count).toBe(8);
+    expect(fuel?.yAxis?.name).toBe('Load');
+    expect(fuel?.yAxis?.address).toBe(0x320);
+    expect(fuel?.yAxis?.count).toBe(4);
+  });
+
+  it('treats "NA" units as raw counts rather than a unit called NA', () => {
+    const raw = importRomRaider(
+      NISSAN_SHAPED.replace('units="Degrees Advance"', 'units="NA"'),
+      { romId: 'CF43D' }
+    );
+    expect(raw.definition.maps.find((m) => m.id === 'Intake Cam')?.scaling.units).toBe('');
+  });
+
+  it('reads the ECU identity a real definition carries', () => {
+    const { definition } = importRomRaider(NISSAN_SHAPED, { romId: 'CF43D' });
+    expect(definition.cpu).toBe('SH7058');
+    expect(definition.ecuPartNumber).toBe('CF43D');
+    expect(definition.name).toContain('350Z');
+  });
+
   it('refuses a little-endian definition, which is a different ECU family', () => {
     const wrong = SAMPLE_DEF.replace('storagetype="uint8" endian="big"\n             toexpr="x*0.5-20"', 'storagetype="uint8" endian="little"\n             toexpr="x*0.5-20"');
     const { problems } = importRomRaider(wrong);
