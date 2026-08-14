@@ -15,12 +15,14 @@
  * nisprog command line — see docs/hardware/z33-kline-setup.md.
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   HardDrive, Upload, Download, AlertTriangle, CheckCircle2, RotateCcw, FileCode2, Search,
+  Cable, ChevronDown,
 } from 'lucide-react';
 
 import { RomImage, importRomRaider, findPartNumbers, quantize } from '../rom/index.js';
+import { BridgeClient, DEFAULT_BRIDGE_URL } from '../bridge/client.js';
 import { T, heat } from './theme.js';
 
 /** Hex, padded, the way every other ROM tool prints an address. */
@@ -57,6 +59,164 @@ function FileButton({ label, accept, onFile, icon: Icon, tone = 'normal' }) {
         }}
       />
     </>
+  );
+}
+
+/** A labelled text field for the bridge form. */
+function Field({ label, value, onChange, placeholder, mono = true }) {
+  return (
+    <label style={{ display: 'block', marginBottom: 8 }}>
+      <div style={{ fontSize: 9, color: T.ink3, letterSpacing: 1, fontWeight: 800, marginBottom: 3 }}>{label}</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        spellCheck={false}
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          padding: '10px 11px', borderRadius: 8, border: `1px solid ${T.line}`,
+          background: T.panel2, color: T.ink, fontSize: 12.5,
+          fontFamily: mono ? T.mono : T.sans,
+        }}
+      />
+    </label>
+  );
+}
+
+/**
+ * Pull a ROM straight off the car through Garage Bridge.
+ *
+ * The bridge is a separate, read-only program — it cannot write to an ECU. This
+ * panel therefore offers connect, kernel and read, and nothing else. The raw
+ * nisprog output is shown as it arrives rather than summarised away, because the
+ * first thing you need on a new setup is to see what actually happened.
+ */
+function BridgePanel({ onDump }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState(DEFAULT_BRIDGE_URL);
+  const [token, setToken] = useState('');
+  const [port, setPort] = useState('');
+  const [device, setDevice] = useState('7055');
+  const [kernelPath, setKernelPath] = useState('');
+  const [busy, setBusy] = useState(null);
+  const [log, setLog] = useState([]);
+  const [problem, setProblem] = useState(null);
+  const [identity, setIdentity] = useState(null);
+
+  const client = useMemo(() => new BridgeClient({ url, token }), [url, token]);
+
+  // Stream nisprog's output while the panel is open and a token is present.
+  useEffect(() => {
+    if (!open || !token) return undefined;
+    const stop = client.streamOutput((line) => setLog((l) => [...l.slice(-200), line]));
+    return stop ?? undefined;
+  }, [client, open, token]);
+
+  const run = async (what, fn) => {
+    setBusy(what);
+    setProblem(null);
+    try {
+      await fn();
+    } catch (err) {
+      setProblem(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doConnect = () => run('connect', async () => {
+    const status = await client.status();
+    if (!status.readOnly) {
+      // The app should notice if it is ever pointed at something that can write.
+      throw new Error('that bridge does not report itself as read-only — refusing to use it');
+    }
+    const result = await client.connect({ port });
+    setIdentity(result.identity);
+    if (!result.connected) throw new Error('nisprog did not report a successful connection — read the log');
+  });
+
+  const doKernel = () => run('kernel', () => client.loadKernel({ device, kernelPath }));
+
+  const doDump = () => run('dump', async () => {
+    const dump = await client.dump({ start: 0, length: 0 });
+    const bytes = await client.fetchDump(dump.id, dump.sha256);
+    onDump(bytes, dump);
+  });
+
+  const button = (label, onClick, key, tone) => (
+    <button
+      onClick={onClick}
+      disabled={busy !== null}
+      style={{
+        flex: 1, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 12,
+        border: `1px solid ${tone === 'primary' ? T.amber : T.line}`,
+        background: tone === 'primary' ? T.amberBg : T.panel2,
+        color: busy ? T.ink3 : tone === 'primary' ? T.amberInk : T.ink2,
+      }}
+    >{busy === key ? '…' : label}</button>
+  );
+
+  return (
+    <div style={{ border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel, marginBottom: 12 }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700 }}>
+          <Cable size={14} style={{ color: T.amber }} />Read from the car
+        </span>
+        <ChevronDown size={15} style={{ color: T.ink3, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 13px 13px' }}>
+          <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
+            Needs Garage Bridge running on this machine (<span style={{ fontFamily: T.mono }}>bridge/</span> in
+            this repo) and an FTDI K-line cable. The bridge is read-only — it cannot
+            write to your ECU.
+          </div>
+
+          <Field label="BRIDGE URL" value={url} onChange={setUrl} />
+          <Field label="TOKEN" value={token} onChange={setToken} placeholder="printed when the bridge starts" />
+          <Field label="SERIAL PORT" value={port} onChange={setPort} placeholder="\\.\COM3  or  /dev/ttyUSB0" />
+          <Field label="MCU" value={device} onChange={setDevice} placeholder="7055" />
+          <Field label="KERNEL PATH" value={kernelPath} onChange={setKernelPath} placeholder="…/npkern/precompiled/npk_SH7055_18.bin" />
+
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            {button('CONNECT', doConnect, 'connect')}
+            {button('KERNEL', doKernel, 'kernel')}
+            {button('READ ROM', doDump, 'dump', 'primary')}
+          </div>
+
+          {identity && (
+            <div style={{ fontSize: 11.5, color: T.green, fontFamily: T.mono, marginTop: 9 }}>
+              connected · {identity.partNumber ?? identity.ecuId ?? 'ECU identified'}
+              {identity.keyset && ` · keyset ${identity.keyset}`}
+            </div>
+          )}
+
+          {problem && (
+            <div style={{ marginTop: 9, fontSize: 11.5, color: T.red, lineHeight: 1.5 }}>{problem}</div>
+          )}
+
+          {log.length > 0 && (
+            <div style={{
+              marginTop: 9, maxHeight: 150, overflowY: 'auto', background: T.bg,
+              border: `1px solid ${T.line}`, borderRadius: 8, padding: '8px 10px',
+              fontFamily: T.mono, fontSize: 10.5, color: T.ink2, lineHeight: 1.6,
+            }}>
+              {log.map((line, i) => <div key={i}>{line}</div>)}
+            </div>
+          )}
+
+          <div style={{ fontSize: 11, color: T.ink3, lineHeight: 1.5, marginTop: 9 }}>
+            Read the ROM twice and compare the two files. A dump that does not
+            reproduce byte for byte means your comms are marginal, and everything you
+            conclude from that file is unreliable.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -250,10 +410,15 @@ export default function RomScreen() {
   const [revision, setRevision] = useState(0);
   const touched = () => setRevision((r) => r + 1);
 
-  const loadRom = async (file) => {
+  /**
+   * Take a set of bytes — from a file or straight off the ECU — and open them.
+   *
+   * @param {Uint8Array} bytes
+   * @param {string} what named in the error message, so a failure says where it came from
+   */
+  const loadBytes = (bytes, what) => {
     setError(null);
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
       const next = new RomImage(bytes, definition ?? undefined);
       setOriginalBytes(bytes);
       setImage(next);
@@ -261,7 +426,15 @@ export default function RomScreen() {
       setSelection(null);
       touched();
     } catch (err) {
-      setError(`Could not open ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Could not open ${what}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const loadRom = async (file) => {
+    try {
+      loadBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+    } catch (err) {
+      setError(`Could not read ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -357,10 +530,12 @@ export default function RomScreen() {
           here can reach a car.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
           <FileButton label="OPEN ROM (.bin)" accept=".bin,.rom,application/octet-stream" onFile={loadRom} icon={Upload} tone="primary" />
           <FileButton label="LOAD DEFINITION (RomRaider .xml)" accept=".xml,text/xml" onFile={loadDefinition} icon={FileCode2} />
         </div>
+
+        <BridgePanel onDump={(bytes) => loadBytes(bytes, 'the dump from the ECU')} />
 
         {definition && (
           <div style={{ fontSize: 12, color: T.green, fontFamily: T.mono, marginBottom: 10 }}>
@@ -403,7 +578,9 @@ export default function RomScreen() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-        <Fact label="SIZE" value={`${(image.size / 1024).toFixed(0)} kB`} />
+        {/* Sub-kilobyte reads are real — a RAM peek is a few hundred bytes — and
+            rounding them to "0 kB" would be worse than useless. */}
+        <Fact label="SIZE" value={image.size < 1024 ? `${image.size} B` : `${(image.size / 1024).toFixed(0)} kB`} />
         <Fact label="CPU" value={image.cpuGuess} />
         <Fact
           label="CHECKSUM"
@@ -476,7 +653,8 @@ export default function RomScreen() {
             value={activeMapId ?? ''}
             onChange={(e) => { setActiveMapId(e.target.value); setSelection(null); }}
             style={{
-              width: '100%', padding: '11px 12px', borderRadius: 9, marginBottom: 10,
+              width: '100%', boxSizing: 'border-box',
+              padding: '11px 12px', borderRadius: 9, marginBottom: 10,
               border: `1px solid ${T.line}`, background: T.panel2, color: T.ink,
               fontSize: 13, fontWeight: 700,
             }}

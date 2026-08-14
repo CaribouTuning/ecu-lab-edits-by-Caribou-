@@ -1,0 +1,21 @@
+{
+  "name": "garage-bridge",
+  "version": "0.1.0",
+  "description": "Read-only local bridge between ECU Lab and a Nissan SH705x ECU, wrapping fenugrec's nisprog.",
+  "keywords": ["nissan", "ecu", "nisprog", "npkern", "k-line", "iso14230"],
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "garage-bridge": "bin/garage-bridge.js"
+  },
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node bin/garage-bridge.js"
+  },
+  "//dependencies": "Deliberately none. The bridge is plain node:http and node:child_process so it can be run straight from a checkout with no install step.",
+  "dependencies": {}
+}

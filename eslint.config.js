@@ -22,6 +22,9 @@ export default [
         // Used by the ROM screen to hand an exported binary back to the user.
         Blob: 'readonly',
         URL: 'readonly',
+        // Node globals, used by the bridge and its tests.
+        Buffer: 'readonly',
+        fetch: 'readonly',
         console: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
