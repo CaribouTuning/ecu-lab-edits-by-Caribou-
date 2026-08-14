@@ -17,7 +17,7 @@
  */
 
 import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS } from './hardware.js';
-import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA, KELVIN_OFFSET, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
 import { knockThreshold, mbtTiming } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
@@ -275,7 +275,7 @@ export function factoryCalibration(preset) {
     const trueBestAfr = bestPowerAfr(boostPsi);
     const threshold = knockThreshold({
       rpm, mapKpa: loadKpa, veActual: ve[ri][ci],
-      chargeC: chargeTempK(boostPsi, preset.mods.intercooler) - 273.15,
+      chargeC: chargeTempK(boostPsi, preset.mods.intercooler) - KELVIN_OFFSET,
       actualAfr: trueBestAfr, bestAfr: trueBestAfr, boostPsi,
       octaneBonus: fuel.bonus, mods: preset.mods, derived, compressor,
     });

@@ -10,7 +10,7 @@
  * physics layer testable in plain Node.
  */
 
-import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, R_AIR } from './constants.js';
+import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { rubbingFmepPa, pumpingFmepPa } from './friction.js';
 import { chargeIndexOf, knockThreshold, mbtTiming } from './knock.js';
@@ -55,7 +55,7 @@ export function evaluatePoint({
 }) {
   const compressorOver = boostPsi > compressor.boostCeiling;
   const chargeK = chargeTempK(boostPsi, mods.intercooler);
-  const chargeC = chargeK - 273.15;
+  const chargeC = chargeK - KELVIN_OFFSET;
 
   // --- AIR CHARGE: ideal gas law. MAP already carries load, so VE is used purely as
   // an efficiency term here — no separate throttle multiplier (that would

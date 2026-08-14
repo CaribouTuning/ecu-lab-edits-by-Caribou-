@@ -134,9 +134,15 @@ export function deriveEngine(cfg) {
   const displacementL = (Math.PI / 4 * boreCm * boreCm * strokeCm * cyl) / 1000;
   const ratio = cfg.bore / cfg.stroke;
   const perCylL = displacementL / cyl;
-  const configKnockBonus = perCylL < 0.5 ? 1 : perCylL > 0.7 ? -1 : 0;
-  const materialKnockBonus = cfg.headMaterial === 'Cast Iron' ? -1.5 : 0;
-  const compressionKnockAdj = (10.3 - cfg.compression) * 2.0;
+  // The three knock terms an engine's ARCHITECTURE decides, as opposed to the ones its
+  // operating point decides. They are applied in `knockThreshold` (knock.js) and their
+  // coefficients live alongside the rest of the knock envelope in coefficients.js, so
+  // the whole envelope can be read in one place rather than half here and half there.
+  const configKnockBonus = perCylL < COEFF.KNOCK_SMALL_CYL_L ? COEFF.KNOCK_SMALL_CYL_BONUS
+    : perCylL > COEFF.KNOCK_LARGE_CYL_L ? COEFF.KNOCK_LARGE_CYL_PENALTY : 0;
+  const materialKnockBonus = cfg.headMaterial === 'Cast Iron' ? COEFF.KNOCK_IRON_HEAD_PENALTY : 0;
+  const compressionKnockAdj = (COEFF.KNOCK_COMPRESSION_REF - cfg.compression)
+    * COEFF.KNOCK_DEG_PER_COMPRESSION_POINT;
   // Thermal efficiency comes from the ideal Otto cycle for this compression ratio,
   // scaled by what real engines actually realize.
   const ottoIdeal = 1 - 1 / Math.pow(cfg.compression, 0.35);
