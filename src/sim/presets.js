@@ -84,7 +84,25 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,
       compression: 10.3,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
-      camDuration: 210, springRate: 50,
+      // Bore, stroke, compression and redline above are published; `camDuration` and
+      // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
+      // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
+      //
+      // REFITTED for the two-zone cycle. #38 landed 220 degrees against the model of the
+      // day; on this one that reads +8.6% on power, outside the +/-5% floor. 202 centres
+      // the fit instead: 0.0% on power and +2.3% on torque, the best simultaneous fit in
+      // the range. The band is event-free from 198 to 226, so the fit is bounded by the
+      // power tolerance rather than by any advisory.
+      //
+      // Do NOT read 210 here as a published number if you see it in the history — that
+      // was the generic custom-build default left in place, which #38 correctly called
+      // out as a coin toss rather than a fit.
+      //
+      // `springRate` 60 does not change power; it sets where the valvetrain gives up.
+      // `valveFloatRpm` lands ~8640, about 1640 RPM clear of the 7000 redline, mid-pack
+      // against the rest of the set. No pull should ever show a `float` event here — if
+      // one appears that is a bug, not "the character".
+      camDuration: 202, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },

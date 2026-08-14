@@ -78,9 +78,13 @@ export const DEFAULT_BOOST = RPM.map(() => 0);
 /**
  * Stock short-block design, calibrated around the Nissan VQ35DE Rev-Up baseline.
  *
- * The geometry, compression, materials, camshaft and valve springs are exposed as the
- * VQ35DE Rev-Up preset. The default redline remains a generic ceiling for custom builds,
- * while the preset carries the production engine's lower limit.
+ * The geometry, compression and materials below are that engine's published figures, and
+ * the `vq35de-revup` preset carries the same ones. The three values that differ are the
+ * three this default does NOT take from Nissan: `camDuration` and `springRate` are round
+ * generic starting points for a custom build, where the preset fits them to the published
+ * power, and `redline` is a deliberately generic 7500 ceiling, where the preset carries
+ * the production 7000 limit. Retuning any of the three here is a custom-build decision and
+ * should not move the preset — see `presets.js`.
  *
  * Frozen: this object is handed straight to React state, and a caller doing
  * `Object.assign(cfg, patch)` — exactly what preset code reaches for — would

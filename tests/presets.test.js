@@ -42,9 +42,21 @@ describe('preset data integrity', () => {
     ]);
   });
 
-  it('exposes the original VQ35DE Rev-Up baseline with its factory redline', () => {
-    expect(S.presetById('vq35de-revup').engine).toEqual({
-      ...S.DEFAULT_ENGINE_CONFIG,
+  it('states the VQ35DE Rev-Up\'s published specifications', () => {
+    // Only the figures Nissan actually publishes are asserted, and they are written out
+    // literally rather than spread from DEFAULT_ENGINE_CONFIG. The default is a generic
+    // custom-build starting point that happens to share this engine's geometry; retuning
+    // it is a decision about custom builds, and must not be able to silently redefine
+    // what this preset claims Nissan published. `camDuration` and `springRate` are
+    // deliberately absent — they are unpublished fitted inputs, and the power and torque
+    // assertions further down are what hold them honest.
+    expect(S.presetById('vq35de-revup').engine).toMatchObject({
+      configuration: 'V6',
+      bore: 95.5,
+      stroke: 81.4,
+      compression: 10.3,
+      blockMaterial: 'Aluminum',
+      headMaterial: 'Aluminum',
       redline: 7000,
     });
   });
