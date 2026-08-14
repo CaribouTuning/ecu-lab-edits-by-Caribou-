@@ -3,7 +3,7 @@
 **Status:** implemented
 **Branch:** `feat/crank-angle-cycle`
 **Issue:** #37
-**Merged with:** #34 (light-load MBT), #35 (peak cylinder pressure), #36 (knock constants), #38 (VQ35DE preset)
+**Merged with:** #34 (light-load MBT), #35 (peak cylinder pressure), #36 (knock constants), #38 (VQ35DE preset), #40 (B58 pair and grouped picker)
 **Date:** 2026-08-14
 
 ## Problem
@@ -33,7 +33,8 @@ valve close to exhaust valve open at `CYCLE_STEP_DEG` (2°):
 | Heat release | Wiebe, `a = 5`, `m = 2`, after a flame-development delay |
 | Pressure | First law per step: `dp = (γ−1)/V·dQ − γ·p/V·dV`, γ blended unburned → burned by mass fraction |
 | Work | Trapezoidal `∮ p dV`, giving gross IMEP directly |
-| End gas | Isentropic from the trapped state, plus flame heating |
+| Heat loss | Woschni per crank degree, against a chamber area that grows as the piston uncovers the liner |
+| End gas | Isentropic from the trapped state, plus flame heating, less what the wall takes |
 | Knock | Livengood–Wu integral of Douaud–Eyzat ignition delay; ≥ 1 is knock |
 
 MBT is not fitted: it is the advance that lands 50% mass burned at `MFB50_ATDC_DEG`,
@@ -107,14 +108,14 @@ The second anchor is not decoration. Values that satisfy only the first push the
 naturally aspirated knock limit past anything the app can command, which silently deletes
 the most basic lesson in the tutorial — that you can over-advance an engine on pump gas.
 
-`COEFF` went from 124 entries to 118 — the additive knock envelope and the empirical
+`COEFF` went from 124 entries to 119 — the additive knock envelope and the empirical
 peak-pressure block out, Woschni, the turbocharger and the saturating exhaust-temperature
 model in — with zero unreferenced.
 
 ## Validation and known limits
 
-All five presets — including the VQ35DE Rev-Up from #38 — reproduce their published power
-and torque from shared physics with no per-engine fudge.
+All seven presets — the VQ35DE Rev-Up from #38 and both B58s from #40 included — reproduce
+their published power and torque from shared physics with no per-engine fudge.
 
 Every preset is held to the tolerances this repo already used — ±5% on power, ±10% on
 torque. An interim version of this work needed a −15% floor on the GTI's torque; the
@@ -165,9 +166,9 @@ quantity the code claimed to model and did not:
   charge the extra air brings extra expansion work and a richer commanded mixture. The
   load term is now `SPAN·(1 − e^(−chargeIndex/SCALE))`, anchored on three real readings —
   ~600 °C at cruise, 860 at wide-open throttle naturally aspirated, 930 boosted at
-  best-power mixture. All five presets land between 853 and 936 on their factory
-  calibrations; the display threshold moved to 980 °C, so a stock engine is always clear
-  and it takes retard or a lean mixture to trip it.
+  best-power mixture. All seven presets land between 881 and 951 °C on their factory
+  calibrations; the flag threshold moved to 980 °C, so a stock engine is always clear and
+  it takes retard or a lean mixture to trip it.
 
 - **Residual gas ignored the clearance volume it was documented as resting on.** The
   docblock said the clearance volume sets the floor; the code read a flat constant, so a
@@ -202,9 +203,32 @@ app itself generated — the same class of false alarm #34 was written to remove
   The advisor called it a point off. It now compares delivered against target and suggests
   the commanded number that would land there, which is the number the player has to type.
 
-All three spark and fuel categories are now empty on all five presets' own factory
+All three spark and fuel categories are now empty on all seven presets' own factory
 calibrations, and a test asserts it. `underAdvanced` is deliberately *not* empty: a factory
 tune is conservative, and showing that headroom is the point of the app.
+
+### Merging #40, and the two defects it exposed
+
+The B58 pair arrived fitted against the old model, and integrating them found two more:
+
+- **The end gas was adiabatic.** The autoignition integral accumulates in *milliseconds*,
+  so a 1900 RPM cycle gives the end gas nearly three times the dwell of a 5500 RPM one.
+  Only that half was modelled. It also gives the end gas three times as long to shed heat
+  into a 450 K head, and without that term the knock limit collapsed at low speed — the
+  B58B30M1 at 11:1 and 16.6 psi came out unable to take *any* advance at 1900 RPM, where
+  the real engine makes its rated torque on pump gas. One new coefficient,
+  `ENDGAS_WALL_AREA_FRAC`, standing for the share of chamber wall the unburned zone
+  touches, which a single-zone model cannot know.
+- **The spark table had three different ranges.** The editable grid allowed −5° to 50°;
+  `factoryCalibration` floored what it generated at 5°, and the advisor refused to suggest
+  below 5°. That is not cosmetic: a production boosted calibration genuinely commands
+  retarded, even after-TDC, timing in the low-speed high-load corner, and flooring the
+  generator above it made it write spark the engine could not take. `SPARK_MIN_DEG` /
+  `SPARK_MAX_DEG` now live in `tables.js` next to the table, and all three read them.
+
+With both fixed, all seven presets validate with zero knocking points on their own
+calibrations. The B58B30M1's torque moved from +1.7% to −1.2% — it is now knock-limited
+down low the way the real engine is — and it is still comfortably inside ±10%.
 
 Remaining simplifications, stated rather than hidden:
 

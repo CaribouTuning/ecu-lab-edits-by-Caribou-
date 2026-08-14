@@ -31,6 +31,19 @@
  *   - Wall heat transfer from the Woschni correlation, per crank degree, against a
  *     chamber area that grows as the piston uncovers the liner.
  *
+ * THE END GAS, AND WHY ENGINE SPEED MATTERS TWICE
+ * The unburned charge ahead of the flame is compressed by the pressure the burned gas is
+ * generating, so it gets hotter than piston compression alone would make it. That is the
+ * gas that autoignites, which is why knock is a pressure-AND-TIME problem rather than a
+ * timing threshold: the Livengood-Wu integral accumulates in milliseconds, so a 1900 RPM
+ * cycle gives the end gas nearly three times the dwell of a 5500 RPM one.
+ *
+ * But it also gives it three times as long to shed heat into a 450 K head, and the end
+ * gas is NOT adiabatic. Modelling only the dwell side made the knock limit collapse at
+ * low speed — a B58B30M1 at 11:1 and 16.6 psi came out unable to take any advance at all
+ * at 1900 RPM, where the real engine makes its rated torque on pump gas. Both halves of
+ * that trade are here now.
+ *
  * WHAT IT IS NOT
  * Not a CFD or multi-zone model. There is no flame-front geometry, no crevice volume as
  * real geometry, no blowby, and no cycle-to-cycle variation. Being single-zone, it does
@@ -195,6 +208,11 @@ export function runCycle({
   let mfb50Deg = burnStart + burnDeg / 2;
   let prevBurned = 0;
   let crossed50 = false;
+  // Heat the unburned charge has given up to the chamber wall by this point in the
+  // cycle, as a temperature the end gas is BELOW its adiabatic value. See the note at
+  // the accumulation site: this is what makes the knock limit's speed dependence real
+  // rather than pure dwell time.
+  let endGasCoolK = 0;
 
   /** Wiebe mass fraction burned at a crank angle. */
   const burnedFraction = (theta) => {
@@ -252,21 +270,22 @@ export function runCycle({
     // Work on the piston, trapezoidal.
     work += ((p + pNext) / 2) * (vNext - v);
 
-    // --- END GAS AND AUTOIGNITION
-    // The unburned charge ahead of the flame is compressed isentropically by the
-    // pressure the burned gas is generating, so it gets hotter than compression alone
-    // would make it. That is the gas that autoignites, and this is why knock is a
-    // pressure-and-time problem rather than a timing threshold.
+    // --- END GAS AND AUTOIGNITION. See "THE END GAS" in the module docblock for why
+    // this is compression MINUS wall loss rather than compression alone.
     if (burned < COEFF.KNOCK_ENDGAS_BURN_LIMIT) {
-      const endGasK = trappedK * flameHeating
+      const adiabaticK = trappedK * flameHeating
         * Math.pow(pNext / trappedPa, (COEFF.GAMMA_UNBURNED - 1) / COEFF.GAMMA_UNBURNED);
+      // The unburned zone's share of the wall area and of the trapped mass are both
+      // roughly (1 - burned), so they cancel: the same Woschni coefficient over the same
+      // area, against the unburned charge's own heat capacity.
+      endGasCoolK += (hCoeff * areaM2 * (adiabaticK - COEFF.WALL_TEMP_K) * dtS
+        * COEFF.ENDGAS_WALL_AREA_FRAC) / (trappedMassKg * COEFF.CHARGE_CP);
+      const endGasK = Math.max(trappedK, adiabaticK - endGasCoolK);
       if (endGasK > peakEndGasK) peakEndGasK = endGasK;
-      // Douaud & Eyzat ignition delay: the time this mixture can survive at this
-      // pressure and temperature before it lights itself. Octane enters here, as a
-      // fuel property, rather than as a bonus in degrees.
-      const pAtm = pNext / COEFF.ATM_PA;
+      // Douaud & Eyzat ignition delay: how long this mixture survives at this pressure
+      // and temperature before lighting itself. Octane enters here as a fuel property.
       const tau = tauFuelTerm
-        * Math.pow(pAtm, -COEFF.KNOCK_DE_N)
+        * Math.pow(pNext / COEFF.ATM_PA, -COEFF.KNOCK_DE_N)
         * Math.exp(COEFF.KNOCK_DE_E / endGasK);
       // Livengood-Wu: autoignition when the accumulated fraction of the delay reaches 1.
       knockIntegral += (step * msPerDeg) / tau;

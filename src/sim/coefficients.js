@@ -182,6 +182,21 @@ export const COEFF = {
   ENDGAS_FLAME_TEMP_GAIN: 0.07,
   FLAME_TEMP_PEAK_LAMBDA: 1.05,
   FLAME_TEMP_WIDTH: 0.28,
+  // Share of the chamber wall area the UNBURNED zone exchanges heat through, for the
+  // end gas's own wall-cooling term. A single-zone cycle does not know where the flame
+  // front is, so it cannot know how much wall the end gas actually touches; this is that
+  // unknown, named and priced in one place.
+  //
+  // It exists because the end gas is not adiabatic, and at low engine speed that is the
+  // dominant effect. The autoignition integral accumulates in milliseconds, so a 1900 RPM
+  // cycle gives the end gas three times the dwell of a 5500 RPM one — but it also gives
+  // it three times as long to shed heat into a 450 K head. Modelling only the dwell side
+  // made the knock limit collapse at low speed: a B58B30M1 at 11:1 and 16.6 psi came out
+  // unable to take the spark table's 5 degree floor at 1900 RPM, when the real engine
+  // makes its rated torque right there on pump gas. Production boosted engines reaching
+  // peak torque by 1800-2000 RPM is the anchor here, and it is a strong one — nearly every
+  // turbocharged car sold does it.
+  ENDGAS_WALL_AREA_FRAC: 0.55,
   // Stop accumulating once this much of the charge has burned: past it there is
   // essentially no unburned end gas left to autoignite.
   KNOCK_ENDGAS_BURN_LIMIT: 0.95,
@@ -304,63 +319,48 @@ export const COEFF = {
   // Exhaust temperature above which the datalog calls the pull hot, °C. Production
   // turbine wheels and exhaust valves are generally rated around 950-1000 °C sustained,
   // and OEM calibrations target below that with fuel enrichment — which is what the rich
-  // cooling term above is modelling. All five shipped presets peak between 850 and 940 on
-  // their factory calibrations, so a stock engine is always clear and it takes a lean or
-  // knock-retarded tune to trip it.
+  // cooling term above is modelling. All seven shipped presets peak between 881 and 951 °C
+  // on their factory calibrations — the Golf R is the hot one — so a stock engine is
+  // always clear and it takes a lean or knock-retarded tune to trip it. The margin above
+  // the hottest preset is about 30 °C, so this is a threshold to re-check rather than
+  // assume if a hotter-running preset is ever added.
   //
   // This drives the datalog's `egtRisk` flag only. Heat damage is not separately priced
   // in the wear model; lean-under-boost, which is the mechanism that actually burns a
   // valve, is already charged through WEAR_VALVE_LEAN_BOOST.
   EGT_LIMIT_C: 980,
 
-
-  // --- Retired: the additive knock envelope ---
-  // Twenty-one coefficients used to live here: a base timing table plus separate
-  // hand-fitted corrections in degrees for charge index, mixture, charge temperature,
-  // overboost, exhaust work, cylinder size, head material and compression, a pair of
-  // pressure-factor clamps, and a five-term plane for MBT.
-  //
-  // They are gone because `cycle.js` now integrates a pressure trace and reads the knock
-  // limit off an autoignition integral, so every one of those effects arrives through
-  // the physics rather than through a number fitted to stand in for it. What replaced
-  // twenty-one fitted coefficients is one: KNOCK_TAU_SCALE, above, on a published
-  // correlation.
-  //
-  // Two of them were never corrections and survive as physical properties instead:
-  // BORE_FLAME_REF_MM (flame travel distance) and IRON_HEAD_CHAMBER_K (chamber heat).
-  // --- Burn duration, which is what MBT actually tracks ---
+  // --- MBT phasing and knock control ---
   // MBT is not a curve fitted to a dyno; it is the advance that puts 50% of the mass
   // fraction burned just after TDC, where the expansion stroke can still use the
-  // pressure. So model the burn and derive the timing from it.
-  //
-  // RETIRED: the burn-duration CORRELATION — spark-to-50%-burn as a formula in RPM and
-  // pressure ratio, with a floor to stop the inverse law running away. Its conclusion is
-  // kept in full, including the light-load end it was written to fix; what replaced it is
-  // the burn the cycle actually integrates, so dilution, mixture, bore and engine speed
-  // move it through the mechanism instead of through an exponent. See
-  // BURN_DURATION_BASE_DEG and the terms around it.
+  // pressure. The burn is modelled (see BURN_DURATION_BASE_DEG above) and the timing
+  // falls out of it. Textbook optimum is 8-10 degrees ATDC across a wide range of
+  // engines.
   MFB50_ATDC_DEG: 8.5,
-  // The range a production spark table could actually command. The burn model is an
-  // extrapolation at its extremes; these stop it producing timing no calibration would
-  // ever contain.
+  // The range MBT itself is allowed to occupy. The burn model is an extrapolation at its
+  // extremes, and these stop it asking for timing no calibration would ever contain.
+  // NOT the same thing as the spark TABLE's range, which is SPARK_MIN_DEG / SPARK_MAX_DEG
+  // in tables.js and goes negative: a table can hold retard that MBT never wants.
   MBT_MIN_DEG: 10,
   MBT_MAX_DEG: 50,
+  // Most retard a real ECU will accumulate from its knock sensors before giving up and
+  // simply running there.
+  MAX_KNOCK_RETARD: 18,
 
-  MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
+  // --- Combustion chamber as a physical object ---
+  // These two are what is left of the old additive knock envelope (see the retirement
+  // note at the foot of this file). They were never corrections in degrees: they are
+  // properties of the chamber, and they now reach knock the way the real ones do — by
+  // moving burn duration and charge temperature, which the cycle then integrates.
+  //
   // Bore the burn-duration model is written for, mm. Flame travel scales with bore: a
   // big cylinder takes longer to burn through, which is why a large-bore V8 is more
   // knock-prone than a small four at the same compression — the end gas spends longer
-  // being compressed and heated before the flame reaches it. This replaces the old
-  // additive per-cylinder-size bonus, and does more than it could: moving burn duration
-  // also moves MBT and the shape of the whole pressure trace.
+  // being compressed and heated before the flame reaches it.
   BORE_FLAME_REF_MM: 92,
   // Chamber heat a cast iron head adds to the charge, K. Iron conducts about a third of
-  // what aluminium does, so the chamber and the charge sitting in it run hotter. Feeding
-  // this into trapped charge temperature — rather than subtracting degrees of margin —
-  // is what makes it reach the autoignition integral the way it does in reality.
+  // what aluminium does, so the chamber and the charge sitting in it run hotter.
   IRON_HEAD_CHAMBER_K: 22,
-
-
 
   // Peak cylinder pressure a stock bottom end — cast pistons, powdered-metal rods,
   // production rod bolts — survives indefinitely. Above it, damage accumulates whether
@@ -371,12 +371,20 @@ export const COEFF = {
   // production internals sit around 110-130 bar, but a single-zone cycle reads lower than
   // a real indicator trace — it has one gas temperature where a real chamber has a hot
   // burned zone driving the peak — so borrowing that number directly would make the
-  // overload unreachable. The anchor instead is the shipped
-  // presets: the most heavily boosted factory engine here (the Golf R's EA888.3 at 17
-  // psi) peaks at 69 bar on its own factory calibration, and builds that stack big static
-  // compression on big boost reach 105-111. 100 sits between them, so a production
-  // engine is always clear and an abusive build always trips.
-  // `tests/presets.test.js` asserts the clearance, so the anchor cannot drift silently.
+  // overload unreachable.
+  //
+  // The anchor is the shipped presets, and as #40 established when the B58s landed, the
+  // top of the production range is a CLUSTER rather than one distinctive engine — so the
+  // number has to clear the whole pack, not just the highest-boost car. Re-measured on
+  // the crank-angle trace the pack sits far lower than the old empirical estimate put it:
+  // the seven presets span 62.3 to 74.6 bar, with the Golf R on top and the B58B30M1 next.
+  // Builds that stack big static compression on big boost reach 105-111. This sits
+  // between the two, so every production engine is always clear and an abusive build
+  // always trips.
+  //
+  // `tests/presets.test.js` asserts the clearance for EVERY preset, which is what keeps
+  // the anchor honest: anything that raises a factory preset's peak pressure has to be
+  // re-checked against the top of the pack, not against one remembered engine.
   PEAK_PRESSURE_LIMIT_BAR: 100,
 
   // --- Wear rates (percent of component life per pull) ---
@@ -545,4 +553,38 @@ export const COEFF = {
   // maximum to builds that did not earn it.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
+
+  // ---------------------------------------------------------------------------------
+  // WHAT USED TO BE IN HERE, AND WHY IT IS NOT
+  //
+  // Kept as one block at the foot of the file rather than as gravestones between the
+  // live values: a contributor reading for a coefficient should see coefficients, and a
+  // contributor asking "didn't this model used to have a term for X?" should find the
+  // answer in one place.
+  //
+  // THE ADDITIVE KNOCK ENVELOPE — twenty-one coefficients. A base timing table plus
+  // separate hand-fitted corrections in degrees for charge index, mixture, charge
+  // temperature, overboost, exhaust work, cylinder size, head material and compression,
+  // a pair of pressure-factor clamps, and a five-term plane for MBT. `cycle.js` now
+  // integrates a pressure trace and reads the knock limit off a Livengood-Wu
+  // autoignition integral, so every one of those effects arrives through the physics
+  // instead. Twenty-one fitted numbers became one: KNOCK_TAU_SCALE, a multiplier on a
+  // published correlation. Two were never corrections and survive above as chamber
+  // properties: BORE_FLAME_REF_MM and IRON_HEAD_CHAMBER_K.
+  //
+  // THE BURN-DURATION CORRELATION — spark-to-50%-burn as a formula in RPM and pressure
+  // ratio, with a floor to stop the inverse law running away. Its CONCLUSION is kept in
+  // full, including the light-load end it was written to fix; what replaced it is the
+  // burn the cycle actually integrates, so dilution, mixture, bore and engine speed move
+  // it through the mechanism rather than through an exponent.
+  //
+  // THE EMPIRICAL PEAK-PRESSURE BLOCK — peak cylinder pressure estimated from boost and
+  // compression. It is measured off the trace now, which is why PEAK_PRESSURE_LIMIT_BAR
+  // sits on a different scale than the literature figure.
+  //
+  // THE FLAT HEAT-LOSS FRACTION — "this share of the fuel energy goes into the walls",
+  // replaced by the Woschni correlation above.
+  //
+  // THE SPOOL RAMP — boost as target x spool(RPM) x throttle^2, with EMP a multiple of
+  // boost. Replaced by the turbine/compressor power balance in turbo.js.
 };

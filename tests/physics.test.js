@@ -563,6 +563,30 @@ describe('the engine cycle', () => {
     expect(high).toBeLessThan(low);
   });
 
+  it('cools the end gas against the wall, and more so the slower it turns', () => {
+    // The autoignition integral accumulates in milliseconds, so a low-speed cycle gives
+    // the end gas far more dwell under pressure. It also gives it far more time to shed
+    // heat into a 450 K head, and modelling only the first half made the knock limit
+    // collapse at low speed. Same charge, same spark, speed the only variable.
+    const boosted = { mapKpa: 200, empKpa: 240, airChargeG: 1.25, burnedFuelG: 0.1 };
+    const endGasAt = (rpm) => S.runCycle({ ...cyc({ rpm, ...boosted }), sparkBtdc: 10 }).peakEndGasK;
+
+    // Turn the wall term off and the end gas is adiabatic — the only thing left that
+    // moves with speed is a little Woschni pressure loss, so the two speeds read almost
+    // the same temperature. That was the defect.
+    const withWall = S.COEFF.ENDGAS_WALL_AREA_FRAC;
+    S.COEFF.ENDGAS_WALL_AREA_FRAC = 0;
+    const adiabatic = { slow: endGasAt(1900), fast: endGasAt(6500) };
+    S.COEFF.ENDGAS_WALL_AREA_FRAC = withWall;
+    const cooled = { slow: endGasAt(1900), fast: endGasAt(6500) };
+
+    // Both speeds lose heat to the wall...
+    expect(cooled.slow).toBeLessThan(adiabatic.slow);
+    expect(cooled.fast).toBeLessThan(adiabatic.fast);
+    // ...and the slow one loses strictly more of it, because it had longer to.
+    expect(adiabatic.slow - cooled.slow).toBeGreaterThan(adiabatic.fast - cooled.fast);
+  });
+
   it('finds a knock limit that rises with octane', () => {
     const boosted = { mapKpa: 190, empKpa: 250, airChargeG: 1.2, burnedFuelG: 0.095 };
     const pump = S.knockLimitedSpark(cyc({ ...boosted, fuel: S.OCTANE_OPTS[0] }));
@@ -956,6 +980,35 @@ describe('exhaust gas temperature', () => {
       chargeIndex: p.chargeIndex, lambda: p.lambda, knockRetardDeg: p.knockPull,
     }) - S.KELVIN_OFFSET;
     expect(p.egt).toBe(Math.round(expected));
+  });
+});
+
+describe('the spark table bounds', () => {
+  it('are one definition, not three that can drift apart', () => {
+    // The UI grid, `factoryCalibration` and the advisor all have to agree on what a
+    // spark cell can hold. They did not: the grid allowed -5 while the other two floored
+    // at 5, so the generator wrote timing the engine could not take in the low-speed
+    // high-load corner. Everything reads SPARK_MIN_DEG / SPARK_MAX_DEG now.
+    expect(S.SPARK_MIN_DEG).toBeLessThan(0);
+    for (const preset of S.ENGINE_PRESETS) {
+      for (const row of S.applyPreset(preset).timing) {
+        for (const cell of row) {
+          expect(cell).toBeGreaterThanOrEqual(S.SPARK_MIN_DEG);
+          expect(cell).toBeLessThanOrEqual(S.SPARK_MAX_DEG);
+        }
+      }
+    }
+  });
+
+  it('let a high-boost engine retard as far as the physics asks at low speed', () => {
+    // A boosted engine at 11:1 and 16 psi genuinely cannot take much advance at 1900 RPM
+    // — that is the most knock-limited corner any turbo car operates in, and why torque
+    // is tapered below ~1800. The generator must be able to write that, rather than
+    // being clamped above it and shipping a table that detonates.
+    const b58 = S.ENGINE_PRESETS.find((p) => p.id === 'b58-m1');
+    const timing = S.applyPreset(b58).timing;
+    const lowSpeedHighLoad = timing[0][S.RPM.indexOf(1500)];
+    expect(lowSpeedHighLoad).toBeLessThan(5);
   });
 });
 

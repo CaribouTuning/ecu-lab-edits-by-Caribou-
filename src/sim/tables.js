@@ -28,6 +28,25 @@ export const DEFAULT_VE = [
   [29, 34, 42, 48, 52, 50, 46, 40],
 ];
 
+/**
+ * The range a spark table cell can hold, degrees BTDC.
+ *
+ * Defined here, next to the table itself, because THREE places need to agree on it and
+ * two of them used to be wrong. The editable grid in the UI has always allowed −5 to 50;
+ * `factoryCalibration` clamped what it generated to 5 as a floor, and the spark advisor
+ * refused to suggest below 5 for the same reason. That disagreement was not cosmetic.
+ *
+ * A production boosted calibration genuinely commands retarded, even after-TDC, timing in
+ * the low-speed high-load corner — it is the most knock-limited place any turbo engine
+ * operates, which is why manufacturers taper torque below about 1800 RPM and enrich hard
+ * there. Flooring the generator at 5 meant it wrote spark the engine could not take: the
+ * B58B30M1 at 11:1 and 16.6 psi came out detonating on its own factory table from 1700 to
+ * 2600 RPM, not because the tune was wrong but because the generator was not allowed to
+ * write the number the physics asked for.
+ */
+export const SPARK_MIN_DEG = -5;
+export const SPARK_MAX_DEG = 50;
+
 /** Stock ignition timing table, degrees BTDC. */
 export const DEFAULT_TIMING = [
   [10, 14, 20, 26, 30, 32, 33, 34],
