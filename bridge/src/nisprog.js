@@ -248,6 +248,57 @@ export class Nisprog extends EventEmitter {
     return transcript;
   }
 
+  /* ---- the high-level surface, matching NativeBridge ----
+   *
+   * The server talks to a driver through these, so the CLI driver and the
+   * native one are interchangeable. This one still infers success from prose,
+   * which is exactly the weakness the native driver removes.
+   */
+
+  /**
+   * Open the K-line session.
+   *
+   * @param {{port: string, iface?: string, dumbopts?: string}} options
+   * @returns {Promise<{connected: boolean, identity: object, transcript: object[]}>}
+   */
+  async connectEcu(options) {
+    const transcript = await this.sendAll(connectSequence(options), { timeoutMs: 30000 });
+    const output = transcript.map((t) => t.output).join('\n');
+    // freediag reports failure in prose, so anything that mentions trouble is
+    // treated as failure rather than claiming a connection we cannot verify.
+    const connected = !/error|fail|timeout|unable/i.test(output);
+    return { connected, identity: parseIdentity(output), transcript };
+  }
+
+  /**
+   * Declare the MCU and upload npkern.
+   *
+   * @param {{device: string, kernelPath: string}} options
+   */
+  async loadKernel({ device, kernelPath }) {
+    const transcript = await this.sendAll(
+      [`setdev ${device}`, 'npconf p3 0', `runkernel ${kernelPath}`],
+      { timeoutMs: 60000 }
+    );
+    return { device, transcript };
+  }
+
+  /**
+   * Read memory into a file.
+   *
+   * @param {{file: string, start?: number, length?: number}} options
+   */
+  async dumpMemory({ file, start = 0, length = 0 }) {
+    const output = await this.send(`dm ${file} ${start} ${length}`, { timeoutMs: 900000 });
+    return { ok: true, output };
+  }
+
+  /** Reset the ECU out of the kernel and close the session. */
+  async endSession() {
+    await this.send('stopkernel', { timeoutMs: 30000 }).catch(() => {});
+    await this.send('nd', { timeoutMs: 15000 }).catch(() => {});
+  }
+
   /**
    * Stop nisprog.
    *

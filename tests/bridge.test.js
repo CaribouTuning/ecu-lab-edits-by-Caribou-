@@ -12,14 +12,19 @@
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { fileURLToPath } from 'node:url';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { checkCommand, describeAllowed, READ_ONLY_COMMANDS, WRITE_COMMANDS } from '../bridge/src/safety.js';
 import { Nisprog, connectSequence, parseIdentity } from '../bridge/src/nisprog.js';
 import { createBridge } from '../bridge/src/server.js';
+import { NativeBridge, OPERATIONS } from '../bridge/src/native.js';
 import { BridgeClient } from '../src/bridge/client.js';
 import { RomImage } from '../src/rom/index.js';
 
 const FAKE = fileURLToPath(new URL('../bridge/test/fake-nisprog.js', import.meta.url));
+const FAKE_NATIVE = fileURLToPath(new URL('../bridge/test/fake-npbridge.js', import.meta.url));
 
 /** Spawn the fake through the current node binary, so it works on every platform. */
 const fakeNisprog = () =>
@@ -221,6 +226,140 @@ describe('output parsing', () => {
 });
 
 /* ------------------------------------------------------------------ *
+ * The native driver
+ *
+ * npbridge links nisprog's command handlers directly instead of driving its
+ * CLI — the approach nisprog's own author recommended. These run against a test
+ * double that speaks the same protocol, so no toolchain is needed.
+ * ------------------------------------------------------------------ */
+
+describe('the native driver', () => {
+  /** @type {NativeBridge | null} */
+  let np = null;
+  // The double has a shebang and is executable, so it can be spawned directly —
+  // the same way the compiled helper is.
+  const spawnFake = () => new NativeBridge({ binary: FAKE_NATIVE, defaultTimeoutMs: 5000 });
+
+  afterEach(async () => { if (np) await np.stop(); np = null; });
+
+  it('starts and reports a version, with no prompt to match', async () => {
+    np = spawnFake();
+    const start = await np.start();
+    expect(start.ok).toBe(true);
+    expect(start.version).toMatch(/0\.2/);
+  });
+
+  it('answers with a boolean instead of prose', async () => {
+    np = spawnFake();
+    await np.start();
+    const good = await np.send('setdev', ['7058']);
+    expect(good.ok).toBe(true);
+    const bad = await np.send('setdev', ['9999']);
+    expect(bad.ok).toBe(false);
+    expect(bad.detail).toBeTruthy();
+  });
+
+  it('has no operation that writes to an ECU', async () => {
+    np = spawnFake();
+    await np.start();
+    // Not "refused by a check" — there is no such operation to name.
+    for (const attempt of ['flrom', 'flblock', 'writevin', 'npt']) {
+      const reply = await np.send(attempt, ['whatever']);
+      expect(reply.ok, attempt).toBe(false);
+      expect(reply.detail).toMatch(/unknown operation/);
+    }
+    expect(OPERATIONS).not.toContain('flrom');
+    expect(OPERATIONS).not.toContain('flblock');
+  });
+
+  it('keeps the library log off the reply stream', async () => {
+    np = spawnFake();
+    const lines = [];
+    np.on('output', (line) => lines.push(line));
+    await np.start();
+    await np.connectEcu({ port: '/dev/ttyUSB0' });
+    // The log arrived, and none of it was JSON — the two pipes never mixed.
+    expect(lines.join('\n')).toMatch(/connecting on/);
+    expect(lines.join('\n')).not.toMatch(/\{"op"/);
+  });
+
+  it('reads the ECU id off a structured reply', async () => {
+    np = spawnFake();
+    await np.start();
+    const result = await np.connectEcu({ port: '/dev/ttyUSB0' });
+    expect(result.connected).toBe(true);
+    expect(result.identity.ecuId).toBe('CF43D');
+  });
+
+  it('throws on a failed operation rather than returning a sad object', async () => {
+    process.env.FAKE_NO_CONNECT = '1';
+    try {
+      np = spawnFake();
+      await np.start();
+      await expect(np.connectEcu({ port: '/dev/ttyUSB0' })).rejects.toThrow(/connect failed/);
+    } finally {
+      delete process.env.FAKE_NO_CONNECT;
+    }
+  });
+
+  it('refuses arguments containing whitespace instead of mangling them', async () => {
+    np = spawnFake();
+    await np.start();
+    // The protocol splits on whitespace, so this would silently become two args.
+    await expect(np.dumpMemory({ file: '/tmp/my rom.bin' })).rejects.toThrow(/whitespace/);
+  });
+
+  it('surfaces a malformed reply rather than dropping it', async () => {
+    process.env.FAKE_GARBAGE = '1';
+    try {
+      np = spawnFake();
+      await expect(np.start(2000)).rejects.toThrow(/unparseable/);
+    } finally {
+      delete process.env.FAKE_GARBAGE;
+    }
+  });
+
+  it('times out rather than hanging when the helper says nothing', async () => {
+    process.env.FAKE_SILENT = '1';
+    try {
+      np = spawnFake();
+      await expect(np.start(400)).rejects.toThrow(/did not answer/);
+    } finally {
+      delete process.env.FAKE_SILENT;
+    }
+  });
+
+  it('serialises operations, since replies carry no request id', async () => {
+    np = spawnFake();
+    await np.start();
+    const [a, b, c] = await Promise.all([
+      np.send('setdev', ['7058']),
+      np.send('ping'),
+      np.send('ecuid'),
+    ]);
+    // Each reply must be matched to its own request, in order.
+    expect(a.op).toBe('setdev');
+    expect(b.op).toBe('ping');
+    expect(c.op).toBe('ecuid');
+  });
+
+  it('dumps to a file through the same interface the CLI driver offers', async () => {
+    np = spawnFake();
+    await np.start();
+    const file = join(tmpdir(), `npbridge-test-${Date.now()}.bin`);
+    const result = await np.dumpMemory({ file, start: 0, length: 512 });
+    expect(result.ok).toBe(true);
+    expect(readFileSync(file)).toHaveLength(512);
+    rmSync(file, { force: true });
+  });
+
+  it('reports a missing binary usefully', async () => {
+    np = new NativeBridge({ binary: '/nonexistent/npbridge', defaultTimeoutMs: 800 });
+    await expect(np.start(1500)).rejects.toThrow(/could not start|did not answer/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
  * The HTTP API
  * ------------------------------------------------------------------ */
 
@@ -323,6 +462,28 @@ describe('the bridge server', () => {
     });
     expect(res.status).toBe(500);
     expect((await res.json()).error).toMatch(/read-only/);
+  });
+
+  it('offers no passthrough at all on the native driver', async () => {
+    const native = createBridge({
+      nisprog: /** @type {any} */ (new NativeBridge({ binary: FAKE_NATIVE, defaultTimeoutMs: 5000 })),
+      token: 'test-token',
+      native: true,
+    });
+    await new Promise((resolve) => { native.server.listen(0, '127.0.0.1', () => resolve(undefined)); });
+    const address = native.server.address();
+    const url = `http://127.0.0.1:${typeof address === 'object' ? address.port : address}`;
+    try {
+      const res = await fetch(url + '/command', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-bridge-token': 'test-token' },
+        body: JSON.stringify({ command: 'flrom evil.bin' }),
+      });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/no passthrough/);
+    } finally {
+      await native.close();
+    }
   });
 
   it('rejects a malformed body instead of crashing', async () => {

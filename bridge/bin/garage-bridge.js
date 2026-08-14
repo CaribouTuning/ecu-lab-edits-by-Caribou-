@@ -19,22 +19,32 @@ const arg = (name, fallback) => {
 if (args.includes('--help') || args.includes('-h')) {
   process.stdout.write(
     `Garage Bridge ${BRIDGE_VERSION} — read-only Nissan ECU access for ECU Lab\n\n` +
-      'Usage: garage-bridge [--port 8347] [--nisprog /path/to/nisprog] [--token TOKEN]\n\n' +
+      'Usage: garage-bridge [--port 8347] [--token TOKEN]\n' +
+      '                     [--npbridge /path/to/npbridge | --nisprog /path/to/nisprog]\n\n' +
+      'Two drivers. --npbridge is the good one: it links nisprog\'s command handlers\n' +
+      'directly, so every operation returns a status instead of prose, and the binary\n' +
+      'has no code path that writes to an ECU. --nisprog drives the stock CLI by pipe\n' +
+      'and gates commands with an allowlist; use it if you have not built npbridge.\n\n' +
       'Binds to 127.0.0.1 only. Every request needs the token printed below.\n' +
-      'This build cannot write to an ECU: flrom, flblock and writevin are refused.\n'
+      'Neither driver can write to an ECU in this build.\n'
   );
   process.exit(0);
 }
 
 const port = Number(arg('port', '8347'));
+
+// Prefer the linked helper when one is named; fall back to the CLI driver.
+const npbridge = arg('npbridge');
 const { server, token, close } = createBridge({
-  binary: arg('nisprog', 'nisprog'),
+  native: Boolean(npbridge),
+  binary: npbridge ?? arg('nisprog', 'nisprog'),
   token: arg('token'),
 });
 
 server.listen(port, '127.0.0.1', () => {
   process.stdout.write(
     `\nGarage Bridge ${BRIDGE_VERSION}  ·  READ-ONLY\n` +
+      `  driver: ${npbridge ? 'npbridge (linked)' : 'nisprog (cli)'}\n` +
       `  http://127.0.0.1:${port}\n` +
       `  token: ${token}\n\n` +
       'Paste that token into ECU Lab to connect. Nothing off this machine can reach\n' +

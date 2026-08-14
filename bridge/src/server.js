@@ -29,10 +29,22 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Nisprog, connectSequence, parseIdentity } from './nisprog.js';
+import { Nisprog } from './nisprog.js';
+import { NativeBridge, OPERATIONS } from './native.js';
 import { describeAllowed, RUNKERNEL_NOTE } from './safety.js';
 
 export const BRIDGE_VERSION = '0.1.0';
+
+/**
+ * What /status reports when the native helper is in use.
+ *
+ * The CLI driver lists an allowlist because it needs one. The native helper has
+ * no dispatch table, so this is simply the set of operations that exist.
+ */
+const OPERATIONS_AS_COMMANDS = OPERATIONS.map((command) => ({
+  command,
+  does: 'read-only operation compiled into npbridge',
+}));
 
 /** Only these origins may talk to the bridge from a browser. */
 const ALLOWED_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
@@ -42,15 +54,24 @@ const ALLOWED_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
  *
  * @param {object} [options]
  * @param {string} [options.token] auth token; generated when omitted
- * @param {Nisprog} [options.nisprog] injectable for tests
- * @param {string} [options.binary] path to the nisprog executable
+ * @param {Nisprog|NativeBridge} [options.nisprog] injectable for tests
+ * @param {string} [options.binary] path to the driver's executable
+ * @param {boolean} [options.native] use the compiled npbridge helper, which calls
+ *        nisprog's command handlers directly instead of driving its CLI
  * @param {string} [options.dumpDir]
- * @returns {{server: import('node:http').Server, token: string, nisprog: Nisprog,
+ * @returns {{server: import('node:http').Server, token: string, nisprog: Nisprog|NativeBridge,
  *            close: () => Promise<void>, dumps: Map<string, object>}}
  */
 export function createBridge(options = {}) {
   const token = options.token ?? randomBytes(24).toString('hex');
-  const np = options.nisprog ?? new Nisprog({ binary: options.binary });
+  // The native helper is the better path — structured replies, and read-only as
+  // a property of the binary rather than a string check. The CLI driver stays
+  // for anyone who has nisprog but has not built npbridge.
+  const np = options.nisprog ??
+    (options.native
+      ? new NativeBridge({ binary: options.binary ?? 'npbridge' })
+      : new Nisprog({ binary: options.binary }));
+  const isNative = np instanceof NativeBridge || options.native === true;
   const dumpDir = options.dumpDir ?? mkdtempSync(join(tmpdir(), 'garage-bridge-'));
 
   /** @type {Map<string, {path: string, size: number, sha256: string, meta: object}>} */
@@ -137,7 +158,8 @@ export function createBridge(options = {}) {
           version: BRIDGE_VERSION,
           readOnly: true,
           nisprogRunning: np.running,
-          allowedCommands: describeAllowed(),
+          driver: isNative ? 'npbridge (linked)' : 'nisprog (cli)',
+          allowedCommands: isNative ? OPERATIONS_AS_COMMANDS : describeAllowed(),
           runkernelNote: RUNKERNEL_NOTE,
           ...state,
         });
@@ -162,15 +184,16 @@ export function createBridge(options = {}) {
         if (!body.port) return send(res, 400, { error: 'port is required' });
 
         if (!np.running) await np.start();
-        const transcript = await np.sendAll(connectSequence(body), { timeoutMs: 30000 });
+        const result = await np.connectEcu(body);
 
-        const output = transcript.map((t) => t.output).join('\n');
-        state.identity = parseIdentity(output);
-        // freediag reports failures in prose, so treat any mention of an error as
-        // one rather than claiming a connection we cannot verify.
-        state.connected = !/error|fail|timeout|unable/i.test(output);
+        state.identity = result.identity;
+        state.connected = result.connected;
 
-        return send(res, 200, { connected: state.connected, identity: state.identity, transcript });
+        return send(res, 200, {
+          connected: result.connected,
+          identity: result.identity,
+          transcript: result.transcript ?? [],
+        });
       }
 
       /* ---- prepare for a fast dump ---- */
@@ -179,13 +202,10 @@ export function createBridge(options = {}) {
         if (!body.device) return send(res, 400, { error: 'device is required, e.g. "7055"' });
         if (!body.kernelPath) return send(res, 400, { error: 'kernelPath is required' });
 
-        const transcript = await np.sendAll(
-          [`setdev ${body.device}`, 'npconf p3 0', `runkernel ${body.kernelPath}`],
-          { timeoutMs: 60000 }
-        );
+        const result = await np.loadKernel(body);
         state.device = body.device;
         state.kernelRunning = true;
-        return send(res, 200, { transcript, note: RUNKERNEL_NOTE });
+        return send(res, 200, { ...result, note: RUNKERNEL_NOTE });
       }
 
       /* ---- read memory ---- */
@@ -196,9 +216,7 @@ export function createBridge(options = {}) {
         const id = randomBytes(8).toString('hex');
         const file = join(dumpDir, `${id}.bin`);
 
-        // A whole 512 kB ROM at 5.4 kB/s is around a hundred seconds; allow well
-        // over that before giving up, since a slow link is not a failure.
-        const output = await np.send(`dm ${file} ${start} ${length}`, { timeoutMs: 600000 });
+        const { output } = await np.dumpMemory({ file, start, length });
 
         let size = 0;
         try { size = statSync(file).size; } catch {
@@ -225,8 +243,19 @@ export function createBridge(options = {}) {
         return res.end(bytes);
       }
 
-      /* ---- raw passthrough, still allowlisted ---- */
+      /* ---- raw passthrough ---- */
       if (req.method === 'POST' && path === '/command') {
+        if (isNative) {
+          // There is deliberately no passthrough on the native driver. It has no
+          // command dispatch table, so there is nothing to pass a command name
+          // through to — that absence is what makes it read-only by
+          // construction rather than by a check.
+          return send(res, 400, {
+            error: 'the npbridge driver has no passthrough: it exposes a fixed set of ' +
+              'read operations and no way to name a handler. Use the specific routes, ' +
+              'or run the CLI driver if you need arbitrary commands.',
+          });
+        }
         const body = await readBody(req);
         const output = await np.send(body.command ?? '', { timeoutMs: body.timeoutMs });
         return send(res, 200, { output });
@@ -235,8 +264,7 @@ export function createBridge(options = {}) {
       /* ---- end the session ---- */
       if (req.method === 'POST' && path === '/disconnect') {
         if (np.running) {
-          if (state.kernelRunning) await np.send('stopkernel', { timeoutMs: 30000 }).catch(() => {});
-          await np.send('nd', { timeoutMs: 15000 }).catch(() => {});
+          await np.endSession();
           await np.stop();
         }
         state.connected = false;

@@ -26,11 +26,60 @@ init through the FTDI DTR/RTS lines, which a browser cannot reach at all.
 **Blast radius.** Everything that can damage an ECU is on one side of this
 boundary, behind one gate, in one file (`src/safety.js`).
 
-## Running it
+## Two drivers
 
-Needs Node 20+, and nisprog built and on your PATH.
+**`npbridge` (recommended).** A small C program in `native/` that links against
+freediag and nisprog and calls their command handlers directly. Every operation
+returns a status code, so nothing here parses English prose to decide whether a
+command worked. This is the approach nisprog's author recommended when asked
+about front ends:
+
+> "Interfacing to the CLI will be messy, you'd almost be better off linking
+> against libdiag and some of the nisprog code, then calling command handlers
+> directly instead of trying to pipe stuff through stdin/stdout."
+> — fenugrec, romraider.com thread 14867
+
+**`nisprog` (fallback).** Drives the stock CLI over a pipe, matching its prompt
+and gating commands through the allowlist in `src/safety.js`. It works, and it is
+there if you have nisprog but have not built npbridge.
+
+### Read-only means something different in each
+
+The CLI driver is read-only because a string allowlist rejects the dangerous
+command names. That is a check, and a check can have gaps — `source`, which runs
+commands from a file, had to be found and blocked by hand.
+
+npbridge is read-only because **there is no code path to those commands**. It has
+no dispatch table: the protocol is a fixed set of operations, each wired to a
+specific function at compile time. An unrecognised word is not looked up
+anywhere, because there is nothing to look it up in. `cmd_flrom`, `cmd_flblock`
+and `cmd_writevin` are never called from `npbridge.c`, so no input can reach
+them.
+
+## Building npbridge
+
+Build nisprog first — this links its libraries and uses its generated
+`version.c`:
 
 ```bash
+git clone --recursive https://github.com/fenugrec/nisprog.git
+cmake -S nisprog -B nisprog/build && cmake --build nisprog/build
+
+cmake -S bridge/native -B build/native -DNISPROG_SRC=$PWD/nisprog
+cmake --build build/native
+```
+
+That produces `build/native/npbridge`.
+
+## Running it
+
+Needs Node 20+.
+
+```bash
+# the good path
+node bin/garage-bridge.js --port 8347 --npbridge /path/to/npbridge
+
+# or, without building the helper
 node bin/garage-bridge.js --port 8347 --nisprog /path/to/nisprog
 ```
 
@@ -52,7 +101,7 @@ All routes need an `x-bridge-token` header (or `?token=` for `/events`, since
 | `POST /kernel` | `{device, kernelPath}` — uploads npkern so dumps run at a usable speed |
 | `POST /dump` | `{start, length}` — reads memory; `{start: 0, length: 0}` means the whole ROM |
 | `GET /dump/:id` | The bytes, with a `x-dump-sha256` header |
-| `POST /command` | Raw passthrough, still allowlisted |
+| `POST /command` | Raw passthrough, allowlisted — CLI driver only; npbridge has none, by design |
 | `POST /disconnect` | Stops the kernel, disconnects, exits nisprog |
 
 ## About `runkernel`
@@ -76,13 +125,18 @@ seconds and ninety minutes.
 
 ## The honest caveat
 
-The bridge drives nisprog by writing to its stdin and reading its stdout — it is
-screen-scraping a human-facing CLI. That output format is not a stable interface
-and may change between nisprog versions. The code is written defensively for it:
-unknown output is passed through rather than parsed, the prompt pattern is
-configurable, and commands time out rather than hang. But the first time you run
-this against a real ECU, watch the raw output in the app and check it agrees with
-what the bridge claims happened.
+With `--npbridge` the scraping is gone: operations return status codes, and the
+helper's replies travel on their own pipe (fd 3) so they cannot interleave with
+freediag's `printf` logging. What remains is that npbridge has only been exercised
+against a fake ECU and against the real binary with no hardware attached. The
+command handlers it calls are nisprog's own, so the protocol work is not
+reimplemented — but nobody has yet watched it dump a real ECU.
+
+With `--nisprog` the original caveat stands in full: it is screen-scraping a
+human-facing CLI whose output format is not a stable interface.
+
+Either way, the first time you run this against a real ECU, watch the log in the
+app and check it agrees with what the bridge claims happened.
 
 ## Credit
 
