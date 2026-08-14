@@ -440,3 +440,24 @@ export function applyPreset(preset) {
  * @returns {Preset|undefined}
  */
 export const presetById = (id) => ENGINE_PRESETS.find((p) => p.id === id);
+
+/**
+ * Presets grouped by manufacturer, in first-appearance order.
+ *
+ * The picker needs headings once the list outgrows a flat stack of buttons. Deriving
+ * the grouping here rather than in the component keeps it assertable in plain Node —
+ * the same reason `applyPreset` returns a patch instead of applying one — and means
+ * the JSX renders a shape rather than computing one.
+ *
+ * Order comes from {@link ENGINE_PRESETS} itself, never from a second list kept
+ * alongside it. A separate ordering table would be free to drift out of agreement
+ * with the presets it claims to order; this cannot.
+ *
+ * @type {{manufacturer: string, presets: Preset[]}[]}
+ */
+export const PRESET_GROUPS = ENGINE_PRESETS.reduce((groups, preset) => {
+  const group = groups.find((g) => g.manufacturer === preset.manufacturer);
+  if (group) group.presets.push(preset);
+  else groups.push({ manufacturer: preset.manufacturer, presets: [preset] });
+  return groups;
+}, /** @type {{manufacturer: string, presets: Preset[]}[]} */ ([]));
