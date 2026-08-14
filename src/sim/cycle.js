@@ -253,9 +253,9 @@ export function runCycle({
  * mixture, engine speed, cam timing, fuel octane — therefore moves the knock limit
  * automatically and in the right proportion, with no separate term for each.
  *
- * Solved by interpolation in log space, because the integral is close to exponential
- * in spark advance. Four cycle evaluations get within a quarter of a degree, which
- * matters: this runs for every logged point of every pull.
+ * A mixture that cannot be made to knock anywhere in the searchable range — anything at
+ * cruise — reports KNOCK_UNBOUNDED_BTDC rather than the ceiling, because the ceiling is
+ * an artefact of the search and not a property of the engine.
  *
  * @param {CycleInput} base cycle inputs; `sparkBtdc` is ignored
  * @returns {number} knock-limited spark advance, degrees BTDC
@@ -269,7 +269,7 @@ export function knockLimitedSpark(base) {
   // low-compression engine off boost. Testing the advanced end first answers those in
   // one cycle evaluation instead of a full search, which matters because this runs for
   // every point of every pull.
-  if (integralAt(hi) < 1) return hi;
+  if (integralAt(hi) < 1) return COEFF.KNOCK_UNBOUNDED_BTDC;
   if (integralAt(lo) >= 1) return lo;
 
   // Bisection. The search ceiling is deliberately below the advance at which the
@@ -387,6 +387,20 @@ export function cycleInputsFor({
 }
 
 /**
+ * MBT for one table cell, from the cycle the rest of the model runs.
+ *
+ * The spark advisor and the factory calibration generator must not disagree about what
+ * good timing looks like — the advisor's own comment says so — so both come through
+ * here rather than each estimating MBT their own way.
+ *
+ * @param {Parameters<typeof cycleInputsFor>[0]} input
+ * @returns {number} MBT spark advance, degrees BTDC
+ */
+export function mbtForCell(input) {
+  return mbtFromBurn(cycleInputsFor(input).burnDeg);
+}
+
+/**
  * Minimum spark for best torque, derived rather than correlated.
  *
  * MBT is the timing that centres the heat release where the piston can use it: across
@@ -405,5 +419,11 @@ export function mbtFromBurn(burnDeg) {
   // Crank angle of 50% burn, as a fraction of the burn duration: solve the Wiebe
   // function for x where the burned fraction is one half.
   const half = Math.pow(Math.log(2) / COEFF.WIEBE_A, 1 / (COEFF.WIEBE_M + 1));
-  return COEFF.FLAME_DEVELOPMENT_DEG + half * burnDeg - COEFF.MBT_MFB50_ATDC;
+  // Clamped to the band a spark table can actually hold, which is the guard the
+  // light-load MBT work added: a very slow, heavily diluted burn would otherwise ask
+  // for advance no calibration would ever write.
+  return clamp(
+    COEFF.FLAME_DEVELOPMENT_DEG + half * burnDeg - COEFF.MFB50_ATDC_DEG,
+    COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG,
+  );
 }

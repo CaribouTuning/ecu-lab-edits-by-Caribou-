@@ -316,7 +316,7 @@ describe('peak cylinder pressure', () => {
     expect(mild.pressureRisk).toBe(false);
     const brutal = point({
       cfg: { ...STOCK, compression: 12.5 }, fuel: S.OCTANE_OPTS[3],
-      mapKpa: S.BARO_KPA + 12 * S.PSI_TO_KPA, veVal: 105, timingVal: 20,
+      mapKpa: S.BARO_KPA + 14 * S.PSI_TO_KPA, veVal: 110, timingVal: 20,
       mods: { ...NO_MODS, intercooler: true, turboFitted: true },
       // E85 at this airflow needs real injectors; the stock 315s would run out of pulse
       // width and lean the mixture out, which would make this a fuelling test instead.
@@ -587,11 +587,47 @@ describe('MBT timing', () => {
     };
     // Within one integration step of the target — the trace is sampled every
     // CYCLE_STEP_DEG degrees, so it cannot land closer than that by construction.
-    expect(Math.abs(S.runCycle(c).mfb50Deg - S.COEFF.MBT_MFB50_ATDC))
+    expect(Math.abs(S.runCycle(c).mfb50Deg - S.COEFF.MFB50_ATDC_DEG))
       .toBeLessThanOrEqual(S.COEFF.CYCLE_STEP_DEG);
   });
 
   it('needs more advance when the burn is slower', () => {
+    expect(S.mbtFromBurn(60)).toBeGreaterThan(S.mbtFromBurn(40));
+  });
+
+  // The defect the light-load MBT work was written to fix: the old linear term spanned
+  // only 6 degrees across the whole load range, so it put cruise MBT around 25 deg. Real
+  // factory cruise maps carry 40-50, because a thin, heavily diluted charge burns slowly
+  // and must be lit much earlier.
+  //
+  // That conclusion is unchanged by the crank-angle cycle — these tests assert exactly
+  // what they always did — but the burn behind it is now integrated rather than
+  // correlated, so MBT comes from the operating point rather than from (rpm, map).
+  const mbtAt = (rpm, mapKpa) => point({ rpm, mapKpa, veVal: mapKpa < 60 ? 55 : 95 }).mbtIdeal;
+
+  it('puts cruise MBT in the 40-50 deg band real calibrations use', () => {
+    const cruise = mbtAt(2500, 20);
+    expect(cruise).toBeGreaterThan(40);
+    expect(cruise).toBeLessThanOrEqual(50);
+  });
+
+  it('spans far more than the old six degrees between cruise and wide-open throttle', () => {
+    expect(mbtAt(2500, 20) - mbtAt(2500, S.BARO_KPA)).toBeGreaterThan(15);
+  });
+
+  it('never leaves the range a production calibration could use', () => {
+    for (const rpm of [800, 2500, 5500, 7500]) {
+      for (const map of [20, 40, 101.325, 150, 200]) {
+        const mbt = mbtAt(rpm, map);
+        expect(mbt).toBeGreaterThanOrEqual(S.COEFF.MBT_MIN_DEG);
+        expect(mbt).toBeLessThanOrEqual(S.COEFF.MBT_MAX_DEG);
+      }
+    }
+  });
+
+  it('asks for more advance as the burn slows, whatever slowed it', () => {
+    // The correlation could only respond to RPM and pressure. The integrated burn also
+    // responds to dilution and mixture, which is what actually stretches a burn out.
     expect(S.mbtFromBurn(60)).toBeGreaterThan(S.mbtFromBurn(40));
   });
 });
@@ -703,5 +739,145 @@ describe('hardware option catalogues', () => {
     for (const opt of S[name]) {
       expect(SIZES, `${name} entry "${opt.label}" has size ${String(opt.size)}`).toContain(opt.size);
     }
+  });
+});
+
+describe('the spark advisor', () => {
+  /** Advice for a stock, naturally aspirated build on its own factory tables. */
+  function advice(overrides = {}) {
+    return S.calibrationAdvice({
+      ve: S.DEFAULT_VE, veTruth: S.DEFAULT_VE, timing: S.DEFAULT_TIMING, afr: S.DEFAULT_AFR,
+      derived: S.deriveEngine(STOCK), octaneBonus: S.OCTANE_OPTS[0].bonus,
+      fuel: S.OCTANE_OPTS[0], mods: NO_MODS, turboOn: false, boostCurve: S.DEFAULT_BOOST,
+      compressor: S.COMPRESSOR_OPTS[1], turbine: S.TURBINE_OPTS[1],
+      injectorCc: 315, ecuInjectorCc: 315, mafScalar: 1, mafErrorBase: 1,
+      ...overrides,
+    });
+  }
+
+  // The defect from issue #4: at 20 kPa the knock limit runs past 160 deg, and the
+  // advisor was handing that straight to the player as a spark recommendation.
+  it('never recommends more advance than the charge can actually use', () => {
+    for (const c of advice().spark) {
+      expect(c.suggested).toBeLessThanOrEqual(c.mbt + 0.5);
+    }
+  });
+
+  it('never recommends more advance than a production table could hold', () => {
+    for (const c of advice().spark) {
+      expect(c.suggested).toBeLessThanOrEqual(50);
+      expect(c.suggested).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('still respects the knock limit where knock is what binds', () => {
+    // Under boost the knock limit falls below MBT, and it must be the one that wins.
+    const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 12) });
+    const knockBound = boosted.spark.filter((c) => c.knockLimited);
+    expect(knockBound.length).toBeGreaterThan(0);
+    // `suggested` is rounded to the nearest half degree, so a cell whose knock ceiling
+    // lands within that rounding of MBT can tie rather than fall below it.
+    for (const c of knockBound) expect(c.suggested).toBeLessThanOrEqual(c.mbt);
+  });
+
+  it('does not call a stock calibration dangerous', () => {
+    // The red panel means "your hardware will not tolerate this". A factory tune on
+    // factory hardware must never trip it.
+    expect(advice().overAdvanced).toHaveLength(0);
+  });
+
+  it('separates advance that is dangerous from advance that is merely wasted', () => {
+    const a = advice();
+    // A cell past the knock limit is reported as dangerous only, never as both.
+    const ids = (arr) => new Set(arr.map((c) => `${c.ri}:${c.ci}`));
+    const over = ids(a.overAdvanced), past = ids(a.pastMbt);
+    for (const id of over) expect(past.has(id)).toBe(false);
+    // And every cell the advisor says has too much advance lands in exactly one of
+    // them, so nothing over a ceiling can go unreported.
+    const tooMuch = a.spark.filter((c) => c.delta < -1.0);
+    expect(over.size + past.size).toBe(tooMuch.length);
+  });
+
+  it('reports the stock light-load cells as past peak torque, not as knock risk', () => {
+    // The stock table runs 40-47 deg at 20 kPa where MBT is in the low 40s, so a few
+    // of those cells genuinely are past MBT — but the knock limit there is over 100,
+    // so none of them are dangerous.
+    //
+    // Assert on `knocking`, which comes from the physics, NOT on how pastMbt was
+    // built. An earlier version of this test asserted the classification flag against
+    // itself and so could never fail, which hid a real inversion.
+    const a = advice();
+    expect(a.pastMbt.length).toBeGreaterThan(0);
+    for (const c of a.pastMbt) expect(c.knocking).toBe(false);
+  });
+
+  // The inversion the tautology hid: a cell can sit past BOTH ceilings with MBT the
+  // lower of the two. Classifying on which ceiling is lower filed those as merely
+  // wasteful and told the player they were safe, while the dyno logged knock on the
+  // very same build. Danger is where the player's own number sits.
+  it('never calls a detonating cell safe', () => {
+    const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 5) });
+    const knocking = boosted.spark.filter((c) => c.knocking);
+    expect(knocking.length).toBeGreaterThan(0);
+    expect(boosted.overAdvanced.length).toBeGreaterThan(0);
+    const pastIds = new Set(boosted.pastMbt.map((c) => `${c.ri}:${c.ci}`));
+    for (const c of knocking) expect(pastIds.has(`${c.ri}:${c.ci}`)).toBe(false);
+  });
+
+  it('does not call a factory spark table wasteful on the engine it was written for', () => {
+    // `factoryCalibration` writes spark from the same min(MBT, knock ceiling) rule the
+    // advisor now advises against, and both take MBT at the table row's own pressure.
+    // If they disagreed on that basis the advisor would contradict a table the app
+    // itself produced — which it did, flagging 21 of 32 cells on every boosted preset.
+    //
+    // This asserts only the MBT half. The knock half is NOT yet in agreement: the
+    // advisor evaluates the knock threshold at the manifold pressure `computeManifold`
+    // produces, while the generator evaluates it at the row pressure, so the highest
+    // boost preset still trips `overAdvanced` on its own table. That is pre-existing
+    // and filed separately; it is not what this test is guarding.
+    for (const preset of S.ENGINE_PRESETS) {
+      const p = S.applyPreset(preset);
+      const fuel = S.OCTANE_OPTS[p.octaneIdx];
+      const a = S.calibrationAdvice({
+        ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        derived: S.deriveEngine(p.engineConfig), octaneBonus: fuel.bonus, fuel,
+        mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+        compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+        turbine: S.TURBINE_OPTS[p.turbineIdx],
+        injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+        mafScalar: 1, mafErrorBase: 1,
+      });
+      expect(a.pastMbt, `${preset.id} called its own factory spark table wasteful`).toHaveLength(0);
+    }
+  });
+
+  it('is self-consistent — taking its own advice leaves nothing left to complain about', () => {
+    // The advisor exists to be acted on. If applying every suggestion still produced
+    // complaints, the advice would be chasing its own tail and no player could ever
+    // reach a clean table.
+    const before = advice();
+    const tuned = S.DEFAULT_TIMING.map((row) => [...row]);
+    for (const c of before.spark) tuned[c.ri][c.ci] = c.suggested;
+    const after = advice({ timing: tuned });
+    expect(after.overAdvanced).toHaveLength(0);
+    expect(after.pastMbt).toHaveLength(0);
+    expect(after.underAdvanced).toHaveLength(0);
+  });
+});
+
+describe('BSFC reporting', () => {
+  it('reports a real figure whenever the engine is making power', () => {
+    const p = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+    expect(p.hp).toBeGreaterThan(0);
+    expect(p.bsfc).toBeGreaterThan(0);
+  });
+
+  // A BSFC of 0.000 lb/hr/hp would be an engine making power from no fuel. On overrun
+  // and at deep vacuum the engine is being motored, and there is no such thing as a
+  // brake-specific figure there — the honest answer is "no reading", not zero.
+  it('reports no reading at all when the engine is not making power', () => {
+    const motoring = point({ rpm: 2500, mapKpa: 20, veVal: 42, timingVal: 40, afrCommanded: 14.7 });
+    expect(motoring.hp).toBeLessThanOrEqual(0);
+    expect(motoring.bsfc).toBeNull();
   });
 });

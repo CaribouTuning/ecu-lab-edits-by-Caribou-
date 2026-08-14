@@ -26,7 +26,18 @@
 const r6 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(6)) : v);
 
 const roundAll = (obj) => Object.fromEntries(
-  Object.entries(obj).map(([k, v]) => [k, typeof v === 'number' ? r6(v) : v]),
+  Object.entries(obj).map(([k, v]) => {
+    if (typeof v === 'number') return [k, r6(v)];
+    // A legitimate absent reading (e.g. bsfc when the engine makes no power) is a
+    // literal null, and typeof null is "object", not "number" — so it never reaches
+    // r6 above. NaN and Infinity, by contrast, are still typeof "number", so a real
+    // blow-up still flows through r6, stays non-finite, and still serialises to
+    // JSON's `null`. Remapping only the literal-null case here keeps the two
+    // distinguishable, which is what lets the ": null" guard in
+    // fingerprint.test.js still mean "physics blew up" and nothing else.
+    if (v === null) return [k, 'n/a'];
+    return [k, v];
+  }),
 );
 
 /** Engine configurations spanning the whole design space, including failure modes. */

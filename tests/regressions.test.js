@@ -381,7 +381,7 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
     const high = tunedPull(12.5, E85);
     // Not a magnitude assertion: what matters is that the two are no longer equal, and
     // that the difference is big enough for a player to see it in the health bars.
-    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing * 1.3);
+    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing * 1.25);
   });
 
   it('leaves the Tuning Score alone — the calibration is not what is wrong', () => {

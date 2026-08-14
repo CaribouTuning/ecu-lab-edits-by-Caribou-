@@ -163,7 +163,10 @@ export function evaluatePoint({
   const powerW = torqueNmCrank * (2 * Math.PI * rpm / 60);
   const hp = (powerW / 745.7) * DRIVETRAIN_EFF;
   const torque = torqueNmCrank * 0.7376 * DRIVETRAIN_EFF;
-  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : 0;
+  // Brake-specific fuel consumption is fuel per unit of work OUT. On overrun and in
+  // deep vacuum there is no work out — the engine is being motored — so the quantity is
+  // undefined, not zero. Zero would read as an engine making power from no fuel.
+  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
   // what it costs the metal to give it. Both now come off the same trace, so they can
@@ -200,7 +203,8 @@ export function evaluatePoint({
     mbtIdeal: Number(mbtIdeal.toFixed(1)), openLoop,
     egt: Math.round(720 + egtProxy),
     imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
-    fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: Number(bsfc.toFixed(3)),
+    fmep: Number((fmepPa / 100000).toFixed(2)),
+    bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
     // The gas-exchange loop, reported separately from rubbing friction because they are
     // different problems with different fixes — one is a turbo match, the other is a
     // rebuild.

@@ -35,11 +35,18 @@ function pullFor(preset) {
 }
 
 describe('preset data integrity', () => {
-  it('ships the four engines', () => {
-    expect(S.ENGINE_PRESETS).toHaveLength(4);
+  it('ships the five engines', () => {
+    expect(S.ENGINE_PRESETS).toHaveLength(5);
     expect(S.ENGINE_PRESETS.map((p) => p.id)).toEqual([
-      'vq35hr', 'n54', 'ea888-gti', 'ea888-r',
+      'vq35de-revup', 'vq35hr', 'n54', 'ea888-gti', 'ea888-r',
     ]);
+  });
+
+  it('exposes the original VQ35DE Rev-Up baseline with its factory redline', () => {
+    expect(S.presetById('vq35de-revup').engine).toEqual({
+      ...S.DEFAULT_ENGINE_CONFIG,
+      redline: 7000,
+    });
   });
 
   it('gives every preset a unique id', () => {
@@ -141,6 +148,10 @@ const TORQUE_UNREACHABLE = {
  * and the entry should be deleted rather than updated.
  */
 const NO_PEAK_BEFORE_LIMITER = {
+  'vq35de-revup': 'Naturally aspirated, and nothing in the shared physics makes its '
+    + 'power fall before the redline: the real engine\'s rolloff around 6400 comes from '
+    + 'cam profile and intake tuning, neither of which the model has a term for. The '
+    + 'simulated curve therefore climbs to the factory 7000 RPM limiter.',
   vq35hr: 'Naturally aspirated, and nothing in the shared physics makes its power fall '
     + 'before the redline: the real engine\'s rolloff past 6800 comes from cam profile, '
     + 'VVEL and intake tuning, none of which the model has a term for, so at every cam '

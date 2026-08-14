@@ -46,7 +46,9 @@ describe('simulation fingerprint', () => {
   it('produces no NaN or Infinity anywhere in the matrix', () => {
     const serialised = serialiseFingerprint(buildFingerprint(S));
     // JSON.stringify turns NaN and Infinity into null, so a null in a numeric slot is
-    // the signature of a physics blow-up.
+    // the signature of a physics blow-up. Legitimate absent readings (e.g. bsfc when
+    // the engine makes no power) are remapped to the string "n/a" in roundAll, so a
+    // bare `null` surviving to here still means only one thing: a blow-up.
     expect(serialised).not.toMatch(/NaN|Infinity/);
     expect(serialised.match(/: null/g) ?? []).toHaveLength(0);
   });
