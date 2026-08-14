@@ -57,7 +57,11 @@ export const DEFAULT_AFR = [
 export const DEFAULT_BOOST = RPM.map(() => 0);
 
 /**
- * Stock short-block design. Nothing here names a real production engine.
+ * Stock short-block design, calibrated around the Nissan VQ35DE Rev-Up baseline.
+ *
+ * The geometry, compression, materials, camshaft and valve springs are exposed as the
+ * VQ35DE Rev-Up preset. The default redline remains a generic ceiling for custom builds,
+ * while the preset carries the production engine's lower limit.
  *
  * Frozen: this object is handed straight to React state, and a caller doing
  * `Object.assign(cfg, patch)` — exactly what preset code reaches for — would

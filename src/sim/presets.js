@@ -61,6 +61,33 @@ const OPEN_LOOP_KPA = 85;
 /** @type {Preset[]} */
 export const ENGINE_PRESETS = [
   {
+    id: 'vq35de-revup',
+    name: 'Nissan VQ35DE Rev-Up',
+    manufacturer: 'Nissan',
+    years: '2005-2006',
+    blurb: 'The high-revving 350Z engine this simulator was originally calibrated around. Its naturally aspirated V6 is the cleanest starting point for learning what the stock tables and hardware are doing.',
+    factory: {
+      crankHp: 300, crankHpRpm: 6400,   // 300 hp @ 6400 rpm
+      crankTq: 260, crankTqRpm: 4800,   // 260 lb-ft @ 4800 rpm
+      displacementL: 3.50,
+    },
+    engine: {
+      configuration: 'V6',
+      // Nissan's 2006 350Z specifications publish 95.5 x 81.4 mm and 10.3:1.
+      // These are also the geometry and compression the simulator's generic default
+      // was calibrated around. The factory 7000 RPM limit replaces that default's
+      // deliberately generic 7500 RPM ceiling here.
+      bore: 95.5, stroke: 81.4,
+      compression: 10.3,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      camDuration: 210, springRate: 50,
+      redline: 7000,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
     id: 'vq35hr',
     name: 'Nissan VQ35HR',
     manufacturer: 'Nissan',
