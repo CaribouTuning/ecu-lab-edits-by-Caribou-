@@ -18,14 +18,59 @@
  * is not on boost at 5000. And backpressure was proportional to BOOST, when the turbine is
  * a restriction of fixed area: double the flow and it takes roughly twice the pressure.
  *
- * STILL MISSING: no compressor map (efficiency is one number per part, so surge and choke
- * are represented only by `boostCeiling`) and no shaft inertia, so this is steady-state
- * and transient lag is not modelled.
+ * Compressor efficiency comes off a MAP ({@link compressorMap}), so surge and choke are
+ * real limit lines rather than one `boostCeiling`. Shaft inertia lives in `live.js` —
+ * only the live engine has a transient to lag through, since a dyno sweep holds each
+ * point until it settles.
+ *
+ * STILL MISSING: the map is parametric, not digitised — one island, one surge line, one
+ * choke line, not a measured field. No variable geometry, no compressor heat soak.
  */
 
 import { BARO_KPA, GAMMA_EXP, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
+
+/**
+ * Where this operating point sits on the compressor map, and what that costs.
+ *
+ * The map is a parametric island rather than a digitised one: peak efficiency at a
+ * design flow and pressure ratio, falling off elliptically away from it, bounded by a
+ * surge line on the low-flow side and a choke line on the high-flow side. That is enough
+ * to reproduce the two things a single efficiency number cannot — a big compressor
+ * surging on a small engine at low RPM, and a small one choking at the top end — and
+ * both are matching failures a tuner has to be able to see.
+ *
+ * @param {object} compressor a COMPRESSOR_OPTS entry
+ * @param {number} flowKgS air the engine is actually drawing
+ * @param {number} pressureRatio compressor outlet over inlet
+ * @returns {{eff: number, surge: boolean, choke: boolean, margin: number}} `margin` is
+ *   the fraction of the flow range between the surge and choke lines that is left, so
+ *   0 means hard against a limit and 1 means dead centre
+ */
+export function compressorMap(compressor, flowKgS, pressureRatio) {
+  const pr = Math.max(1, pressureRatio);
+  // Surge: below this flow, the pressure ratio cannot be sustained and flow reverses.
+  const surgeFlow = compressor.surgeSlope * (pr - 1);
+  const surge = pr > COEFF.SURGE_MIN_PR && flowKgS < surgeFlow;
+  const choke = flowKgS > compressor.chokeFlowKgS;
+  // Elliptical fall-off from the island centre, in normalised flow and pressure ratio.
+  const dFlow = flowKgS / compressor.pkFlowKgS - 1;
+  const dPr = pr / compressor.pkPr - 1;
+  const distance = dFlow * dFlow + COEFF.MAP_PR_WEIGHT * dPr * dPr;
+  let eff = compressor.etaMax * (1 - COEFF.MAP_EFF_FALLOFF * distance);
+  // Past either limit line the map does not merely get worse, it stops working: a
+  // surging compressor is not pumping and a choked one is making heat, not pressure.
+  if (surge) eff *= COEFF.SURGE_EFF_PENALTY;
+  if (choke) eff *= COEFF.CHOKE_EFF_PENALTY;
+  const span = Math.max(1e-6, compressor.chokeFlowKgS - surgeFlow);
+  return {
+    eff: clamp(eff, COEFF.MAP_EFF_FLOOR, compressor.etaMax),
+    surge,
+    choke,
+    margin: clamp(Math.min(flowKgS - surgeFlow, compressor.chokeFlowKgS - flowKgS) / span, 0, 1),
+  };
+}
 
 /**
  * Pressure the turbine needs upstream of itself to pass a given exhaust flow.
@@ -56,11 +101,12 @@ export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2
  * @param {number} input.intakeK compressor inlet temperature
  * @param {number} input.empKpa exhaust manifold pressure available to expand
  * @param {{turbineEff: number}} input.turbine
- * @param {{compressorEff: number}} input.compressor
- * @returns {number} achievable gauge boost, psi
+ * @param {object} input.compressor a COMPRESSOR_OPTS entry, read through {@link compressorMap}
+ * @param {number} [input.currentPr] pressure ratio to evaluate the map at
+ * @returns {{boostPsi: number, map: ReturnType<typeof compressorMap>}}
  */
 export function achievableBoostPsi({
-  airFlowKgS, fuelFlowKgS, exhaustK, intakeK, empKpa, turbine, compressor,
+  airFlowKgS, fuelFlowKgS, exhaustK, intakeK, empKpa, turbine, compressor, currentPr = 1,
 }) {
   const exhaustFlowKgS = airFlowKgS + fuelFlowKgS;
   const expansionRatio = Math.max(1, empKpa / BARO_KPA);
@@ -68,12 +114,14 @@ export function achievableBoostPsi({
   const turbineW = exhaustFlowKgS * COEFF.CP_EXHAUST * exhaustK
     * (1 - Math.pow(expansionRatio, -GAMMA_EXP)) * turbine.turbineEff
     * COEFF.TURBO_MECH_EFF;
-  if (turbineW <= 0 || airFlowKgS <= 0) return 0;
+  if (turbineW <= 0 || airFlowKgS <= 0) return { boostPsi: 0, map: compressorMap(compressor, airFlowKgS, currentPr) };
+  // Efficiency comes off the MAP at where this point actually sits, not from a constant.
+  const map = compressorMap(compressor, airFlowKgS, currentPr);
   // Invert the compressor work equation for the pressure ratio that power buys.
-  const specificWork = (turbineW * compressor.compressorEff)
+  const specificWork = (turbineW * map.eff)
     / (airFlowKgS * COEFF.CP_AIR * Math.max(intakeK, 1));
   const pressureRatio = Math.pow(1 + specificWork, 1 / GAMMA_EXP);
-  return Math.max(0, (pressureRatio - 1) * BARO_KPA / PSI_TO_KPA);
+  return { boostPsi: Math.max(0, (pressureRatio - 1) * BARO_KPA / PSI_TO_KPA), map };
 }
 
 /**
@@ -96,7 +144,8 @@ export function achievableBoostPsi({
  * @param {number} input.lambda delivered lambda, for exhaust mass and temperature
  * @param {number} input.exhaustK turbine inlet temperature
  * @returns {{mapKpa: number, boostPsi: number, empKpa: number, throttleFrac: number,
- *   spool: number, boostShortfallPsi: number}}
+ *   spool: number, boostShortfallPsi: number, compressorEff: number, surge: boolean,
+ *   choke: boolean, mapMargin: number}}
  */
 export function solveInduction({
   rpm, loadKpa, turboOn, boostTargetPsi, turbine, compressor,
@@ -119,6 +168,7 @@ export function solveInduction({
   let boostPsi = target;
   let mapKpa = throttledKpa + boostPsi * PSI_TO_KPA;
   let empKpa = BARO_KPA;
+  let mapState = compressorMap(compressor, 0, 1);
 
   for (let i = 0; i < COEFF.INDUCTION_SOLVE_PASSES; i += 1) {
     const airFlowKgS = airFlowAt(mapKpa, boostPsi);
@@ -127,13 +177,23 @@ export function solveInduction({
       ? turbineBackPressureKpa(airFlowKgS + fuelFlowKgS, exhaustK, turbine.effectiveAreaM2)
       : BARO_KPA + (airFlowKgS * COEFF.EXHAUST_SYSTEM_KPA_PER_KGS);
     if (!turboOn) { boostPsi = 0; mapKpa = throttledKpa; break; }
-    const canMake = achievableBoostPsi({
+    const solved = achievableBoostPsi({
       airFlowKgS, fuelFlowKgS, exhaustK, intakeK: intakeKAt(boostPsi),
-      empKpa, turbine, compressor,
+      empKpa, turbine, compressor, currentPr: mapKpa / BARO_KPA,
     });
+    const canMake = solved.boostPsi;
+    mapState = solved.map;
+    // CHOKE IS A MASS FLOW LIMIT, not merely an efficiency penalty. Once the inducer is
+    // at Mach 1 no more air goes through it at any shaft speed, so the boost the engine
+    // can actually be fed is capped by the flow the compressor can pass — pull the target
+    // back in proportion to the overrun rather than letting the wastegate hold a
+    // pressure the compressor cannot supply.
+    const chokeCap = airFlowKgS > compressor.chokeFlowKgS
+      ? boostPsi * (compressor.chokeFlowKgS / airFlowKgS)
+      : Infinity;
     // The wastegate is the ceiling. Below target the hardware simply cannot deliver, and
     // that is lag and undersizing made visible; above it the gate bleeds the difference.
-    const next = Math.min(target, canMake);
+    const next = Math.min(target, canMake, chokeCap);
     boostPsi = boostPsi + (next - boostPsi) * COEFF.INDUCTION_RELAX;
     mapKpa = throttledKpa + boostPsi * PSI_TO_KPA;
   }
@@ -155,5 +215,11 @@ export function solveInduction({
     // Kept for display continuity: how much of the requested boost is actually present.
     spool: target > 0 ? clamp(boostPsi / target, 0, 1) : 0,
     boostShortfallPsi: Math.max(0, target - boostPsi),
+    // Where the compressor ended up on its own map. Surge and choke are real limits now,
+    // not a single `boostCeiling` standing in for both.
+    compressorEff: mapState.eff,
+    surge: mapState.surge,
+    choke: mapState.choke,
+    mapMargin: mapState.margin,
   };
 }

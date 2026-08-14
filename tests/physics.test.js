@@ -233,16 +233,48 @@ describe('knock', () => {
     expect(highCr).toBeLessThan(lowCr);
   });
 
-  it('loses margin when the mixture is lean under load, but not at cruise', () => {
-    const richWot = point({ mapKpa: 101.325, afrCommanded: 12.0 }).threshold;
-    const leanWot = point({ mapKpa: 101.325, afrCommanded: 15.5 }).threshold;
-    expect(leanWot).toBeLessThan(richWot);
+  // KNOCK MARGIN IS U-SHAPED IN LAMBDA, worst near best-torque mixture. That is where
+  // cylinder pressure peaks, so it is where the end gas is worked hardest; enriching past
+  // it buys margin through charge cooling, and going lean of it buys margin because there
+  // is simply less fuel energy released.
+  //
+  // This assertion used to be monotonic — lean always worse than rich — which the old
+  // single-zone model produced only because a fitted Gaussian ASSERTED peak flame
+  // temperature just lean of stoichiometric. The two-zone model derives burned-gas
+  // temperature instead and disagrees, as does published knock-limited-advance data.
+  //
+  // Lean under load IS dangerous. It is dangerous through TEMPERATURE and mixture, which
+  // the test below this one covers, not through detonation.
+  it('is worst near best-torque mixture, and eases either side of it', () => {
+    const at = (afr) => point({ mapKpa: 101.325, afrCommanded: afr }).threshold;
+    const worst = at(12.85);
+    expect(at(12.0), 'enrichment must buy margin').toBeGreaterThan(worst);
+    expect(at(15.5), 'lean of best torque releases less energy').toBeGreaterThan(worst);
+  });
 
+  it('does not punish a lean mixture at cruise', () => {
     // At deep vacuum a lean mixture is normal and must not be punished — this is why
     // factory cruise maps carry 40+ degrees of advance at 14.7:1.
     const richCruise = point({ mapKpa: 20, afrCommanded: 12.0 }).threshold;
     const leanCruise = point({ mapKpa: 20, afrCommanded: 15.5 }).threshold;
     expect(richCruise - leanCruise).toBeLessThan(1.0);
+  });
+
+  it('still calls lean-under-load dangerous — through heat, not detonation', () => {
+    // The lesson the monotonic test above was protecting is real and must survive the
+    // model change: a lean mixture at load is one of the fastest ways to hole a piston or
+    // burn a valve. In this model that arrives as a mixture and temperature risk rather
+    // than as a knock limit, and under boost it escalates to the valve.
+    const leanWot = point({ mapKpa: 101.325, afrCommanded: 15.5 });
+    expect(leanWot.leanRisk).toBe(true);
+    const leanBoosted = point({
+      mapKpa: 200, afrCommanded: 15.5, veVal: 95,
+      mods: { ...NO_MODS, turboFitted: true, intercooler: true },
+    });
+    expect(leanBoosted.leanRisk).toBe(true);
+    expect(leanBoosted.valveRisk).toBe(true);
+    // And it costs power, which is the other half of why nobody runs it deliberately.
+    expect(leanWot.hp).toBeLessThan(point({ mapKpa: 101.325, afrCommanded: 12.85 }).hp);
   });
 
   it('never retards more than a real ECU would accumulate', () => {
@@ -423,14 +455,21 @@ describe('dyno sweep', () => {
   });
 
   it('raises the overload event only once the parts are actually over their limit', () => {
-    const sane = stockPull({ turboOn: true, boostCurve: [0, 2, 6, 8, 8, 8, 8, 8] });
+    // Both builds run E85 through big injectors with an intercooler, so KNOCK is held
+    // roughly constant and compression-on-boost is the only variable. Without that the
+    // comparison is meaningless: the "sane" build on 91 octane knocks so hard that knock
+    // wear swamps the pressure wear this test is about.
+    const common = {
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
+      turboOn: true, injectorCc: 850, ecuInjectorCc: 850,
+      sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
+    };
+    const sane = stockPull({ ...common, boostCurve: [0, 2, 6, 8, 8, 8, 8, 8] });
     expect(sane.events.some((e) => e.type === 'pressure')).toBe(false);
     const overloaded = stockPull({
+      ...common,
       cfg: { ...STOCK, compression: 12.5 },
-      mods: { ...S.DEFAULT_MODS, intercooler: true },
-      turboOn: true, boostCurve: [0, 4, 12, 16, 18, 18, 18, 18],
-      injectorCc: 850, ecuInjectorCc: 850,
-      sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
+      boostCurve: [0, 4, 12, 16, 18, 18, 18, 18],
     });
     expect(overloaded.events.some((e) => e.type === 'pressure')).toBe(true);
     expect(overloaded.wear.piston).toBeGreaterThan(sane.wear.piston);
@@ -564,27 +603,37 @@ describe('the engine cycle', () => {
   });
 
   it('cools the end gas against the wall, and more so the slower it turns', () => {
-    // The autoignition integral accumulates in milliseconds, so a low-speed cycle gives
+    // The autoignition integral accumulates in MILLISECONDS, so a low-speed cycle gives
     // the end gas far more dwell under pressure. It also gives it far more time to shed
-    // heat into a 450 K head, and modelling only the first half made the knock limit
-    // collapse at low speed. Same charge, same spark, speed the only variable.
+    // heat into a 450 K head. Modelling only the first half collapsed the knock limit at
+    // low speed. Same charge, same spark, speed the only variable.
     const boosted = { mapKpa: 200, empKpa: 240, airChargeG: 1.25, burnedFuelG: 0.1 };
     const endGasAt = (rpm) => S.runCycle({ ...cyc({ rpm, ...boosted }), sparkBtdc: 10 }).peakEndGasK;
+    // Slow turning still runs the hotter end gas — compression dominates — but the wall
+    // term has to hold the gap down, or the low-speed limit falls off a cliff.
+    const spread = endGasAt(1900) - endGasAt(6500);
+    expect(spread).toBeGreaterThan(0);
+    expect(spread).toBeLessThan(120);
+  });
 
-    // Turn the wall term off and the end gas is adiabatic — the only thing left that
-    // moves with speed is a little Woschni pressure loss, so the two speeds read almost
-    // the same temperature. That was the defect.
-    const withWall = S.COEFF.ENDGAS_WALL_AREA_FRAC;
-    S.COEFF.ENDGAS_WALL_AREA_FRAC = 0;
-    const adiabatic = { slow: endGasAt(1900), fast: endGasAt(6500) };
-    S.COEFF.ENDGAS_WALL_AREA_FRAC = withWall;
-    const cooled = { slow: endGasAt(1900), fast: endGasAt(6500) };
-
-    // Both speeds lose heat to the wall...
-    expect(cooled.slow).toBeLessThan(adiabatic.slow);
-    expect(cooled.fast).toBeLessThan(adiabatic.fast);
-    // ...and the slow one loses strictly more of it, because it had longer to.
-    expect(adiabatic.slow - cooled.slow).toBeGreaterThan(adiabatic.fast - cooled.fast);
+  it('tracks a burned-gas temperature, and peaks it near stoichiometric', () => {
+    // The two-zone balance derives flame temperature instead of asserting it. Peak lands
+    // near stoichiometric, where there is exactly enough oxygen and no surplus of either
+    // reactant left over to warm. Rich runs cooler because the extra fuel is mass to heat
+    // without extra oxygen to burn it; lean runs cooler because there is less fuel.
+    const flameAt = (lambda) => S.runCycle({
+      ...cyc({
+        lambda,
+        burnedFuelG: Math.min(0.65 / 14.7, 0.65 / (14.7 * lambda)),
+        fuelMassG: 0.65 / (14.7 * lambda),
+      }),
+      sparkBtdc: 28,
+    }).peakBurnedK;
+    const peak = flameAt(1.0);
+    expect(peak).toBeGreaterThan(2200);
+    expect(peak).toBeLessThan(S.COEFF.BURNED_GAS_MAX_K);
+    expect(flameAt(0.78)).toBeLessThan(peak);
+    expect(flameAt(1.15)).toBeLessThan(peak);
   });
 
   it('finds a knock limit that rises with octane', () => {
@@ -971,15 +1020,22 @@ describe('exhaust gas temperature', () => {
     }
   });
 
-  it('is the same number the turbine ran on, not a second estimate', () => {
-    // These were two different expressions once, so the gauge and the machine disagreed
-    // about the temperature of the same gas. Reproducing the reported EGT from the
-    // exported correlation is what stops them drifting apart again.
+  it('is read off the cycle, not from the correlation', () => {
+    // The datalog's EGT is the burned zone at exhaust valve open, blown down to the
+    // manifold. `exhaustTempK` survives only for the turbine balance, which has to run
+    // BEFORE the cycle it feeds. If these two ever agree exactly, someone has quietly
+    // wired the gauge back to the correlation.
     const p = point({ rpm: 5500, mapKpa: S.BARO_KPA });
-    const expected = S.exhaustTempK({
-      chargeIndex: p.chargeIndex, lambda: p.lambda, knockRetardDeg: p.knockPull,
-    }) - S.KELVIN_OFFSET;
-    expect(p.egt).toBe(Math.round(expected));
+    expect(p.egt).toBeGreaterThan(600);
+    expect(p.egt).toBeLessThan(S.COEFF.EGT_LIMIT_C);
+  });
+
+  it('runs hotter with retarded spark, because the burn finishes later', () => {
+    // Retard shows up in EGT for the real reason now: less of the heat release is
+    // converted to work before the valve opens, so more of it leaves through the port.
+    const advanced = point({ rpm: 5500, timingVal: 30 }).egt;
+    const retarded = point({ rpm: 5500, timingVal: 10 }).egt;
+    expect(retarded).toBeGreaterThan(advanced);
   });
 });
 

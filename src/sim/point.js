@@ -176,13 +176,12 @@ export function evaluatePoint({
   const peakPressure = paToBar(cycle.peakPressurePa);
   const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
 
-  // Same correlation the turbine ran on, plus the knock retard the ECU actually pulled —
-  // the one term the turbine estimate cannot include, since backpressure has to be solved
-  // before the knock limit is known. Keep these on one call; they diverged once.
-  const egtK = exhaustTempK({
-    chargeIndex, lambda: lambdaActual, knockRetardDeg: knockPull,
-  });
-  const egtC = egtK - KELVIN_OFFSET;
+  // The CYCLE's own answer — the burned zone at exhaust valve open, blown down to the
+  // manifold. Retard shows up here for the real reason rather than a per-degree
+  // coefficient: the burn finishes later into the expansion, so less work is extracted
+  // and the gas leaves hotter. `exhaustTempK` survives only where an answer is needed
+  // BEFORE the cycle can run — the turbine backpressure the cycle itself depends on.
+  const egtC = cycle.exhaustK - KELVIN_OFFSET;
   const egtRisk = egtC > COEFF.EGT_LIMIT_C;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
   // Excessively rich is its own failure mode, not just "safe": unburnt fuel washes the
