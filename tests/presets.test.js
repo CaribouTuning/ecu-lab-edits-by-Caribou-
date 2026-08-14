@@ -35,11 +35,30 @@ function pullFor(preset) {
 }
 
 describe('preset data integrity', () => {
-  it('ships the six engines', () => {
-    expect(S.ENGINE_PRESETS).toHaveLength(6);
+  it('ships the seven engines', () => {
+    expect(S.ENGINE_PRESETS).toHaveLength(7);
     expect(S.ENGINE_PRESETS.map((p) => p.id)).toEqual([
-      'vq35hr', 'n54', 'b58-m0', 'b58-m1', 'ea888-gti', 'ea888-r',
+      'vq35de-revup', 'vq35hr', 'n54', 'b58-m0', 'b58-m1', 'ea888-gti', 'ea888-r',
     ]);
+  });
+
+  it('states the VQ35DE Rev-Up\'s published specifications', () => {
+    // Only the figures Nissan actually publishes are asserted, and they are written out
+    // literally rather than spread from DEFAULT_ENGINE_CONFIG. The default is a generic
+    // custom-build starting point that happens to share this engine's geometry; retuning
+    // it is a decision about custom builds, and must not be able to silently redefine
+    // what this preset claims Nissan published. `camDuration` and `springRate` are
+    // deliberately absent — they are unpublished fitted inputs, and the power and torque
+    // assertions further down are what hold them honest.
+    expect(S.presetById('vq35de-revup').engine).toMatchObject({
+      configuration: 'V6',
+      bore: 95.5,
+      stroke: 81.4,
+      compression: 10.3,
+      blockMaterial: 'Aluminum',
+      headMaterial: 'Aluminum',
+      redline: 7000,
+    });
   });
 
   it('gives every preset a unique id', () => {
@@ -161,6 +180,10 @@ function flatTopRpm(points) {
  * and the entry should be deleted rather than updated.
  */
 const NO_PEAK_BEFORE_LIMITER = {
+  'vq35de-revup': 'Naturally aspirated, and nothing in the shared physics makes its '
+    + 'power fall before the redline: the real engine\'s rolloff around 6400 comes from '
+    + 'cam profile and intake tuning, neither of which the model has a term for. The '
+    + 'simulated curve therefore climbs to the factory 7000 RPM limiter.',
   vq35hr: 'Naturally aspirated, and nothing in the shared physics makes its power fall '
     + 'before the redline: the real engine\'s rolloff past 6800 comes from cam profile, '
     + 'VVEL and intake tuning, none of which the model has a term for, so at every cam '
