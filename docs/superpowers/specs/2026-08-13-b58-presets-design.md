@@ -112,7 +112,7 @@ a tolerance.
 > trade-off rather than an upgrade", and a free upgrade contradicts that. The B58 fit
 > never needed the headroom: the M1 finished at 38% duty, the lowest of all six presets.
 >
-> Filed as a follow-up issue — model a cost for oversized injectors (minimum pulse
+> Filed as issue #39 — model a cost for oversized injectors (minimum pulse
 > width and low-pulse nonlinearity, so a big injector loses fuelling accuracy at idle
 > and light load) *before* extending the catalogue. Two catalogue-invariant tests
 > written for the reverted work are worth reusing there: one asserting the list stays
@@ -209,8 +209,8 @@ row moving that this change did not add is a bug in the change, not a fixture to
 
 - `b58-m0` and `b58-m1` ship, both validating against published figures through the
   shared physics with no new coefficients and no per-engine multiplier
-- ~~`INJECTOR_OPTS` carries 1000cc and 1400cc~~ — **descoped**, see above; a follow-up
-  issue covers modelling a cost for oversized injectors first
+- ~~`INJECTOR_OPTS` carries 1000cc and 1400cc~~ — **descoped**, see above; issue #39
+  covers modelling a cost for oversized injectors first
 - The picker is a manufacturer-grouped dropdown covering every preset plus Custom
 - `PRESET_GROUPS` is exported and asserted
 - Fingerprint regenerated deliberately, with the diff reviewed and explained in the PR
