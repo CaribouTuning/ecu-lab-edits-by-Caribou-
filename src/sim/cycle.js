@@ -1,55 +1,35 @@
 /**
  * The closed part of the engine cycle, solved on a crank-angle grid.
  *
- * This is the physics core. Everything the old model approximated with a fitted
- * multiplier — indicated work, peak pressure, MBT timing, the knock limit — is
- * produced here by integrating one cylinder from intake valve close to exhaust valve
- * open, and reading the answers off the resulting pressure trace.
+ * The physics core. Indicated work, peak pressure, MBT and the knock limit are all read
+ * off one integrated pressure trace, from intake valve close to exhaust valve open.
  *
- * WHY A PRESSURE TRACE
- * The previous model computed torque as fuel energy times three efficiency scalars,
- * with spark timing entering through a parabola centred on a correlated MBT. That
- * cannot express the thing every tuner is actually trading: burn PHASING. Spark does
- * not scale the work done, it moves WHEN the heat arrives relative to the piston, and
- * the piston is in a different place at every crank angle. Too early and the rising
- * pressure fights the piston still coming up — real negative work, and the highest
- * peak pressures. Too late and the burn happens into a cylinder that is already
- * expanding, so the pressure has less leverage and more of the heat goes out of the
- * exhaust valve. MBT is not a formula: it is the timing where those two losses balance,
- * and here it falls out of the integration instead of being asserted.
+ * WHY A TRACE. Torque used to be fuel energy times three efficiency scalars, with spark
+ * entering through a parabola on a correlated MBT. That cannot express burn PHASING —
+ * spark does not scale the work done, it moves WHEN the heat arrives relative to a piston
+ * that is somewhere different at every crank angle. Too early and rising pressure fights
+ * the piston still coming up; too late and the burn happens into a cylinder already
+ * expanding. MBT is where those two losses balance, and it falls out of the integration
+ * instead of being asserted.
  *
- * WHAT THIS MODEL IS
- * A single-zone, two-gamma, finite-heat-release cycle — the standard first engineering
- * model above an air-standard cycle, and the same one used to teach the subject:
+ * THE MODEL. Single zone, two gamma, finite heat release:
+ *   - Slider-crank volume, so rod length and stroke matter.
+ *   - Wiebe heat release after a flame-development delay.
+ *   - First law per step: dp = (γ-1)/V · dQ − γ · p/V · dV.
+ *   - Trapezoidal p dV, giving gross indicated MEP directly.
+ *   - Unburned end gas tracked isentropically, feeding an autoignition integral.
+ *   - Woschni wall heat transfer, against an area that grows as the piston uncovers the
+ *     liner.
  *
- *   - Volume from the slider-crank equation, so rod length and stroke matter.
- *   - Heat release from a Wiebe function, the empirical S-curve that real mass-fraction-
- *     burned traces follow closely.
- *   - First law per crank degree: dp = (γ-1)/V · dQ − γ · p/V · dV.
- *   - Work by trapezoidal integration of p dV, giving gross indicated MEP directly.
- *   - The unburned end gas tracked isentropically, feeding an autoignition integral.
- *   - Wall heat transfer from the Woschni correlation, per crank degree, against a
- *     chamber area that grows as the piston uncovers the liner.
+ * WHY ENGINE SPEED MATTERS TWICE. Knock is a pressure-AND-TIME problem: the Livengood-Wu
+ * integral accumulates in MILLISECONDS, so a 1900 RPM cycle gives the end gas nearly
+ * three times the dwell of a 5500 RPM one. It also gives it three times as long to shed
+ * heat into a 450 K head. Model only the dwell side and the knock limit collapses at low
+ * speed, exactly where a boosted engine makes its rated torque. Both halves are here.
  *
- * THE END GAS, AND WHY ENGINE SPEED MATTERS TWICE
- * The unburned charge ahead of the flame is compressed by the pressure the burned gas is
- * generating, so it gets hotter than piston compression alone would make it. That is the
- * gas that autoignites, which is why knock is a pressure-AND-TIME problem rather than a
- * timing threshold: the Livengood-Wu integral accumulates in milliseconds, so a 1900 RPM
- * cycle gives the end gas nearly three times the dwell of a 5500 RPM one.
- *
- * But it also gives it three times as long to shed heat into a 450 K head, and the end
- * gas is NOT adiabatic. Modelling only the dwell side made the knock limit collapse at
- * low speed — a B58B30M1 at 11:1 and 16.6 psi came out unable to take any advance at all
- * at 1900 RPM, where the real engine makes its rated torque on pump gas. Both halves of
- * that trade are here now.
- *
- * WHAT IT IS NOT
- * Not a CFD or multi-zone model. There is no flame-front geometry, no crevice volume as
- * real geometry, no blowby, and no cycle-to-cycle variation. Being single-zone, it does
- * not track burned-gas temperature, which is why the end gas needs a one-coefficient
- * flame-heating term where a two-zone model would compute one. Those are the honest
- * next steps, not hidden assumptions.
+ * WHAT IT IS NOT. Not CFD, and not two-zone — burned-gas temperature is not tracked,
+ * which is why end-gas flame heating is a fitted term rather than a computed one. No
+ * flame-front geometry, no crevice volume, no blowby, no cycle-to-cycle variation.
  */
 
 import { COEFF } from './coefficients.js';
@@ -228,21 +208,16 @@ export function runCycle({
     const burned = burnedFraction(thetaNext);
     const dQ = (burned - prevBurned) * heatJ;
 
-    // Ratio of specific heats falls as the charge burns — hot combustion products are
-    // polyatomic and store energy in vibration. Blending between the two is the cheap
-    // stand-in for a real two-zone model, and it matters: holding gamma at its
-    // unburned value overstates peak pressure badly.
+    // Gamma falls as the charge burns: hot products are polyatomic and store energy in
+    // vibration. Blending is the cheap stand-in for two zones, and it matters — holding
+    // gamma unburned overstates peak pressure badly.
     const gamma = COEFF.GAMMA_UNBURNED
       + (COEFF.GAMMA_BURNED - COEFF.GAMMA_UNBURNED) * burned;
 
-    // --- WALL HEAT TRANSFER, per step, from the Woschni correlation.
-    //
-    // This replaces a flat "14% of the heat goes into the walls" assumption, and the
-    // difference is not cosmetic: heat loss does not scale with fuel, it scales with
-    // surface area, gas temperature and charge motion. A small cylinder has more wall
-    // per unit volume and loses proportionally more; a slow-turning engine holds hot gas
-    // against the walls for longer and loses more; a boosted engine at high pressure
-    // loses more still. Those are real, and a fixed fraction expressed none of them.
+    // --- WALL HEAT TRANSFER, per step, from Woschni. Heat loss scales with surface
+    // area, gas temperature and charge motion, NOT with fuel — so a small cylinder, a
+    // slow-turning engine and a boosted one each lose proportionally more, none of which
+    // a flat fraction of fuel energy could express.
     const tGas = (p * v) / (trappedMassKg * R_AIR);
     // Exposed area: head, piston crown, and the liner the piston has uncovered.
     const strokeFrac = Math.max(0, (v - clearanceM3) / sweptM3);
@@ -312,15 +287,12 @@ export function runCycle({
 /**
  * The most spark advance this cycle tolerates before the end gas lights itself.
  *
- * Found by solving `runCycle` for the timing at which the autoignition integral
- * reaches 1, rather than by looking the answer up in a table of corrections. Every
- * input that changes the pressure history — compression, boost, charge temperature,
- * mixture, engine speed, cam timing, fuel octane — therefore moves the knock limit
- * automatically and in the right proportion, with no separate term for each.
+ * Solved from `runCycle` rather than looked up, so every input that changes the pressure
+ * history — compression, boost, charge temperature, mixture, engine speed, cam timing,
+ * octane — moves the limit automatically, with no separate term for each.
  *
- * A mixture that cannot be made to knock anywhere in the searchable range — anything at
- * cruise — reports KNOCK_UNBOUNDED_BTDC rather than the ceiling, because the ceiling is
- * an artefact of the search and not a property of the engine.
+ * A mixture that cannot knock anywhere in range reports KNOCK_UNBOUNDED_BTDC, not the
+ * ceiling: the ceiling is an artefact of the search, not a property of the engine.
  *
  * @param {CycleInput} base cycle inputs; `sparkBtdc` is ignored
  * @returns {number} knock-limited spark advance, degrees BTDC
@@ -361,11 +333,9 @@ export function knockLimitedSpark(base) {
 export const paToBar = (peakPressurePa) => peakPressurePa / (KPA_PER_BAR * 1000);
 
 /**
- * Air actually trapped in one cylinder for one cycle, grams.
- *
- * The ideal gas law against the swept volume, scaled by volumetric efficiency. Exported
- * so the ECU's per-point solve and the factory calibration generator cannot end up with
- * two slightly different ideas of how much air is in the cylinder.
+ * Air actually trapped in one cylinder for one cycle, grams — the ideal gas law against
+ * swept volume, scaled by VE. Exported so the per-point solve and the calibration
+ * generator cannot end up with two ideas of how much air is in the cylinder.
  *
  * @param {object} input
  * @param {number} input.veActual true cylinder filling, percent
@@ -380,12 +350,9 @@ export function trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3 }) {
 }
 
 /**
- * Builds the cycle inputs for one operating point.
- *
- * Shared by the ECU's per-point solve and by the factory calibration generator, for the
- * reason every shared formula in this codebase is shared: two copies of this setup would
- * drift, and then the generated calibration would be knock-limited against a slightly
- * different engine than the one the player drives.
+ * Builds the cycle inputs for one operating point. Shared by the per-point solve and the
+ * factory calibration generator: two copies would drift, and the generated calibration
+ * would then be knock-limited against a different engine than the player drives.
  *
  * @param {object} input
  * @param {number} input.rpm engine speed
@@ -459,11 +426,9 @@ export function cycleInputsFor({
 }
 
 /**
- * MBT for one table cell, from the cycle the rest of the model runs.
- *
- * The spark advisor and the factory calibration generator must not disagree about what
- * good timing looks like — the advisor's own comment says so — so both come through
- * here rather than each estimating MBT their own way.
+ * MBT for one table cell, from the cycle the rest of the model runs. The advisor and the
+ * calibration generator both come through here so they cannot disagree about what good
+ * timing looks like.
  *
  * @param {Parameters<typeof cycleInputsFor>[0]} input
  * @returns {number} MBT spark advance, degrees BTDC
@@ -475,14 +440,10 @@ export function mbtForCell(input) {
 /**
  * Minimum spark for best torque, derived rather than correlated.
  *
- * MBT is the timing that centres the heat release where the piston can use it: across
- * engine types, best torque lands with 50% of the mass burned at roughly 8-10 degrees
- * after TDC. Given the Wiebe shape, the crank angle of 50% burn is a fixed fraction of
- * the burn duration after ignition, so the timing that puts it there can be written
- * down directly instead of fitted.
- *
- * That makes MBT respond to everything burn duration responds to — mixture, dilution,
- * engine speed — which the previous RPM-and-load correlation could not do.
+ * Best torque lands with 50% of the mass burned 8-10 degrees after TDC across engine
+ * types. Given the Wiebe shape, 50% burn is a fixed fraction of the duration after
+ * ignition, so the timing that puts it there is written down rather than fitted — which
+ * makes MBT respond to mixture, dilution and speed, as the old correlation could not.
  *
  * @param {number} burnDeg burn duration, crank degrees
  * @returns {number} MBT spark advance, degrees BTDC

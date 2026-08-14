@@ -1,41 +1,26 @@
 /**
  * The turbocharger as a machine, not as a boost slider.
  *
- * WHAT THIS REPLACES
- * Boost used to be `target × spool × throttle²`, where spool was a linear ramp in RPM,
- * and exhaust backpressure was boost multiplied by a constant. Both are wrong in ways a
- * tuner feels immediately:
- *
- *   - A turbo does not spool on ENGINE SPEED, it spools on EXHAUST ENERGY. An RPM ramp
- *     says a small turbo makes no boost at 1500 RPM at full load, when in reality that
- *     is exactly where a small turbo is already at full boost. It also says boost
- *     arrives at the same RPM whether the engine is at 30% or 100% load, which is not
- *     how anything behaves.
- *   - Backpressure is not proportional to boost. The turbine is a restriction with a
- *     fixed effective area, so the pressure it needs upstream depends on how much
- *     exhaust is trying to get through it and how hot that exhaust is. Doubling the flow
- *     roughly doubles the pressure it takes to pass it.
- *
- * THE MODEL
- * A power balance. The compressor takes work to raise intake pressure; the turbine
- * extracts work by expanding exhaust down to atmospheric. At steady state the two are
- * equal, and that is what sets how much boost the hardware can actually make:
+ * A POWER BALANCE. The compressor takes work to raise intake pressure; the turbine
+ * extracts it by expanding exhaust to atmospheric. At steady state they are equal, and
+ * that sets the boost the hardware can make:
  *
  *   Pc = ṁ_air · cp · T_in · (PR^((γ-1)/γ) − 1) / η_c        compressor work required
  *   Pt = ṁ_exh · cp · T_exh · (1 − PR_t^-((γ-1)/γ)) · η_t    turbine work available
  *
- * Exhaust manifold pressure comes first, from the turbine treated as a nozzle of fixed
- * effective area. Then the expansion across it sets the power available, and the power
- * balance sets the boost the compressor can deliver. The player's boost target is a
- * CEILING enforced by the wastegate, not a promise: ask for more than the hardware can
- * make and you get what it can make.
+ * Backpressure comes first, from the turbine as a fixed-area nozzle; the expansion across
+ * it sets the power available; the balance sets the boost. The player's target is a
+ * CEILING enforced by the wastegate, not a promise.
  *
- * WHAT IS STILL MISSING
- * No compressor map: efficiency is a constant per compressor rather than a field of
- * islands, so surge and choke are still represented only by `boostCeiling` rather than
- * by real limit lines. No shaft inertia, so this is a steady-state balance and transient
- * lag is not modelled. Those are the next steps, and they are the reason a compressor
- * map is the remaining accuracy item in this model.
+ * Two things this replaces, both of which a tuner feels immediately. Boost was
+ * `target × spool(RPM) × throttle²` — but a turbo spools on exhaust ENERGY, so a small
+ * housing at full load is already on boost at 2000 RPM and the same housing at light load
+ * is not on boost at 5000. And backpressure was proportional to BOOST, when the turbine is
+ * a restriction of fixed area: double the flow and it takes roughly twice the pressure.
+ *
+ * STILL MISSING: no compressor map (efficiency is one number per part, so surge and choke
+ * are represented only by `boostCeiling`) and no shaft inertia, so this is steady-state
+ * and transient lag is not modelled.
  */
 
 import { BARO_KPA, GAMMA_EXP, PSI_TO_KPA } from './constants.js';
@@ -45,10 +30,10 @@ import { clamp } from './math.js';
 /**
  * Pressure the turbine needs upstream of itself to pass a given exhaust flow.
  *
- * The housing is a nozzle: flow through it scales with upstream pressure over the square
- * root of upstream temperature, times an effective area. Inverting that gives the
- * backpressure the engine has to push against — which is why a small housing costs
- * pumping work at high flow, and why the same housing costs almost nothing at idle.
+ * The housing is a nozzle: flow scales with upstream pressure over the square root of
+ * upstream temperature, times an effective area. Inverting gives the backpressure the
+ * engine pushes against — why a small housing costs pumping work at high flow and almost
+ * nothing at idle.
  *
  * @param {number} exhaustFlowKgS mass flow through the turbine
  * @param {number} exhaustK exhaust temperature entering the turbine
@@ -94,10 +79,9 @@ export function achievableBoostPsi({
 /**
  * Solves the manifold and exhaust state for one operating point, turbo included.
  *
- * Boost, airflow and backpressure are mutually dependent — more boost means more air,
- * which means more exhaust, which drives more boost — so this iterates to a fixed point.
- * Three passes is plenty: the loop converges quickly because the feedback is strongly
- * damped by the wastegate ceiling in every case the app can reach.
+ * Boost, airflow and backpressure are mutually dependent, so this iterates to a fixed
+ * point. Three passes suffice: the wastegate ceiling damps the feedback strongly in every
+ * case the app can reach.
  *
  * @param {object} input
  * @param {number} input.rpm engine speed

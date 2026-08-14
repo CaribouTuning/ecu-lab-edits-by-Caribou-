@@ -40,11 +40,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  * @property {number} injectorCc injector size actually fitted, cc/min
  * @property {number} ecuInjectorCc injector size the ECU believes is fitted, cc/min
  * @property {import('./engine.js').DerivedEngine} derived
- * @property {number} [octaneBonus] legacy knock-margin bonus, accepted and ignored.
- *   Octane is now a fuel PROPERTY (`fuel.octane`) read by the autoignition model, not a
- *   margin added after the fact. Callers may still pass this — the UI and the tests do —
- *   and nothing reads it. The underlying `fuel.bonus` is still live, but only in the
- *   Engineer Score, where it prices how much compression a fuel buys you.
+ * @property {number} [octaneBonus] legacy, accepted and IGNORED. Octane is a fuel
+ *   property (`fuel.octane`) the autoignition model reads, not a margin added after the
+ *   fact. `fuel.bonus` is still live, but only in the Engineer Score.
  * @property {{boostCeiling: number}} compressor
  * @property {{size: string, effectiveAreaM2: number}|null} [turbine] turbine in the
  *   exhaust stream, if any. Null means no turbine, which is the correct state for a
@@ -76,19 +74,12 @@ export function evaluatePoint({
   // an efficiency term here — no separate throttle multiplier (that would
   // double-count load, which is exactly the Alpha-N mistake).
   //
-  // TWO VE NUMBERS, DOING DIFFERENT JOBS. This distinction is the whole basis of
-  // closed-loop VE tuning and it must not be collapsed back into one variable:
-  //
-  //   veActual   what the hardware genuinely flows. Physics. Sets the air that is
-  //              really in the cylinder, so it sets torque, knock and measured MAF.
-  //   veVal      what the ECU's table CLAIMS the cylinder flows. Calibration. The ECU
-  //              has no airflow oracle — it fuels from this number and nothing else.
-  //
-  // When the table is wrong, the ECU fuels for air that is not there (or misses air
-  // that is), and the mixture comes back off target. That gap is the entire signal a
-  // fuel-trim histogram measures, and correcting the table toward the truth is what
-  // makes it converge. With a single shared VE the gap is identically zero, the
-  // histogram has nothing to read, and no amount of iterating can ever close it.
+  // TWO VE NUMBERS, DOING DIFFERENT JOBS. Do not collapse these into one variable:
+  //   veActual   what the hardware flows. Physics. Sets real air, so torque/knock/MAF.
+  //   veVal      what the ECU's table CLAIMS. Calibration. The ECU has no airflow
+  //              oracle and fuels from this and nothing else.
+  // The gap between them IS the fuel-trim histogram's entire signal. Share one VE and the
+  // gap is identically zero, the histogram reads nothing, and no iteration can close it.
   const veActual = veActualVal ?? veVal;
   const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
   const airChargeG = trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3: vCylM3 });
@@ -173,39 +164,29 @@ export function evaluatePoint({
   const powerW = torqueNmCrank * (2 * Math.PI * rpm / 60);
   const hp = (powerW / 745.7) * DRIVETRAIN_EFF;
   const torque = torqueNmCrank * 0.7376 * DRIVETRAIN_EFF;
-  // Brake-specific fuel consumption is fuel per unit of work OUT. On overrun and in
-  // deep vacuum there is no work out — the engine is being motored — so the quantity is
-  // undefined, not zero. Zero would read as an engine making power from no fuel.
-  //
-  // The numerator is fuel DELIVERED, not fuel burned. BSFC measures what comes out of the
-  // tank, and at the rich mixture a tuner commands at wide-open throttle the difference
-  // is real: a fifth of the fuel finds no oxygen and leaves as unburnt hydrocarbon, and
-  // the driver still paid for it. Using burned mass here understated BSFC by exactly that
-  // fraction, which made over-fuelling look free on the one gauge that should price it.
+  // Fuel per unit of work OUT, from fuel DELIVERED — BSFC prices what leaves the tank,
+  // and at a rich WOT mixture a fifth of it finds no oxygen and the driver still paid.
+  // Null on overrun and in deep vacuum: there is no work out, so the quantity is
+  // undefined. Zero would read as an engine making power from no fuel.
   const bsfc = powerW > 0
     ? (deliveredFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
-  // what it costs the metal to give it. Both now come off the same trace, so they can
-  // no longer disagree — and the timing that maximises one is visibly not the timing
-  // that minimises the other.
+  // what it costs the metal. Both come off the same trace, so they cannot disagree.
   const peakPressure = paToBar(cycle.peakPressurePa);
   const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
 
-  // EGT comes from the SAME correlation the turbine ran on, with the knock retard the
-  // ECU actually pulled now folded in — that is the term the turbine estimate could not
-  // include, because backpressure has to be solved before the knock limit is known.
-  // Previously this was a separate ad-hoc expression, so the gauge and the turbine
-  // disagreed about the temperature of the same gas.
+  // Same correlation the turbine ran on, plus the knock retard the ECU actually pulled —
+  // the one term the turbine estimate cannot include, since backpressure has to be solved
+  // before the knock limit is known. Keep these on one call; they diverged once.
   const egtK = exhaustTempK({
     chargeIndex, lambda: lambdaActual, knockRetardDeg: knockPull,
   });
   const egtC = egtK - KELVIN_OFFSET;
   const egtRisk = egtC > COEFF.EGT_LIMIT_C;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
-  // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes the
-  // oil film off the bores, fouls plugs, dumps raw fuel into the catalyst and costs
-  // real power — a genuinely damaging condition, just a slower one than knock.
+  // Excessively rich is its own failure mode, not just "safe": unburnt fuel washes the
+  // oil film off the bores, fouls plugs and costs power. Slower than knock, still damage.
   const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
   const valveRisk = leanRisk && boostPsi > 3;
   const mafFlag = Math.abs(trimPct) > 8 && (mods.intake || mods.turboFitted);
