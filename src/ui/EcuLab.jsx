@@ -25,7 +25,8 @@ import {
 import {
   BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR, DEFAULT_BOOST,
   DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
-  INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS, PSI_TO_KPA,
+  INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS,
+  PRESET_GROUPS, PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
   deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
@@ -110,6 +111,48 @@ function PickList({ options, value, onChange }) {
           }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
         );
       })}
+    </div>
+  );
+}
+
+// A native <select> with optgroup headings, styled to the theme. Native rather than a
+// custom panel so that keyboard navigation, type-ahead and screen-reader semantics come
+// from the platform instead of being reimplemented, and so a phone gets its own picker
+// wheel. Used where a list has grown past what a stack of PickList buttons can carry.
+//
+// `groups` is [{ label, options: [{ label, value }] }]; `extra` holds options that
+// belong to no group and render after all of them.
+function GroupedSelect({ groups, extra = [], value, onChange }) {
+  return (
+    <div style={{ position: 'relative', marginBottom: 13 }}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: '100%', appearance: 'none', WebkitAppearance: 'none',
+          padding: '11px 34px 11px 13px', borderRadius: 9,
+          border: `1px solid ${T.line}`, background: T.panel2, color: T.ink,
+          fontFamily: T.sans, fontSize: 13, fontWeight: 600,
+        }}
+      >
+        {groups.map((g) => (
+          <optgroup key={g.label} label={g.label} style={{ background: T.panel, color: T.ink2 }}>
+            {g.options.map((o) => (
+              <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
+            ))}
+          </optgroup>
+        ))}
+        {extra.map((o) => (
+          <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown
+        size={16}
+        style={{
+          position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+          color: T.ink2, pointerEvents: 'none',
+        }}
+      />
     </div>
   );
 }
@@ -1413,11 +1456,22 @@ export default function EngineManagementSandbox() {
               sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
-              <PickList
-                options={[
-                  ...ENGINE_PRESETS.map((p) => ({ label: `${p.name} · ${p.factory.crankHp} hp`, value: p.id })),
-                  { label: 'Custom build', value: '__custom__' },
-                ]}
+              <GroupedSelect
+                groups={PRESET_GROUPS.map((g) => ({
+                  label: g.manufacturer,
+                  // The heading carries the manufacturer, so strip it off the option
+                  // where the name spells it the same way: "BMW B58B30M0" under a "BMW"
+                  // heading becomes "B58B30M0". The two Volkswagens are deliberately
+                  // left alone — they are named "VW EA888.3 (...)" against a
+                  // "Volkswagen" heading, so this replace finds nothing and they keep
+                  // their prefix. That reads fine (VW is the badge, Volkswagen the
+                  // maker) and is not worth an abbreviation table in the UI layer.
+                  options: g.presets.map((p) => ({
+                    label: `${p.name.replace(`${p.manufacturer} `, '')} · ${p.factory.crankHp} hp`,
+                    value: p.id,
+                  })),
+                }))}
+                extra={[{ label: 'Custom build', value: '__custom__' }]}
                 value={presetId ?? '__custom__'}
                 onChange={(v) => {
                   if (v === '__custom__') { setPresetId(null); return; }
