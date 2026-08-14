@@ -24,7 +24,7 @@ in for the missing dimension.
 
 ## The model
 
-`src/sim/cycle.js`, single zone, two gamma, finite heat release. Integrated from intake
+`src/sim/cycle.js`, TWO ZONE, finite heat release. Integrated from intake
 valve close to exhaust valve open at `CYCLE_STEP_DEG` (2°):
 
 | Step | Method |
@@ -34,7 +34,8 @@ valve close to exhaust valve open at `CYCLE_STEP_DEG` (2°):
 | Pressure | First law per step: `dp = (γ−1)/V·dQ − γ·p/V·dV`, γ blended unburned → burned by mass fraction |
 | Work | Trapezoidal `∮ p dV`, giving gross IMEP directly |
 | Heat loss | Woschni per crank degree, against a chamber area that grows as the piston uncovers the liner |
-| End gas | Isentropic from the trapped state, plus flame heating, less what the wall takes |
+| Unburned zone | Isentropic from the trapped state, less what the wall takes |
+| Burned zone | Open-system enthalpy balance, with cp rising toward dissociation |
 | Knock | Livengood–Wu integral of Douaud–Eyzat ignition delay; ≥ 1 is knock |
 
 MBT is not fitted: it is the advance that lands 50% mass burned at `MFB50_ATDC_DEG`,
@@ -108,7 +109,7 @@ The second anchor is not decoration. Values that satisfy only the first push the
 naturally aspirated knock limit past anything the app can command, which silently deletes
 the most basic lesson in the tutorial — that you can over-advance an engine on pump gas.
 
-`COEFF` went from 124 entries to 119 — the additive knock envelope and the empirical
+`COEFF` went from 124 entries to 130 — the additive knock envelope and the empirical
 peak-pressure block out, Woschni, the turbocharger and the saturating exhaust-temperature
 model in — with zero unreferenced.
 
@@ -230,22 +231,48 @@ With both fixed, all seven presets validate with zero knocking points on their o
 calibrations. The B58B30M1's torque moved from +1.7% to −1.2% — it is now knock-limited
 down low the way the real engine is — and it is still comfortably inside ±10%.
 
+### The five remaining limitations, closed
+
+The design previously ended on a list of five. All are now modelled:
+
+- **Two-zone combustion.** Burned and unburned gas share a pressure and carry their own
+  temperatures; the burned zone is an open-system enthalpy balance with a
+  temperature-dependent heat capacity for dissociation. This retires the three-coefficient
+  Gaussian that asserted where flame temperature peaks — the balance produces it.
+- **Exhaust temperature from the cycle**, at exhaust valve open and blown down to the
+  manifold. `exhaustTempK` survives only for the turbine balance, which must run first.
+- **A compressor map** with surge and choke as real limit lines, choke enforced as a mass
+  flow cap. Turbo matching is emergent: a small compressor holds boost from 1500 RPM and
+  chokes by 4000; a large one surges at 2500 and is happy from 4000 up.
+- **Shaft inertia** in the live engine: 0 to 9.4 psi in ~0.3 s, decaying in 0.4 s, with
+  spool-up slower than spool-down because it is energy-limited. The dyno sweep is
+  unaffected by design.
+- **Crevice volume and blowby** as real geometry and real lost mass.
+
+Cycle-to-cycle variation stays out deliberately: the fingerprint requires determinism, and
+what CCV causes — unstable combustion under dilution — already arrives through the
+residual-driven burn duration.
+
+**One pre-existing test changed its claim.** `knock > loses margin when the mixture is
+lean under load` asserted a monotonic relationship the single-zone model produced only
+because its Gaussian asserted it. The two-zone balance derives burned-gas temperature and
+disagrees, as does published knock-limited-advance data: the curve is U-shaped in lambda
+with its minimum near best-torque mixture, where cylinder pressure peaks. The lesson is
+kept as three tests — worst near best torque, cruise still unpunished, and lean-under-load
+still dangerous through `leanRisk`, `valveRisk` and lost power.
+
+`PEAK_PRESSURE_LIMIT_BAR` moved 100 to 105, re-anchored on an E85 build ladder so knock
+does not confound it: presets 63-75 bar, a mild 8 psi build 99, stock rods at 14 psi 108,
+12.5:1 at 18 psi 118. The two-zone scale now sits just under the published 110-130 band.
+
 Remaining simplifications, stated rather than hidden:
 
-- No compressor map. Efficiency is one number per compressor rather than a field of
-  islands, so surge and choke are still only `boostCeiling`. **This is the biggest
-  accuracy item left.**
-- No shaft inertia, so the induction solve is steady-state and transient lag is not
-  modelled.
-- Single zone — burned-gas temperature is not tracked, hence the one-coefficient
-  flame-heating term.
-- No crevice volume as geometry, no blowby, no cycle-to-cycle variation.
-- Exhaust temperature is a correlation in load, mixture and retard, not the cycle's own
-  end-of-expansion answer, because the turbine balance has to run before the cycle does.
-  The induction solve is coarser still: it prices the expansion at a full-charge
-  stoichiometric reference, since it does not yet know how much air the engine will draw.
-  That is tolerable only because the load term saturates — over the range a boosted engine
-  works in, the reference is close to the truth.
+- The compressor map is parametric, not digitised from a real compressor.
+- Both zones are well stirred: no boundary layer, no profile within either.
+- Composition is frozen apart from the two gammas.
+- No cycle-to-cycle variation, by design.
+- The induction solve prices the turbine expansion at a full-charge stoichiometric
+  reference, because it runs before it knows how much air the engine will draw.
 
 The one relaxation left in `tests/presets.test.js` is the ±500 RPM grace on plateau-rated
 peak location, which is the same grace the point-rated branch always had. The GTI misses
