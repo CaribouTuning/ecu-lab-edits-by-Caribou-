@@ -35,6 +35,7 @@ import {
   findPartNumbers,
   importRomRaider,
   parseXml,
+  buildDemoRom,
 } from '../src/rom/index.js';
 
 /* ------------------------------------------------------------------ *
@@ -379,6 +380,62 @@ describe('map access', () => {
     expect(diff[0].changes).toHaveLength(1);
     expect(diff[0].changes[0]).toMatchObject({ row: 2, col: 3 });
     expect(diff[0].changes[0].to - diff[0].changes[0].from).toBeCloseTo(1);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The demo ROM
+ * ------------------------------------------------------------------ */
+
+describe('the demo ROM', () => {
+  it('is the size a real Rev-Up dump is', () => {
+    const { bytes } = buildDemoRom();
+    // SH7058, 1 MB. A dump that is not this size means setdev was wrong.
+    expect(bytes.length).toBe(1024 * 1024);
+  });
+
+  it('opens as a valid, self-consistent image', () => {
+    const { bytes, definition } = buildDemoRom();
+    const image = new RomImage(bytes, definition);
+    expect(image.validation.errors).toEqual([]);
+    expect(image.validation.warnings).toEqual([]);
+    expect(image.checkChecksum().valid).toBe(true);
+  });
+
+  it('holds calibration values that are physically sensible', () => {
+    const { bytes, definition } = buildDemoRom();
+    const image = new RomImage(bytes, definition);
+
+    const fuel = image.readMap('Fuel Target');
+    // Cruise runs stoichiometric because that is where the catalyst works...
+    expect(fuel[0][0]).toBeCloseTo(14.7, 1);
+    // ...and full load runs rich, for knock margin and exhaust temperature.
+    expect(fuel[7][0]).toBeLessThan(12.5);
+    expect(fuel[7][0]).toBeGreaterThan(11);
+
+    expect(image.readMap('Rev Limit (Fuel Cut)')[0][0]).toBeCloseTo(7000, 0);
+    // Idle target falls as the engine warms.
+    const idle = image.readMap('Idle Target')[0];
+    expect(idle[0]).toBeGreaterThan(idle[15]);
+  });
+
+  it('reads its axes back as real engine units', () => {
+    const { bytes, definition } = buildDemoRom();
+    const image = new RomImage(bytes, definition);
+    const axes = image.readAxes('Fuel Target');
+    expect(axes.x[0]).toBeCloseTo(800, 0);
+    expect(axes.x.at(-1)).toBeCloseTo(6400, 0);
+  });
+
+  it('survives an edit and a checksum-verified export', () => {
+    const { bytes, definition } = buildDemoRom();
+    const image = new RomImage(bytes, definition);
+    image.writeCell('Fuel Target', 7, 0, 11.5);
+
+    const out = image.export();
+    expect(out).toHaveLength(1024 * 1024);
+    expect(verify(out, definition.checksum.sumOffset, definition.checksum.xorOffset).valid).toBe(true);
+    expect(image.changedCells()[0].changes).toHaveLength(1);
   });
 });
 

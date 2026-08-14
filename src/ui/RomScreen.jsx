@@ -18,10 +18,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   HardDrive, Upload, Download, AlertTriangle, CheckCircle2, RotateCcw, FileCode2, Search,
-  Cable, ChevronDown,
+  Cable, ChevronDown, FlaskConical,
 } from 'lucide-react';
 
-import { RomImage, importRomRaider, findPartNumbers, quantize } from '../rom/index.js';
+import { RomImage, importRomRaider, findPartNumbers, quantize, buildDemoRom } from '../rom/index.js';
 import { BridgeClient, DEFAULT_BRIDGE_URL } from '../bridge/client.js';
 import { T, heat } from './theme.js';
 
@@ -96,7 +96,7 @@ function BridgePanel({ onDump }) {
   const [url, setUrl] = useState(DEFAULT_BRIDGE_URL);
   const [token, setToken] = useState('');
   const [port, setPort] = useState('');
-  const [device, setDevice] = useState('7055');
+  const [device, setDevice] = useState('7058');
   const [kernelPath, setKernelPath] = useState('');
   const [busy, setBusy] = useState(null);
   const [log, setLog] = useState([]);
@@ -179,8 +179,8 @@ function BridgePanel({ onDump }) {
           <Field label="BRIDGE URL" value={url} onChange={setUrl} />
           <Field label="TOKEN" value={token} onChange={setToken} placeholder="printed when the bridge starts" />
           <Field label="SERIAL PORT" value={port} onChange={setPort} placeholder="\\.\COM3  or  /dev/ttyUSB0" />
-          <Field label="MCU" value={device} onChange={setDevice} placeholder="7055" />
-          <Field label="KERNEL PATH" value={kernelPath} onChange={setKernelPath} placeholder="…/npkern/precompiled/npk_SH7055_18.bin" />
+          <Field label="MCU" value={device} onChange={setDevice} placeholder="7058" />
+          <Field label="KERNEL PATH" value={kernelPath} onChange={setKernelPath} placeholder="…/npkern/precompiled/npk_SH7058.bin" />
 
           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
             {button('CONNECT', doConnect, 'connect')}
@@ -430,6 +430,26 @@ export default function RomScreen() {
     }
   };
 
+  /**
+   * Open the synthetic demo image.
+   *
+   * Not a Nissan ROM and not anyone's dump — an empty buffer with sensible
+   * values written at the addresses a real Rev-Up definition looks for. It
+   * exists so the editor is explorable before you own a cable.
+   */
+  const loadDemo = () => {
+    setError(null);
+    const { bytes, definition: def } = buildDemoRom();
+    setDefinition(def);
+    setDefProblems([]);
+    const next = new RomImage(bytes, def);
+    setOriginalBytes(bytes);
+    setImage(next);
+    setActiveMapId(def.maps[0]?.id ?? null);
+    setSelection(null);
+    touched();
+  };
+
   const loadRom = async (file) => {
     try {
       loadBytes(new Uint8Array(await file.arrayBuffer()), file.name);
@@ -534,6 +554,16 @@ export default function RomScreen() {
           <FileButton label="OPEN ROM (.bin)" accept=".bin,.rom,application/octet-stream" onFile={loadRom} icon={Upload} tone="primary" />
           <FileButton label="LOAD DEFINITION (RomRaider .xml)" accept=".xml,text/xml" onFile={loadDefinition} icon={FileCode2} />
         </div>
+
+        <button
+          onClick={loadDemo}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '11px 14px', borderRadius: 9, fontWeight: 700, fontSize: 12.5,
+            border: `1px solid ${T.violet}`, background: T.violetBg, color: T.violet,
+            width: '100%', marginBottom: 12,
+          }}
+        ><FlaskConical size={15} />TRY A DEMO ROM</button>
 
         <BridgePanel onDump={(bytes) => loadBytes(bytes, 'the dump from the ECU')} />
 

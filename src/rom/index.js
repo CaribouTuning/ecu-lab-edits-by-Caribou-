@@ -42,5 +42,7 @@ export {
 
 export { RomImage, CPU_BY_SIZE, findAsciiStrings, findPartNumbers } from './image.js';
 
+export { buildDemoRom, demoDefinition, DEMO_ROM_SIZE } from './demo.js';
+
 export { importRomRaider } from './formats/romraider.js';
 export { parseXml } from './formats/xml.js';
