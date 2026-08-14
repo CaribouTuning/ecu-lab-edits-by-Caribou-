@@ -20,6 +20,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import {
   Gauge, Grid3x3, Zap, Droplets, Wind, Activity, RotateCcw, Play, AlertTriangle, Info,
   Wrench, Settings, Package, Flame, ChevronDown, Trophy, TrendingUp, BookOpen, Fuel,
+  HardDrive,
 } from 'lucide-react';
 
 import {
@@ -32,6 +33,7 @@ import {
   simulateSweep, veRecommendations
 } from '../sim/index.js';
 import { T, heat, statusColor } from './theme.js';
+import RomScreen from './RomScreen.jsx';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 
@@ -1093,6 +1095,10 @@ export default function EngineManagementSandbox() {
     { id: 'build', label: 'BUILD', icon: Settings },
     { id: 'tune', label: 'TUNE', icon: Grid3x3 },
     { id: 'dyno', label: 'DYNO', icon: Activity },
+    // The one destination that is not the simulator: a real ECU binary. It is
+    // last because everything to its left is where you learn what an edit costs
+    // before making that edit to a file destined for an engine controller.
+    { id: 'rom', label: 'ROM', icon: HardDrive },
   ];
   const TUNE_VIEWS = [
     { id: 've', label: 'AIR', icon: Grid3x3 },
@@ -1137,6 +1143,9 @@ export default function EngineManagementSandbox() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {/* ---------- ROM: a real ECU binary, not the simulation ---------- */}
+        {tab === 'rom' && <RomScreen />}
+
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
         {tab === 'dash' && (
           <div style={{ padding: 16 }}>

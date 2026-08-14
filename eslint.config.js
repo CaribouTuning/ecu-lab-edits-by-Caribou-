@@ -19,6 +19,9 @@ export default [
         window: 'readonly',
         document: 'readonly',
         localStorage: 'readonly',
+        // Used by the ROM screen to hand an exported binary back to the user.
+        Blob: 'readonly',
+        URL: 'readonly',
         console: 'readonly',
         setInterval: 'readonly',
         clearInterval: 'readonly',
