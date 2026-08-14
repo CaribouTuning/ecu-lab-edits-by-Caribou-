@@ -1382,7 +1382,7 @@ export default function EngineManagementSandbox() {
                 <br /><br /><b style={{ color: T.ink }}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was.
                 <br /><br /><b style={{ color: T.ink }}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
                 <br /><br /><b style={{ color: T.ink }}>Airflow</b> — around 200 g/s is typical at redline for an engine near 300 hp, which is a quick sanity check on whether your VE table is plausible.
-                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~950°C cooks turbines and valves; it rises with retarded timing and lean mixtures.
+                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~980°C cooks turbines and valves; it rises hard with retarded timing and lean mixtures, and a rich mixture is what pulls it back down.
               </ExpandableInfo>
 
               <ExpandableInfo title="15. What tuning can fix, and what it can't">
@@ -2070,7 +2070,7 @@ export default function EngineManagementSandbox() {
                         const p = result.points.find((pt) => pt.rpm === r);
                         if (!p) return null;
                         const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-                        const warn = !bad && (p.duty > 85 || p.egt > 870);
+                        const warn = !bad && (p.duty > 85 || p.egtRisk);
                         const edge = bad ? T.red : warn ? T.yellow : T.line;
 
                         // Each row: label, what was asked, what happened, and a verdict.
@@ -2092,8 +2092,8 @@ export default function EngineManagementSandbox() {
                             note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${p.duty > 90 ? ' — at the limit' : ''}`,
                             ok: p.duty <= 90 },
                           { k: 'Heat', asked: null, got: `${p.egt}°C`,
-                            note: `intake charge ${p.iat}°C${p.egt > 950 ? ' · exhaust running hot' : ''}`,
-                            ok: p.egt <= 950 },
+                            note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
+                            ok: !p.egtRisk },
                           { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
                             note: p.pressureRisk
                               ? 'past what stock pistons and rods take — a mechanical limit, not detonation'

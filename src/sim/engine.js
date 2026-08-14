@@ -103,6 +103,7 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} ratio bore ÷ stroke
  * @property {number} compression static compression ratio, carried through unchanged
  * @property {number} bore cylinder bore, mm
+ * @property {number} stroke stroke, mm
  * @property {number} boreFlameFactor flame-travel scaling from bore, 1 at the reference
  * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
@@ -170,7 +171,8 @@ export function deriveEngine(cfg) {
   // `evaluatePoint` a `derived`, so carrying it here keeps the config object out of
   // the per-point signature.
   return {
-    cyl, displacementL, ratio, compression: cfg.compression, bore: cfg.bore,
+    cyl, displacementL, ratio, compression: cfg.compression,
+    bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, chamberOffsetK,
     torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,

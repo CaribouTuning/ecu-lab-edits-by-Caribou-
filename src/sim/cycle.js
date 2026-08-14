@@ -28,11 +28,15 @@
  *   - First law per crank degree: dp = (γ-1)/V · dQ − γ · p/V · dV.
  *   - Work by trapezoidal integration of p dV, giving gross indicated MEP directly.
  *   - The unburned end gas tracked isentropically, feeding an autoignition integral.
+ *   - Wall heat transfer from the Woschni correlation, per crank degree, against a
+ *     chamber area that grows as the piston uncovers the liner.
  *
  * WHAT IT IS NOT
- * Not a CFD or multi-zone model. There is no flame-front geometry, no crevice volume,
- * no blowby, no cycle-to-cycle variation, and heat transfer is a lumped fraction rather
- * than a Woschni correlation. Those are the honest next steps, not hidden assumptions.
+ * Not a CFD or multi-zone model. There is no flame-front geometry, no crevice volume as
+ * real geometry, no blowby, and no cycle-to-cycle variation. Being single-zone, it does
+ * not track burned-gas temperature, which is why the end gas needs a one-coefficient
+ * flame-heating term where a two-zone model would compute one. Those are the honest
+ * next steps, not hidden assumptions.
  */
 
 import { COEFF } from './coefficients.js';
@@ -81,7 +85,12 @@ export function ivcAfterBdcDeg(camDuration) {
 }
 
 /**
- * Burn duration — how many crank degrees the charge takes to go from 10% to 90% burned.
+ * Burn duration — the crank angle the Wiebe function spans, from the end of the flame
+ * development delay to essentially complete combustion.
+ *
+ * This is the TOTAL duration, not the 10-90% figure usually quoted in the literature.
+ * With `WIEBE_A = 5` and `WIEBE_M = 2` the 10-90% window is very close to half of it, so
+ * a 42-degree total here is a ~21-degree 10-90%, which is where a production engine sits.
  *
  * Burn duration in CRANK degrees is roughly constant with engine speed, because
  * turbulence intensity scales with piston speed and the flame speeds up in proportion.
@@ -119,6 +128,9 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} rodRatio connecting rod length ÷ crank radius
  * @property {number} ivcAbdc intake valve close, degrees after BDC
  * @property {number} burnDeg burn duration, crank degrees
+ * @property {number} boreM cylinder bore, metres — sets heat-transfer area
+ * @property {number} strokeM stroke, metres — sets piston speed and liner area
+ * @property {number} trappedMassKg total mass in the cylinder, for the gas-law temperature
  * @property {number} octaneNumber fuel antiknock index
  * @property {number} [lambda] delivered lambda; sets how hot the flame behind the
  *   front runs, which heats the end gas on top of compression
@@ -143,6 +155,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber, lambda = 0.9,
+  boreM, strokeM, trappedMassKg,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
   const thetaStart = -180 + ivcAbdc;
@@ -152,8 +165,14 @@ export function runCycle({
   // of that delay, not from the spark event.
   const burnStart = spark + COEFF.FLAME_DEVELOPMENT_DEG;
   const burnEnd = burnStart + burnDeg;
-  // Heat actually available to raise pressure: the rest goes into the chamber walls.
-  const netHeatJ = heatJ * (1 - COEFF.CYCLE_HEAT_LOSS_FRAC);
+  // Geometry the wall heat-transfer model needs. What reaches the piston is the heat
+  // release minus whatever the walls take, and the wall term is computed per step below
+  // rather than assumed as a fixed fraction of the fuel.
+  const boreAreaM2 = (Math.PI / 4) * boreM * boreM;
+  const meanPistonSpeed = 2 * strokeM * (rpm / 60);
+  // Motored reference state for the Woschni combustion term: what the pressure would
+  // have been at this crank angle with no combustion at all.
+  const vIvcRef = cylinderVolumeM3(thetaStart, clearanceM3, sweptM3, rodRatio);
   // Time per crank degree, milliseconds — the clock the autoignition integral runs on.
   const msPerDeg = 1000 / (6 * Math.max(rpm, 1));
 
@@ -189,7 +208,7 @@ export function runCycle({
     const thetaNext = theta + step;
     const vNext = cylinderVolumeM3(thetaNext, clearanceM3, sweptM3, rodRatio);
     const burned = burnedFraction(thetaNext);
-    const dQ = (burned - prevBurned) * netHeatJ;
+    const dQ = (burned - prevBurned) * heatJ;
 
     // Ratio of specific heats falls as the charge burns — hot combustion products are
     // polyatomic and store energy in vibration. Blending between the two is the cheap
@@ -198,9 +217,36 @@ export function runCycle({
     const gamma = COEFF.GAMMA_UNBURNED
       + (COEFF.GAMMA_BURNED - COEFF.GAMMA_UNBURNED) * burned;
 
-    // First law for a single zone: pressure rises with heat added and falls as the
-    // volume grows.
-    const dp = ((gamma - 1) / v) * dQ - (gamma * p * (vNext - v)) / v;
+    // --- WALL HEAT TRANSFER, per step, from the Woschni correlation.
+    //
+    // This replaces a flat "14% of the heat goes into the walls" assumption, and the
+    // difference is not cosmetic: heat loss does not scale with fuel, it scales with
+    // surface area, gas temperature and charge motion. A small cylinder has more wall
+    // per unit volume and loses proportionally more; a slow-turning engine holds hot gas
+    // against the walls for longer and loses more; a boosted engine at high pressure
+    // loses more still. Those are real, and a fixed fraction expressed none of them.
+    const tGas = (p * v) / (trappedMassKg * R_AIR);
+    // Exposed area: head, piston crown, and the liner the piston has uncovered.
+    const strokeFrac = Math.max(0, (v - clearanceM3) / sweptM3);
+    const areaM2 = 2 * boreAreaM2 + Math.PI * boreM * strokeM * strokeFrac;
+    // Woschni's characteristic gas velocity. The second term is the extra motion
+    // combustion itself creates, driven by how far pressure has risen above the motored
+    // trace — so it only appears once something is burning.
+    const pMotoredPa = trappedPa * Math.pow(vIvcRef / v, COEFF.GAMMA_UNBURNED);
+    const wGas = COEFF.WOSCHNI_C1 * meanPistonSpeed
+      + (burned > 0
+        ? COEFF.WOSCHNI_C2 * (sweptM3 * trappedK / (trappedPa * vIvcRef))
+          * Math.max(0, p - pMotoredPa)
+        : 0);
+    const hCoeff = COEFF.WOSCHNI_K * Math.pow(boreM, -0.2)
+      * Math.pow(p / 1000, 0.8) * Math.pow(tGas, -0.55) * Math.pow(Math.max(wGas, 0.1), 0.8);
+    // Seconds per integration step: a crank turns 6 x rpm degrees per second.
+    const dtS = step / (6 * Math.max(rpm, 1));
+    const dQwall = hCoeff * areaM2 * (tGas - COEFF.WALL_TEMP_K) * dtS;
+
+    // First law for a single zone: pressure rises with heat added, falls as the volume
+    // grows, and falls again with whatever the walls took.
+    const dp = ((gamma - 1) / v) * (dQ - dQwall) - (gamma * p * (vNext - v)) / v;
     const pNext = Math.max(1, p + dp);
 
     // Work on the piston, trapezoidal.
@@ -346,7 +392,9 @@ export function cycleInputsFor({
   const ivcAbdc = ivcAfterBdcDeg(derived.camDuration);
   const vIvc = cylinderVolumeM3(-180 + ivcAbdc, clearanceM3, sweptM3, COEFF.ROD_RATIO);
 
-  const residualFrac = residualFraction({ mapKpa, empKpa, overlapDeg: derived.overlapDeg || 0 });
+  const residualFrac = residualFraction({
+    mapKpa, empKpa, overlapDeg: derived.overlapDeg || 0, compression: derived.compression,
+  });
   // Fuel evaporating into the charge cools it before anything else happens to it, so a
   // richer mixture starts compression colder and a leaner one starts hotter.
   const cooledK = intakeK - evaporativeCoolingK(fuelIn, airChargeG, fuel);
@@ -366,12 +414,17 @@ export function cycleInputsFor({
   // temperature below is what the thermal history and the end gas run on.
   const trappedPa = ((airChargeG / 1000) * R_AIR * cooledK) / vIvc;
 
+  const totalMassKg = (airChargeG / 1000) / Math.max(0.05, 1 - residualFrac);
+
   return {
     rpm,
     sparkBtdc: 0,
     trappedPa,
+    boreM: derived.bore / 1000,
+    strokeM: derived.stroke / 1000,
+    trappedMassKg: totalMassKg,
     trappedK,
-    heatJ: (burnedFuelG / 1000) * fuel.lhv,
+    heatJ: (burnedFuelG / 1000) * fuel.lhv * COEFF.COMBUSTION_COMPLETENESS,
     clearanceM3,
     sweptM3,
     rodRatio: COEFF.ROD_RATIO,

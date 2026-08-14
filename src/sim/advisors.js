@@ -12,11 +12,9 @@ import { computeHardwareVE } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { turbineBackpressureRelief } from './hardware.js';
-import { chargeTempK } from './thermo.js';
-import { COEFF } from './coefficients.js';
-import { clamp, interp1 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { chargeTempK, exhaustTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
+import { clamp, interp1, interp2 } from './math.js';
+import { solveInduction } from './turbo.js';
 import { evaluatePoint } from './point.js';
 import { LOAD, RPM } from './tables.js';
 
@@ -109,7 +107,14 @@ export function calibrationAdvice({
     if (mapRow > maxReachable) return;
     RPM.forEach((rpm, ci) => {
       const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-      const man = computeManifold(rpm, Math.min(mapRow, BARO_KPA), turboOn, boostTarget, turbine, compressor);
+      const man = solveInduction({
+        rpm, loadKpa: Math.min(mapRow, BARO_KPA), turboOn, boostTargetPsi: boostTarget,
+        turbine, compressor,
+        veAt: (mapKpa) => interp2(veTruth ?? ve, rpm, mapKpa),
+        derived,
+        intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
+        lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+      });
       const useMap = mapRow > BARO_KPA ? mapRow : man.mapKpa;
       const boostPsi = Math.max(0, (useMap - BARO_KPA) / PSI_TO_KPA);
       const pt = evaluatePoint({
@@ -155,9 +160,10 @@ export function calibrationAdvice({
       const mbt = mbtForCell({
         rpm, mapKpa: mapRow, intakeK: rowChargeK,
         empKpa: exhaustManifoldKpa({
-          boostPsi: rowBoostPsi, turboOn,
-          turbineRelief: turbineBackpressureRelief(turboOn ? turbine : null),
-          flowFrac: chargeIndexOf(rowVe, mapRow) * (rpm / COEFF.EMP_FLOW_REF_RPM),
+          turboOn, turbine: turboOn ? turbine : null,
+          exhaustFlowKgS: (rowAir / 1000) * (1 + 1 / (fuel.stoich * rowLambda))
+            * derived.cyl * (rpm / 2) / 60,
+          exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(rowVe, mapRow), lambda: rowLambda }),
         }),
         airChargeG: rowAir, burnedFuelG: rowAir / (fuel.stoich * rowLambda),
         lambda: rowLambda, fuel, derived,

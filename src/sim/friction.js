@@ -8,8 +8,10 @@
  * which is exactly why a real engine drops revs so briskly.
  */
 
-import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
+import { clamp } from './math.js';
+import { turbineBackPressureKpa } from './turbo.js';
 
 /**
  * Rubbing (mechanical) friction as a mean effective pressure.
@@ -34,25 +36,28 @@ export function rubbingFmepPa(rpm, springPa = 0, arch = {}) {
  * Exhaust manifold pressure — what the piston has to push against.
  *
  * Naturally aspirated this is barometric plus system backpressure, which grows with
- * flow. With a turbine in the stream it is far higher, and that is the term the model
- * used to be missing entirely: a turbine extracts its energy by throttling the exhaust,
- * so exhaust manifold pressure commonly runs well ABOVE boost pressure. A small
- * housing that spools quickly is the same housing that chokes the exhaust, which is
- * the real trade being made when a turbine is sized — not just a top-end VE multiplier.
+ * flow. With a turbine in the stream it is set by the turbine treated as a nozzle: see
+ * `turbineBackPressureKpa` in turbo.js. It scales with FLOW, not with boost, which is
+ * the correction that makes housing size a real trade — a small housing needs more
+ * pressure upstream to pass the same exhaust, so it spools early and costs pumping work
+ * at high flow.
  *
  * @param {object} input
- * @param {number} input.boostPsi gauge boost, psi
  * @param {boolean} input.turboOn whether a turbine is in the stream
- * @param {number} [input.turbineRelief] backpressure relief from a larger housing, 0..1
- * @param {number} [input.flowFrac] normalised exhaust flow, 1 ≈ full load at 6000 RPM
+ * @param {number} input.exhaustFlowKgS mass flow leaving the cylinder
+ * @param {number} input.exhaustK turbine inlet temperature
+ * @param {{effectiveAreaM2: number}|null} [input.turbine]
+ * @param {number} [input.wastegateRelief] fraction of turbine backpressure the gate bleeds
  * @returns {number} exhaust manifold pressure, kPa
  */
-export function exhaustManifoldKpa({ boostPsi, turboOn, turbineRelief = 0, flowFrac = 0 }) {
-  const systemKpa = (COEFF.EMP_NA_PER_FLOW / 1000) * Math.max(0, flowFrac);
-  if (!turboOn) return BARO_KPA + systemKpa;
-  const boostKpa = Math.max(0, boostPsi) * PSI_TO_KPA;
-  const turbineKpa = boostKpa * COEFF.EMP_TURBINE_RATIO * (1 - turbineRelief);
-  return BARO_KPA + systemKpa + turbineKpa;
+export function exhaustManifoldKpa({
+  turboOn, exhaustFlowKgS, exhaustK, turbine = null, wastegateRelief = 0,
+}) {
+  const systemKpa = COEFF.EXHAUST_SYSTEM_KPA_PER_KGS * Math.max(0, exhaustFlowKgS);
+  if (!turboOn || !turbine) return BARO_KPA + systemKpa;
+  const turbineKpa = turbineBackPressureKpa(exhaustFlowKgS, exhaustK, turbine.effectiveAreaM2)
+    - BARO_KPA;
+  return BARO_KPA + systemKpa + turbineKpa * (1 - clamp(wastegateRelief, 0, 1));
 }
 
 /**

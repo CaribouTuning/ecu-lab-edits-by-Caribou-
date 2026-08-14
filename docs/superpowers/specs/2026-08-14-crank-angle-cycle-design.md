@@ -99,36 +99,110 @@ published ignition-delay correlation, and is fitted against two anchors simultan
 1. Every boosted preset reaches its published output with its factory calibration
    knock-free.
 2. A stock 10.3:1 on 91 octane still runs out of knock margin in the mid thirties, where
-   a real one does.
+   a real one does. It lands at 36.0° at 5500 RPM, and falls to 23.5° at 3000 — the end
+   gas gets more milliseconds under pressure at low speed. That speed dependence is
+   emergent; the additive envelope needed a term for it.
 
 The second anchor is not decoration. Values that satisfy only the first push the
 naturally aspirated knock limit past anything the app can command, which silently deletes
 the most basic lesson in the tutorial — that you can over-advance an engine on pump gas.
 
-`COEFF` went from 124 entries to 102, with zero unreferenced.
+`COEFF` went from 124 entries to 118 — the additive knock envelope and the empirical
+peak-pressure block out, Woschni, the turbocharger and the saturating exhaust-temperature
+model in — with zero unreferenced.
 
 ## Validation and known limits
 
 All five presets — including the VQ35DE Rev-Up from #38 — reproduce their published power
 and torque from shared physics with no per-engine fudge.
 
-Two assertions were relaxed with the mechanism named rather than the tolerance widened,
-both recorded in typed tables that fail if the model ever gains the missing term:
+Every preset is held to the tolerances this repo already used — ±5% on power, ±10% on
+torque. An interim version of this work needed a −15% floor on the GTI's torque; the
+turbine energy balance described below removed the need for it, and it is gone.
 
-- **GTI peak torque** carries a −15% floor. Its 258 lb-ft is rated from 1500 RPM, and
-  `computeManifold` ramps boost from zero over the turbine's spool range, so the model has
-  it making no boost at all at the rated RPM.
-- **Plateau-rated peak location** gets the same ±500 RPM the point-rated branch always
-  had.
+### The second pass
+
+The three items this design first listed as "remaining" were then done, and two
+validation relaxations came back out as a result:
+
+- **Wall heat transfer is now Woschni**, per crank degree, against a chamber area that
+  grows as the piston uncovers the liner. It replaced a flat fraction of fuel energy,
+  which could express none of the things that actually drive heat loss — surface-to-volume
+  ratio, residence time, gas density. A 1500 RPM pull now loses measurably more heat per
+  unit of air than the same engine at 5500, which is why small and slow-turning engines
+  are less efficient.
+- **The turbo is a power balance.** Exhaust manifold pressure comes from the turbine
+  treated as a nozzle of fixed effective area, and boost from matching turbine work to
+  compressor work. The player's target became a wastegate ceiling rather than a promise.
+  The RPM spool ramp is gone, along with `spoolRange` and `lagAdd`.
+- **Dissociation and incomplete combustion.** Burned-gas gamma dropped to the dissociated
+  end of the published band, and 3% of the fuel is left unburned in crevices and quench
+  layers. Without both, the cycle read about 8% high on every engine once Woschni had
+  replaced the old catch-all heat-loss fraction.
+
+The turbo work paid for itself immediately: the GTI's 258 lb-ft is rated from 1500 RPM,
+and the old ramp had it making no boost at all there. It now makes 12.7 psi at 2000 RPM,
+so the **−15% torque floor this design previously needed is gone and the preset is held
+to the normal ±10% again**. The N54 gained a `turbineCount` — it is twin-turbo, and once
+backpressure depends on total flow area, modelling two small housings as one took 27% off
+its power.
+
+### The audit pass
+
+Three more defects came out of reading the finished model back, all of the same kind — a
+quantity the code claimed to model and did not:
+
+- **One exhaust temperature, not two.** The turbine ran on a correlation in `thermo.js`;
+  the datalog's EGT gauge ran on `720 + retard·22 + lean·45 + boost·6`, three bare magic
+  numbers in `point.js` in a codebase whose stated rule is that no such number lives
+  outside `coefficients.js`. They disagreed about the temperature of the same gas. There
+  is now one call, and the gauge additionally folds in the knock retard the ECU actually
+  pulled — the term the turbine estimate cannot include, because backpressure has to be
+  solved before the knock limit is known.
+
+  The correlation itself was also wrong in shape: linear in load and therefore unbounded,
+  it put a stock Golf R at 1030 °C. Exhaust temperature saturates, because past a full
+  charge the extra air brings extra expansion work and a richer commanded mixture. The
+  load term is now `SPAN·(1 − e^(−chargeIndex/SCALE))`, anchored on three real readings —
+  ~600 °C at cruise, 860 at wide-open throttle naturally aspirated, 930 boosted at
+  best-power mixture. All five presets land between 853 and 936 on their factory
+  calibrations; the display threshold moved to 980 °C, so a stock engine is always clear
+  and it takes retard or a lean mixture to trip it.
+
+- **Residual gas ignored the clearance volume it was documented as resting on.** The
+  docblock said the clearance volume sets the floor; the code read a flat constant, so a
+  12:1 build and an 8:1 build re-breathed identically. Residual mass now scales with
+  `Vd/(CR−1)` against a reference ratio, which is why raising compression here shortens
+  the burn and brings MBT in — through the mechanism, not through a second term.
+
+- **BSFC counted fuel burned, not fuel delivered.** Brake-specific consumption prices
+  what leaves the tank. At the rich mixture a tuner commands at wide-open throttle a fifth
+  of the fuel finds no oxygen and goes out unburnt, and the driver still bought it —
+  counting only the burned mass made over-fuelling free on the one gauge meant to price
+  it. A stock naturally aspirated pull reads 0.409 lb/hp·hr rather than 0.375.
+
+None of the three moved a preset outside tolerance.
 
 Remaining simplifications, stated rather than hidden:
 
-- Heat transfer is a lumped fraction, not a Woschni correlation. Largest one left.
-- Single zone — burned-gas temperature is not tracked, hence the flame-heating stand-in.
-- No crevice volume, blowby or cycle-to-cycle variation.
-- The turbo is still a boost target with an RPM ramp, not a compressor map with a turbine
-  energy balance. **This is now the biggest accuracy item in the model**, and it is what
-  caps the GTI fit above.
+- No compressor map. Efficiency is one number per compressor rather than a field of
+  islands, so surge and choke are still only `boostCeiling`. **This is the biggest
+  accuracy item left.**
+- No shaft inertia, so the induction solve is steady-state and transient lag is not
+  modelled.
+- Single zone — burned-gas temperature is not tracked, hence the one-coefficient
+  flame-heating term.
+- No crevice volume as geometry, no blowby, no cycle-to-cycle variation.
+- Exhaust temperature is a correlation in load, mixture and retard, not the cycle's own
+  end-of-expansion answer, because the turbine balance has to run before the cycle does.
+  The induction solve is coarser still: it prices the expansion at a full-charge
+  stoichiometric reference, since it does not yet know how much air the engine will draw.
+  That is tolerable only because the load term saturates — over the range a boosted engine
+  works in, the reference is close to the truth.
+
+The one relaxation left in `tests/presets.test.js` is the ±500 RPM grace on plateau-rated
+peak location, which is the same grace the point-rated branch always had. The GTI misses
+its band by 100 RPM and the Golf R by 300.
 
 The peak-pressure overload limit is anchored on this model's own scale, not on published
 failure thresholds: a single-zone trace reads lower than a real indicator diagram, so
@@ -136,7 +210,7 @@ borrowing 110–130 bar directly would put the overload out of reach.
 
 ## Cost
 
-The test suite goes from 3s to ~29s, almost entirely the fingerprint matrix running a
-knock-limit bisection per point across roughly 34,000 cycles. User-facing paths are
-unaffected: one dyno sweep is 17 ms, the calibration advisor 5 ms, and a live-engine frame
-0.14 ms against a 50 ms budget at 20 Hz.
+The test suite goes from 3s to ~74s, almost entirely the fingerprint matrix running a
+knock-limit bisection and an induction solve per point across roughly 34,000 cycles.
+User-facing paths are unaffected: one dyno sweep is 44 ms, the calibration advisor 12 ms,
+and a live-engine frame 0.28 ms against a 50 ms budget at 20 Hz.

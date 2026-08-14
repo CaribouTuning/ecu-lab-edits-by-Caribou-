@@ -589,6 +589,7 @@ describe('MBT timing', () => {
     const c = {
       rpm: 4000, trappedPa: 100000, trappedK: 330, heatJ: 1400,
       clearanceM3: 6.3e-5, sweptM3: 5.8e-4, rodRatio: S.COEFF.ROD_RATIO,
+      boreM: 0.0955, strokeM: 0.0814, trappedMassKg: 7.0e-4,
       ivcAbdc: 45, burnDeg, octaneNumber: 100, sparkBtdc: mbt,
     };
     // Within one integration step of the target — the trace is sampled every
@@ -837,7 +838,7 @@ describe('the spark advisor', () => {
     // itself produced — which it did, flagging 21 of 32 cells on every boosted preset.
     //
     // This asserts only the MBT half. The knock half is NOT yet in agreement: the
-    // advisor evaluates the knock threshold at the manifold pressure `computeManifold`
+    // advisor evaluates the knock threshold at the manifold pressure `solveInduction`
     // produces, while the generator evaluates it at the row pressure, so the highest
     // boost preset still trips `overAdvanced` on its own table. That is pre-existing
     // and filed separately; it is not what this test is guarding.
@@ -871,11 +872,95 @@ describe('the spark advisor', () => {
   });
 });
 
+describe('exhaust gas temperature', () => {
+  it('rises with load but saturates, instead of climbing without limit', () => {
+    const at = (chargeIndex) => S.exhaustTempK({ chargeIndex, lambda: 1 });
+    // Steep early: a throttled engine to a full charge is hundreds of degrees.
+    const earlyRise = at(1.0) - at(0.25);
+    // Nearly flat late: past a full charge, extra air also brings extra expansion work.
+    const lateRise = at(2.0) - at(1.25);
+    expect(earlyRise).toBeGreaterThan(200);
+    expect(lateRise).toBeLessThan(earlyRise / 4);
+  });
+
+  it('runs hotter with retard and cooler with a rich mixture', () => {
+    const base = S.exhaustTempK({ chargeIndex: 1.2, lambda: 1 });
+    expect(S.exhaustTempK({ chargeIndex: 1.2, lambda: 1, knockRetardDeg: 8 }))
+      .toBeGreaterThan(base);
+    expect(S.exhaustTempK({ chargeIndex: 1.2, lambda: 0.82 })).toBeLessThan(base);
+  });
+
+  it('does not cook a turbine on a factory calibration', () => {
+    // Every shipped preset must sit under the limit on its own factory tune, for the
+    // same reason the spark advisor must not call a stock table dangerous: an app that
+    // cries wolf on the engine as sold has taught the player nothing.
+    for (const preset of S.ENGINE_PRESETS) {
+      const p = S.applyPreset(preset);
+      const r = S.simulateSweep({
+        loadKpa: 100, ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        turboOn: p.turboOn, boostCurve: p.boostCurve, fuel: S.OCTANE_OPTS[p.octaneIdx],
+        injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+        mods: p.mods, mafScalar: 1, derived: S.deriveEngine(p.engineConfig),
+        turbine: S.presetTurbine(preset), compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      });
+      for (const pt of r.points) {
+        expect(pt.egtRisk, `${preset.name} at ${pt.rpm} RPM reads ${pt.egt} C`).toBe(false);
+      }
+    }
+  });
+
+  it('is the same number the turbine ran on, not a second estimate', () => {
+    // These were two different expressions once, so the gauge and the machine disagreed
+    // about the temperature of the same gas. Reproducing the reported EGT from the
+    // exported correlation is what stops them drifting apart again.
+    const p = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+    const expected = S.exhaustTempK({
+      chargeIndex: p.chargeIndex, lambda: p.lambda, knockRetardDeg: p.knockPull,
+    }) - S.KELVIN_OFFSET;
+    expect(p.egt).toBe(Math.round(expected));
+  });
+});
+
+describe('residual gas', () => {
+  it('traps less exhaust as compression rises, because the clearance volume shrinks', () => {
+    const at = (compression) => S.residualFraction({
+      mapKpa: 60, empKpa: 105, overlapDeg: 20, compression,
+    });
+    expect(at(12.5)).toBeLessThan(at(9.0));
+  });
+
+  it('carries that through to a faster burn and less required advance', () => {
+    // The point of modelling the clearance volume rather than asserting a flat floor:
+    // a high-compression engine re-breathes less, so its charge is less diluted, so the
+    // flame crosses it faster and MBT comes in.
+    const cycFor = (compression) => S.cycleInputsFor({
+      rpm: 2500, mapKpa: 50, empKpa: 104, intakeK: 300,
+      airChargeG: 0.3, burnedFuelG: 0.02, lambda: 1.0,
+      fuel: S.OCTANE_OPTS[0], derived: S.deriveEngine({ ...STOCK, compression }),
+    });
+    expect(cycFor(12.5).residualFrac).toBeLessThan(cycFor(9.0).residualFrac);
+    expect(cycFor(12.5).burnDeg).toBeLessThan(cycFor(9.0).burnDeg);
+    expect(S.mbtFromBurn(cycFor(12.5).burnDeg))
+      .toBeLessThan(S.mbtFromBurn(cycFor(9.0).burnDeg));
+  });
+});
+
 describe('BSFC reporting', () => {
   it('reports a real figure whenever the engine is making power', () => {
     const p = point({ rpm: 5500, mapKpa: S.BARO_KPA });
     expect(p.hp).toBeGreaterThan(0);
     expect(p.bsfc).toBeGreaterThan(0);
+  });
+
+  // BSFC prices what leaves the TANK. Past stoichiometric the extra fuel finds no oxygen
+  // and goes out of the exhaust unburnt, and the driver still bought it — so a richer
+  // mixture must cost more per unit of work, even where it makes more power. Counting
+  // only the fuel that burned hid that entirely, on the one gauge meant to show it.
+  it('charges for fuel delivered, not just fuel burned', () => {
+    const stoich = point({ rpm: 5500, afrCommanded: 14.7 });
+    const rich = point({ rpm: 5500, afrCommanded: 11.0 });
+    expect(rich.lambda).toBeLessThan(0.8);
+    expect(rich.bsfc).toBeGreaterThan(stoich.bsfc);
   });
 
   // A BSFC of 0.000 lb/hr/hp would be an engine making power from no fuel. On overrun

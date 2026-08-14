@@ -16,11 +16,10 @@ import {
   cycleInputsFor, knockLimitedSpark, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
 } from './cycle.js';
 import { exhaustManifoldKpa, rubbingFmepPa, pumpingFmepPa } from './friction.js';
-import { turbineBackpressureRelief } from './hardware.js';
 import { chargeIndexOf } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
-import { chargeTempK } from './thermo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
@@ -44,11 +43,17 @@ import { chargeTempK } from './thermo.js';
  * @property {number} [octaneBonus] legacy knock-margin bonus, accepted and ignored.
  *   Octane is now a fuel PROPERTY (`fuel.octane`) read by the autoignition model, not a
  *   margin added after the fact. Callers may still pass this — the UI and the tests do —
- *   and nothing reads it. `fuel.bonus` is still live, but only in the Engineer Score
+ *   and nothing reads it. The underlying `fuel.bonus` is still live, but only in the
+ *   Engineer Score, where it prices how much compression a fuel buys you.
  * @property {{boostCeiling: number}} compressor
- * @property {{size: string}|null} [turbine] turbine in the exhaust stream, if any. Null
- *   means no turbine, which is the correct state for a naturally aspirated engine —
- *   it sets exhaust backpressure, so it is not a cosmetic omission
+ * @property {{size: string, effectiveAreaM2: number}|null} [turbine] turbine in the
+ *   exhaust stream, if any. Null means no turbine, which is the correct state for a
+ *   naturally aspirated engine — it sets exhaust backpressure, so it is not a cosmetic
+ *   omission
+ * @property {number} [empKpa] exhaust manifold pressure, when the caller has already
+ *   solved the induction system and knows it. Omitted, it is computed here from this
+ *   point's own exhaust flow
+ * @property {number} [wastegateRelief] how much backpressure the wastegate is bleeding
  */
 
 /**
@@ -61,6 +66,7 @@ export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
+  empKpa: empOverride, wastegateRelief = 0,
 }) {
   const compressorOver = boostPsi > compressor.boostCeiling;
   const chargeK = chargeTempK(boostPsi, mods.intercooler);
@@ -122,10 +128,13 @@ export function evaluatePoint({
   // much of last cycle's exhaust is still in the cylinder when the intake valve shuts.
   const bestAfr = bestPowerAfr(boostPsi);
   const chargeIndex = chargeIndexOf(veActual, mapKpa);
-  const flowFrac = chargeIndex * (rpm / COEFF.EMP_FLOW_REF_RPM);
-  const empKpa = exhaustManifoldKpa({
-    boostPsi, turboOn: !!mods.turboFitted,
-    turbineRelief: turbineBackpressureRelief(turbine), flowFrac,
+  // Mass actually leaving the cylinder each second — air plus the fuel that went in
+  // with it — which is what the turbine has to pass.
+  const exhaustFlowKgS = ((airChargeG + deliveredFuelG) / 1000) * derived.cyl * (rpm / 2) / 60;
+  const turbineInletK = exhaustTempK({ chargeIndex, lambda: lambdaActual });
+  const empKpa = empOverride ?? exhaustManifoldKpa({
+    turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
+    turbine, wastegateRelief,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
@@ -167,7 +176,14 @@ export function evaluatePoint({
   // Brake-specific fuel consumption is fuel per unit of work OUT. On overrun and in
   // deep vacuum there is no work out — the engine is being motored — so the quantity is
   // undefined, not zero. Zero would read as an engine making power from no fuel.
-  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
+  //
+  // The numerator is fuel DELIVERED, not fuel burned. BSFC measures what comes out of the
+  // tank, and at the rich mixture a tuner commands at wide-open throttle the difference
+  // is real: a fifth of the fuel finds no oxygen and leaves as unburnt hydrocarbon, and
+  // the driver still paid for it. Using burned mass here understated BSFC by exactly that
+  // fraction, which made over-fuelling look free on the one gauge that should price it.
+  const bsfc = powerW > 0
+    ? (deliveredFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
   // what it costs the metal to give it. Both now come off the same trace, so they can
@@ -176,7 +192,16 @@ export function evaluatePoint({
   const peakPressure = paToBar(cycle.peakPressurePa);
   const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
 
-  const egtProxy = knockPull * 22 + Math.max(0, actualAfr - bestAfr) * 45 + boostPsi * 6;
+  // EGT comes from the SAME correlation the turbine ran on, with the knock retard the
+  // ECU actually pulled now folded in — that is the term the turbine estimate could not
+  // include, because backpressure has to be solved before the knock limit is known.
+  // Previously this was a separate ad-hoc expression, so the gauge and the turbine
+  // disagreed about the temperature of the same gas.
+  const egtK = exhaustTempK({
+    chargeIndex, lambda: lambdaActual, knockRetardDeg: knockPull,
+  });
+  const egtC = egtK - KELVIN_OFFSET;
+  const egtRisk = egtC > COEFF.EGT_LIMIT_C;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
   // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes the
   // oil film off the bores, fouls plugs, dumps raw fuel into the catalyst and costs
@@ -202,7 +227,7 @@ export function evaluatePoint({
     threshold: Number(threshold.toFixed(1)), margin: Number(margin.toFixed(1)),
     chargeIndex: Number(chargeIndex.toFixed(3)),
     mbtIdeal: Number(mbtIdeal.toFixed(1)), openLoop,
-    egt: Math.round(720 + egtProxy),
+    egt: Math.round(egtC),
     imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
     fmep: Number((fmepPa / 100000).toFixed(2)),
     bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
@@ -223,6 +248,6 @@ export function evaluatePoint({
     knockIntegral: Number(cycle.knockIntegral.toFixed(3)),
     endGasK: Math.round(cycle.peakEndGasK),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
-    pressureRisk, mafFlag, compressorOver, injMismatch,
+    egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
   };
 }

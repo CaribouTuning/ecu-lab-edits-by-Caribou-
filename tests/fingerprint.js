@@ -218,8 +218,13 @@ export function buildFingerprint(S) {
     interp2: [[800, 20], [2500, 70], [4500, 101.325], [6500, 150], [7500, 200]].map(([rpm, l]) => r6(S.interp2(S.DEFAULT_VE, rpm, l))),
     chargeTempK: [0, 5, 10, 20, 30].flatMap((psi) => [true, false].map((ic) => r6(S.chargeTempK(psi, ic)))),
     idealExhaustDiameter: [2.0, 3.5, 5.0].flatMap((d) => [0, 5, 10, 20].map((b) => r6(S.idealExhaustDiameter(d, b)))),
-    computeManifold: [1500, 3500, 5500, 7500].flatMap((rpm) => [40, 100].map((load) =>
-      roundAll(S.computeManifold(rpm, load, true, 12, S.TURBINE_OPTS[1], S.COMPRESSOR_OPTS[1])))),
+    solveInduction: [1500, 3500, 5500, 7500].flatMap((rpm) => [40, 100].map((load) =>
+      roundAll(S.solveInduction({
+        rpm, loadKpa: load, turboOn: true, boostTargetPsi: 12,
+        turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+        veAt: () => 95, derived: S.deriveEngine(FINGERPRINT_CONFIGS.stockV6),
+        intakeKAt: (psi) => S.chargeTempK(psi, true), lambda: 1, exhaustK: 1100,
+      })))),
     clamp: [[-5, 0, 10], [5, 0, 10], [15, 0, 10]].map(([v, lo, hi]) => S.clamp(v, lo, hi)),
   };
 

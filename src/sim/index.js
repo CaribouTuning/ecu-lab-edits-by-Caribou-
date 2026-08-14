@@ -19,6 +19,7 @@ export * from './friction.js';
 export * from './engine.js';
 export * from './knock.js';
 export * from './manifold.js';
+export * from './turbo.js';
 export * from './cycle.js';
 export * from './airflow.js';
 export * from './point.js';

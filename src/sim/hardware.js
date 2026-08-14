@@ -3,7 +3,6 @@
  * specifications that make each choice a trade-off rather than an upgrade.
  */
 
-import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 /** Cylinder count per configuration. */
@@ -101,42 +100,40 @@ export const INJECTOR_OPTS = [
  *
  * `size` is the stable id the Engineer Score matches on. `label` is display copy and
  * may be reworded freely; simulation logic must never read it.
+ *
+ * `spoolRange` is gone. It set how many RPM a turbo took to come on boost, which was the
+ * wrong variable — a turbo spools on exhaust ENERGY, not engine speed, so a small
+ * housing at full load is already on boost at 2000 RPM and the same housing at light
+ * load is not on boost at 5000. Flow area produces that behaviour instead of asserting
+ * a ramp.
+ *
+ * `effectiveAreaM2` is fitted against the three boosted presets: they are real engines
+ * with published output, and the area is what decides how much backpressure the engine
+ * pays to make their factory boost. It is the flow area the housing presents to the
+ * exhaust, and it is what
+ * makes the sizing trade real rather than a pair of multipliers: a small housing needs
+ * more pressure upstream to pass the same flow, which spools it early AND costs pumping
+ * work at high flow. `turbineEff` is how much of that expansion it converts to shaft
+ * work — bigger wheels are more efficient as well as less restrictive.
  */
 export const TURBINE_OPTS = [
-  { label: 'Small — quick spool', size: 'small', spoolRange: 1200, topEndMult: -0.05 },
-  { label: 'Medium — balanced', size: 'medium', spoolRange: 1800, topEndMult: 0 },
-  { label: 'Large — top-end', size: 'large', spoolRange: 2600, topEndMult: 0.05 },
+  { label: 'Small — quick spool', size: 'small', topEndMult: -0.05, effectiveAreaM2: 0.00153, turbineEff: 0.68 },
+  { label: 'Medium — balanced', size: 'medium', topEndMult: 0, effectiveAreaM2: 0.00243, turbineEff: 0.72 },
+  { label: 'Large — top-end', size: 'large', topEndMult: 0.05, effectiveAreaM2: 0.00360, turbineEff: 0.75 },
 ];
-
-/**
- * How much exhaust backpressure a turbine housing relieves, relative to medium.
- *
- * The turbine makes its power by throttling the exhaust, so housing size is a direct
- * trade: the small housing that spools early is the same one that pins exhaust manifold
- * pressure well above boost and costs pumping work all the way to the redline. This is
- * the other half of the sizing decision that used to show up only as a top-end VE
- * multiplier.
- *
- * @param {{size: string}|null} turbine the fitted turbine, or null for none
- * @returns {number} fraction of turbine backpressure relieved, may be negative
- */
-export function turbineBackpressureRelief(turbine) {
-  if (!turbine) return 0;
-  if (turbine.size === 'large') return COEFF.EMP_TURBINE_SIZE_RELIEF;
-  if (turbine.size === 'small') return -COEFF.EMP_TURBINE_SIZE_RELIEF;
-  return 0;
-}
 
 /**
  * Compressor sizing sets a practical boost ceiling before it is pushed outside its
  * efficient range (surge/choke) — running past it makes hot, knock-prone air.
  *
  * `size` is the stable id the Engineer Score matches on; see {@link TURBINE_OPTS}.
+ * `compressorEff` is how much of the shaft work it turns into pressure; `lagAdd` is gone
+ * with the spool ramp that used it.
  */
 export const COMPRESSOR_OPTS = [
-  { label: 'Small', size: 'small', boostCeiling: 12, lagAdd: -150 },
-  { label: 'Medium', size: 'medium', boostCeiling: 20, lagAdd: 0 },
-  { label: 'Large', size: 'large', boostCeiling: 30, lagAdd: 250 },
+  { label: 'Small', size: 'small', boostCeiling: 12, compressorEff: 0.72 },
+  { label: 'Medium', size: 'medium', boostCeiling: 20, compressorEff: 0.74 },
+  { label: 'Large', size: 'large', boostCeiling: 30, compressorEff: 0.76 },
 ];
 
 /**

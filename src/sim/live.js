@@ -14,7 +14,8 @@ import { BARO_KPA, DRIVETRAIN_EFF } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { solveInduction } from './turbo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
@@ -143,7 +144,13 @@ export function liveStep(st, dt, input, cfg) {
       0.12, 1,
     );
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
-    const man = computeManifold(rpmClamped, loadKpa, turboOn, boostTarget, turbine, compressor);
+    const man = solveInduction({
+      rpm: rpmClamped, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
+      veAt: (mapKpa) => interp2(veTruth ?? ve, rpmClamped, mapKpa),
+      derived,
+      intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
+      lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+    });
     const veVal = interp2(ve, rpmClamped, man.mapKpa);
     const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
     // Spark-based idle stabilisation: the air path is slow (throttle -> manifold ->
@@ -162,7 +169,7 @@ export function liveStep(st, dt, input, cfg) {
       mods: { ...mods, turboFitted: turboOn },
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-      turbine: turboOn ? turbine : null,
+      turbine: turboOn ? turbine : null, empKpa: man.empKpa,
     });
     // evaluatePoint already returns BRAKE torque — friction and pumping are subtracted
     // inside it — so we must not deduct them again here.

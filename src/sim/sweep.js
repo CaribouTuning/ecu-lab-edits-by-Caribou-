@@ -9,7 +9,8 @@
 
 import { COEFF } from './coefficients.js';
 import { clamp, groupRuns, interp1, interp2 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { solveInduction } from './turbo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { RPM } from './tables.js';
 
@@ -85,7 +86,16 @@ export function simulateSweep({
   const endRpm = derived.redline ?? SWEEP_END_RPM;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-    const man = computeManifold(rpm, loadKpa, turboOn, boostTarget, turbine, compressor);
+    // Boost is solved from the turbine/compressor power balance, not ramped in on engine
+    // speed. The target is a wastegate ceiling: ask for more than the hardware can make
+    // and the log will show what it actually made.
+    const man = solveInduction({
+      rpm, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
+      veAt: (mapKpa) => interp2(veTruth ?? ve, rpm, mapKpa),
+      derived,
+      intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
+      lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+    });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
     // calibration up into the high-MAP rows automatically.
     const veVal = interp2(ve, rpm, man.mapKpa);
@@ -98,7 +108,7 @@ export function simulateSweep({
       rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
       veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
       mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-      turbine: turboOn ? turbine : null,
+      turbine: turboOn ? turbine : null, empKpa: man.empKpa,
     }));
   }
 
