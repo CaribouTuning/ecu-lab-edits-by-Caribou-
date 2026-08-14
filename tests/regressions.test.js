@@ -322,6 +322,73 @@ describe('#4 exhaust sizing has one formula and a reachable target', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// #31 — stacking compression on top of boost
+// ---------------------------------------------------------------------------
+// WAS BROKEN: bearing wear was `avgBoost * WEAR_BEARING_PER_PSI`, so static
+// compression cost nothing mechanically and appeared in no wear term at all. On a fuel
+// with enough octane to absorb the knock-margin cost, raising compression under boost
+// was therefore a pure gain: more power, identical wear, empty pull log. On 91 the same
+// change taught the right lesson (less knock margin -> less timing -> less torque),
+// which is what made the E85 case so misleading — the model looked like it was
+// modelling the trade-off, and on the one fuel where the trade-off is mechanical rather
+// than thermal, it was not.
+describe('#31 compression under boost costs the bottom end, not just knock margin', () => {
+  /** A dyno pull with a factory-quality calibration generated for the hardware. */
+  function tunedPull(compression, octaneIdx) {
+    const base = S.presetById('n54');
+    const preset = {
+      ...base,
+      engine: { ...base.engine, compression },
+      parts: { ...base.parts, octaneIdx },
+    };
+    const patch = S.applyPreset(preset);
+    return S.simulateSweep({
+      loadKpa: 100,
+      ve: patch.ve, veTruth: patch.ve, timing: patch.timing, afr: patch.afr,
+      turboOn: patch.turboOn, boostCurve: patch.boostCurve,
+      octaneBonus: S.OCTANE_OPTS[octaneIdx].bonus,
+      octaneLabel: S.OCTANE_OPTS[octaneIdx].label,
+      fuel: S.OCTANE_OPTS[octaneIdx],
+      injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
+      ecuInjectorCc: patch.ecuInjectorCc,
+      injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
+      mods: patch.mods, mafScalar: 1, derived: S.deriveEngine(patch.engineConfig),
+      turbine: S.TURBINE_OPTS[patch.turbineIdx],
+      compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
+    });
+  }
+
+  const E85 = S.OCTANE_OPTS.findIndex((o) => o.label === 'E85');
+
+  it('still hands the power gain over — the point is that it is no longer free', () => {
+    const low = tunedPull(9.5, E85);
+    const high = tunedPull(12.5, E85);
+    expect(high.peakHp).toBeGreaterThan(low.peakHp);
+    // And it really is knock-free on both, which is the condition that used to make
+    // the compression decision cost nothing at all.
+    expect(low.events.some((e) => e.type === 'knock')).toBe(false);
+    expect(high.events.some((e) => e.type === 'knock')).toBe(false);
+  });
+
+  it('charges the same knock-free build more bearing life for more compression', () => {
+    const low = tunedPull(9.5, E85);
+    const high = tunedPull(12.5, E85);
+    // Not a magnitude assertion: what matters is that the two are no longer equal, and
+    // that the difference is big enough for a player to see it in the health bars.
+    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing * 1.5);
+  });
+
+  it('leaves the Tuning Score alone — the calibration is not what is wrong', () => {
+    const r = tunedPull(12.5, E85);
+    const tuning = S.computeTuningScore(r);
+    for (const e of r.events) {
+      expect(tuning.deductions.join(' '), `${e.type} should not deduct`).not.toContain(e.msg);
+    }
+    expect(tuning.score).toBe(100);
+  });
+});
+
 describe('preset-readiness hardening', () => {
   it('freezes the shared default engine config so callers cannot corrupt it', () => {
     expect(Object.isFrozen(S.DEFAULT_ENGINE_CONFIG)).toBe(true);

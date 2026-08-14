@@ -16,6 +16,7 @@ import { rubbingFmepPa, pumpingFmepPa } from './friction.js';
 import { chargeIndexOf, knockThreshold, mbtTiming } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
+import { peakPressureBar } from './pressure.js';
 import { chargeTempK } from './thermo.js';
 
 /**
@@ -152,6 +153,16 @@ export function evaluatePoint({
   // undefined, not zero. Zero would read as an engine making power from no fuel.
   const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
+  // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure
+  // is what it costs the metal to give it. The two are related but not the same, and
+  // the difference is the whole point of computing this separately: retarding spark
+  // gives up torque AND pressure together, while raising static compression buys
+  // torque at a steeper price in pressure than in anything the torque figure shows.
+  const peakPressure = peakPressureBar({
+    compression: derived.compression, mapKpa, veActual, usedTiming, mbtIdeal,
+  });
+  const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
+
   const egtProxy = knockPull * 22 + Math.max(0, actualAfr - bestAfr) * 45 + boostPsi * 6;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
   // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes the
@@ -182,7 +193,8 @@ export function evaluatePoint({
     imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
     fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
     bestAfr: Number(bestAfr.toFixed(2)),
+    peakPressure: Number(peakPressure.toFixed(1)),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
-    mafFlag, compressorOver, injMismatch,
+    pressureRisk, mafFlag, compressorOver, injMismatch,
   };
 }

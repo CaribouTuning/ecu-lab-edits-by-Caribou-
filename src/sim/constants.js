@@ -23,6 +23,9 @@ export const AMBIENT_K = 298;
 /** Pounds per square inch to kilopascals. */
 export const PSI_TO_KPA = 6.895;
 
+/** Kilopascals per bar — cylinder pressures are conventionally quoted in bar. */
+export const KPA_PER_BAR = 100;
+
 /** (γ−1)/γ for air — the isentropic compression exponent. */
 export const GAMMA_EXP = 0.286;
 

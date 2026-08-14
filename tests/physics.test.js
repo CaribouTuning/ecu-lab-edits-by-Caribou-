@@ -253,6 +253,62 @@ describe('torque production', () => {
   });
 });
 
+describe('peak cylinder pressure', () => {
+  /** The four inputs `peakPressureBar` takes, with a wide-open-throttle default. */
+  const press = (o = {}) => S.peakPressureBar({
+    compression: 10.3, mapKpa: S.BARO_KPA, veActual: 95,
+    usedTiming: 24, mbtIdeal: 24, ...o,
+  });
+
+  it('rises with static compression at identical manifold pressure', () => {
+    expect(press({ compression: 12.5 })).toBeGreaterThan(press({ compression: 9.5 }));
+  });
+
+  it('rises with manifold pressure and with trapped charge separately', () => {
+    expect(press({ mapKpa: 200 })).toBeGreaterThan(press({ mapKpa: 100 }));
+    expect(press({ veActual: 115 })).toBeGreaterThan(press({ veActual: 85 }));
+  });
+
+  it('multiplies rather than adds — compression is worth more under boost', () => {
+    const naGain = press({ compression: 12.5 }) - press({ compression: 9.5 });
+    const boostGain = press({ compression: 12.5, mapKpa: 200 }) - press({ compression: 9.5, mapKpa: 200 });
+    expect(boostGain).toBeGreaterThan(naGain);
+  });
+
+  it('falls when spark is retarded from MBT', () => {
+    expect(press({ usedTiming: 12 })).toBeLessThan(press({ usedTiming: 24 }));
+  });
+
+  it('keeps climbing past MBT, where torque is already falling', () => {
+    // The over-advanced tune: more stress, less power. Capped, because the burn cannot
+    // start before there is a charge to burn.
+    expect(press({ usedTiming: 30 })).toBeGreaterThan(press({ usedTiming: 24 }));
+    expect(press({ usedTiming: 60 })).toBe(press({ usedTiming: 34 }));
+  });
+
+  it('lands in the range real engines measure', () => {
+    // Not a magnitude lock — a plausibility band. A naturally aspirated engine at
+    // wide-open throttle peaks near 50-60 bar; 20 psi of boost roughly doubles it.
+    const na = press();
+    expect(na).toBeGreaterThan(35);
+    expect(na).toBeLessThan(70);
+    const boosted = press({ mapKpa: S.BARO_KPA + 20 * S.PSI_TO_KPA });
+    expect(boosted).toBeGreaterThan(na * 1.8);
+  });
+
+  it('reports itself in the datalog, with the overload flag', () => {
+    const mild = point({ cfg: { ...STOCK, compression: 9.5 } });
+    expect(mild.peakPressure).toBeGreaterThan(0);
+    expect(mild.pressureRisk).toBe(false);
+    const brutal = point({
+      cfg: { ...STOCK, compression: 13.0 },
+      mapKpa: S.BARO_KPA + 22 * S.PSI_TO_KPA, veVal: 110,
+    });
+    expect(brutal.peakPressure).toBeGreaterThan(mild.peakPressure);
+    expect(brutal.pressureRisk).toBe(true);
+  });
+});
+
 describe('dyno sweep', () => {
   /** Runs a stock naturally-aspirated pull. */
   function stockPull(overrides = {}) {
@@ -327,6 +383,30 @@ describe('dyno sweep', () => {
     expect(stockPull().wear.piston).toBe(0);
     const nasty = stockPull({ turboOn: true, boostCurve: [0, 4, 12, 20, 24, 25, 25, 25] });
     expect(nasty.wear.piston).toBeGreaterThan(0);
+  });
+
+  it('charges the bearings for compression, not only for boost', () => {
+    const boostCurve = [0, 2, 8, 12, 14, 14, 14, 14];
+    const low = stockPull({ cfg: { ...STOCK, compression: 9.0 }, turboOn: true, boostCurve });
+    const high = stockPull({ cfg: { ...STOCK, compression: 12.5 }, turboOn: true, boostCurve });
+    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
+  });
+
+  it('charges the bearings for a high-compression naturally aspirated engine too', () => {
+    const low = stockPull({ cfg: { ...STOCK, compression: 9.0 } });
+    const high = stockPull({ cfg: { ...STOCK, compression: 12.5 } });
+    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
+  });
+
+  it('raises the overload event only once the parts are actually over their limit', () => {
+    const sane = stockPull({ turboOn: true, boostCurve: [0, 2, 6, 8, 8, 8, 8, 8] });
+    expect(sane.events.some((e) => e.type === 'pressure')).toBe(false);
+    const overloaded = stockPull({
+      cfg: { ...STOCK, compression: 12.5 },
+      turboOn: true, boostCurve: [0, 4, 12, 20, 24, 25, 25, 25],
+    });
+    expect(overloaded.events.some((e) => e.type === 'pressure')).toBe(true);
+    expect(overloaded.wear.piston).toBeGreaterThan(sane.wear.piston);
   });
 });
 
