@@ -115,6 +115,13 @@ calibration, so the limit clears every real engine here with margin while still 
 the builds the issue is about. `tests/presets.test.js` asserts that directly, so the
 anchor cannot silently drift.
 
+> **Amended when the B58 presets landed (issue #5).** The anchor is now a cluster, not
+> a single engine: the Golf R peaks at 94.3 bar and the B58B30M1 at 93.8 — half a bar
+> apart — with the B58B30M0 at 84.3 and the GTI at 77.2. The sentence above stays
+> literally true, but "the most heavily boosted production engine" no longer identifies
+> one distinctive outlier, so anything that would raise a factory preset's peak pressure
+> has to be re-checked against the top two rather than the Golf R alone.
+
 ### Why `pressure` is an advisory, not a Tuning deduction
 
 Spark timing does move peak pressure, so part of this *is* tunable — this is the one

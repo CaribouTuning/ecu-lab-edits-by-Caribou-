@@ -35,10 +35,10 @@ function pullFor(preset) {
 }
 
 describe('preset data integrity', () => {
-  it('ships the four engines', () => {
-    expect(S.ENGINE_PRESETS).toHaveLength(4);
+  it('ships the six engines', () => {
+    expect(S.ENGINE_PRESETS).toHaveLength(6);
     expect(S.ENGINE_PRESETS.map((p) => p.id)).toEqual([
-      'vq35hr', 'n54', 'ea888-gti', 'ea888-r',
+      'vq35hr', 'n54', 'b58-m0', 'b58-m1', 'ea888-gti', 'ea888-r',
     ]);
   });
 
@@ -86,6 +86,48 @@ describe('preset data integrity', () => {
           .toBeCloseTo(preset.factory.displacementL, 2);
       });
     });
+  });
+});
+
+describe('presets grouped by manufacturer', () => {
+  it('accounts for every preset exactly once', () => {
+    const grouped = S.PRESET_GROUPS.flatMap((g) => g.presets);
+    expect(grouped).toHaveLength(S.ENGINE_PRESETS.length);
+    expect(new Set(grouped.map((p) => p.id)).size).toBe(S.ENGINE_PRESETS.length);
+    for (const preset of S.ENGINE_PRESETS) {
+      expect(grouped, `${preset.id} is in no group`).toContain(preset);
+    }
+  });
+
+  it('gives each manufacturer exactly one group', () => {
+    const names = S.PRESET_GROUPS.map((g) => g.manufacturer);
+    expect(new Set(names).size).toBe(names.length);
+    for (const g of S.PRESET_GROUPS) {
+      for (const p of g.presets) expect(p.manufacturer).toBe(g.manufacturer);
+    }
+  });
+
+  // Ordering is DERIVED from ENGINE_PRESETS rather than declared separately, so that
+  // reordering the preset array cannot leave the picker silently disagreeing with it.
+  // Asserting the derivation is what keeps that true when a seventh engine arrives.
+  //
+  // The literal order is asserted BESIDE the derivation, deliberately. The derived
+  // check recomputes its expectation with the same rule the implementation follows,
+  // so the two could hold a misconception together and still agree; the literal list
+  // is an expectation written independently of the code and cannot. Keep both — the
+  // literal catches what the derivation cannot, the derivation catches the drift a
+  // frozen list would miss.
+  it('orders groups and their contents by first appearance in ENGINE_PRESETS', () => {
+    expect(S.PRESET_GROUPS.map((g) => g.manufacturer)).toEqual(['Nissan', 'BMW', 'Volkswagen']);
+    const firstSeen = [];
+    for (const p of S.ENGINE_PRESETS) {
+      if (!firstSeen.includes(p.manufacturer)) firstSeen.push(p.manufacturer);
+    }
+    expect(S.PRESET_GROUPS.map((g) => g.manufacturer)).toEqual(firstSeen);
+    for (const g of S.PRESET_GROUPS) {
+      const expected = S.ENGINE_PRESETS.filter((p) => p.manufacturer === g.manufacturer);
+      expect(g.presets).toEqual(expected);
+    }
   });
 });
 
