@@ -126,18 +126,48 @@ did not make. The cost is real and lands in wear instead.
 
 ## What the fingerprint moved
 
+Re-derived against `main` at the burn-duration MBT model (#34), which landed while this
+branch was open. That is not an unrelated change: peak pressure is phased on spark
+*relative* to MBT, so moving MBT moves every number below. The counts shifted by a few
+sweeps; the shape did not.
+
 504 sweeps re-run; **zero** changes to `hp`, `torque`, `peakHp`, `peakTq`, or any score.
 Nothing added or removed horsepower, which is the rule that matters.
 
-- `wear.bearing` moved on every sweep (rescaled onto pressure); `wear.piston` gained a
-  term on 65 of 504.
-- 65 sweeps gained a `pressure` event. All are on the 24 psi curve except two, which are
-  the two highest-compression configs in the matrix at 8 psi. The 9.5:1 `bigV8` picks it
-  up in 1 of its 12 heavy-boost cases; the 12.5:1 `undersquare` in all 12. That ordering
-  by compression is the point of the change.
-- 45 sweeps gained the `bearing` advisory (mild-boost builds now clear 60 bar average),
-  2 lost it (`floatTrap` at heavy boost — valve float collapses VE, so the pressure it
-  averages is lower than its boost suggested).
+- `wear.bearing` moved on all 504 sweeps (rescaled onto pressure); `wear.piston` gained
+  a term on 71.
+- 71 sweeps gained a `pressure` event — 67 on the 24 psi curve, 4 on the 8 psi one, and
+  every one of them at wide-open throttle. Ordering by compression is the point of the
+  change, and it holds:
+
+  | config | static CR | sweeps tripping it (of 72) |
+  |---|---|---|
+  | `undersquare` | 12.5:1 | 14 |
+  | `smallI4` | 11.5:1 | 13 |
+  | `cammedV8` | 11.0:1 | 13 |
+  | `stockV6` | 10.3:1 | 12 |
+  | `turboI6` | 10.2:1 | 12 |
+  | `floatTrap` | 10.3:1 | 6 |
+  | `bigV8` | 9.5:1 | 1 |
+
+  The 9.5:1 `bigV8` picks it up once. Everything at 10.2:1 or above trips it in all
+  twelve of its wide-open-throttle cases on the 24 psi curve. `floatTrap` is the
+  exception that confirms the mechanism rather than breaking it: same 10.3:1 as
+  `stockV6`, but valve float collapses VE above the float speed, so it traps less charge
+  and peaks lower — pressure follows what is actually in the cylinder, not what the
+  manifold was asked for.
+
+  The four 8 psi cases are precisely what #31 was about: `undersquare` twice, `smallI4`
+  and `cammedV8` once each — the three highest-compression configs in the matrix, every
+  one of them on E85 with an intercooler fitted. High compression, ordinary boost, and a
+  fuel with enough octane that nothing in the knock model ever objected.
+- 49 sweeps gained the `bearing` advisory, 2 lost it. 46 of the gains are mild-boost
+  builds now clearing 60 bar average. The other 3 are `undersquare` with no turbo at all
+  — a 12.5:1 naturally aspirated engine reaching bearing loads that the old
+  `avgBoost > 6` rule could not see by construction, which is the clearest single
+  demonstration that the advisory is now keyed to the right quantity. The 2 losses are
+  `floatTrap` at heavy boost, where collapsing VE means the pressure it averages is
+  lower than its boost suggested.
 
 ## Follow-ups
 
