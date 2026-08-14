@@ -60,6 +60,20 @@ export class Nisprog extends EventEmitter {
     super();
     this.binary = options.binary ?? 'nisprog';
     this.args = options.args ?? [];
+
+    // `nisprog -f <file>` runs every command in <file> at startup, before this
+    // module sees anything. That is the allowlist bypassed entirely, so it is
+    // refused here rather than trusted not to be passed. Verified against
+    // nisprog v1.05: -f is the only argument that does this, and there is no
+    // config file loaded automatically, so blocking it closes the hole.
+    for (const arg of this.args) {
+      if (/^[-+]f/.test(String(arg))) {
+        throw new NisprogError(
+          'refusing to start nisprog with -f: it would run commands from a file ' +
+            'at startup, bypassing the read-only gate entirely'
+        );
+      }
+    }
     this.prompt = options.prompt ?? DEFAULT_PROMPT;
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 20000;
 

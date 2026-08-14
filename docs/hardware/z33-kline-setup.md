@@ -22,6 +22,30 @@ yet; see "What is not built" at the end.
 the SH7055. Getting this wrong gives you a dump of the wrong length, which is the
 easiest way to spot it. See `docs/rom/z33-definitions.md`.
 
+`setdev ?` in nisprog prints the table, which is the authoritative answer:
+
+```
+	name	ROM size
+	7051	256k
+	7055	512k
+	7058	1024k
+```
+
+## Find your ECU part number from your VIN, today
+
+You do not need the cable, or even to open the car, to learn which ECU you have.
+Look the VIN up in a Nissan parts catalogue and read the part number off the
+engine control module:
+
+1. <https://nissan.7zap.com/en/er/> (more reliable than epc-data, which misses
+   some VINs)
+2. Enter your VIN → **Engine Electrical** → **Engine Control Module**
+3. The OEM part number looks like `23710-CF43D`. **The last five characters are
+   your ECUID** — the key every definition file is indexed by.
+
+That single step decides whether a definition already exists for your car, and
+it costs nothing. Do it before buying anything.
+
 The 2007+ cars (VQ35HR, 370Z, G37) moved diagnostics to CAN and **cannot** be
 reached by these tools at all. If you ever put this on a different car, check that
 first — it is the difference between "works" and "no path exists".
@@ -66,8 +90,9 @@ the init through the DTR/RTS lines directly.
 
 ## First session, in the order that fails safe
 
-Engine off, ignition on. Battery healthy — a marginal battery is a real risk later
-and a source of comms errors now.
+Ignition **on**, engine **not started**. Turn off the accessories that share the
+electrical system and add noise — dome light, ventilation, head unit. Battery
+healthy: a marginal battery is a real risk later and a source of comms errors now.
 
 ```
 set
@@ -92,10 +117,27 @@ Once connected:
 
 ```
 gk                       # guess the seed/key set for your ECUID
-setdev 7058              # 7055 on earlier cars - check first
+setdev 7058              # 7055 on earlier cars - check with "setdev ?"
 npconf p3 0              # usually faster and more reliable
 runkernel npkern.bin     # npkern/precompiled/npk_SH7058.bin for a Rev-Up
-dm stock-original.bin 0 0    # dump the entire ROM
+dm stock-original.bin 0 1048576   # 1 MB on a 7058; 524288 on a 7055
+```
+
+**You can hear the kernel start.** Once `runkernel` succeeds the radiator fans
+run continuously — npkern has taken over the ECU and is no longer running the
+fan control. That is a free, tactile confirmation that you are actually talking
+to the ECU, and its absence means you are not.
+
+`dm file 0 0` also dumps the whole ROM using the size `setdev` implies, but
+stating the length explicitly means a wrong `setdev` shows up as a refusal
+rather than as a short file you might not notice.
+
+**Close the session properly.** Do not just pull the cable:
+
+```
+stopkernel               # fans stop - the ECU is back on its own firmware
+npdisc
+quit
 ```
 
 **Dump it twice, to two different files, and compare them.** A dump that does not
@@ -110,8 +152,25 @@ the only thing standing between you and a boat anchor.
 
 `npkern/precompiled/` ships `npk_SH7058.bin`, plus `npk_SH7055_18.bin` and
 `npk_SH7055_35.bin` — the 180 nm and 350 nm variants of the SH7055, which have
-different flash backends. For a 2006 Rev-Up use the SH7058 kernel. If you are only
-dumping, an SH7055 mismatch simply fails to run; get it right before you ever write.
+different flash backends. The community rule, keyed on the FID IC number for your
+ECUID:
+
+| FID IC | Kernel |
+|---|---|
+| starts `7058` | `npk_SH7058.bin` |
+| `705513` or lower | `npk_SH7055_35.bin` |
+| starts `7055`, last two digits above 13 | `npk_SH7055_18.bin` |
+
+For a 2006 Rev-Up that is the SH7058 kernel. If you are only dumping, a mismatch
+simply fails to run; get it right before you ever write.
+
+### One correction to the widely-linked 2018 tutorial
+
+The RomRaider tutorial "how to flash your Nissan ECU with opensource tools" tells
+you to use `setdev 1` for a 7055 and `setdev 2` for a 7058. **That is out of date
+and current nisprog rejects it** — v1.05 answers `Invalid device, see list with
+"setdev ?"`. Use the names: `setdev 7055`, `setdev 7058`. The rest of that guide
+is sound and worth reading.
 
 ## What this repo does with the dump
 

@@ -178,6 +178,17 @@ describe('the nisprog driver', () => {
     }
   });
 
+  it('refuses to start with -f, which would run commands before the gate sees them', () => {
+    // `nisprog -f <file>` executes a whole command file at startup. Allowing it
+    // would make the allowlist decorative.
+    expect(() => new Nisprog({ binary: 'nisprog', args: ['-f', 'commands.txt'] }))
+      .toThrow(/bypassing the read-only gate/);
+    expect(() => new Nisprog({ binary: 'nisprog', args: ['+f', 'commands.txt'] }))
+      .toThrow(/bypassing the read-only gate/);
+    // Ordinary arguments are still fine.
+    expect(() => new Nisprog({ binary: 'nisprog', args: ['-h'] })).not.toThrow();
+  });
+
   it('reports a missing binary as a useful message', async () => {
     np = new Nisprog({ binary: '/nonexistent/nisprog', defaultTimeoutMs: 500 });
     await expect(np.start(1500)).rejects.toThrow(/could not start|timed out/);
