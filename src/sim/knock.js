@@ -6,9 +6,15 @@
  * timing can this engine take here?" A second copy of these formulas would drift
  * from the first, which is the precise failure `idealExhaustDiameter` was created
  * to prevent — see the warning in `hardware.js`.
+ *
+ * Every TUNED number here lives in `coefficients.js`, including the ones on paths no
+ * reachable operating point exercises — an unreachable literal is exactly the kind a
+ * fingerprint diff cannot police, so it needs to be in the constants dump instead. What
+ * remains inline is unit conversion (`/ 100` for percent) and structural identities
+ * (`Math.max(0, x)` clamping a term to non-negative), neither of which is a knob.
  */
 
-import { BARO_KPA } from './constants.js';
+import { AMBIENT_C, BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp, interp1 } from './math.js';
 import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
@@ -35,7 +41,8 @@ import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
 export function mbtTiming(rpm, mapKpa) {
   const pressureRatio = Math.max(mapKpa / BARO_KPA, COEFF.BURN_RATIO_FLOOR);
   // Crank degrees from spark to 50% mass fraction burned.
-  const theta50 = (COEFF.BURN_REF_DEG + ((rpm - 1500) / 6000) * COEFF.BURN_RPM_GAIN)
+  const theta50 = (COEFF.BURN_REF_DEG
+    + ((rpm - COEFF.BURN_RPM_REF) / COEFF.BURN_RPM_SPAN) * COEFF.BURN_RPM_GAIN)
     * Math.pow(1 / pressureRatio, COEFF.BURN_DILUTION_EXP);
   return clamp(theta50 - COEFF.MFB50_ATDC_DEG, COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG);
 }
@@ -73,10 +80,18 @@ export function knockThreshold({
   // is why factory cruise maps carry 40-50 deg of advance and never complain.
   const loadBonus = chargeIndex >= COEFF.KNOCK_CHARGE_REF
     ? (COEFF.KNOCK_CHARGE_REF - chargeIndex) * COEFF.KNOCK_CHARGE_GAIN
-    : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, 0.04) - 1) * COEFF.KNOCK_CHARGE_RATIO_GAIN;
+    : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, COEFF.KNOCK_CHARGE_INDEX_FLOOR) - 1)
+      * COEFF.KNOCK_CHARGE_RATIO_GAIN;
   const overBoost = Math.max(0, boostPsi - compressor.boostCeiling);
-  const iatPenalty = Math.max(0, chargeC - 25) * COEFF.KNOCK_IAT_PER_C;
-  const modsThresholdBonus = (mods.headers ? 1.5 : 0) + (mods.exhaust ? 0.5 : 0);
+  // Charge heat is charged for from AMBIENT_C, not from a datum of its own. This used
+  // to read `chargeC - 25` while ambient elsewhere in the model was 24.85 °C, so every
+  // boosted point was measured against a datum 0.15 °C too high and under-charged by
+  // 0.012 deg. Off boost the two agree — `chargeTempK` returns exactly AMBIENT_K and
+  // the `max(0, ...)` floor made both readings zero — which is why the disagreement
+  // survived: it was invisible on precisely the pulls a reader would check it against.
+  const iatPenalty = Math.max(0, chargeC - AMBIENT_C) * COEFF.KNOCK_IAT_PER_C;
+  const modsThresholdBonus = (mods.headers ? COEFF.KNOCK_HEADERS_BONUS : 0)
+    + (mods.exhaust ? COEFF.KNOCK_EXHAUST_BONUS : 0);
   let threshold = interp1(RPM, BASE_KNOCK_LIMIT_91, rpm) + octaneBonus + loadBonus + modsThresholdBonus
     + derived.configKnockBonus + derived.materialKnockBonus + derived.compressionKnockAdj
     - iatPenalty - overBoost * COEFF.KNOCK_OVERBOOST_PENALTY;
@@ -85,10 +100,13 @@ export function knockThreshold({
   // and never knocks — which is exactly why factory cruise maps look like that. Under
   // boost the same leanness is dangerous. So scale the mixture terms by charge
   // pressure rather than applying them flat.
-  const pressureFactor = clamp(Math.pow(mapKpa / BARO_KPA, 1.5), 0.05, 2.6);
+  const pressureFactor = clamp(
+    Math.pow(mapKpa / BARO_KPA, COEFF.KNOCK_PRESSURE_EXP),
+    COEFF.KNOCK_PRESSURE_MIN, COEFF.KNOCK_PRESSURE_MAX,
+  );
   threshold -= Math.max(0, afrDelta) * COEFF.KNOCK_LEAN_PENALTY * pressureFactor;
   threshold += Math.min(COEFF.KNOCK_RICH_CAP, Math.max(0, -afrDelta) * COEFF.KNOCK_RICH_BONUS)
-    * clamp(pressureFactor, 0.3, 1.5);
+    * clamp(pressureFactor, COEFF.KNOCK_RICH_PRESSURE_MIN, COEFF.KNOCK_RICH_PRESSURE_MAX);
   return threshold;
 }
 
