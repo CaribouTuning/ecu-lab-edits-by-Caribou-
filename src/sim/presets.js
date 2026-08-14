@@ -165,11 +165,11 @@ export const ENGINE_PRESETS = [
       // model, so they are free to be fitted — see the VQ35HR comment above for the
       // same arrangement and why it is not a fudge factor. In the event neither had to
       // move: this engine's peak torque is set almost entirely by manifold pressure.
-      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque at
-      // the 3700 breakpoint, baseline 296 wlb-ft at camDuration 214): swapping duration
-      // 212->214->216 moves it only 297->296->296, about 0-1 wlb-ft per 2°, while +1 psi
-      // of boost at the 3500 breakpoint, the 4500 breakpoint, or added across the whole
-      // curve each move it 296->306/308/308 — 10-12 wlb-ft per psi. So the boost curve
+      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque
+      // 297 wlb-ft at camDuration 214): swapping duration 212->214->216 moves it only
+      // 298->297->296, about 1 wlb-ft per 2°, while +1 psi of boost at the 3500 node,
+      // the 4500 node, or added across the whole curve each move it 297->306/308/308
+      // — 9-11 wlb-ft per psi. So the boost curve
       // below is what was actually fitted. 214° sits just below the N54's 216° and
       // carries 2.20° of overlap, well inside the advisory.
       // `springRate` 60 puts `valveFloatRpm` at ~8474, 1474 RPM clear of the 7000
@@ -195,7 +195,7 @@ export const ENGINE_PRESETS = [
       // real engine's, and deliberately so. This model was calibrated on a naturally
       // aspirated V6, and it reports more torque per unit of manifold pressure than a
       // real high-compression boosted six makes — hold 13 psi flat to 4500 here and the
-      // pull returns 342 wlb-ft against a 281 target. Everything above the torque peak
+      // pull returns 344 wlb-ft against a 281 target. Everything above the torque peak
       // is where that error can be absorbed without contradicting a published number,
       // so that is where it is absorbed.
       //

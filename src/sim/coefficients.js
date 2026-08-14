@@ -171,10 +171,14 @@ export const COEFF = {
   // Peak cylinder pressure a stock bottom end — cast pistons, powdered-metal rods,
   // production rod bolts — survives indefinitely. Above it, damage accumulates whether
   // or not the mixture ever detonates. Anchored against what the shipped presets
-  // actually produce: the most heavily boosted factory engine in the app (the Golf R's
-  // EA888.3 at 17 psi) peaks at about 95 bar on its own factory calibration, so this
-  // sits clear of every production engine here while still catching the builds that
-  // stack big static compression on top of big boost.
+  // actually produce, which since the B58s landed is a CLUSTER rather than one
+  // distinctive engine: the Golf R's EA888.3 at 17 psi peaks at 94.3 bar and the
+  // B58B30M1 at 93.8, with the B58B30M0 at 84.3 and the GTI at 77.2 — so the top of
+  // the production range is two engines half a bar apart, not one outlier. This still
+  // sits clear of every production engine here while catching builds that stack big
+  // static compression on top of big boost, but the margin above the pack is ~16 bar
+  // rather than the ~15 the Golf R alone once implied. Anything that would raise a
+  // factory preset's peak pressure needs re-checking against both of the top two.
   PEAK_PRESSURE_LIMIT_BAR: 110,
 
   // --- Wear rates (percent of component life per pull) ---
