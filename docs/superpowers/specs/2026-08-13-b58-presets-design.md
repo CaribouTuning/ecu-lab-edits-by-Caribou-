@@ -100,7 +100,23 @@ a tolerance.
 
 ---
 
-## Injector catalogue
+## Injector catalogue — DESCOPED, not shipped
+
+> **Amended after implementation.** This section is kept for the record; the work it
+> describes was built, reviewed, and then deliberately reverted before the PR.
+>
+> **Why it was dropped:** oversized injectors carry no modelled cost, so 1000cc and
+> 1400cc were strictly dominant options — peak duty on the 3.0 litre six at 25 psi on
+> E85 falls from 98% to 49%, which defuses the fuel-system constraint the catalogue
+> exists to teach. `hardware.js`'s own header says the catalogue makes each choice "a
+> trade-off rather than an upgrade", and a free upgrade contradicts that. The B58 fit
+> never needed the headroom: the M1 finished at 38% duty, the lowest of all six presets.
+>
+> Filed as a follow-up issue — model a cost for oversized injectors (minimum pulse
+> width and low-pulse nonlinearity, so a big injector loses fuelling accuracy at idle
+> and light load) *before* extending the catalogue. Two catalogue-invariant tests
+> written for the reverted work are worth reusing there: one asserting the list stays
+> ordered by flow with no duplicates, one asserting every label states its own `cc`.
 
 `INJECTOR_OPTS` currently stops at 850cc. Append 1000cc and 1400cc, with a comment
 noting these are port-injection sizes of the kind run alongside OEM direct injection
@@ -176,9 +192,13 @@ factory spark table called wasteful.
 **Fingerprint.** `tests/fingerprint.js` walks `ENGINE_PRESETS` and hashes every
 preset's generated VE, spark and fuel surface, so the hash necessarily moves. It is
 regenerated once, at the end, and the report diff is read before committing. The
-expected diff is two added `factoryCalibration` entries plus the changed
-`INJECTOR_OPTS` constant, with **no changed rows**. A row moving that this change did
-not add is a bug in the change, not a fixture to bless.
+expected diff is two added `factoryCalibration` entries, with **no changed rows**. A
+row moving that this change did not add is a bug in the change, not a fixture to bless.
+
+> **Amended:** this originally also expected a changed `INJECTOR_OPTS` constant. With
+> the catalogue extension descoped above, `INJECTOR_OPTS` is untouched and the correct
+> diff is the two added `factoryCalibration` entries and nothing else — 376 added
+> lines, 0 removed, verified structurally against a worktree at the merge base.
 
 **Full gate before the PR:** `npm test`, `npm run lint`, `npm run typecheck`,
 `npm run build`.
@@ -189,7 +209,8 @@ not add is a bug in the change, not a fixture to bless.
 
 - `b58-m0` and `b58-m1` ship, both validating against published figures through the
   shared physics with no new coefficients and no per-engine multiplier
-- `INJECTOR_OPTS` carries 1000cc and 1400cc
+- ~~`INJECTOR_OPTS` carries 1000cc and 1400cc~~ — **descoped**, see above; a follow-up
+  issue covers modelling a cost for oversized injectors first
 - The picker is a manufacturer-grouped dropdown covering every preset plus Custom
 - `PRESET_GROUPS` is exported and asserted
 - Fingerprint regenerated deliberately, with the diff reviewed and explained in the PR

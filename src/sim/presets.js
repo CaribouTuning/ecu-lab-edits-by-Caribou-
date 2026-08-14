@@ -88,9 +88,9 @@ export const ENGINE_PRESETS = [
       // with an empty event log).
       // `springRate` 68 is set well above the 50 baseline purely to carry that cam:
       // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline —
-      // comparable to (not the same as) the margin the other three presets carry:
-      // 1330 / 1682 / 1382 RPM. No pull should ever show a `float` event on this
-      // engine — if one appears, that is a bug, not "the character".
+      // comparable to (not the same as) the margin the other five presets carry:
+      // 1330 / 1474 / 1534 / 1682 / 1382 RPM. No pull should ever show a `float`
+      // event on this engine — if one appears, that is a bug, not "the character".
       //
       // WHAT THIS PRESET DOES NOT REPRODUCE: the real engine makes peak power at 6800
       // and falls away after it. Simulated power does not fall at all — it climbs
@@ -99,7 +99,7 @@ export const ENGINE_PRESETS = [
       // shared physics, not of this data: the real rolloff comes from cam profile,
       // VVEL variable lift and intake-tract tuning, and the model has no term for any
       // of them, so at every duration that reaches this engine's rating VE is still
-      // rising at the redline. The three boosted presets roll over only because their
+      // rising at the redline. The five boosted presets roll over only because their
       // factory boost curves taper; nothing tapers on a naturally aspirated engine
       // here. Shaping the top end with valve float instead (a 42 spring rate, which is
       // what this preset shipped with) did place the peak, at the cost of modelling a
@@ -198,6 +198,16 @@ export const ENGINE_PRESETS = [
       // pull returns 342 wlb-ft against a 281 target. Everything above the torque peak
       // is where that error can be absorbed without contradicting a published number,
       // so that is where it is absorbed.
+      //
+      // WHAT THIS PRESET DOES NOT REPRODUCE: the rated torque plateau. BMW publishes
+      // 330 lb-ft flat from 1380 RPM; this preset reaches 44% of its 281 wlb-ft target
+      // at 1500 and only 96% by 3000 (123 / 170 / 224 / 268 wlb-ft at 1500 / 2000 /
+      // 2500 / 3000). The line above about boost "commanded from just above idle"
+      // describes the curve this preset ASKS for, not torque it delivers down there.
+      // The N54 above has the same gap and no test asserts torque-peak placement, so
+      // this is a shared limit of the model rather than a fault in this data — the
+      // same absent term tracked as issue #31, which costs nothing for stacking
+      // compression on boost and shows up here in the torque channel.
       boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 13 : r < 4500 ? 11
         : r < 5500 ? 9 : r < 6500 ? 8 : r < 7500 ? 7 : 6.5)),
     },
@@ -260,6 +270,11 @@ export const ENGINE_PRESETS = [
       // give a 62 hp gap (382-320); the two simulated curves give 47 whp (324-277) —
       // the model doesn't reproduce the full published gap, but the direction and most
       // of the magnitude are there.
+      //
+      // WHAT THIS PRESET DOES NOT REPRODUCE: the rated torque plateau, exactly as on
+      // the M0. Published 369 lb-ft flat from 1800 RPM; this preset reaches 38% of its
+      // 314 wlb-ft target at 1500 and 94% by 3000 (120 / 177 / 242 / 295 wlb-ft at
+      // 1500 / 2000 / 2500 / 3000). Same shared limit, same issue #31.
       boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 17 : r < 4500 ? 14
         : r < 6500 ? 12 : r < 7500 ? 11 : 10.5)),
     },
