@@ -471,7 +471,7 @@ describe('advisors never mutate the tables they inspect', () => {
       ve, timing, afr, derived: S.deriveEngine(STOCK), octaneBonus: 0,
       fuel: S.OCTANE_OPTS[0], mods: S.DEFAULT_MODS, turboOn: false,
       boostCurve: [...S.DEFAULT_BOOST], compressor: S.COMPRESSOR_OPTS[1],
-      turbine: S.TURBINE_OPTS[1], injectorCc: 315, ecuInjectorCc: 315,
+      injectorCc: 315, ecuInjectorCc: 315,
       mafScalar: 1.0, mafErrorBase: 1.0,
     });
 
@@ -698,7 +698,7 @@ describe('the spark advisor', () => {
       ve: S.DEFAULT_VE, veTruth: S.DEFAULT_VE, timing: S.DEFAULT_TIMING, afr: S.DEFAULT_AFR,
       derived: S.deriveEngine(STOCK), octaneBonus: S.OCTANE_OPTS[0].bonus,
       fuel: S.OCTANE_OPTS[0], mods: NO_MODS, turboOn: false, boostCurve: S.DEFAULT_BOOST,
-      compressor: S.COMPRESSOR_OPTS[1], turbine: S.TURBINE_OPTS[1],
+      compressor: S.COMPRESSOR_OPTS[1],
       injectorCc: 315, ecuInjectorCc: 315, mafScalar: 1, mafErrorBase: 1,
       ...overrides,
     });
@@ -763,7 +763,13 @@ describe('the spark advisor', () => {
   // wasteful and told the player they were safe, while the dyno logged knock on the
   // very same build. Danger is where the player's own number sits.
   it('never calls a detonating cell safe', () => {
-    const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 5) });
+    // 8 psi, not 5, because `maxReachable` must bring the 150 kPa row into range for a
+    // genuinely detonating cell to exist at all. At 5 psi only the rows at and below
+    // 100 kPa are advised, and a stock engine at 5 psi does not really detonate in
+    // vacuum — it only appeared to before #33, when the advisor graded those rows at a
+    // boosted pressure they never actually run at. The assertion below is unchanged;
+    // it just needs a case where the danger is real.
+    const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 8) });
     const knocking = boosted.spark.filter((c) => c.knocking);
     expect(knocking.length).toBeGreaterThan(0);
     expect(boosted.overAdvanced.length).toBeGreaterThan(0);
@@ -771,17 +777,21 @@ describe('the spark advisor', () => {
     for (const c of knocking) expect(pastIds.has(`${c.ri}:${c.ci}`)).toBe(false);
   });
 
-  it('does not call a factory spark table wasteful on the engine it was written for', () => {
+  it('does not condemn a factory calibration on the engine it was written for', () => {
     // `factoryCalibration` writes spark from the same min(MBT, knock ceiling) rule the
-    // advisor now advises against, and both take MBT at the table row's own pressure.
-    // If they disagreed on that basis the advisor would contradict a table the app
-    // itself produced — which it did, flagging 21 of 32 cells on every boosted preset.
+    // advisor advises against, and both now take BOTH ceilings at the table row's own
+    // pressure. They must not disagree: the red panel means "your hardware will not
+    // tolerate this", and an untouched factory tune must never trip it.
     //
-    // This asserts only the MBT half. The knock half is NOT yet in agreement: the
-    // advisor evaluates the knock threshold at the manifold pressure `computeManifold`
-    // produces, while the generator evaluates it at the row pressure, so the highest
-    // boost preset still trips `overAdvanced` on its own table. That is pre-existing
-    // and filed separately; it is not what this test is guarding.
+    // The MBT half was aligned by issue #4. The knock half is issue #33: the advisor
+    // used to re-derive a manifold pressure from the RPM axis and the boost curve, so
+    // on a boosted engine it graded the VACUUM rows as though they were being run at
+    // full boost — 28 cells across four presets.
+    //
+    // MAF error is passed as the app passes it. `mafErrorBase: 1` would make a turbo
+    // build's delivered mixture richer than its factory table intends, lifting the
+    // knock threshold and masking most of those cells; an earlier version of this test
+    // did exactly that and saw only 8.
     for (const preset of S.ENGINE_PRESETS) {
       const p = S.applyPreset(preset);
       const fuel = S.OCTANE_OPTS[p.octaneIdx];
@@ -790,11 +800,14 @@ describe('the spark advisor', () => {
         derived: S.deriveEngine(p.engineConfig), octaneBonus: fuel.bonus, fuel,
         mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
         compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
-        turbine: S.TURBINE_OPTS[p.turbineIdx],
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-        mafScalar: 1, mafErrorBase: 1,
+        mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
       });
+      expect(a.overAdvanced, `${preset.id} called its own factory spark table dangerous`).toHaveLength(0);
       expect(a.pastMbt, `${preset.id} called its own factory spark table wasteful`).toHaveLength(0);
+      // The advisor must not have gone quiet by declaring the cells safe instead: no
+      // cell of a factory calibration should be detonating on its own factory hardware.
+      expect(a.spark.filter((c) => c.knocking), `${preset.id} detonates on its own factory tune`).toHaveLength(0);
     }
   });
 

@@ -233,7 +233,6 @@ export function buildFingerprint(S) {
       derived: S.deriveEngine(p.engineConfig), octaneBonus: fuel.bonus, fuel,
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
-      turbine: S.TURBINE_OPTS[p.turbineIdx],
       injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
       mafScalar: 1.0, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
     });
