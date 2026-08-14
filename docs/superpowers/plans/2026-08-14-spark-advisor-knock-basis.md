@@ -179,6 +179,7 @@ cells that genuinely knock."
 **Files:**
 - Modify: `src/sim/advisors.js:105-136`
 - Modify: `tests/physics.test.js:774-799`
+- Modify: `tests/fingerprint.js` (the `turbine` line Task 1's snippet added has to come out — `calibrationAdvice` no longer takes it)
 - Modify: `tests/fixtures/fingerprint.sha256` (regenerated)
 
 **Interfaces:**
@@ -298,7 +299,7 @@ Expected: 89 pass, **1 fails** — `the spark advisor > never calls a detonating
 
 Why it fails: that test builds its case at 5 psi. `maxReachable` (`advisors.js:102`) is then `101.325 + 5×6.895 + 2 ≈ 137.8`, so of the six `LOAD` rows `[200, 150, 100, 70, 40, 20]` only the four at or below 100 kPa are advised at all. Under the old basis those vacuum rows were graded at a boosted pressure and duly "detonated". Under the correct basis none of them do — a stock engine running 5 psi genuinely does not detonate at 70 kPa.
 
-**That is the bug, showing up in a test that depended on it.** The test's intent — a cell that is actually detonating must never be filed as merely wasteful — is still exactly right and must be kept. It needs a fixture in which a detonating cell genuinely exists. At 8 psi the 150 kPa row becomes reachable (`101.325 + 8×6.895 ≈ 156.5`) and produces 6 knocking cells on the stock timing table; verified 90/90 green with that single change.
+**That is the bug, showing up in a test that depended on it.** The test's intent — a cell that is actually detonating must never be filed as merely wasteful — is still exactly right and must be kept. It needs a fixture in which a detonating cell genuinely exists. Measured, not anticipated: the cliff is between 6 and 7 psi. At 7 psi `maxReachable` is `101.325 + 7×6.895 + 2 ≈ 151.6`, bringing the 150 kPa row into range, and the 6 knocking cells already exist there; 7 psi is the first that works, 8 is used for margin. `maxReachable` at 8 psi is `101.325 + 8×6.895 + 2 ≈ 158.5`; verified 90/90 green with that single change.
 
 - [ ] **Step 6: Re-fixture the neighbouring test at 8 psi**
 
@@ -310,7 +311,9 @@ In `tests/physics.test.js` (line 766), change the boost and document why it is n
     // 100 kPa are advised, and a stock engine at 5 psi does not really detonate in
     // vacuum — it only appeared to before #33, when the advisor graded those rows at a
     // boosted pressure they never actually run at. The assertion below is unchanged;
-    // it just needs a case where the danger is real.
+    // it just needs a case where the danger is real. Measured, not anticipated: 7 psi is
+    // the first that works — the 150 kPa row's 6 knocking cells already exist there —
+    // 8 is used for margin.
     const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 8) });
 ```
 

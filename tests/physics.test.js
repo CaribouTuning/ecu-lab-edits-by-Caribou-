@@ -768,7 +768,9 @@ describe('the spark advisor', () => {
     // 100 kPa are advised, and a stock engine at 5 psi does not really detonate in
     // vacuum — it only appeared to before #33, when the advisor graded those rows at a
     // boosted pressure they never actually run at. The assertion below is unchanged;
-    // it just needs a case where the danger is real.
+    // it just needs a case where the danger is real. Measured, not anticipated: 7 psi is
+    // the first that works — the 150 kPa row's 6 knocking cells already exist there —
+    // 8 is used for margin.
     const boosted = advice({ turboOn: true, boostCurve: S.RPM.map(() => 8) });
     const knocking = boosted.spark.filter((c) => c.knocking);
     expect(knocking.length).toBeGreaterThan(0);
@@ -792,6 +794,13 @@ describe('the spark advisor', () => {
     // build's delivered mixture richer than its factory table intends, lifting the
     // knock threshold and masking most of those cells; an earlier version of this test
     // did exactly that and saw only 8.
+    //
+    // This passes on real but thin headroom: the worst case measured is `b58-m1` at
+    // 200 kPa / 3500 RPM, where the factory table sits only 0.50 deg under its knock
+    // ceiling — exactly FACTORY_KNOCK_MARGIN_DEG (2.0) minus KNOCK_SAFETY_DEG (1.5) in
+    // presets.js/advisors.js — and it only clears because ADVANCE_TOLERANCE_DEG is 1.0.
+    // Tightening any of those three constants can flip this test; that is the point of
+    // recording the number here instead of leaving the next tuner to re-derive it.
     for (const preset of S.ENGINE_PRESETS) {
       const p = S.applyPreset(preset);
       const fuel = S.OCTANE_OPTS[p.octaneIdx];
@@ -808,6 +817,13 @@ describe('the spark advisor', () => {
       // The advisor must not have gone quiet by declaring the cells safe instead: no
       // cell of a factory calibration should be detonating on its own factory hardware.
       expect(a.spark.filter((c) => c.knocking), `${preset.id} detonates on its own factory tune`).toHaveLength(0);
+      // Nor by simply not running — an advisor that returns nothing satisfies every
+      // toHaveLength(0) above by accident. And an advisor that has gone quiet by
+      // declaring cells safe would, on a real regression, start telling this factory
+      // table to add advance it does not need — assert `underAdvanced` too so that
+      // failure mode is actually caught, not just the "too much advance" ones above.
+      expect(a.spark.length, `${preset.id} advised on nothing at all`).toBeGreaterThan(0);
+      expect(a.underAdvanced, `${preset.id} was told to add advance to its own factory table`).toHaveLength(0);
     }
   });
 

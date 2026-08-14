@@ -108,10 +108,10 @@ export function calibrationAdvice({
       // happens at 3500 RPM" — it is the calibration the ECU applies whenever MAP is
       // 100 kPa, whatever the RPM. This used to re-derive a manifold pressure from the
       // RPM axis and the boost curve instead, which on a boosted engine graded the
-      // vacuum rows against a boosted ceiling: at 3500 RPM a 17 psi engine sits near
-      // 218 kPa, so the 70 and 100 kPa rows were condemned for timing that is perfectly
-      // safe at the pressure they actually apply at. Four of seven shipped presets
-      // failed their own factory calibration that way.
+      // vacuum rows against a boosted ceiling: at 3500 RPM a 17 psi engine (`ea888-r`)
+      // sits near 214 kPa, so the 70 and 100 kPa rows were condemned for timing that is
+      // perfectly safe at the pressure they actually apply at. Four of seven shipped
+      // presets failed their own factory calibration that way.
       //
       // MBT was aligned to the row pressure by issue #4; this is the knock half of the
       // same disagreement (issue #33). Both ceilings now share one basis, and that

@@ -248,6 +248,13 @@ export function buildFingerprint(S) {
         mbt: r6(c.mbt), knockCeiling: r6(c.knockCeiling),
         knockLimited: c.knockLimited, knocking: c.knocking,
       })),
+      // The fuel side used to be recorded only as `wrongMix.length` — a count that an
+      // edit to the `map >= 85` gate or the 0.45 tolerance could move without changing.
+      // Record every cell in the same detail as spark, so a change to either constant
+      // is caught here even when it does not flip which cells cross the threshold.
+      fuelAdv: advice.fuelAdv.map((c) => ({
+        ri: c.ri, ci: c.ci, suggested: r6(c.suggested), delta: r6(c.delta),
+      })),
     };
   }
 
