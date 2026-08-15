@@ -354,8 +354,15 @@ export function runCycle({
   // manifold: an irreversible expansion from cylinder pressure, which cools it. This is
   // the number the turbine should see; `exhaustTempK` in thermo.js is the estimate used
   // only where the answer is needed BEFORE the cycle can be run.
+  // The ratio is capped at 1 because blowdown is an EXPANSION — it can only cool. Below
+  // roughly half throttle the cylinder is still under manifold pressure when the valve
+  // opens, and the uncapped ratio inverted into an isentropic COMPRESSION that heated
+  // the exhaust: a 20 kPa cruise point came out at 2.25x and left the port ~250 K hotter
+  // than the burned gas that fed it, so the datalog read EGT climbing as the driver
+  // lifted. There is no expansion to have in that case; the charge is simply pushed out.
+  const blowdownRatio = Math.min(1, BARO_KPA * 1000 / Math.max(p, 1));
   const blowdownK = tB * Math.pow(
-    Math.max(0.05, BARO_KPA * 1000 / Math.max(p, 1)),
+    Math.max(0.05, blowdownRatio),
     (COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED,
   );
 

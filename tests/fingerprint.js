@@ -212,6 +212,53 @@ export function buildFingerprint(S) {
     };
   }
 
+  // ---- calibrationAdvice: what the spark and fuel advisors SAY about every shipped
+  // preset's own factory calibration. The advisors are what the player actually reads
+  // in TUNE, and until now nothing in this matrix called them at all — so the whole
+  // advisory layer could change what it tells people with no hash movement and no
+  // review. Gating the advice itself, rather than the constants behind it, means a
+  // future ceiling or tolerance added to advisors.js is covered without a matching
+  // addition here.
+  //
+  // Wired exactly as src/ui/EcuLab.jsx wires it, MAF error included. That matters:
+  // passing mafErrorBase 1 makes a turbo build's delivered mixture richer than the
+  // factory table intends, which lifts the knock threshold and hides real cells. The
+  // app never does that, so neither does this.
+  out.calibrationAdvice = {};
+  for (const preset of S.ENGINE_PRESETS) {
+    const p = S.applyPreset(preset);
+    const fuel = S.OCTANE_OPTS[p.octaneIdx];
+    const advice = S.calibrationAdvice({
+      ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+      derived: S.deriveEngine(p.engineConfig), fuel,
+      mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+      compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      turbine: S.presetTurbine(preset),
+      injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+      mafScalar: 1.0, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+    });
+    out.calibrationAdvice[preset.id] = {
+      overAdvanced: advice.overAdvanced.length,
+      pastMbt: advice.pastMbt.length,
+      underAdvanced: advice.underAdvanced.length,
+      wrongMix: advice.wrongMix.length,
+      knocking: advice.spark.filter((c) => c.knocking).length,
+      spark: advice.spark.map((c) => ({
+        ri: c.ri, ci: c.ci,
+        current: r6(c.current), suggested: r6(c.suggested),
+        mbt: r6(c.mbt), knockCeiling: r6(c.knockCeiling),
+        knockLimited: c.knockLimited, knocking: c.knocking,
+      })),
+      // The fuel side used to be recorded only as `wrongMix.length` — a count that an
+      // edit to the `map >= 85` gate or the 0.45 tolerance could move without changing.
+      // Record every cell in the same detail as spark, so a change to either constant
+      // is caught here even when it does not flip which cells cross the threshold.
+      fuelAdv: advice.fuelAdv.map((c) => ({
+        ri: c.ri, ci: c.ci, suggested: r6(c.suggested), delta: r6(c.delta),
+      })),
+    };
+  }
+
   // ---- helpers ----
   out.helpers = {
     interp1: [1000, 1500, 3000, 4500, 6000, 7500, 9000].map((x) => r6(S.interp1(S.RPM, S.DEFAULT_TIMING[0], x))),

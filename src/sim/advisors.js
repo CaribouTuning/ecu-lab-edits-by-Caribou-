@@ -115,12 +115,17 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
     sweptM3: (derived.displacementL / derived.cyl) / 1000,
   });
   const lambda = afrCell / 14.7;
-  const burnedFuelG = airG / (fuel.stoich * lambda);
+  // Delivered vs burnable, split as `point.js` and `factoryCalibration` split it: only
+  // the fuel that finds oxygen releases heat, but the whole delivered mass evaporates
+  // into the charge and the whole delivered mass leaves through the turbine.
+  const deliveredFuelG = airG / (fuel.stoich * lambda);
+  const burnedFuelG = Math.min(deliveredFuelG, airG / fuel.stoich);
   return mbtForCell({
-    rpm, mapKpa, intakeK: chargeK, airChargeG: airG, burnedFuelG, lambda, fuel, derived,
+    rpm, mapKpa, intakeK: chargeK, airChargeG: airG, burnedFuelG,
+    fuelMassG: deliveredFuelG, lambda, fuel, derived,
     empKpa: exhaustManifoldKpa({
       turboOn, turbine: turboOn ? turbine : null,
-      exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
+      exhaustFlowKgS: ((airG + deliveredFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
     }),
   });

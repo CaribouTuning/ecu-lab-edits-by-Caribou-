@@ -17,7 +17,7 @@
  */
 
 import {
-  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS,
+  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
 } from './hardware.js';
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
@@ -399,10 +399,7 @@ export const ENGINE_PRESETS = [
 export function presetTurbine(preset) {
   const { turboOn, turbineIdx, turbineCount = 1 } = preset.induction;
   if (!turboOn) return null;
-  const base = TURBINE_OPTS[turbineIdx];
-  return turbineCount === 1
-    ? base
-    : { ...base, effectiveAreaM2: base.effectiveAreaM2 * turbineCount };
+  return turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount);
 }
 
 /** The induction hardware bundle `computeHardwareVE` expects. */
@@ -484,9 +481,17 @@ export function factoryCalibration(preset) {
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. A second, simpler
     // knock estimate here would drift from the one the player then drives against.
+    // Delivered fuel and BURNABLE fuel are not the same number at a best-power target,
+    // and the cycle needs both: the whole delivered mass evaporates into the charge and
+    // cools it, but only what finds oxygen releases heat. Feeding delivered mass as the
+    // burned mass released a rich cell's unburnable fifth as if it had oxygen — 20% high
+    // on heat at the Golf R's 200 kPa row, which pulled the generated spark ~5 deg below
+    // what the same cycle allows in `point.js`. Split exactly as point.js splits it.
+    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
     const cyc = cycleInputsFor({
       rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
-      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      airChargeG, burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich),
+      fuelMassG: deliveredFuelG,
       lambda, fuel, derived,
     });
     const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;

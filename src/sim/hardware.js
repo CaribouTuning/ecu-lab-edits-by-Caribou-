@@ -105,6 +105,28 @@ export const TURBINE_OPTS = [
 ];
 
 /**
+ * One housing or several, as a single turbine the rest of the model can use.
+ *
+ * `n` small housings pass `n` times the exhaust before they start choking, which is the
+ * whole reason a manufacturer fits two small turbos instead of one big one. Only the
+ * flow area scales: efficiency and inertia are per-housing properties and each housing
+ * still has them.
+ *
+ * This lives here, beside the options it scales, because EVERY consumer must agree on
+ * it. When it lived only inside `presetTurbine`, the test suite validated the N54 as the
+ * twin it is while the app ran it as a single housing — 9% down on power, against a
+ * factory spark table generated for the pair.
+ *
+ * @param {object|null} base a `TURBINE_OPTS` entry
+ * @param {number} count how many of them are fitted
+ * @returns {object|null}
+ */
+export function turbineWithCount(base, count = 1) {
+  if (!base || count === 1) return base;
+  return { ...base, effectiveAreaM2: base.effectiveAreaM2 * count };
+}
+
+/**
  * Compressors, each carrying a MAP rather than a single efficiency number.
  *
  * A real compressor map is a field of efficiency islands bounded by a surge line on the

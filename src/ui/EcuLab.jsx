@@ -30,7 +30,7 @@ import {
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
   deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
-  simulateSweep, veRecommendations
+  simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import { T, heat, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -589,6 +589,9 @@ export default function EngineManagementSandbox() {
   const [totalScore, setTotalScore] = useState(0);
   const [pullCount, setPullCount] = useState(0);
   const [turbineIdx, setTurbineIdx] = useState(1);
+  // How many of that housing are fitted. Only a preset can set this above 1 — the picker
+  // below fits one turbo, so choosing from it resets the count.
+  const [turbineCount, setTurbineCount] = useState(1);
   const [compressorIdx, setCompressorIdx] = useState(1);
   // Which factory preset (if any) is currently loaded stock. Cleared the moment any
   // Engine Architecture control is hand-edited, and offered as a warning prompt
@@ -637,7 +640,11 @@ export default function EngineManagementSandbox() {
   const setModsInvalidating = withPresetField(setMods);
   const setTurboOnInvalidating = withPresetField(setTurboOn);
   const setBoostCurveInvalidating = withPresetField(setBoostCurve);
-  const setTurbineIdxInvalidating = withPresetField(setTurbineIdx);
+  // Fitting a turbine by hand fits ONE of it; the twin-turbo count belongs to a preset.
+  const setTurbineIdxInvalidating = withPresetField((idx) => {
+    setTurbineIdx(idx);
+    setTurbineCount(1);
+  });
   const setCompressorIdxInvalidating = withPresetField(setCompressorIdx);
   const setInjIdxInvalidating = withPresetField(setInjIdx);
   const setOctaneIdxInvalidating = withPresetField(setOctaneIdx);
@@ -681,13 +688,21 @@ export default function EngineManagementSandbox() {
   // stale — exactly as it would in a real shop, where the old log does not update
   // itself because you bolted something on. The VE tab shows what changed and by how
   // much, and you choose when to accept it.
+  // The turbine as actually fitted, count included. EVERY consumer below reads this
+  // rather than indexing TURBINE_OPTS directly, so a twin-turbo preset cannot be
+  // simulated as a single housing.
+  const turbine = useMemo(
+    () => turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount),
+    [turbineIdx, turbineCount],
+  );
+
   const hwForVe = useMemo(() => ({
     turboOn,
-    turbine: turboOn ? TURBINE_OPTS[turbineIdx] : null,
+    turbine: turboOn ? turbine : null,
     exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     fuel,
     peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-  }), [turboOn, turbineIdx, exhaustDiaIdx, fuel, boostCurve]);
+  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve]);
 
   // TRUE cylinder filling for the hardware as currently built. The player's `ve` table
   // is only the ECU's BELIEF about this; the gap between the two is what makes the
@@ -707,10 +722,10 @@ export default function EngineManagementSandbox() {
   );
   const calAdvice = useMemo(() => calibrationAdvice({
     ve, veTruth, timing, afr, derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor: COMPRESSOR_OPTS[compressorIdx], turbine: TURBINE_OPTS[turbineIdx],
+    compressor: COMPRESSOR_OPTS[compressorIdx],
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
   }), [ve, veTruth, timing, afr, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressorIdx, turbineIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase]);
+       compressorIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, hwForVe),
@@ -774,6 +789,7 @@ export default function EngineManagementSandbox() {
     setTurboOn(p.turboOn);
     setBoostCurve(p.boostCurve);
     setTurbineIdx(p.turbineIdx);
+    setTurbineCount(p.turbineCount);
     setCompressorIdx(p.compressorIdx);
     setInjIdx(p.injIdx);
     setEcuInjectorCc(p.ecuInjectorCc);
@@ -891,7 +907,7 @@ export default function EngineManagementSandbox() {
     const r = simulateSweep({
       loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: OCTANE_OPTS[octaneIdx].label,
       fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
     });
     setPrevResult(result);
     setResult(r);
@@ -903,7 +919,7 @@ export default function EngineManagementSandbox() {
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
@@ -926,7 +942,7 @@ export default function EngineManagementSandbox() {
   // without needing to restart the interval every time a table changes.
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
-    turboOn, boostCurve, octaneBonus, turbine: TURBINE_OPTS[turbineIdx],
+    turboOn, boostCurve, octaneBonus, turbine,
     compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
   };
   throttleRef.current = throttleInput;
@@ -1033,12 +1049,12 @@ export default function EngineManagementSandbox() {
     const tuning = computeTuningScore(result);
     const engineer = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: result.peakHp, peakTq: result.peakTq, tuningScore: tuning.score, engineerScore: engineer.score });
     return { tuning, engineer, pull };
-  }, [result, running, engineConfig, turboOn, turbineIdx, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
+  }, [result, running, engineConfig, turboOn, turbine, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
@@ -1626,7 +1642,7 @@ export default function EngineManagementSandbox() {
             <BuildSection
               active={buildSection === 'turbo'} onClick={() => setBuildSection(buildSection === 'turbo' ? null : 'turbo')}
               icon={Wind} label="Forced Induction"
-              sub={turboOn ? `On · ${TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
+              sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
               <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={setTurboOnInvalidating} />
 
