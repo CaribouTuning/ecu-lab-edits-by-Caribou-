@@ -481,17 +481,26 @@ export function factoryCalibration(preset) {
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. A second, simpler
     // knock estimate here would drift from the one the player then drives against.
-    // Delivered fuel and BURNABLE fuel are not the same number at a best-power target,
-    // and the cycle needs both: the whole delivered mass evaporates into the charge and
-    // cools it, but only what finds oxygen releases heat. Feeding delivered mass as the
-    // burned mass released a rich cell's unburnable fifth as if it had oxygen — 20% high
-    // on heat at the Golf R's 200 kPa row, which pulled the generated spark ~5 deg below
-    // what the same cycle allows in `point.js`. Split exactly as point.js splits it.
-    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
+    // KNOWN DEFECT, deliberately left in place — see issue linked from the PR.
+    //
+    // This releases the energy of DELIVERED fuel, not burnable fuel. At a rich best-power
+    // target the surplus has no oxygen, so heat comes out ~20% high (Golf R, 200 kPa) and
+    // the generated spark lands ~5 deg below what the same cycle allows in `point.js` —
+    // the two are supposed to ask one question and get one answer.
+    //
+    // The one-line fix is `burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich)`
+    // with `fuelMassG: deliveredFuelG` alongside it, exactly as point.js splits them. It is
+    // NOT applied here because the boosted presets were fitted around this over-retard:
+    // correcting it alone puts four of them outside the published-figure tolerances
+    // (N54 torque +11.3%, Golf R +7.2%, B58B30M0 +5.5%, GTI +5.3%), and no single fitted
+    // knob recovers them — cam duration saturates (N54 torque bottoms at +10.1% at every
+    // duration, because that plateau is boost-limited), compressor choice moves it not at
+    // all, and the only KNOCK_TAU_SCALE window that passes all seven (~1.4) makes the stock
+    // engine knock on its own shipped calibration. Closing it needs the knock model to bind
+    // on boosted factory tables, which it currently never does.
     const cyc = cycleInputsFor({
       rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
-      airChargeG, burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich),
-      fuelMassG: deliveredFuelG,
+      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
       lambda, fuel, derived,
     });
     const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
