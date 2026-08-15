@@ -707,10 +707,10 @@ export default function EngineManagementSandbox() {
   );
   const calAdvice = useMemo(() => calibrationAdvice({
     ve, veTruth, timing, afr, derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor: COMPRESSOR_OPTS[compressorIdx], turbine: TURBINE_OPTS[turbineIdx],
+    compressor: COMPRESSOR_OPTS[compressorIdx],
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
   }), [ve, veTruth, timing, afr, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressorIdx, turbineIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase]);
+       compressorIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, hwForVe),

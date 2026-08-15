@@ -10,8 +10,7 @@
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
 import { mbtTiming } from './knock.js';
-import { clamp, interp1 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { clamp } from './math.js';
 import { evaluatePoint } from './point.js';
 import { LOAD, RPM } from './tables.js';
 
@@ -94,7 +93,7 @@ export function veRecommendations(currentVe, cfg, mods, hw) {
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, derived, octaneBonus, fuel, mods, turboOn, boostCurve,
-  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
+  compressor, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
 }) {
   const spark = [], fuelAdv = [];
   // Only advise on load the engine can actually reach. A naturally aspirated build
@@ -103,12 +102,23 @@ export function calibrationAdvice({
   LOAD.forEach((mapRow, ri) => {
     if (mapRow > maxReachable) return;
     RPM.forEach((rpm, ci) => {
-      const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
-      const man = computeManifold(rpm, Math.min(mapRow, BARO_KPA), turboOn, boostTarget, turbine, compressor);
-      const useMap = mapRow > BARO_KPA ? mapRow : man.mapKpa;
-      const boostPsi = Math.max(0, (useMap - BARO_KPA) / PSI_TO_KPA);
+      // A row is judged at ITS OWN pressure, both here and in `factoryCalibration`.
+      //
+      // The tables are indexed by manifold pressure, so the 100 kPa row is not "what
+      // happens at 3500 RPM" — it is the calibration the ECU applies whenever MAP is
+      // 100 kPa, whatever the RPM. This used to re-derive a manifold pressure from the
+      // RPM axis and the boost curve instead, which on a boosted engine graded the
+      // vacuum rows against a boosted ceiling: at 3500 RPM a 17 psi engine (`ea888-r`)
+      // sits near 214 kPa, so the 70 and 100 kPa rows were condemned for timing that is
+      // perfectly safe at the pressure they actually apply at. Four of seven shipped
+      // presets failed their own factory calibration that way.
+      //
+      // MBT was aligned to the row pressure by issue #4; this is the knock half of the
+      // same disagreement (issue #33). Both ceilings now share one basis, and that
+      // basis is the one `factoryCalibration` generates against — see presets.js.
+      const boostPsi = Math.max(0, (mapRow - BARO_KPA) / PSI_TO_KPA);
       const pt = evaluatePoint({
-        rpm, mapKpa: useMap, boostPsi,
+        rpm, mapKpa: mapRow, boostPsi,
         veVal: ve[ri][ci], veActualVal: veTruth?.[ri]?.[ci],
         timingVal: timing[ri][ci], afrCommanded: afr[ri][ci],
         octaneBonus, fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
@@ -128,11 +138,7 @@ export function calibrationAdvice({
       // This is the same rule `factoryCalibration` writes its spark table with; see
       // presets.js. The two must not disagree about what good timing looks like.
       const knockCeiling = pt.threshold - KNOCK_SAFETY_DEG;
-      // MBT is taken at the row's OWN pressure, not the manifold pressure the throttle
-      // happens to produce. The table is indexed by manifold pressure, so the 100 kPa
-      // row is the calibration for 100 kPa — and `factoryCalibration` writes it that
-      // way too. Evaluating it at anything else makes the advisor disagree with the
-      // tables the app itself generated.
+      // Both ceilings are taken at the row's own pressure; see the note above.
       const mbt = mbtTiming(rpm, mapRow);
       // Which of the two ceilings bound the suggestion. Useful on its own, but it says
       // nothing about danger: a cell can sit past both ceilings with MBT the lower of
