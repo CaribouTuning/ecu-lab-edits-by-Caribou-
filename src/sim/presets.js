@@ -481,7 +481,7 @@ export function factoryCalibration(preset) {
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. A second, simpler
     // knock estimate here would drift from the one the player then drives against.
-    // KNOWN DEFECT, deliberately left in place — see issue linked from the PR.
+    // KNOWN DEFECT, deliberately left in place — see issue #46.
     //
     // This releases the energy of DELIVERED fuel, not burnable fuel. At a rich best-power
     // target the surplus has no oxygen, so heat comes out ~20% high (Golf R, 200 kPa) and
