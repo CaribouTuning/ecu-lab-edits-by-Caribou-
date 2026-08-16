@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets the weekly release workflow run these checks on the branch it just pushed.
+  # A pull request opened by GITHUB_TOKEN does NOT raise a `pull_request` event — that
+  # is GitHub's recursion guard — so without this the release PR would sit with no
+  # checks at all and could never satisfy the required-status-check rule on main.
+  # `workflow_dispatch` is the documented exception to that guard.
+  workflow_dispatch:
 
 jobs:
   check:

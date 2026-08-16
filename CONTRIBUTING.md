@@ -39,7 +39,16 @@ npm run dev
 npm test
 ```
 
-Node 20+.
+**Node 20 or 22 — not newer.** `.nvmrc` pins 22, so `nvm use` in this repo picks it up.
+
+This is narrower than it looks and it is not fussiness. The behavioural fingerprint is a
+float-sensitive hash, and V8's `Math.pow`/`Math.exp` results shift by an ULP or so
+between major releases — enough to change it. One untouched commit passes on Node 20 and
+22 and fails on 26, same machine. On a newer Node you will meet a failing fingerprint
+that looks like you broke the physics, and the documented cure for that is to regenerate
+the baseline, which would replace the project's regression gate with your toolchain's
+answer. `scripts/update-fingerprint.js` refuses to run outside 20/22 for exactly that
+reason.
 
 ## Before you open a pull request
 
@@ -61,6 +70,15 @@ branch up to date. That applies to maintainers too — nobody pushes to `main` d
 
 `main` is always deployable but is not itself deployed, so finished work can sit there
 unpublished until it is worth a release.
+
+**This is normally done for you.** `.github/workflows/release-pr.yml` runs every
+Thursday at 02:00 UTC — 22:00 Thursday US Eastern in summer, 21:00 in winter, since
+GitHub cron has no timezone — and opens the version-bump PR if there is anything
+unreleased, so it is waiting on Friday morning. It stops at the PR on purpose: approving
+and tagging stay yours, because tagging is what publishes. Run it off-cadence, or with a
+`patch`/`major` bump, from the Actions tab.
+
+The rest of this section is the manual path — for a hotfix, or if the workflow fails.
 
 The version bump is an ordinary pull request — `main` takes no direct pushes, from
 anyone. So do **not** use a bare `npm version`, which commits and tags straight onto

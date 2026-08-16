@@ -1,0 +1,128 @@
+name: Weekly release PR
+
+# Opens the version-bump pull request every Thursday night, so a release is sitting
+# ready to approve on Friday morning.
+#
+# It deliberately stops at the PR. Tagging is what publishes (see deploy.yml), and that
+# stays a human decision — "merging to main means this is good, tagging means this is
+# live" only means something if somebody decides. This automates the tedious half:
+# working out the next version, bumping it, and writing down what is in the release.
+#
+# 02:00 UTC Friday is 22:00 Thursday US Eastern during daylight saving, 21:00 outside
+# it. GitHub cron has no timezone support, so the winter hour drifts by one; that is
+# accepted rather than worked around with a second schedule.
+on:
+  schedule:
+    - cron: '0 2 * * 5'
+  # Cut a release off-cadence, or re-run after a failure.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: minor
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write        # to dispatch the CI run on the branch we push
+
+jobs:
+  open-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      # Nothing to release is the normal case on a quiet week, and an empty release PR
+      # is worse than none: it burns a version number and an approval on no change.
+      - name: Check for unreleased commits
+        id: unreleased
+        run: |
+          LAST=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo '')
+          if [ -z "$LAST" ]; then
+            echo "No tag found; treating everything as unreleased."
+            echo "count=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "count=$(git rev-list --count "$LAST"..HEAD)" >> "$GITHUB_OUTPUT"
+            echo "last=$LAST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if there is nothing to release
+        if: steps.unreleased.outputs.count == '0'
+        run: |
+          echo "::notice::No commits since ${{ steps.unreleased.outputs.last }} — no release PR this week."
+          exit 0
+
+      - name: Bump the version on a branch
+        if: steps.unreleased.outputs.count != '0'
+        id: bump
+        run: |
+          npm version "${{ inputs.bump || 'minor' }}" --no-git-tag-version
+          VERSION="v$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=release/$VERSION" >> "$GITHUB_OUTPUT"
+
+      # `npm version` fires the `version` lifecycle script, which rewrites src/version.js
+      # from package.json. If that ever silently stops happening, the published build
+      # misreports itself in its own header and every bug report from it is suspect.
+      - name: Verify the build version was synced
+        if: steps.unreleased.outputs.count != '0'
+        run: |
+          EXPECTED="${{ steps.bump.outputs.version }}"
+          grep -q "BUILD_VERSION = '$EXPECTED'" src/version.js \
+            || { echo "src/version.js was not synced to $EXPECTED"; exit 1; }
+
+      - name: Commit and push
+        if: steps.unreleased.outputs.count != '0'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "${{ steps.bump.outputs.branch }}"
+          git commit -am "Release ${{ steps.bump.outputs.version }}"
+          git push origin "${{ steps.bump.outputs.branch }}"
+
+      - name: Open the pull request
+        if: steps.unreleased.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          LAST: ${{ steps.unreleased.outputs.last }}
+          COUNT: ${{ steps.unreleased.outputs.count }}
+        run: |
+          {
+            echo "Weekly release. **$COUNT commits** since \`${LAST:-the beginning}\`."
+            echo
+            echo "Approve and merge, then tag the merge commit to publish:"
+            echo
+            echo '```bash'
+            echo "git checkout main && git pull"
+            echo "git tag $VERSION && git push origin $VERSION"
+            echo '```'
+            echo
+            echo "The tag is what deploys — merging this PR does not publish anything."
+            echo
+            echo "## What is in it"
+            echo
+            git log --no-merges --pretty='- %s' "${LAST:+$LAST..}HEAD"
+          } > body.md
+          gh pr create --base main --head "$BRANCH" --title "Release $VERSION" --body-file body.md
+
+      # See the note on ci.yml's workflow_dispatch trigger: the PR above was opened by
+      # GITHUB_TOKEN, so it raised no `pull_request` event and CI has not run. Dispatch
+      # it explicitly against the branch, or the required checks never report and the
+      # PR cannot merge.
+      - name: Trigger CI on the release branch
+        if: steps.unreleased.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref "${{ steps.bump.outputs.branch }}"
