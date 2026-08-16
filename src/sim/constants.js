@@ -48,8 +48,6 @@ export const COMP_ISEN_EFF = 0.70;
 /** Fraction of the compression temperature rise an intercooler removes. */
 export const IC_EFFECTIVENESS = 0.70;
 
-/** Fraction of the ideal Otto cycle realised as INDICATED work. */
-export const OTTO_REALIZATION = 0.685;
 
 /** Crank → wheel transmission efficiency. */
 export const DRIVETRAIN_EFF = 0.85;

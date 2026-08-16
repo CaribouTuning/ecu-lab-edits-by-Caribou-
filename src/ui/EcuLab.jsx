@@ -26,11 +26,11 @@ import {
   BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR, DEFAULT_BOOST,
   DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS,
-  PRESET_GROUPS, PSI_TO_KPA,
+  PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
   deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
-  simulateSweep, veRecommendations
+  simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import { T, heat, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -589,6 +589,9 @@ export default function EngineManagementSandbox() {
   const [totalScore, setTotalScore] = useState(0);
   const [pullCount, setPullCount] = useState(0);
   const [turbineIdx, setTurbineIdx] = useState(1);
+  // How many of that housing are fitted. Only a preset can set this above 1 — the picker
+  // below fits one turbo, so choosing from it resets the count.
+  const [turbineCount, setTurbineCount] = useState(1);
   const [compressorIdx, setCompressorIdx] = useState(1);
   // Which factory preset (if any) is currently loaded stock. Cleared the moment any
   // Engine Architecture control is hand-edited, and offered as a warning prompt
@@ -637,7 +640,11 @@ export default function EngineManagementSandbox() {
   const setModsInvalidating = withPresetField(setMods);
   const setTurboOnInvalidating = withPresetField(setTurboOn);
   const setBoostCurveInvalidating = withPresetField(setBoostCurve);
-  const setTurbineIdxInvalidating = withPresetField(setTurbineIdx);
+  // Fitting a turbine by hand fits ONE of it; the twin-turbo count belongs to a preset.
+  const setTurbineIdxInvalidating = withPresetField((idx) => {
+    setTurbineIdx(idx);
+    setTurbineCount(1);
+  });
   const setCompressorIdxInvalidating = withPresetField(setCompressorIdx);
   const setInjIdxInvalidating = withPresetField(setInjIdx);
   const setOctaneIdxInvalidating = withPresetField(setOctaneIdx);
@@ -681,13 +688,21 @@ export default function EngineManagementSandbox() {
   // stale — exactly as it would in a real shop, where the old log does not update
   // itself because you bolted something on. The VE tab shows what changed and by how
   // much, and you choose when to accept it.
+  // The turbine as actually fitted, count included. EVERY consumer below reads this
+  // rather than indexing TURBINE_OPTS directly, so a twin-turbo preset cannot be
+  // simulated as a single housing.
+  const turbine = useMemo(
+    () => turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount),
+    [turbineIdx, turbineCount],
+  );
+
   const hwForVe = useMemo(() => ({
     turboOn,
-    turbine: turboOn ? TURBINE_OPTS[turbineIdx] : null,
+    turbine: turboOn ? turbine : null,
     exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     fuel,
     peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-  }), [turboOn, turbineIdx, exhaustDiaIdx, fuel, boostCurve]);
+  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve]);
 
   // TRUE cylinder filling for the hardware as currently built. The player's `ve` table
   // is only the ECU's BELIEF about this; the gap between the two is what makes the
@@ -774,6 +789,7 @@ export default function EngineManagementSandbox() {
     setTurboOn(p.turboOn);
     setBoostCurve(p.boostCurve);
     setTurbineIdx(p.turbineIdx);
+    setTurbineCount(p.turbineCount);
     setCompressorIdx(p.compressorIdx);
     setInjIdx(p.injIdx);
     setEcuInjectorCc(p.ecuInjectorCc);
@@ -891,7 +907,7 @@ export default function EngineManagementSandbox() {
     const r = simulateSweep({
       loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: OCTANE_OPTS[octaneIdx].label,
       fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
     });
     setPrevResult(result);
     setResult(r);
@@ -903,7 +919,7 @@ export default function EngineManagementSandbox() {
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
@@ -926,7 +942,7 @@ export default function EngineManagementSandbox() {
   // without needing to restart the interval every time a table changes.
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
-    turboOn, boostCurve, octaneBonus, turbine: TURBINE_OPTS[turbineIdx],
+    turboOn, boostCurve, octaneBonus, turbine,
     compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
   };
   throttleRef.current = throttleInput;
@@ -1033,12 +1049,12 @@ export default function EngineManagementSandbox() {
     const tuning = computeTuningScore(result);
     const engineer = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine: TURBINE_OPTS[turbineIdx], compressor: COMPRESSOR_OPTS[compressorIdx],
+      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: result.peakHp, peakTq: result.peakTq, tuningScore: tuning.score, engineerScore: engineer.score });
     return { tuning, engineer, pull };
-  }, [result, running, engineConfig, turboOn, turbineIdx, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
+  }, [result, running, engineConfig, turboOn, turbine, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
@@ -1390,14 +1406,16 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
 
               <ExpandableInfo title="11. Step 5 — from combustion to torque at the wheels">
-                Fuel energy becomes indicated work on the piston, then the engine pays its own bills:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>η = (1 − 1/CR^0.35) × 0.685</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = fuelMass × LHV × η × timingEff × afrEff ÷ V_cyl</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>FMEP = rubbing friction + pumping loss + spring load</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − FMEP</span><br />
+                Fuel energy becomes indicated work on the piston, then the engine pays its own bills. The work is not estimated — the simulator integrates one cylinder through the closed part of its cycle, two crank degrees at a time:
+                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dQ = Wiebe burn fraction × fuel energy</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dp = (γ−1)/V × dQ − γ × p/V × dV</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = ∮ p dV ÷ V_cyl</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PMEP = exhaust pressure − intake pressure</span><br />
+                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − friction − PMEP</span><br />
                 <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>torque = BMEP × Vd ÷ 4π</span>
-                <br /><br />The first line is ideal Otto-cycle efficiency for your compression ratio, scaled to what real engines actually achieve. So raising compression makes power through genuine thermodynamics.
-                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. It is why fuel consumption per horsepower gets much worse at light load, and why a throttled engine brakes itself on overrun.
+                <br /><br /><b style={{ color: T.ink }}>Why integrate instead of multiply?</b> Because spark timing does not scale the work done — it moves <i>when</i> the heat arrives relative to a piston that is somewhere different at every crank angle. Burn too early and rising pressure fights the piston still coming up. Too late and the burn happens into a cylinder already expanding. MBT is where those two losses balance, and it falls out of the integration rather than being looked up.
+                <br /><br />Raising compression makes power the honest way here: a smaller clearance volume means a longer expansion, and the integral simply comes out bigger.
+                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
               </ExpandableInfo>
 
               <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>
@@ -1423,7 +1441,7 @@ export default function EngineManagementSandbox() {
                 <br /><br /><b style={{ color: T.ink }}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was.
                 <br /><br /><b style={{ color: T.ink }}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
                 <br /><br /><b style={{ color: T.ink }}>Airflow</b> — around 200 g/s is typical at redline for an engine near 300 hp, which is a quick sanity check on whether your VE table is plausible.
-                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~950°C cooks turbines and valves; it rises with retarded timing and lean mixtures.
+                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~980°C cooks turbines and valves; it rises hard with retarded timing and lean mixtures, and a rich mixture is what pulls it back down.
               </ExpandableInfo>
 
               <ExpandableInfo title="15. What tuning can fix, and what it can't">
@@ -1624,7 +1642,7 @@ export default function EngineManagementSandbox() {
             <BuildSection
               active={buildSection === 'turbo'} onClick={() => setBuildSection(buildSection === 'turbo' ? null : 'turbo')}
               icon={Wind} label="Forced Induction"
-              sub={turboOn ? `On · ${TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
+              sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
               <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={setTurboOnInvalidating} />
 
@@ -1826,7 +1844,7 @@ export default function EngineManagementSandbox() {
             <div style={{ padding: '16px 16px 0' }}>
               <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12 }}>Degrees of spark advance before top dead center (° BTDC).</div>
-              <TuningGrid data={timing} min={-5} max={50} decimals={0} {...gridProps} />
+              <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} {...gridProps} />
               {calAdvice.overAdvanced.length > 0 ? (
                 <div style={{ background: T.redBg, border: `1px solid #3a2020`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
                   <div style={{ fontSize: 10, letterSpacing: 1, color: '#ff9d9d', fontWeight: 800, marginBottom: 7 }}>
@@ -1869,7 +1887,7 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={timing} setData={setTimingEdited} selection={selection} min={-5} max={50} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
+            <SelectionDock data={timing} setData={setTimingEdited} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
           </>
         )}
 
@@ -1885,11 +1903,11 @@ export default function EngineManagementSandbox() {
                     {calAdvice.wrongMix.length} HIGH-LOAD CELLS OFF BEST POWER
                   </div>
                   <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.55, marginBottom: 8 }}>
-                    Best-power mixture shifts with boost — richer as cylinder pressure rises. At these points your target is off what this build wants:
+                    Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b style={{ color: T.ink }}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
                   </div>
                   {calAdvice.wrongMix.slice(0, 5).map((c, i) => (
                     <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: c.delta < 0 ? '#ff9d9d' : T.cyan, marginBottom: 2 }}>
-                      {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'}
+                      {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'} · delivered {c.delivered}, wants {c.target}
                     </div>
                   ))}
                   {calAdvice.wrongMix.length > 5 && <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 3 }}>…and {calAdvice.wrongMix.length - 5} more</div>}
@@ -2122,7 +2140,7 @@ export default function EngineManagementSandbox() {
                         const p = result.points.find((pt) => pt.rpm === r);
                         if (!p) return null;
                         const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-                        const warn = !bad && (p.duty > 85 || p.egt > 870);
+                        const warn = !bad && (p.duty > 85 || p.egtRisk);
                         const edge = bad ? T.red : warn ? T.yellow : T.line;
 
                         // Each row: label, what was asked, what happened, and a verdict.
@@ -2144,8 +2162,8 @@ export default function EngineManagementSandbox() {
                             note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${p.duty > 90 ? ' — at the limit' : ''}`,
                             ok: p.duty <= 90 },
                           { k: 'Heat', asked: null, got: `${p.egt}°C`,
-                            note: `intake charge ${p.iat}°C${p.egt > 950 ? ' · exhaust running hot' : ''}`,
-                            ok: p.egt <= 950 },
+                            note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
+                            ok: !p.egtRisk },
                           { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
                             note: p.pressureRisk
                               ? 'past what stock pistons and rods take — a mechanical limit, not detonation'

@@ -22,8 +22,8 @@ delivery, and power is whatever falls out of the physics. If you contribute a fe
 add it as a physical mechanism — never as a bonus multiplier.
 
 That rule is why the numbers mean something. A stock 3.5 L V6 on 91 octane makes about
-237 whp here because the ideal gas law, the Otto cycle and the friction model say so,
-not because someone typed 237.
+250 whp here because the ideal gas law, an integrated pressure trace and the friction
+model say so, not because someone typed 250.
 
 ## What it actually models
 
@@ -32,10 +32,16 @@ not because someone typed 237.
   heating value — which is why E85 needs ~1.5× the injector volume for the same lambda
 - **Injector pulse width** against the real time available per engine cycle, so duty
   cycle is a physical wall rather than a capacity index
-- **Knock** driven by trapped charge mass, charge temperature, octane, compression and
-  mixture — not by boost alone
-- **Torque** as `IMEP − FMEP → BMEP → T = BMEP × Vd / 4π`, with rubbing friction, valve
-  spring load and pumping losses all paid for separately
+- **The closed cycle**, integrated two crank degrees at a time from intake valve close
+  to exhaust valve open — Wiebe heat release, slider-crank volume, and indicated work as
+  `∮ p dV`. Peak cylinder pressure, the angle it occurs at, and MBT all come off that
+  trace rather than from a correlation
+- **Knock** as an autoignition integral over the unburned end gas, so octane,
+  compression, charge temperature, residual dilution and mixture all reach it through
+  the pressure history instead of through separate corrections
+- **Torque** as `IMEP − friction − PMEP → BMEP → T = BMEP × Vd / 4π`. Pumping work is
+  exhaust manifold pressure minus intake, with its real sign, so a turbine's
+  backpressure is a cost and a well-matched one can hand work back
 - **A live engine** integrating real crankshaft dynamics at 20 Hz: it idles, revs,
   stalls, hits a rev limiter with hysteresis, and cuts fuel on overrun
 - **Cam and valvetrain** — duration shifts the VE peak, overlap costs idle vacuum, and

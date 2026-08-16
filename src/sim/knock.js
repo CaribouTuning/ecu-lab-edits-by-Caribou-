@@ -1,116 +1,29 @@
 /**
- * The knock envelope and MBT timing.
+ * The charge index the datalog reports.
  *
- * Extracted from `evaluatePoint` so the factory calibration generator in
- * `presets.js` can ask the physics the same question the ECU asks: "how much
- * timing can this engine take here?" A second copy of these formulas would drift
- * from the first, which is the precise failure `idealExhaustDiameter` was created
- * to prevent — see the warning in `hardware.js`.
+ * WHAT USED TO BE HERE
+ * This module held `knockThreshold` and `mbtTiming` — a base timing table plus eight
+ * additive corrections, and an RPM-and-load correlation for MBT. Both are gone. The
+ * knock limit is now solved from an integrated pressure trace in `cycle.js`
+ * (`knockLimitedSpark`), and MBT is derived from burn phasing (`mbtFromBurn`), so every
+ * input that used to need its own hand-fitted correction in degrees — octane,
+ * compression, charge temperature, boost, mixture, head material, cylinder size —
+ * now reaches the answer through the physics instead.
  *
- * Every TUNED number here lives in `coefficients.js`, including the ones on paths no
- * reachable operating point exercises — an unreachable literal is exactly the kind a
- * fingerprint diff cannot police, so it needs to be in the constants dump instead. What
- * remains inline is unit conversion (`/ 100` for percent) and structural identities
- * (`Math.max(0, x)` clamping a term to non-negative), neither of which is a knob.
+ * What survives is the one thing that was never a correction: the charge index, which
+ * is a plain description of how full the cylinder is, useful in the datalog and in the
+ * exhaust-flow term.
  */
 
-import { AMBIENT_C, BARO_KPA } from './constants.js';
-import { COEFF } from './coefficients.js';
-import { clamp, interp1 } from './math.js';
-import { BASE_KNOCK_LIMIT_91, RPM } from './tables.js';
+import { BARO_KPA } from './constants.js';
 
 /**
- * Minimum spark for best torque, degrees BTDC.
+ * How full the cylinder is, relative to a perfectly filled one at sea level.
  *
- * Derived from burn duration rather than fitted directly. Combustion takes a roughly
- * fixed number of crank degrees for a given charge, so the timing that extracts the
- * most work is the one that lands 50% mass-fraction-burned just after TDC — early
- * enough that peak pressure arrives while the piston can still be pushed on, late
- * enough that it is not fighting the crank on the way up.
- *
- * Two things stretch the burn out. Revs: the flame does not speed up in proportion to
- * engine speed, so it occupies more DEGREES the faster you spin. And dilution: a
- * part-throttle charge is thin and slow-burning, which is why a factory cruise map
- * carries 40-50 degrees of advance and never knocks, while the same engine at wide-open
- * throttle wants barely half that.
- *
- * @param {number} rpm engine speed
+ * @param {number} veActual TRUE cylinder filling, percent
  * @param {number} mapKpa manifold absolute pressure, kPa
- * @returns {number} degrees BTDC, within [COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG]
+ * @returns {number} charge index; 1.0 is 100% VE at one atmosphere
  */
-export function mbtTiming(rpm, mapKpa) {
-  const pressureRatio = Math.max(mapKpa / BARO_KPA, COEFF.BURN_RATIO_FLOOR);
-  // Crank degrees from spark to 50% mass fraction burned.
-  const theta50 = (COEFF.BURN_REF_DEG
-    + ((rpm - COEFF.BURN_RPM_REF) / COEFF.BURN_RPM_SPAN) * COEFF.BURN_RPM_GAIN)
-    * Math.pow(1 / pressureRatio, COEFF.BURN_DILUTION_EXP);
-  return clamp(theta50 - COEFF.MFB50_ATDC_DEG, COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG);
-}
-
-/**
- * The most spark advance this operating point tolerates before it knocks.
- *
- * @param {object} input
- * @param {number} input.rpm engine speed
- * @param {number} input.mapKpa manifold absolute pressure, kPa
- * @param {number} input.veActual TRUE cylinder filling, percent
- * @param {number} input.chargeC charge temperature, degrees C
- * @param {number} input.actualAfr delivered air:fuel ratio, gasoline-equivalent
- * @param {number} input.bestAfr best-power AFR at this boost
- * @param {number} input.boostPsi gauge boost, psi
- * @param {number} input.octaneBonus knock margin from fuel octane, degrees
- * @param {object} input.mods bolt-ons fitted
- * @param {import('./engine.js').DerivedEngine} input.derived
- * @param {{boostCeiling: number}} input.compressor
- * @returns {number} knock-limited spark advance, degrees BTDC
- */
-export function knockThreshold({
-  rpm, mapKpa, veActual, chargeC, actualAfr, bestAfr, boostPsi,
-  octaneBonus, mods, derived, compressor,
-}) {
-  const afrDelta = actualAfr - bestAfr;
-  // Knock is driven by how much charge is actually TRAPPED in the cylinder, not by
-  // manifold pressure alone. Two engines at the same MAP but different volumetric
-  // efficiency see different peak pressures — which is exactly why a big-cam engine
-  // that breathes better also needs a few degrees less timing than a stock one.
-  const chargeIndex = (veActual / 100) * (mapKpa / BARO_KPA);
-  // Knock margin is not linear in charge. Doubling the trapped mass roughly doubles
-  // peak pressure, so margin scales with the RATIO of charge to the reference, not
-  // the difference. At deep vacuum an engine effectively cannot knock at all — which
-  // is why factory cruise maps carry 40-50 deg of advance and never complain.
-  const loadBonus = chargeIndex >= COEFF.KNOCK_CHARGE_REF
-    ? (COEFF.KNOCK_CHARGE_REF - chargeIndex) * COEFF.KNOCK_CHARGE_GAIN
-    : (COEFF.KNOCK_CHARGE_REF / Math.max(chargeIndex, COEFF.KNOCK_CHARGE_INDEX_FLOOR) - 1)
-      * COEFF.KNOCK_CHARGE_RATIO_GAIN;
-  const overBoost = Math.max(0, boostPsi - compressor.boostCeiling);
-  // Charge heat is charged for from AMBIENT_C, not from a datum of its own. This used
-  // to read `chargeC - 25` while ambient elsewhere in the model was 24.85 °C, so every
-  // boosted point was measured against a datum 0.15 °C too high and under-charged by
-  // 0.012 deg. Off boost the two agree — `chargeTempK` returns exactly AMBIENT_K and
-  // the `max(0, ...)` floor made both readings zero — which is why the disagreement
-  // survived: it was invisible on precisely the pulls a reader would check it against.
-  const iatPenalty = Math.max(0, chargeC - AMBIENT_C) * COEFF.KNOCK_IAT_PER_C;
-  const modsThresholdBonus = (mods.headers ? COEFF.KNOCK_HEADERS_BONUS : 0)
-    + (mods.exhaust ? COEFF.KNOCK_EXHAUST_BONUS : 0);
-  let threshold = interp1(RPM, BASE_KNOCK_LIMIT_91, rpm) + octaneBonus + loadBonus + modsThresholdBonus
-    + derived.configKnockBonus + derived.materialKnockBonus + derived.compressionKnockAdj
-    - iatPenalty - overBoost * COEFF.KNOCK_OVERBOOST_PENALTY;
-  // A lean mixture only threatens knock when there is real cylinder pressure behind
-  // it. At light cruise (low MAP) an engine happily runs 14.7:1 with 40 deg of advance
-  // and never knocks — which is exactly why factory cruise maps look like that. Under
-  // boost the same leanness is dangerous. So scale the mixture terms by charge
-  // pressure rather than applying them flat.
-  const pressureFactor = clamp(
-    Math.pow(mapKpa / BARO_KPA, COEFF.KNOCK_PRESSURE_EXP),
-    COEFF.KNOCK_PRESSURE_MIN, COEFF.KNOCK_PRESSURE_MAX,
-  );
-  threshold -= Math.max(0, afrDelta) * COEFF.KNOCK_LEAN_PENALTY * pressureFactor;
-  threshold += Math.min(COEFF.KNOCK_RICH_CAP, Math.max(0, -afrDelta) * COEFF.KNOCK_RICH_BONUS)
-    * clamp(pressureFactor, COEFF.KNOCK_RICH_PRESSURE_MIN, COEFF.KNOCK_RICH_PRESSURE_MAX);
-  return threshold;
-}
-
-/** The charge index used by the knock model, exposed for the datalog. */
 export function chargeIndexOf(veActual, mapKpa) {
   return (veActual / 100) * (mapKpa / BARO_KPA);
 }

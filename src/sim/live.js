@@ -10,11 +10,12 @@
  * sensor noise. Tests that need determinism should stub `Math.random`.
  */
 
-import { BARO_KPA, DRIVETRAIN_EFF } from './constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { solveInduction } from './turbo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
@@ -52,7 +53,7 @@ export function sensorRead(prev, trueVal, lagFactor, noiseAmp) {
  */
 export function makeLiveState() {
   return {
-    running: false, cranking: false, rpm: 0, omega: 0,
+    running: false, cranking: false, rpm: 0, omega: 0, boostPsi: 0,
     idleTrim: 5, stft: 0, ltft: 0,
     coolantC: 20, oilC: 20, knockCount: 0, fuelCut: false, dfco: false, limiterCut: false,
     sensedRpm: 0, sensedMaf: 0, sensedMap: 101, sensedIat: 25,
@@ -73,7 +74,7 @@ export function liveStep(st, dt, input, cfg) {
   const s = { ...st };
   const {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-    mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
+    mafErrorBase, turboOn, boostCurve, turbine, compressor,
   } = cfg;
   if (turboOn) assertBoostCurve(boostCurve);
   const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
@@ -143,7 +144,35 @@ export function liveStep(st, dt, input, cfg) {
       0.12, 1,
     );
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
-    const man = computeManifold(rpmClamped, loadKpa, turboOn, boostTarget, turbine, compressor);
+    const steady = solveInduction({
+      rpm: rpmClamped, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
+      veAt: (mapKpa) => interp2(veTruth ?? ve, rpmClamped, mapKpa),
+      derived,
+      intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
+      lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+    });
+    // --- SHAFT INERTIA, i.e. turbo lag. The balance says where the turbo ENDS UP; a real
+    // one has to spin a wheel up to get there. Spool-UP is energy-limited, so it is slow
+    // at low exhaust flow and fast at high; spool-DOWN is quicker, since a shut throttle
+    // leaves the compressor pumping with nothing driving it.
+    //
+    // Only the live engine sees this — a dyno sweep holds each point until it settles,
+    // which is what makes it a steady-state measurement.
+    const spooling = steady.boostPsi > s.boostPsi;
+    const flowFrac = clamp(rpmClamped / Math.max(1, derived.redline) * aFrac, 0.02, 1);
+    const tau = spooling
+      ? COEFF.TURBO_SPOOL_TAU_S / Math.max(0.05, flowFrac) * turbine.inertiaScale
+      : COEFF.TURBO_DECAY_TAU_S;
+    const boostPsi = turboOn
+      ? s.boostPsi + (steady.boostPsi - s.boostPsi) * clamp(dt / Math.max(dt, tau), 0, 1)
+      : 0;
+    s.boostPsi = boostPsi;
+    const man = {
+      ...steady,
+      boostPsi,
+      mapKpa: Math.min(loadKpa, BARO_KPA) + boostPsi * PSI_TO_KPA,
+      boostShortfallPsi: Math.max(0, boostTarget - boostPsi),
+    };
     const veVal = interp2(ve, rpmClamped, man.mapKpa);
     const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
     // Spark-based idle stabilisation: the air path is slow (throttle -> manifold ->
@@ -158,10 +187,11 @@ export function liveStep(st, dt, input, cfg) {
     const afrCmd = interp2(afr, rpmClamped, man.mapKpa) / coldEnrich;
     pt = evaluatePoint({
       rpm: rpmClamped, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
-      veVal, veActualVal, timingVal, afrCommanded: afrCmd, octaneBonus, fuel,
+      veVal, veActualVal, timingVal, afrCommanded: afrCmd, fuel,
       mods: { ...mods, turboFitted: turboOn },
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
+      turbine: turboOn ? turbine : null, empKpa: man.empKpa,
     });
     // evaluatePoint already returns BRAKE torque — friction and pumping are subtracted
     // inside it — so we must not deduct them again here.

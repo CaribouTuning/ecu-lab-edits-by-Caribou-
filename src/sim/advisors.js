@@ -9,10 +9,13 @@
 
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
-import { mbtTiming } from './knock.js';
-import { clamp } from './math.js';
+import { chargeIndexOf } from './knock.js';
+import { mbtForCell, trappedAirGrams } from './cycle.js';
+import { exhaustManifoldKpa } from './friction.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
+import { clamp, interp1 } from './math.js';
 import { evaluatePoint } from './point.js';
-import { LOAD, RPM } from './tables.js';
+import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
 
 /** The ~100 kPa row — wide-open throttle, naturally aspirated. */
 const WOT_ROW = 2;
@@ -23,16 +26,27 @@ const VE_NOTABLE_PCT = 2.5;
 /** Safety left under the calculated knock limit when advising, degrees. */
 const KNOCK_SAFETY_DEG = 1.5;
 
-/**
- * The spark table's own editable range, degrees BTDC. A suggestion outside it could
- * not be applied, so there is no point offering one. Matches the bounds
- * `factoryCalibration` clamps to in presets.js.
- */
-const SPARK_TABLE_MIN_DEG = 5;
-const SPARK_TABLE_MAX_DEG = 50;
-
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
+
+/** A cell has to be leaving this much advance on the table before it is worth chasing. */
+const UNDER_ADVANCED_DEG = 3.0;
+
+/** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
+const MIX_NOTABLE_AFR = 0.45;
+
+/**
+ * Manifold pressure above which the ECU runs open loop, kPa. Mixture advice is limited
+ * to these rows: below it the target is stoichiometric and the trims own it, so
+ * best-power advice would be actively wrong.
+ */
+const OPEN_LOOP_KPA = 85;
+
+/**
+ * Slack above the boost target when deciding whether a row is reachable, kPa. Enough to
+ * cover interpolation and the barometric rounding, not enough to admit a whole row.
+ */
+const REACHABLE_SLACK_KPA = 2;
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and
@@ -84,84 +98,132 @@ export function veRecommendations(currentVe, cfg, mods, hw) {
 }
 
 /**
+ * MBT for one spark-table cell, at the cell's own manifold pressure.
+ *
+ * Pulled out of {@link calibrationAdvice} because assembling the cycle inputs for a
+ * table cell is a job in itself, and burying it mid-loop hid the one thing that matters
+ * about it: every input here is the ROW's, not the throttle's. See the note on
+ * `calibrationAdvice`.
+ *
+ * @param {object} input
+ * @returns {number} MBT spark advance, degrees BTDC
+ */
+function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine }) {
+  const chargeK = chargeTempK(Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler);
+  const airG = trappedAirGrams({
+    veActual: veCell, mapKpa, chargeK,
+    sweptM3: (derived.displacementL / derived.cyl) / 1000,
+  });
+  const lambda = afrCell / 14.7;
+  // Delivered fuel, used here as the burned mass. Same known defect as the one documented
+  // in `factoryCalibration` — the two are fixed together or not at all, because a spark
+  // advisor that disagrees with the generator is the false alarm #34 removed.
+  const burnedFuelG = airG / (fuel.stoich * lambda);
+  return mbtForCell({
+    rpm, mapKpa, intakeK: chargeK, airChargeG: airG, burnedFuelG, lambda, fuel, derived,
+    empKpa: exhaustManifoldKpa({
+      turboOn, turbine: turboOn ? turbine : null,
+      exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
+      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
+    }),
+  });
+}
+
+/**
  * Reports, cell by cell, what the current hardware would actually tolerate for spark
  * and mixture — so the player can see where their tune has gone stale and fix it
  * themselves. Spark and fuel are never auto-changed.
+ *
+ * THREE RULES GOVERN THIS FUNCTION, and each one exists because breaking it produced a
+ * false alarm on the app's own factory calibration — the fastest way to teach a player
+ * that the advisor is noise.
+ *
+ * 1. EVERY CELL IS JUDGED AT ITS OWN ROW PRESSURE. A spark table is indexed by manifold
+ *    pressure, so the 100 kPa row IS the calibration for 100 kPa. What the throttle
+ *    happens to be doing when the engine passes through that row is not a property of
+ *    the cell, and `factoryCalibration` writes it the same way. Solving the induction
+ *    system first and judging at the pressure it produced meant reading the Golf R's
+ *    100 kPa row at 200 kPa.
+ *
+ * 2. ONLY CELLS THE ENGINE CAN REACH, AT THE SPEED IT REACHES THEM. A turbo build never
+ *    sees 200 kPa at 800 RPM. Judging it there reported the factory table as detonating
+ *    at an operating point that cannot exist.
+ *
+ * 3. MIXTURE IS JUDGED ON WHAT WAS DELIVERED, NOT WHAT WAS COMMANDED, and the suggestion
+ *    is the commanded number that would deliver the target — because that is what the
+ *    player types into the cell. The two differ whenever the ECU's fuel maths is off, and
+ *    a real factory table is written PRE-CORRECTED for its own MAF error: the Golf R
+ *    commands 11.22 at 5000 RPM and full boost and delivers 12.20, its best-power target
+ *    to the hundredth.
  *
  * @param {object} input
  * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
  */
 export function calibrationAdvice({
-  ve, veTruth, timing, afr, derived, octaneBonus, fuel, mods, turboOn, boostCurve,
-  compressor, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
+  ve, veTruth, timing, afr, derived, fuel, mods, turboOn, boostCurve,
+  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase,
 }) {
   const spark = [], fuelAdv = [];
-  // Only advise on load the engine can actually reach. A naturally aspirated build
-  // never sees 150 or 200 kPa, so flagging those rows would be pure noise.
-  const maxReachable = BARO_KPA + (turboOn ? Math.max(...boostCurve) * PSI_TO_KPA : 0) + 2;
+  /** Highest manifold pressure the boost controller is even asking for at this speed. */
+  const reachableKpa = (rpm) => BARO_KPA + REACHABLE_SLACK_KPA
+    + (turboOn ? Math.max(0, interp1(RPM, boostCurve, rpm)) * PSI_TO_KPA : 0);
+
   LOAD.forEach((mapRow, ri) => {
-    if (mapRow > maxReachable) return;
     RPM.forEach((rpm, ci) => {
-      // A row is judged at ITS OWN pressure, both here and in `factoryCalibration`.
-      //
-      // The tables are indexed by manifold pressure, so the 100 kPa row is not "what
-      // happens at 3500 RPM" — it is the calibration the ECU applies whenever MAP is
-      // 100 kPa, whatever the RPM. This used to re-derive a manifold pressure from the
-      // RPM axis and the boost curve instead, which on a boosted engine graded the
-      // vacuum rows against a boosted ceiling: at 3500 RPM a 17 psi engine (`ea888-r`)
-      // sits near 214 kPa, so the 70 and 100 kPa rows were condemned for timing that is
-      // perfectly safe at the pressure they actually apply at. Four of seven shipped
-      // presets failed their own factory calibration that way.
-      //
-      // MBT was aligned to the row pressure by issue #4; this is the knock half of the
-      // same disagreement (issue #33). Both ceilings now share one basis, and that
-      // basis is the one `factoryCalibration` generates against — see presets.js.
-      const boostPsi = Math.max(0, (mapRow - BARO_KPA) / PSI_TO_KPA);
+      if (mapRow > reachableKpa(rpm)) return;                               // rule 2
       const pt = evaluatePoint({
-        rpm, mapKpa: mapRow, boostPsi,
+        rpm, mapKpa: mapRow,                                                // rule 1
+        boostPsi: Math.max(0, (mapRow - BARO_KPA) / PSI_TO_KPA),
         veVal: ve[ri][ci], veActualVal: veTruth?.[ri]?.[ci],
         timingVal: timing[ri][ci], afrCommanded: afr[ri][ci],
-        octaneBonus, fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
+        fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
         injectorCc, ecuInjectorCc, derived, compressor,
+        turbine: turboOn ? turbine : null,
       });
-      // Two different ceilings bind here, and only one of them is dangerous.
+
+      // TWO CEILINGS BIND, AND ONLY ONE IS DANGEROUS.
       //
-      // Knock is the hard one: past it the engine is damaging itself, so leave ~1.5
-      // deg of safety under the calculated limit, as a tuner would.
+      // Knock is the hard one: past it the engine is damaging itself, so leave a little
+      // safety under the calculated limit, as a tuner would. MBT is the soft one: past it
+      // the burn already lands where it should, so more advance buys nothing and only
+      // moves you toward the hard ceiling. At light load the knock limit is enormous — a
+      // cylinder in deep vacuum effectively cannot knock — and advising against it alone
+      // produced suggestions like "run 165 deg at 20 kPa". Whichever is lower is real.
       //
-      // MBT is the soft one: past it the burn is already landing where it should, so
-      // more advance buys nothing and only moves you toward the hard ceiling. At light
-      // load the knock limit is enormous — a cylinder in deep vacuum effectively cannot
-      // knock — and recommending against it alone produced advice like "run 165 deg at
-      // 20 kPa". Whichever ceiling is lower is the real one.
-      //
-      // This is the same rule `factoryCalibration` writes its spark table with; see
-      // presets.js. The two must not disagree about what good timing looks like.
+      // This is the rule `factoryCalibration` writes its spark table with. The two must
+      // not disagree about what good timing looks like.
       const knockCeiling = pt.threshold - KNOCK_SAFETY_DEG;
-      // Both ceilings are taken at the row's own pressure; see the note above.
-      const mbt = mbtTiming(rpm, mapRow);
-      // Which of the two ceilings bound the suggestion. Useful on its own, but it says
-      // nothing about danger: a cell can sit past both ceilings with MBT the lower of
-      // the two. Danger is where the player's own number sits — see below.
-      const knockLimited = knockCeiling < mbt;
+      const mbt = mbtAtRow({
+        rpm, mapKpa: mapRow, veCell: ve[ri][ci], afrCell: afr[ri][ci],
+        fuel, mods, derived, turboOn, turbine,
+      });
       const safeTiming = clamp(
-        Math.round(Math.min(knockCeiling, mbt) * 2) / 2,
-        SPARK_TABLE_MIN_DEG, SPARK_TABLE_MAX_DEG,
+        Math.round(Math.min(knockCeiling, mbt) * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG,
       );
       spark.push({
         ri, ci, rpm, map: mapRow, current: timing[ri][ci], suggested: safeTiming,
         delta: Number((safeTiming - timing[ri][ci]).toFixed(1)), knocking: pt.knock,
         mbt: Number(mbt.toFixed(1)), knockCeiling: Number(knockCeiling.toFixed(1)),
-        knockLimited,
+        // Which ceiling bound the suggestion. Useful on its own, but it says nothing
+        // about danger: a cell can sit past both with MBT the lower of the two. Danger
+        // is where the PLAYER'S number sits — see the classification below.
+        knockLimited: knockCeiling < mbt,
       });
+
+      // Scaling the commanded value by target/delivered prices the error the engine
+      // actually made, and lands on the number to type in.                  // rule 3
+      const suggestedAfr = afr[ri][ci] * (pt.bestAfr / Math.max(0.1, pt.afr));
       fuelAdv.push({
-        ri, ci, rpm, map: mapRow, current: afr[ri][ci], suggested: Number(pt.bestAfr.toFixed(1)),
-        delta: Number((pt.bestAfr - afr[ri][ci]).toFixed(1)), duty: pt.duty,
+        ri, ci, rpm, map: mapRow, current: afr[ri][ci],
+        suggested: Number(suggestedAfr.toFixed(1)),
+        delta: Number((suggestedAfr - afr[ri][ci]).toFixed(1)),
+        delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)),
+        duty: pt.duty,
       });
     });
   });
-  // Past the knock limit is a damage risk. Past MBT is only wasted effort — the burn
-  // is already landing where it should, so the extra advance buys no torque. Reporting
+
+  // Past the knock limit is a damage risk. Past MBT is only wasted effort. Reporting
   // them as one category would either cry wolf about a safe cruise cell or say nothing
   // about a genuinely dangerous one.
   //
@@ -173,7 +235,7 @@ export function calibrationAdvice({
   const overAdvanced = spark.filter((c) => c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG);
   const pastMbt = spark.filter((c) => c.current - c.knockCeiling <= ADVANCE_TOLERANCE_DEG
     && c.current - c.mbt > ADVANCE_TOLERANCE_DEG);
-  const underAdvanced = spark.filter((c) => c.delta > 3.0);
-  const wrongMix = fuelAdv.filter((c) => c.map >= 85 && Math.abs(c.delta) > 0.45);
+  const underAdvanced = spark.filter((c) => c.delta > UNDER_ADVANCED_DEG);
+  const wrongMix = fuelAdv.filter((c) => c.map >= OPEN_LOOP_KPA && Math.abs(c.delta) > MIX_NOTABLE_AFR);
   return { spark, fuelAdv, overAdvanced, underAdvanced, pastMbt, wrongMix };
 }

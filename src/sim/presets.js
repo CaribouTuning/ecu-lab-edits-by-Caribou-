@@ -16,16 +16,20 @@
  * coefficient change can never leave a stale calibration behind.
  */
 
-import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS } from './hardware.js';
-import { BARO_KPA, KELVIN_OFFSET, PSI_TO_KPA } from './constants.js';
+import {
+  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
+} from './hardware.js';
+import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
-import { knockThreshold, mbtTiming } from './knock.js';
+import { chargeIndexOf } from './knock.js';
+import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
+import { exhaustManifoldKpa } from './friction.js';
 import { bestPowerAfr } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
-import { chargeTempK } from './thermo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
 import { deriveEngine } from './engine.js';
 import { clamp } from './math.js';
-import { LOAD, RPM } from './tables.js';
+import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
 
 /**
  * How far below the knock limit a factory calibration sits, in degrees.
@@ -80,28 +84,25 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,
       compression: 10.3,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
-      // Bore, stroke, compression and redline above are published figures and do not
-      // move. `camDuration` and `springRate` are not published — Nissan states only that
-      // the Rev-Up revised the cams and raised the limit — so they are where this preset
-      // is fitted, exactly as `vq35hr` below is fitted.
+      // Bore, stroke, compression and redline above are published; `camDuration` and
+      // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
+      // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
       //
-      // 220° is the duration that centres the power fit: 256 whp against a 255 target
-      // (+0.4%), with torque at 214 wlb-ft (-3.2%). Do not read the old 210° here as a
-      // published number — it was the generic custom-build default left in place, and it
-      // landed at -4.7%, three quarters of a horsepower inside the ±5% test floor. That
-      // is not a fit, it is a coin toss against the next coefficient change, and the
-      // physics has moved three times recently. Nothing else in the range is a trap:
-      // 208-226° is event-free end to end, so the fit is bounded by the power band
-      // alone (-5.5% at 208°, +3.5% at 226°) rather than by an advisory.
+      // REFITTED for the two-zone cycle. #38 landed 220 degrees against the model of the
+      // day; on this one that reads +8.6% on power, outside the +/-5% floor. 202 centres
+      // the fit instead: 0.0% on power and +2.3% on torque, the best simultaneous fit in
+      // the range. The band is event-free from 198 to 226, so the fit is bounded by the
+      // power tolerance rather than by any advisory.
       //
-      // `springRate` 60 does not change power — it only sets where the valvetrain gives
-      // up. It buys `valveFloatRpm` ~8390, about 1390 RPM clear of the 7000 redline,
-      // which sits mid-pack against the rest of the set: 1242 (vq35hr), 1330 (n54),
-      // 1382 (ea888-r), 1474 (b58-m0), 1534 (b58-m1), 1682 (ea888-gti). At the 50
-      // baseline this engine would sit at 810, the thinnest in the set for no reason
-      // other than inheriting a default. No pull should ever show a `float` event here —
-      // if one appears, that is a bug, not "the character".
-      camDuration: 220, springRate: 60,
+      // Do NOT read 210 here as a published number if you see it in the history — that
+      // was the generic custom-build default left in place, which #38 correctly called
+      // out as a coin toss rather than a fit.
+      //
+      // `springRate` 60 does not change power; it sets where the valvetrain gives up.
+      // `valveFloatRpm` lands ~8640, about 1640 RPM clear of the 7000 redline, mid-pack
+      // against the rest of the set. No pull should ever show a `float` event here — if
+      // one appears that is a bug, not "the character".
+      camDuration: 202, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -126,35 +127,24 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
       // Bore, stroke, compression and redline above are published figures and do not
       // move. `camDuration` and `springRate` are not published, so they are where this
-      // preset is fitted — 228° is simply the duration that best fits power and torque
-      // at the same time (+2.2% and -3.9% against the published ratings at the wheels).
-      // Torque is not what caps this fit — in the fitted range it bottoms out near
-      // 220° (213.65 wlb-ft) and RISES in both directions: 216.2 at 224°, 217.4 at
-      // 226°, 218.8 at 228°. Bigger cams gain power and torque both. What actually
-      // bounds the fit is the ±5% power ceiling and the cam-overlap advisory, which
-      // starts firing at 229° (11.00° overlap, vs. 9.90° at 228° — the last duration
-      // with an empty event log).
-      // `springRate` 68 is set well above the 50 baseline purely to carry that cam:
-      // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline —
-      // comparable to (not the same as) the margin the other five presets carry:
-      // 1330 / 1474 / 1534 / 1682 / 1382 RPM. No pull should ever show a `float`
-      // event on this engine — if one appears, that is a bug, not "the character".
+      // preset is fitted.
+      //
+      // REFITTED for the crank-angle cycle. It was 228 degrees, chosen against the old
+      // algebraic combustion model; with work now integrated from a pressure trace the
+      // same cam reads 10% over the published power. 214 lands +0.7% on power and +1.0%
+      // on torque — a better fit than the number it replaces, on both figures at once.
+      // The spring rate carries it easily: valve float sits near 8940 RPM, well clear of
+      // the 7500 redline, and at 2.2 degrees of overlap this cam never trips the
+      // cam advisory.
       //
       // WHAT THIS PRESET DOES NOT REPRODUCE: the real engine makes peak power at 6800
-      // and falls away after it. Simulated power does not fall at all — it climbs
-      // monotonically into the 7500 limiter, so peak power reads 7500, 700 RPM high,
-      // and peak torque sits at 5500 against a published 4800. That is a limit of the
-      // shared physics, not of this data: the real rolloff comes from cam profile,
-      // VVEL variable lift and intake-tract tuning, and the model has no term for any
-      // of them, so at every duration that reaches this engine's rating VE is still
-      // rising at the redline. The five boosted presets roll over only because their
-      // factory boost curves taper; nothing tapers on a naturally aspirated engine
-      // here. Shaping the top end with valve float instead (a 42 spring rate, which is
-      // what this preset shipped with) did place the peak, at the cost of modelling a
-      // healthy valvetrain as a failing one — that is not coming back.
-      // `tests/presets.test.js` asserts the climb-to-limiter rather than a peak
-      // location, and says the same thing there.
-      camDuration: 228, springRate: 68,
+      // and falls away after it. Simulated power does not fall — it climbs monotonically
+      // into the 7500 limiter, so peak power reads 7500, 700 RPM high. That is a limit of
+      // the shared physics, not of this data: the real rolloff comes from cam profile,
+      // VVEL variable lift and intake-tract tuning, and the model has no term for any of
+      // them. The boosted presets roll over only because their factory boost curves taper.
+      // `tests/presets.test.js` asserts the climb-to-limiter rather than a peak location.
+      camDuration: 214, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -182,6 +172,11 @@ export const ENGINE_PRESETS = [
     },
     induction: {
       turboOn: true, turbineIdx: 0, compressorIdx: 1,
+      // TWO of them. Now that backpressure is solved from turbine flow area rather than
+      // assumed proportional to boost, the count is load-bearing: a pair of small
+      // housings passes twice the exhaust of one before it starts choking, which is the
+      // whole reason a manufacturer fits two small turbos instead of one big one.
+      turbineCount: 2,
       // Twin small turbos spool early (0.6 bar / 8.5 psi target by 3500), but the
       // factory ECU tapers boost above that as exhaust backpressure and heat climb
       // toward redline — the well-documented N54 "boost taper" that trades away
@@ -395,6 +390,18 @@ export const ENGINE_PRESETS = [
   },
 ];
 
+/**
+ * The turbine as fitted, with its flow area scaled by how many of them there are.
+ *
+ * @param {Preset} preset
+ * @returns {object|null}
+ */
+export function presetTurbine(preset) {
+  const { turboOn, turbineIdx, turbineCount = 1 } = preset.induction;
+  if (!turboOn) return null;
+  return turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount);
+}
+
 /** The induction hardware bundle `computeHardwareVE` expects. */
 function hardwareFor(preset) {
   const { turboOn, turbineIdx, boost } = preset.induction;
@@ -419,7 +426,6 @@ function hardwareFor(preset) {
 export function factoryCalibration(preset) {
   const derived = deriveEngine(preset.engine);
   const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
-  const compressor = COMPRESSOR_OPTS[preset.induction.compressorIdx];
   const hw = hardwareFor(preset);
   const ve = computeHardwareVE(preset.engine, preset.mods, hw);
 
@@ -455,17 +461,50 @@ export function factoryCalibration(preset) {
   // evaluated against the mixture the engine will ACTUALLY see (best-power AFR, since
   // the fuel table above is what puts it there) rather than the richer commanded
   // number, which is only an artifact of pre-compensating the MAF.
+  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+  const turbine = presetTurbine(preset);
+
   const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
     const boostPsi = boostAt(rpm, loadKpa);
     const trueBestAfr = bestPowerAfr(boostPsi);
-    const threshold = knockThreshold({
-      rpm, mapKpa: loadKpa, veActual: ve[ri][ci],
-      chargeC: chargeTempK(boostPsi, preset.mods.intercooler) - KELVIN_OFFSET,
-      actualAfr: trueBestAfr, bestAfr: trueBestAfr, boostPsi,
-      octaneBonus: fuel.bonus, mods: preset.mods, derived, compressor,
+    const lambda = trueBestAfr / 14.7;
+    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
+    const veActual = ve[ri][ci];
+    const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
+    const lambdaCell = lambda;
+    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambdaCell))
+      * derived.cyl * (rpm / 2) / 60;
+    const empKpa = exhaustManifoldKpa({
+      turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
+      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda: lambdaCell }),
     });
-    const safe = threshold - FACTORY_KNOCK_MARGIN_DEG;
-    return Number(clamp(Math.min(mbtTiming(rpm, loadKpa), safe), 5, 50).toFixed(1));
+    // The generator asks the physics the same question the running ECU asks — how much
+    // spark will this cylinder take — by solving the same cycle. A second, simpler
+    // knock estimate here would drift from the one the player then drives against.
+    // KNOWN DEFECT, deliberately left in place — see issue #46.
+    //
+    // This releases the energy of DELIVERED fuel, not burnable fuel. At a rich best-power
+    // target the surplus has no oxygen, so heat comes out ~20% high (Golf R, 200 kPa) and
+    // the generated spark lands ~5 deg below what the same cycle allows in `point.js` —
+    // the two are supposed to ask one question and get one answer.
+    //
+    // The one-line fix is `burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich)`
+    // with `fuelMassG: deliveredFuelG` alongside it, exactly as point.js splits them. It is
+    // NOT applied here because the boosted presets were fitted around this over-retard:
+    // correcting it alone puts four of them outside the published-figure tolerances
+    // (N54 torque +11.3%, Golf R +7.2%, B58B30M0 +5.5%, GTI +5.3%), and no single fitted
+    // knob recovers them — cam duration saturates (N54 torque bottoms at +10.1% at every
+    // duration, because that plateau is boost-limited), compressor choice moves it not at
+    // all, and the only KNOCK_TAU_SCALE window that passes all seven (~1.4) makes the stock
+    // engine knock on its own shipped calibration. Closing it needs the knock model to bind
+    // on boosted factory tables, which it currently never does.
+    const cyc = cycleInputsFor({
+      rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
+      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      lambda, fuel, derived,
+    });
+    const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
+    return Number(clamp(Math.min(mbtFromBurn(cyc.burnDeg), safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
   }));
 
   return { ve, timing, afr };
@@ -488,6 +527,7 @@ export function applyPreset(preset) {
     turboOn: preset.induction.turboOn,
     boostCurve: [...preset.induction.boost],
     turbineIdx: preset.induction.turbineIdx,
+    turbineCount: preset.induction.turbineCount ?? 1,
     compressorIdx: preset.induction.compressorIdx,
     injIdx: preset.parts.injectorIdx,
     ecuInjectorCc: INJECTOR_OPTS[preset.parts.injectorIdx].cc,

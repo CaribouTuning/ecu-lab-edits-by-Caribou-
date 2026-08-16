@@ -10,14 +10,16 @@
  * physics layer testable in plain Node.
  */
 
-import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET, R_AIR } from './constants.js';
+import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { rubbingFmepPa, pumpingFmepPa } from './friction.js';
-import { chargeIndexOf, knockThreshold, mbtTiming } from './knock.js';
+import {
+  cycleInputsFor, knockLimitedSpark, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
+} from './cycle.js';
+import { exhaustManifoldKpa, rubbingFmepPa, pumpingFmepPa } from './friction.js';
+import { chargeIndexOf } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
-import { peakPressureBar } from './pressure.js';
-import { chargeTempK } from './thermo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
@@ -31,15 +33,25 @@ import { chargeTempK } from './thermo.js';
  *   to `veVal`, which models a perfectly calibrated VE table.
  * @property {number} timingVal commanded spark advance, degrees BTDC
  * @property {number} afrCommanded commanded air:fuel ratio, gasoline-equivalent
- * @property {number} octaneBonus knock margin from fuel octane, degrees
- * @property {{stoich: number, density: number, lhv: number}} fuel
+ * @property {{stoich: number, density: number, lhv: number, octane: number}} fuel
  * @property {object} mods bolt-ons fitted, plus `turboFitted`
  * @property {number} mafScalar player's MAF calibration multiplier
  * @property {number} mafErrorBase physical MAF error introduced by hardware
  * @property {number} injectorCc injector size actually fitted, cc/min
  * @property {number} ecuInjectorCc injector size the ECU believes is fitted, cc/min
  * @property {import('./engine.js').DerivedEngine} derived
+ * @property {number} [octaneBonus] legacy, accepted and IGNORED. Octane is a fuel
+ *   property (`fuel.octane`) the autoignition model reads, not a margin added after the
+ *   fact. `fuel.bonus` is still live, but only in the Engineer Score.
  * @property {{boostCeiling: number}} compressor
+ * @property {{size: string, effectiveAreaM2: number}|null} [turbine] turbine in the
+ *   exhaust stream, if any. Null means no turbine, which is the correct state for a
+ *   naturally aspirated engine — it sets exhaust backpressure, so it is not a cosmetic
+ *   omission
+ * @property {number} [empKpa] exhaust manifold pressure, when the caller has already
+ *   solved the induction system and knows it. Omitted, it is computed here from this
+ *   point's own exhaust flow
+ * @property {number} [wastegateRelief] how much backpressure the wastegate is bleeding
  */
 
 /**
@@ -50,8 +62,9 @@ import { chargeTempK } from './thermo.js';
  */
 export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
-  octaneBonus, fuel, mods, mafScalar, mafErrorBase,
-  injectorCc, ecuInjectorCc, derived, compressor,
+  fuel, mods, mafScalar, mafErrorBase,
+  injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
+  empKpa: empOverride, wastegateRelief = 0,
 }) {
   const compressorOver = boostPsi > compressor.boostCeiling;
   const chargeK = chargeTempK(boostPsi, mods.intercooler);
@@ -61,24 +74,16 @@ export function evaluatePoint({
   // an efficiency term here — no separate throttle multiplier (that would
   // double-count load, which is exactly the Alpha-N mistake).
   //
-  // TWO VE NUMBERS, DOING DIFFERENT JOBS. This distinction is the whole basis of
-  // closed-loop VE tuning and it must not be collapsed back into one variable:
-  //
-  //   veActual   what the hardware genuinely flows. Physics. Sets the air that is
-  //              really in the cylinder, so it sets torque, knock and measured MAF.
-  //   veVal      what the ECU's table CLAIMS the cylinder flows. Calibration. The ECU
-  //              has no airflow oracle — it fuels from this number and nothing else.
-  //
-  // When the table is wrong, the ECU fuels for air that is not there (or misses air
-  // that is), and the mixture comes back off target. That gap is the entire signal a
-  // fuel-trim histogram measures, and correcting the table toward the truth is what
-  // makes it converge. With a single shared VE the gap is identically zero, the
-  // histogram has nothing to read, and no amount of iterating can ever close it.
+  // TWO VE NUMBERS, DOING DIFFERENT JOBS. Do not collapse these into one variable:
+  //   veActual   what the hardware flows. Physics. Sets real air, so torque/knock/MAF.
+  //   veVal      what the ECU's table CLAIMS. Calibration. The ECU has no airflow
+  //              oracle and fuels from this and nothing else.
+  // The gap between them IS the fuel-trim histogram's entire signal. Share one VE and the
+  // gap is identically zero, the histogram reads nothing, and no iteration can close it.
   const veActual = veActualVal ?? veVal;
   const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
-  const airDensity = (mapKpa * 1000) / (R_AIR * chargeK);
-  const airChargeG = (veActual / 100) * vCylM3 * airDensity * 1000;
-  const airChargeBelievedG = (veVal / 100) * vCylM3 * airDensity * 1000;
+  const airChargeG = trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3: vCylM3 });
+  const airChargeBelievedG = trappedAirGrams({ veActual: veVal, mapKpa, chargeK, sweptM3: vCylM3 });
   // The MAF reading reports real airflow — a sensor cannot read a table.
   const mafGps = (airChargeG * derived.cyl * (rpm / 2)) / 60;
 
@@ -110,37 +115,48 @@ export function evaluatePoint({
   const lambdaActual = airChargeG / (deliveredFuelG * fuel.stoich);
   const actualAfr = lambdaActual * 14.7;
 
-  // --- KNOCK ENVELOPE. Shared with the factory calibration generator so the ECU and
-  // the calibration cannot disagree about what this engine tolerates.
+  // --- GAS EXCHANGE. What the piston pushes against on the exhaust stroke, and how
+  // much of last cycle's exhaust is still in the cylinder when the intake valve shuts.
   const bestAfr = bestPowerAfr(boostPsi);
   const chargeIndex = chargeIndexOf(veActual, mapKpa);
-  const threshold = knockThreshold({
-    rpm, mapKpa, veActual, chargeC, actualAfr, bestAfr, boostPsi,
-    octaneBonus, mods, derived, compressor,
+  // Mass actually leaving the cylinder each second — air plus the fuel that went in
+  // with it — which is what the turbine has to pass.
+  const exhaustFlowKgS = ((airChargeG + deliveredFuelG) / 1000) * derived.cyl * (rpm / 2) / 60;
+  const turbineInletK = exhaustTempK({ chargeIndex, lambda: lambdaActual });
+  const empKpa = empOverride ?? exhaustManifoldKpa({
+    turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
+    turbine, wastegateRelief,
   });
 
+  // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
+  // trace rather than estimated: the work done, the peak pressure, and whether the end
+  // gas had time to light itself before the flame reached it.
+  const burnedFuelG = Math.min(deliveredFuelG, airChargeG / fuel.stoich);
+  const cyc = cycleInputsFor({
+    rpm, mapKpa, empKpa, intakeK: chargeK,
+    airChargeG, burnedFuelG, fuelMassG: deliveredFuelG, lambda: lambdaActual, fuel, derived,
+  });
+
+  // The knock limit is solved from the same cycle, so it responds to compression,
+  // boost, charge heat, residuals, mixture and cam timing without a separate term for
+  // any of them. This is what the ECU's knock control is protecting against.
+  const threshold = knockLimitedSpark(cyc);
   const margin = threshold - timingVal;
   const knockPull = margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0;
   const usedTiming = timingVal - knockPull;
 
-  // --- COMBUSTION -> TORQUE
-  const mbtIdeal = mbtTiming(rpm, mapKpa);
-  const timingEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.TIMING_FALLOFF * Math.pow(usedTiming - mbtIdeal, 2));
-  const afrEff = Math.max(COEFF.EFFICIENCY_FLOOR, 1 - COEFF.AFR_FALLOFF * Math.pow(actualAfr - bestAfr, 2));
-  const burnedFuelG = Math.min(deliveredFuelG, airChargeG / fuel.stoich);
-  const energyJ = (burnedFuelG / 1000) * fuel.lhv;
+  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming });
+  const mbtIdeal = mbtFromBurn(cyc.burnDeg);
+  const imepPa = cycle.imepGrossPa;
 
-  // INDICATED work on the piston, expressed as a mean effective pressure.
-  const indicatedJ = energyJ * derived.thermalEff * timingEff * afrEff;
-  const imepPa = indicatedJ / vCylM3;
-
-  // The engine must pay for its own rubbing friction and for pumping air past a
-  // partly closed throttle before anything reaches the crank. Pumping loss is the
-  // vacuum it is working against — which is precisely why part-throttle running is
-  // inefficient and why a throttled engine brakes itself on overrun.
-  const fmepPa = rubbingFmepPa(rpm, derived.springPa || 0, {
+  // The engine must pay for its own rubbing friction, and for the gas-exchange loop.
+  // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and
+  // genuinely negative — work returned to the piston — when boost exceeds backpressure.
+  const pmepPa = pumpingFmepPa(mapKpa, empKpa);
+  const rubbingPa = rubbingFmepPa(rpm, derived.springPa || 0, {
     bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
-  }) + pumpingFmepPa(mapKpa);
+  });
+  const fmepPa = rubbingPa + pmepPa;
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.
@@ -148,26 +164,28 @@ export function evaluatePoint({
   const powerW = torqueNmCrank * (2 * Math.PI * rpm / 60);
   const hp = (powerW / 745.7) * DRIVETRAIN_EFF;
   const torque = torqueNmCrank * 0.7376 * DRIVETRAIN_EFF;
-  // Brake-specific fuel consumption is fuel per unit of work OUT. On overrun and in
-  // deep vacuum there is no work out — the engine is being motored — so the quantity is
-  // undefined, not zero. Zero would read as an engine making power from no fuel.
-  const bsfc = powerW > 0 ? (burnedFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
+  // Fuel per unit of work OUT, from fuel DELIVERED — BSFC prices what leaves the tank,
+  // and at a rich WOT mixture a fifth of it finds no oxygen and the driver still paid.
+  // Null on overrun and in deep vacuum: there is no work out, so the quantity is
+  // undefined. Zero would read as an engine making power from no fuel.
+  const bsfc = powerW > 0
+    ? (deliveredFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
-  // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure
-  // is what it costs the metal to give it. The two are related but not the same, and
-  // the difference is the whole point of computing this separately: retarding spark
-  // gives up torque AND pressure together, while raising static compression buys
-  // torque at a steeper price in pressure than in anything the torque figure shows.
-  const peakPressure = peakPressureBar({
-    compression: derived.compression, mapKpa, veActual, usedTiming, mbtIdeal,
-  });
+  // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
+  // what it costs the metal. Both come off the same trace, so they cannot disagree.
+  const peakPressure = paToBar(cycle.peakPressurePa);
   const pressureRisk = peakPressure > COEFF.PEAK_PRESSURE_LIMIT_BAR;
 
-  const egtProxy = knockPull * 22 + Math.max(0, actualAfr - bestAfr) * 45 + boostPsi * 6;
+  // The CYCLE's own answer — the burned zone at exhaust valve open, blown down to the
+  // manifold. Retard shows up here for the real reason rather than a per-degree
+  // coefficient: the burn finishes later into the expansion, so less work is extracted
+  // and the gas leaves hotter. `exhaustTempK` survives only where an answer is needed
+  // BEFORE the cycle can run — the turbine backpressure the cycle itself depends on.
+  const egtC = cycle.exhaustK - KELVIN_OFFSET;
+  const egtRisk = egtC > COEFF.EGT_LIMIT_C;
   const leanRisk = actualAfr > COEFF.LEAN_DAMAGE_AFR && mapKpa >= 85;
-  // Excessively rich is its own failure mode, not just "safe". Unburnt fuel washes the
-  // oil film off the bores, fouls plugs, dumps raw fuel into the catalyst and costs
-  // real power — a genuinely damaging condition, just a slower one than knock.
+  // Excessively rich is its own failure mode, not just "safe": unburnt fuel washes the
+  // oil film off the bores, fouls plugs and costs power. Slower than knock, still damage.
   const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
   const valveRisk = leanRisk && boostPsi > 3;
   const mafFlag = Math.abs(trimPct) > 8 && (mods.intake || mods.turboFitted);
@@ -188,13 +206,28 @@ export function evaluatePoint({
     boostPsi: Number(boostPsi.toFixed(1)), trimPct: Number(trimPct.toFixed(1)),
     threshold: Number(threshold.toFixed(1)), margin: Number(margin.toFixed(1)),
     chargeIndex: Number(chargeIndex.toFixed(3)),
-    mbtIdeal: Number(mbtIdeal.toFixed(1)), timingEff, afrEff, openLoop,
-    egt: Math.round(720 + egtProxy),
+    mbtIdeal: Number(mbtIdeal.toFixed(1)), openLoop,
+    egt: Math.round(egtC),
     imep: Number((imepPa / 100000).toFixed(2)), bmep: Number((bmepPa / 100000).toFixed(2)),
-    fmep: Number((fmepPa / 100000).toFixed(2)), bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
+    fmep: Number((fmepPa / 100000).toFixed(2)),
+    bsfc: bsfc === null ? null : Number(bsfc.toFixed(3)),
+    // The gas-exchange loop, reported separately from rubbing friction because they are
+    // different problems with different fixes — one is a turbo match, the other is a
+    // rebuild.
+    pmep: Number((pmepPa / 100000).toFixed(2)), emp: Number(empKpa.toFixed(0)),
     bestAfr: Number(bestAfr.toFixed(2)),
     peakPressure: Number(peakPressure.toFixed(1)),
+    // Read off the trace: where the pressure peaked, where the burn centred, how much
+    // of last cycle's exhaust is still in the cylinder, and how close the end gas came
+    // to lighting itself (1.0 is knock).
+    peakPressureDeg: Number(cycle.peakPressureDeg.toFixed(1)),
+    mfb50: Number(cycle.mfb50Deg.toFixed(1)),
+    burnDeg: Number(cyc.burnDeg.toFixed(1)),
+    residualFrac: Number(cyc.residualFrac.toFixed(3)),
+    effectiveCr: Number(cyc.effectiveCr.toFixed(2)),
+    knockIntegral: Number(cycle.knockIntegral.toFixed(3)),
+    endGasK: Math.round(cycle.peakEndGasK),
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
-    pressureRisk, mafFlag, compressorOver, injMismatch,
+    egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
   };
 }

@@ -9,6 +9,10 @@
  * physics and need a fudge factor, put it here with a comment explaining it — that
  * rule is what keeps the model auditable.
  *
+ * KEY ORDER IS PART OF THE FINGERPRINT. `tests/fingerprint.js` hashes this object as
+ * declared, so MOVING a coefficient fails the fingerprint exactly as if you had changed
+ * its value. Add new keys at the end of their section; do not reshuffle.
+ *
  * Changing anything here will move the dyno numbers, which means the behavioural
  * fingerprint tests in `tests/` will fail. That is intentional: review the diff,
  * confirm the new numbers are what you meant, then refresh the fixture with
@@ -25,161 +29,297 @@ export const COEFF = {
   // about 84 kPa, published breakdowns put the crankshaft group near 15% of friction
   // (~12.6 kPa), and the baseline carries four mains — so roughly 3 kPa each.
   FMEP_PER_MAIN_BEARING_PA: 3000,
-  // Fraction of rubbing friction added by a balance shaft pair. The National
-  // Academies' fuel-economy report records a measured 6% friction reduction when
-  // Ford deleted the balance shaft from its 1.0 L three-cylinder. That measurement
-  // is a SINGLE shaft on a 1.0 L I3; this coefficient is applied here to TWIN-shaft
-  // 1.8 L+ I4s (see hasBalanceShafts in hardware.js), which is an extrapolation
-  // beyond the source, not a like-for-like figure.
+  // Fraction of rubbing friction a balance shaft pair adds. Source: National Academies
+  // fuel-economy report, 6% measured on Ford's 1.0 L I3 — but that is a SINGLE shaft on
+  // a triple, applied here to twin-shaft 1.8 L+ I4s. An extrapolation, not a match.
   FMEP_BALANCE_SHAFT_FRAC: 0.06,
 
-  // --- Combustion efficiency roll-off ---
-  // Torque falls as a parabola either side of MBT. 0.0016 gives roughly a 4% loss at
-  // 5 deg from MBT, which matches published spark-sweep curves closely enough.
-  TIMING_FALLOFF: 0.0016,
-  // Same idea for mixture: ~2% loss one full AFR point off best power.
-  AFR_FALLOFF: 0.022,
-  EFFICIENCY_FLOOR: 0.55,      // neither term is allowed to drive output below this
+  // --- Engine cycle: geometry and integration (see cycle.js) ---
+  // Integration step, crank degrees. 133 steps over the closed period. Halving it moves
+  // indicated work under 0.2% and doubles the cost of every knock search — not worth it.
+  CYCLE_STEP_DEG: 2,
+  // Rod length / crank radius. Production petrol runs 1.5-1.9. Not player-editable, but
+  // read from here rather than assumed infinite, which would misplace the piston at TDC.
+  ROD_RATIO: 1.75,
+  // Intake valve close, degrees after BDC, and how it tracks cam duration. IVC sets
+  // EFFECTIVE compression — the piston does not compress until the valve shuts — which is
+  // why a big cam tolerates more static compression and gives away low-RPM pressure.
+  IVC_BASE_ABDC: 45,
+  IVC_CAM_REF_DURATION: 210,
+  IVC_PER_CAM_DEG: 0.5,
+  // Ratio of specific heats, blended by mass fraction burned. Unburned air at chamber
+  // temperature is ~1.35. Burned products dissociate, dropping the effective value into
+  // the published 1.20-1.27 band; this sits at the dissociated end, without which the
+  // cycle reads ~8% high. Holding gamma unburned throughout overstates peak pressure ~15%.
+  GAMMA_UNBURNED: 1.35,
+  GAMMA_BURNED: 1.235,
+  // --- Wall heat transfer (Woschni) ---
+  // h = K · B^-0.2 · p^0.8 · T^-0.55 · w^0.8, W/(m^2·K), pressure in kPa. PUBLISHED
+  // coefficients, not fitted. C1 is the piston-speed term, C2 the combustion term driven
+  // by pressure rise above the motored trace.
+  WOSCHNI_K: 3.26,
+  WOSCHNI_C1: 2.28,
+  WOSCHNI_C2: 3.24e-3,
+  // Mean chamber wall temperature, K. Coolant ~370 K, metal surfaces above it.
+  WALL_TEMP_K: 450,
+  // Standard atmosphere, Pa — the unit Douaud-Eyzat is written in.
+  ATM_PA: 101325,
 
-  // --- Burn duration, which is what MBT actually tracks ---
-  // MBT is not a curve fitted to a dyno; it is the advance that puts 50% of the mass
-  // fraction burned just after TDC, where the expansion stroke can still use the
-  // pressure. So model the burn and derive the timing from it.
+  // --- Engine cycle: combustion (Wiebe) ---
+  // Wiebe efficiency and form factors. a = 5 burns 99.3% by the end of the nominal
+  // duration; m = 2 gives the S-curve measured traces follow.
+  WIEBE_A: 5,
+  WIEBE_M: 2,
+  // Spark to appreciable heat release, crank degrees, while the kernel forms. Real
+  // engines show 5-15 depending on charge motion.
+  FLAME_DEVELOPMENT_DEG: 8,
+  // Burn duration at the reference condition. NOTE this is the TOTAL Wiebe span, not the
+  // 10-90% figure the literature quotes — at a=5, m=2 the 10-90% window is almost exactly
+  // half, so 42 here is a ~21 degree 10-90%, which is where a production engine sits.
+  // Duration in CRANK degrees is near speed-independent (turbulence scales with piston
+  // speed), which is why BURN_PER_RPM is small rather than proportional.
+  BURN_DURATION_BASE_DEG: 42,
+  BURN_RPM_REF: 4000,
+  BURN_PER_RPM: 0.00004,
+  // Lambda that burns fastest — slightly rich, which is part of why best torque is rich.
+  BURN_FASTEST_LAMBDA: 0.9,
+  // How sharply the burn slows either side of that — NOT symmetric. Published laminar
+  // flame speeds fall roughly twice as fast per unit of lambda on the lean side: surplus
+  // air is inert mass to heat, where surplus fuel keeps flame temperature up. A symmetric
+  // penalty let a lean charge burn nearly as fast as a rich one, so the end gas never got
+  // the extra dwell that actually kills pistons.
+  BURN_LAMBDA_PENALTY_RICH: 1.4,
+  BURN_LAMBDA_PENALTY_LEAN: 4.2,
+  // Dilution slows the flame: residual gas carries no oxygen and soaks up heat. This is
+  // a big cam's lumpy idle. ANCHOR: 20 kPa cruise lands ~26% residual, an 82 degree burn
+  // and 42 degrees of MBT, which is the 40-50 band real factory cruise maps carry (#34).
+  BURN_RESIDUAL_PENALTY: 3.8,
+  // Fuel that finds oxygen and burns to completion. Real homogeneous SI combustion leaves
+  // 1-3% in crevices and quench layers — this is why an engine has HC emissions.
+  COMBUSTION_COMPLETENESS: 0.97,
+  // --- Crevice volume and blowby ---
+  // The piston top-land gap, the ring-groove clearance and the head gasket bore, as a
+  // fraction of the clearance volume. Published figures for production engines run
+  // 1.5-3% of clearance. Gas driven in there sits at wall temperature, takes no part in
+  // combustion, and comes back out during expansion too late and too cold to burn — it
+  // is where most unburnt hydrocarbon actually comes from, and it is why
+  // COMBUSTION_COMPLETENESS above is not 1.
+  CREVICE_VOLUME_FRAC: 0.022,
+  // Charge lost past the rings per second, per bar of cylinder pressure. Production
+  // engines lose roughly half a percent to one percent of trapped mass per cycle at full
+  // load; this reproduces that and, unlike a flat fraction, scales with pressure — so
+  // blowby is negligible at cruise and real at 70 bar, which is why a tired ring pack
+  // shows up under boost first.
+  BLOWBY_PER_BAR_S: 0.00025,
+
+  // --- Engine cycle: autoignition (Douaud & Eyzat) ---
+  // tau[ms] = SCALE · A · (ON/100)^B · p[atm]^-N · exp(E/T[K]), integrated per
+  // Livengood-Wu until the accumulated fraction reaches 1. A, B, N and E are the
+  // PUBLISHED coefficients. SCALE is the one fitted number in the knock model: published
+  // Douaud-Eyzat was derived on one specific chamber, and every implementation carries a
+  // scale factor for the engine it is applied to. It also absorbs, in one place, what the
+  // cycle does not model — chamber shape, turbulence, port vs direct injection.
   //
-  // The interval from spark to 50% MFB, in crank degrees, at 1500 rpm and atmospheric
-  // pressure. Combined with MFB50_ATDC_DEG below this reproduces the old model's
-  // wide-open-throttle numbers exactly, which is deliberate: the light-load end was
-  // wrong, the WOT end was not, and NA dyno power must not move.
-  BURN_REF_DEG: 26.5,
-  // Extra crank degrees of burn per BURN_RPM_SPAN of engine speed. Turbulence speeds
-  // the burn up in real time as the engine spins faster, but not fast enough to keep
-  // pace with the crank, so the burn occupies more DEGREES the higher you rev.
-  BURN_RPM_GAIN: 12,
-  // The RPM datum BURN_REF_DEG is calibrated at, and the span over which the full
-  // BURN_RPM_GAIN is paid out. These are properties of the burn model, not of the dyno
-  // sweep: that they happen to coincide with SWEEP_START_RPM and SWEEP_END_RPM is a
-  // coincidence, and moving the sweep range must NOT drag them along.
-  BURN_RPM_REF: 1500,
-  BURN_RPM_SPAN: 6000,
-  // How sharply a thinning charge slows the burn, as an exponent on the inverse
-  // pressure ratio. A part-throttle charge is dilute and low in turbulence, so its
-  // flame travels slowly and must be lit much earlier — which is exactly why factory
-  // cruise maps carry 40-50 deg of advance and never complain. 0.36 puts 20 kPa cruise
-  // at ~43 deg while leaving atmospheric untouched.
-  BURN_DILUTION_EXP: 0.36,
-  // Lowest pressure ratio the burn model will extrapolate to. Below this the inverse
-  // law runs away, and no engine operates there under power anyway.
-  BURN_RATIO_FLOOR: 0.05,
-  // Where 50% of the charge should have burned, in degrees AFTER top dead center.
-  // Textbook optimum is 8-10 deg ATDC across a wide range of engines.
+  // THREE ANCHORS, and changing SCALE must keep all three:
+  //   1. Every preset reaches published output with its factory calibration knock-free.
+  //   2. A stock 10.3:1 on 91 octane runs out of margin at 36.0 deg at 5500 RPM, falling
+  //      to 23.5 at 3000 — a real one does. (Emergent: low speed means more milliseconds
+  //      of dwell for the end gas. The old additive envelope needed a term for it.)
+  //   3. The shipped stock calibration runs knock-free — what a new player meets first.
+  // Higher values pass the presets more easily but push the NA limit past anything the
+  // app can command, deleting the tutorial's most basic lesson.
+  // `tests/presets.test.js` fails if 1 or 3 break.
+  KNOCK_TAU_SCALE: 2.0,
+  KNOCK_DE_A: 17.68,
+  KNOCK_DE_B: 3.402,
+  KNOCK_DE_N: 1.7,
+  KNOCK_DE_E: 3800,
+  // How much of the burned zone's temperature the end gas feels, per unit of mass already
+  // burned. The zones share a pressure but not a boundary layer: the unburned charge is
+  // heated by radiation and conduction from the flame front, not by mixing with it.
+  // Replaces a three-coefficient Gaussian in lambda — the energy balance now produces the
+  // peak on its own rather than being told where it is.
+  ENDGAS_FLAME_COUPLING: 0.035,
+  // Ceiling on burned-gas temperature, K. Above this, dissociation absorbs essentially
+  // all further heat release, which a fixed-gamma zone cannot represent.
+  BURNED_GAS_MAX_K: 2900,
+  // Burned-gas heat capacity rise per 1000 K above the reference. Vibrational modes and
+  // dissociation both soak up heat that would otherwise show as temperature; frozen
+  // composition cannot express that, so flame temperature fell off far too steeply either
+  // side of stoichiometric — a 5% lean mixture lost over 100 K where a real one loses ~40.
+  CP_BURNED_TEMP_RISE: 0.30,
+  CP_BURNED_REF_K: 1800,
+  // Stop accumulating once this much of the charge has burned: past it there is
+  // essentially no unburned end gas left to autoignite.
+  KNOCK_ENDGAS_BURN_LIMIT: 0.95,
+  // Bracket and tolerance for the knock-limit search. MAX must stay BELOW the advance at
+  // which the autoignition integral stops being monotonic (see knockLimitedSpark), or
+  // bisection reports a limit past where the engine actually detonated.
+  KNOCK_SEARCH_MIN_BTDC: -10,
+  KNOCK_SEARCH_MAX_BTDC: 45,
+  // Reported when nothing in range can be made to knock — a cylinder in deep vacuum.
+  // Must NOT be the search ceiling: the advisor reads that as a hard limit and calls
+  // stock cruise cells carrying 47 degrees dangerous. Far above any spark table, so
+  // whatever else binds (MBT, at light load) is correctly the lower ceiling.
+  KNOCK_UNBOUNDED_BTDC: 90,
+  KNOCK_SEARCH_TOL_DEG: 0.25,
+
+  // --- Charge cooling from fuel evaporation ---
+  // Latent heat of vaporisation, J/kg. A richer charge arrives colder, which is most of
+  // why E85 resists knock: double the latent heat AND ~1.4x the mass for the same lambda,
+  // so it drops charge temperature 80-90 K where pump gasoline manages 25-30.
+  FUEL_LATENT_HEAT_GASOLINE: 350000,
+  FUEL_LATENT_HEAT_ETHANOL: 760000,
+  // Stoichiometric ratio below which a fuel counts as an ethanol blend.
+  FUEL_ETHANOL_STOICH_MAX: 12,
+  // Charge specific heat at constant pressure, J/(kg·K).
+  CHARGE_CP: 1005,
+  // Share evaporating in the cylinder rather than the port. Direct injection puts nearly
+  // all of it in the trapped charge; port injection loses much to the runner walls. No
+  // injection-type input yet (issue #24), so this is the blended middle.
+  FUEL_EVAP_IN_CYLINDER: 0.6,
+
+  // --- Residual gas (internal EGR) ---
+  // Exhaust left from the previous cycle. Dilutes the charge, slows the burn, and arrives
+  // at exhaust temperature so it raises where compression starts. Overlap and low load
+  // raise it; boost lowers it as the fresh charge scavenges the chamber.
+  //
+  // RESIDUAL_BASE is quoted at RESIDUAL_CR_REF and scaled by clearance volume, Vd/(CR-1).
+  // Sanity check on 0.04: at 10.5:1 the clearance volume is a tenth of the total, and
+  // exhaust in it at 1050 K is about a third the density of fresh charge.
+  RESIDUAL_BASE: 0.04,
+  RESIDUAL_CR_REF: 10.5,
+  RESIDUAL_PER_OVERLAP_DEG: 0.004,
+  RESIDUAL_LOAD_EXP: 1.15,
+  RESIDUAL_MAX: 0.35,
+  // Temperature the residual fraction is mixed in at, K. Exhaust gas in the chamber at
+  // the end of blowdown, not peak in-cylinder temperature.
+  RESIDUAL_TEMP_K: 1050,
+
+  // --- Turbocharger (see turbo.js) ---
+  // Specific heats at constant pressure, J/(kg·K). Exhaust is hot and partly triatomic,
+  // so it carries more energy per degree — which is why a turbine can drive a compressor
+  // moving the same mass.
+  CP_AIR: 1005,
+  CP_EXHAUST: 1150,
+  // Bearing and windage losses across the shaft.
+  TURBO_MECH_EFF: 0.95,
+  // Turbine flow parameter (mass flow · sqrt(inlet T) / effective area) to the pressure
+  // needed upstream — the nozzle relation collapsed to one constant. This is what makes
+  // backpressure scale with FLOW rather than boost.
+  //
+  // ANCHOR: the medium housing at 0.16 kg/s (a 2.0 L four at 16 psi, 3500 RPM) lands EMP
+  // near 1.4x boost, mid-band for a matched turbo. Small then exceeds 2x at that flow and
+  // large sits just under 1x — the sizing trade, emergent rather than a multiplier.
+  TURBINE_FLOW_TO_KPA: 0.04,
+  // AFR the exhaust-mass estimate assumes. Only total mass matters, so gasoline is close
+  // enough for every fuel.
+  EXHAUST_STOICH_REF: 14.7,
+  // NA exhaust system backpressure per kg/s, kPa. A turbine dwarfs this; without one it
+  // is the whole restriction.
+  EXHAUST_SYSTEM_KPA_PER_KGS: 90,
+  // The induction solve is a fixed point (boost -> airflow -> exhaust energy -> boost).
+  // Three damped passes converge inside a tenth of a psi everywhere the app can reach.
+  INDUCTION_SOLVE_PASSES: 3,
+  INDUCTION_RELAX: 0.7,
+  // Backpressure a wastegate relieves while bleeding exhaust around the turbine. This is
+  // why a larger turbine is worth power at the same boost: it spends more life gated.
+  WASTEGATE_RELIEF: 0.55,
+  // --- Compressor map (see compressorMap in turbo.js) ---
+  // How sharply efficiency falls away from the island centre, and how much a unit of
+  // normalised pressure-ratio error costs relative to a unit of flow error. Real islands
+  // are taller than they are wide — a compressor tolerates being off-flow better than it
+  // tolerates being asked for a pressure ratio it was not designed for.
+  MAP_EFF_FALLOFF: 0.28,
+  MAP_PR_WEIGHT: 1.9,
+  // Efficiency floor. Even a badly mismatched compressor moves some air; this stops the
+  // power balance dividing by nothing at the extremes.
+  MAP_EFF_FLOOR: 0.30,
+  // What crossing a limit line costs. Neither is a gentle roll-off: a surging compressor
+  // has detached, reversing flow and is not pumping, and a choked one is putting its
+  // shaft work into heating the air rather than compressing it.
+  SURGE_EFF_PENALTY: 0.55,
+  CHOKE_EFF_PENALTY: 0.70,
+  // Pressure ratio below which surge is not a meaningful condition — near atmospheric
+  // there is no pressure for the flow to reverse against.
+  SURGE_MIN_PR: 1.15,
+  // --- Turbo shaft inertia (live engine only) ---
+  // Time constant for boost to reach the steady-state balance, seconds, at FULL exhaust
+  // flow. Divided by how much flow there actually is, so spool-up is slow off idle and
+  // quick at high load — which is the real mechanism: the shaft accelerates on surplus
+  // turbine power, and there is very little of that at low flow. Scaled per housing by
+  // TURBINE_OPTS.inertiaScale, because a big wheel has more rotating mass to move.
+  //
+  // A dyno sweep does NOT see this. Each point of a steady-state pull is held until it
+  // settles, which is what makes it a steady-state measurement; only the live engine has
+  // a transient to lag through.
+  TURBO_SPOOL_TAU_S: 0.16,
+  // Coming down is faster than going up: close the throttle and the compressor is pumping
+  // against a shut plate with nothing driving it. The asymmetry is why the second of two
+  // closely spaced shifts feels stronger than the first.
+  TURBO_DECAY_TAU_S: 0.22,
+
+  // --- Exhaust gas temperature ---
+  // One correlation, two consumers: the turbine balance (which needs a temperature before
+  // the cycle can run) and the datalog's EGT gauge. They must not diverge again.
+  //
+  // The load term SATURATES rather than rising linearly — past a full charge, more air
+  // brings more expansion work and a richer mixture too, so EGT gains tens of degrees,
+  // not hundreds. ANCHORS: ~600 °C light-load cruise, 860 °C WOT naturally aspirated,
+  // 930 °C boosted at best power. A linear term fits none of them and puts a stock Golf R
+  // at 1030 °C, which no production turbine survives.
+  EXHAUST_BASE_K: 590,
+  EXHAUST_LOAD_SPAN_K: 714,
+  EXHAUST_LOAD_SCALE: 0.48,
+  EXHAUST_PER_RETARD_K: 14,
+  EXHAUST_RICH_COOLING_K: 420,
+  // Where the datalog calls the pull hot, °C. Production turbine wheels and exhaust
+  // valves are rated 950-1000 sustained. The seven presets peak 881-951 on their factory
+  // calibrations, so ~30 °C of margin above the hottest (the Golf R) — RE-CHECK this if a
+  // hotter preset is added. Drives the `egtRisk` flag only; heat damage is not separately
+  // priced, since lean-under-boost already pays through WEAR_VALVE_LEAN_BOOST.
+  EGT_LIMIT_C: 980,
+
+  // --- MBT phasing and knock control ---
+  // MBT is where 50% mass burned lands just after TDC, derived from the modelled burn
+  // rather than fitted. Textbook optimum is 8-10 degrees ATDC across many engines.
   MFB50_ATDC_DEG: 8.5,
-  // The range a production spark table could actually command. The burn model is an
-  // extrapolation at its extremes; these stop it producing timing no calibration would
-  // ever contain.
+  // Range MBT itself may occupy — the burn model is an extrapolation at its extremes.
+  // NOT the spark TABLE's range: that is SPARK_MIN_DEG / SPARK_MAX_DEG in tables.js and
+  // goes negative, because a table can hold retard MBT would never ask for.
   MBT_MIN_DEG: 10,
   MBT_MAX_DEG: 50,
+  // Most retard an ECU accumulates from its knock sensors before simply running there.
+  MAX_KNOCK_RETARD: 18,
 
-  // --- Knock envelope: margins and penalties (all in crank degrees) ---
-  KNOCK_CHARGE_GAIN: 14,       // deg of margin gained/lost per unit of charge index
-  KNOCK_CHARGE_RATIO_GAIN: 10, // deg gained as charge falls below reference (inverse law)
-  KNOCK_CHARGE_REF: 0.90,      // charge index treated as the calibration reference point
-  KNOCK_LEAN_PENALTY: 2.5,     // deg lost per AFR point leaner than best power
-  KNOCK_RICH_BONUS: 1.0,       // deg gained per AFR point richer (capped)
-  KNOCK_RICH_CAP: 2,
-  // Deg lost per degree C of charge temperature above ambient. The datum this counts
-  // from is AMBIENT_C (constants.js), not a number of its own: "above ambient" has to
-  // mean above the ambient the rest of the model uses, or the two disagree. See the
-  // note in knock.js for the 25 °C literal this replaced.
-  KNOCK_IAT_PER_C: 0.08,
-  KNOCK_OVERBOOST_PENALTY: 1.5,// deg lost per psi past the compressor's efficient range
-  MAX_KNOCK_RETARD: 18,        // most a real ECU will accumulate before giving up
-  // Knock margin bought by exhaust work, degrees. Headers are worth more than a
-  // cat-back because they attack the part that matters — less residual exhaust gas left
-  // in the cylinder to preheat the incoming charge, rather than just less restriction
-  // downstream of the turbine or cat.
-  KNOCK_HEADERS_BONUS: 1.5,
-  KNOCK_EXHAUST_BONUS: 0.5,
-  // Knock margin from cylinder size. A small cylinder has a shorter flame path from
-  // plug to the far side of the bore, so the end gas spends less time being compressed
-  // and heated before the flame front reaches it — the reason motorcycle engines run
-  // compression ratios a big-bore V8 could not touch. Litres per cylinder, and the
-  // margin either side of the band between them.
-  KNOCK_SMALL_CYL_L: 0.5,
-  KNOCK_LARGE_CYL_L: 0.7,
-  KNOCK_SMALL_CYL_BONUS: 1,
-  KNOCK_LARGE_CYL_PENALTY: -1,
-  // Knock margin lost to a cast iron head, degrees. Iron conducts roughly a third of
-  // what aluminium does, so the chamber runs hotter and the end gas with it.
-  KNOCK_IRON_HEAD_PENALTY: -1.5,
-  // Static compression the base knock table (BASE_KNOCK_LIMIT_91 in tables.js) is
-  // written for, and the margin each point of compression above or below it is worth.
+  // --- Combustion chamber as a physical object ---
+  // All that survives of the old additive knock envelope (see the note at the foot of
+  // this file). Never corrections in degrees: chamber properties, which reach knock by
+  // moving burn duration and charge temperature for the cycle to integrate.
   //
-  // Two degrees per point is the model's exchange rate between compression and knock
-  // margin, and it is quoted by name in the Engineer Score comments below
-  // (COMPRESSION_PER_OCTANE_DEG, COMPRESSION_INTERCOOLER_GAIN) to price their own
-  // discounts. Changing it moves those two rules as well, even though they do not read
-  // it directly — one of the reasons it belongs here rather than inline in engine.js.
-  KNOCK_COMPRESSION_REF: 10.3,
-  KNOCK_DEG_PER_COMPRESSION_POINT: 2.0,
+  // Reference bore for the burn model, mm. Flame travel scales with bore, which is why a
+  // large-bore V8 is more knock-prone than a small four at the same compression.
+  BORE_FLAME_REF_MM: 92,
+  // Chamber heat a cast iron head adds, K. Iron conducts about a third of aluminium.
+  IRON_HEAD_CHAMBER_K: 22,
 
-  // --- Knock envelope: shape of the load and pressure terms (dimensionless) ---
-  // Smallest charge index the inverse load law will divide by. At deep vacuum the
-  // computed margin runs away toward infinity, which is directionally right — a
-  // cruising engine genuinely cannot knock — but needs a floor to stay finite.
-  //
-  // No operating point the app can reach comes near this: it would take under about
-  // 4 kPa of manifold pressure at 100% VE. It is a guard, and it is here rather than
-  // inline precisely because an unreachable literal is one a fingerprint diff cannot
-  // police. In COEFF it is at least in the constants dump.
-  KNOCK_CHARGE_INDEX_FLOOR: 0.04,
-  // How hard the mixture terms scale with cylinder pressure. Lean mixtures and rich
-  // mixtures only matter for knock when there is real pressure behind them, and the
-  // relationship is steeper than linear — hence the 1.5 power of the pressure ratio.
-  KNOCK_PRESSURE_EXP: 1.5,
-  // Bounds on that pressure factor. The floor is unreachable in the app (it needs
-  // manifold pressure under about 14 kPa); the ceiling binds regularly under boost and
-  // is what stops a high-boost lean condition from being charged without limit.
-  KNOCK_PRESSURE_MIN: 0.05,
-  KNOCK_PRESSURE_MAX: 2.6,
-  // The rich-mixture bonus is scaled by the same pressure factor but on a narrower
-  // band: charge cooling from extra fuel does something even at light load, and does
-  // not keep scaling all the way up to the lean penalty's ceiling.
-  KNOCK_RICH_PRESSURE_MIN: 0.3,
-  KNOCK_RICH_PRESSURE_MAX: 1.5,
-
-  // --- Peak cylinder pressure (see pressure.js) ---
-  // Polytropic exponent for the compression stroke. The isentropic value for air is
-  // 1.4; real cylinders lose heat to the walls and leak past the rings on the way up,
-  // and measured motoring traces sit around 1.30-1.35. 1.32 is the middle of that.
-  PEAK_POLYTROPIC_N: 1.32,
-  // How much combustion multiplies the motored (compression-only) pressure at MBT
-  // spark. Published pressure traces for a wide-open-throttle spark-ignition engine
-  // put peak firing pressure at roughly 2x-2.5x the motored peak; 2.2 lands a stock
-  // 10.3:1 naturally aspirated engine near 50 bar at wide-open throttle, which is
-  // where real measurements put it.
-  PEAK_COMBUSTION_RISE: 2.2,
-  // Advancing past MBT keeps raising peak pressure while torque falls — about 1.5% per
-  // degree, capped, because the burn cannot start before there is a charge to burn.
-  PEAK_ADVANCE_RISE_PER_DEG: 0.015,
-  PEAK_ADVANCE_CAP_DEG: 10,
-  // Retarding from MBT moves the pressure peak later, onto a descending piston in a
-  // growing volume. Spark-sweep traces lose roughly 2-3% of peak pressure per degree;
-  // the floor is where the burn is so late that it is finishing into the exhaust
-  // stroke and peak pressure is barely above the motored value.
-  PEAK_RETARD_FALL_PER_DEG: 0.025,
-  PEAK_RETARD_FLOOR: 0.45,
   // Peak cylinder pressure a stock bottom end — cast pistons, powdered-metal rods,
-  // production rod bolts — survives indefinitely. Above it, damage accumulates whether
-  // or not the mixture ever detonates. Anchored against what the shipped presets
-  // actually produce, which since the B58s landed is a CLUSTER rather than one
-  // distinctive engine: the Golf R's EA888.3 at 17 psi peaks at 94.3 bar and the
-  // B58B30M1 at 93.8, with the B58B30M0 at 84.3 and the GTI at 77.2 — so the top of
-  // the production range is two engines half a bar apart, not one outlier. This still
-  // sits clear of every production engine here while catching builds that stack big
-  // static compression on top of big boost, but the margin above the pack is ~16 bar
-  // rather than the ~15 the Golf R alone once implied. Anything that would raise a
-  // factory preset's peak pressure needs re-checking against both of the top two.
-  PEAK_PRESSURE_LIMIT_BAR: 110,
+  // production rod bolts — survives indefinitely. Above it, damage accumulates whether or
+  // not the mixture ever detonates.
+  //
+  // Anchored on THIS MODEL's pressure scale, measured across a build ladder on E85 so
+  // knock does not confound it:
+  //     seven factory presets   63-75 bar   clear by ~30
+  //     stock CR, 8 psi         99 bar      clear by 6      (a mild, sane build)
+  //     stock CR, 14 psi       108 bar      trips           (stock rods, serious boost)
+  //     12.5:1, 18 psi         118 bar      trips
+  //     13.5:1, 24 psi         122 bar      trips
+  //
+  // Published failure thresholds for production internals are 110-130 bar. The two-zone
+  // cycle reads close enough to that band for this to sit just under it, where the old
+  // single-zone estimate read low enough that borrowing the literature figure would have
+  // made the overload unreachable. `tests/presets.test.js` asserts every preset clears.
+  PEAK_PRESSURE_LIMIT_BAR: 105,
 
   // --- Wear rates (percent of component life per pull) ---
   WEAR_KNOCK: 0.06,            // per degree of retard, per logged point
@@ -192,26 +332,19 @@ export const COEFF = {
   // than sustained detonation, which is the right ordering: overload cracks a ring land
   // over a season of pulls, knock does it in an afternoon.
   WEAR_PISTON_PER_BAR: 0.004,
-  // Rod and main bearings are loaded by peak cylinder pressure on every firing stroke,
-  // so their wear tracks the pull's AVERAGE peak pressure rather than boost. Boost was
-  // the old proxy for this and it was a bad one: it charged a 9.5:1 engine and a 12.5:1
-  // engine the same amount for the same manifold pressure, when the second is putting
-  // half again as much load through the same bearings.
+  // Bearings are loaded by peak cylinder pressure every firing stroke, so their wear
+  // tracks a pull's AVERAGE peak pressure, not boost. Boost was the old proxy and a bad
+  // one: it charged a 9.5:1 and a 12.5:1 engine alike for the same manifold pressure.
   //
-  // Calibrated to leave the previous boost-based numbers roughly where they were for
-  // the builds that already existed — a stock naturally aspirated pull at wide-open
-  // throttle still costs about 0.15, and the N54 preset still costs about 0.6 — so
-  // what this change moves is the RELATIONSHIP to compression, not the overall rate.
-  // One case does move: a part-throttle pull now costs nothing at all, where the old
-  // boost-based expression charged a flat 0.05. That is deliberate. Below this
-  // threshold the bearings are inside what their oil film carries indefinitely, and an
-  // engine held at 40 kPa is not spending bearing life in any way worth modelling.
-  BEARING_PRESSURE_FREE_BAR: 38,
-  WEAR_BEARING_PER_BAR: 0.03,
-  // Average peak pressure above which the pull log raises the bottom-end advisory.
-  // About 40% above what a healthy naturally aspirated engine puts through its
-  // bearings at wide-open throttle, so the advisory means "this is boosted-engine
-  // loading now", not "you drove it".
+  // These are ORDERING numbers, calibrated so a stock NA pull stays near 0.15 and the
+  // N54 near 0.6: NA nearly free, factory turbo a few tenths, compression-on-boost whole
+  // points per pull. Below the free threshold the oil film carries the load indefinitely,
+  // so a part-throttle pull costs nothing — deliberate, where the old expression charged
+  // a flat 0.05. Refitted when the cycle replaced the empirical pressure estimate.
+  BEARING_PRESSURE_FREE_BAR: 55,
+  WEAR_BEARING_PER_BAR: 0.075,
+  // Average peak pressure that raises the bottom-end advisory. Above a healthy NA pull
+  // (~65 bar averaged), so it means "boosted-engine loading", not "you drove it".
   BEARING_EVENT_BAR: 60,
 
   // --- Camshaft & valvetrain ---
@@ -253,10 +386,9 @@ export const COEFF = {
   TRIM_LIMIT: 25,
 
   // --- MAF measurement error ---
-  // A bigger intake housing or turbo plumbing changes the airflow profile across the
-  // sensor, so a MAF calibrated for stock hardware under-reads once either is fitted.
-  // Values are illustrative of the real-world magnitude tuners correct for with a MAF
-  // scalar or transfer-function rescale, not measurements of a specific part.
+  // A bigger intake or turbo plumbing changes the flow profile across the sensor, so a
+  // MAF calibrated for stock hardware under-reads. Illustrative of the magnitude tuners
+  // correct for with a scalar, not measurements of a specific part.
   MAF_ERROR_INTAKE: 0.90,
   MAF_ERROR_TURBO: 0.92,
 
@@ -275,62 +407,49 @@ export const COEFF = {
   MANIFOLD_VACUUM_RPM_NORM: 7500,
 
   // --- Engineer Score: static compression under boost ---
-  // Static compression a boosted build carries on 91 octane with no charge cooling
-  // before the Engineer Score calls the combination incoherent.
+  // Static compression a boosted build may carry on 91 octane with no charge cooling
+  // before the score calls the combination incoherent. Factory DI turbo engines ship
+  // across 10.2-11.0 (N54 10.2, B58 11.0, Toyota/BMW 2.0 T 11.0); this base clears the
+  // BOTTOM of that band alone, and the credits below clear the top. 10.8 + 0.3 (93
+  // octane) + 0.4 (intercooler) = 11.5 is how a B58 as sold comes out unpenalised.
   //
-  // Factory direct-injection turbo engines ship across a 10.2-11.0 band (BMW N54 10.2,
-  // BMW B58 11.0, Toyota/BMW 2.0 T 11.0). This base clears the BOTTOM of that band on
-  // its own; the top of it is cleared by the octane and charge-cooling credits below,
-  // not by this number. 10.8 + 0.3 (93 octane) + 0.4 (intercooler) = 11.5, which is how
-  // a B58 as actually sold comes out unpenalised. Strip the intercooler and drop it to
-  // 91 and it is charged 2 points — deliberately, because that combination is a
-  // genuinely compromised build rather than a factory one.
-  //
-  // The band sits high because direct injection, at the wide-open-throttle homogeneous-
-  // charge conditions this rule grades, sprays fuel into the cylinder early in the
-  // intake stroke while the valve is still open, giving it time to mix. The fuel
-  // evaporates INSIDE the cylinder instead of in the intake port, so its latent heat is
-  // pulled from the TRAPPED charge rather than from the port walls and the back of the
-  // intake valve, and that buys real knock margin — precisely why those engines can run
-  // compression that would have been reckless on a port-injected engine. (Spraying after
-  // the intake valve closes is stratified lean-burn, used at light load to save fuel;
-  // doing that at full load would starve the mixture of time to prepare and ruin it.)
-  // This model has no separate term for that, so the base carries it implicitly and
-  // imprecisely: a port-injected engine gets the same allowance, which it has not
-  // earned. Issue #24 tracks modelling injection type properly; once it lands, this
-  // should key off it instead of averaging over it.
-  //
-  // This headroom is deliberately boost-LEVEL-independent: `computeEngineerScore` gates
-  // the whole rule on whether the build is making any boost at all (`peakBoostPsi > 0`),
-  // but does not scale the headroom by how much. A build making 3 psi and one making 24
-  // psi are judged by the same ceiling here — that is a known simplification, not an
-  // oversight, and scaling headroom with boost level is deferred to a separate issue.
+  // TWO KNOWN SIMPLIFICATIONS, both deferred rather than hidden:
+  //   - A port-injected engine gets the same allowance as a DI one, which it has not
+  //     earned — DI evaporates fuel inside the cylinder and buys real knock margin from
+  //     it. Issue #24 tracks modelling injection type.
+  //   - The headroom does not scale with boost LEVEL; 3 psi and 24 psi are judged alike.
   COMPRESSION_BOOST_BASE: 10.8,
-  // Extra static compression supported per degree of octane knock bonus. Deliberately a
-  // steep discount off the model's own physics currency, not a fresh guess:
-  // KNOCK_DEG_PER_COMPRESSION_POINT above prices one point of compression at 2 degrees
-  // of knock margin, so E85's +14 degree bonus is worth 7 points of compression in that
-  // same currency. Paying out the full 7 here would bill the octane decision
-  // twice — once in the physics, which already retimes the tune and logs knock events
-  // for it, and again in the Engineer Score. At 0.1, E85 buys back only 1.4 points, about
-  // a 5x discount, on purpose.
+  // Compression credit per degree of octane bonus, and per intercooler.
+  //
+  // Both are steep discounts, on purpose: the physics ALREADY charges for octane and
+  // charge cooling once, so paying full price here bills the decision twice. Their
+  // provenance is the retired flat rate of 2 degrees of knock margin per compression
+  // point — E85's +14 was worth 7 points in that currency, an intercooler's 69 °C was
+  // worth 2.78 — and they pay out roughly a fifth and a seventh of that.
+  //
+  // THAT EXCHANGE RATE NO LONGER EXISTS: the cycle produces compression's knock cost
+  // emergently and it is not a fixed rate. These two are inherited and DUE A
+  // REVALIDATION, left alone here because retuning them is a scoring decision that
+  // belongs in its own change.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
-  // Extra static compression supported by intercooler charge cooling, in points.
-  // Discounted on the same principle as COMPRESSION_PER_OCTANE_DEG — the physics
-  // already charges for this once, so the score should not bill it again at full price
-  // — but not by the same factor. At 15 psi, `chargeTempK` (thermo.js) takes charge
-  // temperature from 397.23 K with no intercooler to 327.77 K with one, a 69.46 °C
-  // delta, which at COEFF.KNOCK_IAT_PER_C (0.08 deg per °C) is 5.56 degrees of knock
-  // margin — 2.78 points of compression in the physics' own currency (again
-  // KNOCK_DEG_PER_COMPRESSION_POINT, 2 degrees per point). Paying
-  // the full 2.78 here would bill the intercooler decision twice, once in the physics
-  // and once in the score, so 0.4 pays out about a seventh of it instead — roughly a 7x
-  // discount, steeper than COMPRESSION_PER_OCTANE_DEG's 5x (1.4 of 7).
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
-  // Engineer Score points charged per point of compression past that headroom, and the
-  // most this rule will ever deduct. The cap equals the flat penalty this rule replaced,
-  // so the new rule is never harsher than its predecessor — it only stops charging that
-  // maximum to builds that did not earn it.
+  // Points charged per compression point past the headroom, and the cap. The cap equals
+  // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
+
+  // --- Retired, kept here so "didn't this used to have a term for X?" has one answer ---
+  //
+  // ADDITIVE KNOCK ENVELOPE (21 coefficients) — a base timing table plus hand-fitted
+  //   corrections in degrees for charge index, mixture, charge temperature, overboost,
+  //   exhaust work, cylinder size, head material and compression, two pressure clamps and
+  //   a five-term MBT plane. All arrive through the cycle's Livengood-Wu integral now.
+  //   Twenty-one fitted numbers became one: KNOCK_TAU_SCALE. Two were never corrections
+  //   and survive above as chamber properties: BORE_FLAME_REF_MM, IRON_HEAD_CHAMBER_K.
+  // BURN-DURATION CORRELATION — spark-to-50%-burn in RPM and pressure ratio. Conclusion
+  //   kept in full; the integrated burn replaced the formula.
+  // EMPIRICAL PEAK-PRESSURE BLOCK — estimated from boost and compression. Measured off
+  //   the trace now, which is why PEAK_PRESSURE_LIMIT_BAR is on a different scale.
+  // FLAT HEAT-LOSS FRACTION — replaced by Woschni.
+  // SPOOL RAMP — boost as target x spool(RPM) x throttle^2. Replaced by the power balance.
 };
