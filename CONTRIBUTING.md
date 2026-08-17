@@ -71,14 +71,26 @@ branch up to date. That applies to maintainers too — nobody pushes to `main` d
 `main` is always deployable but is not itself deployed, so finished work can sit there
 unpublished until it is worth a release.
 
-**This is normally done for you.** `.github/workflows/release-pr.yml` runs every
+**The bump is normally prepared for you.** `.github/workflows/release.yml` runs every
 Thursday at 02:00 UTC — 22:00 Thursday US Eastern in summer, 21:00 in winter, since
-GitHub cron has no timezone — and opens the version-bump PR if there is anything
-unreleased, so it is waiting on Friday morning. It stops at the PR on purpose: approving
-and tagging stay yours, because tagging is what publishes. Run it off-cadence, or with a
-`patch`/`major` bump, from the Actions tab.
+GitHub cron has no timezone. If anything is unreleased it bumps the version on a
+`release/vX.Y.Z` branch, pushes it, and files an issue with the notes and a one-click
+link to open the pull request. Quiet weeks are skipped rather than burning a version
+number on an empty diff. Run it off-cadence, or with a `patch`/`major` bump, from the
+Actions tab.
 
-The rest of this section is the manual path — for a hotfix, or if the workflow fails.
+You open the PR, approve, merge and tag. That is three deliberate steps and they stay
+manual: tagging is what publishes.
+
+It stops short of opening the PR itself for a specific reason. `gh pr create` from a
+workflow needs the repository setting *"Allow GitHub Actions to create and approve pull
+requests"*, and that one toggle also grants every workflow here the right to **approve**
+pull requests — which would quietly undercut the review requirement on `main`. Opening
+it yourself costs a click and gains something too: a PR you open raises a normal
+`pull_request` event, so CI attaches without any dispatch workaround.
+
+The rest of this section is what that automation does, and the path to follow by hand
+for a hotfix or if the workflow fails.
 
 The version bump is an ordinary pull request — `main` takes no direct pushes, from
 anyone. So do **not** use a bare `npm version`, which commits and tags straight onto

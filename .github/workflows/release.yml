@@ -1,12 +1,19 @@
-name: Weekly release PR
+name: Weekly release
 
-# Opens the version-bump pull request every Thursday night, so a release is sitting
-# ready to approve on Friday morning.
+# Prepares a release every Thursday night, so it is ready to open on Friday morning.
 #
-# It deliberately stops at the PR. Tagging is what publishes (see deploy.yml), and that
-# stays a human decision — "merging to main means this is good, tagging means this is
-# live" only means something if somebody decides. This automates the tedious half:
-# working out the next version, bumping it, and writing down what is in the release.
+# It bumps the version on a branch, pushes it, and files an issue with the notes and a
+# one-click link to open the pull request. It deliberately does NOT open the PR itself.
+#
+# WHY NOT. `gh pr create` needs the repository setting "Allow GitHub Actions to create
+# and approve pull requests", which is off. Turning it on grants every workflow here the
+# right to APPROVE pull requests too — the same toggle covers both — which would quietly
+# undercut the review requirement on main. A fine-grained PAT would dodge that, but it
+# expires within a year and fails silently when it does, putting a scheduled outage
+# inside the machinery meant to reduce toil.
+#
+# Opening the PR yourself also costs nothing and gains something: a PR you open raises a
+# normal `pull_request` event, so CI attaches by itself with no dispatch workaround.
 #
 # 02:00 UTC Friday is 22:00 Thursday US Eastern during daylight saving, 21:00 outside
 # it. GitHub cron has no timezone support, so the winter hour drifts by one; that is
@@ -24,13 +31,14 @@ on:
         type: choice
         options: [patch, minor, major]
 
+# Only what it actually does: push a branch, and file an issue. Notably NOT
+# `pull-requests: write` — see the note above.
 permissions:
   contents: write
-  pull-requests: write
-  actions: write        # to dispatch the CI run on the branch we push
+  issues: write
 
 jobs:
-  open-release-pr:
+  prepare-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -42,8 +50,8 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # Nothing to release is the normal case on a quiet week, and an empty release PR
-      # is worse than none: it burns a version number and an approval on no change.
+      # Nothing to release is the normal case on a quiet week, and an empty release is
+      # worse than none: it burns a version number and an approval on no change.
       - name: Check for unreleased commits
         id: unreleased
         run: |
@@ -58,9 +66,7 @@ jobs:
 
       - name: Stop if there is nothing to release
         if: steps.unreleased.outputs.count == '0'
-        run: |
-          echo "::notice::No commits since ${{ steps.unreleased.outputs.last }} — no release PR this week."
-          exit 0
+        run: echo "::notice::No commits since ${{ steps.unreleased.outputs.last }} — nothing to prepare this week."
 
       - name: Bump the version on a branch
         if: steps.unreleased.outputs.count != '0'
@@ -90,39 +96,45 @@ jobs:
           git commit -am "Release ${{ steps.bump.outputs.version }}"
           git push origin "${{ steps.bump.outputs.branch }}"
 
-      - name: Open the pull request
+      - name: Assemble the release notes
         if: steps.unreleased.outputs.count != '0'
+        id: notes
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.bump.outputs.version }}
           BRANCH: ${{ steps.bump.outputs.branch }}
           LAST: ${{ steps.unreleased.outputs.last }}
           COUNT: ${{ steps.unreleased.outputs.count }}
         run: |
+          COMPARE="${{ github.server_url }}/${{ github.repository }}/compare/main...${BRANCH}?expand=1"
+          echo "compare=$COMPARE" >> "$GITHUB_OUTPUT"
           {
-            echo "Weekly release. **$COUNT commits** since \`${LAST:-the beginning}\`."
+            echo "\`$BRANCH\` is pushed and ready. **$COUNT commits** since \`${LAST:-the beginning}\`."
             echo
-            echo "Approve and merge, then tag the merge commit to publish:"
+            echo "**[Open the release pull request]($COMPARE)**"
+            echo
+            echo "Then approve, merge, and tag the merge commit — the tag is what deploys:"
             echo
             echo '```bash'
             echo "git checkout main && git pull"
             echo "git tag $VERSION && git push origin $VERSION"
             echo '```'
             echo
-            echo "The tag is what deploys — merging this PR does not publish anything."
+            echo "Merging the PR publishes nothing on its own."
             echo
             echo "## What is in it"
             echo
             git log --no-merges --pretty='- %s' "${LAST:+$LAST..}HEAD"
-          } > body.md
-          gh pr create --base main --head "$BRANCH" --title "Release $VERSION" --body-file body.md
+          } > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
 
-      # See the note on ci.yml's workflow_dispatch trigger: the PR above was opened by
-      # GITHUB_TOKEN, so it raised no `pull_request` event and CI has not run. Dispatch
-      # it explicitly against the branch, or the required checks never report and the
-      # PR cannot merge.
-      - name: Trigger CI on the release branch
+      # The run summary alone is easy to miss on a quiet Friday. An issue lands in the
+      # normal notification stream, and filing one needs no permission beyond the
+      # `issues: write` above — unlike opening a pull request.
+      - name: File the release issue
         if: steps.unreleased.outputs.count != '0'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yml --ref "${{ steps.bump.outputs.branch }}"
+        run: |
+          gh issue create \
+            --title "Release ${{ steps.bump.outputs.version }} is ready to open" \
+            --body-file notes.md

@@ -4,11 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Lets the weekly release workflow run these checks on the branch it just pushed.
-  # A pull request opened by GITHUB_TOKEN does NOT raise a `pull_request` event — that
-  # is GitHub's recursion guard — so without this the release PR would sit with no
-  # checks at all and could never satisfy the required-status-check rule on main.
-  # `workflow_dispatch` is the documented exception to that guard.
+  # Run the checks by hand from the Actions tab, against any ref. Useful for a branch
+  # pushed by automation before anyone has opened a pull request for it.
+  #
+  # This was originally added so the release workflow could dispatch CI onto a branch
+  # whose PR it had opened itself — a PR opened by GITHUB_TOKEN raises no
+  # `pull_request` event, so the required checks never reported. That workflow no
+  # longer opens the PR, so the workaround is not needed; the trigger stays because
+  # being able to run CI on demand is worth having on its own.
   workflow_dispatch:
 
 jobs:
