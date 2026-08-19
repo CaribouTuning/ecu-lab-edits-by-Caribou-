@@ -14,6 +14,14 @@ const UI_DIR = new URL('../src/ui/', import.meta.url);
 /** Files allowed to name a colour literally: the token layer itself. */
 const ALLOWED = new Set(['tokens.js', 'tokens.css']);
 
+/**
+ * Files allowed to compute an hsl() colour: the token layer, plus theme.js — the only
+ * file where a computed ramp (heat(), deltaHeat()) legitimately lives. This is a
+ * separate list from ALLOWED on purpose: theme.js must still fail the hex and rgba
+ * checks below, so a raw literal can't hide there. Do not fold this into ALLOWED.
+ */
+const HSL_ALLOWED = new Set(['tokens.js', 'tokens.css', 'theme.js']);
+
 /** @returns {string[]} every source file under src/ui that must not name a colour */
 function sourceFiles() {
   return readdirSync(UI_DIR, { withFileTypes: true, recursive: true })
@@ -34,5 +42,12 @@ describe('src/ui contains no hard-coded colours', () => {
       const hits = readFileSync(file, 'utf8').match(/\brgba?\(\s*\d/g) ?? [];
       expect(hits, 'use a token, or a colour-mix on one, instead').toEqual([]);
     });
+
+    if (!HSL_ALLOWED.has(file.slice(file.lastIndexOf('/') + 1))) {
+      it(`${rel} names no hsl colour`, () => {
+        const hits = readFileSync(file, 'utf8').match(/\bhsla?\(/g) ?? [];
+        expect(hits, 'computed colour ramps belong in theme.js').toEqual([]);
+      });
+    }
   }
 });

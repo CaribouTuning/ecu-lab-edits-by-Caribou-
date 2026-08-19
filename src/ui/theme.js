@@ -39,6 +39,11 @@ const T = {
   dangerInk: tokens.dangerInk,
   dangerBg: tokens.dangerBg,
 
+  okLine: tokens.okLine,
+  warnLine: tokens.warnLine,
+  dangerLine: tokens.dangerLine,
+  violetLine: tokens.violetLine,
+
   cyan: tokens.cyan,
   cyanBg: tokens.cyanBg,
   violet: tokens.violet,
@@ -68,4 +73,21 @@ function heat(value, min, max) {
   return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
 }
 
-export { T, accAlpha, heat, shadowAlpha };
+/**
+ * Diverging colour for a SIGNED delta: warm for positive, cool for negative, with
+ * intensity carrying magnitude.
+ *
+ * Distinct from `heat()`, which is a one-directional ramp for an absolute cell value.
+ * A delta has a sign that means something — richer vs leaner, advanced vs retarded —
+ * so it needs a scale that reads outward from a neutral middle rather than along a line.
+ *
+ * @param {number} delta signed difference
+ * @param {number} [fullScale] magnitude at which the colour saturates
+ * @returns {string} an hsl() colour
+ */
+function deltaHeat(delta, fullScale = 12) {
+  const mag = clamp(Math.abs(delta) / fullScale, 0, 1);
+  return `hsl(${delta > 0 ? 8 : 200}, 60%, ${14 + mag * 22}%)`;
+}
+
+export { T, accAlpha, deltaHeat, heat, shadowAlpha };

@@ -51,6 +51,14 @@ export const tokens = Object.freeze({
   dangerInk: '#ff9d9d',
   dangerBg: '#2a1414',
 
+  // Status borders. One step brighter than the matching *Bg so a status box reads as
+  // a bounded object rather than a wash — without reaching the full status hue, which
+  // belongs to text and indicators.
+  okLine: '#1e5238',
+  warnLine: '#5c4415',
+  dangerLine: '#5c2626',
+  violetLine: '#3b3363',
+
   // Secondary data hue, for charts that must plot two series at once (power vs
   // torque). Distinct from `acc` on purpose so a chart never looks like a control.
   cyan: '#38d9f0',

@@ -32,7 +32,7 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, accAlpha, heat, shadowAlpha, statusColor } from './theme.js';
+import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 
@@ -51,7 +51,7 @@ const Panel = ({ children, style, tight }) => (
 );
 
 const Note = ({ children, tone = 'info' }) => {
-  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.warn, T.warnBg, T.warnBg] };
+  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.warn, T.warnLine, T.warnBg] };
   const [fg, bd, bgc] = colors[tone] || colors.info;
   return (
     <div style={{ display: 'flex', gap: 9, background: bgc, border: `1px solid ${bd}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: fg === T.ink2 ? T.inkSoft : fg, lineHeight: 1.55 }}>
@@ -1526,7 +1526,7 @@ export default function EngineManagementSandbox() {
                     <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
                   </div>
                   <div style={{ display: 'flex', gap: 7 }}>
-                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accBg, fontWeight: 800, fontSize: 12 }}>
+                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12 }}>
                       LOAD {presetPrompt.name.toUpperCase()}
                     </button>
                     <button onClick={() => setPresetPrompt(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
@@ -1625,7 +1625,7 @@ export default function EngineManagementSandbox() {
                 {Object.keys(MOD_INFO).map((key) => (
                   <button key={key} onClick={() => installMod(key)} disabled={mods[key]} style={{
                     textAlign: 'left', padding: '11px 13px', borderRadius: 10,
-                    border: `1px solid ${mods[key] ? T.okBg : T.line}`,
+                    border: `1px solid ${mods[key] ? T.okLine : T.line}`,
                     background: mods[key] ? T.okBg : T.panel2,
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1801,7 +1801,7 @@ export default function EngineManagementSandbox() {
 
               {veAdvice && (
                 veAdvice.inSync ? (
-                  <div style={{ display: 'flex', gap: 8, background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok, lineHeight: 1.5 }}>
+                  <div style={{ display: 'flex', gap: 8, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok, lineHeight: 1.5 }}>
                     <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
                     <div>VE table matches your current hardware. Nothing to correct.</div>
                   </div>
@@ -1846,7 +1846,7 @@ export default function EngineManagementSandbox() {
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12 }}>Degrees of spark advance before top dead center (° BTDC).</div>
               <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} {...gridProps} />
               {calAdvice.overAdvanced.length > 0 ? (
-                <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerBg}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
+                <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
                   <div style={{ fontSize: 10, letterSpacing: 1, color: T.dangerInk, fontWeight: 800, marginBottom: 7 }}>
                     {calAdvice.overAdvanced.length} CELLS BEYOND THE KNOCK LIMIT
                   </div>
@@ -1870,7 +1870,7 @@ export default function EngineManagementSandbox() {
                   <b style={{ color: T.accInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
                 </div>
               ) : (
-                <div style={{ background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
+                <div style={{ background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
                   Spark table sits within the knock limit for this hardware.
                 </div>
               )}
@@ -1947,7 +1947,7 @@ export default function EngineManagementSandbox() {
             </div>
             <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={setEcuInjectorCcInvalidating} wrap />
             {ecuInjectorCc !== injectorCc ? (
-              <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerBg}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
+              <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
                 <button onClick={() => setEcuInjectorCcInvalidating(injectorCc)} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                   RESCALE ECU TO {injectorCc}cc
@@ -2232,8 +2232,7 @@ export default function EngineManagementSandbox() {
                                 <div style={{ width: 44, height: 32, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: `1px solid ${T.line}` }}>{m}</div>
                                 {RPM.map((_, ci) => {
                                   const e = histogram[ri][ci];
-                                  const mag = e == null ? 0 : Math.min(1, Math.abs(e) / 12);
-                                  const bg = e == null ? T.panel2 : `hsl(${e > 0 ? 8 : 200}, 60%, ${14 + mag * 22}%)`;
+                                  const bg = e == null ? T.panel2 : deltaHeat(e);
                                   return (
                                     <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : T.ink, fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${shadowAlpha(0.35)}` }}>
                                       {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}
@@ -2263,7 +2262,7 @@ export default function EngineManagementSandbox() {
                   <>
                     <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
                     {result.events.length === 0 ? (
-                      <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: 12 }}>
+                      <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: 12 }}>
                         Clean pull — no knock, fueling, or trim issues across the sweep.
                       </div>
                     ) : (
@@ -2273,7 +2272,7 @@ export default function EngineManagementSandbox() {
                           const isWarn = e.type === 'lean' || e.type === 'fuel' || e.type === 'compressor' || e.type === 'cam';
                           const isViolet = e.type === 'maf';
                           const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
-                          const bd = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.line;
+                          const bd = isDanger ? T.dangerLine : isWarn ? T.warnLine : isViolet ? T.violetLine : T.line;
                           const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
                           return (
                             <div key={i} style={{ padding: '11px 12px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
