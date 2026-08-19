@@ -42,6 +42,16 @@ export const DRAG_TIMEOUT_S = 40;
 export const DRAG_TRACE_INTERVAL_S = 0.02;
 
 /**
+ * Road speed below which rolling resistance is not applied, m/s.
+ *
+ * A stationary tyre has no rolling resistance to speak of, and applying the full
+ * coefficient at v = 0 would have the car fighting a force before it has moved. This is
+ * a numerical guard on the launch step, not a physical threshold — it is well under
+ * walking pace, and the term is at full value everywhere the number matters.
+ */
+const ROLLING_START_MS = 0.1;
+
+/**
  * Tyre compounds, by coefficient of friction.
  *
  * μ is the whole model — since F = μ·N and F = m·a, μ is directly a ceiling on
@@ -356,7 +366,7 @@ export function simulateDragRun({ car, torqueCurveNm, redline, displacementL = 3
 
     // --- Longitudinal dynamics ----------------------------------------------
     const dragN = 0.5 * RHO_AIR * car.cd * car.frontalAreaM2 * v * v;
-    const rollN = v > 0.1 ? car.crr * car.massKg * G : 0;
+    const rollN = v > ROLLING_START_MS ? car.crr * car.massKg * G : 0;
     const resistN = dragN + rollN;
 
     // Two regimes, and it matters which one the car is in.
