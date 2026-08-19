@@ -1,0 +1,19 @@
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--acc-ink);
+}
+
+.rule {
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--acc);
+}
