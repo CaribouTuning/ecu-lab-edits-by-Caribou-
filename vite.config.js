@@ -12,8 +12,10 @@ export default defineConfig({
   },
   test: {
     // The simulation is pure JS with no DOM dependency, so the default Node
-    // environment is both correct and much faster than jsdom.
+    // environment is both correct and much faster than jsdom. Component tests opt
+    // into jsdom per-file with `// @vitest-environment jsdom` rather than slowing
+    // the physics suite down for everyone.
     environment: 'node',
-    include: ['tests/**/*.test.js'],
+    include: ['tests/**/*.test.{js,jsx}'],
   },
 });
