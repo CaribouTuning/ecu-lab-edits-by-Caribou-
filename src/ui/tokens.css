@@ -1,0 +1,43 @@
+/* Mirrors src/ui/tokens.js. Both are checked against each other by
+   tests/tokens.test.js — change one and you must change the other. */
+
+:root {
+  --bg: #0a0d14;
+  --panel: #131824;
+  --panel2: #1a2130;
+  --panel3: #212a3c;
+
+  --line: #262f42;
+  --line-hi: #33405a;
+
+  --ink: #e9eef8;
+  --ink-soft: #c8d2e2;
+  --ink2: #8792a8;
+  --ink3: #5c6880;
+
+  --acc: #4c9eff;
+  --acc-ink: #8fc2ff;
+  --acc-bg: #0f2033;
+  --acc-on: #04162e;
+
+  --ok: #35e08a;
+  --ok-ink: #7fe8b4;
+  --ok-bg: #0d2419;
+  --warn: #ffb020;
+  --warn-ink: #ffd07a;
+  --warn-bg: #2a2110;
+  --danger: #ff4d4d;
+  --danger-ink: #ff9d9d;
+  --danger-bg: #2a1414;
+
+  --cyan: #38d9f0;
+  --cyan-bg: #0b2630;
+  --violet: #a78bfa;
+  --violet-bg: #1d1a33;
+
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --acc-rgb: 76, 158, 255;
+  --shadow-rgb: 0, 0, 0;
+}
