@@ -1,33 +1,76 @@
 /**
- * Design tokens and the shared visual language.
+ * The shared visual language, assembled from the tokens.
  *
- * Every colour, font and status hue in the app comes from here. Screens and
- * primitives must not hard-code hex values — if you need a new colour, add it as a
- * named token so the UI keeps reading as one product rather than a stack of
- * separately-styled forms.
+ * Every colour in the app resolves to `src/ui/tokens.js`. Screens must not hard-code
+ * hex values — `tests/no-hardcoded-colours.test.js` enforces that, because the rule
+ * was stated here for a long time and quietly broken 58 times.
+ *
+ * The `amber*`/`yellow`/`green`/`red` keys are ALIASES kept so the pre-overhaul
+ * screens keep rendering while they are migrated. Write new code against
+ * `acc`/`warn`/`ok`/`danger` and delete an alias the moment its last caller goes.
  */
 
 import { clamp } from '../sim/index.js';
 
+import { tokens } from './tokens.js';
+
 const T = {
-  bg: '#0a0d11', panel: '#12161c', panel2: '#181d24', panelHi: '#1e242c',
-  line: '#242b34', lineHi: '#33404d',
-  ink: '#eef2f5', ink2: '#8b96a3', ink3: '#57616c',
-  amber: '#ff6a2c', amberInk: '#ffab7a', amberBg: '#2a1810',
-  cyan: '#3ec8ff', cyanBg: '#0f2530',
-  violet: '#b083ff', violetBg: '#211a30',
-  green: '#39d980', greenBg: '#0f2418',
-  yellow: '#ffc94d', yellowBg: '#2a2110',
-  red: '#ff5252', redBg: '#2a1414',
-  mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
-  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  bg: tokens.bg,
+  panel: tokens.panel,
+  panel2: tokens.panel2,
+  panel3: tokens.panel3,
+  panelHi: tokens.panel3,
+  line: tokens.line,
+  lineHi: tokens.lineHi,
+
+  ink: tokens.ink,
+  inkSoft: tokens.inkSoft,
+  ink2: tokens.ink2,
+  ink3: tokens.ink3,
+
+  acc: tokens.acc,
+  accInk: tokens.accInk,
+  accBg: tokens.accBg,
+  accOn: tokens.accOn,
+
+  ok: tokens.ok,
+  okInk: tokens.okInk,
+  okBg: tokens.okBg,
+  warn: tokens.warn,
+  warnInk: tokens.warnInk,
+  warnBg: tokens.warnBg,
+  danger: tokens.danger,
+  dangerInk: tokens.dangerInk,
+  dangerBg: tokens.dangerBg,
+
+  cyan: tokens.cyan,
+  cyanBg: tokens.cyanBg,
+  violet: tokens.violet,
+  violetBg: tokens.violetBg,
+
+  // --- aliases retired during the overhaul; see the file comment above ---
+  amber: tokens.acc,
+  amberInk: tokens.accInk,
+  amberBg: tokens.accBg,
+  green: tokens.ok,
+  greenBg: tokens.okBg,
+  yellow: tokens.warn,
+  yellowBg: tokens.warnBg,
+  red: tokens.danger,
+  redBg: tokens.dangerBg,
+
+  mono: tokens.mono,
+  sans: tokens.sans,
 };
 
-/** Maps a 0-100 health/quality value onto the green/yellow/red status scale. */
-export const statusColor = (v) => (v >= 90 ? T.green : v >= 55 ? T.yellow : T.red);
+/** Maps a 0-100 health/quality value onto the green/amber/red status scale. */
+export const statusColor = (v) => (v >= 90 ? T.ok : v >= 55 ? T.warn : T.danger);
 
 /**
- * Heat-map colour for a table cell, blue (low) through red (high).
+ * Heat-map colour for a table cell, cool (low) through warm (high).
+ *
+ * Deliberately its own ramp rather than the status scale: a hot VE cell is not a
+ * fault, and it must never compete visually with a real warning.
  *
  * @param {number} value cell value
  * @param {number} min low end of the scale
