@@ -32,15 +32,15 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, heat, statusColor } from './theme.js';
+import { T, accAlpha, heat, shadowAlpha, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 
 const Eyebrow = ({ children, icon: Icon }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-    <div style={{ width: 3, height: 13, background: T.amber, borderRadius: 2 }} />
-    {Icon && <Icon size={13} color={T.amberInk} />}
-    <span style={{ fontSize: 10.5, letterSpacing: 1.6, color: T.amberInk, textTransform: 'uppercase', fontWeight: 800 }}>{children}</span>
+    <div style={{ width: 3, height: 13, background: T.acc, borderRadius: 2 }} />
+    {Icon && <Icon size={13} color={T.accInk} />}
+    <span style={{ fontSize: 10.5, letterSpacing: 1.6, color: T.accInk, textTransform: 'uppercase', fontWeight: 800 }}>{children}</span>
   </div>
 );
 
@@ -51,10 +51,10 @@ const Panel = ({ children, style, tight }) => (
 );
 
 const Note = ({ children, tone = 'info' }) => {
-  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.yellow, '#3a2f16', T.yellowBg] };
+  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.warn, T.warnBg, T.warnBg] };
   const [fg, bd, bgc] = colors[tone] || colors.info;
   return (
-    <div style={{ display: 'flex', gap: 9, background: bgc, border: `1px solid ${bd}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: fg === T.ink2 ? '#b7c0c9' : fg, lineHeight: 1.55 }}>
+    <div style={{ display: 'flex', gap: 9, background: bgc, border: `1px solid ${bd}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: fg === T.ink2 ? T.inkSoft : fg, lineHeight: 1.55 }}>
       <Info size={15} style={{ flexShrink: 0, marginTop: 1, color: fg }} />
       <div>{children}</div>
     </div>
@@ -67,12 +67,12 @@ function ExpandableInfo({ title, children }) {
     <div style={{ margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
       <button onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
-          <Info size={14} style={{ color: T.amber, flexShrink: 0 }} />{title}
+          <Info size={14} style={{ color: T.acc, flexShrink: 0 }} />{title}
         </span>
         <ChevronDown size={15} style={{ color: T.ink3, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
       </button>
       <div style={{ maxHeight: open ? 900 : 0, opacity: open ? 1 : 0, overflow: 'hidden', transition: 'max-height .3s ease, opacity .2s ease' }}>
-        <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: '#a5aebb', lineHeight: 1.65 }}>{children}</div>
+        <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{children}</div>
       </div>
     </div>
   );
@@ -88,8 +88,8 @@ function Seg({ options, value, onChange, wrap }) {
         return (
           <button key={o.value} onClick={() => onChange(o.value)} style={{
             flex: wrap ? '1 1 30%' : 1, padding: '11px 4px', borderRadius: 9, fontWeight: 700, fontSize: 12.5,
-            border: `1px solid ${active ? T.amber : T.line}`, background: active ? T.amberBg : T.panel2,
-            color: active ? T.amberInk : T.ink2, transition: 'all .15s',
+            border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
+            color: active ? T.accInk : T.ink2, transition: 'all .15s',
           }}>{o.label}</button>
         );
       })}
@@ -106,8 +106,8 @@ function PickList({ options, value, onChange }) {
         return (
           <button key={o.value} onClick={() => onChange(o.value)} style={{
             textAlign: 'left', padding: '11px 13px', borderRadius: 9, fontWeight: 600, fontSize: 13,
-            border: `1px solid ${active ? T.amber : T.line}`, background: active ? T.amberBg : T.panel2,
-            color: active ? T.amberInk : '#c3cad2',
+            border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
+            color: active ? T.accInk : T.inkSoft,
           }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
         );
       })}
@@ -157,15 +157,15 @@ function GroupedSelect({ groups, extra = [], value, onChange }) {
   );
 }
 
-function ToggleRow({ label, sub, checked, onChange, color = T.amber }) {
+function ToggleRow({ label, sub, checked, onChange, color = T.acc }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: 13 }}>
       <div style={{ marginRight: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>{label}</div>
         {sub && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
       </div>
-      <button onClick={() => onChange(!checked)} style={{ width: 48, height: 27, borderRadius: 14, border: 'none', position: 'relative', flexShrink: 0, background: checked ? color : '#2a323a', transition: 'background .2s' }}>
-        <div style={{ position: 'absolute', top: 3, left: checked ? 24 : 3, width: 21, height: 21, borderRadius: 11, background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.4)' }} />
+      <button onClick={() => onChange(!checked)} style={{ width: 48, height: 27, borderRadius: 14, border: 'none', position: 'relative', flexShrink: 0, background: checked ? color : T.panel3, transition: 'background .2s' }}>
+        <div style={{ position: 'absolute', top: 3, left: checked ? 24 : 3, width: 21, height: 21, borderRadius: 11, background: T.ink, transition: 'left .2s', boxShadow: `0 1px 3px ${shadowAlpha(0.4)}` }} />
       </button>
     </div>
   );
@@ -216,18 +216,18 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
   const j = JOURNEY[step];
   if (!j) return null;
   return (
-    <div style={{ background: T.amberBg, border: `1px solid ${T.amber}`, borderRadius: 12, padding: '13px 14px', margin: '0 0 14px' }}>
+    <div style={{ background: T.accBg, border: `1px solid ${T.acc}`, borderRadius: 12, padding: '13px 14px', margin: '0 0 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800 }}>{j.title.toUpperCase()}</div>
+        <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>{j.title.toUpperCase()}</div>
         <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: T.ink3, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>SKIP GUIDE</button>
       </div>
-      <div style={{ fontSize: 12.5, color: '#c3cad2', lineHeight: 1.55, marginTop: 7 }}>{j.body}</div>
+      <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.55, marginTop: 7 }}>{j.body}</div>
       <div style={{ display: 'flex', gap: 5, marginTop: 11, marginBottom: 10 }}>
         {JOURNEY.map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? T.amber : T.line }} />
+          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? T.acc : T.line }} />
         ))}
       </div>
-      <button onClick={onAdvance} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 12.5 }}>
+      <button onClick={onAdvance} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
         {j.cta}
       </button>
     </div>
@@ -239,18 +239,18 @@ function BuildSection({ active, onClick, icon: Icon, label, sub, children }) {
     <div style={{ marginBottom: 9 }}>
       <button onClick={onClick} style={{
         width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px',
-        borderRadius: 11, border: `1px solid ${active ? T.amber : T.line}`, background: active ? T.amberBg : T.panel2,
+        borderRadius: 11, border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left' }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: active ? 'rgba(255,106,44,0.18)' : T.panel, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={16} color={active ? T.amberInk : T.ink2} />
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: active ? accAlpha(0.18) : T.panel, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon size={16} color={active ? T.accInk : T.ink2} />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 13.5, color: active ? T.amberInk : T.ink }}>{label}</div>
+            <div style={{ fontWeight: 800, fontSize: 13.5, color: active ? T.accInk : T.ink }}>{label}</div>
             {sub && <div style={{ fontSize: 10.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
           </div>
         </div>
-        <ChevronDown size={16} style={{ color: active ? T.amberInk : T.ink3, flexShrink: 0, marginLeft: 8, transform: active ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+        <ChevronDown size={16} style={{ color: active ? T.accInk : T.ink3, flexShrink: 0, marginLeft: 8, transform: active ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
       </button>
       <div style={{ maxHeight: active ? 3000 : 0, opacity: active ? 1 : 0, overflow: 'hidden', transition: 'max-height .35s ease, opacity .25s ease' }}>
         <div style={{ padding: '13px 2px 2px' }}>{children}</div>
@@ -273,13 +273,13 @@ function DialMark({ size = 64, pct = 0.62, live = false }) {
           <line key={i}
             x1={50 + inner * Math.sin(a)} y1={50 - inner * Math.cos(a)}
             x2={50 + outer * Math.sin(a)} y2={50 - outer * Math.cos(a)}
-            stroke={i > 9 ? T.red : T.line === T.line ? '#3a4149' : T.line} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
+            stroke={i > 9 ? T.danger : T.line === T.line ? T.ink3 : T.line} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
         );
       })}
       <g style={{ transition: live ? 'none' : 'transform .6s cubic-bezier(.34,1.4,.64,1)' }} transform={`rotate(${angle} 50 50)`}>
-        <line x1="50" y1="50" x2="50" y2="20" stroke={T.amber} strokeWidth="3" strokeLinecap="round" />
+        <line x1="50" y1="50" x2="50" y2="20" stroke={T.acc} strokeWidth="3" strokeLinecap="round" />
       </g>
-      <circle cx="50" cy="50" r="5" fill={T.amber} />
+      <circle cx="50" cy="50" r="5" fill={T.acc} />
     </svg>
   );
 }
@@ -289,7 +289,7 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
   // sits at pct ≈ 0.909 regardless of engine — the red zone has to start at or just
   // below that, not above it, or the needle never shows red at the engine's own redline.
-  const zoneColor = pct > 0.9 ? T.red : pct > 0.75 ? T.yellow : T.green;
+  const zoneColor = pct > 0.9 ? T.danger : pct > 0.75 ? T.warn : T.ok;
   return (
     <Panel style={{ textAlign: 'center', background: T.panel }}>
       <style>{`@keyframes cylpulse{0%,100%{opacity:.25;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}`}</style>
@@ -338,8 +338,8 @@ function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
           {RPM.map((r, ci) => (
             <button key={r} onClick={() => selectCol(ci)} style={{
               width: 51, height: 30, flexShrink: 0, border: 'none', borderBottom: `1px solid ${T.line}`, borderLeft: `1px solid ${T.line}`,
-              background: selection?.type === 'col' && selection.col === ci ? T.amber : T.panel,
-              color: selection?.type === 'col' && selection.col === ci ? '#1a0f08' : T.ink2,
+              background: selection?.type === 'col' && selection.col === ci ? T.acc : T.panel,
+              color: selection?.type === 'col' && selection.col === ci ? T.accOn : T.ink2,
               fontFamily: T.mono, fontSize: 10, fontWeight: 700,
             }}>{r}</button>
           ))}
@@ -348,15 +348,15 @@ function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
           <div key={load} style={{ display: 'flex' }}>
             <button onClick={() => selectRow(ri)} style={{
               width: 44, height: 37, flexShrink: 0, border: 'none', borderRight: `1px solid ${T.line}`, borderTop: `1px solid ${T.line}`,
-              background: selection?.type === 'row' && selection.row === ri ? T.amber : T.panel,
-              color: selection?.type === 'row' && selection.row === ri ? '#1a0f08' : T.ink2,
+              background: selection?.type === 'row' && selection.row === ri ? T.acc : T.panel,
+              color: selection?.type === 'row' && selection.row === ri ? T.accOn : T.ink2,
               fontFamily: T.mono, fontSize: 10, fontWeight: 700,
             }}>{load}</button>
             {data[ri].map((val, ci) => (
               <button key={ci} onClick={() => selectCell(ri, ci)} style={{
                 width: 51, height: 37, flexShrink: 0,
-                border: isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid rgba(0,0,0,0.35)`,
-                background: heat(val, min, max), color: '#f2f5f7',
+                border: isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid ${shadowAlpha(0.35)}`,
+                background: heat(val, min, max), color: T.ink,
                 fontFamily: T.mono, fontSize: 12, fontWeight: 700,
               }}>{fmt(val)}</button>
             ))}
@@ -431,7 +431,7 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
   else sel = `${RPM[selection.col]} RPM · ${LOAD[selection.row]} kPa MAP`;
 
   return (
-    <div style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: '0 -8px 20px rgba(0,0,0,0.45)' }}>
+    <div style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
@@ -444,21 +444,21 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current);
         return (
-          <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px', marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: '#a5aebb' }}>
+          <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px', marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
             <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} kPa</div>
             <div>{ref.what}</div>
             <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
-            <div style={{ marginTop: 4 }}><b style={{ color: '#c3cad2' }}>Affects: </b>{ref.affects}</div>
-            {ref.note && <div style={{ marginTop: 4, color: T.yellow }}>{ref.note}</div>}
+            <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
+            {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
           </div>
         );
       })()}
-      <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.amber }} />
+      <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
         {[-bigStep, -smallStep, smallStep, bigStep].map((d, i) => (
           <button key={i} onClick={() => apply(d)} style={{
             flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
-            color: d < 0 ? '#ff9d7a' : T.green, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
+            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
           }}>{d > 0 ? '+' : ''}{d}</button>
         ))}
       </div>
@@ -492,23 +492,23 @@ function TutorialScreen({ onDone }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px' }}>
-        <div style={{ fontSize: 10.5, letterSpacing: 1.5, color: T.amberInk, fontWeight: 800 }}>TUTORIAL · {step + 1}/{TUTORIAL_STEPS.length}</div>
+        <div style={{ fontSize: 10.5, letterSpacing: 1.5, color: T.accInk, fontWeight: 800 }}>TUTORIAL · {step + 1}/{TUTORIAL_STEPS.length}</div>
         <button onClick={onDone} style={{ background: 'none', border: 'none', color: T.ink3, fontSize: 12, fontWeight: 700 }}>SKIP</button>
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px' }}>
         <div style={{ fontSize: 21, fontWeight: 800, marginBottom: 13, letterSpacing: -0.3 }}>{s.title}</div>
-        <div style={{ fontSize: 14.5, color: '#c3cad2', lineHeight: 1.7 }}>{s.body}</div>
+        <div style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.7 }}>{s.body}</div>
       </div>
       <div style={{ display: 'flex', gap: 6, justifyContent: 'center', padding: '0 0 18px' }}>
         {TUTORIAL_STEPS.map((_, i) => (
-          <div key={i} style={{ width: i === step ? 20 : 6, height: 6, borderRadius: 3, background: i === step ? T.amber : T.line, transition: 'width .2s' }} />
+          <div key={i} style={{ width: i === step ? 20 : 6, height: 6, borderRadius: 3, background: i === step ? T.acc : T.line, transition: 'width .2s' }} />
         ))}
       </div>
       <div style={{ display: 'flex', gap: 10, padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
         {step > 0 && (
-          <button onClick={() => setStep((v) => v - 1)} style={{ flex: 1, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: T.panel2, color: '#c3cad2', fontWeight: 700, fontSize: 14 }}>BACK</button>
+          <button onClick={() => setStep((v) => v - 1)} style={{ flex: 1, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: T.panel2, color: T.inkSoft, fontWeight: 700, fontSize: 14 }}>BACK</button>
         )}
-        <button onClick={() => (last ? onDone() : setStep((v) => v + 1))} style={{ flex: 2, padding: '15px 0', borderRadius: 12, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 14.5 }}>
+        <button onClick={() => (last ? onDone() : setStep((v) => v + 1))} style={{ flex: 2, padding: '15px 0', borderRadius: 12, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 14.5 }}>
           {last ? 'START TUNING' : 'NEXT'}
         </button>
       </div>
@@ -519,17 +519,17 @@ function TutorialScreen({ onDone }) {
 function StartScreen({ onStart, onTutorial }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, justifyContent: 'center', alignItems: 'center', padding: 24, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: '-15%', left: '50%', transform: 'translateX(-50%)', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,106,44,0.10) 0%, transparent 70%)' }} />
+      <div style={{ position: 'absolute', top: '-15%', left: '50%', transform: 'translateX(-50%)', width: 420, height: 420, borderRadius: '50%', background: `radial-gradient(circle, ${accAlpha(0.10)} 0%, transparent 70%)` }} />
       <div style={{ marginBottom: 22, position: 'relative' }}><DialMark size={92} pct={0.62} /></div>
-      <div style={{ fontSize: 11, letterSpacing: 3, color: T.amberInk, fontWeight: 800, marginBottom: 7 }}>CARIBOU TUNING</div>
+      <div style={{ fontSize: 11, letterSpacing: 3, color: T.accInk, fontWeight: 800, marginBottom: 7 }}>CARIBOU TUNING</div>
       <div style={{ fontSize: 25, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 15, maxWidth: 320 }}>Engine Management Sandbox</div>
       <div style={{ fontSize: 13.5, color: T.ink2, lineHeight: 1.65, maxWidth: 300, marginBottom: 34 }}>
         Design an engine. Tune it. Log it. Improve it. A free-tune sandbox built to teach real engine management, not just move sliders.
       </div>
-      <button onClick={onStart} style={{ width: '100%', maxWidth: 300, padding: '16px 0', borderRadius: 12, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 15, letterSpacing: 0.4, marginBottom: 12, boxShadow: '0 8px 24px rgba(255,106,44,0.25)' }}>
+      <button onClick={onStart} style={{ width: '100%', maxWidth: 300, padding: '16px 0', borderRadius: 12, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 15, letterSpacing: 0.4, marginBottom: 12, boxShadow: `0 8px 24px ${accAlpha(0.25)}` }}>
         START
       </button>
-      <button onClick={onTutorial} style={{ width: '100%', maxWidth: 300, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: 'none', color: '#c3cad2', fontWeight: 700, fontSize: 13.5 }}>
+      <button onClick={onTutorial} style={{ width: '100%', maxWidth: 300, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: 'none', color: T.inkSoft, fontWeight: 700, fontSize: 13.5 }}>
         TUTORIAL
       </button>
       <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 18, fontFamily: T.mono }}>{BUILD_VERSION}</div>
@@ -539,9 +539,9 @@ function StartScreen({ onStart, onTutorial }) {
 
 function LiveGauge({ label, value, unit, color = T.ink, warn }) {
   return (
-    <div style={{ flex: 1, minWidth: 68, background: T.panel, border: `1px solid ${warn ? T.red : T.line}`, borderRadius: 9, padding: '8px 9px' }}>
+    <div style={{ flex: 1, minWidth: 68, background: T.panel, border: `1px solid ${warn ? T.danger : T.line}`, borderRadius: 9, padding: '8px 9px' }}>
       <div style={{ fontSize: 8.5, color: T.ink2, letterSpacing: 0.8, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: T.mono, color: warn ? T.red : color }}>
+      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: T.mono, color: warn ? T.danger : color }}>
         {value}<span style={{ fontSize: 9, color: T.ink3, marginLeft: 2 }}>{unit}</span>
       </div>
     </div>
@@ -550,7 +550,7 @@ function LiveGauge({ label, value, unit, color = T.ink, warn }) {
 
 function TrimBar({ label, value }) {
   const pct = clamp((value + 25) / 50, 0, 1) * 100;
-  const c = Math.abs(value) > 15 ? T.red : Math.abs(value) > 8 ? T.yellow : T.green;
+  const c = Math.abs(value) > 15 ? T.danger : Math.abs(value) > 8 ? T.warn : T.ok;
   return (
     <div style={{ marginBottom: 7 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink2, fontWeight: 700, marginBottom: 3 }}>
@@ -1170,7 +1170,7 @@ export default function EngineManagementSandbox() {
       <div style={{ padding: '13px 16px 12px', borderBottom: `1px solid ${T.line}`, background: T.panel }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontSize: 10, letterSpacing: 2, color: T.amberInk, fontWeight: 800 }}>CARIBOU TUNING</div>
+            <div style={{ fontSize: 10, letterSpacing: 2, color: T.accInk, fontWeight: 800 }}>CARIBOU TUNING</div>
             <div style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: 0.2 }}>ECU Lab</div>
             <div style={{ fontSize: 11, color: T.ink2, marginTop: 3, fontFamily: T.mono }}>
               {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
@@ -1190,7 +1190,7 @@ export default function EngineManagementSandbox() {
             <div style={{ width: `${overallHealth}%`, height: '100%', background: overallColor, transition: 'width .4s' }} />
           </div>
           <span style={{ fontSize: 10, color: overallColor, fontWeight: 800, fontFamily: T.mono }}>{Math.round(overallHealth)}%</span>
-          {live.running && <span style={{ fontSize: 9.5, color: T.green, fontWeight: 800, letterSpacing: 0.5 }}>● RUNNING</span>}
+          {live.running && <span style={{ fontSize: 9.5, color: T.ok, fontWeight: 800, letterSpacing: 0.5 }}>● RUNNING</span>}
         </div>
       </div>
 
@@ -1210,7 +1210,7 @@ export default function EngineManagementSandbox() {
                   <div style={{ position: 'relative', flexShrink: 0 }}>
                     <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
                     <div style={{ position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, fontFamily: T.mono, color: live.fuelCut ? T.red : T.ink }}>{Math.round(live.sensedRpm)}</div>
+                      <div style={{ fontSize: 17, fontWeight: 800, fontFamily: T.mono, color: live.fuelCut ? T.danger : T.ink }}>{Math.round(live.sensedRpm)}</div>
                       <div style={{ fontSize: 7, color: T.ink3, letterSpacing: 1, fontWeight: 700 }}>RPM</div>
                     </div>
                   </div>
@@ -1227,13 +1227,13 @@ export default function EngineManagementSandbox() {
                     <div style={{ display: 'flex', gap: 7 }}>
                       <button onClick={live.running || live.cranking ? stopEngine : startEngine} style={{
                         flex: 1, padding: '11px 0', borderRadius: 9, border: 'none', fontWeight: 800, fontSize: 12.5,
-                        background: live.running || live.cranking ? T.panel2 : T.green, color: live.running || live.cranking ? T.ink : '#06210f',
-                        borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.green,
+                        background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
+                        borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
                       }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
                       <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); setSoundOn((v) => !v); }} title="Engine sound" style={{
                         width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
-                        border: `1px solid ${soundOn ? T.amber : T.line}`, background: soundOn ? T.amberBg : T.panel2,
-                        color: soundOn ? T.amberInk : T.ink3,
+                        border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
+                        color: soundOn ? T.accInk : T.ink3,
                       }}>{soundOn ? '♪' : '✕'}</button>
                     </div>
                   </div>
@@ -1247,9 +1247,9 @@ export default function EngineManagementSandbox() {
                     position: 'relative', overflow: 'hidden',
                     marginTop: 12, padding: '18px 0', borderRadius: 12, textAlign: 'center', userSelect: 'none',
                     WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
-                    border: `1px solid ${throttleInput > 0 ? T.amber : T.line}`,
-                    background: throttleInput > 0 ? T.amberBg : T.panel2,
-                    color: throttleInput > 0 ? T.amberInk : T.ink2, fontWeight: 800, fontSize: 13.5, letterSpacing: 0.5,
+                    border: `1px solid ${throttleInput > 0 ? T.acc : T.line}`,
+                    background: throttleInput > 0 ? T.accBg : T.panel2,
+                    color: throttleInput > 0 ? T.accInk : T.ink2, fontWeight: 800, fontSize: 13.5, letterSpacing: 0.5,
                     touchAction: 'none', opacity: live.running ? 1 : 0.4,
                     transition: 'background .1s, border-color .1s',
                   }}
@@ -1257,7 +1257,7 @@ export default function EngineManagementSandbox() {
                   <div style={{
                     position: 'absolute', left: 0, top: 0, bottom: 0,
                     width: `${clamp(live.effThrottle ?? 0, 0, 100)}%`,
-                    background: 'rgba(255,106,44,0.16)', transition: 'width .12s',
+                    background: accAlpha(0.16), transition: 'width .12s',
                   }} />
                   <span style={{ position: 'relative' }}>
                     {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
@@ -1272,13 +1272,13 @@ export default function EngineManagementSandbox() {
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="LAMBDA" value={live.sensedLambda.toFixed(2)} unit="λ" color={T.violet} />
                   <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" color={T.yellow} warn={!!(live.live && live.live.knock)} />
+                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" color={T.warn} warn={!!(live.live && live.live.knock)} />
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
                   <LiveGauge label="DUTY" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
                   <LiveGauge label="IDLE AIR" value={Math.round(live.idleTrim)} unit="%" />
-                  <LiveGauge label="FUEL" value={live.fuelCut ? 'CUT' : 'ON'} unit="" color={live.fuelCut ? T.yellow : T.green} />
+                  <LiveGauge label="FUEL" value={live.fuelCut ? 'CUT' : 'ON'} unit="" color={live.fuelCut ? T.warn : T.ok} />
                 </div>
 
                 <div style={{ marginTop: 12 }}>
@@ -1297,18 +1297,18 @@ export default function EngineManagementSandbox() {
               sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
             >
               <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <StatTile label="BEST PULL" value={bestScore} color={T.amberInk} />
+                <StatTile label="BEST PULL" value={bestScore} color={T.accInk} />
                 <StatTile label="CAREER TOTAL" value={totalScore} color={T.cyan} />
                 <StatTile label="PULLS" value={pullCount} color={T.ink} />
               </div>
               {result && scores ? (
                 <>
                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" color={T.amberInk} />
+                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" color={T.accInk} />
                     <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" color={T.cyan} />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <StatTile label="PULL SCORE" value={scores.pull} color={T.amberInk} />
+                    <StatTile label="PULL SCORE" value={scores.pull} color={T.accInk} />
                     <StatTile label="TUNING" value={scores.tuning.score} color={statusColor(scores.tuning.score)} />
                     <StatTile label="ENGINEER" value={scores.engineer.score} color={statusColor(scores.engineer.score)} />
                   </div>
@@ -1336,7 +1336,7 @@ export default function EngineManagementSandbox() {
             >
               <div style={{ fontSize: 12, color: T.ink3, marginBottom: 10, lineHeight: 1.5 }}>Read in order. Each explains a piece of what the live engine is doing right now.</div>
 
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800, margin: '4px 0 8px' }}>PART 1 · FUNDAMENTALS</div>
+              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '4px 0 8px' }}>PART 1 · FUNDAMENTALS</div>
 
               <ExpandableInfo title="1. The whole thing in one paragraph">
                 An engine is an air pump. However much air it swallows decides how much fuel can be burned, and burning fuel is what makes power. The ECU's entire job is to measure the air, add the right amount of fuel, and light it at the right moment. Tuning is adjusting those last two decisions.
@@ -1368,7 +1368,7 @@ export default function EngineManagementSandbox() {
                 <br /><br /><b style={{ color: T.ink }}>How much is too much?</b> Tuners treat anything sustained above about 2° of retard as damaging, not as an operating point. Zero is the target.
               </ExpandableInfo>
 
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 2 · WHAT THE ECU CALCULATES</div>
+              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 2 · WHAT THE ECU CALCULATES</div>
 
               <ExpandableInfo title="6. The control loop, in order">
                 Thousands of times a minute, the ECU runs the same sequence:
@@ -1418,7 +1418,7 @@ export default function EngineManagementSandbox() {
                 <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
               </ExpandableInfo>
 
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.amberInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>
+              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>
 
               <ExpandableInfo title="12. The loop: change → pull → read → adjust">
                 This is the whole method, and it is not a simplification:
@@ -1508,7 +1508,7 @@ export default function EngineManagementSandbox() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 600 }}>
                     <span>YOUR LAST PULL</span>
-                    <span style={{ color: result ? T.amberInk : T.ink3, fontWeight: 800, fontFamily: T.mono }}>
+                    <span style={{ color: result ? T.accInk : T.ink3, fontWeight: 800, fontFamily: T.mono }}>
                       {result ? `${result.peakHp} whp · ${result.peakTq} lb-ft` : 'no pull logged'}
                     </span>
                   </div>
@@ -1521,12 +1521,12 @@ export default function EngineManagementSandbox() {
                 <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
               )}
               {presetPrompt && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px' }}>
-                  <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.5, marginBottom: 9 }}>
-                    <b style={{ color: T.amberInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
+                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px' }}>
+                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginBottom: 9 }}>
+                    <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
                   </div>
                   <div style={{ display: 'flex', gap: 7 }}>
-                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.amber, color: '#2a1206', fontWeight: 800, fontSize: 12 }}>
+                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accBg, fontWeight: 800, fontSize: 12 }}>
                       LOAD {presetPrompt.name.toUpperCase()}
                     </button>
                     <button onClick={() => setPresetPrompt(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
@@ -1538,12 +1538,12 @@ export default function EngineManagementSandbox() {
               <Panel tight style={{ marginBottom: 13 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>DISPLACEMENT</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.displacementL.toFixed(2)} L</span></div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>BORE : STROKE</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.ratio.toFixed(3)}</span></div>
-                <div style={{ fontSize: 11.5, color: T.amberInk, fontWeight: 600 }}>{engineDerived.character}</div>
+                <div style={{ fontSize: 11.5, color: T.accInk, fontWeight: 600 }}>{engineDerived.character}</div>
               </Panel>
 
               {!veAdvice.inSync && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px', fontSize: 12, color: '#a5aebb', lineHeight: 1.5 }}>
-                  <b style={{ color: T.amberInk }}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b style={{ color: T.ink }}>TUNE &rsaquo; AIR</b> to see which cells changed and why, then accept it there.
+                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                  <b style={{ color: T.accInk }}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b style={{ color: T.ink }}>TUNE &rsaquo; AIR</b> to see which cells changed and why, then accept it there.
                 </div>
               )}
               <ExpandableInfo title="Why changing hardware does not update your VE table">
@@ -1560,15 +1560,15 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
-              <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} style={{ width: '100%', accentColor: T.amber }} />
+              <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
-              <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} style={{ width: '100%', accentColor: T.amber }} />
+              <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
               <ExpandableInfo title="Bore, stroke, and engine character">
                 Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
-              <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} style={{ width: '100%', accentColor: T.amber }} />
+              <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
               <ExpandableInfo title="Compression ratio's trade-off">
                 Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
               </ExpandableInfo>
@@ -1576,7 +1576,7 @@ export default function EngineManagementSandbox() {
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
                 Camshaft Duration: {engineConfig.camDuration}° <span style={{ color: T.ink3, fontWeight: 400 }}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
               </div>
-              <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} style={{ width: '100%', accentColor: T.amber }} />
+              <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, marginTop: 2 }}>
                 <span>mild · low-end torque</span><span>wild · top-end power</span>
               </div>
@@ -1587,11 +1587,11 @@ export default function EngineManagementSandbox() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
-                Valve Spring Rate: {engineConfig.springRate} <span style={{ color: engineDerived.floatRpm < engineDerived.redline ? T.red : T.ink3, fontWeight: 400 }}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
+                Valve Spring Rate: {engineConfig.springRate} <span style={{ color: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.ink3, fontWeight: 400 }}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
               </div>
-              <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} style={{ width: '100%', accentColor: engineDerived.floatRpm < engineDerived.redline ? T.red : T.cyan }} />
+              <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} style={{ width: '100%', accentColor: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.cyan }} />
               {engineDerived.floatRpm < engineDerived.redline && (
-                <div style={{ fontSize: 11.5, color: T.red, marginTop: 5 }}>
+                <div style={{ fontSize: 11.5, color: T.danger, marginTop: 5 }}>
                   Springs float below redline — cylinder filling collapses above {Math.round(engineDerived.floatRpm)} RPM. Stiffen them or fit a milder cam.
                 </div>
               )}
@@ -1625,12 +1625,12 @@ export default function EngineManagementSandbox() {
                 {Object.keys(MOD_INFO).map((key) => (
                   <button key={key} onClick={() => installMod(key)} disabled={mods[key]} style={{
                     textAlign: 'left', padding: '11px 13px', borderRadius: 10,
-                    border: `1px solid ${mods[key] ? '#1f4a30' : T.line}`,
-                    background: mods[key] ? T.greenBg : T.panel2,
+                    border: `1px solid ${mods[key] ? T.okBg : T.line}`,
+                    background: mods[key] ? T.okBg : T.panel2,
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: mods[key] ? T.green : T.ink }}>{MOD_INFO[key].label}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 800, color: mods[key] ? T.green : T.amberInk }}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: mods[key] ? T.ok : T.ink }}>{MOD_INFO[key].label}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 800, color: mods[key] ? T.ok : T.accInk }}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
                     </div>
                     <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 3 }}>{MOD_INFO[key].blurb}</div>
                   </button>
@@ -1675,19 +1675,19 @@ export default function EngineManagementSandbox() {
                         return (
                           <button key={r} onClick={() => setBoostSel(i)} style={{
                             flex: 1, height: '100%', padding: 0, borderRadius: 7,
-                            border: `1px solid ${on ? T.amber : T.line}`,
-                            background: on ? T.amberBg : T.panel,
+                            border: `1px solid ${on ? T.acc : T.line}`,
+                            background: on ? T.accBg : T.panel,
                             display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden',
                           }}>
-                            <div style={{ fontSize: 10, fontFamily: T.mono, fontWeight: 800, color: over ? T.red : on ? T.amberInk : T.ink2, paddingBottom: 2 }}>
+                            <div style={{ fontSize: 10, fontFamily: T.mono, fontWeight: 800, color: over ? T.danger : on ? T.accInk : T.ink2, paddingBottom: 2 }}>
                               {boostCurve[i]}
                             </div>
                             <div style={{
                               height: `${(boostCurve[i] / 25) * 72}%`, minHeight: boostCurve[i] > 0 ? 3 : 0,
-                              background: over ? T.red : on ? T.amber : '#7a4526',
+                              background: over ? T.danger : on ? T.acc : T.lineHi,
                               borderRadius: '3px 3px 0 0', transition: 'height .12s',
                             }} />
-                            <div style={{ fontSize: 8, color: on ? T.amberInk : T.ink3, fontFamily: T.mono, padding: '3px 0' }}>
+                            <div style={{ fontSize: 8, color: on ? T.accInk : T.ink3, fontFamily: T.mono, padding: '3px 0' }}>
                               {r >= 1000 ? (r / 1000).toFixed(1) + 'k' : r}
                             </div>
                           </button>
@@ -1699,18 +1699,18 @@ export default function EngineManagementSandbox() {
                   <Panel tight style={{ marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
                       <span style={{ fontSize: 10.5, letterSpacing: 1, color: T.ink2, fontWeight: 700 }}>{RPM[boostSel]} RPM</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 800, color: boostCurve[boostSel] > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.red : T.amberInk }}>
+                      <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 800, color: boostCurve[boostSel] > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.accInk }}>
                         {boostCurve[boostSel]}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 3 }}>psi</span>
                       </span>
                     </div>
                     <input type="range" min={0} max={25} step={1} value={boostCurve[boostSel]}
                       onChange={(e) => setBoostAt(boostSel, Number(e.target.value))}
-                      style={{ width: '100%', accentColor: T.amber }} />
+                      style={{ width: '100%', accentColor: T.acc }} />
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                       {[-5, -1, 1, 5].map((d) => (
                         <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
                           style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-                            color: d < 0 ? '#ff9d7a' : T.green, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
+                            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
                           {d > 0 ? '+' : ''}{d}
                         </button>
                       ))}
@@ -1733,7 +1733,7 @@ export default function EngineManagementSandbox() {
                         ZERO
                       </button>
                     </div>
-                    <div style={{ fontSize: 10.5, color: Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.red : T.ink3, marginTop: 8 }}>
+                    <div style={{ fontSize: 10.5, color: Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.ink3, marginTop: 8 }}>
                       Compressor efficient to ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi{Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? ' — you are past it, expect hot inefficient air' : ''}
                     </div>
                   </Panel>
@@ -1756,7 +1756,7 @@ export default function EngineManagementSandbox() {
               <Seg options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => setExhaustDiaIdxInvalidating(EXHAUST_DIA_OPTS.findIndex((o) => o.label === v))} />
               <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
                 Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
-                {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.amberInk }}> (raised by boost)</span>}
+                {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
               </div>
               <ExpandableInfo title="Why exhaust diameter isn't just 'bigger is better'">
                 Undersized piping restricts flow at high RPM, choking VE right when the engine wants air moving fastest. Oversized piping does the opposite at low RPM — exhaust velocity drops, scavenging gets lazy, and low-end response suffers.
@@ -1776,8 +1776,8 @@ export default function EngineManagementSandbox() {
                 <button key={v.id} onClick={() => { setTuneView(v.id); setSelection(null); }} style={{
                   flex: 1, padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
-                  border: `1px solid ${on ? T.amber : T.line}`, background: on ? T.amberBg : T.panel2,
-                  color: on ? T.amberInk : T.ink2,
+                  border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
+                  color: on ? T.accInk : T.ink2,
                 }}>
                   <Icon size={15} />{v.label}
                 </button>
@@ -1801,27 +1801,27 @@ export default function EngineManagementSandbox() {
 
               {veAdvice && (
                 veAdvice.inSync ? (
-                  <div style={{ display: 'flex', gap: 8, background: T.greenBg, border: '1px solid #1f4a30', borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.green, lineHeight: 1.5 }}>
+                  <div style={{ display: 'flex', gap: 8, background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok, lineHeight: 1.5 }}>
                     <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
                     <div>VE table matches your current hardware. Nothing to correct.</div>
                   </div>
                 ) : (
-                  <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
+                  <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, letterSpacing: 1, color: T.amberInk, fontWeight: 800 }}>VE OUT OF SYNC WITH HARDWARE</div>
-                      <div style={{ fontSize: 11, fontFamily: T.mono, color: T.amberInk, fontWeight: 700 }}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
+                      <div style={{ fontSize: 10, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>VE OUT OF SYNC WITH HARDWARE</div>
+                      <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accInk, fontWeight: 700 }}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
                     </div>
-                    <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.55, marginBottom: 9 }}>
+                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 9 }}>
                       Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
                     </div>
                     {veAdvice.recs.map((r, i) => (
                       <div key={i} style={{ marginBottom: 9 }}>
                         <div style={{ fontSize: 12, color: T.ink, fontWeight: 700 }}>{r.rpmText}</div>
-                        <div style={{ fontSize: 11.5, color: '#a5aebb', lineHeight: 1.5, marginTop: 2 }}>{r.text}</div>
+                        <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>{r.text}</div>
                         <div style={{ fontSize: 10.5, color: T.cyan, fontFamily: T.mono, marginTop: 3 }}>{r.cells.join('   ')}</div>
                       </div>
                     ))}
-                    <button onClick={recalcVE} style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 9, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 12.5 }}>
+                    <button onClick={recalcVE} style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                       ACCEPT RE-LOGGED VALUES
                     </button>
                     <div style={{ fontSize: 10.5, color: T.ink3, textAlign: 'center', marginTop: 6 }}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
@@ -1846,11 +1846,11 @@ export default function EngineManagementSandbox() {
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12 }}>Degrees of spark advance before top dead center (° BTDC).</div>
               <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} {...gridProps} />
               {calAdvice.overAdvanced.length > 0 ? (
-                <div style={{ background: T.redBg, border: `1px solid #3a2020`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1, color: '#ff9d9d', fontWeight: 800, marginBottom: 7 }}>
+                <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerBg}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
+                  <div style={{ fontSize: 10, letterSpacing: 1, color: T.dangerInk, fontWeight: 800, marginBottom: 7 }}>
                     {calAdvice.overAdvanced.length} CELLS BEYOND THE KNOCK LIMIT
                   </div>
-                  <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.55, marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>
                     Your current hardware will not tolerate this much advance here. These cells are asking for more timing than the charge, octane and compression allow:
                   </div>
                   {calAdvice.overAdvanced.slice(0, 5).map((c, i) => (
@@ -1862,15 +1862,15 @@ export default function EngineManagementSandbox() {
                   <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>Edit them yourself — a calibration is yours to make, not something the app should silently rewrite.</div>
                 </div>
               ) : calAdvice.underAdvanced.length > 4 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: '#a5aebb', lineHeight: 1.5 }}>
-                  <b style={{ color: T.amberInk }}>Timing left on the table.</b> {calAdvice.underAdvanced.length} cells are more than 3° below what this build would tolerate. Safe, but you are giving away torque — advance them a little at a time and pull between each change.
+                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                  <b style={{ color: T.accInk }}>Timing left on the table.</b> {calAdvice.underAdvanced.length} cells are more than 3° below what this build would tolerate. Safe, but you are giving away torque — advance them a little at a time and pull between each change.
                 </div>
               ) : calAdvice.pastMbt.length > 0 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: '#a5aebb', lineHeight: 1.5 }}>
-                  <b style={{ color: T.amberInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
+                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                  <b style={{ color: T.accInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
                 </div>
               ) : (
-                <div style={{ background: T.greenBg, border: '1px solid #1f4a30', borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.green }}>
+                <div style={{ background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
                   Spark table sits within the knock limit for this hardware.
                 </div>
               )}
@@ -1898,15 +1898,15 @@ export default function EngineManagementSandbox() {
               <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12, lineHeight: 1.5 }}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
               <TuningGrid data={afr} min={10} max={18} decimals={1} {...gridProps} />
               {calAdvice.wrongMix.length > 0 && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.amber}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1, color: T.amberInk, fontWeight: 800, marginBottom: 7 }}>
+                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
+                  <div style={{ fontSize: 10, letterSpacing: 1, color: T.accInk, fontWeight: 800, marginBottom: 7 }}>
                     {calAdvice.wrongMix.length} HIGH-LOAD CELLS OFF BEST POWER
                   </div>
-                  <div style={{ fontSize: 12, color: '#a5aebb', lineHeight: 1.55, marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>
                     Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b style={{ color: T.ink }}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
                   </div>
                   {calAdvice.wrongMix.slice(0, 5).map((c, i) => (
-                    <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: c.delta < 0 ? '#ff9d9d' : T.cyan, marginBottom: 2 }}>
+                    <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: c.delta < 0 ? T.dangerInk : T.cyan, marginBottom: 2 }}>
                       {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'} · delivered {c.delivered}, wants {c.target}
                     </div>
                   ))}
@@ -1936,7 +1936,7 @@ export default function EngineManagementSandbox() {
             <Seg options={OCTANE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => setOctaneIdxInvalidating(OCTANE_OPTS.findIndex((o) => o.label === v))} />
             <ExpandableInfo title="What octane actually does — and what E85 costs you">
               Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
-              <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.amberInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
+              <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.accInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
               <br /><br />That trade — huge knock resistance, huge fuel demand — is exactly why serious E85 builds pair it with bigger injectors and a bigger pump, and why "just run E85" is not a shortcut around a fuel system.
             </ExpandableInfo>
 
@@ -1947,14 +1947,14 @@ export default function EngineManagementSandbox() {
             </div>
             <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={setEcuInjectorCcInvalidating} wrap />
             {ecuInjectorCc !== injectorCc ? (
-              <div style={{ background: T.redBg, border: `1px solid #3a2020`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: '#ff9d9d', lineHeight: 1.5 }}>
+              <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerBg}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
-                <button onClick={() => setEcuInjectorCcInvalidating(injectorCc)} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 12.5 }}>
+                <button onClick={() => setEcuInjectorCcInvalidating(injectorCc)} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                   RESCALE ECU TO {injectorCc}cc
                 </button>
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: T.green, margin: '6px 0 4px' }}>ECU scaling matches the fitted injectors.</div>
+              <div style={{ fontSize: 11, color: T.ok, margin: '6px 0 4px' }}>ECU scaling matches the fitted injectors.</div>
             )}
             <ExpandableInfo title="Injector scaling — the step everyone forgets">
               The ECU never commands "fuel" — it commands a pulse width, calculated for the injector size it has been <i>told</i> is fitted. Bolt in bigger injectors without updating that number and every pulse delivers proportionally more fuel than intended, so the engine runs rich everywhere regardless of what your AFR table says.
@@ -1968,12 +1968,12 @@ export default function EngineManagementSandbox() {
             <Panel tight style={{ marginTop: 6, marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>INJECTOR DUTY PREVIEW · WOT @ 6500 RPM</div>
-                {fuel.stoich < 14 && <div style={{ fontSize: 10, color: T.amberInk, fontFamily: T.mono, fontWeight: 700 }}>{fuel.label} stoich {fuel.stoich}:1</div>}
+                {fuel.stoich < 14 && <div style={{ fontSize: 10, color: T.accInk, fontFamily: T.mono, fontWeight: 700 }}>{fuel.label} stoich {fuel.stoich}:1</div>}
               </div>
               <div style={{ height: 8, background: T.panel, borderRadius: 4, marginTop: 8, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-                <div style={{ width: `${Math.min(100, dutyPreview)}%`, height: '100%', background: dutyPreview > 90 ? T.red : dutyPreview > 75 ? T.yellow : T.green }} />
+                <div style={{ width: `${Math.min(100, dutyPreview)}%`, height: '100%', background: dutyPreview > 90 ? T.danger : dutyPreview > 75 ? T.warn : T.ok }} />
               </div>
-              <div style={{ fontSize: 12, marginTop: 7, color: dutyPreview > 90 ? '#ff9d9d' : '#c3cad2' }}>
+              <div style={{ fontSize: 12, marginTop: 7, color: dutyPreview > 90 ? T.dangerInk : T.inkSoft }}>
                 {dutyPreview.toFixed(0)}% duty {dutyPreview > 90 ? '— undersized for this build, expect forced lean-out' : ''}
               </div>
             </Panel>
@@ -1982,7 +1982,7 @@ export default function EngineManagementSandbox() {
             <Panel style={{ marginBottom: 13 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 700 }}>
                 <span>MAF RECAL STATUS</span>
-                <span style={{ color: needsMafRecal ? T.yellow : T.green, fontWeight: 800 }}>{needsMafRecal ? 'HARDWARE CHANGED' : 'STOCK — OK'}</span>
+                <span style={{ color: needsMafRecal ? T.warn : T.ok, fontWeight: 800 }}>{needsMafRecal ? 'HARDWARE CHANGED' : 'STOCK — OK'}</span>
               </div>
               {needsMafRecal && (
                 <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 7 }}>
@@ -1992,7 +1992,7 @@ export default function EngineManagementSandbox() {
             </Panel>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 7, fontWeight: 600 }}>MAF Scalar</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 6 }}>
-              <input type="range" min={0.75} max={1.25} step={0.01} value={mafScalar} onChange={(e) => setMafScalarInvalidating(Number(e.target.value))} style={{ flex: 1, accentColor: T.amber }} />
+              <input type="range" min={0.75} max={1.25} step={0.01} value={mafScalar} onChange={(e) => setMafScalarInvalidating(Number(e.target.value))} style={{ flex: 1, accentColor: T.acc }} />
               <div style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 15, width: 52, textAlign: 'right', color: T.ink }}>{mafScalar.toFixed(2)}</div>
             </div>
             <ExpandableInfo title="VE tuning vs. MAF tuning — platforms differ">
@@ -2038,9 +2038,9 @@ export default function EngineManagementSandbox() {
 
             <button onClick={doRun} disabled={running} style={{
               width: '100%', padding: '15px 0', borderRadius: 12, border: 'none', marginBottom: 16,
-              background: running ? '#3a2c1c' : T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 14.5,
+              background: running ? T.warnBg : T.acc, color: T.accOn, fontWeight: 800, fontSize: 14.5,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, letterSpacing: 0.3,
-              boxShadow: running ? 'none' : '0 6px 18px rgba(255,106,44,0.22)',
+              boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
             }}>
               <Play size={16} />
               {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
@@ -2049,7 +2049,7 @@ export default function EngineManagementSandbox() {
             {result && (
               <>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                  <StatTile label="PEAK WHP" value={result.peakHp} color={T.amberInk} />
+                  <StatTile label="PEAK WHP" value={result.peakHp} color={T.accInk} />
                   <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" color={T.cyan} />
                 </div>
 
@@ -2064,9 +2064,9 @@ export default function EngineManagementSandbox() {
                     <Panel tight style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <TrendingUp size={15} color={T.ink2} style={{ flexShrink: 0 }} />
                       <div style={{ display: 'flex', gap: 14, fontSize: 12.5, flexWrap: 'wrap' }}>
-                        <span style={{ color: dHp === 0 ? T.ink2 : dHp > 0 ? T.green : '#ff8f8f', fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
-                        <span style={{ color: dTq === 0 ? T.ink2 : dTq > 0 ? T.green : '#ff8f8f', fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dTq, ' lb-ft')}</span>
-                        <span style={{ color: dKnock === 0 ? T.ink2 : dKnock < 0 ? T.green : '#ff9d9d', fontFamily: T.mono, fontWeight: 800 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
+                        <span style={{ color: dHp === 0 ? T.ink2 : dHp > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
+                        <span style={{ color: dTq === 0 ? T.ink2 : dTq > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dTq, ' lb-ft')}</span>
+                        <span style={{ color: dKnock === 0 ? T.ink2 : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
                       </div>
                     </Panel>
                   );
@@ -2080,11 +2080,11 @@ export default function EngineManagementSandbox() {
                       return (
                         <button key={id} onClick={() => setDynoView(id)} style={{
                           flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
-                          border: `1px solid ${on ? T.amber : T.line}`, background: on ? T.amberBg : T.panel2,
-                          color: on ? T.amberInk : T.ink2, position: 'relative',
+                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
+                          color: on ? T.accInk : T.ink2, position: 'relative',
                         }}>
                           {label}
-                          {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.red }} />}
+                          {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
                         </button>
                       );
                     })}
@@ -2102,9 +2102,9 @@ export default function EngineManagementSandbox() {
                       <YAxis stroke={T.ink3} fontSize={10} />
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      {prevResult && <Line dataKey="prevHp" name="Prev WHP" stroke="#3a4149" strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      {prevResult && <Line dataKey="prevTorque" name="Prev TQ" stroke="#3a4149" strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      <Line dataKey="hp" name="WHP" stroke={T.amber} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      {prevResult && <Line dataKey="prevHp" name="Prev WHP" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
+                      {prevResult && <Line dataKey="prevTorque" name="Prev TQ" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
+                      <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
                       <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -2119,9 +2119,9 @@ export default function EngineManagementSandbox() {
                       <YAxis stroke={T.ink3} fontSize={10} />
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line dataKey="afrCommanded" name="AFR commanded" stroke="#5c6672" strokeDasharray="3 3" dot={false} isAnimationActive={false} />
-                      <Line dataKey="afr" name="AFR actual" stroke={T.green} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="timing" name="Timing used" stroke={T.yellow} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+                      <Line dataKey="afr" name="AFR actual" stroke={T.ok} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line dataKey="timing" name="Timing used" stroke={T.warn} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </Panel>
@@ -2141,7 +2141,7 @@ export default function EngineManagementSandbox() {
                         if (!p) return null;
                         const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
                         const warn = !bad && (p.duty > 85 || p.egtRisk);
-                        const edge = bad ? T.red : warn ? T.yellow : T.line;
+                        const edge = bad ? T.danger : warn ? T.warn : T.line;
 
                         // Each row: label, what was asked, what happened, and a verdict.
                         const rows = [
@@ -2173,9 +2173,9 @@ export default function EngineManagementSandbox() {
 
                         return (
                           <div key={r} style={{ border: `1px solid ${edge}`, borderRadius: 10, background: T.panel2, overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: bad ? T.redBg : warn ? T.yellowBg : T.panel }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: bad ? T.dangerBg : warn ? T.warnBg : T.panel }}>
                               <span style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 14, color: T.ink }}>{r} RPM</span>
-                              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: bad ? T.red : warn ? T.yellow : T.green }}>
+                              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: bad ? T.danger : warn ? T.warn : T.ok }}>
                                 {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
                               </span>
                             </div>
@@ -2184,12 +2184,12 @@ export default function EngineManagementSandbox() {
                                 <div key={i} style={{ paddingTop: 7 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                                     <span style={{ fontSize: 11.5, color: T.ink2, fontWeight: 600, minWidth: 62 }}>{row.k}</span>
-                                    <span style={{ fontFamily: T.mono, fontSize: 12, color: row.ok ? T.ink : T.red, fontWeight: 700, textAlign: 'right' }}>
+                                    <span style={{ fontFamily: T.mono, fontSize: 12, color: row.ok ? T.ink : T.danger, fontWeight: 700, textAlign: 'right' }}>
                                       {row.asked != null && <span style={{ color: T.ink3, fontWeight: 400 }}>{row.asked} → </span>}
                                       {row.got}
                                     </span>
                                   </div>
-                                  <div style={{ fontSize: 10.5, color: row.ok ? T.ink3 : '#ff9d9d', lineHeight: 1.4, marginTop: 1 }}>{row.note}</div>
+                                  <div style={{ fontSize: 10.5, color: row.ok ? T.ink3 : T.dangerInk, lineHeight: 1.4, marginTop: 1 }}>{row.note}</div>
                                 </div>
                               ))}
                             </div>
@@ -2235,7 +2235,7 @@ export default function EngineManagementSandbox() {
                                   const mag = e == null ? 0 : Math.min(1, Math.abs(e) / 12);
                                   const bg = e == null ? T.panel2 : `hsl(${e > 0 ? 8 : 200}, 60%, ${14 + mag * 22}%)`;
                                   return (
-                                    <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : '#fff', fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(0,0,0,0.35)' }}>
+                                    <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : T.ink, fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${shadowAlpha(0.35)}` }}>
                                       {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}
                                     </div>
                                   );
@@ -2246,7 +2246,7 @@ export default function EngineManagementSandbox() {
                         </div>
                         <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={applyHistogram} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: T.amber, color: '#1a0f08', fontWeight: 800, fontSize: 12.5 }}>
+                          <button onClick={applyHistogram} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                             APPLY CORRECTIONS TO VE
                           </button>
                           <button onClick={() => setHistogram(null)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2, fontWeight: 700, fontSize: 12.5 }}>
@@ -2263,7 +2263,7 @@ export default function EngineManagementSandbox() {
                   <>
                     <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
                     {result.events.length === 0 ? (
-                      <div style={{ fontSize: 12.5, color: T.green, background: T.greenBg, border: '1px solid #1f4a30', borderRadius: 10, padding: 12 }}>
+                      <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okBg}`, borderRadius: 10, padding: 12 }}>
                         Clean pull — no knock, fueling, or trim issues across the sweep.
                       </div>
                     ) : (
@@ -2272,9 +2272,9 @@ export default function EngineManagementSandbox() {
                           const isDanger = e.type === 'knock' || e.type === 'valve' || e.type === 'rich' || e.type === 'injscale' || e.type === 'float' || e.type === 'pressure';
                           const isWarn = e.type === 'lean' || e.type === 'fuel' || e.type === 'compressor' || e.type === 'cam';
                           const isViolet = e.type === 'maf';
-                          const bg = isDanger ? T.redBg : isWarn ? T.yellowBg : isViolet ? T.violetBg : T.panel2;
-                          const bd = isDanger ? '#3a2020' : isWarn ? '#3a2f16' : isViolet ? '#382a4a' : T.line;
-                          const fg = isDanger ? '#ff9d9d' : isWarn ? '#ffcf8a' : isViolet ? T.violet : T.cyan;
+                          const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
+                          const bd = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.line;
+                          const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
                           return (
                             <div key={i} style={{ padding: '11px 12px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -2284,8 +2284,8 @@ export default function EngineManagementSandbox() {
                                 </div>
                                 {e.impact != null && <span style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 800, color: fg, flexShrink: 0 }}>-{e.impact}</span>}
                               </div>
-                              {e.cause && <div style={{ fontSize: 11.5, color: '#9aa4b0', marginTop: 6, paddingLeft: 22 }}><b style={{ color: '#c3cad2' }}>Why: </b>{e.cause}</div>}
-                              {e.fix && <div style={{ fontSize: 11.5, color: '#9aa4b0', marginTop: 4, paddingLeft: 22 }}><b style={{ color: '#c3cad2' }}>Try: </b>{e.fix}</div>}
+                              {e.cause && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 6, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Why: </b>{e.cause}</div>}
+                              {e.fix && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 4, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Try: </b>{e.fix}</div>}
                             </div>
                           );
                         })}
@@ -2298,10 +2298,10 @@ export default function EngineManagementSandbox() {
                 {!running && dynoView === 'score' && scores && (
                       <>
                         <Eyebrow icon={Trophy}>Scorecard</Eyebrow>
-                        <Panel style={{ marginBottom: 10, background: T.amberBg, border: `1px solid ${T.amber}`, textAlign: 'center' }}>
-                          <div style={{ fontSize: 10, color: T.amberInk, letterSpacing: 1.5, fontWeight: 800 }}>PULL SCORE</div>
-                          <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.mono, color: T.amberInk, lineHeight: 1.1 }}>{scores.pull}</div>
-                          <div style={{ fontSize: 11.5, color: scores.pull >= bestScore ? T.green : T.ink2, fontWeight: 700, marginTop: 2 }}>
+                        <Panel style={{ marginBottom: 10, background: T.accBg, border: `1px solid ${T.acc}`, textAlign: 'center' }}>
+                          <div style={{ fontSize: 10, color: T.accInk, letterSpacing: 1.5, fontWeight: 800 }}>PULL SCORE</div>
+                          <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.mono, color: T.accInk, lineHeight: 1.1 }}>{scores.pull}</div>
+                          <div style={{ fontSize: 11.5, color: scores.pull >= bestScore ? T.ok : T.ink2, fontWeight: 700, marginTop: 2 }}>
                             {scores.pull >= bestScore ? 'NEW BEST' : `Best: ${bestScore}`}
                           </div>
                         </Panel>
@@ -2319,7 +2319,7 @@ export default function EngineManagementSandbox() {
                         </div>
                         <Note>Pull Score rewards actual output (peak whp + torque), scaled by how clean (Tuning) and how sound (Engineer) the build is — a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling; every pull is a chance to beat your best.</Note>
                         {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
-                          <Panel tight style={{ marginBottom: 16, fontSize: 11.5, color: '#9aa4b0', fontFamily: T.mono, lineHeight: 1.8 }}>
+                          <Panel tight style={{ marginBottom: 16, fontSize: 11.5, color: T.ink2, fontFamily: T.mono, lineHeight: 1.8 }}>
                             {scores.tuning.deductions.map((d, i) => <div key={'t' + i}>{d}</div>)}
                             {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
                           </Panel>
@@ -2351,9 +2351,9 @@ export default function EngineManagementSandbox() {
             <button key={t.id} onClick={() => changeTab(t.id)} style={{
               flex: 1, padding: '10px 0 9px', background: 'none', border: 'none', position: 'relative',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              color: active ? T.amberInk : T.ink3,
+              color: active ? T.accInk : T.ink3,
             }}>
-              {active && <div style={{ position: 'absolute', top: 0, left: '30%', right: '30%', height: 2, background: T.amber, borderRadius: '0 0 2px 2px' }} />}
+              {active && <div style={{ position: 'absolute', top: 0, left: '30%', right: '30%', height: 2, background: T.acc, borderRadius: '0 0 2px 2px' }} />}
               <Icon size={17} />
               <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.3 }}>{t.label}</span>
             </button>

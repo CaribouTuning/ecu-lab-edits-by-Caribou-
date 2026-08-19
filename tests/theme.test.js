@@ -19,20 +19,11 @@ describe('T', () => {
       'acc', 'accInk', 'accBg', 'accOn',
       'ok', 'okInk', 'okBg', 'warn', 'warnInk', 'warnBg',
       'danger', 'dangerInk', 'dangerBg',
-      'amber', 'amberInk', 'amberBg', 'green', 'greenBg',
-      'yellow', 'yellowBg', 'red', 'redBg',
       'cyan', 'cyanBg', 'violet', 'violetBg', 'mono', 'sans',
     ];
     for (const key of required) {
       expect(T[key], `T.${key} is missing`).toBeTruthy();
     }
-  });
-
-  it('aliases the retired amber keys onto the accent', () => {
-    // Kept so this commit recolours the app without editing 500 call sites.
-    expect(T.amber).toBe(tokens.acc);
-    expect(T.amberInk).toBe(tokens.accInk);
-    expect(T.amberBg).toBe(tokens.accBg);
   });
 
   it('no longer contains the old orange anywhere', () => {

@@ -4,15 +4,11 @@
  * Every colour in the app resolves to `src/ui/tokens.js`. Screens must not hard-code
  * hex values — `tests/no-hardcoded-colours.test.js` enforces that, because the rule
  * was stated here for a long time and quietly broken 58 times.
- *
- * The `amber*`/`yellow`/`green`/`red` keys are ALIASES kept so the pre-overhaul
- * screens keep rendering while they are migrated. Write new code against
- * `acc`/`warn`/`ok`/`danger` and delete an alias the moment its last caller goes.
  */
 
 import { clamp } from '../sim/index.js';
 
-import { tokens } from './tokens.js';
+import { accAlpha, shadowAlpha, tokens } from './tokens.js';
 
 const T = {
   bg: tokens.bg,
@@ -48,17 +44,6 @@ const T = {
   violet: tokens.violet,
   violetBg: tokens.violetBg,
 
-  // --- aliases retired during the overhaul; see the file comment above ---
-  amber: tokens.acc,
-  amberInk: tokens.accInk,
-  amberBg: tokens.accBg,
-  green: tokens.ok,
-  greenBg: tokens.okBg,
-  yellow: tokens.warn,
-  yellowBg: tokens.warnBg,
-  red: tokens.danger,
-  redBg: tokens.dangerBg,
-
   mono: tokens.mono,
   sans: tokens.sans,
 };
@@ -83,4 +68,4 @@ function heat(value, min, max) {
   return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
 }
 
-export { T, heat };
+export { T, accAlpha, heat, shadowAlpha };
