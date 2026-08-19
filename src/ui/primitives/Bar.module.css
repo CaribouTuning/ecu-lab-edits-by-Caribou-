@@ -1,0 +1,20 @@
+.wrap { font-family: var(--sans); }
+
+.label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  color: var(--ink2);
+  margin-bottom: 4px;
+}
+
+.pct { font-family: var(--mono); font-weight: 700; }
+
+.track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--panel3);
+  overflow: hidden;
+}
+
+.fill { height: 100%; transition: width 0.4s ease; }
