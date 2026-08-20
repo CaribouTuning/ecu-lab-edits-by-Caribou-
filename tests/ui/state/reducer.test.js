@@ -10,8 +10,58 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING } from '../../../src/sim/index.js';
+import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
+
+/**
+ * A state where EVERY field of EVERY slice holds a value no real APPLY_PRESET write
+ * could ever produce: a string built from the field's own `slice.field` name. The
+ * field list comes from `makeInitialState()`'s own output keys, not a hand-maintained
+ * list, so a field added to a slice in a later PR is swept automatically.
+ *
+ * Because each sentinel is a fresh string unique to its own field, no real preset
+ * value — a number, an array, a plain object, `null`, a boolean, ANY type the 21 real
+ * writes use — can ever equal it. That makes a single strict `!==` check exact for
+ * "did the reducer touch this field", for every field type in play, with no deep-
+ * equality helper needed: the starting value is never deep-equal to a real written
+ * value by construction, and a field the reducer does not touch keeps the identical
+ * string reference through the object spread, so `!==` cannot false-positive either.
+ * @returns {any} an object shaped like StoreState, but not typed as one — every field
+ *   deliberately holds a sentinel string instead of a value of its real type.
+ */
+function makeSentinelState() {
+  const init = makeInitialState();
+  const state = /** @type {any} */ ({});
+  for (const slice of Object.keys(init)) {
+    const sliceState = /** @type {any} */ ({});
+    for (const field of Object.keys(/** @type {any} */ (init)[slice])) {
+      sliceState[field] = `SENTINEL::${slice}.${field}`;
+    }
+    state[slice] = sliceState;
+  }
+  return state;
+}
+
+/**
+ * The `slice.field` keys whose value differs between two sentinel-seeded state trees,
+ * via strict `!==`. See {@link makeSentinelState} for why reference/value inequality
+ * alone is exact here for every field type.
+ * @param {any} before
+ * @param {any} after
+ * @returns {Set<string>}
+ */
+function changedFieldKeys(before, after) {
+  const changed = new Set();
+  for (const slice of Object.keys(before)) {
+    for (const field of Object.keys(before[slice])) {
+      if (before[slice][field] !== after[slice][field]) {
+        changed.add(`${slice}.${field}`);
+      }
+    }
+  }
+  return changed;
+}
 
 /**
  * A complete, real engineConfig (BMW N54 figures — src/sim/presets.js) so this file's
@@ -379,6 +429,68 @@ describe('APPLY_PRESET', () => {
     dragged.build = { ...dragged.build, mafScalar: 0.8 };
     const s = reducer(dragged, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.build.mafScalar).toBe(1.0);
+  });
+});
+
+describe('APPLY_PRESET — exact write surface (catches drift in both directions)', () => {
+  // Round 1 found 14/21 fields deletable with the suite green; round 2's hardcoded
+  // `boostSel: 3` sailed through the table-driven fix at 65/65. Both survived because
+  // the old test only compared a hand-built map against the local fixture's own key
+  // set — never against what the reducer actually writes. This test instead seeds
+  // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
+  // for real, and asserts the walked set of changed fields against the 21-field
+  // contract this action documents: a stray write grows the changed set past 21, a
+  // dropped write shrinks it below 21, and the failure message names the field either
+  // way.
+  it('changes exactly the 21 documented fields — no more, no fewer', () => {
+    const before = makeSentinelState();
+    const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const changed = changedFieldKeys(before, after);
+
+    const expected = [
+      'build.engineConfig', 'build.mods', 'build.turboOn', 'build.boostCurve',
+      'build.turbineIdx', 'build.turbineCount', 'build.compressorIdx', 'build.injIdx',
+      'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
+      'build.presetId', 'build.presetPrompt',
+      'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
+      'session.result', 'session.prevResult',
+    ];
+
+    expect([...changed].sort()).toEqual([...expected].sort());
+  });
+});
+
+describe('APPLY_PRESET — payload contract stays in sync with sim/presets.js', () => {
+  // The 15 payload-carried fields must be read from applyPreset()'s REAL return value,
+  // not the local fixture: if presets.js grows a 16th field tomorrow and the reducer
+  // is not updated to copy it into the store, nothing before this test would notice —
+  // the fixture and the map would happily agree with each other while both silently
+  // ignore the new field.
+  it('copies every key the real applyPreset() returns into the store', () => {
+    const rawPreset = ENGINE_PRESETS[0];
+    const payload = applyPreset(rawPreset);
+    const payloadKeys = Object.keys(payload);
+    // Sanity: fail loudly (not with a vacuous pass) if applyPreset()'s shape ever
+    // collapses to nothing.
+    expect(payloadKeys.length).toBeGreaterThan(0);
+
+    const before = makeSentinelState();
+    const after = reducer(before, {
+      type: ACTIONS.APPLY_PRESET, preset: /** @type {any} */ (payload),
+    });
+
+    // A key is "copied" if it landed, BY THE SAME NAME, in whichever slice actually
+    // received it — we don't hardcode which slice each key belongs to, we just look
+    // for the exact value applyPreset() produced. Starting from an all-sentinel state
+    // means there is no way for this to pass by coincidence: a field the reducer
+    // doesn't copy is still sitting at its sentinel, which can never equal a real
+    // payload value.
+    const missing = payloadKeys.filter((key) => (
+      after.build[key] !== /** @type {any} */ (payload)[key]
+      && after.tune[key] !== /** @type {any} */ (payload)[key]
+    ));
+
+    expect(missing).toEqual([]);
   });
 });
 
