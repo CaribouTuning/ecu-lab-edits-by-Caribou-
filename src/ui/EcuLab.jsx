@@ -533,7 +533,15 @@ function TrimBar({ label, value }) {
 }
 
 // ============================================================
-function EngineManagementSandbox() {
+/**
+ * The application body. Exported so a caller can mount it inside its OWN
+ * `<StoreProvider>` and share the store with it — which is how the tests reach
+ * build states this component's own guards cannot produce on their own (see
+ * tests/ui/build-store.test.jsx). The default export below is the same component
+ * with a provider already around it, and is what the app and most tests use.
+ * @returns {React.ReactElement}
+ */
+export function EcuLabApp() {
   const [appView, setAppView] = useState('start');
   const [tab, setTab] = useState('dash');
   // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
@@ -1628,7 +1636,7 @@ function EngineManagementSandbox() {
 
                   <Panel tight style={{ marginBottom: 10 }}>
                     {/* Tap a bar to select that RPM point, then edit it below with full-width controls. */}
-                    <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 104 }}>
+                    <div data-testid="boost-columns" style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 104 }}>
                       {RPM.map((r, i) => {
                         const on = boostSel === i;
                         const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
@@ -2340,7 +2348,7 @@ function EngineManagementSandbox() {
 export default function EcuLab() {
   return (
     <StoreProvider>
-      <EngineManagementSandbox />
+      <EcuLabApp />
     </StoreProvider>
   );
 }
