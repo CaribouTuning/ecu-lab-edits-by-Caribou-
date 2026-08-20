@@ -1,6 +1,6 @@
 /** An on/off row for a single hardware option. */
 
-import React from 'react';
+import React, { useId } from 'react';
 
 import styles from './Toggle.module.css';
 
@@ -13,17 +13,20 @@ import styles from './Toggle.module.css';
  * @returns {React.ReactElement}
  */
 export function Toggle({ label, sub, checked, onChange }) {
+  const subId = useId();
   return (
     <button
       type="button"
       className={styles.row}
       role="switch"
       aria-checked={checked}
+      aria-label={label}
+      aria-describedby={sub ? subId : undefined}
       onClick={() => onChange(!checked)}
     >
       <span>
         <span className={styles.label}>{label}</span>
-        {sub && <span className={styles.sub} style={{ display: 'block' }}>{sub}</span>}
+        {sub && <span id={subId} className={styles.sub}>{sub}</span>}
       </span>
       <span className={styles.track}>
         <span className={styles.knob} />

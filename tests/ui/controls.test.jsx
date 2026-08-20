@@ -67,8 +67,8 @@ describe('Select', () => {
         onChange={() => {}}
       />,
     );
-    expect(screen.getAllByRole('option')).toHaveLength(4);
-    expect(screen.getByRole('option', { name: 'Custom build' })).toBeTruthy();
+    const labels = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(labels).toEqual(['N54 3.0', 'B58 3.0', 'VQ35DE', 'Custom build']);
   });
 
   it('reports the selected value', () => {
@@ -87,7 +87,7 @@ describe('Select', () => {
 describe('Toggle', () => {
   it('exposes itself as a switch reflecting its state', () => {
     render(<Toggle label="Intake" checked onChange={() => {}} />);
-    expect(screen.getByRole('switch', { name: /Intake/ }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('switch', { name: 'Intake' }).getAttribute('aria-checked')).toBe('true');
   });
 
   it('reports the flipped value when clicked', () => {
@@ -100,5 +100,27 @@ describe('Toggle', () => {
   it('renders its sub-label', () => {
     render(<Toggle label="Intake" sub="+4% VE above 4000 RPM" checked onChange={() => {}} />);
     expect(screen.getByText('+4% VE above 4000 RPM')).toBeTruthy();
+  });
+
+  it('names the switch after its label alone, not the sub-label too', () => {
+    // The sub-label carries the physics ("+4% VE above 4000 RPM"). Fused into the
+    // accessible name it becomes one unbroken run; as a description it is announced
+    // separately, the way the two visually separated lines read on screen.
+    render(<Toggle label="Intake" sub="+4% VE above 4000 RPM" checked onChange={() => {}} />);
+    const el = screen.getByRole('switch', { name: 'Intake' });
+    expect(el.getAttribute('aria-label')).toBe('Intake');
+  });
+
+  it('describes the switch with its sub-label', () => {
+    render(<Toggle label="Intake" sub="+4% VE above 4000 RPM" checked onChange={() => {}} />);
+    const el = screen.getByRole('switch');
+    const describedBy = el.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy).textContent).toBe('+4% VE above 4000 RPM');
+  });
+
+  it('carries no description when there is no sub-label', () => {
+    render(<Toggle label="Intake" checked onChange={() => {}} />);
+    expect(screen.getByRole('switch').getAttribute('aria-describedby')).toBeNull();
   });
 });
