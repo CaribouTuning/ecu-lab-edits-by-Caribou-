@@ -28,7 +28,7 @@
 
 The design doc says "three contexts". Three *hooks* is what consumers get, and that part is unchanged. Internally this is one reducer, because the operations that matter cross every boundary:
 
-`applyEnginePreset` currently makes **23 sequential `setState` calls** spanning hardware, calibration tables and run results. Its own comment warns that routing its writes through the invalidating setters "would make that order-dependent". `resetToStock` makes six writes and documents that "the last call pins `tablesDirty` back to false". `withTableEdit` writes a **tune** table, then clears `presetId` (**build**), then sets `tablesDirty` (**tune**).
+`applyEnginePreset` currently makes **21 sequential `setState` calls** spanning hardware, calibration tables and run results. Its own comment warns that routing its writes through the invalidating setters "would make that order-dependent". `resetToStock` makes six writes and documents that "the last call pins `tablesDirty` back to false". `withTableEdit` writes a **tune** table, then clears `presetId` (**build**), then sets `tablesDirty` (**tune**).
 
 Three independent contexts would turn each of those into cross-context choreography, preserving the ordering hazards and adding provider-nesting rules to remember. A reducer computes the next state in one pass, so `APPLY_PRESET` becomes atomic and the hazard disappears rather than being documented.
 
@@ -294,7 +294,7 @@ Create `tests/ui/state/reducer.test.js`:
  * Reducer tests — pure, no DOM.
  *
  * The reducer exists so that operations spanning several slices happen in ONE pass.
- * EcuLab's applyEnginePreset makes 23 sequential setState calls and its own comment
+ * EcuLab's applyEnginePreset makes 21 sequential setState calls and its own comment
  * warns the order matters; resetToStock documents that "the last call pins tablesDirty
  * back to false". Those hazards are what this file exists to make impossible.
  */
@@ -687,7 +687,7 @@ npm run build
 git add src/ui/state/reducer.js tests/ui/state/reducer.test.js
 git commit -m "Make preset load, reset and repair atomic actions
 
-applyEnginePreset made 23 sequential setState calls and warned in a comment
+applyEnginePreset made 21 sequential setState calls and warned in a comment
 that routing them through the invalidating setters would make the result
 order-dependent. resetToStock made six and documented that the last one had to
 pin tablesDirty back to false.

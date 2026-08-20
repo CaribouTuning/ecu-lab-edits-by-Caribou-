@@ -207,13 +207,8 @@ describe('SET_ENGINE_CONFIG_PATCH', () => {
   it('patching the engine config merges and invalidates', () => {
     const loaded = makeInitialState();
     loaded.build = { ...loaded.build, presetId: 'n54' };
-    const s = reducer(loaded, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { cylinders: 8 } });
-    // `cylinders` is not a real EngineConfig field (it's `configuration`, e.g. 'V6') —
-    // deliberately used here per the plan's verbatim test code, to prove the merge
-    // lands whatever key the patch carries rather than asserting anything about
-    // EngineConfig's real shape.
-    // @ts-expect-error intentionally patching a non-EngineConfig key, see above
-    expect(s.build.engineConfig.cylinders).toBe(8);
+    const s = reducer(loaded, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { compression: 11.5 } });
+    expect(s.build.engineConfig.compression).toBe(11.5);
     expect(s.build.presetId).toBeNull();
   });
 
@@ -221,15 +216,19 @@ describe('SET_ENGINE_CONFIG_PATCH', () => {
     // A patch that REPLACES rather than merges would silently drop bore, stroke and
     // every other untouched field — the app would still render, just wrongly.
     const loaded = makeInitialState();
-    const boreBefore = loaded.build.engineConfig.bore;
-    const s = reducer(loaded, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { cylinders: 8 } });
-    expect(s.build.engineConfig.bore).toBe(boreBefore);
+    const before = loaded.build.engineConfig;
+    const s = reducer(loaded, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { compression: 11.5 } });
+    const after = s.build.engineConfig;
+    expect(after.bore).toBe(before.bore);
+    expect(after.stroke).toBe(before.stroke);
+    expect(after.configuration).toBe(before.configuration);
+    expect(after.redline).toBe(before.redline);
   });
 });
 
 describe('APPLY_PRESET', () => {
   const preset = {
-    presetId: 'n54', engineConfig: { cylinders: 6 }, mods: { intake: true },
+    presetId: 'n54', engineConfig: { configuration: 'I6' }, mods: { intake: true },
     turboOn: true, boostCurve: [8, 8, 8, 8, 8, 8, 8, 8], turbineIdx: 1,
     turbineCount: 2, compressorIdx: 1, injIdx: 2, ecuInjectorCc: 440,
     octaneIdx: 1, exhaustDiaIdx: 2, ve: [[80]], timing: [[20]], afr: [[12]],
