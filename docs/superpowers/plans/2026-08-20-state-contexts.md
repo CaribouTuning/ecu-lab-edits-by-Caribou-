@@ -705,7 +705,8 @@ Claude-Session: https://claude.ai/code/session_01QXHAjTu429hwKhLLSRfTCd"
 
 **Files:**
 - Modify: `src/ui/EcuLab.jsx`
-- Modify: `src/main.jsx` (wrap in `StoreProvider`)
+- ~~Modify: `src/main.jsx`~~ — **superseded during implementation.** The provider is
+  mounted inside `EcuLab.jsx` instead; see Step 1.
 
 **Interfaces:**
 - Consumes: `useBuild`, `ACTIONS` from Task 2/3.
@@ -769,7 +770,28 @@ pass the function form through an action.
 
 - [ ] **Step 1: Wrap the app in the provider**
 
-In `src/main.jsx`, wrap `<EcuLab />` in `<StoreProvider>`, inside the existing `<ErrorBoundary>`.
+**Do NOT put the provider in `src/main.jsx`.** That was this plan's original instruction and
+it is wrong: `tests/ui/characterisation.test.jsx` renders `<EcuLab />` bare, so a provider
+mounted only in `main.jsx` throws `useStore()`'s guard and breaks all eight of them —
+fixable only by editing tests that must not be edited. Doing both would nest a live
+provider inside a dead one.
+
+Instead, rename the component to `EcuLabApp` and make `EcuLab.jsx`'s default export a
+shell:
+
+```jsx
+export default function EcuLab() {
+  return (
+    <StoreProvider>
+      <EcuLabApp />
+    </StoreProvider>
+  );
+}
+```
+
+`main.jsx` stays exactly as it is — the thin "mount the app in an error boundary" entry
+point it documents itself as — and a test that renders `<EcuLab />` gets the same single
+store the browser does.
 
 - [ ] **Step 2: Replace the build `useState` calls**
 
