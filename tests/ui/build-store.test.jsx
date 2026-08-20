@@ -18,17 +18,35 @@
  * These tests close that gap: they drive the real controls and read the real header.
  */
 
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, ENGINE_PRESETS, OCTANE_OPTS, TURBINE_OPTS,
   applyPreset, computeHardwareVE, turbineWithCount,
 } from '../../src/sim/index.js';
+import { LOAD, RPM } from '../../src/sim/tables.js';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+
+// jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
+// results panel) needs one to mount at all, so any test that reaches a rendered
+// dyno result throws an uncaught ReferenceError from inside react-dom's commit
+// phase without this stub. Same approach as characterisation.test.jsx.
+// observe/unobserve/disconnect are no-ops: the tests below never depend on a
+// resize callback firing, only on the chart mounting.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+const hadResizeObserver = 'ResizeObserver' in window;
+if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
+afterAll(() => {
+  if (!hadResizeObserver) delete window.ResizeObserver;
+});
 
 afterEach(cleanup);
 
@@ -89,6 +107,54 @@ describe('moving the boost-curve cursor', () => {
       return selectedRpm() !== before;
     });
     expect(moved).toBe(true);
+
+    expect(headerEngineName()).toBe(preset);
+  });
+});
+
+describe('moving the tune-grid cursor', () => {
+  it('does not stop the header claiming the factory preset', () => {
+    // The twin of the boost-cursor test above: `setSelection` on the TUNE grid
+    // dispatches SET_TUNE_FIELD (a cursor move), not SET_TABLE (a calibration edit
+    // that clears presetId and flags tablesDirty). Selecting a grid cell must not
+    // disown a loaded preset or trip the overwrite-confirmation prompt.
+    launch();
+    const preset = loadFirstPreset();
+    // Guard the setup rather than trusting it: if loading the preset silently failed,
+    // presetId would be null before the click and the assertion below would pass for
+    // the wrong reason.
+    expect(preset).not.toMatch(/^\d\.\dL /);
+
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    const grid = within(screen.getByTestId('tuning-grid'));
+    // TuningGrid renders, in DOM order: RPM.length column-header buttons (each
+    // itself a numeric label, so a text-pattern filter can't tell them apart from
+    // data cells), then one row per LOAD entry — a numeric row-header button
+    // followed by RPM.length data-cell buttons. Slicing by that known layout is
+    // what actually isolates the data cells; text content alone can collide (a VE
+    // cell can legitimately read "100", same as a LOAD header).
+    const allButtons = grid.getAllByRole('button');
+    const dataCells = [];
+    let idx = RPM.length;
+    for (let row = 0; row < LOAD.length; row += 1) {
+      idx += 1; // row-header button
+      for (let col = 0; col < RPM.length; col += 1) { dataCells.push(allButtons[idx]); idx += 1; }
+    }
+
+    // Selecting a grid cell mounts the SelectionDock, whose readout line names the
+    // selected cell's coordinates: "<rpm> RPM · <map> kPa MAP". Reading it after two
+    // DIFFERENT cell clicks and confirming it changed proves the clicks actually
+    // MOVED the cursor — without that, a click that hit nothing (or landed on the
+    // same cell twice) would leave the header intact and the test would pass while
+    // proving nothing.
+    const cellLabel = () => within(screen.getByTestId('selection-dock'))
+      .getByText(/^\d+ RPM · \d+ kPa MAP$/).textContent;
+
+    fireEvent.click(dataCells[0]);
+    const first = cellLabel();
+    fireEvent.click(dataCells[dataCells.length - 1]);
+    const second = cellLabel();
+    expect(second).not.toBe(first);
 
     expect(headerEngineName()).toBe(preset);
   });
@@ -273,5 +339,108 @@ describe('resetting the calibration to stock', () => {
     const stock = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, hw);
     const modded = computeHardwareVE(DEFAULT_ENGINE_CONFIG, { ...DEFAULT_MODS, intake: true }, hw);
     expect(modded).not.toEqual(stock);
+  });
+});
+
+describe('accepting a re-logged VE table', () => {
+  it('rewrites the VE table on ACCEPT RE-LOGGED VALUES', () => {
+    // recalcVE (EcuLab.jsx:663) is the ACCEPT RE-LOGGED VALUES button's dispatch.
+    // Stub it out and the button silently does nothing — the player is told their
+    // hardware and calibration are out of sync and handed a button that claims to
+    // fix it, and nothing happens.
+    /** @type {*} */
+    let tune;
+    render(
+      <StoreProvider>
+        <TuneProbe onTune={(t) => { tune = t; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+
+    // Drift the hardware away from the stock VE table the store starts with, so
+    // veAdvice.inSync goes false and the ACCEPT button actually renders.
+    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+
+    // Guard: the button only renders when the advisor actually sees a gap. If the
+    // toggles above hadn't moved computeHardwareVE, this query would throw instead
+    // of silently finding nothing, and the assertion below could never run for the
+    // right reason.
+    const acceptBtn = screen.getByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' });
+    const veBefore = tune.ve;
+
+    fireEvent.click(acceptBtn);
+
+    expect(tune.ve).not.toEqual(veBefore);
+  });
+});
+
+describe('applying a fuel-trim histogram', () => {
+  it('rewrites the VE table on APPLY CORRECTIONS TO VE', async () => {
+    // applyHistogram (EcuLab.jsx:990) is the APPLY CORRECTIONS TO VE button's
+    // dispatch. tests/regressions.test.js re-implements the histogram math directly
+    // and never touches this button, so it LOOKS like coverage of this path and is
+    // not. This drives the real control instead: fit hardware the stock VE table
+    // doesn't match, run a dyno pull (the ECU fuels from the stale table while the
+    // engine actually breathes the true one, so the pull logs a real mismatch),
+    // build a histogram from it, and apply it.
+    /** @type {*} */
+    let tune;
+    render(
+      <StoreProvider>
+        <TuneProbe onTune={(t) => { tune = t; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+
+    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    // The reveal is a setInterval that ends by setting running false, which is what
+    // uncovers the CURVES/PULL LOG/DATALOG/SCORE sub-tabs. Real timers + waitFor,
+    // same approach as characterisation.test.jsx's dyno-pull test.
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      { timeout: 10000 },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' }));
+
+    // Guard: BUILD HISTOGRAM swaps its own button for an APPLY/DISCARD pair only once
+    // `histogram` is actually set. If that click's handler were missing, this query
+    // would throw instead of silently finding nothing.
+    const applyBtn = screen.getByRole('button', { name: 'APPLY CORRECTIONS TO VE' });
+    const veBefore = tune.ve;
+
+    fireEvent.click(applyBtn);
+
+    expect(tune.ve).not.toEqual(veBefore);
+  });
+});
+
+describe('choosing Custom build from the preset picker', () => {
+  it('stops the header claiming the preset', () => {
+    // clearPresetId (EcuLab.jsx:600) is CLEAR_PRESET_ID's only call site, reached by
+    // choosing "Custom build" from the preset picker. The reducer case is tested;
+    // this call site was not — stub the dispatch and choosing "Custom build" leaves
+    // the header still naming the preset the player just disowned.
+    launch();
+    const preset = loadFirstPreset();
+    expect(preset).not.toMatch(/^\d\.\dL /);
+
+    fireEvent.change(presetPicker(), { target: { value: '__custom__' } });
+
+    expect(headerEngineName()).toMatch(/^\d\.\dL /);
   });
 });
