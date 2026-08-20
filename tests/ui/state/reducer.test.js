@@ -142,6 +142,46 @@ describe('SET_BUILD_FIELD', () => {
   });
 });
 
+describe('CLEAR_PRESET_ID', () => {
+  it('clears the preset label', () => {
+    const loaded = { ...makeInitialState() };
+    loaded.build = { ...loaded.build, presetId: 'n54' };
+    const s = reducer(loaded, { type: ACTIONS.CLEAR_PRESET_ID });
+    expect(s.build.presetId).toBeNull();
+  });
+
+  it('does not flag the calibration tables as dirty', () => {
+    // Unlike SET_TABLE, choosing "Custom build" is not itself a calibration edit.
+    const s = reducer(makeInitialState(), { type: ACTIONS.CLEAR_PRESET_ID });
+    expect(s.tune.tablesDirty).toBe(false);
+  });
+
+  it('touches ONLY presetId — a value the action cannot even carry proves the point', () => {
+    // The bug this action exists to fix: the old call site dispatched
+    // `{type: SET_BUILD_FIELD, field: 'presetId', value: null}`, which only worked
+    // because the reducer's OWN trailing `presetId: null` clobbered whatever value the
+    // action carried — so a hypothetical caller passing a non-null value would have
+    // silently gotten null back anyway. CLEAR_PRESET_ID has no `value` field in its
+    // shape at all, so there is no payload for a future caller to get wrong here; this
+    // test instead pins that every OTHER build field survives the dispatch untouched,
+    // which is the property SET_BUILD_FIELD could never have offered (it invalidates
+    // every write, by design).
+    const loaded = { ...makeInitialState() };
+    loaded.build = { ...loaded.build, presetId: 'n54', turboOn: true, mafScalar: 0.9 };
+    const s = reducer(loaded, { type: ACTIONS.CLEAR_PRESET_ID });
+    expect(s.build.presetId).toBeNull();
+    expect(s.build.turboOn).toBe(true);
+    expect(s.build.mafScalar).toBe(0.9);
+  });
+
+  it('leaves the other slices untouched by reference', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.CLEAR_PRESET_ID });
+    expect(after.tune).toBe(before.tune);
+    expect(after.session).toBe(before.session);
+  });
+});
+
 describe('SET_TURBINE', () => {
   it('fits one of the chosen housing, because a twin-turbo count belongs to a preset', () => {
     const twin = { ...makeInitialState() };

@@ -36,6 +36,7 @@ import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING } from '../..
  */
 export const ACTIONS = Object.freeze({
   SET_BUILD_FIELD: 'SET_BUILD_FIELD',
+  CLEAR_PRESET_ID: 'CLEAR_PRESET_ID',
   SET_TURBINE: 'SET_TURBINE',
   SET_TABLE: 'SET_TABLE',
   SET_SESSION_FIELD: 'SET_SESSION_FIELD',
@@ -56,6 +57,19 @@ export const ACTIONS = Object.freeze({
  * edits alone don't touch the calibration tables (see SET_TABLE for the write that
  * does).
  * @typedef {{type: 'SET_BUILD_FIELD', field: keyof BuildState, value: *}} SetBuildFieldAction
+ */
+
+/**
+ * Clears `presetId` alone, with NO other side effect — deliberately narrower than
+ * `SET_BUILD_FIELD`, which always pairs a field write with the same invalidation.
+ * Its one caller is the preset picker's "Custom build" option: choosing it disowns
+ * whatever preset is loaded without touching any other build field, so a generic
+ * `{type: SET_BUILD_FIELD, field: 'presetId', value: null}` would only have worked
+ * by coincidence — the reducer's own trailing `presetId: null` happens to overwrite
+ * whatever `action.value` said, so a future caller passing a non-null value would
+ * silently get `null` back with no error anywhere. This action can never carry a
+ * value that lies about what it does.
+ * @typedef {{type: 'CLEAR_PRESET_ID'}} ClearPresetIdAction
  */
 
 /**
@@ -181,7 +195,7 @@ export const ACTIONS = Object.freeze({
  * shape is assignable to `StoreAction` and the eleven specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
- * @typedef {SetBuildFieldAction | SetTurbineAction | SetTableAction |
+ * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
  *   ResetToStockAction | RepairEngineAction | BankPullAction
@@ -212,6 +226,12 @@ export function reducer(state, action) {
       return {
         ...state,
         build: { ...state.build, [action.field]: action.value, presetId: null },
+      };
+
+    case ACTIONS.CLEAR_PRESET_ID:
+      return {
+        ...state,
+        build: { ...state.build, presetId: null },
       };
 
     case ACTIONS.SET_TURBINE:
