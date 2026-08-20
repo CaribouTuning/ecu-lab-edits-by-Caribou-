@@ -15,6 +15,29 @@
 - **No changes to `src/sim/`.**
 - **No new dependencies**, of any kind.
 - **No observable behaviour change.** This is a refactor. If a characterisation test needs editing to pass, the refactor is wrong — not the test.
+- **The reducer is pure, with exactly one documented exception.** No `Date.now()`, no
+  `Math.random()`, no mutation of the state argument — **except `LIVE_STEP`**, which is a
+  simulation integrator. It calls `liveStep` (`src/sim/live.js:73`), whose `sensorRead`
+  (`:47`) uses `Math.random()` for sensor noise. No other case may do this.
+
+  This was measured, not conceded. The pure alternative — a render-assigned `liveRef`
+  read by the interval, with `liveStep` called outside the reducer — applies roughly
+  **half** the integration steps it should (0.51 vs 0.96 applied-step ratio over 40
+  interleaved ticks; 1 step in 81 with renders fully deferred). `live` is a fold
+  accumulator, not an input: `liveCfgRef` and `throttleRef` may be one commit stale
+  because a stale *input* for one tick is invisible, but if the commit has not landed
+  when the next tick fires, a ref-read `prev` makes that tick recompute from the same
+  base and **discard** the previous step. Queued `LIVE_STEP` actions instead fold off one
+  another on the hook queue and lose nothing. The error is load-dependent, so it would
+  read as an engine that spins up at a silently variable fraction of real time — a
+  physics bug, not a state bug.
+
+  **PR 4 must exclude `LIVE_STEP` from the undo log**, and would have had to regardless of
+  purity: 20 actions/second is 72,000 entries an hour, each pinning a `cfg` that
+  references the full VE/timing/AFR tables. The live engine is ephemeral simulation
+  state. One-step replay divergence is fractional; multi-step replay is a bounded random
+  walk through the learned fuel trim, because noise feeds `sensedLambda` → `stft` →
+  `ltft` → `mafScalar`.
 - Test files import assertions explicitly from `vitest` — there are no globals, and no setup file, so component tests need `afterEach(cleanup)`.
 - Under `@vitest-environment jsdom` the global `URL` is jsdom's, which `fs.readFileSync` rejects. Use `import { URL as NodeURL } from 'node:url'` for source-text assertions.
 - `no-undef` and `no-unused-vars` are active in ESLint.
