@@ -123,9 +123,9 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * The reducer's equivalent of `setCfg` (`EcuLab.jsx:738`,
- * `setEngineConfigInvalidating((c) => ({ ...c, ...patch }))`). Actions cannot carry
- * functions, so the merge happens here: the reducer already holds the current
+ * The reducer's equivalent of `setCfg`, which EcuLab.jsx used to implement as a
+ * functional update over local state that also cleared `presetId`. Actions cannot
+ * carry functions, so the merge happens here: the reducer already holds the current
  * `engineConfig` and does the spread itself. Invalidates like every other hardware
  * write.
  *
@@ -183,9 +183,9 @@ export const ACTIONS = Object.freeze({
  * animation before and after an interval-driven timer runs; that is time-based UI
  * state with no atomicity hazard and stays as plain `SET_SESSION_FIELD` dispatches in
  * the component (Task 4). The part that DOES have an ordering hazard, and is what this
- * action removes: `doRun` calls `setPrevResult(result)` (the OLD result) before
- * `setResult(r)` (the new one) — reversing those two lines would silently make
- * `prevResult` equal the new result instead of the old one. `action.result` and
+ * action removes: `doRun` used to call `setPrevResult(result)` (the OLD result)
+ * before `setResult(r)` (the new one) — reversing those two lines would silently have
+ * made `prevResult` equal the new result instead of the old one. `action.result` and
  * `action.pullScore` are precomputed by the caller: `result` comes from
  * `simulateSweep`, and `pullScore` from `computePullScore`, which needs derived
  * hardware objects (`turbine`, `compressor`, `dutyPreview`, `exhaustDiaError`) that

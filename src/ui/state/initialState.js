@@ -1,11 +1,11 @@
 /**
  * The store's starting values, sliced into `build`, `tune`, and `session`.
  *
- * Every default below is copied verbatim from EcuLab.jsx's `useState` initialisers
- * (src/ui/EcuLab.jsx, around lines 535-592) — this file changes nothing about what a
- * fresh session starts with, only where that starting value lives. See reducer.js for
- * why the three slices below are combined into ONE state tree rather than three
- * independent ones.
+ * Every default below began as a verbatim copy of an EcuLab.jsx `useState`
+ * initialiser. Those `useState` calls are gone, so this file is now the SOLE
+ * definition of what a fresh session starts with, not a second copy of one: change a
+ * default here and you have changed the app. See reducer.js for why the three slices
+ * below are combined into ONE state tree rather than three independent ones.
  *
  * `makeInitialState()` must return a fresh object graph on every call — a shared
  * initial state would let one test's mutation leak into the next, or one player's
@@ -77,7 +77,9 @@ import {
  * @property {{piston: number, bearing: number, valve: number}} health component wear, percent
  * @property {object|null} histogram the fuel-trim histogram from the last pull
  * @property {object} live the running live-engine model's state
- * @property {number} throttleInput the driver's current throttle input, 0..1
+ * @property {number} throttleInput the driver's current throttle input, PERCENT
+ *   (0..100), not a 0..1 fraction: the throttle pad writes 0 or 100 and `liveStep`
+ *   compares it against 3 and clamps it to 0..100 (`src/sim/live.js`)
  * @property {number} loadKpa the dyno sweep's fixed manifold load, kPa
  * @property {boolean} soundOn whether the engine-note synth is enabled
  * @property {number} journeyStep guided-onboarding progress: BUILD -> TUNE -> LIVE ->

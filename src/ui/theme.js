@@ -15,7 +15,6 @@ const T = {
   panel: tokens.panel,
   panel2: tokens.panel2,
   panel3: tokens.panel3,
-  panelHi: tokens.panel3,
   line: tokens.line,
   lineHi: tokens.lineHi,
 
