@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR, DEFAULT_BOOST,
+  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR,
   DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS,
   PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
@@ -540,17 +540,15 @@ function EngineManagementSandbox() {
   // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
   // changed, from setters to dispatches. `tune` and `session` are still local useState
   // below until Tasks 5 and 6 move them.
-  const [, dispatch] = useBuild();
-  const [engineConfig, setEngineConfig] = useState(DEFAULT_ENGINE_CONFIG);
-  const [mods, setMods] = useState(DEFAULT_MODS);
+  const [build, dispatch] = useBuild();
+  const {
+    engineConfig, mods, turboOn, boostCurve, octaneIdx, injIdx, mafScalar,
+    turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
+    presetId, presetPrompt, boostSel,
+  } = build;
   const [ve, setVe] = useState(() => computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS));
   const [timing, setTiming] = useState(clone2D(DEFAULT_TIMING));
   const [afr, setAfr] = useState(clone2D(DEFAULT_AFR));
-  const [turboOn, setTurboOn] = useState(false);
-  const [boostCurve, setBoostCurve] = useState([...DEFAULT_BOOST]);
-  const [octaneIdx, setOctaneIdx] = useState(0);
-  const [injIdx, setInjIdx] = useState(0);
-  const [mafScalar, setMafScalar] = useState(1.0);
   const [loadKpa, setLoadKpa] = useState(100);
   const [health, setHealth] = useState({ piston: 100, bearing: 100, valve: 100 });
   const [selection, setSelection] = useState(null);
@@ -561,29 +559,12 @@ function EngineManagementSandbox() {
   const [bestScore, setBestScore] = useState(0);
   const [totalScore, setTotalScore] = useState(0);
   const [pullCount, setPullCount] = useState(0);
-  const [turbineIdx, setTurbineIdx] = useState(1);
-  // How many of that housing are fitted. Only a preset can set this above 1 — the picker
-  // below fits one turbo, so choosing from it resets the count.
-  const [turbineCount, setTurbineCount] = useState(1);
-  const [compressorIdx, setCompressorIdx] = useState(1);
-  // Which factory preset (if any) is currently loaded stock. Cleared the moment any
-  // Engine Architecture control is hand-edited, and offered as a warning prompt
-  // before a loaded tune with logged pulls gets overwritten.
-  const [presetId, setPresetId] = useState(null);
-  const [presetPrompt, setPresetPrompt] = useState(null);
   // True once the player has hand-edited VE/spark/fuel since the last preset load
   // or reset-to-stock. This — not pull count — is what the overwrite-confirmation
   // prompt keys off; see hasTuningWork below.
   const [tablesDirty, setTablesDirty] = useState(false);
-  // Pinned by diameter, not by position: adding sizes to the catalogue must not
-  // silently change which pipe a new build starts with.
-  const [exhaustDiaIdx, setExhaustDiaIdx] = useState(
-    () => EXHAUST_DIA_OPTS.findIndex((o) => o.dia === 3.0),
-  );
   const [buildSection, setBuildSection] = useState('engine');
-  const [ecuInjectorCc, setEcuInjectorCc] = useState(315);
   const [tuneView, setTuneView] = useState('ve');
-  const [boostSel, setBoostSel] = useState(4);
   const [dynoView, setDynoView] = useState('result');
   const [histogram, setHistogram] = useState(null);
   const [live, setLive] = useState(() => makeLiveState());
@@ -598,32 +579,16 @@ function EngineManagementSandbox() {
   const audioRef = useRef(null);
   const [soundOn, setSoundOn] = useState(true);
 
-  // Every field applyPreset() owns funnels its hand-edit path through one of these
-  // two wrappers instead of sprinkling `setPresetId(null)` at each call site — a
-  // wrapper is what stops the next field from being forgotten. `withPresetField`
-  // covers hardware/ECU fields that only invalidate the preset label;
-  // `withTableEdit` additionally flags the calibration tables as having unsaved
-  // work, which is what the overwrite-confirmation prompt (hasTuningWork) keys off.
-  // `applyEnginePreset` itself must NOT use these — it needs to end with `presetId`
-  // SET, and routing its own writes through invalidation would race that.
-  const withPresetField = (setter) => (...args) => { setter(...args); setPresetId(null); };
-  const withTableEdit = (setter) => (...args) => { setter(...args); setPresetId(null); setTablesDirty(true); };
-
-  const setEngineConfigInvalidating = withPresetField(setEngineConfig);
-  const setModsInvalidating = withPresetField(setMods);
-  const setTurboOnInvalidating = withPresetField(setTurboOn);
-  const setBoostCurveInvalidating = withPresetField(setBoostCurve);
-  // Fitting a turbine by hand fits ONE of it; the twin-turbo count belongs to a preset.
-  const setTurbineIdxInvalidating = withPresetField((idx) => {
-    setTurbineIdx(idx);
-    setTurbineCount(1);
-  });
-  const setCompressorIdxInvalidating = withPresetField(setCompressorIdx);
-  const setInjIdxInvalidating = withPresetField(setInjIdx);
-  const setOctaneIdxInvalidating = withPresetField(setOctaneIdx);
-  const setExhaustDiaIdxInvalidating = withPresetField(setExhaustDiaIdx);
-  const setEcuInjectorCcInvalidating = withPresetField(setEcuInjectorCc);
-  const setMafScalarInvalidating = withPresetField(setMafScalar);
+  // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
+  // invalidation now happens inside the reducer rather than in a wrapper each new
+  // hardware field had to remember to be threaded through. What is left here is the
+  // one hand-edit path whose slices have NOT both moved yet — a calibration edit
+  // writes a table (`tune`, still local useState until Task 5), clears `presetId`
+  // (`build`, in the store) and flags unsaved work, which is what the overwrite-
+  // confirmation prompt (hasTuningWork) keys off. Task 5 collapses this into the
+  // single SET_TABLE action that already exists for it.
+  const clearPresetId = () => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'presetId', value: null });
+  const withTableEdit = (setter) => (...args) => { setter(...args); clearPresetId(); setTablesDirty(true); };
 
   const setVeEdited = withTableEdit(setVe);
   const setTimingEdited = withTableEdit(setTiming);
@@ -690,9 +655,11 @@ function EngineManagementSandbox() {
   // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
   // structurally impossible for the curve to be the wrong length or to contain a
   // non-number, which is what previously let a single edit poison the whole sim.
-  const setBoostAt = (i, value) => setBoostCurveInvalidating(
-    RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
-  );
+  const setBoostAt = (i, value) => dispatch({
+    type: ACTIONS.SET_BUILD_FIELD,
+    field: 'boostCurve',
+    value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
+  });
   const calAdvice = useMemo(() => calibrationAdvice({
     ve, veTruth, timing, afr, derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor: COMPRESSOR_OPTS[compressorIdx],
@@ -725,17 +692,16 @@ function EngineManagementSandbox() {
 
   const installMod = (key) => {
     if (mods[key]) return;
-    if (key === 'intercooler') { setModsInvalidating((m) => ({ ...m, intercooler: true })); return; }
     // Fitting a part changes airflow but does NOT edit your logged VE table — the
     // VE tab will show the gap and let you accept it once you understand why.
-    setModsInvalidating({ ...mods, [key]: true });
+    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
   };
   const resetToStock = () => {
     // Wipes the calibration back to a generic stock baseline — which, if a factory
-    // preset was loaded, is NOT that preset's validated tables. Route every write
-    // through the invalidating setters so the header stops claiming a factory
-    // calibration this just deleted, and the last call pins tablesDirty back to
-    // false: a reset baseline is not unsaved player work.
+    // preset was loaded, is NOT that preset's validated tables, so RESET_TO_STOCK
+    // drops the preset label with it and pins tablesDirty back to false in the same
+    // pass: a reset baseline is not unsaved player work.
+    //
     // The reducer does NOT compute the stock VE table; the caller does, and the mix of
     // arguments is the point: DEFAULT_MODS (the bolt-ons come off) against the CURRENT
     // `hwForVe` (the turbo does not — resetting the calibration is not uninstalling the
@@ -749,11 +715,12 @@ function EngineManagementSandbox() {
     // call had to pin tablesDirty back to false.
     setVe(stockVe); setTiming(clone2D(DEFAULT_TIMING)); setAfr(clone2D(DEFAULT_AFR));
     setTablesDirty(false);
-    // Build fields this task has not moved into the store yet; deleted as each moves.
-    setMods(DEFAULT_MODS); setMafScalar(1.0); setPresetId(null);
   };
   const repairEngine = () => setHealth({ piston: 100, bearing: 100, valve: 100 });
-  const setCfg = (patch) => setEngineConfigInvalidating((c) => ({ ...c, ...patch }));
+  // Actions cannot carry functions, so the old functional update becomes a patch the
+  // reducer merges into the engineConfig it already holds. It invalidates the preset
+  // label like every other hardware write.
+  const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
 
   /** Whether the player has unsaved calibration work — hand-edited VE/spark/fuel —
    *  that loading a preset would silently overwrite. Tracked directly via
@@ -763,52 +730,33 @@ function EngineManagementSandbox() {
   const hasTuningWork = () => tablesDirty;
 
   const applyEnginePreset = (preset) => {
-    // Deliberately writes through the RAW setters, not the invalidating wrappers
-    // above — this function's whole job is to SET presetId at the end, and
-    // routing its own writes through setPresetId(null) would make that order-
-    // dependent on React's batching instead of explicit here.
     const p = applyPreset(preset);
-    // The BUILD slice lands atomically in the store, in one pass, with no "last call"
-    // to get right. NOTE the payload is applyPreset()'s OUTPUT, not the raw catalogue
-    // entry — the raw entry has no `engineConfig`, so passing it would build an engine
-    // with no short block.
+    // The whole BUILD slice — including `mafScalar` back to 1.0, and `presetId` SET
+    // rather than cleared — lands in ONE pass. That is what the original's comment
+    // about not routing these writes through the invalidating setters was working
+    // around: there is no longer a "last call" whose ordering decides the outcome.
+    //
+    // NOTE the payload is applyPreset()'s OUTPUT, not the raw catalogue entry — the
+    // raw entry has no `engineConfig`, so passing it builds an engine with no short
+    // block.
     dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
-    // `tune` and `session` are still local useState until Tasks 5 and 6, so their
-    // writes below stay. So do the build-field writes for whichever fields this task
-    // has not moved into the store yet; each one is deleted as its field moves.
-    setEngineConfig(p.engineConfig);
-    setMods(p.mods);
-    setTurboOn(p.turboOn);
-    setBoostCurve(p.boostCurve);
-    setTurbineIdx(p.turbineIdx);
-    setTurbineCount(p.turbineCount);
-    setCompressorIdx(p.compressorIdx);
-    setInjIdx(p.injIdx);
-    setEcuInjectorCc(p.ecuInjectorCc);
-    setOctaneIdx(p.octaneIdx);
-    setExhaustDiaIdx(p.exhaustDiaIdx);
+    // APPLY_PRESET already wrote all of this to the store's `tune` and `session`
+    // slices; those are still local useState until Tasks 5 and 6, so they are written
+    // here too. Each line below is a deletion for those tasks, not a rewrite.
     setVe(p.ve);
     setTiming(p.timing);
     setAfr(p.afr);
-    // The preset's AFR table already bakes in a correction for the MAF error that
-    // the mod set implies (see factoryCalibration in src/sim/presets.js) — that
-    // correction is only valid at the neutral scalar. Loading a preset while a
-    // player has this dragged away from 1.0 would otherwise silently double-correct
-    // the mixture the very next pull.
-    setMafScalar(1.0);
-    setPresetId(p.presetId);
     setSelection(null);
-    setPresetPrompt(null);
+    // Fresh factory calibration is not unsaved player work.
+    setTablesDirty(false);
     // A factory rating from the newly loaded engine must never sit next to a pull
     // logged on whatever was running before it.
     setResult(null);
     setPrevResult(null);
-    // Fresh factory calibration is not unsaved player work.
-    setTablesDirty(false);
   };
 
   const choosePreset = (preset) => {
-    if (hasTuningWork()) setPresetPrompt(preset);
+    if (hasTuningWork()) dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: preset });
     else applyEnginePreset(preset);
   };
 
@@ -1505,7 +1453,7 @@ function EngineManagementSandbox() {
                 extra={[{ label: 'Custom build', value: '__custom__' }]}
                 value={presetId ?? '__custom__'}
                 onChange={(v) => {
-                  if (v === '__custom__') { setPresetId(null); return; }
+                  if (v === '__custom__') { clearPresetId(); return; }
                   const p = ENGINE_PRESETS.find((e) => e.id === v);
                   if (p) choosePreset(p);
                 }}
@@ -1542,7 +1490,7 @@ function EngineManagementSandbox() {
                     <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12 }}>
                       LOAD {presetPrompt.name.toUpperCase()}
                     </button>
-                    <button onClick={() => setPresetPrompt(null)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
+                    <button onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
                       CANCEL
                     </button>
                   </div>
@@ -1657,14 +1605,14 @@ function EngineManagementSandbox() {
               icon={Wind} label="Forced Induction"
               sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
-              <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={setTurboOnInvalidating} />
+              <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
 
               <div style={{ maxHeight: turboOn ? 3000 : 0, opacity: turboOn ? 1 : 0, overflow: 'hidden', transition: 'max-height .4s ease, opacity .3s ease' }}>
                 <div style={{ paddingTop: 12 }}>
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Turbine Size</div>
-                  <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => setTurbineIdxInvalidating(TURBINE_OPTS.findIndex((o) => o.label === v))} />
+                  <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 4, fontWeight: 600 }}>Compressor Size</div>
-                  <Seg options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => setCompressorIdxInvalidating(COMPRESSOR_OPTS.findIndex((o) => o.label === v))} />
+                  <Seg options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 11, color: T.ink3, marginBottom: 10, marginTop: 4 }}>Ceiling before it runs outside its efficient range: ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi</div>
                   <ExpandableInfo title="Turbine vs. compressor — different jobs">
                     The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, making hot, inefficient, knock-prone air.
@@ -1673,7 +1621,7 @@ function EngineManagementSandbox() {
                   </ExpandableInfo>
 
                   <div style={{ marginTop: 4, marginBottom: 14 }}>
-                    <ToggleRow label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => setModsInvalidating((m) => ({ ...m, intercooler: v }))} color={T.cyan} />
+                    <ToggleRow label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} color={T.cyan} />
                   </div>
 
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Boost Target Curve</div>
@@ -1686,7 +1634,7 @@ function EngineManagementSandbox() {
                         const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
                         const over = boostCurve[i] > ceiling;
                         return (
-                          <button key={r} onClick={() => setBoostSel(i)} style={{
+                          <button key={r} onClick={() => dispatch({ type: ACTIONS.SET_BOOST_SEL, value: i })} style={{
                             flex: 1, height: '100%', padding: 0, borderRadius: 7,
                             border: `1px solid ${on ? T.acc : T.line}`,
                             background: on ? T.accBg : T.panel,
@@ -1729,11 +1677,11 @@ function EngineManagementSandbox() {
                       ))}
                     </div>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button onClick={() => setBoostCurveInvalidating(RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)))}
+                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}
                         style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
                         FLAT ACROSS ALL
                       </button>
-                      <button onClick={() => { const peak = boostCurve[boostSel]; setBoostCurveInvalidating(RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1)))); }}
+                      <button onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}
                         style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
                         SPOOL RAMP
                       </button>
@@ -1741,7 +1689,7 @@ function EngineManagementSandbox() {
                           axis. A hand-written literal previously had seven entries
                           for eight breakpoints, and the next edit put NaN through
                           the entire simulation. */}
-                      <button onClick={() => setBoostCurveInvalidating(RPM.map(() => 0))}
+                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}
                         style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
                         ZERO
                       </button>
@@ -1766,7 +1714,7 @@ function EngineManagementSandbox() {
               sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Exhaust Diameter</div>
-              <Seg options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => setExhaustDiaIdxInvalidating(EXHAUST_DIA_OPTS.findIndex((o) => o.label === v))} />
+              <Seg options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
               <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
                 Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
                 {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
@@ -1946,7 +1894,7 @@ function EngineManagementSandbox() {
             {turboOn && <Note>Turbo hardware and the boost target curve live on <b>BUILD</b> — this tab is fuel-side tuning: octane, injectors, and MAF/ECU.</Note>}
 
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>Fuel Octane</div>
-            <Seg options={OCTANE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => setOctaneIdxInvalidating(OCTANE_OPTS.findIndex((o) => o.label === v))} />
+            <Seg options={OCTANE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
             <ExpandableInfo title="What octane actually does — and what E85 costs you">
               Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
               <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.accInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
@@ -1954,15 +1902,15 @@ function EngineManagementSandbox() {
             </ExpandableInfo>
 
             <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Fuel Injectors</div>
-            <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => setInjIdxInvalidating(INJECTOR_OPTS.findIndex((o) => o.label === v))} />
+            <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>
               ECU Injector Scaling <span style={{ color: T.ink3, fontWeight: 400 }}>— what the ECU thinks is fitted</span>
             </div>
-            <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={setEcuInjectorCcInvalidating} wrap />
+            <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} wrap />
             {ecuInjectorCc !== injectorCc ? (
               <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
-                <button onClick={() => setEcuInjectorCcInvalidating(injectorCc)} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+                <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                   RESCALE ECU TO {injectorCc}cc
                 </button>
               </div>
@@ -2005,7 +1953,7 @@ function EngineManagementSandbox() {
             </Panel>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 7, fontWeight: 600 }}>MAF Scalar</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 6 }}>
-              <input type="range" min={0.75} max={1.25} step={0.01} value={mafScalar} onChange={(e) => setMafScalarInvalidating(Number(e.target.value))} style={{ flex: 1, accentColor: T.acc }} />
+              <input type="range" min={0.75} max={1.25} step={0.01} value={mafScalar} onChange={(e) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mafScalar', value: Number(e.target.value) })} style={{ flex: 1, accentColor: T.acc }} />
               <div style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 15, width: 52, textAlign: 'right', color: T.ink }}>{mafScalar.toFixed(2)}</div>
             </div>
             <ExpandableInfo title="VE tuning vs. MAF tuning — platforms differ">
