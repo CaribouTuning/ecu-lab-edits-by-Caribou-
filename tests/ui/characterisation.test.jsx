@@ -15,23 +15,9 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
-// EcuLab.jsx is loaded with a dynamic import behind a runtime-built specifier rather
-// than `import EcuLab from '../../src/ui/EcuLab.jsx'`. tsconfig.json deliberately
-// excludes EcuLab.jsx from typechecking ("still one large untyped component... stays
-// excluded until the screen split") — but that exclusion only controls root-file
-// discovery. tsc still type-checks any file a *statically resolvable* import pulls in
-// transitively, so a normal import here would, for the first time, run ~26 pre-existing
-// and unrelated type errors in EcuLab.jsx through `npm run typecheck` and fail the
-// gate. Because the specifier is a variable, tsc cannot resolve the module and leaves
-// it alone, which is what the exclusion already intends.
-let EcuLab;
-
-beforeAll(async () => {
-  const modulePath = '../../src/ui/EcuLab.jsx';
-  ({ default: EcuLab } = await import(/* @vite-ignore */ modulePath));
-});
+import EcuLab from '../../src/ui/EcuLab.jsx';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
 // results panel) needs one to mount at all, so without this stub any test that

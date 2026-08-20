@@ -1,3 +1,19 @@
+// @ts-nocheck
+/*
+ * This file opts out of type checking, deliberately and temporarily.
+ *
+ * `tsconfig.json` leaves EcuLab.jsx out of `include` because it is still one large
+ * untyped component. That keeps it from being checked as a ROOT file — but `include`
+ * and `exclude` only choose root files. tsc still checks anything a root file imports
+ * transitively, so the moment a test under `tests/` imports this module, its ~26
+ * pre-existing type errors fail `npm run typecheck`.
+ *
+ * This directive is what actually holds the line the tsconfig comment describes, and it
+ * lets the characterisation tests import the component normally instead of hiding it
+ * from tsc behind a dynamic import.
+ *
+ * It disappears with the file: PR 3 splits this component into typed screens.
+ */
 /**
  * ECU LAB — the application shell and screens.
  *
