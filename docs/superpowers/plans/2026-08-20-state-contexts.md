@@ -922,15 +922,61 @@ Search for every write to `ve`/`timing`/`afr`, including the VE-acceptance path.
 
 Same method, for the 14 session fields.
 
+**Six of the fourteen were missing from earlier handover notes:** `histogram`, `live`,
+`throttleInput`, `loadKpa`, `soundOn`, `journeyStep`. They are already declared in
+`initialState.js`'s session typedef and initial value, but are still local `useState` in
+`EcuLabApp`. Do not work from a shorter list.
+
+**Like Task 5, this task is largely ADDITIVE.** `BANK_PULL` is the only session write the
+store receives today. `repairEngine` (`EcuLab.jsx:717`) writes local state ONLY — while
+`REPAIR_ENGINE` already exists in the reducer and is dispatched from nowhere. **Delete that
+setter without adding the dispatch and the REPAIR button goes inert, with no error
+anywhere and no test failing.**
+
+Two mirrors are the opposite case — already covered by the reducer, so **delete** them
+rather than converting: `applyEnginePreset`'s `setResult(null)` / `setPrevResult(null)`
+are written by `APPLY_PRESET`. And check `doRun`'s banking path for a local
+`setPrevResult(result)` whose ordering `BANK_PULL` now owns — the reducer's own comment
+warns that reversing it makes `prevResult` equal the NEW result.
+
 - [ ] **Step 1: Replace the `useState` calls with `useSession()` and destructuring**
 
 - [ ] **Step 2: Take particular care with `live` and `revealCount`**
 
-`live` is driven by an interval in a `useEffect` and updated at high frequency; `revealCount` drives the dyno reveal animation. Both are written from inside effects and refs. **Read those effects fully before changing them** — a stale closure over `dispatch` is not possible (React guarantees dispatch identity is stable), but a stale closure over a *slice value* is. Where an effect reads state to compute the next value, use the functional form via an action the reducer resolves, not a captured variable.
+`live` is driven by an interval in a `useEffect` and updated at high frequency;
+`revealCount` drives the dyno reveal animation. Both are written from inside effects and
+refs. **Read those effects fully before changing them** — a stale closure over `dispatch`
+is not possible (React guarantees dispatch identity is stable), but a stale closure over a
+*slice value* is. Where an effect reads state to compute the next value, use the functional
+form via an action the reducer resolves, not a captured variable.
 
-- [ ] **Step 3: Replace `resetToStock` and `repairEngine` with their actions**
+**`live` is the hardest thing in this PR. Do not paper over it.** It is written by
+`setLive((prev) => ...)` inside a 50 ms `setInterval` (`EcuLab.jsx:896-903`). A
+`SET_SESSION_FIELD` dispatch there would carry a value computed from whatever `live` the
+closure captured at mount, and the engine readout would freeze or jitter — a bug that
+looks like a physics problem, not a state problem. The interval must not read `live` from
+the render scope at all.
 
-`repairEngine` becomes a `REPAIR_ENGINE` dispatch. `resetToStock` becomes a `RESET_TO_STOCK` dispatch carrying the recomputed `ve`.
+Give it a dedicated action that computes the next value **inside** the reducer — a
+`LIVE_STEP` carrying only the inputs the step needs — so `prev` comes from the store
+rather than a closure. Actions must not carry functions.
+
+**`liveCfgRef.current` is assigned DURING RENDER** (`EcuLab.jsx:887`) from the destructured
+store values. Whatever you do here must keep that assignment happening on every render, or
+the live engine keeps running against stale tuning after an edit.
+
+If you conclude `LIVE_STEP` cannot be made to reproduce current behaviour exactly, **report
+BLOCKED with evidence rather than shipping an approximation.** A live readout that is
+subtly wrong is worse than an unconverted field: `live` may stay local and move in PR 3
+if that is the honest answer.
+
+- [ ] **Step 3: Dispatch `REPAIR_ENGINE`**
+
+`repairEngine` becomes a `REPAIR_ENGINE` dispatch. (`resetToStock` was already converted in
+Task 5 — leave it alone.) `REPAIR_ENGINE`'s reducer case is tested; its call site will not
+be. Add a component-level test that drives the real REPAIR control and asserts health
+actually returns to 100, then prove it bites by stubbing `repairEngine` and watching it
+fail.
 
 - [ ] **Step 4: Run the characterisation tests, then the full gate**
 
