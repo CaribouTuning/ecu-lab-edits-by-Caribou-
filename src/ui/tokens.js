@@ -1,15 +1,26 @@
 /**
- * The palette, and the single place it is defined.
+ * The palette, type scale, radius scale and spacing scale — the single place
+ * each is defined.
  *
  * `tokens.css` mirrors this file as CSS custom properties for stylesheets, and
- * `tests/tokens.test.js` proves the two never drift. Add a colour here first.
+ * `tests/tokens.test.js` proves the two never drift. Add a token here first.
  *
- * The organising rule: THE ACCENT IS NEVER A STATUS, AND A STATUS IS NEVER
- * DECORATION. `acc` means "this is the action" or "this is the live value".
+ * The organising rule for colour: THE ACCENT IS NEVER A STATUS, AND A STATUS IS
+ * NEVER DECORATION. `acc` means "this is the action" or "this is the live value".
  * `ok`/`warn`/`danger` mean engine state and nothing else. The previous palette
  * spent its alarm colour on chrome — 84 uses of the same hot orange on the
  * wordmark, the nav, the focus ring and genuine warnings alike — which left a real
  * warning nothing to escalate to.
+ *
+ * The organising rule for the font-size/radius/spacing scales below: they were
+ * added after nine primitives and two screens had already accumulated 15 raw
+ * font-sizes, 8 raw radii and 17 raw padding declarations between them — each
+ * file looked reasonable alone, but a fourteen-screen build is about to land on
+ * top of this layer, and that is a lot cheaper to systematise now than to
+ * retrofit later. Not every raw value in the stylesheets maps onto a step here:
+ * a handful are one-off screen headlines or values pinned to another number
+ * by layout geometry, and those stay raw with a comment explaining why, rather
+ * than being forced onto the ramp.
  */
 
 /** @param {string} s camelCase token name @returns {string} its kebab-case CSS name */
@@ -78,6 +89,41 @@ export const tokens = Object.freeze({
   // rather than re-typing them at a new alpha. See accAlpha/shadowAlpha below.
   accRgb: '76, 158, 255',
   shadowRgb: '0, 0, 0',
+
+  // Font-size scale, small to large. Named by role/size rather than kept as the
+  // 15 raw values they replace, because a scale is a small set of deliberate
+  // steps, not every number a designer happened to type. `fsMicro` and `fsXs`
+  // carry the small uppercase UI chrome (eyebrows, badges, segmented-control
+  // labels); `fsSm`/`fsBase` carry compact and standard body/control text;
+  // `fsMd` is screen-body copy; `fsLg` is the large mono figure in a stat tile.
+  // One-off screen headlines (21/25/27/34px) are not part of this ramp — see
+  // the comments at their declarations for why.
+  fsMicro: '9px',
+  fsXs: '10.5px',
+  fsSm: '12px',
+  fsBase: '13.5px',
+  fsMd: '14.5px',
+  fsLg: '18px',
+
+  // Border-radius scale, small to large. Covers the eight raw radii the
+  // stylesheets had accumulated; `50%` circles and one pill radius pinned to
+  // half of its own element's height are deliberately left out — see the
+  // comment at that declaration.
+  rXs: '3px',
+  rSm: '6px',
+  rMd: '9px',
+  rLg: '12px',
+
+  // Spacing scale, for padding. Covers the seventeen raw padding declarations
+  // the stylesheets had accumulated. A few values stay raw with a comment
+  // because they are pinned to something other than rhythm: a chevron's
+  // clearance, a knob's fit inside its track.
+  spXs: '3px',
+  spSm: '7px',
+  spMd: '10px',
+  spLg: '13px',
+  spXl: '16px',
+  spXxl: '24px',
 });
 
 /**

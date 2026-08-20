@@ -6,7 +6,7 @@
   justify-content: center;
   gap: 7px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-md);
   font-family: var(--sans);
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -63,9 +63,12 @@
 
 /* --- sizes --- */
 
-.sm { padding: 6px 11px; font-size: 10px; }
-.md { padding: 9px 16px; font-size: 11.5px; }
-.lg { padding: 13px 22px; font-size: 13.5px; }
+.sm { padding: var(--sp-sm) var(--sp-md); font-size: var(--fs-xs); }
+.md { padding: var(--sp-md) var(--sp-xl); font-size: var(--fs-sm); }
+/* 22px horizontal is not on the spacing scale: it is 2px from the nearest
+   step (--sp-xxl, 24px), further than the ~1px this pass snaps, and moving it
+   would visibly change the button's proportions. Left raw. */
+.lg { padding: var(--sp-lg) 22px; font-size: var(--fs-base); }
 
 /* --- full width, opt-in only --- */
 

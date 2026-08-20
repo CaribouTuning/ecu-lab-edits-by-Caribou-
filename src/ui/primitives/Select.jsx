@@ -3,6 +3,11 @@
  *
  * Deliberately native: keyboard navigation, type-ahead and screen-reader semantics
  * come free, and on a phone it opens the platform picker. Only the chevron is ours.
+ *
+ * Known migration gap: the legacy `GroupedSelect` this replaces is `width: 100%`
+ * with a bottom margin; this primitive's wrapper is `inline-block` with a
+ * `min-width`. A drop-in swap will change layout at every call site — callers
+ * will need to size and space it themselves.
  */
 
 import { ChevronDown } from 'lucide-react';

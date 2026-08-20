@@ -2,23 +2,23 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 3px;
+  padding: var(--sp-xs);
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--r-md);
 }
 
 .item {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 13px;
+  padding: var(--sp-sm) var(--sp-lg);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink3);
   font-family: var(--sans);
-  font-size: 10.5px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.06em;
   cursor: pointer;
@@ -32,4 +32,22 @@
   background: var(--acc-bg);
   color: var(--acc-ink);
   box-shadow: inset 0 0 0 1px var(--acc);
+}
+
+/* --- equal, opt-in --- */
+/* Declared after the base rules: CSS Modules classes carry equal specificity,
+   so source order decides, and .equal must win over .seg/.item here. Some
+   pickers have few enough options to sit inline at their content width (the
+   default); others — the injector-size picker chief among them — read better
+   as an even row that fills the available width. */
+
+.equal {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.equal .item {
+  flex: 1;
+  min-width: 64px;
 }

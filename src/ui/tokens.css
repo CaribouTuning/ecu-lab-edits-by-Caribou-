@@ -45,4 +45,40 @@
 
   --acc-rgb: 76, 158, 255;
   --shadow-rgb: 0, 0, 0;
+
+  /* Font-size scale, small to large. See the matching comment in tokens.js for
+     why these six steps replace fifteen raw values rather than naming all of
+     them. One-off screen headlines (21/25/27/34px) are intentionally not on
+     this ramp — see the comments at their declarations. */
+  --fs-micro: 9px;
+  --fs-xs: 10.5px;
+  --fs-sm: 12px;
+  --fs-base: 13.5px;
+  --fs-md: 14.5px;
+  --fs-lg: 18px;
+
+  /* Border-radius scale, small to large. `50%` circles and one pill radius
+     pinned to half its own element's height are deliberately not on this
+     ramp — see the comment at that declaration (Toggle.module.css). */
+  --r-xs: 3px;
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 12px;
+
+  /* Spacing scale, for padding. A few raw padding values stay off this ramp
+     because they are pinned to something other than rhythm — a chevron's
+     clearance, a toggle knob's fit inside its track — each documented at its
+     declaration. */
+  --sp-xs: 3px;
+  --sp-sm: 7px;
+  --sp-md: 10px;
+  --sp-lg: 13px;
+  --sp-xl: 16px;
+  --sp-xxl: 24px;
+
+  /* Breakpoint. `@media` cannot read a custom property, so this cannot be a
+     token — it is recorded here instead. 560px is the project's one
+     breakpoint (small-tablet-and-up); it must be kept in sync by hand across
+     every file that uses it: src/ui/screens/StartScreen.module.css and
+     src/ui/screens/TutorialScreen.module.css. */
 }

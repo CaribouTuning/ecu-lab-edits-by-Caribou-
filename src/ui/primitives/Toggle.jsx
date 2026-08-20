@@ -1,4 +1,11 @@
-/** An on/off row for a single hardware option. */
+/**
+ * An on/off row for a single hardware option.
+ *
+ * Known migration gap: the legacy `ToggleRow` this replaces has a `color` prop,
+ * used non-default at one call site (the intercooler toggle, `color={T.cyan}`).
+ * This primitive has no equivalent. Migrating that call site needs a decision:
+ * either add the prop here, or accept the default accent colour there.
+ */
 
 import React, { useId } from 'react';
 

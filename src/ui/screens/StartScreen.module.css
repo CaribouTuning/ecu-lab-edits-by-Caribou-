@@ -4,7 +4,7 @@
   align-items: center;
   justify-content: center;
   min-height: 100dvh;
-  padding: 24px;
+  padding: var(--sp-xxl);
   position: relative;
   overflow: hidden;
   background: var(--bg);
@@ -31,12 +31,16 @@
 
 .eyebrow {
   margin-bottom: 7px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.28em;
   color: var(--acc-ink);
 }
 
+/* 25px/34px (below, at the breakpoint) are not on the font-size scale: this is
+   the app's one hero headline, sized as its own editorial choice rather than
+   a repeating text role. Forcing it onto the ramp would be renaming a
+   one-off, not systematising a repeated value. */
 .title {
   max-width: 22ch;
   margin-bottom: 15px;
@@ -49,17 +53,19 @@
 .blurb {
   max-width: 42ch;
   margin-bottom: 34px;
-  font-size: 13.5px;
+  font-size: var(--fs-base);
   line-height: 1.65;
   color: var(--ink2);
 }
 
 .actions { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; }
 
-.version { margin-top: 18px; font-family: var(--mono); font-size: 10.5px; color: var(--ink3); }
+.version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink3); }
 
 /* From the small-tablet breakpoint up there is room to sit the two actions side by
-   side, which is also where a full-width button starts looking wrong. */
+   side, which is also where a full-width button starts looking wrong.
+   560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
 @media (min-width: 560px) {
   .title { font-size: 34px; }
   .actions { flex-direction: row; max-width: none; justify-content: center; }

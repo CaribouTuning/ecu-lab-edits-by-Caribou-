@@ -8,6 +8,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Seg } from '../../src/ui/primitives/Seg.jsx';
+import segStyles from '../../src/ui/primitives/Seg.module.css';
 import { Select } from '../../src/ui/primitives/Select.jsx';
 import { Toggle } from '../../src/ui/primitives/Toggle.jsx';
 
@@ -46,6 +47,24 @@ describe('Seg', () => {
   it('names the group for assistive technology', () => {
     render(<Seg label="Table" options={SEG_OPTIONS} value="ve" onChange={() => {}} />);
     expect(screen.getByRole('group', { name: 'Table' })).toBeTruthy();
+  });
+
+  it('does not apply the equal-width modifier class by default', () => {
+    render(<Seg label="Table" options={SEG_OPTIONS} value="ve" onChange={() => {}} />);
+    expect(screen.getByRole('group', { name: 'Table' }).className).not.toContain(segStyles.equal);
+  });
+
+  it('applies the equal-width modifier class when equal is set', () => {
+    render(<Seg label="Table" options={SEG_OPTIONS} value="ve" onChange={() => {}} equal />);
+    expect(screen.getByRole('group', { name: 'Table' }).className).toContain(segStyles.equal);
+  });
+
+  it('keeps selection behaviour unchanged when equal is set', () => {
+    const onChange = vi.fn();
+    render(<Seg label="Table" options={SEG_OPTIONS} value="ve" onChange={onChange} equal />);
+    expect(screen.getByRole('button', { name: 'AIR' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'FUEL' }));
+    expect(onChange).toHaveBeenCalledWith('afr');
   });
 });
 

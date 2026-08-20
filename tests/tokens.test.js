@@ -3,7 +3,9 @@
  *
  * `tokens.js` and `tokens.css` describe the same palette in two languages, and
  * nothing but a test can stop them drifting. These also pin the one rule the whole
- * colour system rests on: the accent is never a status colour.
+ * colour system rests on: the accent is never a status colour, and the one rule
+ * that makes the font-size/radius/spacing additions a scale rather than a bag of
+ * numbers: each step is strictly larger than the last.
  */
 
 import { readFileSync } from 'node:fs';
@@ -51,6 +53,38 @@ describe('token contract', () => {
 
   it('is frozen so no screen can mutate the palette at runtime', () => {
     expect(Object.isFrozen(tokens)).toBe(true);
+  });
+});
+
+/** @param {string} px e.g. "10.5px" @returns {number} */
+const num = (px) => Number.parseFloat(px);
+
+/** @returns {number[]} the value of each token name, in the order given */
+const ramp = (...names) => names.map((name) => num(tokens[name]));
+
+describe('scale contract', () => {
+  it('declares the font-size scale, each step larger than the last', () => {
+    const steps = ramp('fsMicro', 'fsXs', 'fsSm', 'fsBase', 'fsMd', 'fsLg');
+    for (const step of steps) expect(Number.isNaN(step)).toBe(false);
+    for (let i = 1; i < steps.length; i += 1) {
+      expect(steps[i], `${steps[i]} is not larger than ${steps[i - 1]}`).toBeGreaterThan(steps[i - 1]);
+    }
+  });
+
+  it('declares the radius scale, each step larger than the last', () => {
+    const steps = ramp('rXs', 'rSm', 'rMd', 'rLg');
+    for (const step of steps) expect(Number.isNaN(step)).toBe(false);
+    for (let i = 1; i < steps.length; i += 1) {
+      expect(steps[i], `${steps[i]} is not larger than ${steps[i - 1]}`).toBeGreaterThan(steps[i - 1]);
+    }
+  });
+
+  it('declares the spacing scale, each step larger than the last', () => {
+    const steps = ramp('spXs', 'spSm', 'spMd', 'spLg', 'spXl', 'spXxl');
+    for (const step of steps) expect(Number.isNaN(step)).toBe(false);
+    for (let i = 1; i < steps.length; i += 1) {
+      expect(steps[i], `${steps[i]} is not larger than ${steps[i - 1]}`).toBeGreaterThan(steps[i - 1]);
+    }
   });
 });
 

@@ -2,15 +2,17 @@
 
 .select {
   width: 100%;
-  padding: 11px 34px 11px 13px;
+  /* Right padding is not on the spacing scale: it is a functional offset that
+     reserves room for the chevron icon, not a rhythm step. */
+  padding: var(--sp-md) 34px var(--sp-md) var(--sp-lg);
   appearance: none;
   -webkit-appearance: none;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: var(--r-md);
   background: var(--panel2);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 600;
   cursor: pointer;
 }

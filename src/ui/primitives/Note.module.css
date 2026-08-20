@@ -2,11 +2,11 @@
   display: flex;
   gap: 9px;
   margin: 10px 0;
-  padding: 11px 13px;
+  padding: var(--sp-md) var(--sp-lg);
   border: 1px solid;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   font-family: var(--sans);
-  font-size: 12.5px;
+  font-size: var(--fs-sm);
   line-height: 1.55;
 }
 
