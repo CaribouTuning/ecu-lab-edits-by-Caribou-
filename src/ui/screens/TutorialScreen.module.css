@@ -1,0 +1,64 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+
+.count {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--acc-ink);
+}
+
+.skip {
+  border: none;
+  background: none;
+  color: var(--ink3);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.skip:hover { color: var(--ink2); }
+.skip:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 24px;
+}
+
+.inner { width: 100%; max-width: 60ch; }
+
+.title { margin: 0 0 13px; font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+.text { margin: 0; font-size: 14.5px; line-height: 1.7; color: var(--ink-soft); }
+
+.dots { display: flex; gap: 6px; justify-content: center; padding-bottom: 18px; }
+
+.dot { width: 6px; height: 6px; border-radius: 3px; background: var(--line); transition: width 0.2s ease; }
+.dotOn { width: 20px; background: var(--acc); }
+
+.actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 560px) {
+  .title { font-size: 27px; }
+}

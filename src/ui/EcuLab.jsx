@@ -35,6 +35,8 @@ import {
 import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
+import { StartScreen } from './screens/StartScreen.jsx';
+import { TutorialScreen } from './screens/TutorialScreen.jsx';
 
 const Eyebrow = ({ children, icon: Icon }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -484,58 +486,6 @@ const TUTORIAL_STEPS = [
   { title: 'Chase the score',
     body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
 ];
-
-function TutorialScreen({ onDone }) {
-  const [step, setStep] = useState(0);
-  const s = TUTORIAL_STEPS[step];
-  const last = step === TUTORIAL_STEPS.length - 1;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px' }}>
-        <div style={{ fontSize: 10.5, letterSpacing: 1.5, color: T.accInk, fontWeight: 800 }}>TUTORIAL · {step + 1}/{TUTORIAL_STEPS.length}</div>
-        <button onClick={onDone} style={{ background: 'none', border: 'none', color: T.ink3, fontSize: 12, fontWeight: 700 }}>SKIP</button>
-      </div>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 24px' }}>
-        <div style={{ fontSize: 21, fontWeight: 800, marginBottom: 13, letterSpacing: -0.3 }}>{s.title}</div>
-        <div style={{ fontSize: 14.5, color: T.inkSoft, lineHeight: 1.7 }}>{s.body}</div>
-      </div>
-      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', padding: '0 0 18px' }}>
-        {TUTORIAL_STEPS.map((_, i) => (
-          <div key={i} style={{ width: i === step ? 20 : 6, height: 6, borderRadius: 3, background: i === step ? T.acc : T.line, transition: 'width .2s' }} />
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 10, padding: '0 16px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
-        {step > 0 && (
-          <button onClick={() => setStep((v) => v - 1)} style={{ flex: 1, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: T.panel2, color: T.inkSoft, fontWeight: 700, fontSize: 14 }}>BACK</button>
-        )}
-        <button onClick={() => (last ? onDone() : setStep((v) => v + 1))} style={{ flex: 2, padding: '15px 0', borderRadius: 12, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 14.5 }}>
-          {last ? 'START TUNING' : 'NEXT'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function StartScreen({ onStart, onTutorial }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, justifyContent: 'center', alignItems: 'center', padding: 24, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ position: 'absolute', top: '-15%', left: '50%', transform: 'translateX(-50%)', width: 420, height: 420, borderRadius: '50%', background: `radial-gradient(circle, ${accAlpha(0.10)} 0%, transparent 70%)` }} />
-      <div style={{ marginBottom: 22, position: 'relative' }}><DialMark size={92} pct={0.62} /></div>
-      <div style={{ fontSize: 11, letterSpacing: 3, color: T.accInk, fontWeight: 800, marginBottom: 7 }}>CARIBOU TUNING</div>
-      <div style={{ fontSize: 25, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 15, maxWidth: 320 }}>Engine Management Sandbox</div>
-      <div style={{ fontSize: 13.5, color: T.ink2, lineHeight: 1.65, maxWidth: 300, marginBottom: 34 }}>
-        Design an engine. Tune it. Log it. Improve it. A free-tune sandbox built to teach real engine management, not just move sliders.
-      </div>
-      <button onClick={onStart} style={{ width: '100%', maxWidth: 300, padding: '16px 0', borderRadius: 12, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 15, letterSpacing: 0.4, marginBottom: 12, boxShadow: `0 8px 24px ${accAlpha(0.25)}` }}>
-        START
-      </button>
-      <button onClick={onTutorial} style={{ width: '100%', maxWidth: 300, padding: '15px 0', borderRadius: 12, border: `1px solid ${T.line}`, background: 'none', color: T.inkSoft, fontWeight: 700, fontSize: 13.5 }}>
-        TUTORIAL
-      </button>
-      <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 18, fontFamily: T.mono }}>{BUILD_VERSION}</div>
-    </div>
-  );
-}
 
 function LiveGauge({ label, value, unit, color = T.ink, warn }) {
   return (
@@ -1161,8 +1111,24 @@ export default function EngineManagementSandbox() {
   ];
   const gridProps = { selection, setSelection };
 
-  if (appView === 'start') return <StartScreen onStart={() => { setAppView('app'); setTab('build'); }} onTutorial={() => setAppView('tutorial')} />;
-  if (appView === 'tutorial') return <TutorialScreen onDone={() => { setAppView('app'); setTab('build'); setJourneyStep(0); }} />;
+  if (appView === 'start') {
+    return (
+      <StartScreen
+        onStart={() => { setAppView('app'); setTab('build'); }}
+        onTutorial={() => setAppView('tutorial')}
+        version={BUILD_VERSION}
+        dial={<DialMark size={92} pct={0.62} />}
+      />
+    );
+  }
+  if (appView === 'tutorial') {
+    return (
+      <TutorialScreen
+        steps={TUTORIAL_STEPS}
+        onDone={() => { setAppView('app'); setTab('build'); setJourneyStep(0); }}
+      />
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
