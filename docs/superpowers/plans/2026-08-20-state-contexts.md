@@ -447,7 +447,7 @@ Implement at minimum: `SET_BUILD_FIELD`, `SET_TURBINE`, `SET_TABLE`, `SET_SESSIO
 
 Every case must return new objects only for the slices it changes — the other slices keep their identity, which is what the "leaves the other slices untouched by reference" test pins.
 
-Write a file header explaining why this is one reducer over three, referencing the 23-write `applyEnginePreset` and the order hazard.
+Write a file header explaining why this is one reducer over three, referencing the 21-write `applyEnginePreset` and the order hazard.
 
 - [ ] **Step 5: Write the provider and hooks**
 
@@ -1016,16 +1016,22 @@ fail.
 - [ ] **Step 1: Confirm the wrappers and their setters are gone**
 
 ```bash
-grep -c "withPresetField\|withTableEdit\|Invalidating\|setVeEdited\|setTimingEdited\|setAfrEdited" src/ui/EcuLab.jsx
+grep -n "withPresetField\|withTableEdit\|Invalidating\|setVeEdited\|setTimingEdited\|setAfrEdited" src/ui/EcuLab.jsx
 ```
-Expected: **0**.
+
+Expect **only comments**. Four surviving references at `:584`, `:589`, `:590` and `:1007`
+name the removed wrappers in order to explain what replaced them and why — that is
+documentation worth keeping, not leftover code. What must NOT appear is any of these
+names being *called* or *assigned*. Read the hits rather than counting them.
 
 - [ ] **Step 2: Confirm only view state remains local**
 
 ```bash
 grep -n "const \[.*\] = useState" src/ui/EcuLab.jsx
 ```
-Expected: only `appView`, `tab`, `tuneView`, `dynoView`, `dashSection`, `buildSection` — six, plus `ExpandableInfo`'s own `open`, which is a different component. Anything else means a field was missed.
+Expected: exactly seven — `open` (`:85`, inside `ExpandableInfo`, a different component)
+plus `appView`, `tab`, `buildSection`, `tuneView`, `dynoView`, `dashSection`. Anything
+else means a field was missed. All seven become route state in PR 3.
 
 - [ ] **Step 3: Check the docs for stale structural claims**
 
@@ -1072,7 +1078,7 @@ Expected: **no output.** This PR adds nothing.
 git push -u origin feat/58-state-contexts
 ```
 
-The PR body must state: what moved and what deliberately did not (view state, because PR 3 absorbs it into routing); that the render is unchanged; that `applyEnginePreset`'s 23-write ordering hazard is now absent rather than documented; that the characterisation tests were written first and stayed green throughout; and the fingerprint evidence from step 6. Close #58 and reference #6.
+The PR body must state: what moved and what deliberately did not (view state, because PR 3 absorbs it into routing); that the render is unchanged; that `applyEnginePreset`'s 21-write ordering hazard is now absent rather than documented; that the characterisation tests were written first and stayed green throughout; and the fingerprint evidence from step 6. Close #58 and reference #6.
 
 - [ ] **Step 9: Check no auto-merge is queued**
 
@@ -1082,6 +1088,48 @@ gh pr view --json autoMergeRequest
 Expected `null`. If not, `gh pr merge <N> --disable-auto`. **Do not merge this PR.**
 
 ---
+
+- [ ] **Step 10: Sweep the findings this PR deferred**
+
+These were all found and deliberately deferred during Tasks 1-6. Fix what is cheap and
+correct; report anything you judge should wait for PR 3 rather than doing it badly here.
+
+1. **Stale docblock references in `src/ui/state/`.** `initialState.js`'s header says its
+   defaults are "copied verbatim from EcuLab.jsx's `useState` initialisers (around lines
+   535-592)" — those `useState` calls no longer exist and `initialState.js` is now the
+   sole definition, not a copy. `reducer.js`'s `SET_ENGINE_CONFIG_PATCH` typedef cites
+   `setEngineConfigInvalidating`, an identifier that no longer exists anywhere. Line
+   citations drifting is unavoidable; a docblock naming a deleted identifier as if it
+   were live code is what misleads.
+
+2. **`initialState.js:80` documents `throttleInput` as `0..1`; the code writes `0`/`100`.**
+   Pre-existing, unrelated to this PR, and a one-word fix. Confirm which is true from the
+   call sites before editing — do not assume the comment is the wrong half.
+
+3. **`LivePatchAction.patch` is typed `object` (`reducer.js:~234`), and `LiveStepAction.cfg`
+   likewise.** So `dispatch({type: LIVE_PATCH, patch: {crankign: true}})` typechecks and
+   the reducer spreads the typo into `live`. The root cause is `SessionState.live` being
+   typed `object` in `initialState.js:78`. A real `LiveState` typedef would close all
+   three. `src/sim/live.js` defines the shape — read it, do not invent one. If that turns
+   out to be more than a small job, say so and leave it: the `KnownStoreAction` union's
+   value is weakened by this, not defeated.
+
+4. **`T.panelHi` is a dead alias** for `tokens.panel3` in `src/ui/theme.js` — deferred from
+   PR 1. Delete it if nothing references it.
+
+- [ ] **Step 11: Record what is NOT covered**
+
+Two gaps are known and should be stated in the PR body rather than discovered later:
+
+- **No single test spans hand-edit → `tablesDirty` → overwrite prompt end to end.** Moving
+  `tablesDirty` into the store made that impossible in one test; it is now covered in
+  three pieces across two files (characterisation test 2 proves a real UI edit reaches
+  `SET_TABLE`; a reducer test proves `SET_TABLE` sets the flag; `build-store.test.jsx`
+  proves the flag opens the prompt). The now-inert hand-edit block in that test's setup is
+  what keeps its preconditions realistic — **do not tidy it away.**
+- **Everything here is jsdom.** The live engine, the audio synth, animation and the reveal
+  timer are exercised only as far as the suites reach. Nobody has loaded the app in a
+  browser during this PR.
 
 ## Notes for the implementer
 
