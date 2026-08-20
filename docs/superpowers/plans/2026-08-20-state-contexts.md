@@ -487,6 +487,68 @@ Claude-Session: https://claude.ai/code/session_01QXHAjTu429hwKhLLSRfTCd"
 
 These are the actions that justify the whole design. Read `applyEnginePreset` and `resetToStock` in `EcuLab.jsx` line by line before writing them; every field they touch must be accounted for.
 
+**Amendment (found during Task 2, decided by the controller).** Task 2 built
+`SET_BUILD_FIELD` to always clear `presetId`, faithfully mirroring `withPresetField`
+(`EcuLab.jsx:602`). But two of the fifteen build-slice fields are written today WITHOUT
+invalidating, and correctly so:
+
+- `boostSel` (`EcuLab.jsx:579`, written at `:1658`) is which RPM column the boost-curve
+  editor has selected — a cursor, not hardware. It is the build-side analogue of
+  `tune.selection`. Moving the cursor changes nothing about the engine.
+- `presetPrompt` (`:566`, written at `:775`, `:785`, `:1514`) is the overwrite-confirmation
+  dialog. Opening or dismissing a dialog is not a build change.
+
+Routing either through `SET_BUILD_FIELD` would clear `presetId` and make the header stop
+claiming a factory preset because the player clicked a column header or opened a dialog.
+
+**Add two dedicated actions — `ACTIONS.SET_BOOST_SEL` and `ACTIONS.SET_PRESET_PROMPT` —
+not one generic non-invalidating setter.** The comment at `EcuLab.jsx:596` says the
+`withPresetField` wrapper "is what stops the next field from being forgotten". A generic
+`SET_BUILD_FIELD_RAW` would be an escape hatch a future caller could reach for on a
+hardware field, silently reintroducing exactly the stale-preset bug the wrapper exists to
+prevent. Two narrow, single-purpose actions cannot be misused that way.
+
+Each needs a test asserting `presetId` SURVIVES the write:
+
+```js
+describe('non-invalidating build writes', () => {
+  it('moving the boost-curve cursor does not disown the preset', () => {
+    const loaded = makeInitialState();
+    loaded.build = { ...loaded.build, presetId: 'n54' };
+    const s = reducer(loaded, { type: ACTIONS.SET_BOOST_SEL, value: 6 });
+    expect(s.build.boostSel).toBe(6);
+    expect(s.build.presetId).toBe('n54');
+  });
+
+  it('opening the overwrite prompt does not disown the preset', () => {
+    const loaded = makeInitialState();
+    loaded.build = { ...loaded.build, presetId: 'n54' };
+    const s = reducer(loaded, { type: ACTIONS.SET_PRESET_PROMPT, value: { presetId: 'k20' } });
+    expect(s.build.presetPrompt).toEqual({ presetId: 'k20' });
+    expect(s.build.presetId).toBe('n54');
+  });
+});
+```
+
+**Also add `ACTIONS.SET_ENGINE_CONFIG_PATCH`** here rather than in Task 4. `setCfg`
+(`EcuLab.jsx:738`) is `setEngineConfigInvalidating((c) => ({ ...c, ...patch }))` — a
+functional update. The reducer already holds the current state, so the action carries a
+plain `patch` object and the reducer does the merge. Do not pass functions through
+actions. It DOES invalidate, like every other hardware write:
+
+```js
+it('patching the engine config merges and invalidates', () => {
+  const loaded = makeInitialState();
+  loaded.build = { ...loaded.build, presetId: 'n54' };
+  const s = reducer(loaded, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { cylinders: 8 } });
+  expect(s.build.engineConfig.cylinders).toBe(8);
+  expect(s.build.presetId).toBeNull();
+});
+```
+
+Confirm the merge preserves the config's other fields — a patch that replaces rather than
+merges would silently drop displacement, and the app would still render.
+
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/ui/state/reducer.test.js`:
