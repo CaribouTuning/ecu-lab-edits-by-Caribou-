@@ -23,6 +23,7 @@
     "src/ui/theme.js",
     "src/ui/primitives",
     "src/ui/screens",
+    "src/ui/state",
     "src/storage.js",
     "src/version.js",
     "src/globals.d.ts",
