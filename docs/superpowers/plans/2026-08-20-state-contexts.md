@@ -713,6 +713,60 @@ Claude-Session: https://claude.ai/code/session_01QXHAjTu429hwKhLLSRfTCd"
 
 This is the first mechanical wiring task. **Work one field at a time and run the characterisation tests between each** — that is what they are for.
 
+**This task is not actually mechanical, and the reason is worth reading before you start.**
+
+Three functions in `EcuLab.jsx` write across slice boundaries: `applyEnginePreset` (21
+writes), `resetToStock` (7), and the score-banking tail of `doRun`. Task 4 removes the
+build slice's `useState` declarations — so the moment they are gone, those functions have
+no `setEngineConfig` to call. You cannot leave them alone, and you cannot fully convert
+them either, because `tune` and `session` are still local `useState` until Tasks 5 and 6.
+
+**The interim shape, for each of the three:** dispatch the atomic action AND keep the
+still-local setters for the slices that have not moved yet.
+
+```jsx
+const applyEnginePreset = (preset) => {
+  const p = applyPreset(preset);
+  dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });   // build lands in the store
+  // tune + session are still local useState until Tasks 5 and 6 — keep writing them.
+  setVe(p.ve); setTiming(p.timing); setAfr(p.afr);
+  setSelection(null); setTablesDirty(false);
+  setResult(null); setPrevResult(null);
+};
+```
+
+This is safe because nothing reads `state.tune` or `state.session` yet. The store's copies
+of those slices are written and simply unread until their task arrives, at which point the
+duplicate local setters are deleted. Task 5 removes the tune lines, Task 6 the session
+lines. **Do not skip the store dispatch for the not-yet-moved slices** — writing the
+store's tune/session now is what makes Task 5 and Task 6 a deletion rather than a rewrite.
+
+**Four traps the review of Task 3 identified. Each produces a plausible-looking wrong
+result, not a crash:**
+
+1. **`APPLY_PRESET`'s payload is `applyPreset(rawPreset)`'s OUTPUT, not the raw
+   `ENGINE_PRESETS` entry.** Pass the raw entry and `p.engineConfig` is `undefined` — a
+   build with no short block.
+
+2. **`RESET_TO_STOCK` takes `ve` in its payload; the reducer does not compute it.** The
+   call site must pass `computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe)` — note the
+   asymmetry: `DEFAULT_MODS` for the mods argument, but the **current** `hwForVe`
+   (`EcuLab.jsx:665`) for hardware. Resetting the calibration does not un-install the
+   turbo. Passing current mods, or a stock `hwForVe`, both yield a table that looks
+   entirely reasonable and is wrong.
+
+3. **`boostSel` and `presetPrompt` go through `SET_BOOST_SEL` and `SET_PRESET_PROMPT`
+   only.** Routing either through `SET_BUILD_FIELD` clears `presetId`, so the header stops
+   claiming the factory preset because the player clicked an RPM column header or opened a
+   dialog. Task 1's characterisation tests will not catch this — write a test that does.
+
+4. **`choosePreset` (`EcuLab.jsx:784-787`) branches on `hasTuningWork()`, which reads
+   `tablesDirty` — still local in this task.** Keep reading the local one; Task 5 moves it.
+
+**`SET_ENGINE_CONFIG_PATCH` already exists** (added in Task 3) — `setCfg` becomes
+`dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch })`. Do not re-add it, and do not
+pass the function form through an action.
+
 - [ ] **Step 1: Wrap the app in the provider**
 
 In `src/main.jsx`, wrap `<EcuLab />` in `<StoreProvider>`, inside the existing `<ErrorBoundary>`.
@@ -740,7 +794,9 @@ dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v });
 
 `setTurbineIdxInvalidating` becomes `{ type: ACTIONS.SET_TURBINE, value: idx }`.
 
-**Watch for functional updates.** `setCfg` does `setEngineConfigInvalidating((c) => ({ ...c, ...patch }))`. The reducer already has the current state, so this becomes a patch action — add `SET_ENGINE_CONFIG_PATCH` if it is cleaner than resolving the function at the call site. Do not pass functions through actions.
+**Functional updates are already handled.** `setCfg` was
+`setEngineConfigInvalidating((c) => ({ ...c, ...patch }))`; it becomes
+`dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch })`, which the reducer merges.
 
 - [ ] **Step 4: Run the characterisation tests after every few fields**
 
