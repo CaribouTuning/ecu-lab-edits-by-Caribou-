@@ -847,6 +847,52 @@ Commit with a message describing which slice moved and confirming the characteri
 
 Same method as Task 4, for `ve`, `timing`, `afr`, `tablesDirty`, `selection`.
 
+**But not the same shape as Task 4, and assuming otherwise will cost you.** Task 4 left the
+store's `build` slice authoritative — every build write goes through a dispatch. It did
+**not** do the same for `tune`. Only two paths write the store's tune slice today, both
+inside cross-slice actions: `APPLY_PRESET` and `RESET_TO_STOCK`. Everything else still
+writes local state ONLY:
+
+- `withTableEdit` (`EcuLab.jsx:599`) — every hand edit to VE, spark or fuel
+- `recalcVE` (`:662`) — the VE-acceptance path
+- `changeTab` (`:699`) and `SelectionDock`'s `setData` — both write `selection`
+
+So Task 5 must **add** `SET_TABLE` / `SET_TUNE_FIELD` dispatches at those sites, not merely
+delete local setters. Verify each against the store rather than assuming Task 4 populated
+it. A field you only delete the local writer for goes silently stale.
+
+**`tests/ui/build-store.test.jsx`'s overwrite-prompt test WILL break, and the reason is
+subtle.** Its setup depends on `tablesDirty` being local: it hand-edits a table (local
+`tablesDirty → true`, the store's stays `false`), then dispatches `APPLY_PRESET` to put a
+preset label back — which clears the *store's* `tune.tablesDirty` but cannot touch the
+local one, so `hasTuningWork()` still returns true and the prompt opens. The moment
+`tablesDirty` moves to the store, `APPLY_PRESET` clears it and the prompt stops opening;
+the test dies at its `/^LOAD /` query.
+
+**Reseed it — do not weaken it.** After the `APPLY_PRESET` dispatch, add:
+
+```jsx
+act(() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'tablesDirty', value: true }));
+```
+
+`SET_TUNE_FIELD` deliberately does not clear `presetId`, which is exactly the seam this
+needs. The test's assertions must not change — only its setup. That test is the only thing
+standing between `presetPrompt` and a regression, so if you find yourself deleting an
+assertion to make it pass, stop and report instead.
+
+**One functional update to resolve.** `setVeEdited` has a functional call site at
+`EcuLab.jsx:992`. `SET_TABLE` carries a value, not a function, so resolve it against the
+current `ve` at the call site.
+
+**Fix `clearPresetId` while you are here.** It currently dispatches
+`{ type: SET_BUILD_FIELD, field: 'presetId', value: null }` (`EcuLab.jsx:598`), which works
+only by coincidence: the computed key is overwritten by the reducer's own trailing
+`presetId: null`. A future caller passing a non-null value would silently get `null` — a
+header that refuses to name a preset, with no error anywhere. Task 5 collapses
+`withTableEdit` into `SET_TABLE` and leaves `clearPresetId` with a single caller (the
+picker's "Custom build" option at `:1464`), so this is the cheapest moment to fix it: add
+`ACTIONS.CLEAR_PRESET_ID`, give it a reducer case and a test, and use it at that one site.
+
 - [ ] **Step 1: Replace the five `useState` calls with `useTune()` and destructuring**
 
 - [ ] **Step 2: Replace `withTableEdit`**
