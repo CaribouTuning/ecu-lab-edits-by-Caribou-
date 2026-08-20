@@ -19,10 +19,13 @@
  * This file implements the SINGLE-slice actions (Task 2 of the state-extraction plan)
  * AND the cross-cutting actions that replace `applyEnginePreset`, `resetToStock`,
  * `repairEngine` and the score-tallying tail of `doRun` — APPLY_PRESET, RESET_TO_STOCK,
- * REPAIR_ENGINE, BANK_PULL (Task 3).
+ * REPAIR_ENGINE, BANK_PULL (Task 3). Task 6 adds the two live-engine actions,
+ * LIVE_STEP and LIVE_PATCH, for the same reason SET_ENGINE_CONFIG_PATCH exists: they
+ * replace functional `setState` updaters, which an action cannot carry, so the reducer
+ * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep } from '../../sim/index.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -48,6 +51,8 @@ export const ACTIONS = Object.freeze({
   RESET_TO_STOCK: 'RESET_TO_STOCK',
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
+  LIVE_STEP: 'LIVE_STEP',
+  LIVE_PATCH: 'LIVE_PATCH',
 });
 
 /**
@@ -190,6 +195,46 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * Advances the live engine by ONE integration step, replacing `EcuLab.jsx`'s
+ * `setLive((prev) => liveStep(prev, ...))` inside a 50 ms `setInterval`.
+ *
+ * This exists because a `SET_SESSION_FIELD` carrying an already-computed value could
+ * not be made correct here. The interval is installed once, with `[]` deps, so its
+ * callback closes over the `live` from the FIRST render forever. Computing
+ * `liveStep(live, ...)` in that callback would integrate from a state that is frozen
+ * at engine-off — the readout would sit dead, or jitter between two adjacent steps,
+ * and it would look like a physics bug rather than a stale closure. The functional
+ * `setLive(prev => ...)` form has no reducer equivalent, because actions must not
+ * carry functions. So the step happens HERE, where `prev` comes from the store.
+ *
+ * `input` and `cfg` are read from refs at DISPATCH time and carried on the action.
+ * They are the only two things the step needs that the reducer does not hold:
+ * `cfg` is `liveCfgRef.current`, rebuilt from the build/tune slices on every render
+ * (a live table edit must reach the running engine without restarting the interval),
+ * and `input.throttle` is `throttleRef.current`. Neither is a function.
+ *
+ * The one caveat, recorded because it is real rather than because it matters: the old
+ * updater read both refs when React RAN it, this reads them when the interval
+ * dispatches. The gap between the two is one React render — sub-millisecond against a
+ * 50 ms tick, and refs only change from pointer handlers and render, so no step can
+ * land on different inputs than it would have before.
+ *
+ * @typedef {{type: 'LIVE_STEP', dt: number, input: {throttle: number, load: number}, cfg: object}} LiveStepAction
+ */
+
+/**
+ * Merges a patch into the live-engine state, for the two writes that are a COMMAND to
+ * the engine rather than a step of it: `startEngine` (`{cranking: true}`) and
+ * `stopEngine` (`{running: false, cranking: false}`). Both were
+ * `setLive((p) => ({ ...p, ... }))` — functional, because they must land on top of
+ * whatever the 20 Hz interval last wrote, not on the `live` the click handler's render
+ * happened to capture. A value-carrying `SET_SESSION_FIELD` would rewind the engine by
+ * up to one step (rpm, temperatures, trims) every time the player pressed START or
+ * STOP. The reducer holds the current `live`, so the merge happens here.
+ * @typedef {{type: 'LIVE_PATCH', patch: object}} LivePatchAction
+ */
+
+/**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
  * shape is assignable to `StoreAction` and the eleven specific typedefs above become
@@ -198,7 +243,8 @@ export const ACTIONS = Object.freeze({
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
+ *   LivePatchAction
  * } KnownStoreAction
  */
 
@@ -210,11 +256,21 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * The root reducer. Pure: no `Date.now()`, no `Math.random()`, no mutation of `state`
- * or any of its slices — every case that changes a slice returns a NEW object for
- * that slice only, and every slice it does not touch keeps its existing reference
- * (so `React.memo`/`useMemo` consumers downstream can bail out on an unrelated
- * dispatch).
+ * The root reducer. No `Date.now()`, no mutation of `state` or any of its slices —
+ * every case that changes a slice returns a NEW object for that slice only, and every
+ * slice it does not touch keeps its existing reference (so `React.memo`/`useMemo`
+ * consumers downstream can bail out on an unrelated dispatch).
+ *
+ * ONE case is not a pure function of `(state, action)`: `LIVE_STEP` calls `liveStep`,
+ * which is itself pure apart from `sensorRead`'s `Math.random()` sensor noise (see
+ * src/sim/live.js). That is deliberate and it is contained. What impurity would
+ * normally cost is replay-safety — React re-runs a reducer over the same actions when
+ * a render is double-invoked under StrictMode, or when an update is rebased behind a
+ * higher-priority one — and here a replay re-integrates the SAME single step from the
+ * SAME `prev`, so the engine never advances twice and the only thing that differs
+ * between two runs is a fraction of a percent of simulated sensor noise, which is
+ * random by design. No other case may call `Math.random()`; a second one would be a
+ * reason to move the step out of the reducer, not a precedent.
  *
  * @param {StoreState} state
  * @param {StoreAction} action
@@ -376,6 +432,29 @@ export function reducer(state, action) {
           totalScore: state.session.totalScore + action.pullScore,
           pullCount: state.session.pullCount + 1,
         },
+      };
+
+    case ACTIONS.LIVE_STEP: {
+      const prev = state.session.live;
+      // A stopped engine has nothing to integrate. Returning the SAME state object —
+      // not a fresh one holding an unchanged `live` — is what makes React bail out of
+      // the re-render: this action arrives 20 times a second for as long as the app is
+      // open, engine running or not, and every one of those ticks would otherwise
+      // re-render the entire app. This guard is `setLive`'s `: prev` branch, moved.
+      if (!(prev.running || prev.cranking || prev.rpm > 1)) return state;
+      return {
+        ...state,
+        session: {
+          ...state.session,
+          live: liveStep(prev, action.dt, action.input, action.cfg),
+        },
+      };
+    }
+
+    case ACTIONS.LIVE_PATCH:
+      return {
+        ...state,
+        session: { ...state.session, live: { ...state.session.live, ...action.patch } },
       };
 
     default:
