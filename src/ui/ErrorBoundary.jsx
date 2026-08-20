@@ -36,7 +36,7 @@ export class ErrorBoundary extends React.Component {
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: 24, gap: 14,
       }}>
-        <div style={{ fontSize: 10.5, letterSpacing: 2, color: T.amberInk, fontWeight: 800 }}>
+        <div style={{ fontSize: 10.5, letterSpacing: 2, color: T.accInk, fontWeight: 800 }}>
           CARIBOU TUNING · ECU LAB
         </div>
         <div style={{ fontSize: 21, fontWeight: 800 }}>Something broke.</div>
@@ -47,7 +47,7 @@ export class ErrorBoundary extends React.Component {
         </div>
         <pre style={{
           background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10,
-          padding: '12px 14px', fontSize: 11.5, fontFamily: T.mono, color: '#ff9d9d',
+          padding: '12px 14px', fontSize: 11.5, fontFamily: T.mono, color: T.dangerInk,
           overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0,
         }}>
           {String(error?.stack || error?.message || error)}
@@ -57,8 +57,8 @@ export class ErrorBoundary extends React.Component {
             type="button"
             onClick={() => this.setState({ error: null })}
             style={{
-              padding: '13px 22px', borderRadius: 11, border: 'none', background: T.amber,
-              color: '#1a0f08', fontWeight: 800, fontSize: 13.5,
+              padding: '13px 22px', borderRadius: 11, border: 'none', background: T.acc,
+              color: T.accOn, fontWeight: 800, fontSize: 13.5,
             }}
           >
             TRY AGAIN
@@ -68,7 +68,7 @@ export class ErrorBoundary extends React.Component {
             onClick={() => window.location.reload()}
             style={{
               padding: '13px 22px', borderRadius: 11, border: `1px solid ${T.line}`,
-              background: T.panel2, color: '#c3cad2', fontWeight: 700, fontSize: 13.5,
+              background: T.panel2, color: T.inkSoft, fontWeight: 700, fontSize: 13.5,
             }}
           >
             RELOAD

@@ -26,3 +26,6 @@ Thumbs.db
 
 # Python bytecode from scripts/
 __pycache__/
+
+# Superpowers brainstorming session artifacts
+.superpowers/

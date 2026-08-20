@@ -26,6 +26,7 @@ export default [
         clearTimeout: 'readonly',
         Float32Array: 'readonly',
         process: 'readonly',
+        URL: 'readonly',
       },
     },
     plugins: { react, 'react-hooks': reactHooks },

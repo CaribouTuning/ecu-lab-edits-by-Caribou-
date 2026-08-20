@@ -16,7 +16,19 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true
   },
-  "//include": "src/ui is excluded for now — the screens are still one large untyped component. Annotating them is tracked in CONTRIBUTING; the physics layer, which is where type safety actually pays, is fully covered.",
-  "include": ["src/sim", "src/storage.js", "src/version.js", "src/globals.d.ts", "tests", "scripts"],
+  "//include": "src/sim is fully typed. src/ui/EcuLab.jsx is still one large untyped component and stays excluded until the screen split; everything built during the overhaul — tokens, primitives, screens — is typed from the start so the exclusion never has to grow again.",
+  "include": [
+    "src/sim",
+    "src/ui/tokens.js",
+    "src/ui/theme.js",
+    "src/ui/primitives",
+    "src/ui/screens",
+    "src/storage.js",
+    "src/version.js",
+    "src/globals.d.ts",
+    "src/css-modules.d.ts",
+    "tests",
+    "scripts"
+  ],
   "exclude": ["node_modules", "dist", "ECULab.jsx"]
 }

@@ -1,0 +1,75 @@
+/* Content-width by default. `block` is opt-in — see Button.jsx. */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- variants --- */
+
+.primary {
+  background: var(--acc);
+  color: var(--acc-on);
+}
+.primary:hover:not(:disabled) { background: var(--acc-ink); }
+
+.ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink2);
+}
+.ghost:hover:not(:disabled) {
+  border-color: var(--line-hi);
+  color: var(--ink);
+}
+
+/* Reserved for genuinely destructive actions, never for emphasis. */
+/* Keeps the saturated hue rather than --danger-line: a destructive control is
+   deliberately louder than a status box, which only reports. */
+.danger {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+.danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
+
+/* Text-only, for escape hatches that must not compete with the primary action. */
+.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink3);
+}
+.quiet:hover:not(:disabled) { color: var(--ink2); }
+
+/* --- sizes --- */
+
+.sm { padding: var(--sp-sm) var(--sp-md); font-size: var(--fs-xs); }
+.md { padding: var(--sp-md) var(--sp-xl); font-size: var(--fs-sm); }
+/* 22px horizontal is not on the spacing scale: it is 2px from the nearest
+   step (--sp-xxl, 24px), further than the ~1px this pass snaps, and moving it
+   would visibly change the button's proportions. Left raw. */
+.lg { padding: var(--sp-lg) 22px; font-size: var(--fs-base); }
+
+/* --- full width, opt-in only --- */
+
+.block { display: flex; width: 100%; }

@@ -1,0 +1,72 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-lg) var(--sp-xl);
+}
+
+.count {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--acc-ink);
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 0 var(--sp-xxl);
+}
+
+.inner { width: 100%; max-width: 60ch; }
+
+/* 21px/27px (below, at the breakpoint) are not on the font-size scale: this is
+   this screen's one section headline, a deliberately different size from
+   StartScreen's hero title rather than a shared repeating role. See the note
+   there. */
+.title { margin: 0 0 13px; font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+.text { margin: 0; font-size: var(--fs-md); line-height: 1.7; color: var(--ink-soft); }
+
+/* 18px is not on the spacing scale: a single-use bottom spacer ahead of the
+   safe-area inset, 2px from the nearest step (--sp-xl, 16px) — further than
+   the ~1px this pass snaps. Left raw. */
+.dots { display: flex; gap: 6px; justify-content: center; padding-bottom: 18px; }
+
+.dot { width: 6px; height: 6px; border-radius: var(--r-xs); background: var(--line); transition: width 0.2s ease; }
+.dotOn { width: 20px; background: var(--acc); }
+
+.actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 var(--sp-xl) calc(var(--sp-xl) + env(safe-area-inset-bottom));
+}
+
+.actions > * { flex: 1; }
+.actions > *:last-child { flex: 2; }
+
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css. Kept in sync by hand with StartScreen.module.css. */
+@media (min-width: 560px) {
+  .title { font-size: 27px; }
+
+  .actions {
+    justify-content: center;
+  }
+
+  .actions > *,
+  .actions > *:last-child {
+    flex: 0 0 auto;
+  }
+}

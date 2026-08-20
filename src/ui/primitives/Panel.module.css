@@ -1,0 +1,8 @@
+.panel {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-lg);
+}
+
+.tight { padding: var(--sp-md) var(--sp-lg); }

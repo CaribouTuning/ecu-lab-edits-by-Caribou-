@@ -1,0 +1,84 @@
+/* Mirrors src/ui/tokens.js. Both are checked against each other by
+   tests/tokens.test.js — change one and you must change the other. */
+
+:root {
+  --bg: #0a0d14;
+  --panel: #131824;
+  --panel2: #1a2130;
+  --panel3: #212a3c;
+
+  --line: #262f42;
+  --line-hi: #33405a;
+
+  --ink: #e9eef8;
+  --ink-soft: #c8d2e2;
+  --ink2: #8792a8;
+  --ink3: #5c6880;
+
+  --acc: #4c9eff;
+  --acc-ink: #8fc2ff;
+  --acc-bg: #0f2033;
+  --acc-on: #04162e;
+
+  --ok: #35e08a;
+  --ok-ink: #7fe8b4;
+  --ok-bg: #0d2419;
+  --warn: #ffb020;
+  --warn-ink: #ffd07a;
+  --warn-bg: #2a2110;
+  --danger: #ff4d4d;
+  --danger-ink: #ff9d9d;
+  --danger-bg: #2a1414;
+
+  --ok-line: #1e5238;
+  --warn-line: #5c4415;
+  --danger-line: #5c2626;
+  --violet-line: #3b3363;
+
+  --cyan: #38d9f0;
+  --cyan-bg: #0b2630;
+  --violet: #a78bfa;
+  --violet-bg: #1d1a33;
+
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --acc-rgb: 76, 158, 255;
+  --shadow-rgb: 0, 0, 0;
+
+  /* Font-size scale, small to large. See the matching comment in tokens.js for
+     why these six steps replace fifteen raw values rather than naming all of
+     them. One-off screen headlines (21/25/27/34px) are intentionally not on
+     this ramp — see the comments at their declarations. */
+  --fs-micro: 9px;
+  --fs-xs: 10.5px;
+  --fs-sm: 12px;
+  --fs-base: 13.5px;
+  --fs-md: 14.5px;
+  --fs-lg: 18px;
+
+  /* Border-radius scale, small to large. `50%` circles and one pill radius
+     pinned to half its own element's height are deliberately not on this
+     ramp — see the comment at that declaration (Toggle.module.css). */
+  --r-xs: 3px;
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 12px;
+
+  /* Spacing scale, for padding. A few raw padding values stay off this ramp
+     because they are pinned to something other than rhythm — a chevron's
+     clearance, a toggle knob's fit inside its track — each documented at its
+     declaration. */
+  --sp-xs: 3px;
+  --sp-sm: 7px;
+  --sp-md: 10px;
+  --sp-lg: 13px;
+  --sp-xl: 16px;
+  --sp-xxl: 24px;
+
+  /* Breakpoint. `@media` cannot read a custom property, so this cannot be a
+     token — it is recorded here instead. 560px is the project's one
+     breakpoint (small-tablet-and-up); it must be kept in sync by hand across
+     every file that uses it: src/ui/screens/StartScreen.module.css and
+     src/ui/screens/TutorialScreen.module.css. */
+}

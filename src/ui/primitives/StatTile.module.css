@@ -1,0 +1,36 @@
+.tile {
+  flex: 1;
+  min-width: 74px;
+  padding: var(--sp-md) var(--sp-md);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+}
+
+.label {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink3);
+}
+
+.value {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.unit {
+  margin-left: 2px;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.acc .value { color: var(--acc); }
+.ok .value { color: var(--ok); }
+.warn .value { color: var(--warn); }
+.danger .value { color: var(--danger); }
