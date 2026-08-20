@@ -3,10 +3,15 @@
 Thanks for being here. This project is a teaching tool, so contributions that make the
 physics more honest or the explanations clearer are worth as much as new features.
 
-**ECU Lab was created by CaribouTuning** — the engine model and everything it teaches
-are his work. Turtle.GTI maintains the repository, tests and tooling. When a change
-touches the physics or the teaching material, CaribouTuning's read on it is the one
-that settles it; he is the domain authority here.
+**ECU Lab is built by CaribouTuning and Turtle.GTI, as partners.** CaribouTuning created
+it — the engine model and everything it teaches started with him, the domain knowledge
+behind them is his, and he still works on the physics. Turtle.GTI develops and maintains
+it: the physics added since, the test suite and its fingerprint gate, the tooling, and
+the current rework of the app.
+
+A change that touches the physics or the teaching material is settled between them. If a
+pull request raises a question neither the code nor the tests can answer on their own,
+expect that conversation rather than a single verdict.
 
 ## The one rule that matters
 
