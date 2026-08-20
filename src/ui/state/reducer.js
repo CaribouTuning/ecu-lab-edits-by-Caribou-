@@ -110,12 +110,7 @@ export const ACTIONS = Object.freeze({
  * `engineConfig` and does the spread itself. Invalidates like every other hardware
  * write.
  *
- * `patch` is typed as a plain object rather than `Partial<EngineConfig>`: the caller
- * (a range/segment `onChange` handler in `EcuLab.jsx`) hands over whatever key it
- * owns, same as the untyped original, and a stricter type here would reject the
- * fixture patches this file's own tests use to prove the merge (not replace)
- * behaviour without also asserting anything about `EngineConfig`'s real shape.
- * @typedef {{type: 'SET_ENGINE_CONFIG_PATCH', patch: Object<string, *>}} SetEngineConfigPatchAction
+ * @typedef {{type: 'SET_ENGINE_CONFIG_PATCH', patch: Partial<import('../../sim/index.js').EngineConfig>}} SetEngineConfigPatchAction
  */
 
 /**
@@ -181,12 +176,23 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * The union of every action shape the reducer actually understands. Deliberately has
+ * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
+ * shape is assignable to `StoreAction` and the eleven specific typedefs above become
+ * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
+ * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction |
- *   {type: string, [key: string]: *}
- * } StoreAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction
+ * } KnownStoreAction
+ */
+
+/**
+ * Kept as the public name `StoreAction` (re-exported via `StoreProvider.jsx`'s
+ * `@typedef {import('./reducer.js').StoreAction}`) so callers outside this file are
+ * unaffected — it is simply an alias for {@link KnownStoreAction}, not a looser type.
+ * @typedef {KnownStoreAction} StoreAction
  */
 
 /**

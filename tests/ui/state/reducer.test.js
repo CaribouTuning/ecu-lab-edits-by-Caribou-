@@ -2,15 +2,38 @@
  * Reducer tests — pure, no DOM.
  *
  * The reducer exists so that operations spanning several slices happen in ONE pass.
- * EcuLab's applyEnginePreset makes 23 sequential setState calls and its own comment
+ * EcuLab's applyEnginePreset makes 21 sequential setState calls and its own comment
  * warns the order matters; resetToStock documents that "the last call pins tablesDirty
  * back to false". Those hazards are what this file exists to make impossible.
  */
 
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING } from '../../../src/sim/index.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
+
+/**
+ * A complete, real engineConfig (BMW N54 figures — src/sim/presets.js) so this file's
+ * APPLY_PRESET fixtures typecheck as a genuine EngineConfig, not just a configuration
+ * stub. Declared with an explicit type annotation below (not an "as" cast) so
+ * `configuration` narrows to the engine-layout literal union instead of widening to
+ * plain string.
+ * @type {import('../../../src/sim/index.js').EngineConfig}
+ */
+const N54_ENGINE_CONFIG = {
+  configuration: 'I6', bore: 84.0, stroke: 89.6, compression: 10.2,
+  blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+};
+
+/** Shared APPLY_PRESET fixture: every field the action's `preset` payload carries. */
+const N54_PRESET = {
+  presetId: 'n54', engineConfig: N54_ENGINE_CONFIG,
+  mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  turboOn: true, boostCurve: [8, 8, 8, 8, 8, 8, 8, 8], turbineIdx: 1,
+  turbineCount: 2, compressorIdx: 1, injIdx: 2, ecuInjectorCc: 440,
+  octaneIdx: 1, exhaustDiaIdx: 2, ve: [[80]], timing: [[20]], afr: [[12]],
+};
 
 describe('makeInitialState', () => {
   it('returns the three slices', () => {
@@ -104,7 +127,12 @@ describe('SET_TABLE', () => {
 describe('unknown actions', () => {
   it('returns the same state object, so React skips the re-render', () => {
     const before = makeInitialState();
-    expect(reducer(before, { type: 'NOT_A_REAL_ACTION' })).toBe(before);
+    // Deliberately outside the known-action union (see the StoreAction JSDoc in
+    // reducer.js) — this test exercises the default branch's fallback for an action
+    // shape the reducer does not recognize, so the cast is intentional, not a leak of
+    // the removed catch-all.
+    const bogus = /** @type {any} */ ({ type: 'NOT_A_REAL_ACTION' });
+    expect(reducer(before, bogus)).toBe(before);
   });
 });
 
@@ -183,6 +211,41 @@ describe('every write produces a fresh slice reference', () => {
     expect(after.tune).not.toBe(before.tune);
     expect(before.tune.selection).toBeNull(); // the input state is untouched
   });
+
+  // Finding 7: the tests above only ever assert `toBe` on slices an action LEAVES
+  // ALONE — the inverse property. None of the cross-cutting actions asserted a fresh
+  // reference for the slice(s) they actually WRITE, so an action that mutated a slice
+  // in place instead of replacing it would pass every existing test here.
+  it('APPLY_PRESET replaces build, tune AND session rather than mutating them', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(after.build).not.toBe(before.build);
+    expect(after.tune).not.toBe(before.tune);
+    expect(after.session).not.toBe(before.session);
+  });
+
+  it('RESET_TO_STOCK replaces build and tune rather than mutating them', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(after.build).not.toBe(before.build);
+    expect(after.tune).not.toBe(before.tune);
+  });
+
+  it('REPAIR_ENGINE replaces session rather than mutating it', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.REPAIR_ENGINE });
+    expect(after.session).not.toBe(before.session);
+  });
+
+  it('BANK_PULL replaces session rather than mutating it', () => {
+    const before = makeInitialState();
+    const after = reducer(before, {
+      type: ACTIONS.BANK_PULL,
+      result: { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } },
+      pullScore: 50,
+    });
+    expect(after.session).not.toBe(before.session);
+  });
 });
 
 describe('non-invalidating build writes', () => {
@@ -227,12 +290,43 @@ describe('SET_ENGINE_CONFIG_PATCH', () => {
 });
 
 describe('APPLY_PRESET', () => {
-  const preset = {
-    presetId: 'n54', engineConfig: { configuration: 'I6' }, mods: { intake: true },
-    turboOn: true, boostCurve: [8, 8, 8, 8, 8, 8, 8, 8], turbineIdx: 1,
-    turbineCount: 2, compressorIdx: 1, injIdx: 2, ecuInjectorCc: 440,
-    octaneIdx: 1, exhaustDiaIdx: 2, ve: [[80]], timing: [[20]], afr: [[12]],
+  const preset = N54_PRESET;
+
+  // Finding 1: every field the preset carries must land in the RIGHT slice. Deleting
+  // any one of these from the reducer's APPLY_PRESET case must fail this test by
+  // naming the missing field — that is the point of iterating rather than spot-
+  // checking a handful of fields. The key-set assertion at the end means a 22nd field
+  // added to the fixture without a matching map entry fails LOUDLY too, so this table
+  // cannot silently drift out of date the way the hand-picked assertions above did.
+  const presetFieldSlice = {
+    presetId: 'build',
+    engineConfig: 'build',
+    mods: 'build',
+    turboOn: 'build',
+    boostCurve: 'build',
+    turbineIdx: 'build',
+    turbineCount: 'build',
+    compressorIdx: 'build',
+    injIdx: 'build',
+    ecuInjectorCc: 'build',
+    octaneIdx: 'build',
+    exhaustDiaIdx: 'build',
+    ve: 'tune',
+    timing: 'tune',
+    afr: 'tune',
   };
+
+  it('maps every fixture field to a slice — the map cannot drift out of date', () => {
+    expect(Object.keys(presetFieldSlice).sort()).toEqual(Object.keys(preset).sort());
+  });
+
+  it.each(Object.entries(presetFieldSlice))(
+    'lands preset field %s in the %s slice',
+    (field, slice) => {
+      const s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset });
+      expect(s[slice][field]).toEqual(preset[field]);
+    },
+  );
 
   it('ends with the preset LOADED, not invalidated', () => {
     // The ordering hazard this whole design removes: applying a preset writes the same
@@ -268,7 +362,14 @@ describe('APPLY_PRESET', () => {
   });
 
   it('clears any pending overwrite prompt and cell selection', () => {
-    const s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset });
+    // Finding 2: makeInitialState() already starts with both fields null, so
+    // dispatching against a bare initial state proves nothing — the reducer could
+    // drop these two writes entirely and this would still pass. Seed non-null
+    // starting values so the assertions below have something to actually clear.
+    const seeded = { ...makeInitialState() };
+    seeded.build = { ...seeded.build, presetPrompt: { id: 'k20' } };
+    seeded.tune = { ...seeded.tune, selection: { type: 'cell', row: 0, col: 0 } };
+    const s = reducer(seeded, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.build.presetPrompt).toBeNull();
     expect(s.tune.selection).toBeNull();
   });
@@ -316,6 +417,55 @@ describe('RESET_TO_STOCK', () => {
     const before = makeInitialState();
     const after = reducer(before, { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
     expect(after.session).toBe(before.session);
+  });
+
+  // Finding 3: DEFAULT_TIMING/DEFAULT_AFR are NOT Object.freeze'd (unlike DEFAULT_MODS
+  // and DEFAULT_ENGINE_CONFIG — see src/sim/tables.js). clone2D is load-bearing here:
+  // handing back the module-level constant directly would let any future in-place
+  // table edit corrupt the shared default for the rest of the session, and every later
+  // reset would then return the already-corrupted table. toEqual alone cannot catch
+  // that regression because a bare DEFAULT_TIMING is also toEqual DEFAULT_TIMING.
+  it('clones timing and afr rather than returning the shared module-level defaults', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(s.tune.timing).toEqual(DEFAULT_TIMING);
+    expect(s.tune.timing).not.toBe(DEFAULT_TIMING);
+    expect(s.tune.afr).toEqual(DEFAULT_AFR);
+    expect(s.tune.afr).not.toBe(DEFAULT_AFR);
+  });
+
+  // Finding 1's table-driven approach applied here too: the reviewer found that
+  // deleting `timing`/`afr` from this case entirely still left the suite green,
+  // because no test started from a value that differed from the reset target. Every
+  // field below is seeded to a WRONG value first, same fix as Finding 2's
+  // presetPrompt/selection seeding — RESET_TO_STOCK does not touch presetPrompt or
+  // selection at all (only EcuLab's hand-edit setters do), so there is nothing
+  // "equivalent" to clear there; this is the field-coverage analogue instead. One
+  // seeded starting state, one assertion per field RESET_TO_STOCK owns — deleting any
+  // one of these from the reducer case leaves that field at its seeded WRONG value and
+  // fails this test by naming it.
+  it('resets every field it owns, starting from values that all differ from the target', () => {
+    const dirty = { ...makeInitialState() };
+    dirty.build = {
+      ...dirty.build,
+      mods: { intake: true, exhaust: true, headers: true, intercooler: true },
+      mafScalar: 0.7,
+      presetId: 'n54',
+    };
+    dirty.tune = {
+      ...dirty.tune,
+      ve: [[999]],
+      timing: [[999]],
+      afr: [[999]],
+      tablesDirty: true,
+    };
+    const s = reducer(dirty, { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(s.build.mods).toEqual(DEFAULT_MODS);
+    expect(s.build.mafScalar).toBe(1.0);
+    expect(s.build.presetId).toBeNull();
+    expect(s.tune.ve).toEqual([[70]]);
+    expect(s.tune.timing).toEqual(DEFAULT_TIMING);
+    expect(s.tune.afr).toEqual(DEFAULT_AFR);
+    expect(s.tune.tablesDirty).toBe(false);
   });
 });
 
