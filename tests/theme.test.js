@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
-import { T, heat, statusColor } from '../src/ui/theme.js';
+import { T, heat, statusColor, utilisationColor } from '../src/ui/theme.js';
 
 describe('T', () => {
   it('exposes every key the existing screens read', () => {
@@ -46,6 +46,23 @@ describe('statusColor', () => {
   it('is red below 55', () => {
     expect(statusColor(54)).toBe(tokens.danger);
     expect(statusColor(0)).toBe(tokens.danger);
+  });
+});
+
+describe('utilisationColor', () => {
+  it('is green at and below 75', () => {
+    expect(utilisationColor(0)).toBe(tokens.ok);
+    expect(utilisationColor(75)).toBe(tokens.ok);
+  });
+
+  it('is amber between 76 and 90', () => {
+    expect(utilisationColor(76)).toBe(tokens.warn);
+    expect(utilisationColor(90)).toBe(tokens.warn);
+  });
+
+  it('is red above 90', () => {
+    expect(utilisationColor(91)).toBe(tokens.danger);
+    expect(utilisationColor(100)).toBe(tokens.danger);
   });
 });
 

@@ -93,4 +93,22 @@ describe('Bar', () => {
     const healthFill = /** @type {HTMLElement} */ (healthy.container.querySelector('[data-fill]'));
     expect(dutyFill.style.background).not.toBe(healthFill.style.background);
   });
+
+  it('reads an ordinary duty cycle as healthy, not as an alarm', () => {
+    // 60% injector duty is a comfortably sized injector, not a warning. Mirroring the
+    // health bands used to paint everything above 45% red, which is what this pins.
+    const { container } = render(<Bar label="Duty" value={60} max={100} higherIsBetter={false} />);
+    const healthy = render(<Bar label="Pistons" value={95} max={100} />);
+    const dutyFill = /** @type {HTMLElement} */ (container.querySelector('[data-fill]'));
+    const healthFill = /** @type {HTMLElement} */ (healthy.container.querySelector('[data-fill]'));
+    expect(dutyFill.style.background).toBe(healthFill.style.background);
+  });
+
+  it('reads a duty cycle with no headroom left as dangerous', () => {
+    const { container } = render(<Bar label="Duty" value={95} max={100} higherIsBetter={false} />);
+    const failing = render(<Bar label="Pistons" value={20} max={100} />);
+    const dutyFill = /** @type {HTMLElement} */ (container.querySelector('[data-fill]'));
+    const failingFill = /** @type {HTMLElement} */ (failing.container.querySelector('[data-fill]'));
+    expect(dutyFill.style.background).toBe(failingFill.style.background);
+  });
 });

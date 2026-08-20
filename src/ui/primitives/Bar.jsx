@@ -3,16 +3,19 @@
  *
  * Those two use cases run in opposite directions: high component health is good,
  * but high injector duty is the dangerous end. `higherIsBetter` is how a caller
- * says which way this particular value reads.
+ * says which way this particular value reads. Each direction has its own colour
+ * scale rather than one mirrored around the other — `statusColor` for health,
+ * `utilisationColor` for how much of a capacity is spent — because they are
+ * different judgements about different quantities, not reflections of each other.
  *
- * The fill colour comes from `statusColor`, so it is a STATUS, never decoration.
- * Do not use this for a value that has no good/bad reading.
+ * The fill colour comes from one of those two scales, so it is a STATUS, never
+ * decoration. Do not use this for a value that has no good/bad reading.
  */
 
 import React from 'react';
 
 import { clamp } from '../../sim/index.js';
-import { statusColor } from '../theme.js';
+import { statusColor, utilisationColor } from '../theme.js';
 
 import styles from './Bar.module.css';
 
@@ -28,9 +31,7 @@ import styles from './Bar.module.css';
 export function Bar({ label, value, max = 100, higherIsBetter = true }) {
   const pct = clamp((value / max) * 100, 0, 100);
   const shown = clamp(value, 0, max);
-  // Mirror the percentage through the one status scale rather than adding a
-  // second set of thresholds that could drift from statusColor's.
-  const tone = higherIsBetter ? statusColor(pct) : statusColor(100 - pct);
+  const tone = higherIsBetter ? statusColor(pct) : utilisationColor(pct);
   return (
     <div className={styles.wrap}>
       <div className={styles.label}>
