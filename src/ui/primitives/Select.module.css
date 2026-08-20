@@ -1,0 +1,28 @@
+.wrap { position: relative; display: inline-block; min-width: 200px; }
+
+.select {
+  width: 100%;
+  padding: 11px 34px 11px 13px;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel2);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.select:hover { border-color: var(--line-hi); }
+.select:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+.chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink2);
+  pointer-events: none;
+}
