@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
+
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -122,5 +125,22 @@ describe('Toggle', () => {
   it('carries no description when there is no sub-label', () => {
     render(<Toggle label="Intake" checked onChange={() => {}} />);
     expect(screen.getByRole('switch').getAttribute('aria-describedby')).toBeNull();
+  });
+});
+
+describe('Toggle styling lives in the stylesheet', () => {
+  // .sub's margin-top does nothing on an inline box, so display:block is load-bearing
+  // rather than cosmetic — and jsdom cannot observe it any other way.
+  it('gives the sub-label display:block in CSS, not inline', () => {
+    // Explicit node:url URL, not the ambient global: this file runs under the jsdom
+    // environment, which replaces global URL with its own class that fs.readFileSync
+    // refuses ("The URL must be of scheme file") even for a valid file:// URL.
+    const css = readFileSync(new NodeURL('../../src/ui/primitives/Toggle.module.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.sub\s*\{[^}]*display:\s*block/);
+  });
+
+  it('keeps Toggle.jsx free of inline styles', () => {
+    const jsx = readFileSync(new NodeURL('../../src/ui/primitives/Toggle.jsx', import.meta.url), 'utf8');
+    expect(jsx).not.toContain('style=');
   });
 });

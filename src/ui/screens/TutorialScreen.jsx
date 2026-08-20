@@ -26,7 +26,7 @@ export function TutorialScreen({ steps, onDone }) {
 
       <div className={styles.body}>
         <div className={styles.inner}>
-          <h2 className={styles.title}>{current.title}</h2>
+          <h1 className={styles.title}>{current.title}</h1>
           <p className={styles.text}>{current.body}</p>
         </div>
       </div>

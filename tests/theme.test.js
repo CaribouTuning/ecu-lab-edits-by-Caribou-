@@ -19,6 +19,7 @@ describe('T', () => {
       'acc', 'accInk', 'accBg', 'accOn',
       'ok', 'okInk', 'okBg', 'warn', 'warnInk', 'warnBg',
       'danger', 'dangerInk', 'dangerBg',
+      'okLine', 'warnLine', 'dangerLine', 'violetLine',
       'cyan', 'cyanBg', 'violet', 'violetBg', 'mono', 'sans',
     ];
     for (const key of required) {

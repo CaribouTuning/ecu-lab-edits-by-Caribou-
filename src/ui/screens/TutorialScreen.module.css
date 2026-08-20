@@ -43,10 +43,21 @@
 .actions {
   display: flex;
   gap: 10px;
-  justify-content: center;
   padding: 0 16px calc(16px + env(safe-area-inset-bottom));
 }
 
+.actions > * { flex: 1; }
+.actions > *:last-child { flex: 2; }
+
 @media (min-width: 560px) {
   .title { font-size: 27px; }
+
+  .actions {
+    justify-content: center;
+  }
+
+  .actions > *,
+  .actions > *:last-child {
+    flex: 0 0 auto;
+  }
 }

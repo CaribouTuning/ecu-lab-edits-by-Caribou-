@@ -44,6 +44,8 @@
 }
 
 /* Reserved for genuinely destructive actions, never for emphasis. */
+/* Keeps the saturated hue rather than --danger-line: a destructive control is
+   deliberately louder than a status box, which only reports. */
 .danger {
   background: var(--danger-bg);
   border-color: var(--danger);

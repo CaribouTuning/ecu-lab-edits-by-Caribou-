@@ -2004,7 +2004,7 @@ export default function EngineManagementSandbox() {
 
             <button onClick={doRun} disabled={running} style={{
               width: '100%', padding: '15px 0', borderRadius: 12, border: 'none', marginBottom: 16,
-              background: running ? T.warnBg : T.acc, color: T.accOn, fontWeight: 800, fontSize: 14.5,
+              background: running ? T.panel3 : T.acc, color: running ? T.ink2 : T.accOn, fontWeight: 800, fontSize: 14.5,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, letterSpacing: 0.3,
               boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
             }}>

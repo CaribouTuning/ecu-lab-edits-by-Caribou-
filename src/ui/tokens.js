@@ -53,7 +53,11 @@ export const tokens = Object.freeze({
 
   // Status borders. One step brighter than the matching *Bg so a status box reads as
   // a bounded object rather than a wash — without reaching the full status hue, which
-  // belongs to text and indicators.
+  // belongs to text and indicators. These are for a status BOX's border — something
+  // that reports state, like Note or an inline banner. A destructive CONTROL (e.g.
+  // Button's danger variant) deliberately uses the saturated hue instead, because it
+  // needs to read louder than something that merely reports; that is not an
+  // inconsistency to "fix" by pointing it at these tokens too.
   okLine: '#1e5238',
   warnLine: '#5c4415',
   dangerLine: '#5c2626',

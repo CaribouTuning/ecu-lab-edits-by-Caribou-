@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { camelToKebab, tokens } from '../src/ui/tokens.js';
 
 const css = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 /** @returns {Map<string,string>} every `--name: value` declared in tokens.css */
 function parseCss() {
@@ -50,5 +51,15 @@ describe('token contract', () => {
 
   it('is frozen so no screen can mutate the palette at runtime', () => {
     expect(Object.isFrozen(tokens)).toBe(true);
+  });
+});
+
+describe('pre-mount styles', () => {
+  it('keeps index.html on the same palette', () => {
+    // index.html is exempt from the colour guard because the pre-mount background
+    // cannot wait for a stylesheet. That exemption needs this assertion, or it is
+    // just a place for the palette to drift out of sight.
+    expect(html).toContain(tokens.bg);
+    expect(html).toContain(tokens.acc);
   });
 });

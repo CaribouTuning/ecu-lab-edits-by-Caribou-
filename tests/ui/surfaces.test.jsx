@@ -29,6 +29,11 @@ describe('Panel', () => {
     render(<Panel as="section">x</Panel>);
     expect(screen.getByText('x').tagName).toBe('SECTION');
   });
+
+  it('passes unknown props through to the element', () => {
+    render(<Panel aria-label="Build summary">x</Panel>);
+    expect(screen.getByLabelText('Build summary')).toBeTruthy();
+  });
 });
 
 describe('Eyebrow', () => {
