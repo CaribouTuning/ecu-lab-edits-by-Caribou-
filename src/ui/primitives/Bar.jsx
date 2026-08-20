@@ -1,6 +1,10 @@
 /**
  * A horizontal meter for a 0-max quantity: component health, injector duty.
  *
+ * Those two use cases run in opposite directions: high component health is good,
+ * but high injector duty is the dangerous end. `higherIsBetter` is how a caller
+ * says which way this particular value reads.
+ *
  * The fill colour comes from `statusColor`, so it is a STATUS, never decoration.
  * Do not use this for a value that has no good/bad reading.
  */
@@ -17,15 +21,21 @@ import styles from './Bar.module.css';
  * @param {string} props.label
  * @param {number} props.value
  * @param {number} [props.max]
+ * @param {boolean} [props.higherIsBetter] true when a high value is healthy
+ *   (component wear); false when a high value is the dangerous end (injector duty cycle)
  * @returns {React.ReactElement}
  */
-export function Bar({ label, value, max = 100 }) {
+export function Bar({ label, value, max = 100, higherIsBetter = true }) {
   const pct = clamp((value / max) * 100, 0, 100);
+  const shown = clamp(value, 0, max);
+  // Mirror the percentage through the one status scale rather than adding a
+  // second set of thresholds that could drift from statusColor's.
+  const tone = higherIsBetter ? statusColor(pct) : statusColor(100 - pct);
   return (
     <div className={styles.wrap}>
       <div className={styles.label}>
         <span>{label}</span>
-        <span className={styles.pct} style={{ color: statusColor(pct) }}>
+        <span className={styles.pct} style={{ color: tone }}>
           {Math.round(pct)}%
         </span>
       </div>
@@ -33,14 +43,14 @@ export function Bar({ label, value, max = 100 }) {
         className={styles.track}
         role="meter"
         aria-label={label}
-        aria-valuenow={value}
+        aria-valuenow={shown}
         aria-valuemin={0}
         aria-valuemax={max}
       >
         <div
           data-fill=""
           className={styles.fill}
-          style={{ width: `${pct}%`, background: statusColor(pct) }}
+          style={{ width: `${pct}%`, background: tone }}
         />
       </div>
     </div>
