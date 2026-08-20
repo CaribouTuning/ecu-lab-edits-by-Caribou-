@@ -53,6 +53,8 @@ import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
+import { StoreProvider, useBuild } from './state/StoreProvider.jsx';
+import { ACTIONS } from './state/reducer.js';
 
 const Eyebrow = ({ children, icon: Icon }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -531,9 +533,14 @@ function TrimBar({ label, value }) {
 }
 
 // ============================================================
-export default function EngineManagementSandbox() {
+function EngineManagementSandbox() {
   const [appView, setAppView] = useState('start');
   const [tab, setTab] = useState('dash');
+  // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
+  // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
+  // changed, from setters to dispatches. `tune` and `session` are still local useState
+  // below until Tasks 5 and 6 move them.
+  const [, dispatch] = useBuild();
   const [engineConfig, setEngineConfig] = useState(DEFAULT_ENGINE_CONFIG);
   const [mods, setMods] = useState(DEFAULT_MODS);
   const [ve, setVe] = useState(() => computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS));
@@ -729,10 +736,21 @@ export default function EngineManagementSandbox() {
     // through the invalidating setters so the header stops claiming a factory
     // calibration this just deleted, and the last call pins tablesDirty back to
     // false: a reset baseline is not unsaved player work.
-    setVeEdited(computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe));
-    setTimingEdited(clone2D(DEFAULT_TIMING)); setAfrEdited(clone2D(DEFAULT_AFR));
-    setModsInvalidating(DEFAULT_MODS); setMafScalarInvalidating(1.0);
+    // The reducer does NOT compute the stock VE table; the caller does, and the mix of
+    // arguments is the point: DEFAULT_MODS (the bolt-ons come off) against the CURRENT
+    // `hwForVe` (the turbo does not — resetting the calibration is not uninstalling the
+    // hardware). Either half swapped for the other yields a perfectly plausible table
+    // that is wrong.
+    const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
+    dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: stockVe });
+    // `tune` is still local useState until Task 5, so it is written here too. Note these
+    // are the RAW setters, not the ...Edited wrappers: the wrappers exist to flag unsaved
+    // player work, and a reset baseline is not that — which is why the original's last
+    // call had to pin tablesDirty back to false.
+    setVe(stockVe); setTiming(clone2D(DEFAULT_TIMING)); setAfr(clone2D(DEFAULT_AFR));
     setTablesDirty(false);
+    // Build fields this task has not moved into the store yet; deleted as each moves.
+    setMods(DEFAULT_MODS); setMafScalar(1.0); setPresetId(null);
   };
   const repairEngine = () => setHealth({ piston: 100, bearing: 100, valve: 100 });
   const setCfg = (patch) => setEngineConfigInvalidating((c) => ({ ...c, ...patch }));
@@ -750,6 +768,14 @@ export default function EngineManagementSandbox() {
     // routing its own writes through setPresetId(null) would make that order-
     // dependent on React's batching instead of explicit here.
     const p = applyPreset(preset);
+    // The BUILD slice lands atomically in the store, in one pass, with no "last call"
+    // to get right. NOTE the payload is applyPreset()'s OUTPUT, not the raw catalogue
+    // entry — the raw entry has no `engineConfig`, so passing it would build an engine
+    // with no short block.
+    dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
+    // `tune` and `session` are still local useState until Tasks 5 and 6, so their
+    // writes below stay. So do the build-field writes for whichever fields this task
+    // has not moved into the store yet; each one is deleted as its field moves.
     setEngineConfig(p.engineConfig);
     setMods(p.mods);
     setTurboOn(p.turboOn);
@@ -889,6 +915,11 @@ export default function EngineManagementSandbox() {
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
+    // Banking the pull — prevResult rotation, wear, scores, pull count — lands in the
+    // store in one pass. `result` and `pullScore` are precomputed here because the
+    // reducer has no access to the useMemo-derived hardware `computePullScore` needs.
+    // The still-local session setters above and below stay until Task 6.
+    dispatch({ type: ACTIONS.BANK_PULL, result: r, pullScore: pull });
     const nextBest = Math.max(bestScore, pull);
     const nextTotal = totalScore + pull;
     const nextPulls = pullCount + 1;
@@ -2342,5 +2373,26 @@ export default function EngineManagementSandbox() {
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * The app shell: the store, then the app inside it.
+ *
+ * The provider is mounted HERE rather than in `main.jsx` because the store is this
+ * module's own state — every consumer of it lives inside this file (and, after PR 3,
+ * inside the screens this file splits into). Mounting it at the module boundary means
+ * `<EcuLab />` is self-contained: `main.jsx` stays the thin "mount the app in an error
+ * boundary" entry point it documents itself as, and a test that renders `<EcuLab />`
+ * gets the same single store the browser does instead of having to reconstruct the
+ * app's root providers by hand.
+ *
+ * @returns {React.ReactElement}
+ */
+export default function EcuLab() {
+  return (
+    <StoreProvider>
+      <EngineManagementSandbox />
+    </StoreProvider>
   );
 }
