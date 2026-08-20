@@ -345,7 +345,7 @@ function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
     return false;
   };
   return (
-    <div>
+    <div data-testid="tuning-grid">
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
       <span>MAP kPa &darr;</span><span>RPM &rarr;</span>
     </div>
@@ -449,7 +449,7 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
   else sel = `${RPM[selection.col]} RPM · ${LOAD[selection.row]} kPa MAP`;
 
   return (
-    <div style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
+    <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>

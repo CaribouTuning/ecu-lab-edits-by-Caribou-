@@ -13,7 +13,7 @@
  * extraction is wrong — do not edit the test to match the new behaviour.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
@@ -133,10 +133,22 @@ describe('editing a calibration table', () => {
     fireEvent.change(picker, { target: { value: target } });
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    // Scope to the tuning grid itself: unscoped queries also match the BUILD tab's
+    // boost-curve editor, so if tab navigation broke and the app never left BUILD,
+    // an unscoped query would still find cells there and the test would pass for
+    // the wrong reason. Querying inside the grid means this can only pass by
+    // actually landing on TUNE and editing a real calibration table cell.
+    const grid = within(screen.getByTestId('tuning-grid'));
     // Any grid cell; the first numeric-labelled button inside the grid will do.
-    const cells = screen.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
+    const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
-    fireEvent.click(screen.getByRole('button', { name: '+1' }));
+    // Selecting a grid cell mounts the SelectionDock (the sticky editor at the
+    // bottom of the tuning tab). The BUILD tab's boost-curve editor has its own
+    // unrelated '+1' button, so scope to the dock rather than querying the whole
+    // document — otherwise a broken tab switch that left the boost editor visible
+    // could satisfy this query too.
+    const dock = within(screen.getByTestId('selection-dock'));
+    fireEvent.click(dock.getByRole('button', { name: '+1' }));
 
     // Header falls back to the derived "3.0L I6" form once the preset is invalidated.
     expect(screen.getByText(/oct/).textContent).toMatch(/^\d\.\dL /);
@@ -148,6 +160,12 @@ describe('running a dyno pull', () => {
     launch();
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    // doRun() calls setResult(r) synchronously (before the reveal interval even
+    // starts), so the PEAK WHP tile mounts immediately — no need to wait for the
+    // sweep to finish. This is the actual point of the test: if setResult were
+    // wired to the wrong slice (or dropped entirely), this tile never appears,
+    // regardless of what the button label does.
+    expect(screen.getByText('PEAK WHP')).toBeTruthy();
     // The reveal is a setInterval that ends by setting running false, so the button
     // returns to its idle label. Real timers + waitFor is less brittle here than fake
     // timers, which would need act() wrapping around every tick.
