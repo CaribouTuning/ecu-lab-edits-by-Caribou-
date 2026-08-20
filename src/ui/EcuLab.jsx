@@ -39,8 +39,8 @@ import {
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, DEFAULT_AFR,
-  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
+  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT,
+  DEFAULT_MODS, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS,
   PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
@@ -53,7 +53,7 @@ import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
-import { StoreProvider, useBuild } from './state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useTune } from './state/StoreProvider.jsx';
 import { ACTIONS } from './state/reducer.js';
 
 const Eyebrow = ({ children, icon: Icon }) => (
@@ -546,20 +546,22 @@ export function EcuLabApp() {
   const [tab, setTab] = useState('dash');
   // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
   // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
-  // changed, from setters to dispatches. `tune` and `session` are still local useState
-  // below until Tasks 5 and 6 move them.
+  // changed, from setters to dispatches. `session` is still local useState below until
+  // Task 6 moves it.
   const [build, dispatch] = useBuild();
   const {
     engineConfig, mods, turboOn, boostCurve, octaneIdx, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
     presetId, presetPrompt, boostSel,
   } = build;
-  const [ve, setVe] = useState(() => computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS));
-  const [timing, setTiming] = useState(clone2D(DEFAULT_TIMING));
-  const [afr, setAfr] = useState(clone2D(DEFAULT_AFR));
+  // The TUNE slice — calibration tables, the unsaved-work flag, and the grid cursor.
+  // Same destructuring shape as `build` above; `dispatch` is the SAME function
+  // useBuild() returned (one reducer, one useReducer call — see StoreProvider.jsx),
+  // so it is not re-bound here.
+  const [tune] = useTune();
+  const { ve, timing, afr, tablesDirty, selection } = tune;
   const [loadKpa, setLoadKpa] = useState(100);
   const [health, setHealth] = useState({ piston: 100, bearing: 100, valve: 100 });
-  const [selection, setSelection] = useState(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
   const [prevResult, setPrevResult] = useState(null);
@@ -567,10 +569,6 @@ export function EcuLabApp() {
   const [bestScore, setBestScore] = useState(0);
   const [totalScore, setTotalScore] = useState(0);
   const [pullCount, setPullCount] = useState(0);
-  // True once the player has hand-edited VE/spark/fuel since the last preset load
-  // or reset-to-stock. This — not pull count — is what the overwrite-confirmation
-  // prompt keys off; see hasTuningWork below.
-  const [tablesDirty, setTablesDirty] = useState(false);
   const [buildSection, setBuildSection] = useState('engine');
   const [tuneView, setTuneView] = useState('ve');
   const [dynoView, setDynoView] = useState('result');
@@ -589,18 +587,22 @@ export function EcuLabApp() {
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
   // invalidation now happens inside the reducer rather than in a wrapper each new
-  // hardware field had to remember to be threaded through. What is left here is the
-  // one hand-edit path whose slices have NOT both moved yet — a calibration edit
-  // writes a table (`tune`, still local useState until Task 5), clears `presetId`
-  // (`build`, in the store) and flags unsaved work, which is what the overwrite-
-  // confirmation prompt (hasTuningWork) keys off. Task 5 collapses this into the
-  // single SET_TABLE action that already exists for it.
-  const clearPresetId = () => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'presetId', value: null });
-  const withTableEdit = (setter) => (...args) => { setter(...args); clearPresetId(); setTablesDirty(true); };
-
-  const setVeEdited = withTableEdit(setVe);
-  const setTimingEdited = withTableEdit(setTiming);
-  const setAfrEdited = withTableEdit(setAfr);
+  // hardware field had to remember to be threaded through. The one hand-edit path that
+  // used to cross the build/tune boundary in two local calls (`clearPresetId` then
+  // `setTablesDirty(true)`) is now the single SET_TABLE action, which clears `presetId`
+  // and flags unsaved work in the SAME reducer pass — see reducer.js. `withTableEdit`
+  // and its three derived setters (`setVeEdited`/`setTimingEdited`/`setAfrEdited`) are
+  // gone; every table-edit call site below dispatches SET_TABLE directly.
+  //
+  // `clearPresetId` itself survives with a narrower job: CLEAR_PRESET_ID touches
+  // `presetId` alone, with no `tablesDirty` side effect, for the one caller that wants
+  // exactly that — the preset picker's "Custom build" option, below.
+  const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
+  // The build-side analogue of a table edit is a cursor, not a calibration edit:
+  // `SET_TUNE_FIELD` deliberately does NOT clear `presetId` or flag `tablesDirty`
+  // (see reducer.js), so moving the highlighted grid cell never disowns a loaded
+  // preset.
+  const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
 
   const octaneBonus = OCTANE_OPTS[octaneIdx].bonus;
   const engineDerived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
@@ -658,7 +660,7 @@ export function EcuLabApp() {
     [engineConfig, mods, hwForVe],
   );
 
-  const recalcVE = () => setVeEdited(veTruth);
+  const recalcVE = () => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: veTruth });
 
   // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
   // structurally impossible for the curve to be the wrong length or to contain a
@@ -717,12 +719,6 @@ export function EcuLabApp() {
     // that is wrong.
     const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
     dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: stockVe });
-    // `tune` is still local useState until Task 5, so it is written here too. Note these
-    // are the RAW setters, not the ...Edited wrappers: the wrappers exist to flag unsaved
-    // player work, and a reset baseline is not that — which is why the original's last
-    // call had to pin tablesDirty back to false.
-    setVe(stockVe); setTiming(clone2D(DEFAULT_TIMING)); setAfr(clone2D(DEFAULT_AFR));
-    setTablesDirty(false);
   };
   const repairEngine = () => setHealth({ piston: 100, bearing: 100, valve: 100 });
   // Actions cannot carry functions, so the old functional update becomes a patch the
@@ -748,15 +744,10 @@ export function EcuLabApp() {
     // raw entry has no `engineConfig`, so passing it builds an engine with no short
     // block.
     dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
-    // APPLY_PRESET already wrote all of this to the store's `tune` and `session`
-    // slices; those are still local useState until Tasks 5 and 6, so they are written
-    // here too. Each line below is a deletion for those tasks, not a rewrite.
-    setVe(p.ve);
-    setTiming(p.timing);
-    setAfr(p.afr);
-    setSelection(null);
-    // Fresh factory calibration is not unsaved player work.
-    setTablesDirty(false);
+    // APPLY_PRESET already wrote the `tune` slice (ve/timing/afr/tablesDirty/selection)
+    // in the same pass. `session` is still local useState until Task 6, so it is
+    // written here too.
+    //
     // A factory rating from the newly loaded engine must never sit next to a pull
     // logged on whatever was running before it.
     setResult(null);
@@ -989,10 +980,14 @@ export function EcuLabApp() {
   };
   const applyHistogram = () => {
     if (!histogram) return;
-    setVeEdited((prev) => prev.map((row, ri) => row.map((v, ci) => {
+    // SET_TABLE carries a value, not a function, so the old functional update
+    // (`setVeEdited((prev) => ...)`) is resolved here against the CURRENT `ve` — the
+    // one already in scope from the store — before dispatching.
+    const nextVe = ve.map((row, ri) => row.map((v, ci) => {
       const e = histogram[ri][ci];
       return e == null ? v : Number(clamp(v * (1 + e / 100), 10, 130).toFixed(1));
-    })));
+    }));
+    dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: nextVe });
     setHistogram(null);
   };
 
@@ -1804,7 +1799,7 @@ export function EcuLabApp() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={ve} setData={setVeEdited} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />
+            <SelectionDock data={ve} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value })} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />
           </>
         )}
 
@@ -1856,7 +1851,7 @@ export function EcuLabApp() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={timing} setData={setTimingEdited} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
+            <SelectionDock data={timing} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
           </>
         )}
 
@@ -1891,7 +1886,7 @@ export function EcuLabApp() {
               </ExpandableInfo>
             </div>
             <div style={{ flex: 1 }} />
-            <SelectionDock data={afr} setData={setAfrEdited} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
+            <SelectionDock data={afr} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value })} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
           </>
         )}
 

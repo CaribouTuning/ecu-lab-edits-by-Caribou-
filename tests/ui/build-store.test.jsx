@@ -136,10 +136,19 @@ describe('opening and dismissing the overwrite prompt', () => {
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
     fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
 
-    // Now put a preset label back on the build without touching `tablesDirty`, which
-    // is still EcuLab's own useState until Task 5.
+    // Now put a preset label back on the build. APPLY_PRESET also clears the store's
+    // `tune.tablesDirty` (it moved into the store in Task 5, along with the rest of the
+    // tune slice) — a fresh factory calibration is not unsaved player work. That is
+    // correct behaviour, but it undoes this test's setup: the hand edit above no longer
+    // leaves any unsaved work behind once a preset is loaded on top of it. So re-flag
+    // `tablesDirty` directly afterwards, via the one action built for exactly this seam:
+    // `SET_TUNE_FIELD` deliberately does NOT clear `presetId` (unlike SET_TABLE), so it
+    // can put the store back into "preset loaded, unsaved work pending" — the combination
+    // this test exists to pin — without going through another hand edit that would just
+    // clear the preset label again.
     const seed = ENGINE_PRESETS[0];
     act(() => dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(seed) }));
+    act(() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'tablesDirty', value: true }));
     expect(headerEngineName()).toBe(seed.name);
 
     // Choosing a different preset with work pending opens the prompt rather than
