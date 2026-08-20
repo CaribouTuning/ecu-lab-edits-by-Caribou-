@@ -22,9 +22,12 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ENGINE_PRESETS, applyPreset } from '../../src/sim/index.js';
+import {
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, ENGINE_PRESETS, OCTANE_OPTS, TURBINE_OPTS,
+  applyPreset, computeHardwareVE, turbineWithCount,
+} from '../../src/sim/index.js';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
-import { StoreProvider, useBuild } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 
 afterEach(cleanup);
@@ -99,7 +102,9 @@ describe('moving the boost-curve cursor', () => {
  */
 function DispatchProbe({ onReady }) {
   const [, dispatch] = useBuild();
-  onReady(dispatch);
+  // In an effect, not in render: a render-phase callback fires on every render and
+  // twice under StrictMode.
+  React.useEffect(() => { onReady(dispatch); }, [onReady, dispatch]);
   return null;
 }
 
@@ -152,5 +157,112 @@ describe('opening and dismissing the overwrite prompt', () => {
     fireEvent.click(screen.getByRole('button', { name: 'CANCEL' }));
     expect(screen.queryByRole('button', { name: /^LOAD / })).toBeNull();
     expect(headerEngineName()).toBe(seed.name);
+  });
+});
+
+
+/**
+ * ToggleRow renders its switch as an unlabelled button beside the label text, so it
+ * has to be reached through the row rather than by name.
+ * @param {string} label
+ * @returns {HTMLButtonElement}
+ */
+function toggleFor(label) {
+  return screen.getByText(label).parentElement.parentElement.querySelector('button');
+}
+
+/**
+ * Reports the store's `tune` slice to the test on every change.
+ * @param {{onTune: (tune: *) => void}} props
+ * @returns {null}
+ */
+function TuneProbe({ onTune }) {
+  const [tune] = useTune();
+  React.useEffect(() => { onTune(tune); }, [onTune, tune]);
+  return null;
+}
+
+describe('choosing a turbine', () => {
+  it('drops the twin-turbo count the preset installed', () => {
+    // SET_TURBINE resets `turbineCount` to 1 as well as setting `turbineIdx`, because
+    // the count belongs to the preset's induction layout, not to the housing you just
+    // picked. Route this control through SET_BUILD_FIELD and the count survives: a
+    // twin count against a turbine chosen as a single, silently doubling the airflow
+    // the sim is handed. Nothing else in the suite covers that.
+    launch();
+    const picker = presetPicker();
+    const twin = ENGINE_PRESETS.find((p) => applyPreset(p).turbineCount > 1);
+    expect(twin).toBeTruthy();
+    fireEvent.change(picker, { target: { value: twin.id } });
+
+    // The Forced Induction summary is where the count is legible: it reads "Twin
+    // <housing> turbine" above 1 and the bare housing name at 1.
+    const inductionSummary = () => screen.getByText(/turbine · peak/).textContent;
+    expect(inductionSummary()).toMatch(/Twin/);
+
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const current = TURBINE_OPTS[applyPreset(twin).turbineIdx].label;
+    const other = TURBINE_OPTS.map((o) => o.label).find((l) => l !== current);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${other}`) }));
+
+    expect(inductionSummary()).not.toMatch(/Twin/);
+  });
+});
+
+describe('resetting the calibration to stock', () => {
+  /**
+   * Runs the app to a reset and reports the VE table the store received.
+   * @param {boolean} withIntake whether to fit the intake first
+   * @returns {number[][]}
+   */
+  function veAfterReset(withIntake) {
+    /** @type {*} */
+    let tune;
+    render(
+      <StoreProvider>
+        <TuneProbe onTune={(t) => { tune = t; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    // Turbo on in BOTH runs, so the hardware half of the VE calculation is identical
+    // and the only difference between them is the mod set.
+    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(toggleFor('Turbo kit'));
+    if (withIntake) {
+      fireEvent.click(screen.getByText('Bolt-On Parts'));
+      fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
+    }
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
+    cleanup();
+    return tune.ve;
+  }
+
+  it('rebuilds the VE table from STOCK mods, not the ones still bolted on', () => {
+    // resetToStock passes computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe) —
+    // DEFAULT_MODS for the mods argument, but the CURRENT hwForVe for hardware.
+    // Wiping a calibration is not un-installing the turbo, and it is not un-bolting
+    // the intake either: reset means "give me the stock BASELINE for this hardware",
+    // so the table must come out the same whether or not parts are fitted.
+    //
+    // Change that DEFAULT_MODS to `mods` and the player gets a table calibrated for
+    // bolt-ons the reset just told them it had discarded. The whole suite passes.
+    expect(veAfterReset(true)).toEqual(veAfterReset(false));
+  });
+
+  it('can tell the two apart — the mods argument changes the table', () => {
+    // Guards the test above. If mods made no difference to computeHardwareVE, the
+    // equality assertion would hold no matter which argument the call site passed,
+    // and would be proving nothing at all.
+    const hw = {
+      turboOn: true,
+      turbine: turbineWithCount(TURBINE_OPTS[1], 1),
+      exhaustDia: 3.0,
+      fuel: OCTANE_OPTS[0],
+      peakBoostPsi: 8,
+    };
+    const stock = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, hw);
+    const modded = computeHardwareVE(DEFAULT_ENGINE_CONFIG, { ...DEFAULT_MODS, intake: true }, hw);
+    expect(modded).not.toEqual(stock);
   });
 });
