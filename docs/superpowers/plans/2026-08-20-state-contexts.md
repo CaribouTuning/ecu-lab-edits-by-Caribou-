@@ -549,6 +549,33 @@ it('patching the engine config merges and invalidates', () => {
 Confirm the merge preserves the config's other fields — a patch that replaces rather than
 merges would silently drop displacement, and the app would still render.
 
+**Close the nested-mutation blind spot while you are in this file.** Task 2's reviewer
+broke `SET_SESSION_FIELD` by mutating `state.session[action.field] = action.value` in
+place instead of spreading, re-ran `tests/ui/state/reducer.test.js`, and **all 16 tests
+still passed.** The shipped reducer is correct — every case spreads properly — but the
+suite cannot tell. The existing reference tests only assert that the slices you did NOT
+touch keep their identity; nothing asserts the slice you DID touch gets a fresh one.
+
+That is the exact bug class this design is meant to be safe against: a nested mutation
+survives a shallow equality check, so React skips the re-render and the screen silently
+stops matching the state. Task 3 adds several more cases to this reducer, so add the
+assertion now and let the new cases inherit it:
+
+```js
+describe('every write produces a fresh slice reference', () => {
+  it('replaces the changed slice rather than mutating it', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: 3 });
+    expect(after.session).not.toBe(before.session);
+    expect(before.session.pullCount).toBe(0); // the input state is untouched
+  });
+});
+```
+
+Apply the same two assertions to at least one build write and one tune write. Prove it
+bites: temporarily mutate the state argument in place in the case under test, confirm the
+new test fails, restore, and record the output in your report.
+
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/ui/state/reducer.test.js`:
