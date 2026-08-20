@@ -45,7 +45,7 @@ import {
   PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
+  deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
@@ -53,7 +53,7 @@ import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
-import { StoreProvider, useBuild, useTune } from './state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
 import { ACTIONS } from './state/reducer.js';
 
 const Eyebrow = ({ children, icon: Icon }) => (
@@ -546,8 +546,7 @@ export function EcuLabApp() {
   const [tab, setTab] = useState('dash');
   // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
   // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
-  // changed, from setters to dispatches. `session` is still local useState below until
-  // Task 6 moves it.
+  // changed, from setters to dispatches. All three domain slices are in the store now.
   const [build, dispatch] = useBuild();
   const {
     engineConfig, mods, turboOn, boostCurve, octaneIdx, injIdx, mafScalar,
@@ -560,30 +559,27 @@ export function EcuLabApp() {
   // so it is not re-bound here.
   const [tune] = useTune();
   const { ve, timing, afr, tablesDirty, selection } = tune;
-  const [loadKpa, setLoadKpa] = useState(100);
-  const [health, setHealth] = useState({ piston: 100, bearing: 100, valve: 100 });
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState(null);
-  const [prevResult, setPrevResult] = useState(null);
-  const [revealCount, setRevealCount] = useState(0);
-  const [bestScore, setBestScore] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
-  const [pullCount, setPullCount] = useState(0);
+  // The SESSION slice — everything about the current run and career progress that is
+  // neither hardware nor calibration. Same destructuring shape again, same `dispatch`.
+  // What is left as local `useState` below is deliberate: `appView`, `tab`,
+  // `buildSection`, `tuneView`, `dynoView` and `dashSection` are VIEW state (which
+  // screen and which accordion panel is open), which PR 3 moves when it splits this
+  // component into screens.
+  const [session] = useSession();
+  const {
+    loadKpa, soundOn, journeyStep, throttleInput, histogram, health,
+    result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
+    live,
+  } = session;
   const [buildSection, setBuildSection] = useState('engine');
   const [tuneView, setTuneView] = useState('ve');
   const [dynoView, setDynoView] = useState('result');
-  const [histogram, setHistogram] = useState(null);
-  const [live, setLive] = useState(() => makeLiveState());
-  const [throttleInput, setThrottleInput] = useState(0);
   const [dashSection, setDashSection] = useState('live');
-  // Guided first run: BUILD -> TUNE -> LIVE -> DYNO, then free play (step 4).
-  const [journeyStep, setJourneyStep] = useState(0);
   const revealTimer = useRef(null);
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
-  const [soundOn, setSoundOn] = useState(true);
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
   // invalidation now happens inside the reducer rather than in a wrapper each new
@@ -720,7 +716,11 @@ export function EcuLabApp() {
     const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
     dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: stockVe });
   };
-  const repairEngine = () => setHealth({ piston: 100, bearing: 100, valve: 100 });
+  // The REPAIR button's only handler. Before the extraction this wrote a local
+  // `health` that the store never saw, while REPAIR_ENGINE sat in the reducer with no
+  // caller at all — so this is an ADDED dispatch, not a converted one. Drop it and the
+  // button goes inert with nothing raising an error: see tests/ui/session-store.test.jsx.
+  const repairEngine = () => dispatch({ type: ACTIONS.REPAIR_ENGINE });
   // Actions cannot carry functions, so the old functional update becomes a patch the
   // reducer merges into the engineConfig it already holds. It invalidates the preset
   // label like every other hardware write.
@@ -743,15 +743,12 @@ export function EcuLabApp() {
     // NOTE the payload is applyPreset()'s OUTPUT, not the raw catalogue entry — the
     // raw entry has no `engineConfig`, so passing it builds an engine with no short
     // block.
+    // APPLY_PRESET writes all three slices in that one pass — including clearing
+    // `session.result` and `session.prevResult`, so that a factory rating from the
+    // newly loaded engine never sits next to a pull logged on whatever was running
+    // before it. The two local `setResult(null)`/`setPrevResult(null)` calls that used
+    // to follow this line were mirroring writes the reducer already made.
     dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
-    // APPLY_PRESET already wrote the `tune` slice (ve/timing/afr/tablesDirty/selection)
-    // in the same pass. `session` is still local useState until Task 6, so it is
-    // written here too.
-    //
-    // A factory rating from the newly loaded engine must never sit next to a pull
-    // logged on whatever was running before it.
-    setResult(null);
-    setPrevResult(null);
   };
 
   const choosePreset = (preset) => {
@@ -841,20 +838,17 @@ export function EcuLabApp() {
   const doRun = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
-    setRunning(true);
-    setRevealCount(0);
+    // The reveal animation's own state: `running` gates the RUN button's label and the
+    // partial chart, `revealCount` is how much of the sweep has been drawn so far.
+    // Neither has an ordering hazard (unlike the banking tail below, which BANK_PULL
+    // owns), so they stay plain field writes.
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
     const r = simulateSweep({
       loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: OCTANE_OPTS[octaneIdx].label,
       fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
       turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
     });
-    setPrevResult(result);
-    setResult(r);
-    setHealth((h) => ({
-      piston: clamp(h.piston - r.wear.piston, 0, 100),
-      bearing: clamp(h.bearing - r.wear.bearing, 0, 100),
-      valve: clamp(h.valve - r.wear.valve, 0, 100),
-    }));
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
@@ -865,19 +859,26 @@ export function EcuLabApp() {
     // Banking the pull — prevResult rotation, wear, scores, pull count — lands in the
     // store in one pass. `result` and `pullScore` are precomputed here because the
     // reducer has no access to the useMemo-derived hardware `computePullScore` needs.
-    // The still-local session setters above and below stay until Task 6.
+    // The local `setPrevResult`/`setResult`/`setHealth` calls that used to sit above
+    // this line, and the `setBestScore`/`setTotalScore`/`setPullCount` trio below it,
+    // were all mirroring writes this one action already makes — including the
+    // prevResult-before-result rotation whose ordering it exists to own.
     dispatch({ type: ACTIONS.BANK_PULL, result: r, pullScore: pull });
+    // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
+    // expressions. They are still computed here because `persistCareer` needs the new
+    // values NOW: reading them back off `session` would read this render's stale ones.
     const nextBest = Math.max(bestScore, pull);
     const nextTotal = totalScore + pull;
     const nextPulls = pullCount + 1;
-    setBestScore(nextBest); setTotalScore(nextTotal); setPullCount(nextPulls);
     persistCareer(nextBest, nextTotal, nextPulls);
     const total = r.points.length;
     let i = 0;
     revealTimer.current = setInterval(() => {
       i += Math.ceil(total / 30);
-      setRevealCount(Math.min(i, total));
-      if (i >= total) { clearInterval(revealTimer.current); setRunning(false); }
+      // `i` is the interval's own counter, not a read of `revealCount`, so there is no
+      // stale-closure hazard in carrying the value on the action.
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: Math.min(i, total) });
+      if (i >= total) { clearInterval(revealTimer.current); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: false }); }
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
@@ -893,14 +894,30 @@ export function EcuLabApp() {
 
   // The engine runs continuously in the background at 20 Hz, integrating real
   // crankshaft dynamics and running one ECU control pass per step.
+  //
+  // The step itself happens in the REDUCER, not here. This interval is installed once
+  // and never re-created, so its callback closes over the `live` of the first render
+  // forever — computing `liveStep(live, ...)` here and dispatching the result would
+  // integrate from a permanently frozen engine-off state, and the readout would sit
+  // dead or jitter between two adjacent steps. That reads as a physics bug, not a
+  // state bug. The old `setLive((prev) => ...)` functional form has no action
+  // equivalent (actions must not carry functions), so LIVE_STEP carries only the two
+  // things the reducer cannot see — the driver input and the current tune — and
+  // resolves `prev` against the store. Both come from REFS, which are current at every
+  // tick, so nothing stale reaches the engine.
   useEffect(() => {
     liveTimer.current = setInterval(() => {
-      setLive((prev) => (prev.running || prev.cranking || prev.rpm > 1)
-        ? liveStep(prev, 0.05, { throttle: throttleRef.current, load: 0 }, liveCfgRef.current)
-        : prev);
+      dispatch({
+        type: ACTIONS.LIVE_STEP,
+        dt: 0.05,
+        input: { throttle: throttleRef.current, load: 0 },
+        cfg: liveCfgRef.current,
+      });
     }, 50);
     return () => clearInterval(liveTimer.current);
-  }, []);
+    // Stable for the life of the store, so the interval is still installed exactly once
+    // — re-creating it would restart the engine's 20 Hz clock on every render.
+  }, [dispatch]);
 
   // ---- Engine audio -------------------------------------------------------
   // Synthesised from the firing frequency: a 4-stroke fires cyl/2 times per
@@ -910,17 +927,17 @@ export function EcuLabApp() {
   const startEngine = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
-    setLive((p) => ({ ...p, cranking: true }));
+    dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
   };
   const stopEngine = () => {
-    setThrottleInput(0); throttleRef.current = 0;
-    setLive((p) => ({ ...p, running: false, cranking: false }));
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0;
+    dispatch({ type: ACTIONS.LIVE_PATCH, patch: { running: false, cranking: false } });
   };
 
   // Safety net: if a pointerup/cancel is missed (scroll, app switch, lost focus)
   // the throttle must still close, or the engine would hang at redline.
   useEffect(() => {
-    const release = () => { setThrottleInput(0); throttleRef.current = 0; };
+    const release = () => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; };
     window.addEventListener('pointerup', release);
     window.addEventListener('pointercancel', release);
     window.addEventListener('blur', release);
@@ -931,7 +948,10 @@ export function EcuLabApp() {
       window.removeEventListener('blur', release);
       document.removeEventListener('visibilitychange', release);
     };
-  }, []);
+    // `dispatch` is stable for the life of the store (useReducer guarantees it), so
+    // this effect still installs its listeners exactly once — the dependency is here
+    // to satisfy exhaustive-deps honestly rather than to make the effect re-run.
+  }, [dispatch]);
 
   // Career stats persist across sessions so the high score is worth chasing.
   useEffect(() => {
@@ -939,10 +959,13 @@ export function EcuLabApp() {
     (async () => {
       const c = await loadCareer();
       if (cancelled) return;
-      setBestScore(c.best); setTotalScore(c.total); setPullCount(c.pulls);
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'bestScore', value: c.best });
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'totalScore', value: c.total });
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: c.pulls });
     })();
     return () => { cancelled = true; };
-  }, []);
+    // Stable for the life of the store, so this still loads career stats exactly once.
+  }, [dispatch]);
 
   const chartData = useMemo(() => {
     if (!result) return [];
@@ -976,7 +999,7 @@ export function EcuLabApp() {
       const err = ((p.afr / p.afrCommanded) - 1) * 100;
       cells[ri][ci].sum += err; cells[ri][ci].n += 1;
     });
-    setHistogram(cells.map((row) => row.map((c) => (c.n ? c.sum / c.n : null))));
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: cells.map((row) => row.map((c) => (c.n ? c.sum / c.n : null))) });
   };
   const applyHistogram = () => {
     if (!histogram) return;
@@ -988,7 +1011,7 @@ export function EcuLabApp() {
       return e == null ? v : Number(clamp(v * (1 + e / 100), 10, 130).toFixed(1));
     }));
     dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: nextVe });
-    setHistogram(null);
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null });
   };
 
   const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
@@ -1123,7 +1146,7 @@ export function EcuLabApp() {
     return (
       <TutorialScreen
         steps={TUTORIAL_STEPS}
-        onDone={() => { setAppView('app'); setTab('build'); setJourneyStep(0); }}
+        onDone={() => { setAppView('app'); setTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
       />
     );
   }
@@ -1163,7 +1186,7 @@ export function EcuLabApp() {
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
         {tab === 'dash' && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { setJourneyStep(3); changeTab('dyno'); }} onDismiss={() => setJourneyStep(99)} />}
+            {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 3 }); changeTab('dyno'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <BuildSection
               active={dashSection === 'live'} onClick={() => setDashSection(dashSection === 'live' ? null : 'live')}
               icon={Activity} label="Live Engine"
@@ -1194,7 +1217,7 @@ export function EcuLabApp() {
                         background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
                         borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
                       }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
-                      <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); setSoundOn((v) => !v); }} title="Engine sound" style={{
+                      <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn }); }} title="Engine sound" style={{
                         width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
                         border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
                         color: soundOn ? T.accInk : T.ink3,
@@ -1204,9 +1227,9 @@ export function EcuLabApp() {
                 </div>
 
                 <div
-                  onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); setThrottleInput(100); throttleRef.current = 100; }}
-                  onPointerUp={() => { setThrottleInput(0); throttleRef.current = 0; }}
-                  onPointerCancel={() => { setThrottleInput(0); throttleRef.current = 0; }}
+                  onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 100 }); throttleRef.current = 100; }}
+                  onPointerUp={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
+                  onPointerCancel={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
                   style={{
                     position: 'relative', overflow: 'hidden',
                     marginTop: 12, padding: '18px 0', borderRadius: 12, textAlign: 'center', userSelect: 'none',
@@ -1426,7 +1449,7 @@ export function EcuLabApp() {
         {/* ---------- BUILD: engine architecture, parts, forced induction ---------- */}
         {tab === 'build' && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 0 && <JourneyBanner step={0} onAdvance={() => { setJourneyStep(1); changeTab('tune'); }} onDismiss={() => setJourneyStep(99)} />}
+            {journeyStep === 0 && <JourneyBanner step={0} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 1 }); changeTab('tune'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Settings}>Garage</Eyebrow>
             <p style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginTop: 0, marginBottom: 14 }}>
               Design the car before you tune it. Tap a section to open it — every choice inside changes real physics elsewhere in the sandbox.
@@ -1752,7 +1775,7 @@ export function EcuLabApp() {
 
         {tab === 'tune' && journeyStep === 1 && (
           <div style={{ padding: '14px 16px 0' }}>
-            <JourneyBanner step={1} onAdvance={() => { setJourneyStep(2); changeTab('dash'); }} onDismiss={() => setJourneyStep(99)} />
+            <JourneyBanner step={1} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 2 }); changeTab('dash'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />
           </div>
         )}
 
@@ -1990,10 +2013,10 @@ export function EcuLabApp() {
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => setJourneyStep(99)} onDismiss={() => setJourneyStep(99)} />}
+            {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Activity}>Dyno Cell</Eyebrow>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
-            <Seg options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, value: l }))} value={loadKpa} onChange={setLoadKpa} />
+            <Seg options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, value: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
             <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
@@ -2212,7 +2235,7 @@ export function EcuLabApp() {
                           <button onClick={applyHistogram} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
                             APPLY CORRECTIONS TO VE
                           </button>
-                          <button onClick={() => setHistogram(null)} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2, fontWeight: 700, fontSize: 12.5 }}>
+                          <button onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2, fontWeight: 700, fontSize: 12.5 }}>
                             DISCARD
                           </button>
                         </div>
