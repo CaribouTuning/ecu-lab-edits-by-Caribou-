@@ -51,6 +51,14 @@
 }
 .danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
 
+/* Text-only, for escape hatches that must not compete with the primary action. */
+.quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink3);
+}
+.quiet:hover:not(:disabled) { color: var(--ink2); }
+
 /* --- sizes --- */
 
 .sm { padding: 6px 11px; font-size: 10px; }

@@ -21,18 +21,6 @@
   color: var(--acc-ink);
 }
 
-.skip {
-  border: none;
-  background: none;
-  color: var(--ink3);
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.skip:hover { color: var(--ink2); }
-.skip:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-
 .body {
   flex: 1;
   display: flex;

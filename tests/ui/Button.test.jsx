@@ -49,6 +49,11 @@ describe('Button', () => {
     expect(screen.getByRole('button').className).toContain(styles.danger);
   });
 
+  it('applies the quiet variant', () => {
+    render(<Button variant="quiet">SKIP</Button>);
+    expect(screen.getByRole('button').className).toContain(styles.quiet);
+  });
+
   it('calls onClick when clicked', () => {
     const onClick = vi.fn();
     render(<Button onClick={onClick}>GO</Button>);

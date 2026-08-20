@@ -21,7 +21,7 @@ export function TutorialScreen({ steps, onDone }) {
     <div className={styles.screen}>
       <div className={styles.bar}>
         <div className={styles.count}>TUTORIAL · {step + 1}/{steps.length}</div>
-        <button type="button" className={styles.skip} onClick={onDone}>SKIP</button>
+        <Button variant="quiet" size="sm" onClick={onDone}>SKIP</Button>
       </div>
 
       <div className={styles.body}>

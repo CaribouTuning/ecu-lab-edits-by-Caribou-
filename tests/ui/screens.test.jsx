@@ -77,5 +77,7 @@ describe('TutorialScreen', () => {
   it('reports progress through the steps', () => {
     render(<TutorialScreen steps={STEPS} onDone={() => {}} />);
     expect(screen.getByText('TUTORIAL · 1/2')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'NEXT' }));
+    expect(screen.getByText('TUTORIAL · 2/2')).toBeTruthy();
   });
 });
