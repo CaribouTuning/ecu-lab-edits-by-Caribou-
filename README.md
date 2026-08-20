@@ -1,14 +1,15 @@
 # ECU Lab
 
-### An engine management and tuning simulator, created by **CaribouTuning**.
+### An engine management and tuning simulator.
 
-> **CaribouTuning** Designed it, and wrote the engine
-> model — the physics, the calibration tables, the pull log, the teaching material,
-> the whole thing. Every number this simulator produces comes from his work.
+> **CaribouTuning** and **Turtle.GTI** build ECU Lab together.
 >
-> **Turtle.GTI** is hosting the repository and handling the engineering, scaffolding,
-> and scaling around it: packaging it as a project, adding the test suite, and setting up
-> CI, so the app has somewhere to live and grow.
+> CaribouTuning created it. The concept, the engine model, the calibration tables, the
+> pull log and the teaching material started with him, the domain knowledge behind them
+> is his, and he still works on the physics.
+>
+> Turtle.GTI develops and maintains it: the physics added since, the test suite and its
+> behavioural fingerprint gate, the tooling and CI, and the current rework of the app.
 
 Design an engine, edit the same three calibration tables a real tuner edits, run a dyno
 pull, and read a log that explains what went right or wrong.
@@ -122,24 +123,30 @@ UI is still one large component pending decomposition, and accessibility needs w
 
 ## Credits
 
-**ECU Lab was created by [CaribouTuning](#credits).**
+**ECU Lab is built by CaribouTuning and Turtle.GTI, as partners.**
 
-The simulator is his. The engine model, the calibration tables, the knock envelope, the
-pull log, the scoring, the tutorial and the design — all of it originated with him, and
-the domain knowledge behind it is his too. Anything this app teaches, it teaches because
-he knew it first.
+It began as CaribouTuning's. The engine model, the calibration tables, the knock
+envelope, the pull log, the scoring, the tutorial and the original design all originated
+with him, and so did the domain knowledge behind them. Anything this app teaches at its
+core, it teaches because he knew it first — and he is still working on the physics.
+
+Turtle.GTI develops and maintains it: the physics added since, the behavioural
+fingerprint that pins the model against drift, the intent test suite, CI, the release
+pipeline, and the current rebuild of the interface.
+
+Decisions that touch the physics or the teaching material are made between them.
 
 | | |
 |---|---|
-| **CaribouTuning** | Creator and author. Engine model, physics, calibration design, UI, teaching material. |
-| **Turtle.GTI** | Repository, build tooling, test suite, CI, packaging. |
+| **CaribouTuning** | Created it. Engine model, calibration design, pull log, scoring, teaching material, ongoing physics. |
+| **Turtle.GTI** | Develops and maintains it. Physics, test suite and fingerprint gate, tooling, CI, and the UI rework. |
 
 Contributions from anyone else are very welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-[MIT](LICENSE) — copyright Caribou Tuning.
+[MIT](LICENSE) — copyright Caribou Tuning and Turtle.GTI.
 
 ## A note on real engines
 
