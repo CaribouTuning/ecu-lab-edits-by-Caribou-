@@ -267,10 +267,23 @@ export const ACTIONS = Object.freeze({
  * normally cost is replay-safety — React re-runs a reducer over the same actions when
  * a render is double-invoked under StrictMode, or when an update is rebased behind a
  * higher-priority one — and here a replay re-integrates the SAME single step from the
- * SAME `prev`, so the engine never advances twice and the only thing that differs
+ * SAME `prev`; React never applies an action twice, it recomputes from base, so this
+ * is always a SINGLE-step replay. For that single step, the only thing that differs
  * between two runs is a fraction of a percent of simulated sensor noise, which is
- * random by design. No other case may call `Math.random()`; a second one would be a
- * reason to move the step out of the reducer, not a precedent.
+ * random by design. That framing does NOT generalise to a multi-step replay, and the
+ * reason is not cosmetic: the noise `sensorRead` writes into `sensedLambda`
+ * (live.js:253) is integrated into `stft` (live.js:239), `stft` into `ltft`
+ * (live.js:240), and `ltft` feeds back into `mafScalar` (live.js:192) — the airflow
+ * the engine actually runs on. Re-integrating several steps in sequence from divergent
+ * noise would be a bounded random walk through a learned fuel trim, not a rounding
+ * difference. Nothing in this reducer does that today — every replay React performs
+ * here is single-step — but it bounds what a FUTURE caller may safely do with this
+ * action: PR 4's undo log MUST exclude LIVE_STEP. It dispatches at 20 Hz, so one hour
+ * of idle alone is 72,000 entries, each pinning a `cfg` that references the full
+ * VE/timing/AFR tables — and even setting that cost aside, "undo the last 50 ms of
+ * engine idle" is not a thing a player wants. No other case may call `Math.random()`;
+ * a second one would be a reason to move the step out of the reducer, not a
+ * precedent.
  *
  * @param {StoreState} state
  * @param {StoreAction} action
@@ -436,11 +449,18 @@ export function reducer(state, action) {
 
     case ACTIONS.LIVE_STEP: {
       const prev = state.session.live;
-      // A stopped engine has nothing to integrate. Returning the SAME state object —
-      // not a fresh one holding an unchanged `live` — is what makes React bail out of
-      // the re-render: this action arrives 20 times a second for as long as the app is
-      // open, engine running or not, and every one of those ticks would otherwise
-      // re-render the entire app. This guard is `setLive`'s `: prev` branch, moved.
+      // A stopped engine has nothing to integrate. React 18's `dispatchReducerAction`
+      // DOES have an eager path: when the fiber has no pending lanes, it runs the
+      // reducer immediately outside of render and bails out on
+      // `Object.is(eagerState, currentState)` without scheduling a render at all. But
+      // that path is opportunistic, not guaranteed — it does not fire once a render is
+      // already in flight, which a dispatch arriving 20 times a second, racing every
+      // other UI action in the app, cannot rely on being clear of. Returning the SAME
+      // state object here is what GUARANTEES the bail-out on every tick regardless:
+      // even on the slow path, reconciliation compares the reducer's return value to
+      // the fiber's current state by `Object.is` and leaves `didReceiveUpdate` false
+      // when they match, so React still bails out of `StoreProvider`'s subtree and no
+      // consumer re-renders. This guard is `setLive`'s `: prev` branch, moved.
       if (!(prev.running || prev.cranking || prev.rpm > 1)) return state;
       return {
         ...state,

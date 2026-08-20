@@ -276,6 +276,41 @@ describe('running a dyno pull', () => {
     expect(screen.queryByRole('button', { name: 'APPLY CORRECTIONS TO VE' })).toBeNull();
     expect(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' })).toBeTruthy();
   });
+
+  it('resets the tach to the start of the sweep when a second pull begins', async () => {
+    // `doRun` (EcuLab.jsx:846) dispatches `revealCount: 0` before the reveal interval
+    // starts. Task 6's report justified leaving that dispatch untested by calling it
+    // "a reset to a value the field is usually already at" with "no readout that could
+    // distinguish" it. Both halves are false: after ANY completed pull revealCount ===
+    // points.length, never 0, and the tach (EcuLab.jsx:1017) reads it back directly.
+    // Drop the dispatch and every pull after the first opens with the tach still
+    // pinned at the PREVIOUS pull's peak RPM and the chart fully drawn, then snaps
+    // back to the sweep's first point and re-animates a beat later — a visible flash
+    // on a core screen, every time a player runs back-to-back pulls.
+    launch();
+    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      { timeout: 10000 },
+    );
+    const afterFirstPull = tachReading();
+    // Guard the setup, not just the outcome: if the reveal had not actually run to the
+    // end of the sweep, this would already read the sweep's first point, and the real
+    // assertion below would pass whether or not the second pull's reset dispatch fired
+    // — for the wrong reason. Same figure the "sweeps the tach to the top of the run"
+    // test above already establishes is reachable.
+    expect(afterFirstPull).toBeGreaterThan(1500);
+
+    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    // Deliberately no `waitFor` here: `doRun` dispatches SET_SESSION_FIELD/revealCount
+    // and BANK_PULL synchronously, inside this very click, before the reveal interval
+    // has ticked even once. The whole failure this test exists to catch is the FIRST
+    // frame of the second pull — waiting for anything would let the 55 ms interval
+    // catch up and paper over exactly the flash a player would see.
+    expect(tachReading()).toBeLessThan(afterFirstPull);
+  });
 });
 
 /**
