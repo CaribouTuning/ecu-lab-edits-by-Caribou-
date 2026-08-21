@@ -56,6 +56,19 @@ const T = {
 export const statusColor = (v) => (v >= 90 ? T.ok : v >= 55 ? T.warn : T.danger);
 
 /**
+ * The NAME of the band `statusColor` paints, for consumers that take a semantic tone
+ * rather than a colour — `StatTile`, and anything else with a token-driven variant.
+ *
+ * Derived from the same comparison as `statusColor` rather than repeating its
+ * thresholds, because two copies of a band drift apart and then disagree about
+ * whether the same number is a warning.
+ *
+ * @param {number} v 0-100
+ * @returns {'ok'|'warn'|'danger'}
+ */
+export const statusTone = (v) => (v >= 90 ? 'ok' : v >= 55 ? 'warn' : 'danger');
+
+/**
  * Status colour for a value where HIGH is the dangerous end: injector duty cycle,
  * or any "how much of the available capacity is spent" reading.
  *

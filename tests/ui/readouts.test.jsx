@@ -7,12 +7,28 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StatTile } from '../../src/ui/primitives/StatTile.jsx';
 import tileStyles from '../../src/ui/primitives/StatTile.module.css';
+import { tokens } from '../../src/ui/tokens.js';
 
 // This file's queries rely on `screen` being scoped to the current test's render;
 // without this, meters from earlier tests accumulate in the DOM and unscoped
 // role/name queries start matching more than one element. Matches the pattern
 // already used in Button.test.jsx and surfaces.test.jsx.
 afterEach(cleanup);
+
+// WCAG relative-luminance contrast ratio between two hex colours. There is no
+// contrast helper anywhere in this repo — every contrast finding so far (including
+// the two fixed in this PR) was caught by a human reading a diff.
+function contrast(hexA, hexB) {
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const [R, G, B] = [r, g, b].map(lin);
+    return 0.2126 * R + 0.7152 * G + 0.0722 * B;
+  };
+  const [l1, l2] = [luminance(hexA), luminance(hexB)];
+  const [lighter, darker] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 describe('StatTile', () => {
   it('renders label, value and unit', () => {
@@ -30,6 +46,30 @@ describe('StatTile', () => {
   it('applies the tone it is given', () => {
     const { container } = render(<StatTile label="KNOCK" value="0.4" tone="warn" />);
     expect(container.querySelector(`.${tileStyles.warn}`)).toBeTruthy();
+  });
+
+  it('gives the alt tone its own class, distinct from the partner it sits beside', () => {
+    // `alt` marks the second quantity in a paired readout — torque beside power. If it
+    // resolved to the same colour as its partner the pairing would be invisible, which
+    // is the whole reason the tone exists.
+    const { container } = render(<StatTile label="PEAK TQ" value={300} tone="alt" />);
+    expect(container.querySelector(`.${tileStyles.alt}`)).toBeTruthy();
+    expect(container.querySelector(`.${tileStyles.acc}`)).toBeNull();
+  });
+
+  it('keeps the label readable on the surface it sits on', () => {
+    // ~9.5px is small text: WCAG AA wants 4.5:1. This failed at 2.87:1 with --ink3,
+    // which is a hierarchy token, not a legibility one.
+    expect(Number(contrast(tokens.ink2, tokens.panel2))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the acc value at the brightness every call site already relied on', () => {
+    // Every acc call site passes T.accInk today. --acc alone only clears 5.86:1 —
+    // still AA for 24px large text, but a needless dim from the 8.69:1 callers expect,
+    // and it spends the interactive accent on something that isn't interactive.
+    expect(Number(contrast(tokens.accInk, tokens.panel2))).toBeGreaterThanOrEqual(
+      Number(contrast(tokens.acc, tokens.panel2)),
+    );
   });
 });
 

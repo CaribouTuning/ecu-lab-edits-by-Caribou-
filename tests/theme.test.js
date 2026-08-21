@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
-import { T, heat, statusColor, utilisationColor } from '../src/ui/theme.js';
+import { T, heat, statusColor, statusTone, utilisationColor } from '../src/ui/theme.js';
 
 describe('T', () => {
   it('exposes every key the existing screens read', () => {
@@ -64,6 +64,22 @@ describe('utilisationColor', () => {
   it('is red above 90', () => {
     expect(utilisationColor(91)).toBe(tokens.danger);
     expect(utilisationColor(100)).toBe(tokens.danger);
+  });
+});
+
+describe('statusTone', () => {
+  it('names the same band statusColor paints', () => {
+    // The point of having both is that a caller who needs a token and a caller who
+    // needs a semantic name cannot end up on different sides of a threshold.
+    const cases = [100, 95, 90, 89, 60, 55, 54, 20, 0];
+    const map = { ok: T.ok, warn: T.warn, danger: T.danger };
+    cases.forEach((v) => {
+      expect(map[statusTone(v)]).toBe(statusColor(v));
+    });
+  });
+
+  it('returns exactly the three status names', () => {
+    expect(new Set([100, 60, 10].map(statusTone))).toEqual(new Set(['ok', 'warn', 'danger']));
   });
 });
 
