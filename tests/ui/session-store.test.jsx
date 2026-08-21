@@ -346,18 +346,16 @@ describe('the dyno load selector', () => {
 });
 
 /**
- * Seg marks its selected option by giving that one button a different background from
- * the rest, so the selected label is the odd one out of the three.
+ * Seg marks its selected option with `aria-pressed="true"`, so the selected label is
+ * whichever of the three carries it.
  * @returns {string}
  */
 function selectedLoad() {
   const buttons = ['100 kPa', '70 kPa', '40 kPa']
     .map((name) => screen.getByRole('button', { name }));
-  const tally = {};
-  buttons.forEach((b) => { tally[b.style.background] = (tally[b.style.background] || 0) + 1; });
-  const odd = buttons.filter((b) => tally[b.style.background] === 1);
-  expect(odd).toHaveLength(1);
-  return odd[0].textContent;
+  const pressed = buttons.filter((b) => b.getAttribute('aria-pressed') === 'true');
+  expect(pressed).toHaveLength(1);
+  return pressed[0].textContent;
 }
 
 describe('the guided first run', () => {

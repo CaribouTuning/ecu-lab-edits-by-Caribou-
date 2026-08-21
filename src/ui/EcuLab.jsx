@@ -60,6 +60,8 @@ import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Bar } from './primitives/Bar.jsx';
+import { Seg } from './primitives/Seg.jsx';
+import { Select } from './primitives/Select.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -78,25 +80,6 @@ function ExpandableInfo({ title, children }) {
   );
 }
 
-// Segmented row of equal-width option buttons — replaces the repeated
-// flex-row-of-buttons pattern used all over the tuning screens.
-function Seg({ options, value, onChange, wrap }) {
-  return (
-    <div style={{ display: 'flex', gap: 7, marginBottom: 4, flexWrap: wrap ? 'wrap' : 'nowrap' }}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button key={o.value} onClick={() => onChange(o.value)} style={{
-            flex: wrap ? '1 1 30%' : 1, padding: '11px 4px', borderRadius: 9, fontWeight: 700, fontSize: 12.5,
-            border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
-            color: active ? T.accInk : T.ink2, transition: 'all .15s',
-          }}>{o.label}</button>
-        );
-      })}
-    </div>
-  );
-}
-
 // Full-width descriptive rows for choices that need a subtitle (turbine, injectors).
 function PickList({ options, value, onChange }) {
   return (
@@ -111,48 +94,6 @@ function PickList({ options, value, onChange }) {
           }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
         );
       })}
-    </div>
-  );
-}
-
-// A native <select> with optgroup headings, styled to the theme. Native rather than a
-// custom panel so that keyboard navigation, type-ahead and screen-reader semantics come
-// from the platform instead of being reimplemented, and so a phone gets its own picker
-// wheel. Used where a list has grown past what a stack of PickList buttons can carry.
-//
-// `groups` is [{ label, options: [{ label, value }] }]; `extra` holds options that
-// belong to no group and render after all of them.
-function GroupedSelect({ groups, extra = [], value, onChange }) {
-  return (
-    <div style={{ position: 'relative', marginBottom: 13 }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: '100%', appearance: 'none', WebkitAppearance: 'none',
-          padding: '11px 34px 11px 13px', borderRadius: 9,
-          border: `1px solid ${T.line}`, background: T.panel2, color: T.ink,
-          fontFamily: T.sans, fontSize: 13, fontWeight: 600,
-        }}
-      >
-        {groups.map((g) => (
-          <optgroup key={g.label} label={g.label} style={{ background: T.panel, color: T.ink2 }}>
-            {g.options.map((o) => (
-              <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
-            ))}
-          </optgroup>
-        ))}
-        {extra.map((o) => (
-          <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
-        ))}
-      </select>
-      <ChevronDown
-        size={16}
-        style={{
-          position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-          color: T.ink2, pointerEvents: 'none',
-        }}
-      />
     </div>
   );
 }
@@ -1424,7 +1365,8 @@ export function EcuLabApp() {
               sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
-              <GroupedSelect
+              <Select
+                label="Start from a real engine"
                 groups={PRESET_GROUPS.map((g) => ({
                   label: g.manufacturer,
                   // The heading carries the manufacturer, so strip it off the option
@@ -1504,7 +1446,7 @@ export function EcuLabApp() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 10, fontWeight: 600 }}>Configuration</div>
-              <Seg options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, value: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
+              <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
               <ExpandableInfo title="Why cylinder count and layout matter">
                 For the same total displacement, spreading it across more, smaller cylinders means each one needs less peak pressure to make the same overall torque — a small real knock-margin benefit and smoother delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
               </ExpandableInfo>
@@ -1552,9 +1494,9 @@ export function EcuLabApp() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Block Material</div>
-              <Seg options={MATERIAL_OPTS.map((m) => ({ label: m, value: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
+              <Seg label="Block Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Head Material</div>
-              <Seg options={MATERIAL_OPTS.map((m) => ({ label: m, value: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
+              <Seg label="Head Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
               <ExpandableInfo title="Why block and head material matter">
                 Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.
               </ExpandableInfo>
@@ -1601,7 +1543,7 @@ export function EcuLabApp() {
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Turbine Size</div>
                   <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 4, fontWeight: 600 }}>Compressor Size</div>
-                  <Seg options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
+                  <Seg label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 11, color: T.ink3, marginBottom: 10, marginTop: 4 }}>Ceiling before it runs outside its efficient range: ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi</div>
                   <ExpandableInfo title="Turbine vs. compressor — different jobs">
                     The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, making hot, inefficient, knock-prone air.
@@ -1703,7 +1645,7 @@ export function EcuLabApp() {
               sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Exhaust Diameter</div>
-              <Seg options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
+              <Seg label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
               <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
                 Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
                 {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
@@ -1883,7 +1825,7 @@ export function EcuLabApp() {
             {turboOn && <Note>Turbo hardware and the boost target curve live on <b>BUILD</b> — this tab is fuel-side tuning: octane, injectors, and MAF/ECU.</Note>}
 
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>Fuel Octane</div>
-            <Seg options={OCTANE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
+            <Seg label="Fuel Octane" options={OCTANE_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
             <ExpandableInfo title="What octane actually does — and what E85 costs you">
               Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
               <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.accInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
@@ -1895,7 +1837,7 @@ export function EcuLabApp() {
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>
               ECU Injector Scaling <span style={{ color: T.ink3, fontWeight: 400 }}>— what the ECU thinks is fitted</span>
             </div>
-            <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} wrap />
+            <Seg label="ECU Injector Scaling" options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, id: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} equal />
             {ecuInjectorCc !== injectorCc ? (
               <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
@@ -1985,7 +1927,7 @@ export function EcuLabApp() {
             {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Activity}>Dyno Cell</Eyebrow>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
-            <Seg options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, value: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
+            <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
             <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
