@@ -526,6 +526,52 @@ Delete the local `function Seg` (:103-119) and `function GroupedSelect` (:145-17
 
 **`PickList` (:121) stays.** It has no primitive and this PR does not create one.
 
+- [ ] **Step 2b: Pin the transform at the call sites, not just in the primitive**
+
+Task 4's review proved the hole this closes: it set `higherIsBetter={true}` on the duty
+`Bar` — a 95%-duty injector painted bright green — and **all 179 tests passed**. `Bar`'s
+three direction tests render the primitive in isolation and say nothing about the props
+the app hands it.
+
+`Seg` has the same hole, and a nastier failure. If a call site keeps the old
+`{value, label}` shape, every option gets `id: undefined`, so:
+
+- `aria-pressed={undefined === value}` is false for **every** option — no selection shows
+- `onClick={() => onChange(undefined)}` — clicking a choice writes `undefined` into the
+  build, and the sim gets garbage
+
+It renders. It looks nearly right. Nothing in lint or typecheck can see it, because
+`EcuLab.jsx` carries `@ts-nocheck`.
+
+**Write one test that covers all eight sites and cannot drift**, rather than eight tests
+naming them. Render the app, walk every `role="group"` the screen exposes, and assert each
+has exactly one option with `aria-pressed="true"`:
+
+```jsx
+it('every segmented control shows exactly one option as selected', () => {
+  // A Seg still passed the old {value,label} shape renders every option with
+  // id: undefined, so aria-pressed is false on all of them and onChange fires with
+  // undefined. The control looks almost right and silently writes garbage. Counting
+  // pressed options catches that without naming a single call site — so a ninth Seg
+  // added later is covered the day it appears.
+  launch();
+  const groups = screen.getAllByRole('group');
+  expect(groups.length).toBeGreaterThan(0);   // guard: prove we actually found Segs
+  groups.forEach((group) => {
+    const pressed = within(group).getAllByRole('button', { pressed: true });
+    expect(pressed).toHaveLength(1);
+  });
+});
+```
+
+Segs live on several tabs, so one `launch()` will not reveal all eight. Visit each tab that
+holds one and run the same check — or write it as a helper called per tab. Say in your
+report which tabs you covered and how many groups each revealed, so the total is auditable
+against the eight known sites.
+
+**Prove it bites:** revert one call site to `{ value, label }` and confirm the test fails.
+Restore.
+
 - [ ] **Step 3: Verify the accessible names exist**
 
 The controls suite already covers `Seg` and `Select` in isolation. What is new is that `EcuLab` now passes real names, so check one end to end:
