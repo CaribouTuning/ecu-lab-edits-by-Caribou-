@@ -26,6 +26,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { loadCareer } from '../../src/storage.js';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
@@ -383,6 +384,41 @@ describe('the guided first run', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SKIP GUIDE' }));
 
     expect(screen.queryByText('STEP 1 · BUILD THE ENGINE')).toBeNull();
+  });
+});
+
+describe('banking a pull', () => {
+  it('writes the career through to storage, not just to the store', async () => {
+    // `BANK_PULL` updates bestScore/totalScore/pullCount in the store; `persistCareer`
+    // (EcuLab.jsx:873) is a SEPARATE synchronous call that writes them through to the
+    // storage adapter. It is deliberately not in the reducer — reducers do no I/O — and
+    // deliberately not in a useEffect keyed on the score fields, because the restore
+    // effect is async and a score-watching effect would fire with 0,0,0 on mount,
+    // BEFORE loadCareer() resolves, and overwrite a real save with zeroes.
+    //
+    // That left the call itself pinned by nothing. Deleting the persistCareer line
+    // passes all 169 other tests: the session plays perfectly, the HOME panel shows the
+    // right figures from the store, and the career is simply gone at the next refresh.
+    // A whole-branch break sweep found this; every earlier review confirmed the call
+    // site was CORRECT without checking a regression would be caught.
+    launch();
+    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    // Guard the setup: nothing is saved before a pull is banked, so if the pull below
+    // silently failed to run, the assertion afterwards would be comparing zero to zero.
+    expect(localStorage.getItem('career')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      { timeout: 10000 },
+    );
+
+    // Read it back through the adapter rather than parsing the raw string, so this
+    // pins the round trip a returning player actually depends on.
+    const saved = await loadCareer();
+    expect(saved.pulls).toBe(1);
+    expect(saved.total).toBeGreaterThan(0);
+    expect(saved.best).toBe(saved.total);
   });
 });
 

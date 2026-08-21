@@ -9,7 +9,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING } from '../../../src/sim/index.js';
+import {
+  clone2D, COMPRESSOR_OPTS, computeHardwareVE, DEFAULT_AFR, DEFAULT_BOOST,
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, deriveEngine, INJECTOR_OPTS,
+  OCTANE_OPTS,
+} from '../../../src/sim/index.js';
 import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
@@ -634,6 +638,90 @@ describe('REPAIR_ENGINE', () => {
     const after = reducer(before, { type: ACTIONS.REPAIR_ENGINE });
     expect(after.build).toBe(before.build);
     expect(after.tune).toBe(before.tune);
+  });
+});
+
+describe('LIVE_STEP and LIVE_PATCH', () => {
+  // These were the only two actions with no reducer-level tests. `session-store.test.jsx`
+  // covers them through the running engine, which is the coverage that matters most, but
+  // it cannot express the reference-identity contract precisely — and that contract is
+  // the whole reason LIVE_STEP has an early return.
+
+  /** @returns {*} a state whose engine is running, so LIVE_STEP has something to do */
+  function running() {
+    const s = makeInitialState();
+    s.session = { ...s.session, live: { ...s.session.live, running: true, rpm: 900 } };
+    return s;
+  }
+
+  /**
+   * The live config the app feeds the loop, built from the same sim exports EcuLab
+   * uses. Assembled from real values rather than stubbed: `liveStep` destructures
+   * fourteen fields off it and asserts the boost curve's shape, so a hand-made stub
+   * would be testing a shape the app never passes.
+   * @returns {*}
+   */
+  function liveCfg() {
+    const cfg = DEFAULT_ENGINE_CONFIG;
+    const derived = deriveEngine(cfg);
+    const ve = computeHardwareVE(cfg, DEFAULT_MODS);
+    return {
+      ve, veTruth: ve, timing: clone2D(DEFAULT_TIMING), afr: clone2D(DEFAULT_AFR),
+      derived, fuel: OCTANE_OPTS[0], injectorCc: INJECTOR_OPTS[0].cc,
+      ecuInjectorCc: INJECTOR_OPTS[0].cc, mods: DEFAULT_MODS, mafScalar: 1.0,
+      mafErrorBase: 1.0, turboOn: false, boostCurve: [...DEFAULT_BOOST],
+      octaneBonus: 0, turbine: null, compressor: COMPRESSOR_OPTS[0],
+      exhaustDiaError: 0,
+    };
+  }
+
+  const step = {
+    type: ACTIONS.LIVE_STEP, dt: 0.05,
+    input: { throttle: 0, load: 0 }, cfg: liveCfg(),
+  };
+
+  it('returns the IDENTICAL state object when the engine is stopped', () => {
+    // Not "an equal object" — the same one. This action arrives 20 times a second for
+    // as long as the app is open, engine running or not. Object.is equality is what
+    // makes React bail out of the whole StoreProvider subtree; return a fresh object
+    // and every one of those ticks re-renders the entire app for nothing.
+    const before = makeInitialState();
+    expect(reducer(before, step)).toBe(before);
+  });
+
+  it('integrates the engine when it is running', () => {
+    const before = running();
+    const after = reducer(before, step);
+    expect(after.session.live).not.toBe(before.session.live);
+    expect(after.session.live.elapsed).toBeGreaterThan(before.session.live.elapsed);
+  });
+
+  it('leaves build and tune untouched while integrating', () => {
+    // The live engine reads the calibration but must never write it.
+    const before = running();
+    const after = reducer(before, step);
+    expect(after.build).toBe(before.build);
+    expect(after.tune).toBe(before.tune);
+  });
+
+  it('LIVE_PATCH merges rather than replacing', () => {
+    // START/STOP were `setLive((p) => ({ ...p, running: X }))`. Carrying a whole new
+    // live object instead would rewind every field the patch omits — coolant, trims,
+    // knock count — back to whatever the caller happened to capture.
+    const before = running();
+    const after = reducer(before, { type: ACTIONS.LIVE_PATCH, patch: { running: false } });
+    expect(after.session.live.running).toBe(false);
+    expect(after.session.live.rpm).toBe(before.session.live.rpm);
+    expect(after.session.live.coolantC).toBe(before.session.live.coolantC);
+  });
+
+  it('neither action disowns a loaded preset', () => {
+    // Running the engine is not a build edit.
+    const before = running();
+    before.build = { ...before.build, presetId: 'n54' };
+    expect(reducer(before, step).build.presetId).toBe('n54');
+    expect(reducer(before, { type: ACTIONS.LIVE_PATCH, patch: { running: false } })
+      .build.presetId).toBe('n54');
   });
 });
 
