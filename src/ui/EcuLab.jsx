@@ -57,12 +57,7 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ACTIONS } from './state/reducer.js';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Note } from './primitives/Note.jsx';
-
-const Panel = ({ children, style, tight }) => (
-  <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: tight ? '10px 12px' : 14, ...style }}>
-    {children}
-  </div>
-);
+import { Panel } from './primitives/Panel.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
