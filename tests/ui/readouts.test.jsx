@@ -114,6 +114,20 @@ describe('StatTile', () => {
     expect(contrast(labelColor, tileBg)).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('paints tone text with an ink variant, never with the interactive accent', () => {
+    // Contrast alone cannot pin this: --acc on --panel measures 6.46:1 and clears the
+    // 3:1 large-text bar perfectly well, so a correct WCAG assertion stays green if
+    // someone puts it back. What is wrong with it is not legibility, it is meaning.
+    //
+    // --acc is the interactive accent: the colour of a thing you can click. A stat
+    // tile's figure is a readout. Spending the interactive colour on it is the quiet
+    // half of the rule this whole PR enforces — the accent is never a status, and a
+    // status is never decoration. --acc-ink is the readable-on-dark variant that
+    // exists for exactly this, and it is what all four call sites passed before the
+    // migration.
+    expect(customPropertyOf('.acc .value', 'color')).toBe('acc-ink');
+  });
+
   it('keeps the acc value readable on the surface it sits on', () => {
     // `.value` renders at --fs-lg (18px) and font-weight 800 — WCAG "large text",
     // which AA holds to 3:1 rather than 4.5:1. --acc alone clears 6.46:1; --acc-ink,
