@@ -90,6 +90,9 @@ describe('the engine synthesiser', () => {
   let ctx, graph;
   beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx, firingEvents); });
 
+  /** Pushes a frame, advancing the clock first so the parameter throttle lets it through. */
+  const push = (frame) => { ctx.currentTime += 0.1; updateEngineAudio(graph, frame); };
+
   it('builds silent, so nothing is heard before a frame is pushed', () => {
     expect(graph.master.gain.value).toBe(0);
   });
@@ -100,29 +103,29 @@ describe('the engine synthesiser', () => {
 
   it('tunes the pipe delay to the resonance the physics reported', () => {
     const frame = frameFor();
-    updateEngineAudio(graph, frame);
+    push(frame);
     expect(graph.pipeDelay.delayTime.value).toBeCloseTo(1 / (2 * frame.drive.pipeHz), 9);
   });
 
   it('goes quiet when the engine is not audible', () => {
-    updateEngineAudio(graph, frameFor({ audible: false }));
+    push(frameFor({ audible: false }));
     expect(graph.master.gain.value).toBe(0);
   });
 
   it('is louder pulling hard than idling, but never silent at idle', () => {
-    updateEngineAudio(graph, frameFor({ rpm: 4500 }));
+    push(frameFor({ rpm: 4500 }));
     const wot = graph.master.gain.value;
-    updateEngineAudio(graph, frameFor({ rpm: 800 }));
+    push(frameFor({ rpm: 800 }));
     const idle = graph.master.gain.value;
     expect(wot).toBeGreaterThan(idle);
     expect(idle).toBeGreaterThan(0);
   });
 
   it('connects only the running layout, so idle layouts cost nothing', () => {
-    updateEngineAudio(graph, frameFor({ configuration: 'V8' }));
+    push(frameFor({ configuration: 'V8' }));
     expect(graph.loopConnected.V8).toBe(true);
     expect(graph.loopConnected.I4).toBe(false);
-    updateEngineAudio(graph, frameFor({ configuration: 'I4' }));
+    push(frameFor({ configuration: 'I4' }));
     expect(graph.loopConnected.V8).toBe(false);
     expect(graph.loopConnected.I4).toBe(true);
   });
@@ -186,6 +189,7 @@ describe('stopping', () => {
   it('pins every layer to zero rather than gliding towards it', () => {
     const ctx = stubContext();
     const graph = createEngineAudio(ctx, firingEvents);
+    ctx.currentTime = 0.5;
     updateEngineAudio(graph, frameFor());
     expect(graph.master.gain.value).toBeGreaterThan(0);
 

@@ -43,7 +43,8 @@
 
 import { COEFF } from './coefficients.js';
 import {
-  BARO_KPA, COMP_ISEN_EFF, GAMMA_EXP, KELVIN_OFFSET, KPA_PER_BAR, PSI_TO_KPA, R_AIR,
+  AMBIENT_C, BARO_KPA, COMP_ISEN_EFF, GAMMA_EXP, KELVIN_OFFSET, KPA_PER_BAR, PSI_TO_KPA,
+  R_AIR,
 } from './constants.js';
 import { EVO_ATDC, cylinderVolumeM3 } from './cycle.js';
 import { clamp } from './math.js';
@@ -72,6 +73,19 @@ export const ACOUSTIC = {
   // Bounds on the fundamental, so a nonsense build cannot ask for an inaudible pipe.
   PIPE_HZ_MIN: 45,
   PIPE_HZ_MAX: 180,
+
+  // --- Pulse shape ---
+  // Effective exhaust flow area as a fraction of bore area. A valve head runs about
+  // 0.36 of the bore and its curtain area at full lift is roughly 0.8 of its own disc,
+  // which lands here. It is what turns cylinder volume into a blowdown TIME.
+  EXHAUST_FLOW_AREA_FRAC: 0.13,
+  // Blowdown duration that renders at unit playback rate — the stock 3.5 L V6 at load.
+  // Everything else is pitched relative to it, so a longer-stroke engine vents a longer,
+  // lower pulse and a hot engine a shorter, sharper one, without either being asserted.
+  PULSE_REF_DURATION_S: 1.01e-3,
+  // Bounds on that rate, so a strange build cannot ask for an unrecognisable pulse.
+  PULSE_RATE_MIN: 0.55,
+  PULSE_RATE_MAX: 1.6,
 
   // --- Blowdown ---
   // Reference overpressure across the exhaust valve at valve opening, kPa. A stock
@@ -114,6 +128,17 @@ export const ACOUSTIC = {
   // one arrives, and the flywheel filters what is left — so a cammed engine loafs at
   // idle and cleans up as it revs.
   COV_SMOOTHING_RPM: 2600,
+  // How much of one cycle's weakness carries into the next.
+  //
+  // This is the PRIOR-CYCLE EFFECT and it is why a lopey idle loafs instead of
+  // buzzing. A weak cycle burns less of its charge, so it leaves more residual behind,
+  // so the cycle after it is diluted too — the variation is strongly correlated rather
+  // than random. Published lag-one autocorrelations of IMEP in dilute spark ignition
+  // sit around 0.3-0.6.
+  //
+  // The renderer needs this, not the sim: modelling variation as white noise per firing
+  // event produces a fizz, and the same amount of variation with memory produces a lope.
+  COV_PERSISTENCE: 0.55,
   // Fraction of cycles that misfire outright, per unit of variation past the floor.
   // A misfire is the audible gap in a lopey idle, not just a quieter pulse.
   MISFIRE_PER_COV: 0.55,
@@ -144,6 +169,10 @@ export const ACOUSTIC = {
   // Reference airflow for induction noise, g/s. Roughly what a 3.5 L engine pulls at its
   // power peak, so the intake reads about 1 there.
   INDUCTION_REF_GPS: 320,
+  // Exhaust enthalpy flux that reads as "fully driven", W. The same 3.5 L engine at its
+  // power peak passes roughly a quarter of a megawatt out of the pipe — which is a fair
+  // reminder of how much of the fuel never reaches the crank.
+  EXHAUST_POWER_REF_W: 260000,
 };
 
 /**
@@ -369,6 +398,61 @@ export function cyclicVariation({ residualFrac, rpm }) {
 }
 
 /**
+ * Effective exhaust flow area for one cylinder, m^2.
+ *
+ * @param {number} boreMm cylinder bore
+ * @returns {number} area, m^2
+ */
+export function exhaustFlowAreaM2(boreMm) {
+  const boreM = boreMm / 1000;
+  return ACOUSTIC.EXHAUST_FLOW_AREA_FRAC * (Math.PI / 4) * boreM * boreM;
+}
+
+/**
+ * How long one blowdown pulse lasts, seconds.
+ *
+ * The cylinder empties through the valve at roughly the speed of sound, so the time it
+ * takes is volume divided by (area x sonic velocity). Two things fall out of that, and
+ * both are audible:
+ *
+ *   - Volume scales with bore^2 x stroke and valve area with bore^2, so the pulse
+ *     LENGTH tracks STROKE, not displacement. A long-stroke engine genuinely vents a
+ *     longer, lower-pitched pulse than a short-stroke one of the same capacity.
+ *   - Sonic velocity rises with gas temperature, so a hot engine vents FASTER. The note
+ *     sharpens as it comes on song, for the same reason the pipe resonance does.
+ *
+ * @param {{displacementL: number, cyl: number, bore: number, compression: number,
+ *          gasTempK: number}} state
+ * @returns {number} pulse duration, seconds
+ */
+export function blowdownDurationS({ displacementL, cyl, bore, compression, gasTempK }) {
+  const sweptM3 = (displacementL / cyl) / 1000;
+  const clearanceM3 = sweptM3 / Math.max(1.5, compression - 1);
+  const vEvo = cylinderVolumeM3(EVO_ATDC, clearanceM3, sweptM3, COEFF.ROD_RATIO);
+  const areaM2 = exhaustFlowAreaM2(bore);
+  return vEvo / (areaM2 * soundSpeedMs(gasTempK, COEFF.GAMMA_BURNED));
+}
+
+/**
+ * Exhaust enthalpy flux, watts.
+ *
+ * How much energy per second is actually leaving through the pipe: mass flow times the
+ * heat capacity of the burned gas times how far above ambient it is. This is what drives
+ * the exhaust system acoustically, and it is the term that lets TUNING reach the sound —
+ * retarding the spark finishes the burn later, so more of the heat leaves through the
+ * valve instead of the crank, and the pipe is driven harder for the same airflow.
+ *
+ * @param {{mafGps: number, egtC: number}} state
+ * @returns {number} enthalpy flux above ambient, W
+ */
+export function exhaustPowerW({ mafGps, egtC }) {
+  // cp of the burned gas: gamma R / (gamma - 1).
+  const cpBurned = (COEFF.GAMMA_BURNED * R_AIR) / (COEFF.GAMMA_BURNED - 1);
+  const massFlowKgS = Math.max(0, mafGps) / 1000;
+  return massFlowKgS * cpBurned * Math.max(0, egtC - AMBIENT_C);
+}
+
+/**
  * Compressor tip speed needed to make a given boost, m/s.
  *
  * Euler's turbomachine equation: the specific work a radial compressor does is
@@ -434,8 +518,14 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} pulseLevel pulse pressure amplitude, 1 being a stock naturally
  *   aspirated engine at wide-open throttle. Linear in PRESSURE, so the renderer is the
  *   thing that maps it to loudness — a factor of ten here is 20 dB, not ten times louder
+ * @property {number} pulseRate how fast one blowdown pulse plays out, relative to the
+ *   reference engine — under 1 is a longer, lower pulse
  * @property {number} cov cycle-to-cycle variation of indicated work
+ * @property {number} covPersistence how much of one cycle's variation carries to the next
  * @property {number} misfireRate fraction of cycles that fail to light
+ * @property {number} exhaustPowerW enthalpy leaving through the pipe, W
+ * @property {number} exhaustDrive that flux against a reference, 0..1 — how hard the
+ *   exhaust system is being driven acoustically
  * @property {number} inductionLevel intake noise, 0..1 against a reference airflow
  * @property {number} knockLevel 0..1, how hard the engine is detonating
  * @property {number} shaftRpm turbo shaft speed, RPM (0 when not boosted)
@@ -474,6 +564,11 @@ export function acousticDrive({ rpm, derived, point, configuration, pipeDiaIn, t
   const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) + ACOUSTIC.EXHAUST_STROKE_KPA;
   const variation = cyclicVariation({ residualFrac: point ? point.residualFrac : 0, rpm });
 
+  const durationS = blowdownDurationS({
+    displacementL, cyl, bore: derived.bore, compression, gasTempK,
+  });
+  const powerW = point ? exhaustPowerW({ mafGps: point.maf, egtC: point.egt }) : 0;
+
   const turbo = turboOn && compressor && point && point.boostPsi > 0
     ? turboAcoustics({ compressor, boostPsi: point.boostPsi, inletK: point.iat + KELVIN_OFFSET })
     : { shaftRpm: 0, whistleHz: 0, bladePassHz: 0 };
@@ -485,8 +580,15 @@ export function acousticDrive({ rpm, derived, point, configuration, pipeDiaIn, t
     blowdownRatio: ratio,
     sharpness: pulseSharpness(ratio),
     pulseLevel: clamp(overpressureKpa / ACOUSTIC.BLOWDOWN_REF_KPA, 0, 2),
+    pulseRate: clamp(
+      ACOUSTIC.PULSE_REF_DURATION_S / Math.max(1e-6, durationS),
+      ACOUSTIC.PULSE_RATE_MIN, ACOUSTIC.PULSE_RATE_MAX,
+    ),
     cov: variation.cov,
+    covPersistence: ACOUSTIC.COV_PERSISTENCE,
     misfireRate: variation.misfireRate,
+    exhaustPowerW: powerW,
+    exhaustDrive: clamp(powerW / ACOUSTIC.EXHAUST_POWER_REF_W, 0, 1),
     inductionLevel: clamp((point ? point.maf : 0) / ACOUSTIC.INDUCTION_REF_GPS, 0, 1.5),
     knockLevel: point && point.knock ? clamp(point.knockPull / COEFF.MAX_KNOCK_RETARD, 0, 1) : 0,
     ...turbo,

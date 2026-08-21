@@ -162,6 +162,71 @@ describe('blowdown', () => {
   });
 });
 
+describe('pulse shape', () => {
+  it('lasts longer on a longer stroke, and is indifferent to bore', () => {
+    const at = (bore, stroke) => {
+      const derived = S.deriveEngine({ ...STOCK, bore, stroke });
+      return S.blowdownDurationS({
+        displacementL: derived.displacementL, cyl: derived.cyl, bore,
+        compression: STOCK.compression, gasTempK: 1100,
+      });
+    };
+    // Volume scales with bore^2 x stroke and valve area with bore^2, so bore cancels.
+    expect(at(88, 105)).toBeGreaterThan(at(88, 81));
+    expect(at(105, 88)).toBeCloseTo(at(88, 88), 4);
+  });
+
+  it('vents faster when the gas is hotter, because sound travels faster in it', () => {
+    const at = (gasTempK) => S.blowdownDurationS({
+      displacementL: 3.5, cyl: 6, bore: 95.5, compression: 10.3, gasTempK,
+    });
+    expect(at(1200)).toBeLessThan(at(600));
+  });
+
+  it('lands in the millisecond range a real blowdown occupies', () => {
+    for (const gasTempK of [600, 900, 1200]) {
+      const ms = S.blowdownDurationS({
+        displacementL: 3.5, cyl: 6, bore: 95.5, compression: 10.3, gasTempK,
+      }) * 1000;
+      expect(ms).toBeGreaterThan(0.5);
+      expect(ms).toBeLessThan(4);
+    }
+  });
+
+  it('renders the reference engine at about unit rate', () => {
+    const d = drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal: 26 });
+    expect(d.pulseRate).toBeGreaterThan(0.85);
+    expect(d.pulseRate).toBeLessThan(1.2);
+  });
+});
+
+describe('exhaust enthalpy flux', () => {
+  it('rises with airflow and with gas temperature independently', () => {
+    const base = S.exhaustPowerW({ mafGps: 150, egtC: 850 });
+    expect(S.exhaustPowerW({ mafGps: 200, egtC: 850 })).toBeGreaterThan(base);
+    expect(S.exhaustPowerW({ mafGps: 150, egtC: 950 })).toBeGreaterThan(base);
+  });
+
+  it('is zero when nothing is flowing', () => {
+    expect(S.exhaustPowerW({ mafGps: 0, egtC: 850 })).toBe(0);
+  });
+
+  it('rises when spark is retarded, at unchanged airflow', () => {
+    // Burning later leaves more of the heat in the exhaust instead of on the piston.
+    // This is the path by which a spark change reaches the sound at all.
+    const at = (timingVal) => drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal });
+    const mbt = at(30), retarded = at(12);
+    expect(retarded.exhaustPowerW).toBeGreaterThan(mbt.exhaustPowerW);
+  });
+
+  it('spans idle to redline over most of its range', () => {
+    const idle = drive({ rpm: 850, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
+    const wot = drive({ rpm: 6500, mapKpa: S.BARO_KPA, timingVal: 26 });
+    expect(idle.exhaustDrive).toBeLessThan(0.1);
+    expect(wot.exhaustDrive).toBeGreaterThan(0.7);
+  });
+});
+
 describe('cycle-to-cycle variation', () => {
   it('sits at the floor when the charge is clean', () => {
     expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).cov).toBe(S.ACOUSTIC.COV_FLOOR);
@@ -179,6 +244,14 @@ describe('cycle-to-cycle variation', () => {
     const idle = S.cyclicVariation({ residualFrac: 0.20, rpm: 850 });
     const revving = S.cyclicVariation({ residualFrac: 0.20, rpm: 2400 });
     expect(revving.cov).toBeLessThan(idle.cov);
+  });
+
+  it('carries memory from one cycle to the next', () => {
+    // A weak cycle leaves more residual, so the next one is diluted too. Without this
+    // the renderer produces white noise on the pulse amplitudes, which fizzes.
+    expect(S.ACOUSTIC.COV_PERSISTENCE).toBeGreaterThan(0);
+    expect(S.ACOUSTIC.COV_PERSISTENCE).toBeLessThan(1);
+    expect(drive({ rpm: 850, mapKpa: 40 }).covPersistence).toBe(S.ACOUSTIC.COV_PERSISTENCE);
   });
 
   it('lopes a big cam and not a small one, without ever being told about overlap', () => {

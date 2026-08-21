@@ -65,6 +65,25 @@ const LOOP_REF_RPM = 3000;
 const LOOP_VARIANTS = 2;
 
 /**
+ * How far apart the looped variants are held in playback rate, as a fraction.
+ *
+ * Two loops of identical length played at identical rates phase-lock, and a pair of
+ * phase-locked periodic buffers is a synthesiser however they were rendered. Holding
+ * them a fraction of a percent apart makes them drift continuously against each other,
+ * which is what real cylinders do — they never stay in lockstep either.
+ */
+const LOOP_DETUNE = 0.0018;
+
+/** How often the slow per-variant rate wander is redrawn, seconds. */
+const LOOP_WANDER_S = 0.55;
+
+/** How much of the wander comes from cycle-to-cycle variation. */
+const LOOP_WANDER_PER_COV = 0.35;
+
+/** Parameter updates per second. Pulse scheduling is unthrottled; this is not. */
+const PARAM_HZ = 14;
+
+/**
  * Firing events per second at which the ear stops resolving individual pulses, and the
  * span over which the scheduled train hands over to the looped one.
  *
@@ -72,12 +91,12 @@ const LOOP_VARIANTS = 2;
  * loop does. Crossfade, never decimate: playing sparse loud pulses up there sounds like
  * hitting a tin can, because that is what it is.
  */
-const PULSE_FUSE_HZ = 90;
-const PULSE_FUSE_SPAN_HZ = 110;
+const PULSE_FUSE_HZ = 130;
+const PULSE_FUSE_SPAN_HZ = 150;
 
 /** How far ahead pulses are scheduled, and the most that may be queued in one call. */
 const SCHEDULE_AHEAD_S = 0.14;
-const MAX_PULSES_PER_CALL = 40;
+const MAX_PULSES_PER_CALL = 64;
 
 /**
  * Pulse amplitude, in pressure, that renders at unity gain.
@@ -96,7 +115,7 @@ const LEVEL_EXPONENT = 0.45;
  * every layer is being flattened into every other. Leaving headroom is what lets the
  * pulses stay separate.
  */
-const MASTER_TRIM = 0.62;
+const MASTER_TRIM = 0.72;
 
 /** Quietest and loudest the exhaust may render, as a master gain. */
 const GAIN_FLOOR = 0.08;
@@ -352,7 +371,14 @@ export function createEngineAudio(ctx, eventsFor) {
     }
   }
 
-  for (const layout of LAYOUTS) for (const src of loopSources[layout]) src.start();
+  // Start each variant at a different point in its own cycle. Starting them together
+  // means they begin phase-aligned and the ear hears one buffer, not two.
+  for (const layout of LAYOUTS) {
+    loopSources[layout].forEach((src, v) => {
+      const cycleSec = 120 / LOOP_REF_RPM;
+      src.start(0, (v / LOOP_VARIANTS) * cycleSec);
+    });
+  }
   oscA.start(); oscB.start(); sub.start(); pulseLfo.start(); flutLfo.start();
   noise.start(); indNoise.start(); bladeNoise.start(); rushNoise.start();
   bovNoise.start(); flutNoise.start();
@@ -366,7 +392,13 @@ export function createEngineAudio(ctx, eventsFor) {
     softPulses, hardPulses,
     loopSources, loopGains, loopConnected,
     loopBlend: new Array(LOOP_VARIANTS).fill(1), loopNextSwap: 0,
+    // Slow per-variant rate offsets, redrawn on their own schedule so the loops keep
+    // drifting rather than settling into a fixed beat.
+    loopWander: new Array(LOOP_VARIANTS).fill(0), loopNextWander: 0,
     nextPulse: 0, pulseIdx: 0, prevBoostPsi: 0,
+    // Cycle-to-cycle variation carries memory; see ACOUSTIC.COV_PERSISTENCE.
+    // Far enough in the past that the first frame is never throttled away.
+    cycleWander: 0, paramsAt: -1e9,
   };
 }
 
@@ -397,6 +429,11 @@ export function createEngineAudio(ctx, eventsFor) {
 export function updateEngineAudio(a, frame) {
   const { drive, rpm, configuration, load, audible, cut, cranking, pipeDiaIn, openExhaust, intakeFitted, boostPsi } = frame;
   const t = a.ctx.currentTime;
+  // A caller may push frames far faster than any of these values can be heard changing,
+  // and each one is a scheduled automation event. Rate-limit them; the pulse scheduler
+  // is deliberately not rate-limited, because its timing is the sound.
+  if (t - a.paramsAt < 1 / PARAM_HZ) return;
+  a.paramsAt = t;
   const voice = VOICING[configuration] || VOICING.I4;
 
   const fire = Math.max(6, drive.firingHz);
@@ -422,6 +459,11 @@ export function updateEngineAudio(a, frame) {
   // never perfectly steady — and a dead-steady pitch is the giveaway for synthesis. The
   // depth of the wobble is the cycle-to-cycle variation the physics reported.
   const drift = 1 + (Math.random() - 0.5) * drive.cov * 0.3;
+  // Each variant also gets its own slow rate offset, redrawn on an unrelated schedule.
+  if (t > a.loopNextWander) {
+    a.loopWander = a.loopWander.map(() => (Math.random() - 0.5) * drive.cov * LOOP_WANDER_PER_COV);
+    a.loopNextWander = t + LOOP_WANDER_S * (0.6 + Math.random() * 0.8);
+  }
   const blendSum = a.loopBlend.reduce((x, y) => x + y, 0);
   for (const layout of LAYOUTS) {
     const active = layout === configuration;
@@ -435,8 +477,10 @@ export function updateEngineAudio(a, frame) {
     }
     if (!active) continue;
     a.loopGains[layout].forEach((g, k) => {
+      // Held apart by LOOP_DETUNE plus each variant's own wander, so they never lock.
+      const spread = 1 + (k - (LOOP_VARIANTS - 1) / 2) * LOOP_DETUNE + a.loopWander[k];
       a.loopSources[layout][k].playbackRate.setTargetAtTime(
-        Math.min(3.2, Math.max(0.2, (rpm / LOOP_REF_RPM) * drift)), t, 0.05);
+        Math.min(3.2, Math.max(0.2, (rpm / LOOP_REF_RPM) * drift * spread)), t, 0.12);
       g.gain.setTargetAtTime(
         audible ? contMix * levelToGain(drive.pulseLevel) * (a.loopBlend[k] / blendSum) : 0, t, 0.18);
     });
@@ -447,10 +491,14 @@ export function updateEngineAudio(a, frame) {
   // and a cat-back removes the chambers that were doing the reflecting.
   const diaOpen = 0.72 + (pipeDiaIn - 2.5) * 0.20;
   a.pipeDelay.delayTime.setTargetAtTime(1 / (2 * drive.pipeHz), t, 0.15);
-  // How much gas is moving decides how hard the pipe is driven. At idle the flow is slow
-  // and the system is well muffled; leaving it ringing there gives a metallic clang no
-  // real engine makes.
-  const flow = Math.min(1, Math.max(0.14, 0.18 + drive.inductionLevel * 1.1));
+  // How hard the pipe is driven is an ENERGY question, not a volume one: what excites the
+  // system is the enthalpy leaving through it, which is mass flow times how far above
+  // ambient the gas is. Driving it from airflow alone would mean a retarded engine — which
+  // sends the same air out much hotter — sounded identical to one at MBT.
+  //
+  // It also fixes idle. There the flow is slow and cool and the whole system is muffled;
+  // leaving the pipe ringing there gives a metallic clang no real engine makes.
+  const flow = Math.min(1, Math.max(0.14, 0.16 + drive.exhaustDrive * 0.9));
   a.pipeFb.gain.setTargetAtTime(
     Math.min(0.46, Math.max(0.16, (0.30 + flow * 0.20) - (pipeDiaIn - 2.5) * 0.05 - (openExhaust ? 0.04 : 0))), t, 0.12);
   a.pipeDamp.frequency.setTargetAtTime(420 + flow * (900 + diaOpen * 1200) + drive.sharpness * 500, t, 0.1);
@@ -553,15 +601,25 @@ export function scheduleExhaustPulses(a, frame) {
     const idx = a.pulseIdx % events.length;
     const src = a.ctx.createBufferSource();
     src.buffer = bank[Math.floor(Math.random() * bank.length)];
-    // No two combustion events are identical, and identical pulses are what make
-    // synthesis sound mechanical.
-    src.playbackRate.value = 0.97 + Math.random() * 0.06;
+    // The rendered pulse is stretched to the duration the physics says this cylinder
+    // takes to blow down — which tracks stroke and gas temperature. A long-stroke engine
+    // gets a longer, lower pulse; a hot one a shorter, sharper one. Then a fraction of a
+    // percent of per-event scatter on top, because no two combustion events are identical
+    // and perfectly identical pulses are what make synthesis sound mechanical.
+    src.playbackRate.value = drive.pulseRate * (0.97 + Math.random() * 0.06);
     const g = a.ctx.createGain();
-    // CYCLE-TO-CYCLE VARIATION. A diluted charge burns weakly, or occasionally not at
-    // all. This is where a lopey idle actually comes from: individual combustion events
-    // being unequal, not the whole mix being modulated.
+
+    // CYCLE-TO-CYCLE VARIATION, WITH MEMORY. A diluted charge burns weakly, and a weak
+    // cycle leaves more residual behind, so the cycle after it starts diluted too. That
+    // correlation is the whole difference between a lope and a fizz: white noise on the
+    // pulse amplitudes sounds like a gate chattering, and the same amount of variation
+    // carried forward sounds like an engine loafing. See ACOUSTIC.COV_PERSISTENCE.
+    const p = drive.covPersistence;
+    a.cycleWander = a.cycleWander * p + (Math.random() * 2 - 1) * (1 - p);
     const misfired = Math.random() < drive.misfireRate;
-    const wander = 1 - drive.cov * (Math.random() * 2);
+    // sqrt(1 - p^2) keeps the variance the same as the uncorrelated case, so adding
+    // memory changes the CHARACTER of the variation without quietly changing its depth.
+    const wander = 1 + a.cycleWander * drive.cov * 2 / Math.sqrt(1 - p * p);
     g.gain.value = Math.max(0, level * pulseMix * (misfired ? 0.22 : 1) * wander);
     src.connect(g); g.connect(a.pulseBus);
     try { src.start(a.nextPulse); } catch { /* scheduling raced; skip this one */ }
