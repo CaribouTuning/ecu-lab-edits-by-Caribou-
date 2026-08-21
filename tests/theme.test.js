@@ -68,13 +68,24 @@ describe('utilisationColor', () => {
 });
 
 describe('statusTone', () => {
-  it('names the same band statusColor paints', () => {
-    // The point of having both is that a caller who needs a token and a caller who
-    // needs a semantic name cannot end up on different sides of a threshold.
-    const cases = [100, 95, 90, 89, 60, 55, 54, 20, 0];
-    const map = { ok: T.ok, warn: T.warn, danger: T.danger };
-    cases.forEach((v) => {
-      expect(map[statusTone(v)]).toBe(statusColor(v));
+  it('names a tone for every band, and every name is a real token', () => {
+    // This used to compare `map[statusTone(v)]` against `statusColor(v)` across a
+    // spread of values. That test could not fail any more: `statusColor` is now
+    // `T[statusTone(v)]`, so the comparison reduced to `T[x] === T[x]` and held for
+    // any thresholds and any implementation. The property it claimed to guard —
+    // that the two cannot disagree — is now true by construction, which is why the
+    // restructure was worth making.
+    //
+    // What the restructure DID introduce is a new way to fail. `statusColor` used to
+    // name `T.ok`/`T.warn`/`T.danger` directly, so renaming one broke at the
+    // reference. It is now a dynamic lookup, and a rename would make `statusColor`
+    // return `undefined` — a colour that silently disappears rather than an error.
+    // That is what is worth pinning.
+    [100, 95, 90, 89, 60, 55, 54, 20, 0].forEach((v) => {
+      const tone = statusTone(v);
+      expect(Object.keys(T)).toContain(tone);
+      expect(typeof statusColor(v)).toBe('string');
+      expect(statusColor(v)).toMatch(/^#[0-9a-f]{6}$/i);
     });
   });
 
