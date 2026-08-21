@@ -504,3 +504,62 @@ describe('the injector-duty preview call site', () => {
     expect(fill.style.background).toBe(refFill.style.background);
   });
 });
+
+/**
+ * The segmented controls on screen right now.
+ *
+ * `role="group"` alone is not enough: `<optgroup>` carries that role implicitly, so the
+ * preset picker's three manufacturer headings answer to it too. A Seg is the group whose
+ * children are `aria-pressed` buttons.
+ * @returns {HTMLElement[]}
+ */
+function segmentedControls() {
+  return screen.queryAllByRole('group')
+    .filter((g) => g.querySelector('button[aria-pressed]'));
+}
+
+/** Asserts every Seg on the current screen shows exactly one option as selected. */
+function expectEverySegHasOneSelection() {
+  const groups = segmentedControls();
+  expect(groups.length).toBeGreaterThan(0);
+  groups.forEach((group) => {
+    // `label` is the group's accessible name and the primitive has no default. Drop it
+    // at a call site and the control still renders, still works, and announces itself
+    // as an unnamed group of buttons — so a screen-reader user hears the options with
+    // no idea what choice they belong to. Counting selections alone does not see that.
+    expect(group.getAttribute('aria-label')).toBeTruthy();
+    const pressed = within(group).getAllByRole('button', { pressed: true });
+    expect(pressed).toHaveLength(1);
+  });
+  return groups.length;
+}
+
+describe('every segmented control', () => {
+  it('shows exactly one option as selected, on every tab that has one', () => {
+    // Seg's options changed shape from {value,label} to {id,label}. A call site left on
+    // the old shape gives every option `id: undefined`, so `aria-pressed` is false on
+    // ALL of them and `onChange` fires with undefined — the control renders, shows no
+    // selection, and writes garbage into the build. EcuLab.jsx carries @ts-nocheck, so
+    // neither lint nor tsc can see it, and the primitive's own tests render it in
+    // isolation and never inspect what the app passes.
+    //
+    // Counting pressed options catches that without naming a single call site, so a
+    // ninth Seg added later is covered the day it appears.
+    launch();
+    let total = expectEverySegHasOneSelection();
+
+    // The remaining Segs are on other tabs, and the two ECU ones are behind a sub-view
+    // that is not the default.
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    total += expectEverySegHasOneSelection();
+
+    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    total += expectEverySegHasOneSelection();
+
+    // Guard the sweep itself: if navigation silently failed, the per-tab assertions
+    // above would each pass on whatever happened to be showing. Eight is the count of
+    // <Seg> call sites in EcuLab.jsx today.
+    expect(total).toBe(8);
+  });
+});
