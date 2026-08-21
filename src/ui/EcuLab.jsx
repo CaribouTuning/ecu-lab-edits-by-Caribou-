@@ -29,9 +29,12 @@ import {
   PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
   R_AIR, RPM, TURBINE_OPTS, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
-  simulateSweep, turbineWithCount, veRecommendations
+  acousticDrive, deriveEngine, firingEvents, idealExhaustDiameter, interp2, liveStep,
+  makeLiveState, presetById, simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
+import {
+  createEngineAudio, scheduleExhaustPulses, silenceEngineAudio, updateEngineAudio,
+} from './audio/engineAudio.js';
 import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
@@ -775,71 +778,7 @@ export default function EngineManagementSandbox() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     try {
-      const ctx = new Ctx();
-      const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
-
-      // An exhaust note is a PULSE TRAIN, not a smooth wave — each cylinder fires a
-      // sharp pressure spike. Building a periodic wave with many harmonics falling
-      // off ~1/n gives that pulse character, which sounds far more like an engine
-      // than a raw sawtooth does.
-      const N = 24;
-      const re = new Float32Array(N), im = new Float32Array(N);
-      for (let n = 1; n < N; n++) { re[n] = 0; im[n] = (1 / n) * Math.exp(-n / 14); }
-      const pulseWave = ctx.createPeriodicWave(re, im, { disableNormalization: false });
-
-      // Two slightly detuned pulse oscillators — real engines never hold a perfectly
-      // pure pitch, and the beating between them is what stops it sounding synthetic.
-      const oscA = ctx.createOscillator(); oscA.setPeriodicWave(pulseWave); oscA.frequency.value = 40;
-      const oscB = ctx.createOscillator(); oscB.setPeriodicWave(pulseWave); oscB.frequency.value = 40; oscB.detune.value = 9;
-      const oscG = ctx.createGain(); oscG.gain.value = 0.5;
-      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 20;
-      const subG = ctx.createGain(); subG.gain.value = 0.35;
-
-      // Exhaust system: a resonant body plus an overall lowpass.
-      const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 320; body.Q.value = 0.9;
-      const bodyG = ctx.createGain(); bodyG.gain.value = 0.8;
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900; filter.Q.value = 2;
-      filter.connect(master); body.connect(bodyG); bodyG.connect(master);
-      oscA.connect(oscG); oscB.connect(oscG); oscG.connect(filter); oscG.connect(body);
-      sub.connect(subG); subG.connect(filter);
-
-      const bufLen = 2 * ctx.sampleRate;
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-      const dch = buf.getChannelData(0);
-      for (let i = 0; i < bufLen; i++) dch[i] = (Math.random() * 2 - 1) * 0.35;
-
-      // Combustion roughness, amplitude-modulated at the firing rate so the noise
-      // arrives in pulses rather than as constant hiss.
-      const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
-      const ng = ctx.createGain(); ng.gain.value = 0.04;
-      const pulseLfo = ctx.createOscillator(); pulseLfo.type = 'sawtooth'; pulseLfo.frequency.value = 40;
-      const pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0.03;
-      pulseLfo.connect(pulseDepth); pulseDepth.connect(ng.gain);
-      noise.connect(ng); ng.connect(filter);
-
-      // LOPE: valve overlap makes combustion inconsistent cylinder-to-cylinder at
-      // idle, so output surges and dips at a slow sub-multiple of the firing rate.
-      // That uneven pulsing is the classic cammed idle.
-      const lopeLfo = ctx.createOscillator(); lopeLfo.type = 'triangle'; lopeLfo.frequency.value = 6;
-      const lopeDepth = ctx.createGain(); lopeDepth.gain.value = 0;
-      lopeLfo.connect(lopeDepth); lopeDepth.connect(master.gain);
-      lopeLfo.start();
-
-      const indG = ctx.createGain(); indG.gain.value = 0;
-      const indFilt = ctx.createBiquadFilter(); indFilt.type = 'bandpass'; indFilt.frequency.value = 1800; indFilt.Q.value = 1.2;
-      const noise2 = ctx.createBufferSource(); noise2.buffer = buf; noise2.loop = true;
-      noise2.connect(indFilt); indFilt.connect(indG); indG.connect(master);
-
-      const whistle = ctx.createOscillator(); whistle.type = 'sine'; whistle.frequency.value = 3000;
-      const whistleG = ctx.createGain(); whistleG.gain.value = 0;
-      whistle.connect(whistleG); whistleG.connect(master);
-      const bovFilt = ctx.createBiquadFilter(); bovFilt.type = 'bandpass'; bovFilt.frequency.value = 2600; bovFilt.Q.value = 0.8;
-      const bovG = ctx.createGain(); bovG.gain.value = 0;
-      const noise3 = ctx.createBufferSource(); noise3.buffer = buf; noise3.loop = true;
-      noise3.connect(bovFilt); bovFilt.connect(bovG); bovG.connect(master);
-
-      oscA.start(); oscB.start(); sub.start(); noise.start(); noise2.start(); noise3.start(); pulseLfo.start();
-      audioRef.current = { ctx, oscA, oscB, oscG, sub, subG, master, filter, body, bodyG, ng, pulseLfo, lopeLfo, lopeDepth, indG, whistle, whistleG, bovG };
+      audioRef.current = createEngineAudio(new Ctx(), firingEvents);
       return audioRef.current;
     } catch { return null; }
   };
@@ -1008,82 +947,66 @@ export default function EngineManagementSandbox() {
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
-  const prevBoostRef = useRef(0);
+  //
+  // Nothing here decides what the engine sounds like. `acousticDrive` turns the operating
+  // point into the physical properties of the exhaust note, and `updateEngineAudio`
+  // renders them; this effect only says which engine is running and how hard.
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    const t = a.ctx.currentTime;
 
     const onDyno = tab === 'dyno' && running && result;
     const onLive = tab === 'dash' && (live.running || live.cranking);
-    const audible = onDyno || onLive;
+    const audible = Boolean((onDyno || onLive) && soundOn);
 
     const rpm = onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
+    const point = onDyno ? dynoPt : (live.running ? live.live : null);
     const load = onDyno ? 1 : clamp((live.effThrottle ?? 0) / 100, 0, 1);
-    const boostNow = onDyno ? (dynoPt?.boostPsi ?? 0) : (live.live?.boostPsi ?? 0);
-    const cut = onLive ? live.fuelCut : false;
 
-    const cyl = engineDerived.cyl;
-    const fire = Math.max(6, (rpm / 60) * (cyl / 2));
-    a.oscA.frequency.setTargetAtTime(fire, t, 0.02);
-    a.oscB.frequency.setTargetAtTime(fire, t, 0.02);
-    a.sub.frequency.setTargetAtTime(fire / 2, t, 0.02);
-    a.pulseLfo.frequency.setTargetAtTime(fire, t, 0.02);
+    const frame = {
+      drive: acousticDrive({
+        rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
+        pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
+        compressor: COMPRESSOR_OPTS[compressorIdx],
+      }),
+      rpm,
+      configuration: engineConfig.configuration,
+      load,
+      audible,
+      cut: onLive ? live.fuelCut : false,
+      cranking: Boolean(onLive && live.cranking),
+      pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
+      openExhaust: Boolean(mods.exhaust || mods.headers),
+      intakeFitted: Boolean(mods.intake),
+      boostPsi: point?.boostPsi ?? 0,
+    };
 
-    // Layout character. A four is rough and buzzy (wider detune, more upper content);
-    // a V8 leans on its low-order rumble; a six sits between.
-    const isFour = cyl === 4, isEight = cyl === 8;
-    a.oscB.detune.setTargetAtTime(isFour ? 16 : isEight ? 6 : 9, t, 0.2);
-    a.oscG.gain.setTargetAtTime(isFour ? 0.55 : isEight ? 0.42 : 0.50, t, 0.1);
-    a.subG.gain.setTargetAtTime(isFour ? 0.20 : isEight ? 0.58 : 0.35, t, 0.1);
-    a.body.frequency.setTargetAtTime(isEight ? 240 : isFour ? 420 : 320, t, 0.15);
-
-    // Exhaust diameter: a bigger pipe is louder, deeper and less restricted.
-    const dia = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia;
-    const diaOpen = 0.72 + (dia - 2.5) * 0.20;
-    const catBack = mods.exhaust || mods.headers;
-    a.filter.frequency.setTargetAtTime((300 + fire * 7 + load * 2400) * diaOpen, t, 0.05);
-    a.filter.Q.setTargetAtTime(isFour ? 3.2 : isEight ? 1.8 : 2.4, t, 0.1);
-    a.bodyG.gain.setTargetAtTime(0.5 + (dia - 2.5) * 0.22, t, 0.15);
-
-    a.indG.gain.setTargetAtTime(mods.intake && audible ? load * 0.055 * (rpm / 7500 + 0.3) : 0, t, 0.06);
-
-    if (turboOn) {
-      a.whistle.frequency.setTargetAtTime(1400 + (rpm / 7500) * 5200, t, 0.08);
-      a.whistleG.gain.setTargetAtTime(audible ? Math.min(0.05, boostNow * 0.006) * load : 0, t, 0.08);
-      if (prevBoostRef.current > 3 && load < 0.15 && audible) {
-        a.bovG.gain.cancelScheduledValues(t);
-        a.bovG.gain.setValueAtTime(0.09, t);
-        a.bovG.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-      }
-      prevBoostRef.current = boostNow;
-    } else {
-      a.whistleG.gain.setTargetAtTime(0, t, 0.1);
-      prevBoostRef.current = 0;
-    }
-
-    // Lope is loudest at idle and washes out as revs rise and combustion evens up.
-    const overlap = engineDerived.overlapDeg || 0;
-    const lopeRate = clamp(fire / 6, 2.5, 14);
-    a.lopeLfo.frequency.setTargetAtTime(lopeRate, t, 0.15);
-    const lopeStrength = audible && overlap > 2 && rpm < 2200
-      ? Math.min(0.085, overlap * 0.0022) * clamp(1 - (rpm - 800) / 1600, 0.15, 1)
-      : 0;
-    a.lopeDepth.gain.setTargetAtTime(lopeStrength, t, 0.12);
-
-    a.ng.gain.setTargetAtTime(live.cranking && onLive ? 0.12 : 0.03 + load * 0.045, t, 0.05);
-    const vol = cut ? 0.012 : 0.05 + load * 0.11;
-    a.master.gain.setTargetAtTime(audible && soundOn ? vol * (catBack ? 1.18 : 1) : 0, t, cut ? 0.015 : 0.06);
+    updateEngineAudio(a, frame);
+    // Scheduling runs on every tick, not just when a parameter changed, because it is
+    // what keeps the pulse train in step with the crank.
+    scheduleExhaustPulses(a, frame);
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
-      engineDerived.cyl, exhaustDiaIdx, mods.intake, mods.exhaust, mods.headers, turboOn,
-      running, currentRpm, revealCount, result, tab, engineDerived.overlapDeg]);
+      engineDerived, engineConfig.configuration, exhaustDiaIdx, compressorIdx,
+      mods.intake, mods.exhaust, mods.headers, turboOn,
+      running, currentRpm, revealCount, result, tab]);
+
+  // HARD SILENCE. Scheduled ramps (a blow-off, a flutter burst) can leave a gain parked
+  // open if a run ends mid-ramp, so stopping is its own operation rather than something
+  // the smoothed targets above eventually get around to.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const sounding = (tab === 'dash' && (live.running || live.cranking)) || (tab === 'dyno' && running);
+    if (sounding && soundOn) return;
+    silenceEngineAudio(a);
+  }, [tab, live.running, live.cranking, running, soundOn]);
 
   // Hard-stop audio on unmount or when the tab changes away from a sounding page.
   useEffect(() => {
     return () => {
       const a = audioRef.current;
-      if (a) { try { a.master.gain.setTargetAtTime(0, a.ctx.currentTime, 0.02); } catch { /* noop */ } }
+      if (a) { try { silenceEngineAudio(a); } catch { /* noop */ } }
     };
   }, [tab]);
 

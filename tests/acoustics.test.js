@@ -1,0 +1,257 @@
+/**
+ * Acoustics intent tests.
+ *
+ * Same rule as `physics.test.js`: assert on DIRECTION and RELATIONSHIP, not on
+ * magnitudes. What matters is that the sound model stays wired to the engine — that a
+ * harder-run engine produces a harder pulse, that a hotter pipe rings higher, and that
+ * the cross-plane V8's rhythm is a consequence of its crank rather than a chosen
+ * pattern. Exact frequencies are a voicing decision and will move.
+ */
+
+import { describe, expect, it } from 'vitest';
+
+import * as S from '../src/sim/index.js';
+
+const STOCK = S.DEFAULT_ENGINE_CONFIG;
+const NO_MODS = { ...S.DEFAULT_MODS, turboFitted: false };
+
+/** One operating point on a stock V6, overridable per test. */
+function point(overrides = {}) {
+  const {
+    cfg = STOCK, rpm = 5500, mapKpa = S.BARO_KPA, boostPsi = 0,
+    timingVal = 30, afrCommanded = 12.6, mods = NO_MODS,
+  } = overrides;
+  const derived = S.deriveEngine(cfg);
+  return {
+    derived,
+    pt: S.evaluatePoint({
+      rpm, mapKpa, boostPsi, veVal: S.interp2(S.DEFAULT_VE, rpm, mapKpa),
+      timingVal, afrCommanded, fuel: S.OCTANE_OPTS[0], mods,
+      mafScalar: 1, mafErrorBase: 1, injectorCc: 550, ecuInjectorCc: 550,
+      derived, compressor: S.COMPRESSOR_OPTS[1], turbine: S.TURBINE_OPTS[1],
+    }),
+  };
+}
+
+/** The full drive for one point. */
+function drive(overrides = {}) {
+  const cfg = overrides.cfg ?? STOCK;
+  const rpm = overrides.rpm ?? 5500;
+  const pipeDiaIn = overrides.pipeDiaIn ?? 2.5;
+  const turboOn = overrides.turboOn ?? false;
+  const { derived, pt } = point({ ...overrides, cfg, rpm });
+  return S.acousticDrive({
+    rpm, derived, point: pt, configuration: cfg.configuration, pipeDiaIn, turboOn,
+    compressor: S.COMPRESSOR_OPTS[1],
+  });
+}
+
+describe('firing frequency', () => {
+  it('is half what the cylinder count suggests, because a four-stroke fires every other revolution', () => {
+    expect(S.firingFrequencyHz(6000, 8)).toBeCloseTo(400, 6);
+    expect(S.firingFrequencyHz(6000, 4)).toBeCloseTo(200, 6);
+  });
+
+  it('is zero at rest and never negative', () => {
+    expect(S.firingFrequencyHz(0, 6)).toBe(0);
+    expect(S.firingFrequencyHz(-500, 6)).toBe(0);
+  });
+});
+
+describe('firing geometry', () => {
+  it('gives every layout one event per cylinder, evenly spaced around the cycle', () => {
+    for (const { config, cyl } of [
+      { config: 'I4', cyl: 4 }, { config: 'I6', cyl: 6 },
+      { config: 'V6', cyl: 6 }, { config: 'V8', cyl: 8 },
+    ]) {
+      const events = S.firingEvents(config);
+      expect(events).toHaveLength(cyl);
+      events.forEach((e, i) => expect(e.angleDeg).toBeCloseTo(i * (720 / cyl), 6));
+    }
+  });
+
+  it('fires a cross-plane V8 UNEVENLY within each bank — which is the rumble', () => {
+    const intervals = S.bankFiringIntervalsDeg('V8', 0);
+    expect(intervals).toEqual([180, 270, 180, 90]);
+    expect(new Set(intervals).size).toBeGreaterThan(1);
+  });
+
+  it('fires every other layout evenly within its bank, which is why none of them rumble', () => {
+    for (const config of ['I4', 'I6', 'V6']) {
+      const intervals = S.bankFiringIntervalsDeg(config, 0);
+      expect(new Set(intervals).size).toBe(1);
+    }
+  });
+
+  it('accounts for all 720 degrees in every bank', () => {
+    for (const config of ['I4', 'I6', 'V6', 'V8']) {
+      for (const bank of [0, 1]) {
+        const intervals = S.bankFiringIntervalsDeg(config, bank);
+        if (intervals.length === 0) continue;
+        expect(intervals.reduce((a, b) => a + b, 0)).toBeCloseTo(720, 6);
+      }
+    }
+  });
+
+  it('puts an inline engine\'s cylinders all in one bank and a V\'s in two', () => {
+    expect(S.bankFiringIntervalsDeg('I6', 1)).toHaveLength(0);
+    expect(S.bankFiringIntervalsDeg('V6', 1)).toHaveLength(3);
+    expect(S.bankFiringIntervalsDeg('V8', 1)).toHaveLength(4);
+  });
+});
+
+describe('exhaust resonance', () => {
+  it('rings higher when the gas in it is hotter, because sound travels faster', () => {
+    const cold = S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 600 });
+    const hot = S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 1100 });
+    expect(hot).toBeGreaterThan(cold);
+  });
+
+  it('rings lower on a bigger engine, which carries a longer system', () => {
+    const small = S.exhaustResonanceHz({ displacementL: 2.0, pipeDiaIn: 2.5, gasTempK: 900 });
+    const big = S.exhaustResonanceHz({ displacementL: 6.2, pipeDiaIn: 2.5, gasTempK: 900 });
+    expect(big).toBeLessThan(small);
+  });
+
+  it('follows c / 2L exactly for the length it reports', () => {
+    const lengthM = S.exhaustLengthM({ displacementL: 3.5, pipeDiaIn: 2.5 });
+    const c = S.soundSpeedMs(900, S.COEFF.GAMMA_BURNED);
+    expect(S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 900 }))
+      .toBeCloseTo(c / (2 * lengthM), 6);
+  });
+
+  it('adds an end correction, so a wider pipe measures acoustically longer', () => {
+    expect(S.exhaustLengthM({ displacementL: 3.5, pipeDiaIn: 3.5 }))
+      .toBeGreaterThan(S.exhaustLengthM({ displacementL: 3.5, pipeDiaIn: 2.0 }));
+  });
+});
+
+describe('blowdown', () => {
+  it('is choked at wide-open throttle — which is why a hard-run engine cracks', () => {
+    const d = drive({ rpm: 5500, mapKpa: S.BARO_KPA });
+    expect(d.blowdownRatio).toBeGreaterThan(S.CRITICAL_PRESSURE_RATIO);
+    expect(d.sharpness).toBe(1);
+  });
+
+  it('does not happen at all at a throttled idle, so idle is a soft chuff', () => {
+    const d = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
+    expect(d.blowdownRatio).toBeLessThan(1);
+    expect(d.sharpness).toBe(0);
+  });
+
+  it('gets louder with boost, because there is more pressure to let go of', () => {
+    const na = drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal: 26 });
+    const boosted = drive({
+      rpm: 4500, mapKpa: 184, boostPsi: 12, timingVal: 18, afrCommanded: 12.2,
+      mods: { ...S.DEFAULT_MODS, turboFitted: true },
+    });
+    expect(boosted.pulseLevel).toBeGreaterThan(na.pulseLevel);
+  });
+
+  it('still makes some noise with no blowdown, because the piston pushes the charge out', () => {
+    const d = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
+    expect(d.pulseLevel).toBeGreaterThan(0);
+  });
+
+  it('spans roughly 30 dB between idle and wide-open throttle', () => {
+    const idle = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
+    const wot = drive({ rpm: 5500, mapKpa: S.BARO_KPA });
+    const dB = 20 * Math.log10(wot.pulseLevel / idle.pulseLevel);
+    expect(dB).toBeGreaterThan(20);
+    expect(dB).toBeLessThan(45);
+  });
+});
+
+describe('cycle-to-cycle variation', () => {
+  it('sits at the floor when the charge is clean', () => {
+    expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).cov).toBe(S.ACOUSTIC.COV_FLOOR);
+    expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).misfireRate).toBe(0);
+  });
+
+  it('rises with residual, which is what a lopey idle physically is', () => {
+    const clean = S.cyclicVariation({ residualFrac: 0.11, rpm: 850 });
+    const diluted = S.cyclicVariation({ residualFrac: 0.20, rpm: 850 });
+    expect(diluted.cov).toBeGreaterThan(clean.cov);
+    expect(diluted.misfireRate).toBeGreaterThan(clean.misfireRate);
+  });
+
+  it('washes out as revs rise, because there is no time left to wander', () => {
+    const idle = S.cyclicVariation({ residualFrac: 0.20, rpm: 850 });
+    const revving = S.cyclicVariation({ residualFrac: 0.20, rpm: 2400 });
+    expect(revving.cov).toBeLessThan(idle.cov);
+  });
+
+  it('lopes a big cam and not a small one, without ever being told about overlap', () => {
+    const cam = (duration) => {
+      const cfg = { ...STOCK, configuration: 'V8', camDuration: duration };
+      return drive({ cfg, rpm: 850, mapKpa: 40, timingVal: 14, afrCommanded: 13.5 }).cov;
+    };
+    expect(cam(270)).toBeGreaterThan(cam(200) * 1.5);
+  });
+});
+
+describe('turbocharger', () => {
+  it('needs more tip speed for more boost', () => {
+    const low = S.compressorTipSpeedMs({ boostPsi: 5, inletK: 310 });
+    const high = S.compressorTipSpeedMs({ boostPsi: 20, inletK: 310 });
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it('sizes a wheel from choke flow, and lands in the range real wheels occupy', () => {
+    for (const compressor of S.COMPRESSOR_OPTS) {
+      const mm = S.compressorWheelDiameterM(compressor) * 1000;
+      expect(mm).toBeGreaterThan(30);
+      expect(mm).toBeLessThan(90);
+    }
+  });
+
+  it('spins a small turbo faster than a big one for the same boost', () => {
+    const small = S.turboAcoustics({ compressor: S.COMPRESSOR_OPTS[0], boostPsi: 12, inletK: 320 });
+    const large = S.turboAcoustics({ compressor: S.COMPRESSOR_OPTS[2], boostPsi: 12, inletK: 320 });
+    expect(small.shaftRpm).toBeGreaterThan(large.shaftRpm);
+    expect(small.whistleHz).toBeGreaterThan(large.whistleHz);
+  });
+
+  it('puts the whistle somewhere a person can hear it', () => {
+    for (const compressor of S.COMPRESSOR_OPTS) {
+      for (const boostPsi of [3, 10, 20]) {
+        const { whistleHz } = S.turboAcoustics({ compressor, boostPsi, inletK: 320 });
+        expect(whistleHz).toBeGreaterThan(300);
+        expect(whistleHz).toBeLessThan(6000);
+      }
+    }
+  });
+
+  it('is silent when no turbo is fitted', () => {
+    const d = drive({ rpm: 5500 });
+    expect(d.whistleHz).toBe(0);
+    expect(d.shaftRpm).toBe(0);
+  });
+});
+
+describe('the drive handed to the renderer', () => {
+  it('is finite everywhere across the operating envelope', () => {
+    for (const configuration of S.CONFIG_OPTS) {
+      for (const rpm of [800, 2500, 4500, 7000]) {
+        for (const mapKpa of [30, 60, S.BARO_KPA, 200]) {
+          const cfg = { ...STOCK, configuration };
+          const d = drive({ cfg, rpm, mapKpa, timingVal: 18, afrCommanded: 13 });
+          for (const [key, value] of Object.entries(d)) {
+            if (key === 'events') continue;
+            expect(Number.isFinite(value), `${configuration} ${rpm}/${mapKpa} ${key}`).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it('says nothing is happening when the engine is not running', () => {
+    const d = S.acousticDrive({
+      rpm: 0, derived: S.deriveEngine(STOCK), point: null,
+      configuration: STOCK.configuration, pipeDiaIn: 2.5,
+    });
+    expect(d.firingHz).toBe(0);
+    expect(d.sharpness).toBe(0);
+    expect(d.whistleHz).toBe(0);
+  });
+});
