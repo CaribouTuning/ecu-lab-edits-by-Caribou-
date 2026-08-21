@@ -233,12 +233,18 @@ git commit -m "Use the Panel primitive, dropping styles that restated its own lo
 **Two defects in the primitive itself, found while planning. Fix these FIRST — migrating
 before you do would ship an accessibility regression on ten tiles.**
 
-Measured against `panel2` (`#1a2130`), the surface every StatTile sits on:
+**Correction to an earlier draft of this section:** I first measured these against
+`panel2`, the *local copy's* background. The primitive's `.tile` is `var(--panel)`
+(`#131824`), so those are the numbers that matter. The conclusion is unchanged — the label
+still fails AA — but the figures below are the correct ones.
 
-| Element | Local copy | Primitive | Ratio | Needs |
+| Element | Local copy (on panel2) | Primitive (on **panel**) | Verdict | Needs |
 |---|---|---|---|---|
-| `.label` (~9.5px, **small text**) | `T.ink2` 5.14:1 | `--ink3` **2.87:1** | **FAILS AA** | 4.5:1 |
-| `.acc .value` (24px, large text) | `T.accInk` 8.69:1 | `--acc` 5.86:1 | passes | 3:1 |
+| `.label` (~9.5px, **small text**) | `T.ink2` 5.14:1 | `--ink3` **3.17:1** | **FAILS AA** | 4.5:1 |
+| `.acc .value` (large text) | `T.accInk` 8.69:1 | `--acc` 6.46:1 | passes | 3:1 |
+
+With `.label` on `--ink2` the primitive measures 5.67:1, and `.acc .value` on `--acc-ink`
+measures 9.57:1.
 
 1. **`.label` must not use `--ink3`.** At 2.87:1 it fails WCAG AA for small text; the copy
    it replaces passed at 5.14:1. Change `.label` to `var(--ink2)`. This is the same class
