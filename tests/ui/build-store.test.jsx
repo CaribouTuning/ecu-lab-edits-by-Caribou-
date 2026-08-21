@@ -28,6 +28,7 @@ import {
 } from '../../src/sim/index.js';
 import { LOAD, RPM } from '../../src/sim/tables.js';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
+import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 
@@ -442,5 +443,64 @@ describe('choosing Custom build from the preset picker', () => {
     fireEvent.change(presetPicker(), { target: { value: '__custom__' } });
 
     expect(headerEngineName()).toMatch(/^\d\.\dL /);
+  });
+});
+
+describe('the injector-duty preview call site', () => {
+  it('paints the Duty bar as dangerous, not healthy, once duty cycle has no headroom left', () => {
+    // TUNE/readouts.test.jsx's describe('Bar') proves the PRIMITIVE inverts colour
+    // correctly given higherIsBetter={false} — it renders Bar in isolation. It says
+    // nothing about whether EcuLab's own INJECTOR DUTY PREVIEW call site (ECU Fuel
+    // System, EcuLab.jsx ~1924) actually PASSES that prop. A reviewer flipped it to
+    // higherIsBetter={true} — 95% duty, an injector out of headroom and about to lean
+    // the mixture out, painted bright green — and all existing tests, including the
+    // Bar unit tests, stayed green. This drives the real app to a build that reaches
+    // a genuinely dangerous duty cycle and reads the colour off the rendered bar.
+    launch();
+
+    // dutyPreview (EcuLab.jsx:639) is computed at WOT @ 6500 RPM. It scales inversely
+    // with ecuInjectorCc (a fresh build already starts at 315cc, the smallest on the
+    // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
+    // dial the boost target at 6500 RPM to its maximum.
+    fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
+    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(toggleFor('Turbo kit'));
+
+    const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
+    fireEvent.click(columns[RPM.indexOf(6500)]);
+    // Every collapsed BuildSection stays mounted (its content is hidden with
+    // max-height, not unmounted — see BuildSection in EcuLab.jsx), so the Engine
+    // Architecture section's five sliders are still in the DOM here alongside the
+    // boost slider. max=25 is unique to the boost-curve range input.
+    const slider = screen.getAllByRole('slider').find((s) => s.getAttribute('max') === '25');
+    fireEvent.change(slider, { target: { value: '25' } });
+
+    // The true VE the boosted hardware breathes is not what the ECU's calibration
+    // table believes until the player accepts it — RESET ALL TO STOCK rebuilds the VE
+    // table from the CURRENT hardware (hwForVe, which reads turboOn and boostCurve),
+    // which is what lets dutyPreview's own VE lookup see the boosted cylinder filling
+    // instead of the naturally-aspirated baseline it started on.
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+
+    const meter = screen.getByRole('meter', { name: 'Duty' });
+    const dutyValue = Number(meter.getAttribute('aria-valuenow'));
+    // Guard the setup rather than trusting it: utilisationColor's danger band is
+    // strictly above 90. If the boost/injector combination above did not actually
+    // push duty past that line, the colour assertion below could pass or fail for
+    // the wrong reason.
+    expect(dutyValue).toBeGreaterThan(90);
+
+    // Compare against a Bar known to render dangerous, the same way
+    // readouts.test.jsx's own describe('Bar') tests do, rather than a hardcoded
+    // colour literal: jsdom normalizes an inline `background` to `rgb(...)`, so a
+    // hex literal copied out of theme.js would never string-match what the DOM
+    // actually holds.
+    const dangerRef = render(<Bar label="Reference" value={20} max={100} />);
+    const fill = /** @type {HTMLElement} */ (meter.querySelector('[data-fill]'));
+    const refFill = /** @type {HTMLElement} */ (dangerRef.container.querySelector('[data-fill]'));
+    expect(fill.style.background).toBe(refFill.style.background);
   });
 });
