@@ -23,6 +23,7 @@
     "src/ui/theme.js",
     "src/ui/primitives",
     "src/ui/screens",
+    "src/ui/state",
     "src/storage.js",
     "src/version.js",
     "src/globals.d.ts",
@@ -30,5 +31,6 @@
     "tests",
     "scripts"
   ],
-  "exclude": ["node_modules", "dist", "ECULab.jsx"]
+  "//exclude": "`exclude` only filters `include` — it does not stop tsc following an import. EcuLab.jsx is kept out of typechecking by a `@ts-nocheck` directive at the top of the file itself, not from here.",
+  "exclude": ["node_modules", "dist"]
 }
