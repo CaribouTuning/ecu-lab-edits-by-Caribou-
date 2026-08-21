@@ -33,7 +33,8 @@ import {
   makeLiveState, presetById, simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import {
-  createEngineAudio, scheduleExhaustPulses, silenceEngineAudio, updateEngineAudio,
+  beepEngineAudio, createEngineAudio, scheduleExhaustPulses, silenceEngineAudio,
+  updateEngineAudio,
 } from './audio/engineAudio.js';
 import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -577,6 +578,14 @@ export default function EngineManagementSandbox() {
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [volume, setVolume] = useState(1);
+  // null until the player runs the self-test; then 'ok' | 'blocked' | 'unavailable'.
+  const [audioStatus, setAudioStatus] = useState(null);
+  // A dyno pull is a sequence, not just a sweep: settle at idle, load it and sweep to
+  // redline, let it spin back down on engine braking, settle again. Those bookends are
+  // most of what a pull SOUNDS like, and without them the whole run is a 1.6 s blip.
+  const [dynoPhase, setDynoPhase] = useState(null);
+  const [dynoRpm, setDynoRpm] = useState(820);
 
   // Every field applyPreset() owns funnels its hand-edit path through one of these
   // two wrappers instead of sprinkling `setPresetId(null)` at each call site — a
@@ -701,7 +710,14 @@ export default function EngineManagementSandbox() {
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
 
   const needsMafRecal = mods.intake || turboOn;
-  const changeTab = (t) => { setTab(t); setSelection(null); };
+  const changeTab = (t) => {
+    // Browsers only let audio start from inside a user gesture, so take every tap on the
+    // nav as another chance to unlock it. Without this a player who never presses START
+    // first can navigate the whole app and hear nothing.
+    const a = audioRef.current;
+    if (a && a.ctx.state === 'suspended') a.ctx.resume();
+    setTab(t); setSelection(null);
+  };
 
   const installMod = (key) => {
     if (mods[key]) return;
@@ -783,6 +799,17 @@ export default function EngineManagementSandbox() {
     } catch { return null; }
   };
 
+  // A deliberately obvious beep. If this is silent, the problem is the device or the
+  // browser — on an iPhone the physical ring/silent switch mutes web audio even at full
+  // volume — and not the engine model. Worth being able to prove.
+  const testSound = () => {
+    const a = ensureAudio();
+    if (!a) { setAudioStatus('unavailable'); return; }
+    a.ctx.resume();
+    beepEngineAudio(a, { hz: 220, seconds: 0.45, gain: 0.35 });
+    setAudioStatus(a.ctx.state === 'running' ? 'ok' : 'blocked');
+  };
+
   // Persistence goes through the storage adapter, which picks whichever backend is
   // available (artifact host, localStorage, or in-memory) so career stats survive a
   // refresh wherever the app is deployed.
@@ -817,12 +844,49 @@ export default function EngineManagementSandbox() {
     const nextPulls = pullCount + 1;
     setBestScore(nextBest); setTotalScore(nextTotal); setPullCount(nextPulls);
     persistCareer(nextBest, nextTotal, nextPulls);
+    // ---- The pull, as a sequence -----------------------------------------------
+    //   settle     hold idle, so you hear it running before it is loaded
+    //   sweep      load it and take it to redline, drawing the graph as it goes
+    //   spooldown  throttle shut; revs fall on the engine's own friction and pumping
+    //   rest       settle at idle again, and the pull is over
+    // The bookends are not decoration. A pull that teleports from nothing to redline and
+    // stops gives the ear no reference for what changed, and never lets you hear the
+    // overrun — which is where a boosted engine vents.
     const total = r.points.length;
-    let i = 0;
+    const SETTLE_MS = 1400, SWEEP_MS = 1900, DOWN_MS = 2100, REST_MS = 900;
+    const idleRpm = 820;
+    const topRpm = r.points[total - 1].rpm;
+    const t0 = Date.now();
+    setDynoPhase('settle');
+    setDynoRpm(idleRpm);
+    setRevealCount(0);
+
     revealTimer.current = setInterval(() => {
-      i += Math.ceil(total / 30);
-      setRevealCount(Math.min(i, total));
-      if (i >= total) { clearInterval(revealTimer.current); setRunning(false); }
+      const el = Date.now() - t0;
+      if (el < SETTLE_MS) {
+        setDynoPhase('settle');
+        setDynoRpm(idleRpm + Math.sin(el / 90) * 14);
+      } else if (el < SETTLE_MS + SWEEP_MS) {
+        const f = (el - SETTLE_MS) / SWEEP_MS;
+        const idx = Math.min(total, Math.round(f * total));
+        setDynoPhase('sweep');
+        setRevealCount(idx);
+        setDynoRpm(r.points[Math.min(total - 1, Math.max(0, idx - 1))].rpm);
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS) {
+        // Engine braking: fast at first, easing as friction and pumping fall away with
+        // engine speed.
+        const f = (el - SETTLE_MS - SWEEP_MS) / DOWN_MS;
+        setDynoPhase('spooldown');
+        setRevealCount(total);
+        setDynoRpm(idleRpm + (topRpm - idleRpm) * Math.pow(1 - f, 2.2));
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS + REST_MS) {
+        setDynoPhase('rest');
+        setDynoRpm(idleRpm + Math.sin(el / 90) * 12);
+      } else {
+        clearInterval(revealTimer.current);
+        setDynoPhase(null);
+        setRunning(false);
+      }
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
@@ -932,7 +996,9 @@ export default function EngineManagementSandbox() {
     setHistogram(null);
   };
 
-  const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
+  const currentRpm = running
+    ? dynoRpm
+    : (result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500);
   const scores = useMemo(() => {
     if (!result || running) return null;
     const tuning = computeTuningScore(result);
@@ -962,24 +1028,36 @@ export default function EngineManagementSandbox() {
     const rpm = onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
     const point = onDyno ? dynoPt : (live.running ? live.live : null);
-    const load = onDyno ? 1 : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+    // Throttle position through a pull. The sweep is wide open; the bookends are not, and
+    // the overrun is a closed throttle — which is what makes the blow-off fire when the
+    // pull ends, exactly where you would hear it on a real dyno.
+    const load = onDyno
+      ? (dynoPhase === 'sweep' ? 1 : dynoPhase === 'spooldown' ? 0.04 : 0.10)
+      : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+    const cut = onLive ? live.fuelCut : Boolean(onDyno && dynoPhase === 'spooldown');
 
     const frame = {
       drive: acousticDrive({
         rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
         pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
         compressor: COMPRESSOR_OPTS[compressorIdx],
+        // The sweep only ever measures wide-open points, so the idle and overrun either
+        // side of it have to borrow the nearest one and scale it by throttle.
+        throttle: onDyno ? load : 1,
       }),
       rpm,
       configuration: engineConfig.configuration,
       load,
       audible,
-      cut: onLive ? live.fuelCut : false,
+      cut,
       cranking: Boolean(onLive && live.cranking),
       pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
       openExhaust: Boolean(mods.exhaust || mods.headers),
       intakeFitted: Boolean(mods.intake),
-      boostPsi: point?.boostPsi ?? 0,
+      // Boost only counts while the throttle is open; dropping it on the overrun is what
+      // the renderer watches for to vent.
+      boostPsi: onDyno && dynoPhase !== 'sweep' ? 0 : (point?.boostPsi ?? 0),
+      volume,
     };
 
     updateEngineAudio(a, frame);
@@ -988,7 +1066,7 @@ export default function EngineManagementSandbox() {
     scheduleExhaustPulses(a, frame);
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
       engineDerived, engineConfig.configuration, exhaustDiaIdx, compressorIdx,
-      mods.intake, mods.exhaust, mods.headers, turboOn,
+      mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
       running, currentRpm, revealCount, result, tab]);
 
   // HARD SILENCE. Scheduled ramps (a blow-off, a flutter burst) can leave a gain parked
@@ -1119,6 +1197,10 @@ export default function EngineManagementSandbox() {
                         background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
                         borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
                       }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
+                      <button onClick={testSound} title="Test sound" style={{
+                        width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 10.5,
+                        border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2,
+                      }}>TEST</button>
                       <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); setSoundOn((v) => !v); }} title="Engine sound" style={{
                         width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
                         border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
@@ -1152,6 +1234,30 @@ export default function EngineManagementSandbox() {
                     {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
                   </span>
                 </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                  <span style={{ fontSize: 10, color: T.ink2, fontWeight: 700, letterSpacing: 0.5 }}>VOL</span>
+                  <input
+                    type="range" min={0} max={2} step={0.05} value={volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    aria-label="Engine volume"
+                    style={{ flex: 1, accentColor: T.acc }}
+                  />
+                  <span style={{ fontFamily: T.mono, fontSize: 11, color: T.ink2, width: 34, textAlign: 'right' }}>
+                    {Math.round(volume * 100)}%
+                  </span>
+                </div>
+
+                {audioStatus && (
+                  <div style={{ fontSize: 11, color: audioStatus === 'ok' ? T.ok : T.warn, marginTop: 8, lineHeight: 1.5 }}>
+                    {audioStatus === 'ok'
+                      ? 'Audio is running. If you heard the test beep but not the engine, start it and hold the throttle.'
+                      : audioStatus === 'blocked'
+                        ? 'The browser is still blocking audio — tap START, or any tab, then try TEST again.'
+                        : 'This browser did not provide Web Audio, so engine sound is unavailable.'}
+                    <br />On iPhone the physical ring/silent switch mutes web audio even at full volume.
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
                   <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
@@ -1932,7 +2038,11 @@ export default function EngineManagementSandbox() {
               boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
             }}>
               <Play size={16} />
-              {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
+              {!running ? 'RUN DYNO PULL'
+                : dynoPhase === 'settle' ? 'IDLING…'
+                  : dynoPhase === 'sweep' ? 'SWEEPING…'
+                    : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
+                      : 'SETTLING…'}
             </button>
 
             {result && (

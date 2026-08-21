@@ -108,18 +108,22 @@ const MAX_PULSES_PER_CALL = 64;
 const LEVEL_EXPONENT = 0.45;
 
 /**
- * Overall trim, chosen so a wide-open pull peaks below full scale.
+ * Overall trim.
  *
- * Measured rather than guessed: with this at 1 the loudest cases sat pinned against the
- * output for seconds at a time, which means the brickwall below is doing the mixing and
- * every layer is being flattened into every other. Leaving headroom is what lets the
- * pulses stay separate.
+ * Deliberately hot. An engine note is a train of transients, and a transient train that
+ * is never allowed to work the limiter sounds thin — the density that reads as "real"
+ * comes from the compression, not from the raw waveform. This is the level the balance
+ * was tuned at, and the tanh brickwall after the make-up gain is what makes running it
+ * this hard safe: peaks round over instead of clipping square.
  */
-const MASTER_TRIM = 0.72;
+const MASTER_TRIM = 1.0;
+
+/** Make-up gain after the limiter, before the brickwall. */
+const MAKEUP_GAIN = 2.4;
 
 /** Quietest and loudest the exhaust may render, as a master gain. */
-const GAIN_FLOOR = 0.08;
-const GAIN_CEILING = 0.80;
+const GAIN_FLOOR = 0.18;
+const GAIN_CEILING = 1.15;
 
 /**
  * Maps a physical pulse amplitude to a rendering gain.
@@ -223,7 +227,7 @@ export function createEngineAudio(ctx, eventsFor) {
   limiter.ratio.value = 12;
   limiter.attack.value = 0.003;
   limiter.release.value = 0.12;
-  const outGain = ctx.createGain(); outGain.gain.value = 1.25;  // make-up for the limiter
+  const outGain = ctx.createGain(); outGain.gain.value = MAKEUP_GAIN;
 
   // A brickwall after the make-up gain. The limiter is a compressor, so a fast enough
   // transient still gets past it, and anything over full scale is HARD clipped by the
@@ -289,6 +293,33 @@ export function createEngineAudio(ctx, eventsFor) {
   const pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0.03;
   pulseLfo.connect(pulseDepth); pulseDepth.connect(ng.gain);
   noise.connect(ng); ng.connect(filter);
+
+  // LOPE, at the mix level. The per-pulse variation below is where a lumpy idle really
+  // comes from, but a diluted engine also surges and dips as a whole across several
+  // cycles, and that slow swell is a large part of what the ear recognises. One is the
+  // texture, the other is the shape; both are needed.
+  const lopeLfo = ctx.createOscillator(); lopeLfo.type = 'triangle'; lopeLfo.frequency.value = 6;
+  const lopeDepth = ctx.createGain(); lopeDepth.gain.value = 0;
+  lopeLfo.connect(lopeDepth); lopeDepth.connect(master.gain);
+
+  // SHIFT CLUNK. A gear change is mechanical — dogs or synchros engaging make a short,
+  // low, woody knock. Without it a shift is just a dip in level, which reads as a glitch
+  // rather than as a gearchange. Straight to the output, so the limiter cannot duck it.
+  const clunkFilt = ctx.createBiquadFilter();
+  clunkFilt.type = 'bandpass'; clunkFilt.frequency.value = 190; clunkFilt.Q.value = 3.5;
+  const clunkG = ctx.createGain(); clunkG.gain.value = 0;
+  const clunkNoise = noiseSource();
+  clunkNoise.connect(clunkFilt); clunkFilt.connect(clunkG); clunkG.connect(outGain);
+
+  // TORQUE CONVERTER. A slipping converter has a fluid whine that rises with slip —
+  // loudest off the line where the engine is spinning far faster than the gearbox input,
+  // fading as it couples up. A manual has nothing equivalent, which is a large part of
+  // why the two sound so different from a standstill.
+  const convOsc = ctx.createOscillator(); convOsc.type = 'triangle'; convOsc.frequency.value = 320;
+  const convFilt = ctx.createBiquadFilter();
+  convFilt.type = 'bandpass'; convFilt.frequency.value = 500; convFilt.Q.value = 2.0;
+  const convG = ctx.createGain(); convG.gain.value = 0;
+  convOsc.connect(convFilt); convFilt.connect(convG); convG.connect(master);
 
   // Induction: air being dragged past a filter and down a runner.
   const indG = ctx.createGain(); indG.gain.value = 0;
@@ -380,14 +411,16 @@ export function createEngineAudio(ctx, eventsFor) {
     });
   }
   oscA.start(); oscB.start(); sub.start(); pulseLfo.start(); flutLfo.start();
+  lopeLfo.start(); convOsc.start();
   noise.start(); indNoise.start(); bladeNoise.start(); rushNoise.start();
-  bovNoise.start(); flutNoise.start();
+  bovNoise.start(); flutNoise.start(); clunkNoise.start();
 
   return {
     ctx, limiter, outGain, softClip, master, filter, body, bodyG, body2, body2G,
     oscA, oscB, oscG, sub, subG, ng, pulseLfo,
     indG, indFilt, whistle, whistleG, bladeFilt, bladeG, rushFilt, rushG,
-    bovFilt, bovG, flutFilt, flutEnv, flutLfo,
+    bovFilt, bovG, flutFilt, flutEnv, flutLfo, lopeLfo, lopeDepth,
+    clunkFilt, clunkG, convOsc, convFilt, convG,
     pipeDelay, pipeFb, pipeDamp, pipeOut, pulseBus,
     softPulses, hardPulses,
     loopSources, loopGains, loopConnected,
@@ -415,6 +448,7 @@ export function createEngineAudio(ctx, eventsFor) {
  * @property {boolean} openExhaust whether a cat-back or headers are fitted
  * @property {boolean} intakeFitted whether an intake is fitted
  * @property {number} boostPsi current boost, for detecting a lift
+ * @property {number} [volume] player-facing master volume, 1 being the tuned balance
  */
 
 /**
@@ -486,6 +520,22 @@ export function updateEngineAudio(a, frame) {
     });
   }
 
+  // --- How the tune is VOICED -------------------------------------------------------
+  // These are rendering decisions about measurements the drive reports, not physics:
+  // the model says the burn finished late and the gas left hot, and what follows decides
+  // that this should be heard as rasp rather than as anything else.
+  //
+  // RASP. Burning later dumps more of the heat through the valve instead of into the
+  // crank, and an exhaust carrying more energy is harder and brighter.
+  const rasp = clamp01(drive.retardDeg / 12);
+  // RICHNESS. A rich charge burns slower and softer; lean is sharp and thin.
+  const richness = Math.max(-0.4, Math.min(0.8, (1 - drive.lambda) * 2.2));
+  // BITE. A higher-compression engine has a faster pressure rise behind each pulse.
+  const crBite = Math.max(-0.2, Math.min(0.25, (drive.compression - 10.3) * 0.06));
+  // DEPTH. A bigger engine moves more gas per pulse, so its exhaust system is larger and
+  // everything about it sits lower.
+  const dispDepth = Math.max(0.6, Math.min(1.6, 3.5 / Math.max(drive.displacementL, 1.2)));
+
   // THE EXHAUST SYSTEM. The pipe's fundamental is physics and arrives in the drive; how
   // hard it rings is not — a bigger bore radiates more at the mouth and reflects less,
   // and a cat-back removes the chambers that were doing the reflecting.
@@ -501,33 +551,52 @@ export function updateEngineAudio(a, frame) {
   const flow = Math.min(1, Math.max(0.14, 0.16 + drive.exhaustDrive * 0.9));
   a.pipeFb.gain.setTargetAtTime(
     Math.min(0.46, Math.max(0.16, (0.30 + flow * 0.20) - (pipeDiaIn - 2.5) * 0.05 - (openExhaust ? 0.04 : 0))), t, 0.12);
-  a.pipeDamp.frequency.setTargetAtTime(420 + flow * (900 + diaOpen * 1200) + drive.sharpness * 500, t, 0.1);
+  a.pipeDamp.frequency.setTargetAtTime(
+    420 + flow * (900 + diaOpen * 1200) + rasp * 500, t, 0.1);
   a.pipeOut.gain.setTargetAtTime(audible ? voice.pipeGain * (0.45 + 0.55 * flow) : 0, t, 0.12);
 
   // Blowdown sharpness opens the whole system up: a choked pulse carries far more high
-  // frequency than a chuff, which is what "coming on song" sounds like.
-  a.filter.frequency.setTargetAtTime((300 + fire * 7 + drive.sharpness * 2400) * diaOpen, t, 0.05);
-  a.filter.Q.setTargetAtTime(voice.lowQ, t, 0.1);
-  a.body.frequency.setTargetAtTime(voice.bodyHz, t, 0.15);
+  // frequency than a chuff, which is what "coming on song" sounds like. Retard brightens
+  // it further, a bigger engine sits lower, and compression sharpens the leading edge.
+  a.filter.frequency.setTargetAtTime(
+    (300 + fire * 7 + Math.max(load, drive.sharpness) * 2400)
+      * diaOpen * (1 / dispDepth) * (1 + rasp * 0.45 + crBite), t, 0.05);
+  a.filter.Q.setTargetAtTime(voice.lowQ * (1 + crBite), t, 0.1);
+  a.body.frequency.setTargetAtTime(voice.bodyHz / dispDepth, t, 0.15);
   a.body.Q.setTargetAtTime(voice.bodyQ, t, 0.15);
-  a.body2.frequency.setTargetAtTime((720 + fire * 4) * diaOpen, t, 0.1);
+  a.body2.frequency.setTargetAtTime((720 + fire * 4) * diaOpen * (1 + rasp * 0.3), t, 0.1);
   a.body2.Q.setTargetAtTime(voice.body2Q, t, 0.15);
-  a.body2G.gain.setTargetAtTime(voice.body2Gain * (0.35 + 0.65 * clamp01(drive.sharpness)), t, 0.12);
-  a.bodyG.gain.setTargetAtTime(0.5 + (pipeDiaIn - 2.5) * 0.22, t, 0.15);
+  a.body2G.gain.setTargetAtTime(
+    (voice.body2Gain + rasp * 0.18) * (0.35 + 0.65 * load), t, 0.12);
+  a.bodyG.gain.setTargetAtTime((0.5 + (pipeDiaIn - 2.5) * 0.22) * dispDepth, t, 0.15);
   a.pulseBus.gain.setTargetAtTime(voice.pulseGain, t, 0.15);
+
+  // The slow swell of a diluted idle, on top of the per-pulse variation. It runs at a
+  // sub-multiple of the firing rate and washes out as the engine revs and the burn evens
+  // up — which is why a cammed engine loafs at idle and cleans up on the way to redline.
+  a.lopeLfo.frequency.setTargetAtTime(Math.max(1.8, Math.min(11, fire / 7)), t, 0.15);
+  a.lopeDepth.gain.setTargetAtTime(
+    audible ? Math.min(0.42, Math.max(0, drive.cov - 0.02) * 2.6) : 0, t, 0.12);
 
   // Induction noise is the sound of air being moved, so it tracks airflow directly.
   a.indG.gain.setTargetAtTime(intakeFitted && audible ? drive.inductionLevel * 0.09 : 0, t, 0.06);
 
   if (drive.whistleHz > 0) {
+    const boostFrac = Math.min(1.4, Math.max(0, boostPsi / 14));
     a.whistle.frequency.setTargetAtTime(drive.whistleHz, t, 0.07);
     a.whistleG.gain.setTargetAtTime(audible ? Math.min(0.012, boostPsi * 0.0014) * load : 0, t, 0.08);
     // The blade band sits at the same frequency but is noise, not a tone, and it carries
     // most of the character.
     a.bladeFilt.frequency.setTargetAtTime(drive.whistleHz, t, 0.07);
-    a.bladeG.gain.setTargetAtTime(audible ? Math.min(0.22, (boostPsi / 14) * 0.19) * (0.35 + 0.65 * load) : 0, t, 0.08);
+    a.bladeG.gain.setTargetAtTime(audible ? Math.min(0.22, boostFrac * 0.19) * (0.35 + 0.65 * load) : 0, t, 0.08);
     a.rushFilt.frequency.setTargetAtTime(800 + drive.inductionLevel * 1600, t, 0.1);
-    a.rushG.gain.setTargetAtTime(audible ? Math.min(0.21, drive.inductionLevel * 0.16) : 0, t, 0.1);
+    // A small boosted engine is mostly induction noise — on a turbo four the whoosh
+    // genuinely dominates the exhaust, which is why they sound so unlike a big naturally
+    // aspirated engine making the same power.
+    const smallEngineBias = Math.max(0.7, Math.min(2.1, 2.6 / Math.max(drive.displacementL, 1.2)));
+    a.rushG.gain.setTargetAtTime(
+      audible ? Math.min(0.21, drive.inductionLevel * 0.10 * (0.4 + boostFrac) * smallEngineBias) : 0, t, 0.1);
+    a.rushFilt.Q.setTargetAtTime(configuration === 'I4' ? 0.45 : 0.8, t, 0.15);
   } else {
     a.whistleG.gain.setTargetAtTime(0, t, 0.1);
     a.bladeG.gain.setTargetAtTime(0, t, 0.1);
@@ -561,11 +630,90 @@ export function updateEngineAudio(a, frame) {
   // Combustion roughness rises with load, and knock adds a hard rattly edge on top —
   // the audible reason tuners fear it.
   a.ng.gain.setTargetAtTime(
-    cranking ? 0.12 : 0.03 + load * 0.045 + contMix * 0.11 + drive.knockLevel * 0.06, t, 0.05);
+    cranking ? 0.12
+      : 0.03 + load * 0.045 + contMix * 0.11
+        + Math.max(0, richness) * 0.03 + drive.knockLevel * 0.06, t, 0.05);
 
+  a.outGain.gain.setTargetAtTime(MAKEUP_GAIN * (frame.volume ?? 1), t, 0.08);
   const gain = cut ? 0.10 : levelToGain(drive.pulseLevel);
   a.master.gain.setTargetAtTime(
     audible ? gain * (openExhaust ? 1.18 : 1) : 0, t, cut ? 0.015 : 0.06);
+}
+
+/**
+ * Fires a gear-change noise.
+ *
+ * A manual disconnects completely: the note falls away, the dogs engage with a hard
+ * mechanical knock, and it catches again as the clutch comes back out. An automatic never
+ * disconnects at all — a converter is a fluid coupling, so the engine keeps driving the
+ * car through the change and you get a soft dip and a swell instead of a gap, with no
+ * engagement noise to hear.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {{automatic: boolean}} opts
+ */
+export function shiftEngineAudio(a, { automatic }) {
+  const t = a.ctx.currentTime;
+  const back = a.master.gain.value > 0.05 ? a.master.gain.value : 0.7;
+  a.master.gain.cancelScheduledValues(t);
+  a.master.gain.setValueAtTime(a.master.gain.value, t);
+  a.clunkG.gain.cancelScheduledValues(t);
+  a.clunkFilt.frequency.cancelScheduledValues(t);
+
+  if (automatic) {
+    a.master.gain.linearRampToValueAtTime(back * 0.62, t + 0.05);   // slips, never releases
+    a.master.gain.linearRampToValueAtTime(back * 1.06, t + 0.15);   // clutch packs take up
+    a.master.gain.linearRampToValueAtTime(back, t + 0.26);
+    // A soft low swell rather than a knock — the shift you feel more than hear.
+    a.clunkG.gain.setValueAtTime(0.0001, t + 0.03);
+    a.clunkG.gain.linearRampToValueAtTime(0.13, t + 0.09);
+    a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    a.clunkFilt.frequency.setValueAtTime(120, t + 0.03);
+    a.clunkFilt.Q.setValueAtTime(1.2, t + 0.03);
+  } else {
+    a.master.gain.linearRampToValueAtTime(0.03, t + 0.045);         // clutch in
+    a.master.gain.setValueAtTime(0.03, t + 0.13);                   // gap while shifting
+    a.master.gain.linearRampToValueAtTime(back * 1.12, t + 0.20);   // clutch out, flare
+    a.master.gain.linearRampToValueAtTime(back, t + 0.30);
+    a.clunkG.gain.setValueAtTime(0.0001, t + 0.10);
+    a.clunkG.gain.linearRampToValueAtTime(0.55, t + 0.118);
+    a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
+    a.clunkFilt.Q.setValueAtTime(3.5, t + 0.10);
+    a.clunkFilt.frequency.setValueAtTime(240, t + 0.10);
+    a.clunkFilt.frequency.exponentialRampToValueAtTime(140, t + 0.20);
+  }
+}
+
+/**
+ * Sets the torque-converter whine.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {{rpm: number, slip: number, audible: boolean}} opts slip is 0 (locked up) to 1
+ */
+export function converterEngineAudio(a, { rpm, slip, audible }) {
+  const t = a.ctx.currentTime;
+  a.convOsc.frequency.setTargetAtTime(240 + rpm * 0.055, t, 0.08);
+  a.convFilt.frequency.setTargetAtTime(420 + rpm * 0.09, t, 0.08);
+  a.convG.gain.setTargetAtTime(audible ? Math.max(0, Math.min(1, slip)) * 0.055 : 0, t, 0.1);
+}
+
+/**
+ * Plays a short tone. Used for the staging-tree lights, and as an audio self-test —
+ * if this is silent the problem is the device or the browser, not the engine model.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {{hz: number, seconds: number, gain: number}} opts
+ */
+export function beepEngineAudio(a, { hz, seconds, gain }) {
+  const t = a.ctx.currentTime;
+  const osc = a.ctx.createOscillator(); osc.type = 'sine'; osc.frequency.value = hz;
+  const g = a.ctx.createGain(); g.gain.value = 0;
+  osc.connect(g); g.connect(a.outGain);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  osc.start(t); osc.stop(t + seconds + 0.05);
+  osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch { /* already gone */ } };
 }
 
 /**
@@ -617,9 +765,15 @@ export function scheduleExhaustPulses(a, frame) {
     const p = drive.covPersistence;
     a.cycleWander = a.cycleWander * p + (Math.random() * 2 - 1) * (1 - p);
     const misfired = Math.random() < drive.misfireRate;
+    // Two shapes, because a lope has both. The first-order term above is the stochastic
+    // part — one weak cycle making the next one weak. The product of two slow sines is a
+    // deterministic drift with no repeat period the ear can latch onto, and it is what
+    // makes it LOAF rather than merely wobble.
     // sqrt(1 - p^2) keeps the variance the same as the uncorrelated case, so adding
     // memory changes the CHARACTER of the variation without quietly changing its depth.
-    const wander = 1 + a.cycleWander * drive.cov * 2 / Math.sqrt(1 - p * p);
+    const loaf = Math.sin(a.pulseIdx * 0.55) * Math.sin(a.pulseIdx * 0.17);
+    const scatter = a.cycleWander / Math.sqrt(1 - p * p);
+    const wander = 1 - drive.cov * (1.1 * (0.5 + 0.5 * loaf) - 0.55 * scatter);
     g.gain.value = Math.max(0, level * pulseMix * (misfired ? 0.22 : 1) * wander);
     src.connect(g); g.connect(a.pulseBus);
     try { src.start(a.nextPulse); } catch { /* scheduling raced; skip this one */ }
@@ -650,6 +804,7 @@ export function silenceEngineAudio(a) {
   };
   kill(a.master); kill(a.pipeOut); kill(a.indG);
   kill(a.whistleG); kill(a.bladeG); kill(a.rushG); kill(a.bovG); kill(a.flutEnv);
+  kill(a.clunkG); kill(a.convG); kill(a.lopeDepth);
   for (const layout of LAYOUTS) for (const g of a.loopGains[layout]) kill(g);
   a.prevBoostPsi = 0;
 }

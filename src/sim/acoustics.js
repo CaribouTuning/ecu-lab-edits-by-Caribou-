@@ -528,6 +528,11 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  *   exhaust system is being driven acoustically
  * @property {number} inductionLevel intake noise, 0..1 against a reference airflow
  * @property {number} knockLevel 0..1, how hard the engine is detonating
+ * @property {number} retardDeg degrees the ECU pulled out of the commanded spark
+ * @property {number} lambda delivered mixture, 1.0 being stoichiometric
+ * @property {number} compression static compression ratio
+ * @property {number} displacementL total displacement, litres
+ * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} shaftRpm turbo shaft speed, RPM (0 when not boosted)
  * @property {number} whistleHz turbo tone, Hz (0 when not boosted)
  * @property {number} bladePassHz compressor blade-pass frequency, Hz (0 when not boosted)
@@ -547,9 +552,18 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @param {number} input.pipeDiaIn exhaust pipe diameter, inches
  * @param {boolean} [input.turboOn] whether a turbo is fitted
  * @param {object} [input.compressor] the fitted compressor, from `COMPRESSOR_OPTS`
+ * @param {number} [input.throttle] throttle position, 0..1, for callers that know it but
+ *   have no MEASURED point at it. A dyno sweep only ever evaluates wide-open points, so
+ *   the idle and overrun either side of a pull have to borrow the nearest one; scaling
+ *   the blowdown by throttle is a fair approximation, because pressure at valve opening
+ *   tracks trapped charge and trapped charge tracks manifold pressure. It scales nothing
+ *   else — the gas is still as hot as it measured, and the exhaust stroke still pushes.
+ *   Defaults to 1, which leaves a measured point exactly as it is.
  * @returns {AcousticDrive}
  */
-export function acousticDrive({ rpm, derived, point, configuration, pipeDiaIn, turboOn, compressor }) {
+export function acousticDrive({
+  rpm, derived, point, configuration, pipeDiaIn, turboOn, compressor, throttle = 1,
+}) {
   const { cyl, displacementL, compression } = derived;
   const gasTempK = (point ? point.egt : 0) + KELVIN_OFFSET;
   const empKpa = point ? point.emp : BARO_KPA;
@@ -561,7 +575,8 @@ export function acousticDrive({ rpm, derived, point, configuration, pipeDiaIn, t
     })
     : 0;
   // Blowdown when there is any, plus what the exhaust stroke pushes out regardless.
-  const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) + ACOUSTIC.EXHAUST_STROKE_KPA;
+  const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) * clamp(throttle, 0, 1)
+    + ACOUSTIC.EXHAUST_STROKE_KPA;
   const variation = cyclicVariation({ residualFrac: point ? point.residualFrac : 0, rpm });
 
   const durationS = blowdownDurationS({
@@ -591,6 +606,15 @@ export function acousticDrive({ rpm, derived, point, configuration, pipeDiaIn, t
     exhaustDrive: clamp(powerW / ACOUSTIC.EXHAUST_POWER_REF_W, 0, 1),
     inductionLevel: clamp((point ? point.maf : 0) / ACOUSTIC.INDUCTION_REF_GPS, 0, 1.5),
     knockLevel: point && point.knock ? clamp(point.knockPull / COEFF.MAX_KNOCK_RETARD, 0, 1) : 0,
+    // Measurements the renderer voices from directly. They are reported, not derived —
+    // the acoustic consequence of a retarded burn or a rich mixture is a question about
+    // how an exhaust note is SHAPED, which is a rendering decision, not a physics one.
+    // Putting them in the drive keeps the renderer from having to reach into the point.
+    retardDeg: point ? Math.max(0, point.commandedTiming - point.timing) : 0,
+    lambda: point ? point.lambda : 1,
+    compression,
+    displacementL,
+    overlapDeg: derived.overlapDeg || 0,
     ...turbo,
   };
 }
