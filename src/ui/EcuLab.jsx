@@ -1923,9 +1923,15 @@ export function EcuLabApp() {
               <div style={{ marginTop: 8 }}>
                 <Bar label="Duty" value={dutyPreview} higherIsBetter={false} />
               </div>
-              <div style={{ fontSize: 12, marginTop: 7, color: dutyDangerous ? T.dangerInk : T.inkSoft }}>
-                {dutyPreview.toFixed(0)}% duty {dutyDangerous ? '— undersized for this build, expect forced lean-out' : ''}
-              </div>
+              {/* The figure itself is the Bar's, now that it has a label row of its own —
+                  restating it here put the same number on screen twice, seven pixels
+                  apart. What is left is the part the Bar cannot say: what an undersized
+                  injector is about to do to the mixture. */}
+              {dutyDangerous && (
+                <div style={{ fontSize: 12, marginTop: 7, color: T.dangerInk }}>
+                  Undersized for this build — expect forced lean-out
+                </div>
+              )}
             </Panel>
 
             <Eyebrow icon={Zap}>Fuel Control &amp; MAF Scaling</Eyebrow>
@@ -2108,9 +2114,12 @@ export function EcuLabApp() {
                               : p.richRisk ? 'far richer than commanded — check injector scaling'
                               : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
                             ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
+                          // Same "no headroom left" cutoff as the build tab's duty preview,
+                          // asked the same way: utilisationColor owns the band, and this
+                          // reads its verdict rather than restating >90 twice more.
                           { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${p.duty > 90 ? ' — at the limit' : ''}`,
-                            ok: p.duty <= 90 },
+                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
+                            ok: utilisationColor(p.duty) !== T.danger },
                           { k: 'Heat', asked: null, got: `${p.egt}°C`,
                             note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
                             ok: !p.egtRisk },
