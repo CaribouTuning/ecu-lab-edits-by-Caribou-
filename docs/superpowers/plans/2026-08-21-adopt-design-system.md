@@ -656,6 +656,44 @@ Do **not** guess at what it was meant to compare and implement that instead — 
 
 Keep `T.danger` here: on a tachometer that is the redline, a genuine warning.
 
+- [ ] **Step 2b: Two more findings, both surfaced by Task 2's review**
+
+**A hand-rolled div that is a `Panel`.** Around `EcuLab.jsx:2276`, inside the score
+block, sits:
+
+```jsx
+<div style={{ flex: 1, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: 14 }}>
+```
+
+That is the `Panel` primitive's exact look, written out by hand — and it kept the literal
+`padding: 14` while every migrated `Panel` moved to `--sp-lg` (13px). So it now sits 1px
+looser than the real `Panel` directly above it in the same block. It was never a `<Panel>`
+call, so Task 2's 15-site sweep correctly did not catch it.
+
+Replace it with `<Panel style={{ flex: 1 }}>`. Then look for siblings: any other div
+setting `background: T.panel2` **and** a `T.line` border is the same duplication. List what
+you find and convert what genuinely is a panel — but do not force a div that merely shares
+one property.
+
+**An animation shorthand fighting its own longhand.** `EcuLab.jsx:305-306`:
+
+```jsx
+animation: running ? `cylpulse ...s ease-in-out infinite` : 'none',
+animationDelay: `${i * (0.5 / cylinders)}s`,
+```
+
+React warns about this on every render of the tach. `animation` is a shorthand that resets
+`animation-delay`, so declaring the longhand beside it in the same object is order-dependent
+and the per-cylinder stagger may not apply at all. Fold the delay into the shorthand — it
+takes a delay as its second time value:
+
+```jsx
+animation: running ? `cylpulse ${dur}s ${i * (0.5 / cylinders)}s ease-in-out infinite` : 'none',
+```
+
+Confirm the console warning is gone afterwards. This is pre-existing, not something this PR
+introduced — say so in the PR body rather than implying otherwise.
+
 - [ ] **Step 3: Confirm every duplicate is gone**
 
 ```bash
