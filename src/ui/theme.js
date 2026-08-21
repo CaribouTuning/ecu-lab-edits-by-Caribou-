@@ -83,10 +83,9 @@ export const statusColor = (v) => T[statusTone(v)];
  * sized so that sustained duty above ~90% has no headroom left for the next
  * enrichment the ECU asks for.
  *
- * These bands are copied exactly — thresholds and comparison operators — from the
- * inline duty preview in `EcuLab.jsx`. That copy is still there because this PR does
- * not migrate screens. When that panel moves onto `Bar`, delete the inline version
- * and call this instead; until then the two must be changed together.
+ * The bands live here alone now — the injector duty preview and the tachometer's
+ * redline zone in `EcuLab.jsx` both call this instead of re-testing the thresholds
+ * inline. Do not let a new inline copy creep back in; change the bands here.
  *
  * @param {number} v 0-100
  * @returns {string} a status colour

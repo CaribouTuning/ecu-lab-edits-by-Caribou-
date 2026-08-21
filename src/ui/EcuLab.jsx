@@ -48,7 +48,7 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone } from './theme.js';
+import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -59,6 +59,7 @@ import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
+import { Bar } from './primitives/Bar.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -170,20 +171,6 @@ function ToggleRow({ label, sub, checked, onChange, color = T.acc }) {
   );
 }
 
-function HealthBar({ label, value }) {
-  const c = statusColor(value);
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: T.ink2, marginBottom: 4, fontWeight: 600 }}>
-        <span>{label}</span><span style={{ color: c, fontWeight: 800 }}>{Math.round(value)}%</span>
-      </div>
-      <div style={{ height: 7, background: T.panel, borderRadius: 4, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-        <div style={{ width: `${value}%`, height: '100%', background: c, borderRadius: 4, transition: 'width .4s', boxShadow: `0 0 8px ${c}66` }} />
-      </div>
-    </div>
-  );
-}
-
 // Guided first run. Walks a new player through the actual working order a tuner
 // uses — build the engine, calibrate it, hear it run, then measure it — and then
 // gets out of the way. Purely navigational: it never changes the simulation.
@@ -279,7 +266,7 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
   // sits at pct ≈ 0.909 regardless of engine — the red zone has to start at or just
   // below that, not above it, or the needle never shows red at the engine's own redline.
-  const zoneColor = pct > 0.9 ? T.danger : pct > 0.75 ? T.warn : T.ok;
+  const zoneColor = utilisationColor(pct * 100);
   return (
     <Panel style={{ textAlign: 'center', background: T.panel }}>
       <style>{`@keyframes cylpulse{0%,100%{opacity:.25;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}`}</style>
@@ -662,6 +649,10 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
+  // Single source of truth for the "no headroom left" cutoff is utilisationColor's
+  // own >90 band — comparing its output rather than re-testing dutyPreview keeps this
+  // caption from becoming a fourth copy of the threshold.
+  const dutyDangerous = utilisationColor(dutyPreview) === T.danger;
 
   const needsMafRecal = mods.intake || turboOn;
   const changeTab = (t) => { setTab(t); setSelection(null); };
@@ -1279,9 +1270,11 @@ export function EcuLabApp() {
               sub={`${Math.round(overallHealth)}% overall`}
             >
               <Panel>
-                <HealthBar label="PISTON / RINGS · knock, detonation" value={health.piston} />
-                <HealthBar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
-                <HealthBar label="VALVES · lean-under-boost heat" value={health.valve} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Bar label="PISTON / RINGS · knock, detonation" value={health.piston} />
+                  <Bar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
+                  <Bar label="VALVES · lean-under-boost heat" value={health.valve} />
+                </div>
               </Panel>
               {needsMafRecal && <Note tone="warn">Your intake and/or turbo plumbing changed the MAF reading — head to <b>FUEL</b> to rescale it before your next pull.</Note>}
             </BuildSection>
@@ -1927,11 +1920,11 @@ export function EcuLabApp() {
                 <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>INJECTOR DUTY PREVIEW · WOT @ 6500 RPM</div>
                 {fuel.stoich < 14 && <div style={{ fontSize: 10, color: T.accInk, fontFamily: T.mono, fontWeight: 700 }}>{fuel.label} stoich {fuel.stoich}:1</div>}
               </div>
-              <div style={{ height: 8, background: T.panel, borderRadius: 4, marginTop: 8, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-                <div style={{ width: `${Math.min(100, dutyPreview)}%`, height: '100%', background: dutyPreview > 90 ? T.danger : dutyPreview > 75 ? T.warn : T.ok }} />
+              <div style={{ marginTop: 8 }}>
+                <Bar label="Duty" value={dutyPreview} higherIsBetter={false} />
               </div>
-              <div style={{ fontSize: 12, marginTop: 7, color: dutyPreview > 90 ? T.dangerInk : T.inkSoft }}>
-                {dutyPreview.toFixed(0)}% duty {dutyPreview > 90 ? '— undersized for this build, expect forced lean-out' : ''}
+              <div style={{ fontSize: 12, marginTop: 7, color: dutyDangerous ? T.dangerInk : T.inkSoft }}>
+                {dutyPreview.toFixed(0)}% duty {dutyDangerous ? '— undersized for this build, expect forced lean-out' : ''}
               </div>
             </Panel>
 
