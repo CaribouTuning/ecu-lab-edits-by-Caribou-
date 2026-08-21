@@ -48,7 +48,7 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
+import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -58,6 +58,7 @@ import { ACTIONS } from './state/reducer.js';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
+import { StatTile } from './primitives/StatTile.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -165,15 +166,6 @@ function ToggleRow({ label, sub, checked, onChange, color = T.acc }) {
       <button onClick={() => onChange(!checked)} style={{ width: 48, height: 27, borderRadius: 14, border: 'none', position: 'relative', flexShrink: 0, background: checked ? color : T.panel3, transition: 'background .2s' }}>
         <div style={{ position: 'absolute', top: 3, left: checked ? 24 : 3, width: 21, height: 21, borderRadius: 11, background: T.ink, transition: 'left .2s', boxShadow: `0 1px 3px ${shadowAlpha(0.4)}` }} />
       </button>
-    </div>
-  );
-}
-
-function StatTile({ label, value, unit, color = T.ink, flex = 1 }) {
-  return (
-    <div style={{ flex, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 11, padding: 13 }}>
-      <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: T.mono, color, marginTop: 2 }}>{value}<span style={{ fontSize: 11.5, color: T.ink2, marginLeft: 3, fontWeight: 600 }}>{unit}</span></div>
     </div>
   );
 }
@@ -1262,20 +1254,20 @@ export function EcuLabApp() {
               sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
             >
               <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <StatTile label="BEST PULL" value={bestScore} color={T.accInk} />
-                <StatTile label="CAREER TOTAL" value={totalScore} color={T.cyan} />
-                <StatTile label="PULLS" value={pullCount} color={T.ink} />
+                <StatTile label="BEST PULL" value={bestScore} tone="acc" />
+                <StatTile label="CAREER TOTAL" value={totalScore} tone="alt" />
+                <StatTile label="PULLS" value={pullCount} />
               </div>
               {result && scores ? (
                 <>
                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" color={T.accInk} />
-                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" color={T.cyan} />
+                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
+                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <StatTile label="PULL SCORE" value={scores.pull} color={T.accInk} />
-                    <StatTile label="TUNING" value={scores.tuning.score} color={statusColor(scores.tuning.score)} />
-                    <StatTile label="ENGINEER" value={scores.engineer.score} color={statusColor(scores.engineer.score)} />
+                    <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
+                    <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
+                    <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />
                   </div>
                 </>
               ) : <Note>No dyno pull logged yet — head to DYNO and run one.</Note>}
@@ -2014,8 +2006,8 @@ export function EcuLabApp() {
             {result && (
               <>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                  <StatTile label="PEAK WHP" value={result.peakHp} color={T.accInk} />
-                  <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" color={T.cyan} />
+                  <StatTile label="PEAK WHP" value={result.peakHp} tone="acc" />
+                  <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
                 </div>
 
                 {prevResult && !running && (() => {
