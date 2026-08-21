@@ -230,6 +230,53 @@ git commit -m "Use the Panel primitive, dropping styles that restated its own lo
 **Interfaces:**
 - Produces: `StatTile`'s `tone="alt"`; `statusTone(v)` exported from `src/ui/theme.js`.
 
+**Two defects in the primitive itself, found while planning. Fix these FIRST — migrating
+before you do would ship an accessibility regression on ten tiles.**
+
+Measured against `panel2` (`#1a2130`), the surface every StatTile sits on:
+
+| Element | Local copy | Primitive | Ratio | Needs |
+|---|---|---|---|---|
+| `.label` (~9.5px, **small text**) | `T.ink2` 5.14:1 | `--ink3` **2.87:1** | **FAILS AA** | 4.5:1 |
+| `.acc .value` (24px, large text) | `T.accInk` 8.69:1 | `--acc` 5.86:1 | passes | 3:1 |
+
+1. **`.label` must not use `--ink3`.** At 2.87:1 it fails WCAG AA for small text; the copy
+   it replaces passed at 5.14:1. Change `.label` to `var(--ink2)`. This is the same class
+   of defect PR 1's own review found when RUN DYNO PULL rendered at 1.14:1 — a token
+   chosen for hierarchy without checking it against the surface it lands on.
+
+2. **`.acc .value` should use `var(--acc-ink)`, not `var(--acc)`.** Every call site passes
+   `T.accInk` today. `accInk` is the readable-on-dark variant and exists for exactly this;
+   `--acc` is the interactive accent. Using it here both dims the figure (8.69 → 5.86)
+   and spends the interactive colour on something that is not interactive — the rule this
+   PR enforces, in its quieter form. Compare `Note`, which correctly uses `warnInk` for
+   text on a warn surface.
+
+Both are primitive-level fixes with primitive-level tests, and they belong here because
+this is the task that first puts `StatTile` on screen. Add a contrast assertion so neither
+can regress:
+
+```js
+it('keeps the label readable on the surface it sits on', () => {
+  // ~9.5px is small text: WCAG AA wants 4.5:1. This failed at 2.87:1 with --ink3,
+  // which is a hierarchy token, not a legibility one.
+  expect(Number(contrast(tokens.ink2, tokens.panel2))).toBeGreaterThanOrEqual(4.5);
+});
+```
+
+**There is no contrast helper in this repo** — I checked. PR 1's contrast findings, including
+the 1.14:1 one, were all caught by human review, which is exactly why this pair survived
+into a shipped primitive. Write a small one in the test file you are already editing:
+relative luminance per WCAG, then `(lighter + 0.05) / (darker + 0.05)`. Roughly fifteen
+lines.
+
+Keep it to the two pairs this task needs. Sweeping every token combination in the design
+system is a real and worthwhile job, but it is not this task — if you notice other failing
+pairs while you are in there, **report them rather than fixing them**, and they will be
+triaged.
+
+---
+
 All ten call sites pass a raw `color`. The primitive takes a semantic `tone` of `neutral|acc|ok|warn|danger`. Three of the ten cannot be expressed:
 
 ```
