@@ -55,31 +55,14 @@ import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
 import { ACTIONS } from './state/reducer.js';
-
-const Eyebrow = ({ children, icon: Icon }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-    <div style={{ width: 3, height: 13, background: T.acc, borderRadius: 2 }} />
-    {Icon && <Icon size={13} color={T.accInk} />}
-    <span style={{ fontSize: 10.5, letterSpacing: 1.6, color: T.accInk, textTransform: 'uppercase', fontWeight: 800 }}>{children}</span>
-  </div>
-);
+import { Eyebrow } from './primitives/Eyebrow.jsx';
+import { Note } from './primitives/Note.jsx';
 
 const Panel = ({ children, style, tight }) => (
   <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: tight ? '10px 12px' : 14, ...style }}>
     {children}
   </div>
 );
-
-const Note = ({ children, tone = 'info' }) => {
-  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.warn, T.warnLine, T.warnBg] };
-  const [fg, bd, bgc] = colors[tone] || colors.info;
-  return (
-    <div style={{ display: 'flex', gap: 9, background: bgc, border: `1px solid ${bd}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: fg === T.ink2 ? T.inkSoft : fg, lineHeight: 1.55 }}>
-      <Info size={15} style={{ flexShrink: 0, marginTop: 1, color: fg }} />
-      <div>{children}</div>
-    </div>
-  );
-};
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
