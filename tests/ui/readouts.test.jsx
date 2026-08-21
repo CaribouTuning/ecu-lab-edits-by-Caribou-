@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
+
 import { cleanup, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StatTile } from '../../src/ui/primitives/StatTile.jsx';
 import tileStyles from '../../src/ui/primitives/StatTile.module.css';
-import { tokens } from '../../src/ui/tokens.js';
+import { camelToKebab, tokens } from '../../src/ui/tokens.js';
 
 // This file's queries rely on `screen` being scoped to the current test's render;
 // without this, meters from earlier tests accumulate in the DOM and unscoped
@@ -30,6 +33,49 @@ function contrast(hexA, hexB) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+// Read the real stylesheet rather than trusting a value copied out of it by hand.
+// `tests/tokens.test.js` reads tokens.css the same way, for the same reason: a
+// hardcoded stand-in for a stylesheet value can drift from the stylesheet silently.
+// Under jsdom the global `URL` is jsdom's own, which `readFileSync` rejects, so this
+// uses node:url's URL explicitly.
+const tileCss = readFileSync(
+  new NodeURL('../../src/ui/primitives/StatTile.module.css', import.meta.url),
+  'utf8',
+);
+
+// tokens.js keyed by the CSS custom property name it declares (e.g. `accInk` ->
+// `acc-ink`), so a `var(--x)` pulled out of the stylesheet can be resolved to a hex
+// value without hardcoding the mapping a second time.
+const tokensByCssName = new Map(Object.entries(tokens).map(([name, value]) => [camelToKebab(name), value]));
+
+/**
+ * The custom-property name (without `--`) a declaration in StatTile.module.css
+ * resolves to, e.g. `customPropertyOf('.label', 'color')` -> `'ink2'`. Throws if the
+ * selector or declaration isn't found, so a typo here fails loudly instead of
+ * silently asserting against `undefined`.
+ */
+function customPropertyOf(selector, property) {
+  const escapedSelector = selector.replace(/[.[\]]/g, '\\$&');
+  const rule = tileCss.match(new RegExp(`${escapedSelector}\\s*{([^}]*)}`));
+  if (!rule) throw new Error(`no "${selector}" rule in StatTile.module.css`);
+  const decl = rule[1].match(new RegExp(`${property}\\s*:\\s*var\\(--([a-z0-9-]+)\\)`));
+  if (!decl) throw new Error(`no "${property}" declaration on "${selector}" in StatTile.module.css`);
+  return decl[1];
+}
+
+/** Resolves a custom-property name read from the stylesheet to its token hex value. */
+function tokenFor(cssName) {
+  const value = tokensByCssName.get(cssName);
+  if (!value) throw new Error(`--${cssName} is not a known token`);
+  return value;
+}
+
+// The surfaces these assertions measure against, read out of the stylesheet rather
+// than assumed: `.tile` is the element `.label` and `.acc .value` actually paint onto.
+const tileBg = tokenFor(customPropertyOf('.tile', 'background'));
+const labelColor = tokenFor(customPropertyOf('.label', 'color'));
+const accValueColor = tokenFor(customPropertyOf('.acc .value', 'color'));
+
 describe('StatTile', () => {
   it('renders label, value and unit', () => {
     render(<StatTile label="PEAK HP" value={412} unit="whp" />);
@@ -51,25 +97,29 @@ describe('StatTile', () => {
   it('gives the alt tone its own class, distinct from the partner it sits beside', () => {
     // `alt` marks the second quantity in a paired readout — torque beside power. If it
     // resolved to the same colour as its partner the pairing would be invisible, which
-    // is the whole reason the tone exists.
+    // is the whole reason the tone exists. A class-name check alone can't catch that:
+    // two differently-named classes can still be styled to the same colour. Compare
+    // the custom properties the stylesheet actually assigns instead.
     const { container } = render(<StatTile label="PEAK TQ" value={300} tone="alt" />);
     expect(container.querySelector(`.${tileStyles.alt}`)).toBeTruthy();
     expect(container.querySelector(`.${tileStyles.acc}`)).toBeNull();
+    expect(customPropertyOf('.alt .value', 'color')).not.toBe(customPropertyOf('.acc .value', 'color'));
   });
 
   it('keeps the label readable on the surface it sits on', () => {
-    // ~9.5px is small text: WCAG AA wants 4.5:1. This failed at 2.87:1 with --ink3,
-    // which is a hierarchy token, not a legibility one.
-    expect(Number(contrast(tokens.ink2, tokens.panel2))).toBeGreaterThanOrEqual(4.5);
+    // ~9.5px is small text: WCAG AA wants 4.5:1. This failed at 3.17:1 when `.label`
+    // used --ink3, a hierarchy token, not a legibility one; --ink2 clears 5.67:1.
+    // Measured against the property `.label` actually sets and the background `.tile`
+    // actually paints, both read out of the stylesheet above, not asserted by name.
+    expect(contrast(labelColor, tileBg)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('keeps the acc value at the brightness every call site already relied on', () => {
-    // Every acc call site passes T.accInk today. --acc alone only clears 5.86:1 —
-    // still AA for 24px large text, but a needless dim from the 8.69:1 callers expect,
-    // and it spends the interactive accent on something that isn't interactive.
-    expect(Number(contrast(tokens.accInk, tokens.panel2))).toBeGreaterThanOrEqual(
-      Number(contrast(tokens.acc, tokens.panel2)),
-    );
+  it('keeps the acc value readable on the surface it sits on', () => {
+    // `.value` renders at --fs-lg (18px) and font-weight 800 — WCAG "large text",
+    // which AA holds to 3:1 rather than 4.5:1. --acc alone clears 6.46:1; --acc-ink,
+    // what `.acc .value` actually sets, clears 9.57:1 — comfortably past the bar,
+    // and read from the stylesheet rather than assumed.
+    expect(contrast(accValueColor, tileBg)).toBeGreaterThanOrEqual(3);
   });
 });
 

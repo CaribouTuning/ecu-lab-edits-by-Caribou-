@@ -52,21 +52,22 @@ const T = {
   sans: tokens.sans,
 };
 
-/** Maps a 0-100 health/quality value onto the green/amber/red status scale. */
-export const statusColor = (v) => (v >= 90 ? T.ok : v >= 55 ? T.warn : T.danger);
-
 /**
- * The NAME of the band `statusColor` paints, for consumers that take a semantic tone
- * rather than a colour — `StatTile`, and anything else with a token-driven variant.
+ * The NAME of the band a 0-100 health/quality value falls into, for consumers that
+ * take a semantic tone rather than a colour — `StatTile`, and anything else with a
+ * token-driven variant.
  *
- * Derived from the same comparison as `statusColor` rather than repeating its
- * thresholds, because two copies of a band drift apart and then disagree about
- * whether the same number is a warning.
+ * The single source of truth for where the bands sit. `statusColor` below maps this
+ * tone onto a colour rather than repeating the thresholds, because two copies of a
+ * band drift apart and then disagree about whether the same number is a warning.
  *
  * @param {number} v 0-100
  * @returns {'ok'|'warn'|'danger'}
  */
 export const statusTone = (v) => (v >= 90 ? 'ok' : v >= 55 ? 'warn' : 'danger');
+
+/** Maps a 0-100 health/quality value onto the green/amber/red status scale. */
+export const statusColor = (v) => T[statusTone(v)];
 
 /**
  * Status colour for a value where HIGH is the dangerous end: injector duty cycle,
