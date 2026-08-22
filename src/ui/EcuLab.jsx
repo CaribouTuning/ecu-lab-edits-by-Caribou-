@@ -1431,10 +1431,10 @@ export function EcuLabApp() {
                     {/* The one `danger` in the app. This prompt is raised ONLY when
                         `hasTuningWork()` is true, so confirming it always destroys
                         hand-edited VE/spark/fuel tables that nothing can restore. */}
-                    <Button variant="danger" size="sm" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
+                    <Button variant="danger" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
                       LOAD {presetPrompt.name.toUpperCase()}
                     </Button>
-                    <Button variant="ghost" size="sm" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })}>
+                    <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })}>
                       CANCEL
                     </Button>
                   </div>
