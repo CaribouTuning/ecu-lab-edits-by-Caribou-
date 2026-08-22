@@ -186,7 +186,7 @@ function DialMark({ size = 64, pct = 0.62, live = false }) {
           <line key={i}
             x1={50 + inner * Math.sin(a)} y1={50 - inner * Math.cos(a)}
             x2={50 + outer * Math.sin(a)} y2={50 - outer * Math.cos(a)}
-            stroke={i > 9 ? T.danger : T.line === T.line ? T.ink3 : T.line} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
+            stroke={i > 9 ? T.danger : T.ink3} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
         );
       })}
       <g style={{ transition: live ? 'none' : 'transform .6s cubic-bezier(.34,1.4,.64,1)' }} transform={`rotate(${angle} 50 50)`}>
@@ -217,8 +217,11 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
         {Array.from({ length: cylinders }).map((_, i) => (
           <div key={i} style={{
             width: 8, height: 24, borderRadius: 2, background: zoneColor,
-            animation: running ? `cylpulse ${Math.max(0.12, 50 / Math.max(rpm, 500))}s ease-in-out infinite` : 'none',
-            animationDelay: `${i * (0.5 / cylinders)}s`, opacity: running ? undefined : 0.3,
+            // Duration then delay, both inside the shorthand: `animation` resets
+            // `animation-delay`, so declaring the longhand beside it left the
+            // per-cylinder stagger dependent on property order.
+            animation: running ? `cylpulse ${Math.max(0.12, 50 / Math.max(rpm, 500))}s ${i * (0.5 / cylinders)}s ease-in-out infinite` : 'none',
+            opacity: running ? undefined : 0.3,
           }} />
         ))}
       </div>
