@@ -41,6 +41,7 @@
  */
 
 
+import { ExhaustProcessor, PROCESSOR_NAME } from './exhaustProcessor.js';
 import EXHAUST_PROCESSOR_SOURCE from './exhaustProcessor.js?raw';
 
 /**
@@ -71,13 +72,12 @@ const VOICING = {
 /**
  * Make-up gain after the limiter, before the brickwall.
  *
- * Modest, because the waveguide is already calibrated: `PA_TO_UNIT` in the processor sets
- * full scale from the model's own pascals, and a 6.2 litre V8 on an open 3" system peaks
- * around 0.6 there. The old chain needed 2.4 because its source was a normalised buffer
- * with no absolute level of its own; this one has one, so anything much above unity here
- * is just feeding the limiter, and the limiter is not the sound.
+ * Set with the leveller above rather than against it: the compressor pulls a 20 dB range
+ * down to about 10, and this puts what is left where it can be heard — idle around
+ * -12 dBFS peak and the loudest build just under full scale. The brickwall after it
+ * catches whatever the slow attack lets through.
  */
-const MAKEUP_GAIN = 1.15;
+const MAKEUP_GAIN = 3.0;
 
 /**
  * How much turbulence the model injects at the valve seat, as a multiplier on the flow
@@ -106,6 +106,96 @@ const EFFECT_TRIM = 0.45;
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
+ * Block size for the main-thread fallback below.
+ *
+ * 1024 samples is 23 ms, which is short enough that a throttle blip does not feel late and
+ * long enough to survive an ordinary React render without the buffer running dry.
+ */
+const FALLBACK_BLOCK = 1024;
+
+/**
+ * Creates the node the exhaust model runs in, whichever way this browser allows.
+ *
+ * AN AUDIOWORKLET IS THE RIGHT PLACE FOR THIS and it is tried first: the audio thread, at
+ * sample resolution, immune to whatever the UI is doing. But a worklet module has to be
+ * fetched from a URL, and this app also ships as a single inlined HTML page served under a
+ * strict content-security policy. Measured there, `addModule` rejects with AbortError for
+ * a `blob:` URL AND for a `data:` one — so the exhaust never loaded and the app was
+ * completely silent, while the same build served from a dev server was fine. That is a bad
+ * failure to have: silent, browser-dependent, and invisible to every test that runs the
+ * DSP directly.
+ *
+ * So there is a second path. The processor is a plain class, so on failure it is
+ * instantiated on the main thread and driven from a ScriptProcessorNode, which needs no
+ * module loading and is refused by nothing. Same code, same coefficients, same output; it
+ * costs main-thread time and can glitch under heavy layout, which is the price of working
+ * everywhere. The shim below gives it the two things it expects from Web Audio — a port to
+ * receive geometry on, and parameters that smooth — so nothing above this line knows or
+ * cares which one it got.
+ *
+ * @param {AudioContext} ctx
+ * @param {(node: any) => void} ready called with the node once it exists
+ */
+function createExhaustNode(ctx, ready) {
+  const fallback = () => {
+    let processor;
+    try {
+      processor = new ExhaustProcessor({ processorOptions: { sampleRate: ctx.sampleRate } });
+    } catch { return; }
+    const node = ctx.createScriptProcessor(FALLBACK_BLOCK, 0, 2);
+    /** One audio parameter, smoothed the way `setTargetAtTime` smooths. */
+    const param = (value) => {
+      const p = {
+        value,
+        target: value,
+        coeff: 0,
+        setTargetAtTime(v, _t, tau) {
+          p.target = v;
+          p.coeff = Math.exp(-FALLBACK_BLOCK / (ctx.sampleRate * Math.max(1e-3, tau)));
+        },
+        setValueAtTime(v) { p.target = v; p.value = v; p.coeff = 0; },
+        cancelScheduledValues() { p.target = p.value; p.coeff = 0; },
+        step() { p.value = p.target + (p.value - p.target) * p.coeff; return p.value; },
+      };
+      return p;
+    };
+    /** @type {Record<string, any>} */
+    const params = {};
+    for (const d of ExhaustProcessor.parameterDescriptors) params[d.name] = param(d.defaultValue);
+    /** @type {Record<string, Float32Array>} */
+    const view = {};
+    for (const name of Object.keys(params)) view[name] = new Float32Array(1);
+    node.onaudioprocess = (e) => {
+      for (const name of Object.keys(params)) view[name][0] = params[name].step();
+      processor.process([], [[e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1)]], view);
+    };
+    // A ScriptProcessorNode only runs while it is connected to something, so it is wired
+    // up here and the caller connects it onward.
+    ready({
+      port: { postMessage: (data) => processor.port.onmessage?.({ data }) },
+      parameters: { get: (name) => params[name] },
+      connect: (dest) => node.connect(dest),
+      disconnect: () => node.disconnect(),
+    });
+  };
+
+  if (!ctx.audioWorklet) { fallback(); return; }
+  let url;
+  try {
+    url = URL.createObjectURL(new Blob([EXHAUST_PROCESSOR_SOURCE], { type: 'text/javascript' }));
+  } catch { fallback(); return; }
+  ctx.audioWorklet.addModule(url).then(() => {
+    URL.revokeObjectURL(url);
+    ready(new AudioWorkletNode(ctx, PROCESSOR_NAME, {
+      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
+    }));
+  }).catch(() => {
+    URL.revokeObjectURL(url);
+    fallback();
+  });
+}
+
+/**
  * Builds the whole audio graph. Call once; it stays alive for the session.
  *
  * The graph holds no opinion about engine geometry at all: the firing order arrives per
@@ -119,12 +209,24 @@ export function createEngineAudio(ctx) {
   // A SAFETY NET, NOT A SOUND. It is set to catch the top few decibels of the loudest
   // pulses and nothing else — see MASTER_TRIM for why it used to be doing far more than
   // that, and why an engine cannot survive it.
+  // A LEVELLER, NOT A LIMITER, and the distinction is the whole reason it is safe.
+  //
+  // The exhaust model's own dynamic range from idle to redline is about 20 dB, which is
+  // real and correct — but it means that calibrating the loud end leaves idle at -21 dBFS,
+  // and on a phone that is inaudible. Measured, that is exactly what a player got.
+  //
+  // The fix is not more gain: it is the same thing a recording chain does, which is to
+  // compress the ENVELOPE and leave the transients alone. The attack is eighty
+  // milliseconds — far slower than the five between firing events at 3000 rpm — so
+  // individual pulses pass through untouched and only the running level is pulled up.
+  // A fast attack here is what flattens an engine into a slab; a slow one is what makes a
+  // quiet one audible without doing that.
   const limiter = ctx.createDynamicsCompressor();
-  limiter.threshold.value = -3;
-  limiter.knee.value = 3;
+  limiter.threshold.value = -20;
+  limiter.knee.value = 12;
   limiter.ratio.value = 4;
-  limiter.attack.value = 0.002;
-  limiter.release.value = 0.15;
+  limiter.attack.value = 0.08;
+  limiter.release.value = 0.4;
   const outGain = ctx.createGain(); outGain.gain.value = MAKEUP_GAIN;
 
   // A brickwall after the make-up gain. The limiter is a compressor, so a fast enough
@@ -243,32 +345,20 @@ export function createEngineAudio(ctx) {
   // THE EXHAUST ITSELF, which is the whole note and is not built out of any of the above.
   //
   // It runs a one-dimensional acoustic model of a real exhaust system at audio rate — see
-  // `exhaustProcessor.js` — so it has to live in an AudioWorklet, on the audio thread, at
-  // sample resolution. A scattering junction cannot be built out of Web Audio nodes: any
-  // cycle through the graph costs a whole render block, and a collector is nothing but a
-  // cycle.
-  //
-  // Loading a worklet is asynchronous and the graph must exist before it finishes, so the
-  // node arrives later and everything else is already wired and working when it does. The
-  // module is passed as a Blob rather than a URL because this app also ships as a single
-  // inlined HTML file, where there is no second file to fetch.
+  // `exhaustProcessor.js`. A scattering junction cannot be built out of Web Audio nodes:
+  // any cycle through the graph costs a whole render block, and a collector is nothing but
+  // a cycle. So the model runs as sample-rate code, either in an AudioWorklet or, where
+  // one cannot be loaded, on the main thread. See `createExhaustNode`.
   const graph = {};
   graph.exhaust = null;
   graph.exhaustGain = ctx.createGain();
   graph.exhaustGain.gain.value = 1;
   graph.exhaustGain.connect(master);
-  if (ctx.audioWorklet) {
-    const url = URL.createObjectURL(new Blob([EXHAUST_PROCESSOR_SOURCE], { type: 'text/javascript' }));
-    ctx.audioWorklet.addModule(url).then(() => {
-      URL.revokeObjectURL(url);
-      const node = new AudioWorkletNode(ctx, 'exhaust-waveguide', {
-        numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
-      });
-      node.connect(graph.exhaustGain);
-      graph.exhaust = node;
-      if (graph.pendingGeometry) node.port.postMessage(graph.pendingGeometry);
-    }).catch(() => { URL.revokeObjectURL(url); });
-  }
+  createExhaustNode(ctx, (node) => {
+    node.connect(graph.exhaustGain);
+    graph.exhaust = node;
+    if (graph.pendingGeometry) node.port.postMessage(graph.pendingGeometry);
+  });
 
   return Object.assign(graph, {
     ctx, limiter, outGain, softClip, master,
