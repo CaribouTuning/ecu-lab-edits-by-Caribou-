@@ -30,7 +30,7 @@ import {
   R_AIR, RPM, SIXTY_FEET_M, SPARK_MAX_DEG, SPARK_MIN_DEG, TIRE_GRIP, TURBINE_OPTS,
   acousticDrive, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore, deriveEngine,
-  firingEvents, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById, roadSpeedMs,
+  idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById, roadSpeedMs,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import {
@@ -1225,7 +1225,7 @@ export default function EngineManagementSandbox() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     try {
-      audioRef.current = createEngineAudio(new Ctx(), firingEvents);
+      audioRef.current = createEngineAudio(new Ctx());
       return audioRef.current;
     } catch { return null; }
   };

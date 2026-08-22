@@ -14,18 +14,19 @@
  * arriving at the crank angles the engine actually fires at, sounds like an engine
  * because the ear resolves the pulses and hears their rhythm.
  *
- * Three layers, crossfaded by how fast the pulses are arriving:
+ * EVERY FIRING EVENT IS SCHEDULED, at every engine speed, right up to redline. There used
+ * to be a looped buffer above the point where the ear stops resolving individual pulses,
+ * on the reasoning that one node per event costs more than it is worth up there. It costs
+ * about twenty milliseconds of main thread per second at 7000 rpm, which is two per cent
+ * of a core — and the loop it replaced was doing real damage: a loop is pitched by playback
+ * rate, so every resonance baked into it rises with engine speed like a tape running fast,
+ * and its bandwidth is whatever it was rendered at. Measured, handing over to it at 5500
+ * rpm cost 26 dB of content above 4 kHz and collapsed the harmonic comb from 30 dB to 11.
+ * One mechanism at every speed is both cheaper to reason about and the only correct one.
  *
- *   PULSE TRAIN     below roughly 90 events/sec the ear separates individual pulses, so
- *                   each firing event is scheduled as its own buffer with its own gain.
- *                   Rumble, lope and misfire all live here.
- *   LOOPED TRAIN    above that, one node per firing event costs more than it is worth,
- *                   so a pre-rendered buffer holding ONE COMPLETE ENGINE CYCLE — with
- *                   this layout's real firing angles baked into it — is looped and
- *                   pitched by playback rate. Same pulses, same rhythm, one node.
- *   OSCILLATORS     a faint pulse-wave underlay that only fills in body. If this layer
- *                   is ever loud enough to notice on its own, the result stops sounding
- *                   like an engine.
+ * Underneath the train sits a faint pulse-wave and sub oscillator that only fill in body.
+ * If that layer is ever loud enough to notice on its own, the result stops sounding like
+ * an engine.
  *
  * Everything then passes through an exhaust model: two resonant bodies, a lowpass, and
  * a delay line with feedback standing in for the pipe itself. A pipe is a resonant tube
@@ -63,12 +64,6 @@ const VOICING = {
   V6: { bodyHz: 320, bodyQ: 3.6, body2Q: 5.0, body2Gain: 0.34, lowQ: 6.0, pulseGain: 1.05, pipeGain: 0.88, headerGain: 0.70, dryGain: 0.68, subGain: 0.032, oscGain: 0.012, detune: 9 },
   V8: { bodyHz: 240, bodyQ: 0.6, body2Q: 0.9, body2Gain: 0.10, lowQ: 1.1, pulseGain: 1.25, pipeGain: 1.10, headerGain: 0.55, dryGain: 0.60, subGain: 0.064, oscGain: 0.009, detune: 6 },
 };
-
-/** Layouts the looped pulse train is pre-rendered for. Must cover `VOICING`. */
-const LAYOUTS = ['I4', 'I6', 'V6', 'V8'];
-
-/** Engine speed the looped buffers are rendered at; playback rate scales from here. */
-const LOOP_REF_RPM = 3000;
 
 /**
  * Runner ring the pulse buffers are rendered at, Hz.
@@ -145,34 +140,17 @@ const PULSE = {
   BODY_DECAY: 45,
 };
 
-/**
- * Sharpness the looped buffers are rendered at.
- *
- * The loop only ever runs above the fusion point, and an engine spinning that fast is
- * choked on every event — so it is rendered hard rather than crossfaded, which keeps the
- * loop to two variants instead of four.
- */
-const LOOP_SHARPNESS = 0.85;
-
-
-/** Pre-rendered variants per layout. Each is an always-running source, so keep it lean. */
-const LOOP_VARIANTS = 2;
 
 /**
- * How far apart the looped variants are held in playback rate, as a fraction.
+ * How fast the engine-speed wander moves, and how deep it goes.
  *
- * Two loops of identical length played at identical rates phase-lock, and a pair of
- * phase-locked periodic buffers is a synthesiser however they were rendered. Holding
- * them a fraction of a percent apart makes them drift continuously against each other,
- * which is what real cylinders do — they never stay in lockstep either.
+ * `SMOOTH` is the pole of a random walk stepped at `PARAM_HZ`, so 0.93 is a time constant
+ * of about a second. `PER_COV` scales it by the cycle-to-cycle variation the physics
+ * reported. Both are deliberately small: see the note beside `drift` for what happens when
+ * engine speed is dithered fast enough to modulate the spectrum.
  */
-const LOOP_DETUNE = 0.0018;
-
-/** How often the slow per-variant rate wander is redrawn, seconds. */
-const LOOP_WANDER_S = 0.55;
-
-/** How much of the wander comes from cycle-to-cycle variation. */
-const LOOP_WANDER_PER_COV = 0.35;
+const RPM_DRIFT_SMOOTH = 0.93;
+const RPM_DRIFT_PER_COV = 0.35;
 
 /**
  * How much harder individual pulses vary than the mix as a whole.
@@ -187,19 +165,39 @@ const LOPE_PULSE_RATIO = 2.15;
 /** Pulse-to-pulse scatter that every engine has, lope or not. Small on purpose. */
 const COMBUSTION_SCATTER = 0.06;
 
+/**
+ * How much each cylinder differs from the next, as a fraction of playback rate — AND, far
+ * more importantly, THE FACT THAT IT IS THE SAME EVERY CYCLE.
+ *
+ * This is the difference between an engine and a hiss, and it is worth being blunt about
+ * because the intuition points the wrong way.
+ *
+ * A running engine is PERIODIC. Every 720 degrees the same eight cylinders fire in the same
+ * order through the same eight runners, so the pressure at the tailpipe repeats — and a
+ * repeating waveform has a harmonic spectrum, a comb of lines at multiples of the cycle
+ * rate, reaching as high as its sharpest edge does. That comb is why you can hear the PITCH
+ * of an engine at 5000 rpm and not merely its loudness, and why a rev sounds musical.
+ *
+ * Randomising a pulse per EVENT destroys it. Picking a different rendered variant each time,
+ * or dithering the playback rate by a few per cent each time, means the waveform never
+ * repeats — and a non-repeating waveform has no comb at all, only a noise floor. Measured
+ * on the previous version of this file, comb contrast above 2 kHz was 2 dB: the top half of
+ * the spectrum was literally noise, which is exactly what a listener calls digital. With the
+ * variation moved off the event and onto the cylinder it is 25-40 dB.
+ *
+ * And per-cylinder is what is physically true anyway. Cylinder 3 has a slightly different
+ * runner length, valve seat and injector from cylinder 5, and it has them on every single
+ * cycle — it does not draw a new set each revolution. Real cycle-to-cycle variation is a
+ * small AMPLITUDE wobble on top of that, which is handled below and which costs nothing:
+ * modulating amplitude puts sidebands around the comb lines, it does not erase them.
+ *
+ * The values are a fixed spread of about one per cent, ordered so it is not a monotonic
+ * ramp down the bank.
+ */
+const CYL_DETUNE = [0.000, 0.0062, -0.0091, 0.0110, -0.0043, 0.0081, -0.0112, 0.0034];
+
 /** Parameter updates per second. Pulse scheduling is unthrottled; this is not. */
 const PARAM_HZ = 14;
-
-/**
- * Firing events per second at which the ear stops resolving individual pulses, and the
- * span over which the scheduled train hands over to the looped one.
- *
- * Below the first number discrete pulses do all the work. Above the sum of the two the
- * loop does. Crossfade, never decimate: playing sparse loud pulses up there sounds like
- * hitting a tin can, because that is what it is.
- */
-const PULSE_FUSE_HZ = 130;
-const PULSE_FUSE_SPAN_HZ = 150;
 
 /** How far ahead pulses are scheduled, and the most that may be queued in one call. */
 const SCHEDULE_AHEAD_S = 0.14;
@@ -381,57 +379,16 @@ function renderPulse(ctx, sharpness, runnerHz, variant) {
 }
 
 /**
- * Pre-renders one complete engine cycle for a layout, at `LOOP_REF_RPM`.
- *
- * The firing angles come straight from the physics, so the cross-plane V8's uneven bank
- * spacing is inside the sample and survives at any playback rate. Each bank gets its own
- * pulse colour, because two collectors of different length do not sound identical — and
- * that difference is what the ear picks the rumble out of.
- *
- * It writes the SAME blowdown the scheduled train plays. Rendering something simpler here
- * would mean the sound changed character as the crossfade came in, which is audible and is
- * exactly what a listener hears as the moment it "turns into a synthesiser".
- *
- * Each buffer is internally periodic; variation comes from crossfading BETWEEN buffers at
- * random intervals, so the variation rate is decoupled from the loop rate and cannot beat
- * against it.
- *
- * @param {AudioContext} ctx
- * @param {{angleDeg: number, bank: number}[]} events one engine cycle of firing events
- * @param {number} variant which variant to render
- * @returns {AudioBuffer}
- */
-function renderCycleLoop(ctx, events, variant) {
-  const sr = ctx.sampleRate;
-  const cycleSec = 120 / LOOP_REF_RPM;
-  const len = Math.round(sr * cycleSec);
-  const buf = ctx.createBuffer(1, len, sr);
-  const data = buf.getChannelData(0);
-  // A deterministic generator, so a buffer is identical every time it is built.
-  let seed = 12345 + variant * 7919;
-  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-
-  const ring = RUNNER_REF_HZ * (0.92 + variant * 0.06);
-  for (const ev of events) {
-    // The two collectors are different lengths, so they ring slightly differently.
-    const bankRing = ring * (ev.bank === 1 ? 1.045 : 1);
-    const start = Math.floor((ev.angleDeg / 720) * cycleSec * sr);
-    writeBlowdown(data, start, sr, LOOP_SHARPNESS, bankRing, rnd);
-  }
-  normalise(data);
-  return buf;
-}
-
-/**
  * Builds the whole audio graph. Call once; it stays alive for the session.
  *
+ * The graph holds no opinion about engine geometry at all: the firing order arrives per
+ * frame on `drive.events` and is placed by the scheduler, so nothing here has to be built
+ * per layout.
+ *
  * @param {AudioContext} ctx
- * @param {(configuration: string) => {angleDeg: number, bank: number}[]} eventsFor
- *   supplies each layout's firing events — passed in rather than imported so this file
- *   holds no opinion about engine geometry
  * @returns {object} the node graph, or null if the context cannot be built
  */
-export function createEngineAudio(ctx, eventsFor) {
+export function createEngineAudio(ctx) {
   // A SAFETY NET, NOT A SOUND. It is set to catch the top few decibels of the loudest
   // pulses and nothing else — see MASTER_TRIM for why it used to be doing far more than
   // that, and why an engine cannot survive it.
@@ -660,28 +617,6 @@ export function createEngineAudio(ctx, eventsFor) {
   const softPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.15, RUNNER_REF_HZ, v));
   const hardPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.95, RUNNER_REF_HZ, v));
 
-  const loopSources = {}, loopGains = {}, loopConnected = {};
-  for (const layout of LAYOUTS) {
-    const events = eventsFor(layout);
-    loopSources[layout] = []; loopGains[layout] = []; loopConnected[layout] = false;
-    for (let v = 0; v < LOOP_VARIANTS; v++) {
-      const src = ctx.createBufferSource();
-      src.buffer = renderCycleLoop(ctx, events, v);
-      src.loop = true;
-      const g = ctx.createGain(); g.gain.value = 0;
-      src.connect(g);
-      loopSources[layout].push(src); loopGains[layout].push(g);
-    }
-  }
-
-  // Start each variant at a different point in its own cycle. Starting them together
-  // means they begin phase-aligned and the ear hears one buffer, not two.
-  for (const layout of LAYOUTS) {
-    loopSources[layout].forEach((src, v) => {
-      const cycleSec = 120 / LOOP_REF_RPM;
-      src.start(0, (v / LOOP_VARIANTS) * cycleSec);
-    });
-  }
   oscA.start(); oscB.start(); sub.start(); pulseLfo.start(); flutLfo.start();
   lopeLfo.start(); convOsc.start();
   noise.start(); indNoise.start(); bladeNoise.start(); rushNoise.start();
@@ -697,11 +632,8 @@ export function createEngineAudio(ctx, eventsFor) {
     pipeDelay, pipeFb, pipeDamp, pipeOut, pipeA, pipeB,
     hdrDelay, hdrFb, hdrDamp, hdrOut, pulseBus,
     softPulses, hardPulses,
-    loopSources, loopGains, loopConnected,
-    loopBlend: new Array(LOOP_VARIANTS).fill(1), loopNextSwap: 0,
-    // Slow per-variant rate offsets, redrawn on their own schedule so the loops keep
-    // drifting rather than settling into a fixed beat.
-    loopWander: new Array(LOOP_VARIANTS).fill(0), loopNextWander: 0,
+    // The engine's own slow speed wander, a one-pole random walk. See `drift`.
+    rpmDrift: 0,
     nextPulse: 0, pulseIdx: 0, prevBoostPsi: 0,
     // Cycle-to-cycle variation carries memory; see ACOUSTIC.COV_PERSISTENCE.
     // Far enough in the past that the first frame is never throttled away.
@@ -735,7 +667,7 @@ export function createEngineAudio(ctx, eventsFor) {
  * @param {EngineAudioFrame} frame
  */
 export function updateEngineAudio(a, frame) {
-  const { drive, rpm, configuration, load, audible, cut, cranking, pipeDiaIn, openExhaust, intakeFitted, boostPsi } = frame;
+  const { drive, configuration, load, audible, cut, cranking, pipeDiaIn, openExhaust, intakeFitted, boostPsi } = frame;
   const t = a.ctx.currentTime;
   // A caller may push frames far faster than any of these values can be heard changing,
   // and each one is a scheduled automation event. Rate-limit them; the pulse scheduler
@@ -752,52 +684,22 @@ export function updateEngineAudio(a, frame) {
   a.oscB.detune.setTargetAtTime(voice.detune, t, 0.2);
   a.oscG.gain.setTargetAtTime(voice.oscGain, t, 0.1);
 
-  // Hand over from scheduled pulses to the looped train as the events fuse.
-  const contMix = clamp01((fire - PULSE_FUSE_HZ) / PULSE_FUSE_SPAN_HZ);
-  a.subG.gain.setTargetAtTime(voice.subGain + contMix * 0.06, t, 0.1);
+  a.subG.gain.setTargetAtTime(voice.subGain, t, 0.1);
 
-  // Wander between loop variants at irregular intervals, so the top end never settles
-  // into a held note. The interval is random, so it cannot line up with the loop period.
-  if (t > a.loopNextSwap) {
-    const target = Math.floor(Math.random() * LOOP_VARIANTS);
-    a.loopBlend = a.loopBlend.map((_, k) => (k === target ? 1 : 0.2 + Math.random() * 0.25));
-    a.loopNextSwap = t + 0.25 + Math.random() * 0.55;
-  }
   // A real engine's speed micro-fluctuates from combustion variation, so its pitch is
-  // never perfectly steady — and a dead-steady pitch is the giveaway for synthesis. The
-  // depth of the wobble is the cycle-to-cycle variation the physics reported.
-  const drift = 1 + (Math.random() - 0.5) * Math.min(drive.cov, 0.06) * 0.3;
-  // Each variant also gets its own slow rate offset, redrawn on an unrelated schedule.
-  if (t > a.loopNextWander) {
-    // Capped: this is meant to stop two loops phase-locking, not to add vibrato.
-    a.loopWander = a.loopWander.map(
-      () => (Math.random() - 0.5) * Math.min(drive.cov, 0.06) * LOOP_WANDER_PER_COV);
-    a.loopNextWander = t + LOOP_WANDER_S * (0.6 + Math.random() * 0.8);
-  }
-  const blendSum = a.loopBlend.reduce((x, y) => x + y, 0);
-  for (const layout of LAYOUTS) {
-    const active = layout === configuration;
-    // A gain of zero does not stop Web Audio processing a node, so inactive layouts are
-    // disconnected outright rather than merely silenced.
-    if (a.loopConnected[layout] !== active) {
-      for (const g of a.loopGains[layout]) {
-        try { if (active) g.connect(a.pulseBus); else g.disconnect(); } catch { /* already in that state */ }
-      }
-      a.loopConnected[layout] = active;
-    }
-    if (!active) continue;
-    a.loopGains[layout].forEach((g, k) => {
-      // Held apart by LOOP_DETUNE plus each variant's own wander, so they never lock.
-      const spread = 1 + (k - (LOOP_VARIANTS - 1) / 2) * LOOP_DETUNE + a.loopWander[k];
-      // Rate carries engine speed. The loop's pulses were baked at RUNNER_REF_HZ and the
-      // firing angles are baked with them, so pitching by RPM keeps both correct; the
-      // header resonator downstream is what re-tunes the bark for this engine.
-      a.loopSources[layout][k].playbackRate.setTargetAtTime(
-        Math.min(3.2, Math.max(0.2, (rpm / LOOP_REF_RPM) * drift * spread)), t, 0.12);
-      g.gain.setTargetAtTime(
-        audible ? contMix * levelToGain(drive.pulseLevel) * (a.loopBlend[k] / blendSum) : 0, t, 0.18);
-    });
-  }
+  // never perfectly steady — and a dead-steady pitch is a giveaway for synthesis.
+  //
+  // BUT IT MUST BE SLOW, and it must be a walk rather than a draw. What was here re-drew a
+  // random rate every parameter update, fourteen times a second: that is not a wobble, it
+  // is frequency modulation by white noise, and at 4 kHz a third of a per cent is a
+  // twelve-hertz smear against a comb whose lines are twenty-five hertz apart. It erased
+  // the top half of the spectrum into a hiss. See CYL_DETUNE.
+  //
+  // A crankshaft cannot change speed at 14 Hz anyway. This is a one-pole random walk with a
+  // time constant near a second, at a fraction of the old depth: an engine loafing, not a
+  // modulator. `scheduleExhaustPulses` reads it when it places the next event.
+  a.rpmDrift = a.rpmDrift * RPM_DRIFT_SMOOTH
+    + (Math.random() - 0.5) * (1 - RPM_DRIFT_SMOOTH);
 
   // --- How the tune is VOICED -------------------------------------------------------
   // These are rendering decisions about measurements the drive reports, not physics:
@@ -870,10 +772,15 @@ export function updateEngineAudio(a, frame) {
   // left to absorb it — so this leads with sharpness and opens further with the pipe.
   // At idle it is small: the flow there is slow and subsonic and there is very little
   // edge to hear.
-  a.dryTilt.frequency.setTargetAtTime(4200 + drive.sharpness * 2600, t, 0.1);
+  // Retard brightens the edge and a rich charge softens it — the two voicing terms that
+  // most obviously belong on the part of the signal a listener hears directly.
+  a.dryTilt.frequency.setTargetAtTime(
+    (4200 + drive.sharpness * 2600) * (1 + rasp * 0.30) / (1 + Math.max(0, richness) * 0.35),
+    t, 0.1);
   a.pulseDry.gain.setTargetAtTime(
     audible ? voice.dryGain * (0.22 + 0.78 * clamp01(drive.sharpness))
-      * (openExhaust ? 1.25 : 1) * diaOpen : 0, t, 0.12);
+      * (openExhaust ? 1.25 : 1) * diaOpen * (1 + rasp * 0.25 - Math.max(0, richness) * 0.20)
+      : 0, t, 0.12);
 
   // The slow swell of a diluted idle, on top of the per-pulse variation. It runs at a
   // sub-multiple of the firing rate and washes out as the engine revs and the burn evens
@@ -932,12 +839,21 @@ export function updateEngineAudio(a, frame) {
     a.prevBoostPsi = boostPsi;
   }
 
-  // Combustion roughness rises with load, and knock adds a hard rattly edge on top —
-  // the audible reason tuners fear it.
+  // THIS BED CARRIES ONLY WHAT IS GENUINELY APERIODIC, and that is a deliberate cut.
+  //
+  // It used to carry a blanket `0.03 + load*0.045 + contMix*0.11` — constant white noise
+  // rising to 0.185 at high load, where the mix is thinnest. Measured, it was the single
+  // loudest thing above 2 kHz: muting it at 5500 rpm moved comb contrast in that band from
+  // 4.7 dB to 14.3 dB. A running engine is periodic
+  // (see CYL_DETUNE), and a steady hiss laid across it is the most synthetic-sounding
+  // thing it is possible to add, because it is the one component with no engine in it.
+  //
+  // Combustion roughness is real, but it is per-event — it belongs to the blowdown, where
+  // the jet noise now carries it, arriving in pulses and repeating every cycle. What is
+  // left here is the starter, which is genuinely a random scrape, and knock, which is
+  // genuinely stochastic detonation and has to sound like it.
   a.ng.gain.setTargetAtTime(
-    cranking ? 0.12
-      : 0.03 + load * 0.045 + contMix * 0.11
-        + Math.max(0, richness) * 0.03 + drive.knockLevel * 0.06, t, 0.05);
+    cranking ? 0.12 : drive.knockLevel * 0.06, t, 0.05);
 
   a.outGain.gain.setTargetAtTime(MAKEUP_GAIN * (frame.volume ?? 1), t, 0.08);
   const gain = cut ? 0.10 : levelToGain(drive.pulseLevel);
@@ -1040,11 +956,11 @@ export function scheduleExhaustPulses(a, frame) {
   const events = drive.events;
   if (events.length === 0) return;
 
-  // Below the fusion point discrete pulses do the work; above it the looped train does.
-  const pulseMix = 1 - clamp01((drive.firingHz - PULSE_FUSE_HZ) / PULSE_FUSE_SPAN_HZ);
-  if (pulseMix <= 0.02) { a.nextPulse = now + 0.02; return; }
-
-  const cycleSec = 120 / Math.max(rpm, 200);
+  // The slow speed wander from `updateEngineAudio`, applied where it physically belongs:
+  // the crank is turning fractionally faster or slower, so the events are fractionally
+  // closer together. Slow enough that the harmonic comb rides with it rather than smearing.
+  const drift = 1 + a.rpmDrift * Math.min(drive.cov, 0.06) * RPM_DRIFT_PER_COV;
+  const cycleSec = 120 / Math.max(rpm * drift, 200);
   const level = (cut ? 0.14 : 1) * levelToGain(drive.pulseLevel);
   // A choked blowdown cracks, an unchoked one chuffs — pick the pulse to match.
   const bank = drive.sharpness > 0.5 ? a.hardPulses : a.softPulses;
@@ -1053,18 +969,19 @@ export function scheduleExhaustPulses(a, frame) {
   while (a.nextPulse < now + SCHEDULE_AHEAD_S && guard++ < MAX_PULSES_PER_CALL) {
     const idx = a.pulseIdx % events.length;
     const src = a.ctx.createBufferSource();
-    src.buffer = bank[Math.floor(Math.random() * bank.length)];
+    // WHICH PULSE THIS CYLINDER GETS IS FIXED, and this is the single most important line
+    // in the file. See CYL_DETUNE.
+    src.buffer = bank[idx % bank.length];
     // The rendered pulse is stretched to the duration the physics says this cylinder
     // takes to blow down — which tracks stroke and gas temperature. A long-stroke engine
-    // gets a longer, lower pulse; a hot one a shorter, sharper one. Then a fraction of a
-    // percent of per-event scatter on top, because no two combustion events are identical
-    // and perfectly identical pulses are what make synthesis sound mechanical.
+    // gets a longer, lower pulse; a hot one a shorter, sharper one.
     // Pitched from the RUNNER RING, because that is the audible constraint: the buffer was
     // rendered at RUNNER_REF_HZ and has to land on this engine's primary. The envelope
     // follows for free — ring frequency and vent duration both scale with c/L, so they are
     // exact inverses and one rate moves both correctly. `drive.pulseRate` is the same
     // scaling seen from the blowdown-duration side and is what the physics bench reports.
-    src.playbackRate.value = (drive.runnerHz / RUNNER_REF_HZ) * (0.97 + Math.random() * 0.06);
+    src.playbackRate.value = (drive.runnerHz / RUNNER_REF_HZ)
+      * (1 + CYL_DETUNE[idx % CYL_DETUNE.length]);
     const g = a.ctx.createGain();
 
     // CYCLE-TO-CYCLE VARIATION, WITH MEMORY. A diluted charge burns weakly, and a weak
@@ -1087,7 +1004,7 @@ export function scheduleExhaustPulses(a, frame) {
     const loaf = 0.5 + 0.5 * Math.sin(a.pulseIdx * 0.55) * Math.sin(a.pulseIdx * 0.17);
     const misfired = Math.random() < drive.misfireRate;
     const wander = (1 - severity * loaf * 0.75) * (1 + a.cycleWander * COMBUSTION_SCATTER);
-    g.gain.value = Math.max(0, level * pulseMix * (misfired ? 0.25 : 1) * wander);
+    g.gain.value = Math.max(0, level * (misfired ? 0.25 : 1) * wander);
     src.connect(g); g.connect(a.pulseBus);
     try { src.start(a.nextPulse); } catch { /* scheduling raced; skip this one */ }
     src.onended = () => { try { src.disconnect(); g.disconnect(); } catch { /* already gone */ } };
@@ -1119,6 +1036,5 @@ export function silenceEngineAudio(a) {
   kill(a.pulseDry); kill(a.indG);
   kill(a.whistleG); kill(a.bladeG); kill(a.rushG); kill(a.bovG); kill(a.flutEnv);
   kill(a.clunkG); kill(a.convG); kill(a.lopeDepth);
-  for (const layout of LAYOUTS) for (const g of a.loopGains[layout]) kill(g);
   a.prevBoostPsi = 0;
 }
