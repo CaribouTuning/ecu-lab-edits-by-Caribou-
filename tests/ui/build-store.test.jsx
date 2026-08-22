@@ -563,3 +563,38 @@ describe('every segmented control', () => {
     expect(total).toBe(8);
   });
 });
+
+describe('every toggle', () => {
+  it('is a named switch that reports its own state', () => {
+    // A Toggle is the one control here with no visible text of its own on the switch —
+    // its whole identity is the accessible name and the aria-checked state. Drop the
+    // label at a call site and it still renders, still works, and announces itself as
+    // an unnamed switch; get `checked` wrong and it reports the opposite of the build.
+    // EcuLab.jsx carries @ts-nocheck, so neither lint nor tsc sees either mistake, and
+    // Toggle's own tests render it in isolation and never inspect what the app passes.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const switches = screen.getAllByRole('switch');
+    expect(switches.length).toBeGreaterThan(0);
+    switches.forEach((sw) => {
+      expect(sw.getAttribute('aria-label') || sw.textContent).toBeTruthy();
+      expect(sw.getAttribute('aria-checked')).toMatch(/^(true|false)$/);
+    });
+  });
+
+  it('installs the intercooler when switched on, and reports it', () => {
+    // The intercooler had no coverage at all, before this migration or after. It is
+    // also the call site that lost a prop in the swap, so it is the one most likely to
+    // have been broken by it.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const intercooler = screen.getByRole('switch', { name: /Intercooler/ });
+    expect(intercooler.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(intercooler);
+
+    expect(screen.getByRole('switch', { name: /Intercooler/ }).getAttribute('aria-checked')).toBe('true');
+    // And it reached the build, not just the switch: the parts count reads the mod set.
+    expect(screen.getByText(/[1-4]\/4 installed/)).toBeTruthy();
+  });
+});
