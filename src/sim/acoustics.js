@@ -63,6 +63,18 @@ import { clamp } from './math.js';
  */
 export const ACOUSTIC = {
   // --- Exhaust system geometry ---
+  // Primary runner length, head to collector. Production headers run 0.35-0.9 m, longer
+  // on bigger engines because the ports are further apart and the collector further away.
+  //
+  // This length matters more than any other for how an engine SOUNDS. A primary is a tube
+  // closed at the valve and open at the collector, so it rings at c/4L — 300-450 Hz for
+  // real geometry — and that band is where an exhaust note's hard edge lives. Get it wrong
+  // and you have a sub-bass thud with no bark, whatever else the model does correctly.
+  RUNNER_LENGTH_BASE_M: 0.34,
+  RUNNER_LENGTH_PER_LITRE_M: 0.035,
+  // Bounds on the runner fundamental, Hz.
+  RUNNER_HZ_MIN: 180,
+  RUNNER_HZ_MAX: 620,
   // Tailpipe distance from the head. Production systems run roughly 2.5-4.5 m; the
   // displacement term stands in for the fact that bigger engines go in bigger cars.
   EXHAUST_LENGTH_BASE_M: 2.55,
@@ -313,6 +325,35 @@ export function exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }) {
 }
 
 /**
+ * Length of one primary runner, head to collector, m.
+ *
+ * @param {number} displacementL total displacement
+ * @returns {number} length, m
+ */
+export function runnerLengthM(displacementL) {
+  return ACOUSTIC.RUNNER_LENGTH_BASE_M + displacementL * ACOUSTIC.RUNNER_LENGTH_PER_LITRE_M;
+}
+
+/**
+ * Ringing frequency of one primary runner, Hz.
+ *
+ * A primary is closed at the valve and open into the collector, which makes it a QUARTER
+ * wave resonator: it rings at c/4L, not c/2L like the tailpipe. Every blowdown pulse
+ * excites it, and what comes back out is the sharp mid-band edge the ear reads as an
+ * exhaust note rather than a thump. It rises with gas temperature for the same reason
+ * everything else here does.
+ *
+ * @param {{displacementL: number, gasTempK: number}} sys
+ * @returns {number} runner fundamental, Hz
+ */
+export function runnerResonanceHz({ displacementL, gasTempK }) {
+  const c = soundSpeedMs(gasTempK, COEFF.GAMMA_BURNED);
+  return clamp(
+    c / (4 * runnerLengthM(displacementL)), ACOUSTIC.RUNNER_HZ_MIN, ACOUSTIC.RUNNER_HZ_MAX,
+  );
+}
+
+/**
  * Cylinder pressure at the instant the exhaust valve opens, kPa.
  *
  * Reconstructed rather than re-integrated: take the peak pressure the cycle measured and
@@ -542,6 +583,7 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} firingHz firing frequency, Hz
  * @property {FiringEvent[]} events one engine cycle of firing events
  * @property {number} pipeHz exhaust fundamental, Hz
+ * @property {number} runnerHz primary runner ring, Hz — the note's hard edge
  * @property {number} blowdownRatio pressure ratio across the exhaust valve at EVO
  * @property {number} sharpness 0 (soft chuff) to 1 (choked crack)
  * @property {number} pulseLevel pulse pressure amplitude, 1 being a stock naturally
@@ -622,6 +664,7 @@ export function acousticDrive({
     firingHz: firingFrequencyHz(rpm, cyl),
     events: firingEvents(configuration),
     pipeHz: exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }),
+    runnerHz: runnerResonanceHz({ displacementL, gasTempK }),
     blowdownRatio: ratio,
     sharpness: pulseSharpness(ratio),
     pulseLevel: clamp(overpressureKpa / ACOUSTIC.BLOWDOWN_REF_KPA, 0, 2),

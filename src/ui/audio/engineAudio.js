@@ -42,6 +42,15 @@
 /**
  * How each layout is voiced.
  *
+ * A NOTE ON `oscGain` AND `subGain`. They are a steady tonal bed at the firing order and
+ * at half of it, and they are deliberately small. A real engine's tone is not a drone with
+ * pulses laid over it — the tone IS the pulse train, heard fast enough that the ear fuses
+ * it. Anything held steady underneath is the most static thing in the mix by definition,
+ * and static is what a listener identifies as synthetic: measured, running these an octave
+ * louder buries a third of the spectrum above 2 kHz and flattens the peak-to-average ratio
+ * that makes the note read as mechanical. They are here to fill the very bottom, not to
+ * carry the note.
+ *
  * These are mixing decisions, not physics — the physics of why a V8 rumbles is the
  * firing geometry in `acoustics.js`, and it arrives here as the event list. What is
  * here is how each layout's exhaust system is shaped: a V8's collectors are large and
@@ -49,10 +58,10 @@
  * so its widely spaced pulses stay individually audible.
  */
 const VOICING = {
-  I4: { bodyHz: 420, bodyQ: 1.4, body2Q: 2.2, body2Gain: 0.20, lowQ: 4.5, pulseGain: 0.95, pipeGain: 0.68, subGain: 0.05, oscGain: 0.045, detune: 16 },
-  I6: { bodyHz: 300, bodyQ: 3.2, body2Q: 4.6, body2Gain: 0.32, lowQ: 5.6, pulseGain: 1.05, pipeGain: 0.86, subGain: 0.09, oscGain: 0.033, detune: 8 },
-  V6: { bodyHz: 320, bodyQ: 3.6, body2Q: 5.0, body2Gain: 0.34, lowQ: 6.0, pulseGain: 1.05, pipeGain: 0.88, subGain: 0.08, oscGain: 0.035, detune: 9 },
-  V8: { bodyHz: 240, bodyQ: 0.6, body2Q: 0.9, body2Gain: 0.10, lowQ: 1.1, pulseGain: 1.25, pipeGain: 1.10, subGain: 0.16, oscGain: 0.025, detune: 6 },
+  I4: { bodyHz: 420, bodyQ: 1.4, body2Q: 2.2, body2Gain: 0.20, lowQ: 4.5, pulseGain: 0.95, pipeGain: 0.68, headerGain: 0.85, dryGain: 0.84, subGain: 0.020, oscGain: 0.016, detune: 16 },
+  I6: { bodyHz: 300, bodyQ: 3.2, body2Q: 4.6, body2Gain: 0.32, lowQ: 5.6, pulseGain: 1.05, pipeGain: 0.86, headerGain: 0.72, dryGain: 0.68, subGain: 0.036, oscGain: 0.012, detune: 8 },
+  V6: { bodyHz: 320, bodyQ: 3.6, body2Q: 5.0, body2Gain: 0.34, lowQ: 6.0, pulseGain: 1.05, pipeGain: 0.88, headerGain: 0.70, dryGain: 0.68, subGain: 0.032, oscGain: 0.012, detune: 9 },
+  V8: { bodyHz: 240, bodyQ: 0.6, body2Q: 0.9, body2Gain: 0.10, lowQ: 1.1, pulseGain: 1.25, pipeGain: 1.10, headerGain: 0.55, dryGain: 0.60, subGain: 0.064, oscGain: 0.009, detune: 6 },
 };
 
 /** Layouts the looped pulse train is pre-rendered for. Must cover `VOICING`. */
@@ -60,6 +69,91 @@ const LAYOUTS = ['I4', 'I6', 'V6', 'V8'];
 
 /** Engine speed the looped buffers are rendered at; playback rate scales from here. */
 const LOOP_REF_RPM = 3000;
+
+/**
+ * Runner ring the pulse buffers are rendered at, Hz.
+ *
+ * Roughly a 3.5 L engine at load. Every build is pitched from here, so this is the one
+ * number that decides whether a pulse sounds like a bark or a thud.
+ */
+const RUNNER_REF_HZ = 350;
+
+/**
+ * Where the open end of the tailpipe stops radiating like a piston and starts radiating
+ * like a monopole, Hz — the frequency at which ka = 1.
+ *
+ * This is the single most important number in the whole renderer and it is why every
+ * synthesised engine before this one sounded like a thud. A pipe mouth is not a
+ * loudspeaker: below ka = 1 it radiates the gas flow itself, and above it the far-field
+ * pressure follows the TIME DERIVATIVE of that flow. A derivative is +6 dB/octave, so the
+ * same blowdown that is a soft chuff inside the pipe leaves the mouth with its leading
+ * edge lifted by twenty-odd decibels. That lift is the crack.
+ *
+ * ka = 1 at f = c / (2*pi*a). A 2.75" tailpipe has a = 35 mm, and gas leaving it at
+ * around 700 K carries c ~ 490 m/s, so f ~ 2.2 kHz. The buffers are rendered at that
+ * reference and the runtime pipe diameter is carried by `diaOpen` on the filters
+ * downstream, the same way `RUNNER_REF_HZ` is a rendering reference that playback rate
+ * moves off.
+ */
+const RADIATION_REF_HZ = 2200;
+
+/**
+ * The shape of one blowdown, as flow rather than as sound.
+ *
+ * Everything here describes the gas: how fast the valve cracks (`RISE_*`), how long the
+ * cylinder takes to vent (`TAU_*`), how hard the primary runner rings on the way out
+ * (`RING_*`), and how much broadband noise the sonic jet at the valve seat makes
+ * (`JET_*`). Turning that into what a listener hears is the radiation model above — none
+ * of these numbers try to describe the sound directly, which is exactly why the result
+ * survives being pitched, filtered and resonated downstream.
+ *
+ * The `_SOFT` value applies to an unchoked blowdown and the `_HARD` one to a fully choked
+ * blowdown; `sharpness` from the physics crossfades between them.
+ */
+const PULSE = {
+  /** Buffer length. Long enough for the body to decay, short enough to stay cheap. */
+  LEN_S: 0.09,
+  /** Valve-crack rise time: 0.30 ms unchoked, 0.08 ms choked. */
+  RISE_SOFT_S: 0.00030,
+  RISE_HARD_S: 0.00008,
+  /** Blowdown time constant: 6.0 ms unchoked, 3.8 ms choked. */
+  TAU_SOFT_S: 0.0060,
+  TAU_HARD_S: 0.0038,
+  /** How deeply the primary's quarter-wave modulates the escaping flow. */
+  RING_MOD: 0.55,
+  /** Ring decay, 1/s. A short lossy primary, so it rings for ~10 ms. */
+  RING_DECAY_SOFT: 70,
+  RING_DECAY_HARD: 130,
+  /** Jet-noise level, and how far it is spread across the variants. */
+  JET_SOFT: 0.07,
+  JET_HARD: 0.16,
+  /**
+   * Where the jet noise sits. A sonic jet through a valve seat peaks at the Strouhal
+   * frequency, St*U/D — with U near sonic and a seat gap of a few millimetres that lands
+   * in the low kHz, and it climbs as the blowdown chokes harder. This is the rasp.
+   */
+  JET_HP_SOFT_HZ: 2200,
+  JET_HP_HARD_HZ: 4800,
+  JET_LP_HZ: 9000,
+  /** How fast the jet dies: it stops when the flow stops being sonic, well before the ring. */
+  JET_DECAY: 260,
+  /** Filter make-up for the two-pole low-pass and one-pole high-pass on the noise. */
+  JET_TRIM: 8,
+  /** The collector volume underneath, as a fraction of the runner ring. */
+  BODY_RATIO: 0.30,
+  BODY_AMT: 0.30,
+  BODY_DECAY: 45,
+};
+
+/**
+ * Sharpness the looped buffers are rendered at.
+ *
+ * The loop only ever runs above the fusion point, and an engine spinning that fast is
+ * choked on every event — so it is rendered hard rather than crossfaded, which keeps the
+ * loop to two variants instead of four.
+ */
+const LOOP_SHARPNESS = 0.85;
+
 
 /** Pre-rendered variants per layout. Each is an always-running source, so keep it lean. */
 const LOOP_VARIANTS = 2;
@@ -123,20 +217,36 @@ const LEVEL_EXPONENT = 0.45;
 /**
  * Overall trim.
  *
- * Deliberately hot. An engine note is a train of transients, and a transient train that
- * is never allowed to work the limiter sounds thin — the density that reads as "real"
- * comes from the compression, not from the raw waveform. This is the level the balance
- * was tuned at, and the tanh brickwall after the make-up gain is what makes running it
- * this hard safe: peaks round over instead of clipping square.
+ * AN ENGINE IS A TRANSIENT TRAIN, AND ITS CREST FACTOR IS THE SOUND. Measured at the
+ * pulse bus this renderer produces about 10 dB of crest — peaks around ten times the
+ * running level, which is what a microphone in front of a real exhaust records. Run the
+ * output stage hot enough and every one of those peaks is flattened into the ceiling: the
+ * crest collapses to two or three decibels, the waveform becomes a slab, and no amount of
+ * work on the pulse itself can be heard through it. That is what "digital" sounds like,
+ * and it is a mixing fault rather than a synthesis one.
+ *
+ * So the whole chain is trimmed to leave the crest intact. This lands the bus at roughly
+ * unity peak going into the limiter, the limiter is a safety net rather than a sound, and
+ * the output sits around -12 dBFS RMS with peaks near -2 dBFS — which is a normal,
+ * comfortable listening level with the dynamics still in it.
  */
-const MASTER_TRIM = 1.0;
+const MASTER_TRIM = 0.30;
 
 /** Make-up gain after the limiter, before the brickwall. */
 const MAKEUP_GAIN = 2.4;
 
 /** Quietest and loudest the exhaust may render, as a master gain. */
-const GAIN_FLOOR = 0.18;
-const GAIN_CEILING = 1.15;
+const GAIN_FLOOR = 0.055;
+const GAIN_CEILING = 0.35;
+
+/**
+ * Trim on the layers that bypass the limiter — blow-off, flutter, gearchange.
+ *
+ * They go straight to the output so the compression that makes the engine dense cannot
+ * duck them, which also means they are the only things in the mix not held down by it.
+ * With the bed no longer slammed into the ceiling they need to come down with it.
+ */
+const EFFECT_TRIM = 0.45;
 
 /**
  * Maps a physical pulse amplitude to a rendering gain.
@@ -151,34 +261,122 @@ function levelToGain(level) {
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
- * Builds one exhaust pulse into a buffer.
+ * Writes one blowdown into `dest` at `offset`, wrapping at the end.
  *
- * A blowdown pulse is a pressure spike with a fast attack and an exponential decay,
- * riding on the lower-frequency thump of the gas column starting to move. `sharpness`
- * is the physics input: a choked blowdown cracks, an unchoked one chuffs.
+ * WHAT A BLOWDOWN ACTUALLY IS, in the order it happens:
+ *
+ *   1. THE VALVE CRACKS. The cylinder is several bar above the manifold, so gas leaves
+ *      through a sonic orifice the instant there is a gap. The flow rises in a fraction
+ *      of a millisecond and then decays as the cylinder empties.
+ *
+ *   2. THE PRIMARY RINGS. The runner is closed at the valve and open into the collector,
+ *      so it is a quarter-wave resonator at c/4L. The step excites it and it rings for
+ *      about ten milliseconds. This is the bark.
+ *
+ *   3. THE JET ROARS. Sonic gas tearing past a valve seat is loud broadband noise,
+ *      peaking near the Strouhal frequency of the gap — the low kHz. It stops as soon as
+ *      the flow stops being sonic, so it is a leading rasp, not a hiss laid over
+ *      everything.
+ *
+ * And then — this is the part that matters — it has to LEAVE THE PIPE. The mouth is not a
+ * loudspeaker reproducing the pressure inside it. Below ka = 1 it radiates the flow; above
+ * ka = 1 the far-field pressure follows dq/dt, which lifts the leading edge by 6 dB per
+ * octave. Rendering the pressure inside the pipe and calling it the sound is precisely
+ * what makes a synthesised engine a soft thud with no high frequency in it at all. See
+ * {@link RADIATION_REF_HZ}.
+ *
+ * The flow is built first, radiated second, and only then is the jet noise added — the
+ * jet is already sound when it is made, so it must not be differentiated a second time.
+ *
+ * @param {Float32Array} dest buffer to add into
+ * @param {number} offset sample to start at
+ * @param {number} sr sample rate
+ * @param {number} sharpness 0..1 from `AcousticDrive.sharpness`
+ * @param {number} ringHz the primary's quarter-wave ring
+ * @param {() => number} rnd uniform 0..1 source
+ */
+function writeBlowdown(dest, offset, sr, sharpness, ringHz, rnd) {
+  const len = Math.min(Math.floor(sr * PULSE.LEN_S), dest.length);
+  const mix = (soft, hard) => soft + (hard - soft) * sharpness;
+
+  const riseS = mix(PULSE.RISE_SOFT_S, PULSE.RISE_HARD_S);
+  const tauS = mix(PULSE.TAU_SOFT_S, PULSE.TAU_HARD_S);
+  const ringDecay = mix(PULSE.RING_DECAY_SOFT, PULSE.RING_DECAY_HARD);
+
+  // 1-2: the gas flow leaving the port, with the primary ringing on top of it.
+  const q = new Float32Array(len + 1);
+  for (let i = 0; i <= len; i++) {
+    const x = i / sr;
+    const env = (1 - Math.exp(-x / riseS)) * Math.exp(-x / tauS);
+    const ring = Math.sin(2 * Math.PI * ringHz * x) * Math.exp(-x * ringDecay);
+    q[i] = env * (1 + PULSE.RING_MOD * ring);
+  }
+
+  // Radiation from the open end: flat below ka = 1, +6 dB/octave above it.
+  const kRad = 1 / (2 * Math.PI * RADIATION_REF_HZ);
+  const out = new Float32Array(len);
+  for (let i = 0; i < len; i++) out[i] = q[i] + (q[i + 1] - q[i]) * sr * kRad;
+
+  // 3: jet noise, band-limited around its Strouhal peak and gated by the sonic flow.
+  // Two poles down at JET_LP_HZ, one pole up at the peak — a real jet rolls off both
+  // sides, and white noise gated by an envelope is a hiss, not a rasp.
+  const jetAmt = mix(PULSE.JET_SOFT, PULSE.JET_HARD);
+  const kLp = Math.exp(-2 * Math.PI * PULSE.JET_LP_HZ / sr);
+  const kHp = Math.exp(-2 * Math.PI * mix(PULSE.JET_HP_SOFT_HZ, PULSE.JET_HP_HARD_HZ) / sr);
+  const bodyHz = ringHz * PULSE.BODY_RATIO;
+  let lp1 = 0, lp2 = 0, hpY = 0, hpX = 0;
+  for (let i = 0; i < len; i++) {
+    const x = i / sr;
+    const w = rnd() * 2 - 1;
+    lp1 = w * (1 - kLp) + lp1 * kLp;
+    lp2 = lp1 * (1 - kLp) + lp2 * kLp;
+    hpY = kHp * (hpY + lp2 - hpX);
+    hpX = lp2;
+    out[i] += jetAmt * hpY * PULSE.JET_TRIM * Math.exp(-x * PULSE.JET_DECAY);
+    // The collector volume underneath. It is a resonance of the space downstream, not a
+    // feature of the flow through the valve, so it is added after the radiation term.
+    out[i] += Math.sin(2 * Math.PI * bodyHz * x) * Math.exp(-x * PULSE.BODY_DECAY) * PULSE.BODY_AMT;
+  }
+
+  for (let i = 0; i < len; i++) dest[(offset + i) % dest.length] += out[i];
+}
+
+/** Removes DC and scales to unit peak, in place. */
+function normalise(data) {
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i];
+  const mean = sum / data.length;
+  let peak = 1e-9;
+  for (let i = 0; i < data.length; i++) {
+    data[i] -= mean;
+    const a = Math.abs(data[i]);
+    if (a > peak) peak = a;
+  }
+  for (let i = 0; i < data.length; i++) data[i] /= peak;
+}
+
+/**
+ * Builds one exhaust pulse into a buffer, for the scheduled train.
+ *
+ * Rendered at a reference ring and pitched at playback: the ring and the vent duration
+ * both scale with c/L, so they are exact inverses and one playback rate moves the whole
+ * pulse correctly — a bigger engine's longer primary rings lower AND vents over a longer
+ * time, together.
  *
  * @param {AudioContext} ctx
  * @param {number} sharpness 0..1 from `AcousticDrive.sharpness`
- * @param {number} seed variation index, so no two pulses are identical
+ * @param {number} runnerHz the primary's ring, from `AcousticDrive.runnerHz`
+ * @param {number} variant which of the rendered variants this is
  * @returns {AudioBuffer}
  */
-function renderPulse(ctx, sharpness, seed) {
-  const len = Math.floor(ctx.sampleRate * 0.13);
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+function renderPulse(ctx, sharpness, runnerHz, variant) {
+  const sr = ctx.sampleRate;
+  const len = Math.floor(sr * PULSE.LEN_S);
+  const buf = ctx.createBuffer(1, len, sr);
   const data = buf.getChannelData(0);
-  // A sharp pulse opens fast and dies fast; a soft one loafs.
-  const decay = 26 + sharpness * 26 + seed * 4;
-  const attackS = 0.0038 - sharpness * 0.0028;
-  const thumpHz = 62 + seed * 9;
-  const crackAmt = 0.10 + sharpness * 0.30;
-  for (let i = 0; i < len; i++) {
-    const x = i / ctx.sampleRate;
-    const env = Math.exp(-x * decay);
-    const attack = Math.min(1, x / attackS);
-    const thump = Math.sin(2 * Math.PI * thumpHz * x) * 0.9;
-    const crack = (Math.random() * 2 - 1) * crackAmt;
-    data[i] = (thump + crack) * env * attack;
-  }
+  // Real runners are not all the same length, so each cylinder rings slightly differently.
+  writeBlowdown(data, 0, sr, sharpness, runnerHz * (0.94 + variant * 0.05), Math.random);
+  normalise(data);
   return buf;
 }
 
@@ -190,6 +388,10 @@ function renderPulse(ctx, sharpness, seed) {
  * pulse colour, because two collectors of different length do not sound identical — and
  * that difference is what the ear picks the rumble out of.
  *
+ * It writes the SAME blowdown the scheduled train plays. Rendering something simpler here
+ * would mean the sound changed character as the crossfade came in, which is audible and is
+ * exactly what a listener hears as the moment it "turns into a synthesiser".
+ *
  * Each buffer is internally periodic; variation comes from crossfading BETWEEN buffers at
  * random intervals, so the variation rate is decoupled from the loop rate and cannot beat
  * against it.
@@ -200,27 +402,23 @@ function renderPulse(ctx, sharpness, seed) {
  * @returns {AudioBuffer}
  */
 function renderCycleLoop(ctx, events, variant) {
+  const sr = ctx.sampleRate;
   const cycleSec = 120 / LOOP_REF_RPM;
-  const len = Math.round(ctx.sampleRate * cycleSec);
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const len = Math.round(sr * cycleSec);
+  const buf = ctx.createBuffer(1, len, sr);
   const data = buf.getChannelData(0);
   // A deterministic generator, so a buffer is identical every time it is built.
   let seed = 12345 + variant * 7919;
   const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+  const ring = RUNNER_REF_HZ * (0.92 + variant * 0.06);
   for (const ev of events) {
-    const decay = 40 + variant * 7 + ev.bank * 5;
-    const thumpHz = 70 + variant * 11 + ev.bank * 6;
-    const crackAmt = 0.24 + variant * 0.07;
-    const start = Math.floor((ev.angleDeg / 720) * cycleSec * ctx.sampleRate);
-    const evLen = Math.floor(ctx.sampleRate * 0.09);
-    for (let i = 0; i < evLen; i++) {
-      const j = (start + i) % len;                  // wrap, so the loop point is seamless
-      const x = i / ctx.sampleRate;
-      const env = Math.exp(-x * decay);
-      const attack = Math.min(1, x / 0.0012);
-      data[j] += (Math.sin(2 * Math.PI * thumpHz * x) * 0.9 + (rnd() * 2 - 1) * crackAmt) * env * attack;
-    }
+    // The two collectors are different lengths, so they ring slightly differently.
+    const bankRing = ring * (ev.bank === 1 ? 1.045 : 1);
+    const start = Math.floor((ev.angleDeg / 720) * cycleSec * sr);
+    writeBlowdown(data, start, sr, LOOP_SHARPNESS, bankRing, rnd);
   }
+  normalise(data);
   return buf;
 }
 
@@ -234,24 +432,33 @@ function renderCycleLoop(ctx, events, variant) {
  * @returns {object} the node graph, or null if the context cannot be built
  */
 export function createEngineAudio(ctx, eventsFor) {
+  // A SAFETY NET, NOT A SOUND. It is set to catch the top few decibels of the loudest
+  // pulses and nothing else — see MASTER_TRIM for why it used to be doing far more than
+  // that, and why an engine cannot survive it.
   const limiter = ctx.createDynamicsCompressor();
-  limiter.threshold.value = -14;
-  limiter.knee.value = 8;
-  limiter.ratio.value = 12;
-  limiter.attack.value = 0.003;
-  limiter.release.value = 0.12;
+  limiter.threshold.value = -3;
+  limiter.knee.value = 3;
+  limiter.ratio.value = 4;
+  limiter.attack.value = 0.002;
+  limiter.release.value = 0.15;
   const outGain = ctx.createGain(); outGain.gain.value = MAKEUP_GAIN;
 
   // A brickwall after the make-up gain. The limiter is a compressor, so a fast enough
   // transient still gets past it, and anything over full scale is HARD clipped by the
-  // output — which is audible as a tearing edge on exactly the loudest pulses. A tanh
-  // curve rounds those over instead, which is what a real microphone in front of a real
-  // exhaust does anyway.
+  // output — which is audible as a tearing edge on exactly the loudest pulses.
+  //
+  // Linear below the knee and rounded above it. A plain tanh is a saturator: it is
+  // already bending the curve at half scale, so it eats the very transients this renderer
+  // exists to produce. This one is transparent until the signal is nearly at the ceiling
+  // and only then rounds over, which is what makes it a brickwall rather than a colour.
   const softClip = ctx.createWaveShaper();
   const curve = new Float32Array(1024);
+  const knee = 0.72;
   for (let i = 0; i < curve.length; i++) {
     const x = (i / (curve.length - 1)) * 2 - 1;
-    curve[i] = Math.tanh(x * 1.6) / Math.tanh(1.6);
+    const a = Math.abs(x);
+    curve[i] = a <= knee ? x
+      : Math.sign(x) * (knee + (1 - knee) * Math.tanh((a - knee) / (1 - knee)));
   }
   softClip.curve = curve;
   softClip.oversample = '2x';
@@ -383,23 +590,75 @@ export function createEngineAudio(ctx, eventsFor) {
   flutNoise.connect(flutFilt); flutFilt.connect(flutGate); flutGate.connect(flutEnv);
   flutEnv.connect(outGain);
 
-  // EXHAUST WAVEGUIDE. Delay time sets the pipe's fundamental: f = 1 / (2 x delay).
-  const pipeDelay = ctx.createDelay(0.05);
-  pipeDelay.delayTime.value = 1 / (2 * 100);
-  const pipeFb = ctx.createGain(); pipeFb.gain.value = 0.35;
-  const pipeDamp = ctx.createBiquadFilter(); pipeDamp.type = 'lowpass'; pipeDamp.frequency.value = 1800;
-  pipeDelay.connect(pipeDamp); pipeDamp.connect(pipeFb); pipeFb.connect(pipeDelay);
-  const pipeOut = ctx.createGain(); pipeOut.gain.value = 0;
-  pipeDamp.connect(pipeOut); pipeOut.connect(master);
+  // THE EXHAUST AS TWO RESONATORS, because that is what it is.
+  //
+  // HEADER PRIMARY — short, closed at the valve, open into the collector. A quarter-wave
+  // tube at c/4L, 300-450 Hz on real geometry. This is the BARK: the mid-band edge that
+  // separates an engine note from a thump. It is short and lossy, so it rings only briefly.
+  const hdrDelay = ctx.createDelay(0.02);
+  hdrDelay.delayTime.value = 1 / (2 * RUNNER_REF_HZ);
+  const hdrFb = ctx.createGain(); hdrFb.gain.value = 0.30;
+  const hdrDamp = ctx.createBiquadFilter();
+  hdrDamp.type = 'lowpass'; hdrDamp.frequency.value = 3200;
+  hdrDelay.connect(hdrDamp); hdrDamp.connect(hdrFb); hdrFb.connect(hdrDelay);
+  const hdrOut = ctx.createGain(); hdrOut.gain.value = 0;
+  hdrDamp.connect(hdrOut);
+
+  // TAILPIPE — long, open at the far end, f = c/2L, 50-130 Hz. This is the body.
+  //
+  // TWO OF THEM, a few per cent different in length, panned apart. A real car has two banks
+  // down two pipes of different length, and a real listener has two ears; a single mono
+  // resonator is the reason synthesised engines sound like they are inside your head rather
+  // than in front of you. Two independent resonators decorrelate genuinely, so this widens
+  // without the phasiness a delay-and-invert trick would bring.
+  const makePipe = (lengthScale, pan) => {
+    const delay = ctx.createDelay(0.05);
+    delay.delayTime.value = (1 / (2 * 100)) * lengthScale;
+    const fb = ctx.createGain(); fb.gain.value = 0.35;
+    const damp = ctx.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 1800;
+    delay.connect(damp); damp.connect(fb); fb.connect(delay);
+    const out = ctx.createGain(); out.gain.value = 0;
+    const panner = ctx.createStereoPanner(); panner.pan.value = pan;
+    damp.connect(out); out.connect(panner); panner.connect(master);
+    return { delay, fb, damp, out, lengthScale };
+  };
+  const pipeA = makePipe(1.0, -0.55);
+  const pipeB = makePipe(1.035, 0.55);
+  // Kept under the old names so callers that only know about "the pipe" still work.
+  const pipeDelay = pipeA.delay, pipeFb = pipeA.fb, pipeDamp = pipeA.damp, pipeOut = pipeA.out;
+  hdrOut.connect(master);
 
   const pulseBus = ctx.createGain(); pulseBus.gain.value = 2.3;
-  pulseBus.connect(filter); pulseBus.connect(body); pulseBus.connect(body2); pulseBus.connect(pipeDelay);
+  pulseBus.connect(filter); pulseBus.connect(body); pulseBus.connect(body2);
+  pulseBus.connect(pipeA.delay); pulseBus.connect(pipeB.delay); pulseBus.connect(hdrDelay);
+
+  // THE DIRECT PATH, and it is not optional.
+  //
+  // Every branch above is a resonator or a band, and every one of them is low-passed:
+  // 900 Hz on the tone filter, 1.8 kHz in the pipes, 3.2 kHz in the header. Routed only
+  // through those, a pulse loses its entire leading edge before it reaches the output —
+  // measured, less than half a per cent of the energy above 2 kHz, which is a thud with
+  // some resonance behind it and not an engine.
+  //
+  // A listener standing beside a car hears the mouth of the pipe directly as well as
+  // everything the system rings at, so the pulse train also goes STRAIGHT to master at
+  // full bandwidth. A gentle tilt takes the very top off, because air absorption and the
+  // mouth's directivity do too — but the crack survives.
+  const dryTilt = ctx.createBiquadFilter();
+  dryTilt.type = 'highshelf';
+  dryTilt.frequency.value = 5200;
+  dryTilt.gain.value = -6;
+  const pulseDry = ctx.createGain(); pulseDry.gain.value = 0;
+  pulseBus.connect(dryTilt); dryTilt.connect(pulseDry); pulseDry.connect(master);
 
   // Six pulse variants at each end of the sharpness range. Real combustion events are
   // never identical, and one reused sample reads as synthetic no matter how it is
   // filtered.
-  const softPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.15, v));
-  const hardPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.95, v));
+  // Rendered once at a reference runner frequency and pitched at playback. The ring and
+  // the envelope both scale with c/L, so one playback rate moves the whole pulse correctly:
+  // a bigger engine's longer primary rings lower AND vents over a longer time, together.
+  const softPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.15, RUNNER_REF_HZ, v));
+  const hardPulses = [0, 1, 2].map((v) => renderPulse(ctx, 0.95, RUNNER_REF_HZ, v));
 
   const loopSources = {}, loopGains = {}, loopConnected = {};
   for (const layout of LAYOUTS) {
@@ -433,8 +692,10 @@ export function createEngineAudio(ctx, eventsFor) {
     oscA, oscB, oscG, sub, subG, ng, pulseLfo,
     indG, indFilt, whistle, whistleG, bladeFilt, bladeG, rushFilt, rushG,
     bovFilt, bovG, flutFilt, flutEnv, flutLfo, lopeLfo, lopeDepth,
+    pulseDry, dryTilt,
     clunkFilt, clunkG, convOsc, convFilt, convG,
-    pipeDelay, pipeFb, pipeDamp, pipeOut, pulseBus,
+    pipeDelay, pipeFb, pipeDamp, pipeOut, pipeA, pipeB,
+    hdrDelay, hdrFb, hdrDamp, hdrOut, pulseBus,
     softPulses, hardPulses,
     loopSources, loopGains, loopConnected,
     loopBlend: new Array(LOOP_VARIANTS).fill(1), loopNextSwap: 0,
@@ -528,6 +789,9 @@ export function updateEngineAudio(a, frame) {
     a.loopGains[layout].forEach((g, k) => {
       // Held apart by LOOP_DETUNE plus each variant's own wander, so they never lock.
       const spread = 1 + (k - (LOOP_VARIANTS - 1) / 2) * LOOP_DETUNE + a.loopWander[k];
+      // Rate carries engine speed. The loop's pulses were baked at RUNNER_REF_HZ and the
+      // firing angles are baked with them, so pitching by RPM keeps both correct; the
+      // header resonator downstream is what re-tunes the bark for this engine.
       a.loopSources[layout][k].playbackRate.setTargetAtTime(
         Math.min(3.2, Math.max(0.2, (rpm / LOOP_REF_RPM) * drift * spread)), t, 0.12);
       g.gain.setTargetAtTime(
@@ -555,7 +819,12 @@ export function updateEngineAudio(a, frame) {
   // hard it rings is not — a bigger bore radiates more at the mouth and reflects less,
   // and a cat-back removes the chambers that were doing the reflecting.
   const diaOpen = 0.72 + (pipeDiaIn - 2.5) * 0.20;
-  a.pipeDelay.delayTime.setTargetAtTime(1 / (2 * drive.pipeHz), t, 0.15);
+  for (const pipe of [a.pipeA, a.pipeB]) {
+    pipe.delay.delayTime.setTargetAtTime((1 / (2 * drive.pipeHz)) * pipe.lengthScale, t, 0.15);
+  }
+  // The header rings at the runner's quarter-wave, which moves with gas temperature — so
+  // the bark sharpens as the engine heats, exactly as the body does.
+  a.hdrDelay.delayTime.setTargetAtTime(1 / (2 * drive.runnerHz), t, 0.15);
   // How hard the pipe is driven is an ENERGY question, not a volume one: what excites the
   // system is the enthalpy leaving through it, which is mass flow times how far above
   // ambient the gas is. Driving it from airflow alone would mean a retarded engine — which
@@ -564,11 +833,21 @@ export function updateEngineAudio(a, frame) {
   // It also fixes idle. There the flow is slow and cool and the whole system is muffled;
   // leaving the pipe ringing there gives a metallic clang no real engine makes.
   const flow = Math.min(1, Math.max(0.14, 0.16 + drive.exhaustDrive * 0.9));
-  a.pipeFb.gain.setTargetAtTime(
-    Math.min(0.46, Math.max(0.16, (0.30 + flow * 0.20) - (pipeDiaIn - 2.5) * 0.05 - (openExhaust ? 0.04 : 0))), t, 0.12);
-  a.pipeDamp.frequency.setTargetAtTime(
-    420 + flow * (900 + diaOpen * 1200) + rasp * 500, t, 0.1);
-  a.pipeOut.gain.setTargetAtTime(audible ? voice.pipeGain * (0.45 + 0.55 * flow) : 0, t, 0.12);
+  const fb = Math.min(0.46, Math.max(0.16,
+    (0.30 + flow * 0.20) - (pipeDiaIn - 2.5) * 0.05 - (openExhaust ? 0.04 : 0)));
+  const damp = 420 + flow * (900 + diaOpen * 1200) + rasp * 500;
+  for (const pipe of [a.pipeA, a.pipeB]) {
+    pipe.fb.gain.setTargetAtTime(fb, t, 0.12);
+    pipe.damp.frequency.setTargetAtTime(damp, t, 0.1);
+    // Each side carries half, so the pair sums to the level one mono pipe used to.
+    pipe.out.gain.setTargetAtTime(audible ? voice.pipeGain * (0.45 + 0.55 * flow) * 0.62 : 0, t, 0.12);
+  }
+  // The header's ring is short and stiff. It leads with load rather than with flow, because
+  // what excites it is the shock at the valve, not the volume moving downstream.
+  a.hdrFb.gain.setTargetAtTime(0.20 + drive.sharpness * 0.20, t, 0.12);
+  a.hdrDamp.frequency.setTargetAtTime(1600 + drive.sharpness * 2600 + rasp * 900, t, 0.1);
+  a.hdrOut.gain.setTargetAtTime(
+    audible ? voice.headerGain * (0.30 + 0.70 * clamp01(drive.sharpness)) : 0, t, 0.12);
 
   // Blowdown sharpness opens the whole system up: a choked pulse carries far more high
   // frequency than a chuff, which is what "coming on song" sounds like. Retard brightens
@@ -585,6 +864,16 @@ export function updateEngineAudio(a, frame) {
     (voice.body2Gain + rasp * 0.18) * (0.35 + 0.65 * load), t, 0.12);
   a.bodyG.gain.setTargetAtTime((0.5 + (pipeDiaIn - 2.5) * 0.22) * dispDepth, t, 0.15);
   a.pulseBus.gain.setTargetAtTime(voice.pulseGain, t, 0.15);
+
+  // How much of the raw pulse train reaches the output unfiltered. A choked blowdown
+  // radiates a far harder edge than a chuff does, and an open exhaust has no chambers
+  // left to absorb it — so this leads with sharpness and opens further with the pipe.
+  // At idle it is small: the flow there is slow and subsonic and there is very little
+  // edge to hear.
+  a.dryTilt.frequency.setTargetAtTime(4200 + drive.sharpness * 2600, t, 0.1);
+  a.pulseDry.gain.setTargetAtTime(
+    audible ? voice.dryGain * (0.22 + 0.78 * clamp01(drive.sharpness))
+      * (openExhaust ? 1.25 : 1) * diaOpen : 0, t, 0.12);
 
   // The slow swell of a diluted idle, on top of the per-pulse variation. It runs at a
   // sub-multiple of the firing rate and washes out as the engine revs and the burn evens
@@ -629,11 +918,11 @@ export function updateEngineAudio(a, frame) {
     a.flutFilt.frequency.setValueAtTime(1000 + stored * 25, t);
     a.flutFilt.frequency.exponentialRampToValueAtTime(500, t + 0.55);
     a.flutEnv.gain.cancelScheduledValues(t);
-    a.flutEnv.gain.setValueAtTime(Math.min(0.85, 0.30 + stored * 0.030), t);
+    a.flutEnv.gain.setValueAtTime(EFFECT_TRIM * Math.min(0.85, 0.30 + stored * 0.030), t);
     a.flutEnv.gain.exponentialRampToValueAtTime(0.0001, t + 0.65);
 
     a.bovG.gain.cancelScheduledValues(t);
-    a.bovG.gain.setValueAtTime(Math.min(1.25, 0.55 + stored * 0.045), t);
+    a.bovG.gain.setValueAtTime(EFFECT_TRIM * Math.min(1.25, 0.55 + stored * 0.045), t);
     a.bovG.gain.exponentialRampToValueAtTime(0.0001, t + 0.95);
     a.bovFilt.frequency.cancelScheduledValues(t);
     a.bovFilt.frequency.setValueAtTime(3200 + stored * 95, t);
@@ -682,7 +971,7 @@ export function shiftEngineAudio(a, { automatic }) {
     a.master.gain.linearRampToValueAtTime(back, t + 0.26);
     // A soft low swell rather than a knock — the shift you feel more than hear.
     a.clunkG.gain.setValueAtTime(0.0001, t + 0.03);
-    a.clunkG.gain.linearRampToValueAtTime(0.13, t + 0.09);
+    a.clunkG.gain.linearRampToValueAtTime(EFFECT_TRIM * 0.13, t + 0.09);
     a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
     a.clunkFilt.frequency.setValueAtTime(120, t + 0.03);
     a.clunkFilt.Q.setValueAtTime(1.2, t + 0.03);
@@ -692,7 +981,7 @@ export function shiftEngineAudio(a, { automatic }) {
     a.master.gain.linearRampToValueAtTime(back * 1.12, t + 0.20);   // clutch out, flare
     a.master.gain.linearRampToValueAtTime(back, t + 0.30);
     a.clunkG.gain.setValueAtTime(0.0001, t + 0.10);
-    a.clunkG.gain.linearRampToValueAtTime(0.55, t + 0.118);
+    a.clunkG.gain.linearRampToValueAtTime(EFFECT_TRIM * 0.55, t + 0.118);
     a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
     a.clunkFilt.Q.setValueAtTime(3.5, t + 0.10);
     a.clunkFilt.frequency.setValueAtTime(240, t + 0.10);
@@ -770,7 +1059,12 @@ export function scheduleExhaustPulses(a, frame) {
     // gets a longer, lower pulse; a hot one a shorter, sharper one. Then a fraction of a
     // percent of per-event scatter on top, because no two combustion events are identical
     // and perfectly identical pulses are what make synthesis sound mechanical.
-    src.playbackRate.value = drive.pulseRate * (0.97 + Math.random() * 0.06);
+    // Pitched from the RUNNER RING, because that is the audible constraint: the buffer was
+    // rendered at RUNNER_REF_HZ and has to land on this engine's primary. The envelope
+    // follows for free — ring frequency and vent duration both scale with c/L, so they are
+    // exact inverses and one rate moves both correctly. `drive.pulseRate` is the same
+    // scaling seen from the blowdown-duration side and is what the physics bench reports.
+    src.playbackRate.value = (drive.runnerHz / RUNNER_REF_HZ) * (0.97 + Math.random() * 0.06);
     const g = a.ctx.createGain();
 
     // CYCLE-TO-CYCLE VARIATION, WITH MEMORY. A diluted charge burns weakly, and a weak
@@ -821,7 +1115,8 @@ export function silenceEngineAudio(a) {
     if (!node) return;
     try { node.gain.cancelScheduledValues(t); node.gain.setValueAtTime(0, t); } catch { /* noop */ }
   };
-  kill(a.master); kill(a.pipeOut); kill(a.indG);
+  kill(a.master); kill(a.pipeA.out); kill(a.pipeB.out); kill(a.hdrOut);
+  kill(a.pulseDry); kill(a.indG);
   kill(a.whistleG); kill(a.bladeG); kill(a.rushG); kill(a.bovG); kill(a.flutEnv);
   kill(a.clunkG); kill(a.convG); kill(a.lopeDepth);
   for (const layout of LAYOUTS) for (const g of a.loopGains[layout]) kill(g);

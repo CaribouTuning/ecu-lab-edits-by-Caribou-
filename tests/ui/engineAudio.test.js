@@ -52,15 +52,19 @@ function stubContext() {
     destination: node(),
     createGain: () => node({ gain: param(1) }),
     createOscillator: () => node({ frequency: param(440), detune: param(0), type: 'sine', setPeriodicWave() {} }),
-    createBiquadFilter: () => node({ frequency: param(1000), Q: param(1), type: 'lowpass' }),
+    createBiquadFilter: () => node({ frequency: param(1000), Q: param(1), gain: param(0), type: 'lowpass' }),
     createDelay: () => node({ delayTime: param(0.01) }),
     createDynamicsCompressor: () => node({
       threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25),
     }),
     createPeriodicWave: () => ({}),
     createWaveShaper: () => node({ curve: null, oversample: 'none' }),
-    createBuffer: (_ch, len) => ({ length: len, getChannelData: () => new Float32Array(len) }),
+    createBuffer: (_ch, len) => {
+      const data = new Float32Array(len);
+      return { length: len, getChannelData: () => data };
+    },
     createBufferSource: () => node({ buffer: null, loop: false, playbackRate: param(1), onended: null }),
+    createStereoPanner: () => node({ pan: param(0) }),
   };
 }
 
@@ -201,5 +205,84 @@ describe('stopping', () => {
     for (const layout of Object.keys(graph.loopGains)) {
       for (const g of graph.loopGains[layout]) expect(g.gain.value).toBe(0);
     }
+  });
+});
+
+/**
+ * The two things that decided whether this renderer sounded like an engine or like a
+ * synthesiser, and neither of them is audible in any other test here.
+ */
+describe('what makes it sound real', () => {
+  /**
+   * Collects every buffer the graph renders at build time.
+   * @returns {Float32Array[]} the rendered pulse and cycle buffers
+   */
+  function renderedBuffers() {
+    const ctx = stubContext();
+    const built = [];
+    const inner = ctx.createBuffer;
+    ctx.createBuffer = (ch, len, sr) => {
+      const buf = inner(ch, len, sr);
+      built.push(buf.getChannelData(0));
+      return buf;
+    };
+    createEngineAudio(ctx, firingEvents);
+    // The noise beds are long flat random fills; the pulses (90 ms) and cycle loops
+    // (40 ms) are the rendered ones.
+    return built.filter((d) => d.length > 1000 && d.length < 10000);
+  }
+
+  it('renders pulses with real high-frequency content, not a filtered thud', () => {
+    // A blowdown leaving an open pipe radiates as dq/dt above ka = 1, so its leading edge
+    // is broadband. Measured as the ratio of first-difference energy to total energy,
+    // which rises with spectral centroid: a signal band-limited to a few hundred hertz
+    // scores near zero however loud it is.
+    const buffers = renderedBuffers();
+    expect(buffers.length).toBeGreaterThan(4);
+    for (const data of buffers) {
+      let sq = 0;
+      let dsq = 0;
+      for (let i = 1; i < data.length; i++) {
+        sq += data[i] * data[i];
+        const d = data[i] - data[i - 1];
+        dsq += d * d;
+      }
+      expect(sq).toBeGreaterThan(0);
+      // The renderer this replaced scored 0.0012 to 0.0015 — its entire leading edge was
+      // below a kilohertz, which is a thud. These score 0.013 and up.
+      expect(dsq / sq).toBeGreaterThan(0.006);
+    }
+  });
+
+  it('renders pulses free of DC and normalised to unit peak', () => {
+    for (const data of renderedBuffers()) {
+      let sum = 0;
+      let peak = 0;
+      for (let i = 0; i < data.length; i++) {
+        sum += data[i];
+        const a = Math.abs(data[i]);
+        if (a > peak) peak = a;
+      }
+      expect(peak).toBeCloseTo(1, 5);
+      // A pressure pulse at an open tailpipe has no DC. An offset left in is a thud on
+      // every event, and it eats the headroom the leading edge needs.
+      expect(Math.abs(sum / data.length)).toBeLessThan(0.02);
+    }
+  });
+
+  it('leaves headroom for the transients instead of pinning the limiter', () => {
+    // AN ENGINE IS A TRANSIENT TRAIN AND ITS CREST FACTOR IS THE SOUND. If the renderer's
+    // own maximum static gain is above unity, every pulse is flattened into the ceiling
+    // and the peak-to-average ratio collapses to a couple of decibels — measured, that is
+    // exactly what a listener calls "digital", and no work on the pulse survives it.
+    // So the chain must be able to reach full scale only on peaks, never on the bed.
+    const ctx = stubContext();
+    const a = createEngineAudio(ctx, firingEvents);
+    ctx.currentTime += 0.1;
+    updateEngineAudio(a, frameFor({ rpm: 6000, load: 1 }));
+    // Whatever the physics asks for, master gain times make-up cannot reach full scale.
+    expect(a.master.gain.value * a.outGain.gain.value).toBeLessThan(1);
+    // And the limiter is a safety net: it may not be catching the running level.
+    expect(a.limiter.threshold.value).toBeGreaterThanOrEqual(-6);
   });
 });
