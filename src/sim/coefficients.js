@@ -41,6 +41,14 @@ export const COEFF = {
   // a triple, applied here to twin-shaft 1.8 L+ I4s. An extrapolation, not a match.
   FMEP_BALANCE_SHAFT_FRAC: 0.06,
 
+  // Below this crank speed a crank sensor produces no usable signal at all, so the ECU
+  // reports zero rather than a small number. A variable-reluctance pickup's output voltage
+  // is proportional to how fast a tooth goes past it; with nothing turning there are no
+  // teeth and no signal, and reading noise off a stationary crank is not a measurement.
+  // Without this the tachometer sat at about 28 RPM forever after the engine was switched
+  // off, which is what a stopped engine looked like: still running.
+  CRANK_SENSOR_MIN_RPM: 30,
+
   // --- Engine cycle: geometry and integration (see cycle.js) ---
   // Integration step, crank degrees. 133 steps over the closed period. Halving it moves
   // indicated work under 0.2% and doubles the cost of every knock search — not worth it.

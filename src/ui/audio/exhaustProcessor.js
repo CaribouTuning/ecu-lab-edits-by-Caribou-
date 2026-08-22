@@ -260,7 +260,32 @@ class Cylinder {
   }
 }
 
-class ExhaustProcessor extends AudioWorkletProcessor {
+/**
+ * The base class, and why there is a choice of one.
+ *
+ * This file is written as an AudioWorklet module, which is where it belongs: on the audio
+ * thread, at sample resolution, immune to whatever the main thread is doing. But a worklet
+ * module has to be FETCHED FROM A URL, and this app also ships as a single inlined HTML
+ * page served under a strict content-security policy — where `blob:` and `data:` are both
+ * refused and there is no second file to point at. Measured: `addModule` rejects with
+ * AbortError and the entire exhaust silently never loads, which is exactly what a player
+ * hears as an app with no engine sound in it.
+ *
+ * So the model does not depend on being a worklet. It is a plain class that needs three
+ * globals, and when they are absent it runs identically on the main thread inside a
+ * ScriptProcessorNode, which needs no module loading and is refused by nothing. Same DSP,
+ * same numbers, same tests — see `createExhaustNode` in `engineAudio.js`.
+ */
+const WorkletBase = typeof AudioWorkletProcessor !== 'undefined'
+  ? AudioWorkletProcessor
+  : /** @type {any} */ (class {
+    constructor() {
+      /** @type {any} */
+      this.port = { onmessage: null, postMessage() {} };
+    }
+  });
+
+export class ExhaustProcessor extends WorkletBase {
   static get parameterDescriptors() {
     return [
       { name: 'rpm', defaultValue: 0, minValue: 0, maxValue: 12000, automationRate: 'a-rate' },
@@ -274,9 +299,15 @@ class ExhaustProcessor extends AudioWorkletProcessor {
     ];
   }
 
-  constructor() {
-    super();
-    const sr = sampleRate;
+  /**
+   * @param {{processorOptions?: {sampleRate?: number}}} [options] the worklet passes
+   *   nothing; the main-thread fallback passes the context's sample rate, because the
+   *   `sampleRate` global only exists inside an AudioWorkletGlobalScope
+   */
+  constructor(options) {
+    super(options);
+    const sr = options?.processorOptions?.sampleRate
+      ?? (typeof sampleRate !== 'undefined' ? sampleRate : 44100);
     this.sr = sr;
     const maxD = Math.ceil((MAX_TUBE_M / 300) * sr) + 4;
 
@@ -724,9 +755,11 @@ class ExhaustProcessor extends AudioWorkletProcessor {
 
 }
 
-registerProcessor('exhaust-waveguide', ExhaustProcessor);
-
-// A worklet module has no exports of its own — registering the processor is the whole
-// point of loading it. This one exists so the file is a MODULE rather than a script, which
-// is what lets its tests import it and run the model directly in Node.
+/** The name the worklet registers under, when it is running as one. */
 export const PROCESSOR_NAME = 'exhaust-waveguide';
+
+// Only inside an AudioWorkletGlobalScope. On the main thread and in Node this is a plain
+// module export and nothing is registered.
+if (typeof registerProcessor !== 'undefined') {
+  registerProcessor(PROCESSOR_NAME, ExhaustProcessor);
+}

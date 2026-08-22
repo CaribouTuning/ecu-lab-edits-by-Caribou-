@@ -246,7 +246,14 @@ export function liveStep(st, dt, input, cfg) {
   const lag = clamp(dt / 0.09, 0, 1);
   const lopeAmp = s.running && s.rpm < 1500 ? (derived.overlapDeg || 0) * 0.9 : 0;
   s.lope = lopeAmp;
-  s.sensedRpm = sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
+  // A CRANK SENSOR THAT IS NOT TURNING READS ZERO, and reads it exactly. Everything else
+  // here is a real transducer with lag and noise, but a stationary crank presents no teeth
+  // to the pickup, so there is no signal to be noisy — the ECU sees no pulses and reports
+  // no speed. Left as a noisy reading it never settled, and a switched-off engine showed a
+  // tachometer wandering around 28 RPM for as long as you cared to watch it.
+  s.sensedRpm = s.rpm < COEFF.CRANK_SENSOR_MIN_RPM
+    ? 0
+    : sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
   s.sensedMaf = sensorRead(s.sensedMaf, pt ? pt.maf : 0, lag * 0.8, 1.4);
   s.sensedMap = sensorRead(s.sensedMap, pt ? pt.map : BARO_KPA, lag, 0.7);
   s.sensedIat = sensorRead(s.sensedIat, pt ? pt.iat : 25, 0.05, 0.3);
