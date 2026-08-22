@@ -115,6 +115,31 @@ export const ACOUSTIC = {
   // together with the area steps above this lands at about 20 dB off the top and 6 dB off
   // the bottom — which is the point of a muffler: it takes the treble and leaves the boom.
   MUFFLER_ABSORB_HZ: 380,
+  // THE CATALYTIC CONVERTER, which is the biggest damper in any road exhaust and is easy
+  // to forget because it is not there to be one. It is a honeycomb of channels a
+  // millimetre across, and sound crossing it runs into wall friction over an enormous
+  // surface area, so it absorbs broadband and hard — a real cat's insertion loss is
+  // 10-15 dB across the mid band. Without it the pipes ring on their own between firing
+  // events, and at idle, where the excitation is weakest, that ringing is all you hear.
+  // `KEEP` is the amplitude that survives one pass; `HZ_M` is its own boundary-layer
+  // corner, far lower than open pipe because the channels are far narrower.
+  CAT_KEEP: 0.80,
+  // A TURBINE IN THE EXHAUST, which is why a turbo car is quiet. The blowdown pulse does
+  // not leave through a pipe, it does work on a wheel — the energy that would have become
+  // noise becomes shaft power instead, and what gets past is smeared by a rotor sitting in
+  // the path. It is the single biggest reason a boosted engine sounds muted and whooshy
+  // where the same engine naturally aspirated barks. This is what survives one pass, and
+  // the corner is low because a turbine housing is a very effective absorber of the top
+  // end in particular.
+  TURBINE_KEEP: 0.42,
+  TURBINE_HZ_M: 700,
+  // LONG-TUBE HEADERS against a cast manifold. Longer primaries of a bigger bore: the
+  // quarter-wave drops, so the bark deepens, and the tube is less restrictive so more of
+  // the pulse survives to the collector.
+  HEADER_LENGTH_MULT: 1.28,
+  HEADER_DIA_MULT: 1.10,
+  CAT_HZ_M: 1400,
+  CAT_LENGTH_M: 0.30,
   // Gas cools on the way down the pipe, so the tailpipe carries a lower speed of sound
   // than the primaries do. A tailpipe runs a few hundred kelvin below the port.
   TAIL_TEMP_FRAC: 0.72,
@@ -124,7 +149,7 @@ export const ACOUSTIC = {
   VALVE_CD: 0.72,
   // Wall friction per metre of pipe, as a fraction of wave amplitude lost. Real pipes are
   // lossy, and a model without loss rings like a bell forever.
-  WALL_LOSS_PER_M: 0.020,
+  WALL_LOSS_PER_M: 0.040,
   // Boundary-layer loss, as a one-pole corner in Hz TIMES METRES — so a longer tube eats
   // treble proportionally harder, which is what makes a long system duller than a short
   // one at the same volume. Anchored at about half a decibel lost at 4 kHz per metre
@@ -722,16 +747,20 @@ export function circleAreaM2(d) {
  * @param {string} sys.configuration one of `CONFIG_OPTS`
  * @param {number} sys.pipeDiaIn tailpipe diameter, inches
  * @param {number} sys.gasTempK exhaust gas temperature at the port, K
+ * @param {boolean} [sys.headers] long-tube headers fitted in place of a cast manifold
+ * @param {boolean} [sys.turboFitted] a turbine sits in the exhaust path
  * @returns {object} tube lengths, areas, cylinder geometry and gas state
  */
 export function exhaustGeometry({
   displacementL, cyl, bore, compression, configuration, pipeDiaIn, gasTempK,
+  headers = false, turboFitted = false,
 }) {
   const events = firingEvents(configuration);
   const banks = events.some((e) => e.bank === 1) ? 2 : 1;
   const perBank = Math.max(1, Math.round(cyl / banks));
 
-  const primaryDia = primaryDiameterM(displacementL, cyl);
+  const primaryDia = primaryDiameterM(displacementL, cyl)
+    * (headers ? ACOUSTIC.HEADER_DIA_MULT : 1);
   const primaryArea = circleAreaM2(primaryDia);
   const collectorArea = primaryArea * perBank * ACOUSTIC.COLLECTOR_AREA_FRAC;
   const tailArea = circleAreaM2(pipeDiaIn * 0.0254);
@@ -740,7 +769,8 @@ export function exhaustGeometry({
   // path, so the tailpipe is what is left once the primaries and the collector have had
   // their share.
   const totalLength = exhaustLengthM({ displacementL, pipeDiaIn });
-  const primaryLength = runnerLengthM(displacementL);
+  const primaryLength = runnerLengthM(displacementL)
+    * (headers ? ACOUSTIC.HEADER_LENGTH_MULT : 1);
   const collectorLength = totalLength * ACOUSTIC.COLLECTOR_TO_TAIL_FRAC;
   const tailLength = Math.max(0.4, totalLength - primaryLength - collectorLength);
 
@@ -759,6 +789,14 @@ export function exhaustGeometry({
     mufflerArea: tailArea * ACOUSTIC.MUFFLER_AREA_RATIO,
     mufflerLength: ACOUSTIC.MUFFLER_LENGTH_M,
     mufflerAbsorbHz: ACOUSTIC.MUFFLER_ABSORB_HZ,
+    // The converter, and the turbine ahead of it when one is fitted. Both sit in the same
+    // place in the model — a lossy section between the collector and the muffler — because
+    // that is where they sit in the car and because that is what they do.
+    catKeep: ACOUSTIC.CAT_KEEP * (turboFitted ? ACOUSTIC.TURBINE_KEEP : 1),
+    catHzM: turboFitted ? ACOUSTIC.TURBINE_HZ_M : ACOUSTIC.CAT_HZ_M,
+    catLength: ACOUSTIC.CAT_LENGTH_M,
+    headers,
+    turboFitted,
     portK,
     tailK: portK * ACOUSTIC.TAIL_TEMP_FRAC,
     cylinderK: portK * ACOUSTIC.CYLINDER_TEMP_FRAC,

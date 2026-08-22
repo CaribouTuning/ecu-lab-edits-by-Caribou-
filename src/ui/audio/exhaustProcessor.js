@@ -46,7 +46,7 @@ const P_ATM = 101325;
 /** J/(kg K) for exhaust gas — the same value the simulation uses for air. */
 const R_GAS = 287;
 /** Fraction of the wave a cylinder head reflects. Not quite 1: the port is not a mirror. */
-const HEAD_REFLECTION = 0.94;
+const HEAD_REFLECTION = 0.90;
 /** How much of the wave the open mouth sends back. The rest radiates. */
 const MOUTH_REFLECTION = 0.80;
 /**
@@ -58,6 +58,20 @@ const MOUTH_REFLECTION = 0.80;
  * it out at an impossible velocity.
  */
 const EVC_MIN_ATDC = 14;
+/**
+ * How much of a wave survives a junction, as an amplitude fraction.
+ *
+ * `MERGE_KEEP` is the collector, where several streams meet at an angle and mix; that
+ * mixing is turbulent and it is the largest single loss in a real exhaust system.
+ * `STEP_KEEP` is a plain change of section, which is gentler. Both are what stop the tubes
+ * behaving like organ pipes: a lossless network rings on its own between firing events,
+ * and at idle, where the excitation is weakest, that ringing is what a listener hears.
+ */
+const MERGE_KEEP = 0.78;
+const STEP_KEEP = 0.96;
+
+/** Below this the far field carries nothing a listener can hear or a speaker reproduce. */
+const DC_BLOCK_HZ = 18;
 /** Longest tube the model will allocate for, m. Guards a nonsense build. */
 const MAX_TUBE_M = 8;
 /**
@@ -86,6 +100,8 @@ const STEEPEN_MAX_FRAC = 0.34;
  * the numerical statement of "a shock has a finite thickness".
  */
 const WARP_SLEW = 0.7;
+/** Flow noise at the collector, per unit of squared bulk velocity through it. */
+const FLOW_NOISE = 0.10;
 /** Jet noise per unit of valve flow velocity. Turbulence at the seat, gated by the flow. */
 const JET_PER_VEL = 0.020;
 /**
@@ -93,11 +109,11 @@ const JET_PER_VEL = 0.020;
  *
  * The waveguide works in pascals and cubic metres per second, so its output scale is
  * whatever the physics happens to produce. This is the one number that says what counts
- * as full scale, and it is set by measurement: a 6.2 litre V8 on a 3" open system at
- * 3000 rpm and wide-open throttle peaks at about 0.6 here, which leaves headroom for the
- * loudest thing the model can be asked for without the limiter having to invent it.
+ * as full scale, and it is set by measurement against the LOUDEST build the app can be
+ * asked for — a 6.2 litre V8 on a 4" open system at 6000 rpm — which peaks at 0.80 here.
+ * Everything quieter than that is quieter for a physical reason and needs no curve.
  */
-const PA_TO_UNIT = 0.457;
+const PA_TO_UNIT = 1.84;
 
 /** A bidirectional delay line standing in for one length of pipe. */
 class Tube {
@@ -135,13 +151,15 @@ class Tube {
    * @param {number} lossPerM wall loss fraction per metre
    * @param {number} lossHzM boundary-layer corner in Hz-metres; a longer tube eats more
    * @param {number} sr sample rate
+   * @param {number} [keep=1] extra broadband survival per pass, for an element that
+   *   absorbs rather than reflects — a converter, or a turbine sitting in the stream
    */
-  set(lengthM, c, area, lossPerM, lossHzM, sr) {
+  set(lengthM, c, area, lossPerM, lossHzM, sr, keep = 1) {
     const d = Math.max(1, Math.min(this.n - 2, Math.round((lengthM / c) * sr)));
     this.d = d;
     this.area = area;
     this.c = c;
-    this.loss = Math.max(0.90, 1 - lossPerM * lengthM);
+    this.loss = Math.max(0.90, 1 - lossPerM * lengthM) * keep;
     this.lpK = Math.exp((-2 * Math.PI * (lossHzM / Math.max(0.1, lengthM))) / sr);
     // NONLINEAR STEEPENING, and this is the mechanism that makes an exhaust CRACK.
     //
@@ -238,6 +256,7 @@ class Cylinder {
     // How strong THIS cylinder's last burn was, redrawn once per cycle at valve opening.
     this.strength = 1;
     this.wander = 0;
+    this.lastQ = 0;
   }
 }
 
@@ -270,9 +289,12 @@ class ExhaustProcessor extends AudioWorkletProcessor {
     this.nCyl = 0;
 
     this.tailA = [new Tube(maxD), new Tube(maxD)];
+    this.cat = [new Tube(maxD), new Tube(maxD)];
     this.chamber = [new Tube(maxD), new Tube(maxD)];
     this.tailB = [new Tube(maxD), new Tube(maxD)];
     this.mouthLp = [0, 0];
+    this.dcState = [0, 0];
+    this.dcK = 0;
     this.mouthLpK = 0.5;
     this.radK = 1;
     this.prevOut = [0, 0];
@@ -323,10 +345,14 @@ class ExhaustProcessor extends AudioWorkletProcessor {
     // fitted the chamber is a plain continuation of the pipe, which is exactly what a
     // straight-through system is.
     const tailTotal = g.collectorLength + g.tailLength;
-    const front = tailTotal * 0.45;
-    const back = Math.max(0.15, tailTotal - front - g.mufflerLength);
+    const front = tailTotal * 0.40;
+    const back = Math.max(0.15, tailTotal - front - g.mufflerLength - g.catLength);
     for (let b = 0; b < 2; b++) {
       this.tailA[b].set(front, g.cTail, g.collectorArea, g.wallLossPerM, g.wallLossHzM, sr);
+      // The converter. Same bore as the pipe it sits in, so it reflects almost nothing —
+      // it does its work by absorbing, which is why it is modelled as loss rather than as
+      // another area step.
+      this.cat[b].set(g.catLength, g.cTail, g.tailArea, g.wallLossPerM, g.catHzM, sr, g.catKeep);
       this.chamber[b].set(
         g.mufflerLength, g.cTail, this.muffled ? g.mufflerArea : g.tailArea,
         g.wallLossPerM,
@@ -351,6 +377,27 @@ class ExhaustProcessor extends AudioWorkletProcessor {
     const kaHz = g.cTail / (2 * Math.PI * mouthRadius);
     this.mouthLpK = Math.exp((-2 * Math.PI * kaHz) / sr);
     this.radK = sr / (2 * Math.PI * kaHz);
+    this.dcK = 1 - Math.exp((-2 * Math.PI * DC_BLOCK_HZ) / sr);
+  }
+
+  /**
+   * Valve lift at a crank angle, 0 to 1.
+   *
+   * Lift ramps over a FIXED number of crank degrees and then holds. A bigger cam is a
+   * longer window, not a lazier one — tying the ramp to a fraction of the window made a
+   * 290-degree race cam open more slowly than a stock one and come out duller, which is
+   * the opposite of what a big cam sounds like.
+   *
+   * @param {number} deg crank degrees after firing TDC
+   * @param {number} evoClose crank angle the valve shuts at
+   * @returns {number} lift, 0 to 1
+   */
+  liftAt(deg, evoClose) {
+    const span = evoClose - this.evoDeg;
+    const since = deg - this.evoDeg;
+    if (since <= 0 || since >= span) return 0;
+    const ramp = Math.min(this.camRampDeg, span * 0.45);
+    return Math.min(1, Math.min(since / ramp, (span - since) / ramp)) ** this.camShape;
   }
 
   /**
@@ -419,6 +466,7 @@ class ExhaustProcessor extends AudioWorkletProcessor {
     const level = params.level[0];
     const overlap = params.overlapDeg[0];
     const jetGain = params.jet[0] * JET_PER_VEL;
+    const flowGain = params.jet[0] * FLOW_NOISE;
     const lope = params.lope[0];
     const persistence = params.covPersistence[0];
     const sr = this.sr;
@@ -442,6 +490,7 @@ class ExhaustProcessor extends AudioWorkletProcessor {
       // knows each cylinder's crank offset, and the order falls out of that.
       const collectorIn = [0, 0];
       const collectorY = [0, 0];
+      const collectorFlow = [0, 0];
       for (let i = 0; i < this.nCyl; i++) {
         const cy = this.cyl[i];
         const tube = this.primaries[i];
@@ -450,7 +499,7 @@ class ExhaustProcessor extends AudioWorkletProcessor {
 
         // Arm at the start of the cycle, and set the cylinder to the pressure the
         // combustion model says it reached by valve opening.
-        if (!open) { cy.armed = true; }
+        if (!open) { cy.armed = true; cy.lastQ = 0; }
         else if (cy.armed) {
           // CYCLE-TO-CYCLE VARIATION, and it belongs here rather than on the output.
           // A diluted charge burns weakly, so it reaches valve opening at a LOWER
@@ -472,21 +521,26 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         }
 
         const bwd = tube.readB();
-        let fwd = HEAD_REFLECTION * bwd;
+        // WHAT THE PRIMARY SEES AT ITS OTHER END DEPENDS ON THE VALVE, and this is the
+        // single thing that stops a header ringing like an organ pipe.
+        //
+        // Shut, the port is very nearly a rigid wall and reflects almost everything. Wide
+        // open, the primary looks into the cylinder — a volume many times its own bore —
+        // and the reflection collapses: the area ratio alone takes it from 0.96 down to
+        // about 0.28 at full lift. So the tube is heavily damped for exactly as long as it
+        // is being driven and free to ring only when it is not, which is why a real header
+        // barks rather than whistles. Holding it constant instead left the primary's higher
+        // modes with almost nothing to damp them, and at idle — where the excitation is
+        // weakest and the valve is shut two thirds of the time — those modes were louder
+        // than the engine and read as a screech that moved with pipe diameter and layout.
+        const liftArea = open
+          ? this.valveCd * this.valveArea * this.liftAt(deg, evoClose)
+          : 0;
+        const rHead = HEAD_REFLECTION * ((tube.area - liftArea) / (tube.area + liftArea));
+        let fwd = rHead * bwd;
 
         if (open && rpm > 1) {
-          // Lift ramps over a FIXED number of crank degrees and then holds. A bigger cam
-          // is a longer window, not a lazier one — tying the ramp to a fraction of the
-          // window made a race cam open more slowly than a stock one, which is backwards
-          // and made it sound duller instead of lumpier.
-          const span = evoClose - this.evoDeg;
-          const open = deg - this.evoDeg;
-          const ramp = Math.min(this.camRampDeg, span * 0.45);
-          const lift = Math.min(
-            1,
-            Math.min(open / ramp, (span - open) / ramp),
-          ) ** this.camShape;
-          const area = this.valveCd * this.valveArea * lift;
+          const area = liftArea;
 
           const pPipe = P_ATM + bwd + fwd;
           let mdot = this.orifice(cy.p, pPipe, area, this.cylK);
@@ -527,6 +581,7 @@ class ExhaustProcessor extends AudioWorkletProcessor {
           // The wave the flow launches down the primary. A volume flow Q injected at the
           // closed end of a duct raises the pressure there by rho*c*Q/A.
           const q = mdot / rhoPrimary;
+          cy.lastQ = q;
           fwd += (this.geom.cPrimary * rhoPrimary * q) / tube.area;
 
           // Turbulence at the seat, in proportion to how fast gas is going through it.
@@ -546,6 +601,7 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         const y = tube.area / (rhoPrimary * this.geom.cPrimary);
         collectorIn[cy.bank] += y * arriving;
         collectorY[cy.bank] += y;
+        collectorFlow[cy.bank] += Math.abs(cy.lastQ);
         // Stash for the junction pass below.
         tube.pendingF = fwd;
         tube.arriving = arriving;
@@ -568,13 +624,32 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         // THE COLLECTOR. Every primary on this bank and the tailpipe all meet here at one
         // pressure, and each one is handed back the difference between that pressure and
         // what it brought. This single junction is where the cylinders hear each other.
+        // FLOW NOISE. Gas moving through a merge, a converter and a set of baffles
+        // separates and reattaches, and that turbulence radiates broadband — it is one of
+        // the three named sources of exhaust noise alongside the firing pulses, and it is
+        // what a listener actually hears between chuffs on an idling car. It belongs here
+        // rather than at the output because everything downstream then colours it: it
+        // arrives having been through the cat, the muffler and the mouth, so it is part of
+        // the pipe rather than a bed laid under it. Amplitude goes with the square of bulk
+        // velocity, which is the usual scaling for flow past an obstruction, so it grows
+        // with airflow and is nearly absent at a closed throttle.
+        const bulk = collectorFlow[b] / tA.area;
+        const flowNoise = (Math.random() * 2 - 1) * bulk * bulk * flowGain;
+
         const tailBack = tA.readB();
         const sumY = collectorY[b] + yA;
-        const pJ = (2 * (collectorIn[b] + yA * tailBack)) / (sumY || 1);
+        const pJ = (2 * (collectorIn[b] + yA * tailBack)) / (sumY || 1) + flowNoise;
+        // AND IT LOSES ENERGY DOING IT. Four pipes merging is not a lossless junction: the
+        // streams arrive at different angles and different times and mix turbulently, and
+        // that mixing is dissipation. Without it a primary is a closed tube with a nearly
+        // rigid end at the shut valve and almost nothing to damp it, so it rings on its own
+        // between chuffs — measured at idle, a 460 Hz mode was twelve decibels above the
+        // engine and reading as a screech, and it moved with pipe diameter and layout
+        // exactly as a pipe mode would.
         for (let i = 0; i < this.nCyl; i++) {
           if (this.cyl[i].bank !== b) continue;
           const tube = this.primaries[i];
-          tube.write(tube.pendingF, pJ - tube.arriving);
+          tube.write(tube.pendingF, (pJ - tube.arriving) * MERGE_KEEP);
         }
 
         // THE MUFFLER, which is an expansion chamber and nothing more: the pipe opens into
@@ -583,9 +658,15 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         // cancel what is still arriving — which is exactly how a reactive muffler is
         // quiet at some frequencies and not at others. Fit a straight-through system and
         // the areas match, nothing reflects, and it is simply more pipe.
-        const aAtCh = tA.readF();
+        // Collector pipe, then the converter, then the muffler chamber, then the tailpipe.
+        const cat = this.cat[b];
+        const yCat = cat.area / (rhoTail * cT);
+        const aAtCat = tA.readF();
+        const catBack = cat.readB();
+        const pJ0 = (2 * (yA * aAtCat + yCat * catBack)) / (yA + yCat);
+        const aAtCh = cat.readF();
         const chBack = ch.readB();
-        const pJ1 = (2 * (yA * aAtCh + yC * chBack)) / (yA + yC);
+        const pJ1 = (2 * (yCat * aAtCh + yC * chBack)) / (yCat + yC);
         const chAtB = ch.readF();
         const bBack = tB.readB();
         const pJ2 = (2 * (yC * chAtB + yB * bBack)) / (yC + yB);
@@ -598,9 +679,10 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         this.mouthLp[b] = atMouth + this.mouthLpK * (this.mouthLp[b] - atMouth);
         const reflected = -MOUTH_REFLECTION * this.mouthLp[b];
 
-        tA.write(pJ - tailBack, pJ1 - aAtCh);
-        ch.write(pJ1 - chBack, pJ2 - chAtB);
-        tB.write(pJ2 - bBack, reflected);
+        tA.write((pJ - tailBack) * MERGE_KEEP, (pJ0 - aAtCat) * STEP_KEEP);
+        cat.write((pJ0 - catBack) * STEP_KEEP, (pJ1 - aAtCh) * STEP_KEEP);
+        ch.write((pJ1 - chBack) * STEP_KEEP, (pJ2 - chAtB) * STEP_KEEP);
+        tB.write((pJ2 - bBack) * STEP_KEEP, reflected);
 
         // WHAT A LISTENER ACTUALLY HEARS. Close to the mouth the pressure follows the flow
         // leaving it; far away it follows that flow's time derivative, and the changeover
@@ -613,8 +695,15 @@ class ExhaustProcessor extends AudioWorkletProcessor {
         // notices about pipe diameter — and without it the model had it backwards, because
         // a narrow pipe raises wave pressure for the same flow.
         const leaving = ((atMouth - reflected) * tB.area) / (rhoTail * cT);
-        const rad = leaving + (leaving - this.prevOut[b]) * this.radK;
+        let rad = leaving + (leaving - this.prevOut[b]) * this.radK;
         this.prevOut[b] = leaving;
+        // A MONOPOLE CANNOT RADIATE DC. The exhaust stroke pushes a net positive volume
+        // out of the pipe every cycle, so the flow leaving it has a standing mean — but
+        // steady flow makes no sound, and leaving it in put a large offset and a subsonic
+        // rumble under everything and ate the headroom the pulses needed. Measured at
+        // idle, 0 Hz was the single strongest component in the spectrum.
+        this.dcState[b] += (rad - this.dcState[b]) * this.dcK;
+        rad -= this.dcState[b];
         if (b === 0) left += rad; else right += rad;
       }
 

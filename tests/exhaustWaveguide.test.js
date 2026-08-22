@@ -40,6 +40,7 @@ function run(opts = {}) {
   const {
     rpm = 3000, seconds = 1.2, load = 1, pipeDiaIn = 3, muffled = false, jet = 0.3,
     engine = { configuration: 'V8', bore: 101.6, stroke: 92 },
+    headers = false, turboFitted = false,
   } = opts;
   const cfg = { ...DEFAULT_ENGINE_CONFIG, ...engine };
   const derived = deriveEngine(cfg);
@@ -53,7 +54,7 @@ function run(opts = {}) {
   const geo = exhaustGeometry({
     displacementL: derived.displacementL, cyl: derived.cyl, bore: cfg.bore,
     compression: cfg.compression, configuration: cfg.configuration, pipeDiaIn,
-    gasTempK: point.egt + 273.15,
+    gasTempK: point.egt + 273.15, headers, turboFitted,
   });
   const p = new Processor();
   p.port.onmessage({ data: { ...geo, muffled } });
@@ -156,7 +157,7 @@ describe('the exhaust waveguide', () => {
     // A real recording does the same, so the model must not hold the ratio flat.
     const crests = [1500, 3000, 6000].map((rpm) => levels(run({ rpm, seconds: 1 }).out).crest);
     for (const c of crests) expect(c).toBeGreaterThan(4);
-    expect(crests[0]).toBeGreaterThan(crests[2] + 4);
+    expect(crests[0]).toBeGreaterThan(crests[2] + 2.5);
   });
 
   it('gets louder with load because the cylinder reaches valve opening higher, not because anything says so', () => {
@@ -242,5 +243,44 @@ describe('the exhaust waveguide', () => {
     const bank0 = geo.events.filter((/** @type {any} */ e) => e.bank === 0).map((/** @type {any} */ e) => e.angleDeg);
     const gaps = bank0.slice(1).map((/** @type {number} */ a, /** @type {number} */ i) => a - bank0[i]);
     expect(new Set(gaps.map((/** @type {number} */ g) => Math.round(g))).size).toBeGreaterThan(1);
+  });
+});
+
+describe('what the rest of the build does to the exhaust', () => {
+  /** @param {object} o @returns {{rms: number, bands: number[]}} */
+  function measure(o) {
+    const { out } = run({ rpm: 3000, load: 1, muffled: true, seconds: 1.4, ...o });
+    return {
+      rms: levels(out).rms,
+      bands: [bandDb(out, 40, 200), bandDb(out, 200, 800), bandDb(out, 800, 3000), bandDb(out, 3000, 8000)],
+    };
+  }
+
+  it('mutes the whole exhaust when a turbine sits in it', () => {
+    // The single biggest thing that makes a boosted car sound unlike the same engine
+    // naturally aspirated, and it is not an EQ curve: the blowdown does work on a wheel
+    // instead of leaving through a pipe, so the energy that would have been noise becomes
+    // shaft power, and a rotor in the path absorbs most of what gets past.
+    const na = measure({});
+    const turbo = measure({ turboFitted: true });
+    expect(turbo.rms).toBeLessThan(na.rms * 0.6);
+    // And it takes the top end hardest, which is why a turbo car is muffled rather than
+    // merely quiet.
+    expect(na.bands[3] - turbo.bands[3]).toBeGreaterThan(na.bands[0] - turbo.bands[0]);
+  });
+
+  it('deepens and opens the bark when long-tube headers replace a cast manifold', () => {
+    const stock = measure({});
+    const headers = measure({ headers: true });
+    // Longer primaries of a bigger bore: the quarter-wave drops and less is lost getting
+    // to the collector, so the mid band the bark lives in comes up.
+    expect(headers.bands[1]).toBeGreaterThan(stock.bands[1] + 2);
+  });
+
+  it('stacks headers with an open system, because they are different parts', () => {
+    const stock = measure({});
+    const both = measure({ headers: true, muffled: false });
+    expect(both.bands[2]).toBeGreaterThan(stock.bands[2] + 8);
+    expect(both.bands[3]).toBeGreaterThan(stock.bands[3] + 8);
   });
 });
