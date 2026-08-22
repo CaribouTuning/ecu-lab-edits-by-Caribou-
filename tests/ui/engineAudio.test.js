@@ -162,13 +162,13 @@ describe('the exhaust pulse train', () => {
     expect(spread).toBeLessThan(Math.min(...gaps) * 0.05);
   });
 
-  it('spaces a cross-plane V8 evenly at the tailpipe but unevenly within a bank', () => {
-    // Both halves matter. The tailpipe hears all eight, 90 degrees apart; each collector
-    // hears only four, and those four are what rumbles.
+  it('pairs a cross-plane V8\'s pulses, which is the rumble', () => {
+    // Each bank fires unevenly, and the two collectors deliver a beat apart, so the train
+    // that reaches the ear alternates long-short instead of sitting at one spacing.
     const derived = deriveEngine({ ...DEFAULT_ENGINE_CONFIG, configuration: 'V8' });
     const times = collect(frameFor({ rpm: 1200, configuration: 'V8', derived }), 0.6);
     const gaps = times.slice(1).map((t, i) => t - times[i]);
-    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(Math.min(...gaps) * 0.05);
+    expect(Math.max(...gaps)).toBeGreaterThan(Math.min(...gaps) * 1.4);
 
     const events = firingEvents('V8').filter((e) => e.bank === 0).map((e) => e.angleDeg);
     const bankGaps = events.slice(1).map((a, i) => a - events[i]);

@@ -80,6 +80,19 @@ const LOOP_WANDER_S = 0.55;
 /** How much of the wander comes from cycle-to-cycle variation. */
 const LOOP_WANDER_PER_COV = 0.35;
 
+/**
+ * How much harder individual pulses vary than the mix as a whole.
+ *
+ * Modulating single combustion events is what "lumpy" IS; modulating the whole mix is a
+ * tremolo. So the per-pulse term is the loud one and the mix-level swell underneath it is
+ * comparatively gentle — get that balance the wrong way round and an engine wobbles
+ * instead of loping.
+ */
+const LOPE_PULSE_RATIO = 2.15;
+
+/** Pulse-to-pulse scatter that every engine has, lope or not. Small on purpose. */
+const COMBUSTION_SCATTER = 0.06;
+
 /** Parameter updates per second. Pulse scheduling is unthrottled; this is not. */
 const PARAM_HZ = 14;
 
@@ -492,10 +505,12 @@ export function updateEngineAudio(a, frame) {
   // A real engine's speed micro-fluctuates from combustion variation, so its pitch is
   // never perfectly steady — and a dead-steady pitch is the giveaway for synthesis. The
   // depth of the wobble is the cycle-to-cycle variation the physics reported.
-  const drift = 1 + (Math.random() - 0.5) * drive.cov * 0.3;
+  const drift = 1 + (Math.random() - 0.5) * Math.min(drive.cov, 0.06) * 0.3;
   // Each variant also gets its own slow rate offset, redrawn on an unrelated schedule.
   if (t > a.loopNextWander) {
-    a.loopWander = a.loopWander.map(() => (Math.random() - 0.5) * drive.cov * LOOP_WANDER_PER_COV);
+    // Capped: this is meant to stop two loops phase-locking, not to add vibrato.
+    a.loopWander = a.loopWander.map(
+      () => (Math.random() - 0.5) * Math.min(drive.cov, 0.06) * LOOP_WANDER_PER_COV);
     a.loopNextWander = t + LOOP_WANDER_S * (0.6 + Math.random() * 0.8);
   }
   const blendSum = a.loopBlend.reduce((x, y) => x + y, 0);
@@ -575,8 +590,9 @@ export function updateEngineAudio(a, frame) {
   // sub-multiple of the firing rate and washes out as the engine revs and the burn evens
   // up — which is why a cammed engine loafs at idle and cleans up on the way to redline.
   a.lopeLfo.frequency.setTargetAtTime(Math.max(1.8, Math.min(11, fire / 7)), t, 0.15);
-  a.lopeDepth.gain.setTargetAtTime(
-    audible ? Math.min(0.42, Math.max(0, drive.cov - 0.02) * 2.6) : 0, t, 0.12);
+  // Zero on a stock cam. This modulates the whole mix, so anything above zero here is
+  // heard on every engine — which is exactly the wobble a smooth idle must not have.
+  a.lopeDepth.gain.setTargetAtTime(audible ? Math.min(0.42, drive.lopeSeverity) : 0, t, 0.12);
 
   // Induction noise is the sound of air being moved, so it tracks airflow directly.
   a.indG.gain.setTargetAtTime(intakeFitted && audible ? drive.inductionLevel * 0.09 : 0, t, 0.06);
@@ -762,19 +778,22 @@ export function scheduleExhaustPulses(a, frame) {
     // correlation is the whole difference between a lope and a fizz: white noise on the
     // pulse amplitudes sounds like a gate chattering, and the same amount of variation
     // carried forward sounds like an engine loafing. See ACOUSTIC.COV_PERSISTENCE.
+    // A diluted charge burns weakly, and occasionally not at all. This is where a lumpy
+    // idle actually comes from — individual combustion events being unequal, not the whole
+    // mix being modulated. On a stock cam `lopeSeverity` is zero and this is a no-op.
+    //
+    // Two shapes, because a lope has both. The product of two slow sines is a
+    // deterministic drift with no repeat period the ear can latch onto, and it is what
+    // makes it LOAF rather than merely wobble. The first-order term is the stochastic
+    // part — one weak cycle making the next one weak — kept small so it textures the
+    // loafing rather than replacing it with noise.
+    const severity = Math.min(0.85, drive.lopeSeverity * LOPE_PULSE_RATIO);
     const p = drive.covPersistence;
     a.cycleWander = a.cycleWander * p + (Math.random() * 2 - 1) * (1 - p);
+    const loaf = 0.5 + 0.5 * Math.sin(a.pulseIdx * 0.55) * Math.sin(a.pulseIdx * 0.17);
     const misfired = Math.random() < drive.misfireRate;
-    // Two shapes, because a lope has both. The first-order term above is the stochastic
-    // part — one weak cycle making the next one weak. The product of two slow sines is a
-    // deterministic drift with no repeat period the ear can latch onto, and it is what
-    // makes it LOAF rather than merely wobble.
-    // sqrt(1 - p^2) keeps the variance the same as the uncorrelated case, so adding
-    // memory changes the CHARACTER of the variation without quietly changing its depth.
-    const loaf = Math.sin(a.pulseIdx * 0.55) * Math.sin(a.pulseIdx * 0.17);
-    const scatter = a.cycleWander / Math.sqrt(1 - p * p);
-    const wander = 1 - drive.cov * (1.1 * (0.5 + 0.5 * loaf) - 0.55 * scatter);
-    g.gain.value = Math.max(0, level * pulseMix * (misfired ? 0.22 : 1) * wander);
+    const wander = (1 - severity * loaf * 0.75) * (1 + a.cycleWander * COMBUSTION_SCATTER);
+    g.gain.value = Math.max(0, level * pulseMix * (misfired ? 0.25 : 1) * wander);
     src.connect(g); g.connect(a.pulseBus);
     try { src.start(a.nextPulse); } catch { /* scheduling raced; skip this one */ }
     src.onended = () => { try { src.disconnect(); g.disconnect(); } catch { /* already gone */ } };

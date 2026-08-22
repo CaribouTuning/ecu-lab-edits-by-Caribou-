@@ -59,15 +59,41 @@ describe('firing frequency', () => {
 });
 
 describe('firing geometry', () => {
-  it('gives every layout one event per cylinder, evenly spaced around the cycle', () => {
+  it('gives every layout one event per cylinder, in ascending crank order', () => {
     for (const { config, cyl } of [
       { config: 'I4', cyl: 4 }, { config: 'I6', cyl: 6 },
       { config: 'V6', cyl: 6 }, { config: 'V8', cyl: 8 },
     ]) {
       const events = S.firingEvents(config);
       expect(events).toHaveLength(cyl);
-      events.forEach((e, i) => expect(e.angleDeg).toBeCloseTo(i * (720 / cyl), 6));
+      events.forEach((e, i) => {
+        expect(e.angleDeg).toBeGreaterThanOrEqual(i === 0 ? 0 : events[i - 1].angleDeg);
+        expect(e.angleDeg).toBeLessThan(720);
+      });
     }
+  });
+
+  it('spaces every layout but the cross-plane V8 evenly at the tailpipe', () => {
+    const gapsOf = (config) => {
+      const ev = S.firingEvents(config);
+      return ev.map((e, i) => ((ev[(i + 1) % ev.length].angleDeg - e.angleDeg + 720) % 720) || 720);
+    };
+    for (const config of ['I4', 'I6', 'V6']) {
+      const gaps = gapsOf(config);
+      gaps.forEach((g) => expect(g).toBeCloseTo(720 / gaps.length, 6));
+    }
+  });
+
+  it('PAIRS a cross-plane V8 at the tailpipe — this is the rumble', () => {
+    // Both banks interleave to an even 90 degrees, so if their collectors delivered at the
+    // same instant the ear would hear an even train and a V8 would not sound like one.
+    // The offset between the two pairs the pulses up.
+    const ev = S.firingEvents('V8');
+    const gaps = ev.map((e, i) => ((ev[(i + 1) % ev.length].angleDeg - e.angleDeg + 720) % 720) || 720);
+    const norm = gaps.map((g) => g / 90);
+    expect(Math.max(...norm)).toBeGreaterThan(1.2);
+    expect(Math.min(...norm)).toBeLessThan(0.8);
+    expect(gaps.reduce((a, b) => a + b, 0)).toBeCloseTo(720, 6);
   });
 
   it('fires a cross-plane V8 UNEVENLY within each bank — which is the rumble', () => {
@@ -233,17 +259,24 @@ describe('cycle-to-cycle variation', () => {
     expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).misfireRate).toBe(0);
   });
 
-  it('rises with residual, which is what a lopey idle physically is', () => {
-    const clean = S.cyclicVariation({ residualFrac: 0.11, rpm: 850 });
-    const diluted = S.cyclicVariation({ residualFrac: 0.20, rpm: 850 });
-    expect(diluted.cov).toBeGreaterThan(clean.cov);
-    expect(diluted.misfireRate).toBeGreaterThan(clean.misfireRate);
+  it('is FLAT ZERO on a stock cam — a smooth idle must render smooth', () => {
+    const stock = S.cyclicVariation({ rpm: 850, overlapDeg: 0 });
+    expect(stock.severity).toBe(0);
+    expect(stock.misfireRate).toBe(0);
+    expect(stock.cov).toBe(S.ACOUSTIC.COV_FLOOR);
+  });
+
+  it('rises with valve overlap, which is what opens the window for dilution', () => {
+    const mild = S.cyclicVariation({ rpm: 850, overlapDeg: 11 });
+    const wild = S.cyclicVariation({ rpm: 850, overlapDeg: 44 });
+    expect(wild.severity).toBeGreaterThan(mild.severity);
+    expect(wild.misfireRate).toBeGreaterThan(mild.misfireRate);
   });
 
   it('washes out as revs rise, because there is no time left to wander', () => {
-    const idle = S.cyclicVariation({ residualFrac: 0.20, rpm: 850 });
-    const revving = S.cyclicVariation({ residualFrac: 0.20, rpm: 2400 });
-    expect(revving.cov).toBeLessThan(idle.cov);
+    const idle = S.cyclicVariation({ rpm: 850, overlapDeg: 44 });
+    const revving = S.cyclicVariation({ rpm: 2400, overlapDeg: 44 });
+    expect(revving.severity).toBeLessThan(idle.severity);
   });
 
   it('carries memory from one cycle to the next', () => {
@@ -254,12 +287,13 @@ describe('cycle-to-cycle variation', () => {
     expect(drive({ rpm: 850, mapKpa: 40 }).covPersistence).toBe(S.ACOUSTIC.COV_PERSISTENCE);
   });
 
-  it('lopes a big cam and not a small one, without ever being told about overlap', () => {
+  it('lopes a big cam and leaves a small one alone', () => {
     const cam = (duration) => {
       const cfg = { ...STOCK, configuration: 'V8', camDuration: duration };
-      return drive({ cfg, rpm: 850, mapKpa: 40, timingVal: 14, afrCommanded: 13.5 }).cov;
+      return drive({ cfg, rpm: 850, mapKpa: 40, timingVal: 14, afrCommanded: 13.5 }).lopeSeverity;
     };
-    expect(cam(270)).toBeGreaterThan(cam(200) * 1.5);
+    expect(cam(200)).toBe(0);
+    expect(cam(270)).toBeGreaterThan(0.2);
   });
 });
 

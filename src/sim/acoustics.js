@@ -104,44 +104,32 @@ export const ACOUSTIC = {
   // the tailpipe.
   EXHAUST_STROKE_KPA: 9,
 
-  // --- Cycle-to-cycle variation (the physical basis of "lope") ---
-  // Residual fraction above which burning stops being repeatable.
-  //
-  // The textbook knee is around 0.20, and this is deliberately not that. `residualFraction`
-  // in thermo.js is conservative at light load — it reports about 0.12 at a 40 kPa idle
-  // where measurements on a cammed engine run past 0.25 — so a 0.20 knee would mean no
-  // engine in this simulation ever lopes. The knee is placed where THIS model's own
-  // light-load residual begins instead, which is the number that separates a stock cam
-  // from a race cam in the range it actually produces.
-  //
-  // IF `residualFraction` IS EVER RECALIBRATED, THIS MOVES WITH IT. It is a knee on that
-  // function's output, not an independent physical claim.
-  COV_RESIDUAL_KNEE: 0.11,
-  // Coefficient of variation of indicated work at low dilution, and how fast it rises
-  // once past the knee. 2% is a healthy production engine; 10%+ is a visibly lumpy idle.
-  // The slope is steep because it works on the narrow span of dilution the residual model
-  // above spans, not on a textbook range.
+  // --- Cycle-to-cycle variation ("lope") ---
+  // Below this much valve overlap an engine simply does not loaf. A stock cam is 0 and
+  // must render as 0 — anything else puts a wobble on an engine that idles smoothly.
+  LOPE_OVERLAP_MIN_DEG: 1.5,
+  // How much variation each degree of overlap buys, and the ceiling. 44 degrees (a
+  // 290-degree cam) reaches 0.57, which is a thoroughly lumpy idle; a 230-degree cam
+  // reaches 0.14 and merely sounds alive.
+  LOPE_PER_OVERLAP_DEG: 0.013,
+  LOPE_MAX: 0.60,
+  // Where lope is measured from, and how fast it washes out with engine speed.
+  LOPE_IDLE_RPM: 800,
+  LOPE_FADE_RPM: 2000,
+  // Coefficient of variation of indicated work with no overlap at all. 2% is a healthy
+  // production engine and is what a stock build should sit at.
   COV_FLOOR: 0.02,
-  COV_PER_RESIDUAL: 5.5,
-  COV_CEILING: 0.22,
-  // Above this engine speed there is no time for a cycle to wander far before the next
-  // one arrives, and the flywheel filters what is left — so a cammed engine loafs at
-  // idle and cleans up as it revs.
-  COV_SMOOTHING_RPM: 2600,
+  // Fraction of cycles that fail to light, per unit of severity. A misfire is the audible
+  // gap in a lopey idle, not just a quieter pulse.
+  MISFIRE_PER_SEVERITY: 0.30,
   // How much of one cycle's weakness carries into the next.
   //
-  // This is the PRIOR-CYCLE EFFECT and it is why a lopey idle loafs instead of
-  // buzzing. A weak cycle burns less of its charge, so it leaves more residual behind,
-  // so the cycle after it is diluted too — the variation is strongly correlated rather
-  // than random. Published lag-one autocorrelations of IMEP in dilute spark ignition
-  // sit around 0.3-0.6.
-  //
-  // The renderer needs this, not the sim: modelling variation as white noise per firing
-  // event produces a fizz, and the same amount of variation with memory produces a lope.
+  // This is the PRIOR-CYCLE EFFECT and it is why a lopey idle loafs instead of buzzing. A
+  // weak cycle burns less of its charge, leaves more residual, and dilutes the cycle after
+  // it. Published lag-one autocorrelations of IMEP in dilute spark ignition sit around
+  // 0.3-0.6. The renderer needs this, not the sim: the same amount of variation without
+  // memory produces a fizz.
   COV_PERSISTENCE: 0.55,
-  // Fraction of cycles that misfire outright, per unit of variation past the floor.
-  // A misfire is the audible gap in a lopey idle, not just a quieter pulse.
-  MISFIRE_PER_COV: 0.55,
 
   // --- Turbocharger ---
   // Radial compressor slip factor: the fraction of tip speed the gas actually leaves
@@ -217,6 +205,24 @@ const BANK_ORDER = {
 };
 
 /**
+ * How far the second bank's pulses arrive behind the first, as a fraction of the average
+ * firing gap.
+ *
+ * WITHOUT THIS A CROSS-PLANE V8 DOES NOT RUMBLE, and that is worth stating plainly.
+ * Its two banks fire at 180/270/180/90 degrees each, but they interleave to a perfectly
+ * even 90 degrees at the tailpipe — so if both collectors delivered at the same instant
+ * the ear would hear an even train and it would sound like anything else. What it
+ * actually hears is two markedly different pulse trains arriving down two collectors of
+ * different length, merged well downstream, and that offset pairs the pulses up: the gaps
+ * alternate roughly 1.28 and 0.72 of the average instead of sitting at 1.0.
+ *
+ * The 60-degree V6's banks are even and short-coupled, so the same offset would only
+ * smear an already-even train; it gets none. Inline engines have one bank and no offset
+ * to have.
+ */
+const BANK_OFFSET_FRAC = { I4: 0, I6: 0, V6: 0, V8: 0.28 };
+
+/**
  * @typedef {object} FiringEvent
  * @property {number} angleDeg crank angle of the firing event within the 720-degree cycle
  * @property {number} bank which exhaust collector it leaves through, 0 or 1
@@ -235,7 +241,10 @@ const BANK_ORDER = {
 export function firingEvents(configuration) {
   const banks = BANK_ORDER[configuration] || BANK_ORDER.I4;
   const gap = 720 / banks.length;
-  return banks.map((bank, i) => ({ angleDeg: i * gap, bank }));
+  const offset = (BANK_OFFSET_FRAC[configuration] ?? 0) * gap;
+  return banks
+    .map((bank, i) => ({ angleDeg: i * gap + (bank === 1 ? offset : 0), bank }))
+    .sort((a, b) => a.angleDeg - b.angleDeg);
 }
 
 /**
@@ -381,20 +390,40 @@ export function pulseSharpness(ratio) {
  * model already computes residual, and driving the sound from the consequence rather
  * than the cause means a build that dilutes its charge some other way lopes too.
  *
- * @param {{residualFrac: number, rpm: number}} state
- * @returns {{cov: number, misfireRate: number}} variation and the fraction of cycles
- *   that fail to light
+ * @param {{residualFrac?: number, rpm: number, overlapDeg?: number}} state
+ * @returns {{cov: number, severity: number, misfireRate: number}} variation, how hard it
+ *   loafs, and the fraction of cycles that fail to light
  */
-export function cyclicVariation({ residualFrac, rpm }) {
-  const dilution = Math.max(0, (residualFrac ?? 0) - ACOUSTIC.COV_RESIDUAL_KNEE);
-  // Fast engines have less time to wander and a flywheel that filters what is left.
-  const speedFade = clamp(1 - Math.max(0, rpm) / ACOUSTIC.COV_SMOOTHING_RPM, 0, 1);
-  const cov = clamp(
-    ACOUSTIC.COV_FLOOR + dilution * ACOUSTIC.COV_PER_RESIDUAL * speedFade,
-    ACOUSTIC.COV_FLOOR, ACOUSTIC.COV_CEILING,
+export function cyclicVariation({ rpm, overlapDeg = 0 }) {
+  // VALVE OVERLAP, NOT RESIDUAL FRACTION, AND THAT IS A COMPROMISE WORTH READING.
+  //
+  // Residual is the better physical basis and this function used to use it. It does not
+  // work against the residual model we have: `residualFraction` in thermo.js is dominated
+  // by the pressure ratio across the cylinder, so at a 40 kPa idle it reports 0.12 for a
+  // stock cam and 0.13 for a 290-degree race cam — a 9% spread, where the audible
+  // difference between those two engines is total. Worse, it reports a HIGH number for a
+  // stock engine at deep vacuum, so driving lope from it made every engine loaf at idle.
+  // A stock engine does not loaf. It idles smoothly, and it must sound like it.
+  //
+  // Overlap separates them cleanly (0 degrees against 44) because overlap is the actual
+  // mechanism: it is the window where exhaust can push back into the intake. Until the
+  // residual model resolves light-load dilution properly, this is the honest lever, and
+  // the residual model resolves light-load dilution properly, this is the honest lever.
+  const severity = overlapDeg > ACOUSTIC.LOPE_OVERLAP_MIN_DEG
+    ? Math.min(ACOUSTIC.LOPE_MAX, overlapDeg * ACOUSTIC.LOPE_PER_OVERLAP_DEG)
+    : 0;
+  // Fast engines have no time to wander far before the next cycle arrives, and the
+  // flywheel filters what is left — so a cammed engine loafs at idle and cleans up on the
+  // way to redline.
+  const speedFade = clamp(
+    1 - (Math.max(0, rpm) - ACOUSTIC.LOPE_IDLE_RPM) / ACOUSTIC.LOPE_FADE_RPM, 0.12, 1,
   );
-  const misfireRate = Math.max(0, cov - ACOUSTIC.COV_FLOOR) * ACOUSTIC.MISFIRE_PER_COV;
-  return { cov, misfireRate };
+  const cov = ACOUSTIC.COV_FLOOR + severity * speedFade;
+  return {
+    cov,
+    severity: severity * speedFade,
+    misfireRate: severity * speedFade * ACOUSTIC.MISFIRE_PER_SEVERITY,
+  };
 }
 
 /**
@@ -521,6 +550,7 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} pulseRate how fast one blowdown pulse plays out, relative to the
  *   reference engine — under 1 is a longer, lower pulse
  * @property {number} cov cycle-to-cycle variation of indicated work
+ * @property {number} lopeSeverity 0..1, how hard the idle loafs — 0 on a stock cam
  * @property {number} covPersistence how much of one cycle's variation carries to the next
  * @property {number} misfireRate fraction of cycles that fail to light
  * @property {number} exhaustPowerW enthalpy leaving through the pipe, W
@@ -577,7 +607,7 @@ export function acousticDrive({
   // Blowdown when there is any, plus what the exhaust stroke pushes out regardless.
   const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) * clamp(throttle, 0, 1)
     + ACOUSTIC.EXHAUST_STROKE_KPA;
-  const variation = cyclicVariation({ residualFrac: point ? point.residualFrac : 0, rpm });
+  const variation = cyclicVariation({ rpm, overlapDeg: derived.overlapDeg || 0 });
 
   const durationS = blowdownDurationS({
     displacementL, cyl, bore: derived.bore, compression, gasTempK,
@@ -600,6 +630,7 @@ export function acousticDrive({
       ACOUSTIC.PULSE_RATE_MIN, ACOUSTIC.PULSE_RATE_MAX,
     ),
     cov: variation.cov,
+    lopeSeverity: variation.severity,
     covPersistence: ACOUSTIC.COV_PERSISTENCE,
     misfireRate: variation.misfireRate,
     exhaustPowerW: powerW,
