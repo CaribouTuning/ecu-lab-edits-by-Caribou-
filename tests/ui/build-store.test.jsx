@@ -565,21 +565,39 @@ describe('every segmented control', () => {
 });
 
 describe('every toggle', () => {
-  it('is a named switch that reports its own state', () => {
-    // A Toggle is the one control here with no visible text of its own on the switch —
-    // its whole identity is the accessible name and the aria-checked state. Drop the
-    // label at a call site and it still renders, still works, and announces itself as
-    // an unnamed switch; get `checked` wrong and it reports the opposite of the build.
-    // EcuLab.jsx carries @ts-nocheck, so neither lint nor tsc sees either mistake, and
-    // Toggle's own tests render it in isolation and never inspect what the app passes.
+  it('carries an accessible name at every call site', () => {
+    // Toggle puts the name in `aria-label`, so dropping `label` leaves a switch that
+    // renders, works, and announces itself unnamed. EcuLab.jsx carries @ts-nocheck and
+    // Toggle's own tests render it in isolation, so nothing else would see it.
+    //
+    // This asserts `aria-label` directly and deliberately does NOT fall back to
+    // textContent: the sub-label lives inside the same <button>, so textContent stays
+    // truthy with the name gone and the fallback made the assertion unfailable. An
+    // earlier version of this test had exactly that bug.
     launch();
     fireEvent.click(screen.getByText('Forced Induction'));
     const switches = screen.getAllByRole('switch');
-    expect(switches.length).toBeGreaterThan(0);
+    expect(switches.length).toBeGreaterThan(1);
     switches.forEach((sw) => {
-      expect(sw.getAttribute('aria-label') || sw.textContent).toBeTruthy();
-      expect(sw.getAttribute('aria-checked')).toMatch(/^(true|false)$/);
+      expect(sw.getAttribute('aria-label')).toBeTruthy();
     });
+  });
+
+  it('installs the turbo when switched on, and reports it', () => {
+    // The partner to the intercooler test below. Without this, breaking Turbo kit's
+    // `checked` or `onChange` was caught only incidentally, by an unrelated duty-cycle
+    // test whose threshold happens to need turboOn — change that number and a broken
+    // turbo switch would pass the whole suite.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
+    expect(summary()).toBe('Not installed');
+
+    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+
+    expect(screen.getByRole('switch', { name: /Turbo kit/ }).getAttribute('aria-checked')).toBe('true');
+    // And it reached the build, not just the switch: the section summary reads turboOn.
+    expect(summary()).toMatch(/turbine · peak/);
   });
 
   it('installs the intercooler when switched on, and reports it', () => {
