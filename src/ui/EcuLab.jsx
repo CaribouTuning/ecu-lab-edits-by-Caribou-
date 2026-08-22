@@ -125,7 +125,7 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
     <div style={{ background: T.accBg, border: `1px solid ${T.acc}`, borderRadius: 12, padding: '13px 14px', margin: '0 0 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>{j.title.toUpperCase()}</div>
-        <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: T.ink3, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>SKIP GUIDE</button>
+        <Button variant="quiet" size="sm" style={{ flexShrink: 0 }} onClick={onDismiss}>SKIP GUIDE</Button>
       </div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.55, marginTop: 7 }}>{j.body}</div>
       <div style={{ display: 'flex', gap: 5, marginTop: 11, marginBottom: 10 }}>
@@ -133,9 +133,16 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
           <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? T.acc : T.line }} />
         ))}
       </div>
-      <button onClick={onAdvance} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+      {/* The closest thing this file has to a justified `block`, and still not one.
+          The card looks bounded, but nothing bounds it: index.html lays the app out
+          mobile-first and neither the shell nor any tab body sets a max-width, so
+          this banner is as wide as the window. `block` here would put a 2500px-wide
+          "Done building — go tune it" on a desktop monitor, which is the complaint
+          this PR exists to answer. Give the app a max-width first; `block` becomes
+          honest the moment a container is genuinely narrow. */}
+      <Button onClick={onAdvance}>
         {j.cta}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1054,12 +1061,16 @@ export function EcuLabApp() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => setAppView('tutorial')} title="Tutorial" style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: 9, color: T.ink2 }}>
-              <Info size={16} />
-            </button>
-            <button onClick={repairEngine} title="Repair engine" style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: 9, color: T.ink2 }}>
-              <Wrench size={16} />
-            </button>
+            {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
+                button whose accessible name depends on the tooltip surviving. Note
+                the lower-case names — the start screen's TUTORIAL button is queried
+                by exact name and must stay the only match. */}
+            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={() => setAppView('tutorial')}>
+              <Info size={16} aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={repairEngine}>
+              <Wrench size={16} aria-hidden="true" />
+            </Button>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
@@ -1102,11 +1113,17 @@ export function EcuLabApp() {
                         : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
                     </div>
                     <div style={{ display: 'flex', gap: 7 }}>
-                      <button onClick={live.running || live.cranking ? stopEngine : startEngine} style={{
-                        flex: 1, padding: '11px 0', borderRadius: 9, border: 'none', fontWeight: 800, fontSize: 12.5,
-                        background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
-                        borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
-                      }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
+                      {/* START was filled with `ok`. Green here is decoration, not
+                          state — the engine is not running when the button says
+                          START — and spending a status colour on an action is the
+                          rule Toggle's docstring closed. It takes the accent; STOP
+                          is the secondary state and takes `ghost`. Not `danger`:
+                          shutting an engine down destroys nothing. */}
+                      <Button
+                        variant={live.running || live.cranking ? 'ghost' : 'primary'}
+                        style={{ flex: 1 }}
+                        onClick={live.running || live.cranking ? stopEngine : startEngine}
+                      >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
                       <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn }); }} title="Engine sound" style={{
                         width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
                         border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
