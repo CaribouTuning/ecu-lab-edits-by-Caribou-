@@ -746,6 +746,58 @@ animation: running ? `cylpulse ${dur}s ${i * (0.5 / cylinders)}s ease-in-out inf
 Confirm the console warning is gone afterwards. This is pre-existing, not something this PR
 introduced — say so in the PR body rather than implying otherwise.
 
+- [ ] **Step 2c: Finish the `T.ok` sweep — and tell the two kinds apart**
+
+Task 7 removed `T.ok` from START ENGINE because green there was decoration: the button
+reads START precisely when the engine is **off**, so the status colour reported the
+opposite of the state. That same judgement was not applied to the steppers, and the
+review caught the inconsistency.
+
+`grep` finds five sites. **They are not all the same thing, and the difference is the
+whole point of the rule:**
+
+| Line | Expression | Verdict |
+|---|---|---|
+| `:374` | `d < 0 ? T.accInk : T.ok` | **decoration** — a pending edit's sign |
+| `:1618` | `d < 0 ? T.accInk : T.ok` | **decoration** — same, boost editor |
+| `:1992` | `dHp > 0 ? T.ok : T.dangerInk` | **status** — this pull made more power than the last |
+| `:1993` | `dTq > 0 ? T.ok : T.dangerInk` | **status** |
+| `:1994` | `dKnock < 0 ? T.ok : T.dangerInk` | **status** — less knock is genuinely better |
+
+Raising a VE cell by one is not *good*; it is just positive. The stepper is showing a sign,
+and painting a sign green teaches the player that green means nothing in particular —
+which is what makes them ignore it when `:1992` uses it to say something real.
+
+Fix `:374` and `:1618`. **Leave `:1992`-`:1994` alone** — a delta against the previous pull
+is a verdict, and that is exactly what the status scale is for. Use `T.inkSoft` or the
+`accInk`/`ink2` pairing already in use; state what you chose.
+
+Check the file for any other `T.ok`/`T.warn`/`T.danger` used for something that is not a
+judgement, and report what you find rather than assuming these five are all of them.
+
+- [ ] **Step 2d: Three more hand-rolled `Panel` duplicates, and one Panel fighting itself**
+
+Beyond `:2246`, `grep` finds `:1773` and `:1777` (both `panel2` + a `line` border + radius 10
++ `11px 13px`, which is `<Panel tight>`), and `:360` (radius 9). Convert what genuinely is a
+panel; leave anything that only shares one property, and say which you left.
+
+Separately, `EcuLab.jsx:1096` is `<Panel style={{ background: T.panel, marginBottom: 10 }}>`
+— it overrides the primitive's own surface, which is most of what `Panel` is. Task 2
+classified two such sites as deliberate "recessed" treatments. Decide whether this one is
+the same intent or a leftover, and say which.
+
+- [ ] **Step 2e: The `quiet` variant is too quiet**
+
+`Button`'s `quiet` uses `--ink3` and measures **2.87-3.47:1** depending on surface — below
+AA for its 10.5px size. `RESET ALL TO STOCK` went from 6.21:1 to 3.47:1 when it adopted the
+variant, so this task doubled the blast radius of a primitive-level problem.
+
+Raise `quiet` to `--ink2` and re-measure every place it is used. This is the same class of
+defect Task 3 fixed in `StatTile` — a token chosen for hierarchy without checking it
+against the surface it lands on — so **add the assertion beside `StatTile`'s**, using the
+contrast helper that already exists in `tests/ui/readouts.test.jsx`, rather than fixing it
+silently.
+
 - [ ] **Step 3: Confirm every duplicate is gone**
 
 ```bash
@@ -779,6 +831,25 @@ git fetch origin
 git rebase origin/main
 ```
 A pre-rebase green says nothing about the post-rebase tree. Re-run step 4 in full.
+
+- [ ] **Step 6b: Write down what this PR deliberately did not do**
+
+These came out of the task reviews and belong to #59, which rebuilds the shell. The PR body
+should name them so they are handed over rather than lost:
+
+1. **The app has no content width cap.** Nothing in `EcuLab.jsx`, `index.html` or
+   `tokens.css` sets a `max-width`; the root is `height: 100dvh` with unconstrained width,
+   so every container *is* the viewport. This is the actual root of "buttons span the whole
+   screen" — and it is why `Button`'s `block` prop ships with **zero adopters**: using it
+   anywhere today reproduces the complaint. #59 must add the cap first; three or four sites
+   then become honest `block` candidates.
+2. **Two hand-rolled disclosures want a primitive.** `ExpandableInfo` and `BuildSection`
+   are both expand/collapse rows, and **neither carries `aria-expanded`** — the state is
+   conveyed only by a rotated chevron, so a screen-reader user cannot tell open from shut.
+3. **`Seg` needs two things before three more call sites can adopt it:** a stacked
+   (icon-over-label) layout for the TUNE sub-tabs, and a badge slot for the DYNO sub-tabs'
+   unread dot. Both groups are `Seg` in all but name today.
+4. **The sound toggle has no `aria-pressed`**, and its accessible name is the glyph `♪`/`✕`.
 
 - [ ] **Step 7: Open the PR**
 
