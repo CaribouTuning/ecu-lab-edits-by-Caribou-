@@ -34,6 +34,15 @@ describe('Panel', () => {
     render(<Panel aria-label="Build summary">x</Panel>);
     expect(screen.getByLabelText('Build summary')).toBeTruthy();
   });
+
+  it('lets a caller supply the layout the panel does not own', () => {
+    // Fourteen of the fifteen call sites pass a `style` for margins and flex. They
+    // live in a file with @ts-nocheck, so a props type that rejected `style` would
+    // never have failed there — it would only have surfaced the first time a typed
+    // screen tried the same thing, which is exactly what the next PR does.
+    const { container } = render(<Panel style={{ marginBottom: 13 }}>x</Panel>);
+    expect(/** @type {HTMLElement} */ (container.firstChild).style.marginBottom).toBe('13px');
+  });
 });
 
 describe('Eyebrow', () => {

@@ -52,8 +52,22 @@ const T = {
   sans: tokens.sans,
 };
 
+/**
+ * The NAME of the band a 0-100 health/quality value falls into, for consumers that
+ * take a semantic tone rather than a colour — `StatTile`, and anything else with a
+ * token-driven variant.
+ *
+ * The single source of truth for where the bands sit. `statusColor` below maps this
+ * tone onto a colour rather than repeating the thresholds, because two copies of a
+ * band drift apart and then disagree about whether the same number is a warning.
+ *
+ * @param {number} v 0-100
+ * @returns {'ok'|'warn'|'danger'}
+ */
+export const statusTone = (v) => (v >= 90 ? 'ok' : v >= 55 ? 'warn' : 'danger');
+
 /** Maps a 0-100 health/quality value onto the green/amber/red status scale. */
-export const statusColor = (v) => (v >= 90 ? T.ok : v >= 55 ? T.warn : T.danger);
+export const statusColor = (v) => T[statusTone(v)];
 
 /**
  * Status colour for a value where HIGH is the dangerous end: injector duty cycle,
@@ -69,10 +83,9 @@ export const statusColor = (v) => (v >= 90 ? T.ok : v >= 55 ? T.warn : T.danger)
  * sized so that sustained duty above ~90% has no headroom left for the next
  * enrichment the ECU asks for.
  *
- * These bands are copied exactly — thresholds and comparison operators — from the
- * inline duty preview in `EcuLab.jsx`. That copy is still there because this PR does
- * not migrate screens. When that panel moves onto `Bar`, delete the inline version
- * and call this instead; until then the two must be changed together.
+ * The bands live here alone now — the injector duty preview and the tachometer's
+ * redline zone in `EcuLab.jsx` both call this instead of re-testing the thresholds
+ * inline. Do not let a new inline copy creep back in; change the bands here.
  *
  * @param {number} v 0-100
  * @returns {string} a status colour

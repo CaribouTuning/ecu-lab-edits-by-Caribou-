@@ -104,6 +104,25 @@ describe('Select', () => {
     render(<Select label="Engine" groups={GROUPS} value="n54" onChange={() => {}} />);
     expect(screen.getByRole('combobox', { name: 'Engine' })).toBeTruthy();
   });
+
+  it('lets the caller size it, since the primitive will not', () => {
+    // The wrapper is inline-block with a 200px floor, so a bare swap for the old
+    // full-width control shrinks it. The docstring says callers must size it
+    // themselves — this is the mechanism that makes that possible, and without it
+    // the instruction was unfollowable.
+    const { container } = render(
+      <Select
+        label="Engine"
+        groups={[{ label: 'Nissan', options: [{ value: 'vq', label: 'VQ35DE' }] }]}
+        value="vq"
+        onChange={() => {}}
+        style={{ display: 'block', marginBottom: 13 }}
+      />,
+    );
+    const wrap = /** @type {HTMLElement} */ (container.firstChild);
+    expect(wrap.style.display).toBe('block');
+    expect(wrap.style.marginBottom).toBe('13px');
+  });
 });
 
 describe('Toggle', () => {

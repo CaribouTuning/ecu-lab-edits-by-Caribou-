@@ -28,6 +28,7 @@ import {
 } from '../../src/sim/index.js';
 import { LOAD, RPM } from '../../src/sim/tables.js';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
+import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 
@@ -237,13 +238,13 @@ describe('opening and dismissing the overwrite prompt', () => {
 
 
 /**
- * ToggleRow renders its switch as an unlabelled button beside the label text, so it
- * has to be reached through the row rather than by name.
+ * The Toggle primitive renders a `role="switch"` with the label as its accessible
+ * name, so it can be reached directly rather than through the row's DOM shape.
  * @param {string} label
- * @returns {HTMLButtonElement}
+ * @returns {HTMLElement}
  */
 function toggleFor(label) {
-  return screen.getByText(label).parentElement.parentElement.querySelector('button');
+  return screen.getByRole('switch', { name: label });
 }
 
 /**
@@ -442,5 +443,176 @@ describe('choosing Custom build from the preset picker', () => {
     fireEvent.change(presetPicker(), { target: { value: '__custom__' } });
 
     expect(headerEngineName()).toMatch(/^\d\.\dL /);
+  });
+});
+
+describe('the injector-duty preview call site', () => {
+  it('paints the Duty bar as dangerous, not healthy, once duty cycle has no headroom left', () => {
+    // TUNE/readouts.test.jsx's describe('Bar') proves the PRIMITIVE inverts colour
+    // correctly given higherIsBetter={false} — it renders Bar in isolation. It says
+    // nothing about whether EcuLab's own INJECTOR DUTY PREVIEW call site (ECU Fuel
+    // System, EcuLab.jsx ~1924) actually PASSES that prop. A reviewer flipped it to
+    // higherIsBetter={true} — 95% duty, an injector out of headroom and about to lean
+    // the mixture out, painted bright green — and all existing tests, including the
+    // Bar unit tests, stayed green. This drives the real app to a build that reaches
+    // a genuinely dangerous duty cycle and reads the colour off the rendered bar.
+    launch();
+
+    // dutyPreview (EcuLab.jsx:639) is computed at WOT @ 6500 RPM. It scales inversely
+    // with ecuInjectorCc (a fresh build already starts at 315cc, the smallest on the
+    // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
+    // dial the boost target at 6500 RPM to its maximum.
+    fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
+    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(toggleFor('Turbo kit'));
+
+    const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
+    fireEvent.click(columns[RPM.indexOf(6500)]);
+    // Every collapsed BuildSection stays mounted (its content is hidden with
+    // max-height, not unmounted — see BuildSection in EcuLab.jsx), so the Engine
+    // Architecture section's five sliders are still in the DOM here alongside the
+    // boost slider. max=25 is unique to the boost-curve range input.
+    const slider = screen.getAllByRole('slider').find((s) => s.getAttribute('max') === '25');
+    fireEvent.change(slider, { target: { value: '25' } });
+
+    // The true VE the boosted hardware breathes is not what the ECU's calibration
+    // table believes until the player accepts it — RESET ALL TO STOCK rebuilds the VE
+    // table from the CURRENT hardware (hwForVe, which reads turboOn and boostCurve),
+    // which is what lets dutyPreview's own VE lookup see the boosted cylinder filling
+    // instead of the naturally-aspirated baseline it started on.
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+
+    const meter = screen.getByRole('meter', { name: 'Duty' });
+    const dutyValue = Number(meter.getAttribute('aria-valuenow'));
+    // Guard the setup rather than trusting it: utilisationColor's danger band is
+    // strictly above 90. If the boost/injector combination above did not actually
+    // push duty past that line, the colour assertion below could pass or fail for
+    // the wrong reason.
+    expect(dutyValue).toBeGreaterThan(90);
+
+    // Compare against a Bar known to render dangerous, the same way
+    // readouts.test.jsx's own describe('Bar') tests do, rather than a hardcoded
+    // colour literal: jsdom normalizes an inline `background` to `rgb(...)`, so a
+    // hex literal copied out of theme.js would never string-match what the DOM
+    // actually holds.
+    const dangerRef = render(<Bar label="Reference" value={20} max={100} />);
+    const fill = /** @type {HTMLElement} */ (meter.querySelector('[data-fill]'));
+    const refFill = /** @type {HTMLElement} */ (dangerRef.container.querySelector('[data-fill]'));
+    expect(fill.style.background).toBe(refFill.style.background);
+  });
+});
+
+/**
+ * The segmented controls on screen right now.
+ *
+ * `role="group"` alone is not enough: `<optgroup>` carries that role implicitly, so the
+ * preset picker's three manufacturer headings answer to it too. A Seg is the group whose
+ * children are `aria-pressed` buttons.
+ * @returns {HTMLElement[]}
+ */
+function segmentedControls() {
+  return screen.queryAllByRole('group')
+    .filter((g) => g.querySelector('button[aria-pressed]'));
+}
+
+/** Asserts every Seg on the current screen shows exactly one option as selected. */
+function expectEverySegHasOneSelection() {
+  const groups = segmentedControls();
+  expect(groups.length).toBeGreaterThan(0);
+  groups.forEach((group) => {
+    // `label` is the group's accessible name and the primitive has no default. Drop it
+    // at a call site and the control still renders, still works, and announces itself
+    // as an unnamed group of buttons — so a screen-reader user hears the options with
+    // no idea what choice they belong to. Counting selections alone does not see that.
+    expect(group.getAttribute('aria-label')).toBeTruthy();
+    const pressed = within(group).getAllByRole('button', { pressed: true });
+    expect(pressed).toHaveLength(1);
+  });
+  return groups.length;
+}
+
+describe('every segmented control', () => {
+  it('shows exactly one option as selected, on every tab that has one', () => {
+    // Seg's options changed shape from {value,label} to {id,label}. A call site left on
+    // the old shape gives every option `id: undefined`, so `aria-pressed` is false on
+    // ALL of them and `onChange` fires with undefined — the control renders, shows no
+    // selection, and writes garbage into the build. EcuLab.jsx carries @ts-nocheck, so
+    // neither lint nor tsc can see it, and the primitive's own tests render it in
+    // isolation and never inspect what the app passes.
+    //
+    // Counting pressed options catches that without naming a single call site, so a
+    // ninth Seg added later is covered the day it appears.
+    launch();
+    let total = expectEverySegHasOneSelection();
+
+    // The remaining Segs are on other tabs, and the two ECU ones are behind a sub-view
+    // that is not the default.
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    total += expectEverySegHasOneSelection();
+
+    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    total += expectEverySegHasOneSelection();
+
+    // Guard the sweep itself: if navigation silently failed, the per-tab assertions
+    // above would each pass on whatever happened to be showing. Eight is the count of
+    // <Seg> call sites in EcuLab.jsx today.
+    expect(total).toBe(8);
+  });
+});
+
+describe('every toggle', () => {
+  it('carries an accessible name at every call site', () => {
+    // Toggle puts the name in `aria-label`, so dropping `label` leaves a switch that
+    // renders, works, and announces itself unnamed. EcuLab.jsx carries @ts-nocheck and
+    // Toggle's own tests render it in isolation, so nothing else would see it.
+    //
+    // This asserts `aria-label` directly and deliberately does NOT fall back to
+    // textContent: the sub-label lives inside the same <button>, so textContent stays
+    // truthy with the name gone and the fallback made the assertion unfailable. An
+    // earlier version of this test had exactly that bug.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const switches = screen.getAllByRole('switch');
+    expect(switches.length).toBeGreaterThan(1);
+    switches.forEach((sw) => {
+      expect(sw.getAttribute('aria-label')).toBeTruthy();
+    });
+  });
+
+  it('installs the turbo when switched on, and reports it', () => {
+    // The partner to the intercooler test below. Without this, breaking Turbo kit's
+    // `checked` or `onChange` was caught only incidentally, by an unrelated duty-cycle
+    // test whose threshold happens to need turboOn — change that number and a broken
+    // turbo switch would pass the whole suite.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
+    expect(summary()).toBe('Not installed');
+
+    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+
+    expect(screen.getByRole('switch', { name: /Turbo kit/ }).getAttribute('aria-checked')).toBe('true');
+    // And it reached the build, not just the switch: the section summary reads turboOn.
+    expect(summary()).toMatch(/turbine · peak/);
+  });
+
+  it('installs the intercooler when switched on, and reports it', () => {
+    // The intercooler had no coverage at all, before this migration or after. It is
+    // also the call site that lost a prop in the swap, so it is the one most likely to
+    // have been broken by it.
+    launch();
+    fireEvent.click(screen.getByText('Forced Induction'));
+    const intercooler = screen.getByRole('switch', { name: /Intercooler/ });
+    expect(intercooler.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(intercooler);
+
+    expect(screen.getByRole('switch', { name: /Intercooler/ }).getAttribute('aria-checked')).toBe('true');
+    // And it reached the build, not just the switch: the parts count reads the mod set.
+    expect(screen.getByText(/[1-4]\/4 installed/)).toBeTruthy();
   });
 });

@@ -48,38 +48,22 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor } from './theme.js';
+import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
 import { ACTIONS } from './state/reducer.js';
-
-const Eyebrow = ({ children, icon: Icon }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-    <div style={{ width: 3, height: 13, background: T.acc, borderRadius: 2 }} />
-    {Icon && <Icon size={13} color={T.accInk} />}
-    <span style={{ fontSize: 10.5, letterSpacing: 1.6, color: T.accInk, textTransform: 'uppercase', fontWeight: 800 }}>{children}</span>
-  </div>
-);
-
-const Panel = ({ children, style, tight }) => (
-  <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: tight ? '10px 12px' : 14, ...style }}>
-    {children}
-  </div>
-);
-
-const Note = ({ children, tone = 'info' }) => {
-  const colors = { info: [T.ink2, T.line, T.panel2], warn: [T.warn, T.warnLine, T.warnBg] };
-  const [fg, bd, bgc] = colors[tone] || colors.info;
-  return (
-    <div style={{ display: 'flex', gap: 9, background: bgc, border: `1px solid ${bd}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: fg === T.ink2 ? T.inkSoft : fg, lineHeight: 1.55 }}>
-      <Info size={15} style={{ flexShrink: 0, marginTop: 1, color: fg }} />
-      <div>{children}</div>
-    </div>
-  );
-};
+import { Button } from './primitives/Button.jsx';
+import { Eyebrow } from './primitives/Eyebrow.jsx';
+import { Note } from './primitives/Note.jsx';
+import { Panel } from './primitives/Panel.jsx';
+import { StatTile } from './primitives/StatTile.jsx';
+import { Bar } from './primitives/Bar.jsx';
+import { Seg } from './primitives/Seg.jsx';
+import { Select } from './primitives/Select.jsx';
+import { Toggle } from './primitives/Toggle.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -98,25 +82,6 @@ function ExpandableInfo({ title, children }) {
   );
 }
 
-// Segmented row of equal-width option buttons — replaces the repeated
-// flex-row-of-buttons pattern used all over the tuning screens.
-function Seg({ options, value, onChange, wrap }) {
-  return (
-    <div style={{ display: 'flex', gap: 7, marginBottom: 4, flexWrap: wrap ? 'wrap' : 'nowrap' }}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button key={o.value} onClick={() => onChange(o.value)} style={{
-            flex: wrap ? '1 1 30%' : 1, padding: '11px 4px', borderRadius: 9, fontWeight: 700, fontSize: 12.5,
-            border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
-            color: active ? T.accInk : T.ink2, transition: 'all .15s',
-          }}>{o.label}</button>
-        );
-      })}
-    </div>
-  );
-}
-
 // Full-width descriptive rows for choices that need a subtitle (turbine, injectors).
 function PickList({ options, value, onChange }) {
   return (
@@ -131,85 +96,6 @@ function PickList({ options, value, onChange }) {
           }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
         );
       })}
-    </div>
-  );
-}
-
-// A native <select> with optgroup headings, styled to the theme. Native rather than a
-// custom panel so that keyboard navigation, type-ahead and screen-reader semantics come
-// from the platform instead of being reimplemented, and so a phone gets its own picker
-// wheel. Used where a list has grown past what a stack of PickList buttons can carry.
-//
-// `groups` is [{ label, options: [{ label, value }] }]; `extra` holds options that
-// belong to no group and render after all of them.
-function GroupedSelect({ groups, extra = [], value, onChange }) {
-  return (
-    <div style={{ position: 'relative', marginBottom: 13 }}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{
-          width: '100%', appearance: 'none', WebkitAppearance: 'none',
-          padding: '11px 34px 11px 13px', borderRadius: 9,
-          border: `1px solid ${T.line}`, background: T.panel2, color: T.ink,
-          fontFamily: T.sans, fontSize: 13, fontWeight: 600,
-        }}
-      >
-        {groups.map((g) => (
-          <optgroup key={g.label} label={g.label} style={{ background: T.panel, color: T.ink2 }}>
-            {g.options.map((o) => (
-              <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
-            ))}
-          </optgroup>
-        ))}
-        {extra.map((o) => (
-          <option key={o.value} value={o.value} style={{ background: T.panel2, color: T.ink }}>{o.label}</option>
-        ))}
-      </select>
-      <ChevronDown
-        size={16}
-        style={{
-          position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-          color: T.ink2, pointerEvents: 'none',
-        }}
-      />
-    </div>
-  );
-}
-
-function ToggleRow({ label, sub, checked, onChange, color = T.acc }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: 13 }}>
-      <div style={{ marginRight: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>{label}</div>
-        {sub && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
-      </div>
-      <button onClick={() => onChange(!checked)} style={{ width: 48, height: 27, borderRadius: 14, border: 'none', position: 'relative', flexShrink: 0, background: checked ? color : T.panel3, transition: 'background .2s' }}>
-        <div style={{ position: 'absolute', top: 3, left: checked ? 24 : 3, width: 21, height: 21, borderRadius: 11, background: T.ink, transition: 'left .2s', boxShadow: `0 1px 3px ${shadowAlpha(0.4)}` }} />
-      </button>
-    </div>
-  );
-}
-
-function StatTile({ label, value, unit, color = T.ink, flex = 1 }) {
-  return (
-    <div style={{ flex, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 11, padding: 13 }}>
-      <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, fontFamily: T.mono, color, marginTop: 2 }}>{value}<span style={{ fontSize: 11.5, color: T.ink2, marginLeft: 3, fontWeight: 600 }}>{unit}</span></div>
-    </div>
-  );
-}
-
-function HealthBar({ label, value }) {
-  const c = statusColor(value);
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: T.ink2, marginBottom: 4, fontWeight: 600 }}>
-        <span>{label}</span><span style={{ color: c, fontWeight: 800 }}>{Math.round(value)}%</span>
-      </div>
-      <div style={{ height: 7, background: T.panel, borderRadius: 4, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-        <div style={{ width: `${value}%`, height: '100%', background: c, borderRadius: 4, transition: 'width .4s', boxShadow: `0 0 8px ${c}66` }} />
-      </div>
     </div>
   );
 }
@@ -239,7 +125,7 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
     <div style={{ background: T.accBg, border: `1px solid ${T.acc}`, borderRadius: 12, padding: '13px 14px', margin: '0 0 14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>{j.title.toUpperCase()}</div>
-        <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: T.ink3, fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>SKIP GUIDE</button>
+        <Button variant="quiet" size="sm" style={{ flexShrink: 0 }} onClick={onDismiss}>SKIP GUIDE</Button>
       </div>
       <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.55, marginTop: 7 }}>{j.body}</div>
       <div style={{ display: 'flex', gap: 5, marginTop: 11, marginBottom: 10 }}>
@@ -247,9 +133,16 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
           <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? T.acc : T.line }} />
         ))}
       </div>
-      <button onClick={onAdvance} style={{ width: '100%', padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+      {/* The closest thing this file has to a justified `block`, and still not one.
+          The card looks bounded, but nothing bounds it: index.html lays the app out
+          mobile-first and neither the shell nor any tab body sets a max-width, so
+          this banner is as wide as the window. `block` here would put a 2500px-wide
+          "Done building — go tune it" on a desktop monitor, which is the complaint
+          this PR exists to answer. Give the app a max-width first; `block` becomes
+          honest the moment a container is genuinely narrow. */}
+      <Button onClick={onAdvance}>
         {j.cta}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -293,7 +186,7 @@ function DialMark({ size = 64, pct = 0.62, live = false }) {
           <line key={i}
             x1={50 + inner * Math.sin(a)} y1={50 - inner * Math.cos(a)}
             x2={50 + outer * Math.sin(a)} y2={50 - outer * Math.cos(a)}
-            stroke={i > 9 ? T.danger : T.line === T.line ? T.ink3 : T.line} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
+            stroke={i > 9 ? T.danger : T.ink3} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
         );
       })}
       <g style={{ transition: live ? 'none' : 'transform .6s cubic-bezier(.34,1.4,.64,1)' }} transform={`rotate(${angle} 50 50)`}>
@@ -309,7 +202,7 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
   // sits at pct ≈ 0.909 regardless of engine — the red zone has to start at or just
   // below that, not above it, or the needle never shows red at the engine's own redline.
-  const zoneColor = pct > 0.9 ? T.danger : pct > 0.75 ? T.warn : T.ok;
+  const zoneColor = utilisationColor(pct * 100);
   return (
     <Panel style={{ textAlign: 'center', background: T.panel }}>
       <style>{`@keyframes cylpulse{0%,100%{opacity:.25;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}`}</style>
@@ -324,8 +217,11 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
         {Array.from({ length: cylinders }).map((_, i) => (
           <div key={i} style={{
             width: 8, height: 24, borderRadius: 2, background: zoneColor,
-            animation: running ? `cylpulse ${Math.max(0.12, 50 / Math.max(rpm, 500))}s ease-in-out infinite` : 'none',
-            animationDelay: `${i * (0.5 / cylinders)}s`, opacity: running ? undefined : 0.3,
+            // Duration then delay, both inside the shorthand: `animation` resets
+            // `animation-delay`, so declaring the longhand beside it left the
+            // per-cylinder stagger dependent on property order.
+            animation: running ? `cylpulse ${Math.max(0.12, 50 / Math.max(rpm, 500))}s ${i * (0.5 / cylinders)}s ease-in-out infinite` : 'none',
+            opacity: running ? undefined : 0.3,
           }} />
         ))}
       </div>
@@ -459,26 +355,30 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
             {decimals ? current.toFixed(decimals) : Math.round(current)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
-        <button onClick={onClose} style={{ color: T.ink2, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 7, fontSize: 11.5, fontWeight: 700, padding: '8px 14px' }}>DONE</button>
+        <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
       </div>
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current);
         return (
-          <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px', marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
+          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
             <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} kPa</div>
             <div>{ref.what}</div>
             <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
             <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
             {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
-          </div>
+          </Panel>
         );
       })()}
       <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
+        {/* One colour for all four: the +/- is already in the label. Painting the
+            positive steps with the status green said "raising this cell is good", which
+            is not something a stepper can know — and spending the status scale on a sign
+            is what teaches a player to ignore it where it means something. */}
         {[-bigStep, -smallStep, smallStep, bigStep].map((d, i) => (
           <button key={i} onClick={() => apply(d)} style={{
             flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
-            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
+            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
           }}>{d > 0 ? '+' : ''}{d}</button>
         ))}
       </div>
@@ -692,6 +592,10 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
+  // Single source of truth for the "no headroom left" cutoff is utilisationColor's
+  // own >90 band — comparing its output rather than re-testing dutyPreview keeps this
+  // caption from becoming a fourth copy of the threshold.
+  const dutyDangerous = utilisationColor(dutyPreview) === T.danger;
 
   const needsMafRecal = mods.intake || turboOn;
   const changeTab = (t) => { setTab(t); setSelection(null); };
@@ -1164,12 +1068,16 @@ export function EcuLabApp() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button onClick={() => setAppView('tutorial')} title="Tutorial" style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: 9, color: T.ink2 }}>
-              <Info size={16} />
-            </button>
-            <button onClick={repairEngine} title="Repair engine" style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: 9, color: T.ink2 }}>
-              <Wrench size={16} />
-            </button>
+            {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
+                button whose accessible name depends on the tooltip surviving. Note
+                the lower-case names — the start screen's TUTORIAL button is queried
+                by exact name and must stay the only match. */}
+            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={() => setAppView('tutorial')}>
+              <Info size={16} aria-hidden="true" />
+            </Button>
+            <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={repairEngine}>
+              <Wrench size={16} aria-hidden="true" />
+            </Button>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
@@ -1212,11 +1120,17 @@ export function EcuLabApp() {
                         : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
                     </div>
                     <div style={{ display: 'flex', gap: 7 }}>
-                      <button onClick={live.running || live.cranking ? stopEngine : startEngine} style={{
-                        flex: 1, padding: '11px 0', borderRadius: 9, border: 'none', fontWeight: 800, fontSize: 12.5,
-                        background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
-                        borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
-                      }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
+                      {/* START was filled with `ok`. Green here is decoration, not
+                          state — the engine is not running when the button says
+                          START — and spending a status colour on an action is the
+                          rule Toggle's docstring closed. It takes the accent; STOP
+                          is the secondary state and takes `ghost`. Not `danger`:
+                          shutting an engine down destroys nothing. */}
+                      <Button
+                        variant={live.running || live.cranking ? 'ghost' : 'primary'}
+                        style={{ flex: 1 }}
+                        onClick={live.running || live.cranking ? stopEngine : startEngine}
+                      >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
                       <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn }); }} title="Engine sound" style={{
                         width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
                         border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
@@ -1259,7 +1173,7 @@ export function EcuLabApp() {
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="LAMBDA" value={live.sensedLambda.toFixed(2)} unit="λ" color={T.violet} />
                   <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" color={T.warn} warn={!!(live.live && live.live.knock)} />
+                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && live.live.knock)} />
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
@@ -1284,20 +1198,20 @@ export function EcuLabApp() {
               sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
             >
               <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <StatTile label="BEST PULL" value={bestScore} color={T.accInk} />
-                <StatTile label="CAREER TOTAL" value={totalScore} color={T.cyan} />
-                <StatTile label="PULLS" value={pullCount} color={T.ink} />
+                <StatTile label="BEST PULL" value={bestScore} tone="acc" />
+                <StatTile label="CAREER TOTAL" value={totalScore} tone="alt" />
+                <StatTile label="PULLS" value={pullCount} />
               </div>
               {result && scores ? (
                 <>
                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" color={T.accInk} />
-                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" color={T.cyan} />
+                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
+                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <StatTile label="PULL SCORE" value={scores.pull} color={T.accInk} />
-                    <StatTile label="TUNING" value={scores.tuning.score} color={statusColor(scores.tuning.score)} />
-                    <StatTile label="ENGINEER" value={scores.engineer.score} color={statusColor(scores.engineer.score)} />
+                    <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
+                    <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
+                    <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />
                   </div>
                 </>
               ) : <Note>No dyno pull logged yet — head to DYNO and run one.</Note>}
@@ -1309,9 +1223,11 @@ export function EcuLabApp() {
               sub={`${Math.round(overallHealth)}% overall`}
             >
               <Panel>
-                <HealthBar label="PISTON / RINGS · knock, detonation" value={health.piston} />
-                <HealthBar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
-                <HealthBar label="VALVES · lean-under-boost heat" value={health.valve} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Bar label="PISTON / RINGS · knock, detonation" value={health.piston} />
+                  <Bar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
+                  <Bar label="VALVES · lean-under-boost heat" value={health.valve} />
+                </div>
               </Panel>
               {needsMafRecal && <Note tone="warn">Your intake and/or turbo plumbing changed the MAF reading — head to <b>FUEL</b> to rescale it before your next pull.</Note>}
             </BuildSection>
@@ -1461,7 +1377,13 @@ export function EcuLabApp() {
               sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
-              <GroupedSelect
+              <Select
+                // The primitive is inline-block with a 200px floor, so it must be told
+                // to fill this column — the legacy control was width:100% and the
+                // section is a single narrow stack. The margin is the 13px the old one
+                // carried; nothing after it should close up.
+                style={{ display: 'block', marginBottom: 13 }}
+                label="Start From a Real Engine"
                 groups={PRESET_GROUPS.map((g) => ({
                   label: g.manufacturer,
                   // The heading carries the manufacturer, so strip it off the option
@@ -1513,12 +1435,15 @@ export function EcuLabApp() {
                     <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
                   </div>
                   <div style={{ display: 'flex', gap: 7 }}>
-                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12 }}>
+                    {/* The one `danger` in the app. This prompt is raised ONLY when
+                        `hasTuningWork()` is true, so confirming it always destroys
+                        hand-edited VE/spark/fuel tables that nothing can restore. */}
+                    <Button variant="danger" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
                       LOAD {presetPrompt.name.toUpperCase()}
-                    </button>
-                    <button onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
+                    </Button>
+                    <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })}>
                       CANCEL
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1541,7 +1466,7 @@ export function EcuLabApp() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 10, fontWeight: 600 }}>Configuration</div>
-              <Seg options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, value: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
+              <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
               <ExpandableInfo title="Why cylinder count and layout matter">
                 For the same total displacement, spreading it across more, smaller cylinders means each one needs less peak pressure to make the same overall torque — a small real knock-margin benefit and smoother delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
               </ExpandableInfo>
@@ -1589,9 +1514,9 @@ export function EcuLabApp() {
               </ExpandableInfo>
 
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Block Material</div>
-              <Seg options={MATERIAL_OPTS.map((m) => ({ label: m, value: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
+              <Seg label="Block Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
               <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Head Material</div>
-              <Seg options={MATERIAL_OPTS.map((m) => ({ label: m, value: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
+              <Seg label="Head Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
               <ExpandableInfo title="Why block and head material matter">
                 Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.
               </ExpandableInfo>
@@ -1604,9 +1529,9 @@ export function EcuLabApp() {
               sub={`${Object.values(mods).filter((v) => v).length}/4 installed`}
             >
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 9 }}>
-                <button onClick={resetToStock} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: T.ink2, fontSize: 11, fontWeight: 600 }}>
-                  <RotateCcw size={12} /> RESET ALL TO STOCK
-                </button>
+                <Button variant="quiet" size="sm" onClick={resetToStock}>
+                  <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
+                </Button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {Object.keys(MOD_INFO).map((key) => (
@@ -1631,14 +1556,14 @@ export function EcuLabApp() {
               icon={Wind} label="Forced Induction"
               sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
-              <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
+              <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
 
               <div style={{ maxHeight: turboOn ? 3000 : 0, opacity: turboOn ? 1 : 0, overflow: 'hidden', transition: 'max-height .4s ease, opacity .3s ease' }}>
                 <div style={{ paddingTop: 12 }}>
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Turbine Size</div>
                   <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 4, fontWeight: 600 }}>Compressor Size</div>
-                  <Seg options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
+                  <Seg label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
                   <div style={{ fontSize: 11, color: T.ink3, marginBottom: 10, marginTop: 4 }}>Ceiling before it runs outside its efficient range: ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi</div>
                   <ExpandableInfo title="Turbine vs. compressor — different jobs">
                     The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, making hot, inefficient, knock-prone air.
@@ -1647,7 +1572,7 @@ export function EcuLabApp() {
                   </ExpandableInfo>
 
                   <div style={{ marginTop: 4, marginBottom: 14 }}>
-                    <ToggleRow label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} color={T.cyan} />
+                    <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
                   </div>
 
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Boost Target Curve</div>
@@ -1697,28 +1622,28 @@ export function EcuLabApp() {
                       {[-5, -1, 1, 5].map((d) => (
                         <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
                           style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-                            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
+                            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
                           {d > 0 ? '+' : ''}{d}
                         </button>
                       ))}
                     </div>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
                         FLAT ACROSS ALL
-                      </button>
-                      <button onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      </Button>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
                         SPOOL RAMP
-                      </button>
+                      </Button>
                       {/* Built from RPM so the curve can never be shorter than the
                           axis. A hand-written literal previously had seven entries
                           for eight breakpoints, and the next edit put NaN through
                           the entire simulation. */}
-                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
                         ZERO
-                      </button>
+                      </Button>
                     </div>
                     <div style={{ fontSize: 10.5, color: Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.ink3, marginTop: 8 }}>
                       Compressor efficient to ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi{Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? ' — you are past it, expect hot inefficient air' : ''}
@@ -1740,7 +1665,7 @@ export function EcuLabApp() {
               sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Exhaust Diameter</div>
-              <Seg options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
+              <Seg label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
               <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
                 Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
                 {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
@@ -1808,9 +1733,12 @@ export function EcuLabApp() {
                         <div style={{ fontSize: 10.5, color: T.cyan, fontFamily: T.mono, marginTop: 3 }}>{r.cells.join('   ')}</div>
                       </div>
                     ))}
-                    <button onClick={recalcVE} style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+                    {/* Was width:100%. It is the only action in this advisory box and
+                        reads as one at its own width; the box is already the full
+                        content column, so stretching it only made it wider. */}
+                    <Button onClick={recalcVE} style={{ marginTop: 4 }}>
                       ACCEPT RE-LOGGED VALUES
-                    </button>
+                    </Button>
                     <div style={{ fontSize: 10.5, color: T.ink3, textAlign: 'center', marginTop: 6 }}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
                   </div>
                 )
@@ -1849,13 +1777,13 @@ export function EcuLabApp() {
                   <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>Edit them yourself — a calibration is yours to make, not something the app should silently rewrite.</div>
                 </div>
               ) : calAdvice.underAdvanced.length > 4 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
                   <b style={{ color: T.accInk }}>Timing left on the table.</b> {calAdvice.underAdvanced.length} cells are more than 3° below what this build would tolerate. Safe, but you are giving away torque — advance them a little at a time and pull between each change.
-                </div>
+                </Panel>
               ) : calAdvice.pastMbt.length > 0 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
                   <b style={{ color: T.accInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
-                </div>
+                </Panel>
               ) : (
                 <div style={{ background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
                   Spark table sits within the knock limit for this hardware.
@@ -1920,7 +1848,7 @@ export function EcuLabApp() {
             {turboOn && <Note>Turbo hardware and the boost target curve live on <b>BUILD</b> — this tab is fuel-side tuning: octane, injectors, and MAF/ECU.</Note>}
 
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>Fuel Octane</div>
-            <Seg options={OCTANE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
+            <Seg label="Fuel Octane" options={OCTANE_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
             <ExpandableInfo title="What octane actually does — and what E85 costs you">
               Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
               <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.accInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
@@ -1932,13 +1860,18 @@ export function EcuLabApp() {
             <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>
               ECU Injector Scaling <span style={{ color: T.ink3, fontWeight: 400 }}>— what the ECU thinks is fitted</span>
             </div>
-            <Seg options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, value: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} wrap />
+            <Seg label="ECU Injector Scaling" options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, id: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} equal />
             {ecuInjectorCc !== injectorCc ? (
               <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
-                <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
-                  RESCALE ECU TO {injectorCc}cc
-                </button>
+                {/* The wrapper, not the button, is what breaks the line: the button
+                    sits inside a paragraph and is inline-flex, so without a block
+                    parent it would run on from the end of the warning text. */}
+                <div style={{ marginTop: 9 }}>
+                  <Button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })}>
+                    RESCALE ECU TO {injectorCc}cc
+                  </Button>
+                </div>
               </div>
             ) : (
               <div style={{ fontSize: 11, color: T.ok, margin: '6px 0 4px' }}>ECU scaling matches the fitted injectors.</div>
@@ -1957,12 +1890,18 @@ export function EcuLabApp() {
                 <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>INJECTOR DUTY PREVIEW · WOT @ 6500 RPM</div>
                 {fuel.stoich < 14 && <div style={{ fontSize: 10, color: T.accInk, fontFamily: T.mono, fontWeight: 700 }}>{fuel.label} stoich {fuel.stoich}:1</div>}
               </div>
-              <div style={{ height: 8, background: T.panel, borderRadius: 4, marginTop: 8, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-                <div style={{ width: `${Math.min(100, dutyPreview)}%`, height: '100%', background: dutyPreview > 90 ? T.danger : dutyPreview > 75 ? T.warn : T.ok }} />
+              <div style={{ marginTop: 8 }}>
+                <Bar label="Duty" value={dutyPreview} higherIsBetter={false} />
               </div>
-              <div style={{ fontSize: 12, marginTop: 7, color: dutyPreview > 90 ? T.dangerInk : T.inkSoft }}>
-                {dutyPreview.toFixed(0)}% duty {dutyPreview > 90 ? '— undersized for this build, expect forced lean-out' : ''}
-              </div>
+              {/* The figure itself is the Bar's, now that it has a label row of its own —
+                  restating it here put the same number on screen twice, seven pixels
+                  apart. What is left is the part the Bar cannot say: what an undersized
+                  injector is about to do to the mixture. */}
+              {dutyDangerous && (
+                <div style={{ fontSize: 12, marginTop: 7, color: T.dangerInk }}>
+                  Undersized for this build — expect forced lean-out
+                </div>
+              )}
             </Panel>
 
             <Eyebrow icon={Zap}>Fuel Control &amp; MAF Scaling</Eyebrow>
@@ -2016,28 +1955,34 @@ export function EcuLabApp() {
             {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Activity}>Dyno Cell</Eyebrow>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
-            <Seg options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, value: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
+            <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
             <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
 
             <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 
-            <button onClick={doRun} disabled={running} style={{
-              width: '100%', padding: '15px 0', borderRadius: 12, border: 'none', marginBottom: 16,
-              background: running ? T.panel3 : T.acc, color: running ? T.ink2 : T.accOn, fontWeight: 800, fontSize: 14.5,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, letterSpacing: 0.3,
-              boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
-            }}>
-              <Play size={16} />
-              {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
-            </button>
+            {/* The app's most important control, and the one PR 1's review caught
+                rendering its label at 1.14:1 while running — panel3 fill under ink2
+                text. `disabled` now dims the whole button instead of recolouring the
+                label, so the contrast between fill and label never changes.
+
+                Deliberately NOT `block`. This sits in the main content column, which
+                on a desktop window is the window; the hand-rolled width:100% here is
+                the literal button that spanned the screen. `lg` gives it its weight
+                instead. */}
+            <div style={{ marginBottom: 16 }}>
+              <Button size="lg" onClick={doRun} disabled={running}>
+                <Play size={16} aria-hidden="true" />
+                {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
+              </Button>
+            </div>
 
             {result && (
               <>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                  <StatTile label="PEAK WHP" value={result.peakHp} color={T.accInk} />
-                  <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" color={T.cyan} />
+                  <StatTile label="PEAK WHP" value={result.peakHp} tone="acc" />
+                  <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
                 </div>
 
                 {prevResult && !running && (() => {
@@ -2107,8 +2052,11 @@ export function EcuLabApp() {
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
-                      <Line dataKey="afr" name="AFR actual" stroke={T.ok} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="timing" name="Timing used" stroke={T.warn} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      {/* Series identity colours, not status: both lines are on screen for
+                          every pull, so green and amber here reported a health this chart
+                          never measures. */}
+                      <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </Panel>
@@ -2145,9 +2093,12 @@ export function EcuLabApp() {
                               : p.richRisk ? 'far richer than commanded — check injector scaling'
                               : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
                             ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
+                          // Same "no headroom left" cutoff as the build tab's duty preview,
+                          // asked the same way: utilisationColor owns the band, and this
+                          // reads its verdict rather than restating >90 twice more.
                           { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${p.duty > 90 ? ' — at the limit' : ''}`,
-                            ok: p.duty <= 90 },
+                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
+                            ok: utilisationColor(p.duty) !== T.danger },
                           { k: 'Heat', asked: null, got: `${p.egt}°C`,
                             note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
                             ok: !p.egtRisk },
@@ -2201,9 +2152,14 @@ export function EcuLabApp() {
                       <br /><br />The ECU has no way to measure cylinder filling directly. It fuels from your table and nothing else, so a wrong table means wrong fuel, every time. Blue cells are within tolerance; red means your table is lying to the ECU at that point. Correct, re-pull, repeat until it is flat. A cell you hit squarely lands on the truth in one pass; the rest take a couple, because every logged point is interpolated between four cells.
                     </ExpandableInfo>
                     {!histogram ? (
-                      <button onClick={buildHistogram} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: `1px solid ${T.cyan}`, background: T.cyanBg, color: T.cyan, fontWeight: 800, fontSize: 12.5, marginBottom: 16 }}>
-                        BUILD HISTOGRAM FROM THIS PULL
-                      </button>
+                      /* Was a cyan-outlined width:100% bar. Cyan is the chart-series
+                         hue — the same borrowed colour Task 6 took off the intercooler
+                         toggle — so this takes the accent like every other action. */
+                      <div style={{ marginBottom: 16 }}>
+                        <Button onClick={buildHistogram}>
+                          BUILD HISTOGRAM FROM THIS PULL
+                        </Button>
+                      </div>
                     ) : (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ overflowX: 'auto', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 8 }}>
@@ -2232,12 +2188,14 @@ export function EcuLabApp() {
                         </div>
                         <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={applyHistogram} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+                          <Button style={{ flex: 2 }} onClick={applyHistogram}>
                             APPLY CORRECTIONS TO VE
-                          </button>
-                          <button onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2, fontWeight: 700, fontSize: 12.5 }}>
+                          </Button>
+                          {/* Not `danger`: discarding throws away a histogram that
+                              BUILD HISTOGRAM regenerates from the same pull. */}
+                          <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })}>
                             DISCARD
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -2295,11 +2253,11 @@ export function EcuLabApp() {
                           {[['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]].map(([label, s]) => {
                             const c = statusColor(s.score);
                             return (
-                              <div key={label} style={{ flex: 1, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: 14 }}>
+                              <Panel key={label} style={{ flex: 1 }}>
                                 <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
                                 <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.mono, color: c, marginTop: 2 }}>{s.score}</div>
                                 <div style={{ fontSize: 11, color: c, fontWeight: 700 }}>{s.label}</div>
-                              </div>
+                              </Panel>
                             );
                           })}
                         </div>
