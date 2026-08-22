@@ -1938,15 +1938,21 @@ export function EcuLabApp() {
 
             <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 
-            <button onClick={doRun} disabled={running} style={{
-              width: '100%', padding: '15px 0', borderRadius: 12, border: 'none', marginBottom: 16,
-              background: running ? T.panel3 : T.acc, color: running ? T.ink2 : T.accOn, fontWeight: 800, fontSize: 14.5,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, letterSpacing: 0.3,
-              boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
-            }}>
-              <Play size={16} />
-              {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
-            </button>
+            {/* The app's most important control, and the one PR 1's review caught
+                rendering its label at 1.14:1 while running — panel3 fill under ink2
+                text. `disabled` now dims the whole button instead of recolouring the
+                label, so the contrast between fill and label never changes.
+
+                Deliberately NOT `block`. This sits in the main content column, which
+                on a desktop window is the window; the hand-rolled width:100% here is
+                the literal button that spanned the screen. `lg` gives it its weight
+                instead. */}
+            <div style={{ marginBottom: 16 }}>
+              <Button size="lg" onClick={doRun} disabled={running}>
+                <Play size={16} aria-hidden="true" />
+                {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
+              </Button>
+            </div>
 
             {result && (
               <>
@@ -2119,9 +2125,14 @@ export function EcuLabApp() {
                       <br /><br />The ECU has no way to measure cylinder filling directly. It fuels from your table and nothing else, so a wrong table means wrong fuel, every time. Blue cells are within tolerance; red means your table is lying to the ECU at that point. Correct, re-pull, repeat until it is flat. A cell you hit squarely lands on the truth in one pass; the rest take a couple, because every logged point is interpolated between four cells.
                     </ExpandableInfo>
                     {!histogram ? (
-                      <button onClick={buildHistogram} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: `1px solid ${T.cyan}`, background: T.cyanBg, color: T.cyan, fontWeight: 800, fontSize: 12.5, marginBottom: 16 }}>
-                        BUILD HISTOGRAM FROM THIS PULL
-                      </button>
+                      /* Was a cyan-outlined width:100% bar. Cyan is the chart-series
+                         hue — the same borrowed colour Task 6 took off the intercooler
+                         toggle — so this takes the accent like every other action. */
+                      <div style={{ marginBottom: 16 }}>
+                        <Button onClick={buildHistogram}>
+                          BUILD HISTOGRAM FROM THIS PULL
+                        </Button>
+                      </div>
                     ) : (
                       <div style={{ marginBottom: 16 }}>
                         <div style={{ overflowX: 'auto', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 8 }}>
@@ -2150,12 +2161,14 @@ export function EcuLabApp() {
                         </div>
                         <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={applyHistogram} style={{ flex: 2, padding: '12px 0', borderRadius: 10, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+                          <Button style={{ flex: 2 }} onClick={applyHistogram}>
                             APPLY CORRECTIONS TO VE
-                          </button>
-                          <button onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })} style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2, fontWeight: 700, fontSize: 12.5 }}>
+                          </Button>
+                          {/* Not `danger`: discarding throws away a histogram that
+                              BUILD HISTOGRAM regenerates from the same pull. */}
+                          <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })}>
                             DISCARD
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )}
