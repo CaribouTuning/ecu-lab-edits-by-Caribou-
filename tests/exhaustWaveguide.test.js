@@ -273,8 +273,11 @@ describe('what the rest of the build does to the exhaust', () => {
     const stock = measure({});
     const headers = measure({ headers: true });
     // Longer primaries of a bigger bore: the quarter-wave drops and less is lost getting
-    // to the collector, so the mid band the bark lives in comes up.
-    expect(headers.bands[1]).toBeGreaterThan(stock.bands[1] + 2);
+    // to the collector, so the mid band the bark lives in comes up RELATIVE to the boom
+    // underneath it. Stated as a ratio because how loud the whole thing is depends on gas
+    // temperature, and that is the cycle's business rather than the header's.
+    expect(headers.bands[1] - headers.bands[0])
+      .toBeGreaterThan(stock.bands[1] - stock.bands[0] + 1);
   });
 
   it('stacks headers with an open system, because they are different parts', () => {
