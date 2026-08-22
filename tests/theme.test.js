@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
-import { T, heat, statusColor, utilisationColor } from '../src/ui/theme.js';
+import { T, heat, statusColor, statusTone, utilisationColor } from '../src/ui/theme.js';
 
 describe('T', () => {
   it('exposes every key the existing screens read', () => {
@@ -64,6 +64,33 @@ describe('utilisationColor', () => {
   it('is red above 90', () => {
     expect(utilisationColor(91)).toBe(tokens.danger);
     expect(utilisationColor(100)).toBe(tokens.danger);
+  });
+});
+
+describe('statusTone', () => {
+  it('names a tone for every band, and every name is a real token', () => {
+    // This used to compare `map[statusTone(v)]` against `statusColor(v)` across a
+    // spread of values. That test could not fail any more: `statusColor` is now
+    // `T[statusTone(v)]`, so the comparison reduced to `T[x] === T[x]` and held for
+    // any thresholds and any implementation. The property it claimed to guard —
+    // that the two cannot disagree — is now true by construction, which is why the
+    // restructure was worth making.
+    //
+    // What the restructure DID introduce is a new way to fail. `statusColor` used to
+    // name `T.ok`/`T.warn`/`T.danger` directly, so renaming one broke at the
+    // reference. It is now a dynamic lookup, and a rename would make `statusColor`
+    // return `undefined` — a colour that silently disappears rather than an error.
+    // That is what is worth pinning.
+    [100, 95, 90, 89, 60, 55, 54, 20, 0].forEach((v) => {
+      const tone = statusTone(v);
+      expect(Object.keys(T)).toContain(tone);
+      expect(typeof statusColor(v)).toBe('string');
+      expect(statusColor(v)).toMatch(/^#[0-9a-f]{6}$/i);
+    });
+  });
+
+  it('returns exactly the three status names', () => {
+    expect(new Set([100, 60, 10].map(statusTone))).toEqual(new Set(['ok', 'warn', 'danger']));
   });
 });
 
