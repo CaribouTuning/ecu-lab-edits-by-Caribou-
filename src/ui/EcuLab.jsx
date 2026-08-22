@@ -1599,6 +1599,7 @@ export default function EngineManagementSandbox() {
         bore: engineConfig.bore, compression: engineConfig.compression,
         configuration: engineConfig.configuration,
         pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, gasTempK: drive.gasTempK,
+        headers: Boolean(mods.headers), turboFitted: Boolean(turboOn),
       }),
       rpm,
       configuration: engineConfig.configuration,
