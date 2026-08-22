@@ -368,10 +368,14 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
       })()}
       <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
+        {/* One colour for all four: the +/- is already in the label. Painting the
+            positive steps with the status green said "raising this cell is good", which
+            is not something a stepper can know — and spending the status scale on a sign
+            is what teaches a player to ignore it where it means something. */}
         {[-bigStep, -smallStep, smallStep, bigStep].map((d, i) => (
           <button key={i} onClick={() => apply(d)} style={{
             flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
-            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
+            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
           }}>{d > 0 ? '+' : ''}{d}</button>
         ))}
       </div>
@@ -1166,7 +1170,7 @@ export function EcuLabApp() {
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="LAMBDA" value={live.sensedLambda.toFixed(2)} unit="λ" color={T.violet} />
                   <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" color={T.warn} warn={!!(live.live && live.live.knock)} />
+                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && live.live.knock)} />
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
                   <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
@@ -1615,7 +1619,7 @@ export function EcuLabApp() {
                       {[-5, -1, 1, 5].map((d) => (
                         <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
                           style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-                            color: d < 0 ? T.accInk : T.ok, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
+                            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
                           {d > 0 ? '+' : ''}{d}
                         </button>
                       ))}
@@ -2045,8 +2049,11 @@ export function EcuLabApp() {
                       <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
                       <Legend wrapperStyle={{ fontSize: 11 }} />
                       <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
-                      <Line dataKey="afr" name="AFR actual" stroke={T.ok} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="timing" name="Timing used" stroke={T.warn} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      {/* Series identity colours, not status: both lines are on screen for
+                          every pull, so green and amber here reported a health this chart
+                          never measures. */}
+                      <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
+                      <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </Panel>
