@@ -70,8 +70,6 @@ const EVC_MIN_ATDC = 14;
 const MERGE_KEEP = 0.78;
 const STEP_KEEP = 0.96;
 
-/** Below this the far field carries nothing a listener can hear or a speaker reproduce. */
-const DC_BLOCK_HZ = 18;
 /** Longest tube the model will allocate for, m. Guards a nonsense build. */
 const MAX_TUBE_M = 8;
 /**
@@ -91,6 +89,12 @@ const MAX_TUBE_M = 8;
  * is that, with the amount set by measurement rather than assumed.
  */
 const STEEPEN_BETA = 0.30;
+/**
+ * Pressure step, Pa, for the numerical slope of the orifice curve at the valve junction.
+ * Small enough to be a local derivative, large enough that the difference of two flows
+ * carries real digits in single precision.
+ */
+const JUNCTION_DP = 150;
 /** How far steepening may pull a wave forward, as a fraction of the tube's own delay. */
 const STEEPEN_MAX_FRAC = 0.34;
 /**
@@ -113,7 +117,7 @@ const JET_PER_VEL = 0.020;
  * asked for — a 6.2 litre V8 on a 4" open system at 6000 rpm — which peaks at 0.80 here.
  * Everything quieter than that is quieter for a physical reason and needs no curve.
  */
-const PA_TO_UNIT = 1.84;
+const PA_TO_UNIT = 13;
 
 /** A bidirectional delay line standing in for one length of pipe. */
 class Tube {
@@ -324,8 +328,7 @@ export class ExhaustProcessor extends WorkletBase {
     this.chamber = [new Tube(maxD), new Tube(maxD)];
     this.tailB = [new Tube(maxD), new Tube(maxD)];
     this.mouthLp = [0, 0];
-    this.dcState = [0, 0];
-    this.dcK = 0;
+    this.prevRad = [0, 0];
     this.mouthLpK = 0.5;
     this.radK = 1;
     this.prevOut = [0, 0];
@@ -379,10 +382,18 @@ export class ExhaustProcessor extends WorkletBase {
     const front = tailTotal * 0.40;
     const back = Math.max(0.15, tailTotal - front - g.mufflerLength - g.catLength);
     for (let b = 0; b < 2; b++) {
-      this.tailA[b].set(front, g.cTail, g.collectorArea, g.wallLossPerM, g.wallLossHzM, sr);
-      // The converter. Same bore as the pipe it sits in, so it reflects almost nothing —
-      // it does its work by absorbing, which is why it is modelled as loss rather than as
-      // another area step.
+      // Tailpipe bore from the collector all the way to the muffler, which is how a car is
+      // actually plumbed: the area change happens AT the collector, where several primaries
+      // become one pipe, and the junction above already models it. Running this section at
+      // collector bore instead left the converter as a NARROW tube squeezed between two
+      // wider ones — an acoustic constriction, and a strong resonator. Measured, its second
+      // mode at 1260 Hz was 17 dB above everything around it at idle and no amount of
+      // damping anywhere else could touch it, because the reflection making it was the
+      // area step and not the loss.
+      this.tailA[b].set(front, g.cTail, g.tailArea, g.wallLossPerM, g.wallLossHzM, sr);
+      // The converter, at the same bore as the pipe either side of it, so it reflects
+      // nothing at all and does its work purely by absorbing — which is what a honeycomb
+      // substrate does and why it is modelled as loss rather than as another area step.
       this.cat[b].set(g.catLength, g.cTail, g.tailArea, g.wallLossPerM, g.catHzM, sr, g.catKeep);
       this.chamber[b].set(
         g.mufflerLength, g.cTail, this.muffled ? g.mufflerArea : g.tailArea,
@@ -407,8 +418,7 @@ export class ExhaustProcessor extends WorkletBase {
     const mouthRadius = Math.sqrt(g.tailArea / Math.PI);
     const kaHz = g.cTail / (2 * Math.PI * mouthRadius);
     this.mouthLpK = Math.exp((-2 * Math.PI * kaHz) / sr);
-    this.radK = sr / (2 * Math.PI * kaHz);
-    this.dcK = 1 - Math.exp((-2 * Math.PI * DC_BLOCK_HZ) / sr);
+    this.radK = Math.exp((-2 * Math.PI * kaHz) / sr);
   }
 
   /**
@@ -573,8 +583,38 @@ export class ExhaustProcessor extends WorkletBase {
         if (open && rpm > 1) {
           const area = liftArea;
 
-          const pPipe = P_ATM + bwd + fwd;
-          let mdot = this.orifice(cy.p, pPipe, area, this.cylK);
+          // THE VALVE AND THE PIPE HAVE TO BE SOLVED TOGETHER, and getting this wrong is
+          // what made the idle scream.
+          //
+          // The pressure at the port is not something the valve can read off and then
+          // react to: the flow the valve passes launches a wave that IS part of that
+          // pressure. In wave terms the tube offers the valve a Thevenin source — an
+          // open-circuit pressure `pOpen` behind a characteristic impedance `rho c / A` —
+          // and the orifice equation is a curve through that same (p, mdot) plane. The
+          // physical answer is where the two meet.
+          //
+          // Evaluating the orifice at `pOpen` alone and adding its wave afterwards is an
+          // explicit step around that loop, and its gain is d(mdot)/dp times c/A. Near
+          // equalised pressure d(mdot)/dp goes to infinity — the orifice curve is vertical
+          // there — so at light load with the valve wide open the loop gain passes one and
+          // the model oscillates on its own. Measured, that is exactly what it did: a
+          // fixed 848 Hz sine at a constant 8e-3 peak, unchanged by rpm, by load, by jet
+          // noise, by the steepening term, and running at the SAME level as 3000 rpm at
+          // wide-open throttle. It was not the engine at all, it was the solver, and it is
+          // the screech.
+          //
+          // One Newton step on mdot = f(pOpen + (c/A) mdot) closes the loop instead. The
+          // derivative is negative — more pressure downstream, less flow — so the
+          // denominator is always above one and the step can never overshoot the meeting
+          // point. It is also the right physics for free: a valve opened into a pipe far
+          // narrower than itself is limited by the PIPE, and this is the term that says so.
+          const pOpen = P_ATM + bwd + fwd;
+          const zByRho = this.geom.cPrimary / tube.area;
+          const explicit = this.orifice(cy.p, pOpen, area, this.cylK);
+          const slope = (this.orifice(cy.p, pOpen + JUNCTION_DP, area, this.cylK) - explicit)
+            / JUNCTION_DP;
+          let mdot = explicit / (1 - Math.min(0, slope) * zByRho);
+          const pPipe = pOpen + zByRho * mdot;
 
           // Cylinder state: isentropic, losing mass through the valve while the piston
           // changes the volume underneath it. Both terms are audible — the first is the
@@ -715,26 +755,34 @@ export class ExhaustProcessor extends WorkletBase {
         ch.write((pJ1 - chBack) * STEP_KEEP, (pJ2 - chAtB) * STEP_KEEP);
         tB.write((pJ2 - bBack) * STEP_KEEP, reflected);
 
-        // WHAT A LISTENER ACTUALLY HEARS. Close to the mouth the pressure follows the flow
-        // leaving it; far away it follows that flow's time derivative, and the changeover
-        // is at ka = 1 for the pipe's own radius. So it is flat below that corner and
-        // +6 dB/octave above — which is the difference between a chuff and a crack, and it
-        // removes any standing offset for free.
+        // WHAT A LISTENER ACTUALLY HEARS, and this had it exactly backwards.
+        //
+        // A pipe mouth radiates as a compact monopole only while it is small compared with
+        // the wavelength. There the far-field pressure follows the TIME DERIVATIVE of the
+        // volume flow, so it rises at 6 dB/octave. But that cannot continue: once ka passes
+        // one the mouth is no longer compact, it beams instead of radiating spherically,
+        // and its radiation efficiency stops rising and plateaus. The standard result is
+        // that radiated amplitude goes as ka/sqrt(1 + (ka)^2) — RISING below ka = 1 and
+        // FLAT above it, which is a first-order highpass at that corner.
+        //
+        // What was here was the mirror image: flat below and rising for ever above, which
+        // is an unbounded differentiator. Measured, it put +18.5 dB into the top octave
+        // relative to DC and lifted every high mode, every numerical artefact and all of
+        // the jet noise with it. That is a screech, and no amount of damping inside the
+        // pipes could reach it, because it was applied after them.
         // What radiates is the VOLUME FLOW leaving the mouth, not the pressure in the
         // pipe: U = A(f - b) / (rho c). That factor of area is why a bigger tailpipe is
         // louder and more open and a small one is subdued, which is the first thing anyone
         // notices about pipe diameter — and without it the model had it backwards, because
         // a narrow pipe raises wave pressure for the same flow.
         const leaving = ((atMouth - reflected) * tB.area) / (rhoTail * cT);
-        let rad = leaving + (leaving - this.prevOut[b]) * this.radK;
+        // One-pole highpass at ka = 1. It also removes the standing offset the exhaust
+        // stroke leaves in the flow, for free and for the same reason: steady flow makes
+        // no sound, and a source that cannot radiate at low frequency certainly cannot
+        // radiate at zero.
+        const rad = this.radK * (this.prevRad[b] + leaving - this.prevOut[b]);
+        this.prevRad[b] = rad;
         this.prevOut[b] = leaving;
-        // A MONOPOLE CANNOT RADIATE DC. The exhaust stroke pushes a net positive volume
-        // out of the pipe every cycle, so the flow leaving it has a standing mean — but
-        // steady flow makes no sound, and leaving it in put a large offset and a subsonic
-        // rumble under everything and ate the headroom the pulses needed. Measured at
-        // idle, 0 Hz was the single strongest component in the spectrum.
-        this.dcState[b] += (rad - this.dcState[b]) * this.dcK;
-        rad -= this.dcState[b];
         if (b === 0) left += rad; else right += rad;
       }
 

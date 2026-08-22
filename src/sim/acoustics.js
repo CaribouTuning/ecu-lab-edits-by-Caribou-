@@ -154,7 +154,7 @@ export const ACOUSTIC = {
   // treble proportionally harder, which is what makes a long system duller than a short
   // one at the same volume. Anchored at about half a decibel lost at 4 kHz per metre
   // travelled, which is the right order for steel pipe carrying hot gas.
-  WALL_LOSS_HZ_M: 11000,
+  WALL_LOSS_HZ_M: 4000,
   // How the exhaust valve opens: a ramp of this many CRANK DEGREES to full lift, then a
   // hold, then the same ramp closing. Fixed degrees rather than a fraction of the window,
   // because a bigger cam holds the valve open longer — it does not open it more slowly.
@@ -195,6 +195,13 @@ export const ACOUSTIC = {
   // 30 dB, which is roughly the measured spread between idle and wide-open throttle at
   // the tailpipe.
   EXHAUST_STROKE_KPA: 9,
+  // Cylinder pressure at exhaust valve opening with no combustion at all: the floor the
+  // waveguide's valve sees on a closed throttle. A motored cylinder starting from about
+  // 20 kPa at intake valve close comes back down to roughly half an atmosphere by the time
+  // the crank is 130 degrees past top dead centre, so the exhaust pipe is HIGHER than the
+  // cylinder and the first thing that happens when the valve opens is that gas goes the
+  // wrong way. That is what an overrun is, and it is why it is quiet.
+  MOTORED_EVO_KPA: 48,
 
   // --- Cycle-to-cycle variation ("lope") ---
   // Below this much valve overlap an engine simply does not loaf. A stock cam is 0 and
@@ -841,10 +848,14 @@ export function exhaustGeometry({
  *   tracks trapped charge and trapped charge tracks manifold pressure. It scales nothing
  *   else — the gas is still as hot as it measured, and the exhaust stroke still pushes.
  *   Defaults to 1, which leaves a measured point exactly as it is.
+ * @param {boolean} [input.fuelCut] whether the injectors are off — the rev limiter, or a
+ *   closed throttle on the overrun. No combustion means the cylinder reaches valve opening
+ *   at motored pressure, and nothing else about the note changes.
  * @returns {AcousticDrive}
  */
 export function acousticDrive({
   rpm, derived, point, configuration, pipeDiaIn, turboOn, compressor, throttle = 1,
+  fuelCut = false,
 }) {
   const { cyl, displacementL, compression } = derived;
   const gasTempK = (point ? point.egt : 0) + KELVIN_OFFSET;
@@ -860,6 +871,44 @@ export function acousticDrive({
   const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) * clamp(throttle, 0, 1)
     + ACOUSTIC.EXHAUST_STROKE_KPA;
   const variation = cyclicVariation({ rpm, overlapDeg: derived.overlapDeg || 0 });
+
+  // WHAT THE WAVEGUIDE'S VALVE NEEDS IS THE REAL CYLINDER PRESSURE, not the manifold plus
+  // an allowance for the exhaust stroke.
+  //
+  // `overpressureKpa` above is a LEVEL — it says how hard this cycle hits, and it feeds
+  // `pulseLevel`. Handing the same number to the waveguide as an absolute pressure was a
+  // leftover from before the waveguide existed, and it double-counted: the waveguide runs
+  // its own piston through its own valve, so the exhaust stroke is already in there, and
+  // adding EXHAUST_STROKE_KPA on top put the cylinder ABOVE the manifold at every
+  // operating point in the map.
+  //
+  // That inverted the overrun. A closed throttle at 5000 rpm leaves the cylinder at
+  // roughly half an atmosphere when the valve cracks, so the pipe is HIGHER than the
+  // cylinder and gas rushes in before the piston pushes it back out. Told instead that the
+  // cylinder was 9 kPa above the pipe, the model blew down on every event and the overrun
+  // came out 6 dB LOUDER than wide-open throttle — measured through the running UI, it was
+  // the loudest thing in the program, which is not what lifting off a throttle sounds like.
+  const evoTrueKpa = point
+    ? evoPressureKpa({
+      peakPressureBar: point.peakPressure, peakPressureDeg: point.peakPressureDeg,
+      compression, displacementL, cyl,
+    })
+    : BARO_KPA;
+  // A dyno sweep only ever measures wide-open points, so the idle and overrun either side
+  // of a pull borrow the nearest one. Pressure at valve opening tracks trapped charge and
+  // trapped charge tracks manifold pressure, so throttle scales it; the floor is what a
+  // cylinder reaches with no fuel in it at all, which is where a real overrun sits.
+  //
+  // A FUEL CUT IS THE SAME STATEMENT. On the rev limiter and on the overrun the injectors
+  // are off, so there is no combustion and the cylinder reaches the valve at the motored
+  // pressure and nothing more. That is the whole of what a cut does to the exhaust note,
+  // and it is not a mute: the engine is still turning at seven and a half thousand and
+  // still pumping a cylinder of air out of every port, which is exactly why a limiter
+  // bangs. The renderer used to express this by scaling the OUTPUT LEVEL to 0.18, which
+  // made the loudest part of the rev range the quietest thing in the program.
+  const evoAtValveKpa = fuelCut
+    ? ACOUSTIC.MOTORED_EVO_KPA
+    : Math.max(ACOUSTIC.MOTORED_EVO_KPA, evoTrueKpa * clamp(throttle, 0, 1));
 
   const durationS = blowdownDurationS({
     displacementL, cyl, bore: derived.bore, compression, gasTempK,
@@ -879,7 +928,7 @@ export function acousticDrive({
     // Cylinder pressure at valve opening, and the manifold it blows down into. The
     // waveguide renderer needs both as absolute pressures: it opens a real valve between
     // them and lets an orifice decide the flow, rather than being handed a pulse shape.
-    evoKpa: overpressureKpa + empKpa,
+    evoKpa: evoAtValveKpa,
     empKpa,
     gasTempK,
     sharpness: pulseSharpness(ratio),

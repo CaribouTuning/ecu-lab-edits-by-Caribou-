@@ -459,11 +459,18 @@ export function updateEngineAudio(a, frame) {
       EXHAUST_JET * (0.7 + 0.6 * clamp01(drive.exhaustDrive)) * (1 + rasp * 0.4), t, 0.1);
     p.get('lope').setTargetAtTime(drive.lopeSeverity, t, 0.15);
     p.get('covPersistence').setValueAtTime(drive.covPersistence, t);
-    // A cut engine is not making pressure at all, and a stopped one is silent. The
-    // waveguide keeps ringing for a few milliseconds after either, which is correct —
-    // the gas in the pipe does not know the ignition has been switched off.
-    p.get('level').setTargetAtTime(
-      audible ? (cut ? 0.18 : 1) * (frame.volume ?? 1) : 0, t, cut ? 0.02 : 0.05);
+    // A stopped engine is silent, and the waveguide keeps ringing for a few milliseconds
+    // after it stops, which is correct — the gas in the pipe does not know the ignition has
+    // been switched off.
+    //
+    // A CUT ENGINE IS NOT QUIET, and this used to say it was: a fuel cut scaled the level
+    // to 0.18, so the rev limiter — the loudest, angriest thing a road engine does — came
+    // out fifteen decibels below the rest of the rev range and the overrun after it was
+    // louder than wide-open throttle. Nothing needs saying here at all. A cut is an absent
+    // combustion, `acousticDrive` reports it as motored cylinder pressure at valve opening,
+    // and the waveguide renders a cylinder of air being pumped out of a port at 7500 rpm,
+    // which is what it is.
+    p.get('level').setTargetAtTime(audible ? (frame.volume ?? 1) : 0, t, 0.05);
   }
   a.exhaustGain.gain.setTargetAtTime(audible ? voice.exhaustGain : 0, t, 0.08);
 
