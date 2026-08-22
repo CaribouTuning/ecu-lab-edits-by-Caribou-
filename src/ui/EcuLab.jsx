@@ -55,6 +55,7 @@ import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
 import { ACTIONS } from './state/reducer.js';
+import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -1410,12 +1411,15 @@ export function EcuLabApp() {
                     <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
                   </div>
                   <div style={{ display: 'flex', gap: 7 }}>
-                    <button onClick={() => applyEnginePreset(presetPrompt)} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12 }}>
+                    {/* The one `danger` in the app. This prompt is raised ONLY when
+                        `hasTuningWork()` is true, so confirming it always destroys
+                        hand-edited VE/spark/fuel tables that nothing can restore. */}
+                    <Button variant="danger" size="sm" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
                       LOAD {presetPrompt.name.toUpperCase()}
-                    </button>
-                    <button onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })} style={{ flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 12 }}>
+                    </Button>
+                    <Button variant="ghost" size="sm" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })}>
                       CANCEL
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1501,9 +1505,9 @@ export function EcuLabApp() {
               sub={`${Object.values(mods).filter((v) => v).length}/4 installed`}
             >
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 9 }}>
-                <button onClick={resetToStock} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: T.ink2, fontSize: 11, fontWeight: 600 }}>
-                  <RotateCcw size={12} /> RESET ALL TO STOCK
-                </button>
+                <Button variant="quiet" size="sm" onClick={resetToStock}>
+                  <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
+                </Button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {Object.keys(MOD_INFO).map((key) => (
@@ -1600,22 +1604,22 @@ export function EcuLabApp() {
                       ))}
                     </div>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
                         FLAT ACROSS ALL
-                      </button>
-                      <button onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      </Button>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
                         SPOOL RAMP
-                      </button>
+                      </Button>
                       {/* Built from RPM so the curve can never be shorter than the
                           axis. A hand-written literal previously had seven entries
                           for eight breakpoints, and the next edit put NaN through
                           the entire simulation. */}
-                      <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}
-                        style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel, color: T.ink2, fontWeight: 700, fontSize: 11 }}>
+                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
+                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
                         ZERO
-                      </button>
+                      </Button>
                     </div>
                     <div style={{ fontSize: 10.5, color: Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.ink3, marginTop: 8 }}>
                       Compressor efficient to ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi{Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? ' — you are past it, expect hot inefficient air' : ''}
