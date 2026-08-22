@@ -1043,6 +1043,9 @@ export default function EngineManagementSandbox() {
       // The sweep only ever measures wide-open points, so the idle and overrun either
       // side of it have to borrow the nearest one and scale it by throttle.
       throttle: onDyno ? load : 1,
+      // No injectors, no combustion, so the cylinder reaches the exhaust valve at motored
+      // pressure. The renderer does not need to know what a rev limiter is.
+      fuelCut: cut,
     });
     const frame = {
       drive,
