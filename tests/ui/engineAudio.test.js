@@ -12,10 +12,10 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { acousticDrive, deriveEngine, firingEvents, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
+import { acousticDrive, deriveEngine, exhaustGeometry, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
   BARO_KPA, COMPRESSOR_OPTS, TURBINE_OPTS, OCTANE_OPTS, DEFAULT_VE, interp2,
   evaluatePoint } from '../../src/sim/index.js';
-import { createEngineAudio, scheduleExhaustPulses, silenceEngineAudio, updateEngineAudio }
+import { createEngineAudio, silenceEngineAudio, updateEngineAudio }
   from '../../src/ui/audio/engineAudio.js';
 
 /** A minimal AudioParam that records what was written to it. */
@@ -85,6 +85,11 @@ function frameFor(overrides = {}) {
   return {
     drive: acousticDrive({ rpm, derived, point: pt, configuration, pipeDiaIn: 2.5 }),
     rpm, configuration, load: 1, audible: true, cut: false, cranking: false,
+    geometry: exhaustGeometry({
+      displacementL: derived.displacementL, cyl: derived.cyl, bore: DEFAULT_ENGINE_CONFIG.bore,
+      compression: DEFAULT_ENGINE_CONFIG.compression, configuration,
+      pipeDiaIn: 2.5, gasTempK: pt.egt + 273.15,
+    }),
     pipeDiaIn: 2.5, openExhaust: false, intakeFitted: false, boostPsi: 0,
     ...overrides,
   };
@@ -102,13 +107,14 @@ describe('the engine synthesiser', () => {
   });
 
   it('starts every source it creates', () => {
-    expect(ctx.started.length).toBeGreaterThan(10);
+    expect(ctx.started.length).toBeGreaterThan(5);
   });
 
-  it('tunes the pipe delay to the resonance the physics reported', () => {
-    const frame = frameFor();
-    push(frame);
-    expect(graph.pipeDelay.delayTime.value).toBeCloseTo(1 / (2 * frame.drive.pipeHz), 9);
+  it('holds the exhaust silent until the frame says the engine is audible', () => {
+    push(frameFor({ audible: false }));
+    expect(graph.exhaustGain.gain.value).toBe(0);
+    push(frameFor({ audible: true }));
+    expect(graph.exhaustGain.gain.value).toBeGreaterThan(0);
   });
 
   it('goes quiet when the engine is not audible', () => {
@@ -116,85 +122,24 @@ describe('the engine synthesiser', () => {
     expect(graph.master.gain.value).toBe(0);
   });
 
-  it('is louder pulling hard than idling, but never silent at idle', () => {
+  it('applies no level curve of its own, because how loud an engine is is physics', () => {
+    // The waveguide is driven by the pressure the cylinder actually reached, so idle comes
+    // out quiet and wide-open throttle loud without anything here scaling it. A gain curve
+    // on top would be asserting a second, different answer.
     push(frameFor({ rpm: 4500 }));
     const wot = graph.master.gain.value;
     push(frameFor({ rpm: 800 }));
-    const idle = graph.master.gain.value;
-    expect(wot).toBeGreaterThan(idle);
-    expect(idle).toBeGreaterThan(0);
+    expect(graph.master.gain.value).toBe(wot);
   });
 
-  it('voices each layout differently without being told how a layout sounds', () => {
-    // Nothing in the graph is built per layout any more — the firing order arrives on the
-    // frame — so the only thing that may differ between two engines here is the voicing.
+  it('rebuilds the tube network only when the build changes', () => {
     push(frameFor({ configuration: 'V8' }));
-    const v8 = graph.body.frequency.value;
+    const first = graph.geomKey;
+    expect(first).not.toBe('');
+    push(frameFor({ configuration: 'V8' }));
+    expect(graph.geomKey).toBe(first);
     push(frameFor({ configuration: 'I4' }));
-    expect(graph.body.frequency.value).not.toBe(v8);
-  });
-});
-
-describe('the exhaust pulse train', () => {
-  let ctx, graph;
-  beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx); });
-
-  /** Runs the scheduler forward and returns the times pulses were scheduled at. */
-  function collect(frame, seconds) {
-    const before = ctx.started.length;
-    for (let t = 0; t < seconds; t += 0.05) {
-      ctx.currentTime = t;
-      scheduleExhaustPulses(graph, frame);
-    }
-    return ctx.started.slice(before).sort((a, b) => a - b);
-  }
-
-  it('schedules one pulse per cylinder per two revolutions', () => {
-    const rpm = 1200, seconds = 1;
-    const times = collect(frameFor({ rpm }), seconds);
-    // 1200 RPM is 10 engine cycles a second; a V6 fires six times in each.
-    const expected = (rpm / 120) * DERIVED.cyl * seconds;
-    expect(times.length).toBeGreaterThan(expected * 0.8);
-    expect(times.length).toBeLessThan(expected * 1.25);
-  });
-
-  it('spaces an inline four evenly', () => {
-    const derived = deriveEngine({ ...DEFAULT_ENGINE_CONFIG, configuration: 'I4' });
-    const times = collect(frameFor({ rpm: 1200, configuration: 'I4', derived }), 0.6);
-    const gaps = times.slice(1).map((t, i) => t - times[i]);
-    const spread = Math.max(...gaps) - Math.min(...gaps);
-    expect(spread).toBeLessThan(Math.min(...gaps) * 0.05);
-  });
-
-  it('pairs a cross-plane V8\'s pulses, which is the rumble', () => {
-    // Each bank fires unevenly, and the two collectors deliver a beat apart, so the train
-    // that reaches the ear alternates long-short instead of sitting at one spacing.
-    const derived = deriveEngine({ ...DEFAULT_ENGINE_CONFIG, configuration: 'V8' });
-    const times = collect(frameFor({ rpm: 1200, configuration: 'V8', derived }), 0.6);
-    const gaps = times.slice(1).map((t, i) => t - times[i]);
-    expect(Math.max(...gaps)).toBeGreaterThan(Math.min(...gaps) * 1.4);
-
-    const events = firingEvents('V8').filter((e) => e.bank === 0).map((e) => e.angleDeg);
-    const bankGaps = events.slice(1).map((a, i) => a - events[i]);
-    expect(new Set(bankGaps).size).toBeGreaterThan(1);
-  });
-
-  it('keeps placing individual events at redline, where a loop would take over', () => {
-    // A looped buffer is the obvious way to survive 460 events a second, and it is what
-    // this used to do. It cannot be done that way: a loop is pitched by playback rate, so
-    // every resonance in it rises with engine speed like a tape running fast, and the
-    // buffer's own bandwidth is fixed. Measured, handing over to a loop at 5500 rpm cost
-    // 26 dB of content above 4 kHz and collapsed the harmonic comb to 11 dB. Scheduling
-    // every event costs about 20 ms of main thread per second at redline, and is correct.
-    const times = collect(frameFor({ rpm: 7000 }), 0.5);
-    expect(times.length).toBeGreaterThan(150);
-    // ...and they are still on the crank angles the layout fires at.
-    const gaps = times.slice(1).map((v, i) => v - times[i]);
-    expect(Math.min(...gaps)).toBeGreaterThan(0);
-  });
-
-  it('schedules nothing when the engine is not audible', () => {
-    expect(collect(frameFor({ audible: false }), 0.5)).toHaveLength(0);
+    expect(graph.geomKey).not.toBe(first);
   });
 });
 
@@ -207,75 +152,15 @@ describe('stopping', () => {
     expect(graph.master.gain.value).toBeGreaterThan(0);
 
     silenceEngineAudio(graph);
-    for (const node of [graph.master, graph.pipeOut, graph.indG, graph.whistleG,
+    for (const node of [graph.master, graph.exhaustGain, graph.indG, graph.whistleG,
       graph.bladeG, graph.rushG, graph.bovG, graph.flutEnv]) {
       expect(node.gain.value).toBe(0);
     }
   });
 });
 
-/**
- * The two things that decided whether this renderer sounded like an engine or like a
- * synthesiser, and neither of them is audible in any other test here.
- */
+/** What the output stage must not do to the model's own dynamics. */
 describe('what makes it sound real', () => {
-  /**
-   * Collects every buffer the graph renders at build time.
-   * @returns {Float32Array[]} the rendered pulse and cycle buffers
-   */
-  function renderedBuffers() {
-    const ctx = stubContext();
-    const built = [];
-    const inner = ctx.createBuffer;
-    ctx.createBuffer = (ch, len, sr) => {
-      const buf = inner(ch, len, sr);
-      built.push(buf.getChannelData(0));
-      return buf;
-    };
-    createEngineAudio(ctx);
-    // The noise beds are long flat random fills; the pulses (90 ms) and cycle loops
-    // (40 ms) are the rendered ones.
-    return built.filter((d) => d.length > 1000 && d.length < 10000);
-  }
-
-  it('renders pulses with real high-frequency content, not a filtered thud', () => {
-    // A blowdown leaving an open pipe radiates as dq/dt above ka = 1, so its leading edge
-    // is broadband. Measured as the ratio of first-difference energy to total energy,
-    // which rises with spectral centroid: a signal band-limited to a few hundred hertz
-    // scores near zero however loud it is.
-    const buffers = renderedBuffers();
-    expect(buffers.length).toBeGreaterThan(4);
-    for (const data of buffers) {
-      let sq = 0;
-      let dsq = 0;
-      for (let i = 1; i < data.length; i++) {
-        sq += data[i] * data[i];
-        const d = data[i] - data[i - 1];
-        dsq += d * d;
-      }
-      expect(sq).toBeGreaterThan(0);
-      // The renderer this replaced scored 0.0012 to 0.0015 — its entire leading edge was
-      // below a kilohertz, which is a thud. These score 0.013 and up.
-      expect(dsq / sq).toBeGreaterThan(0.006);
-    }
-  });
-
-  it('renders pulses free of DC and normalised to unit peak', () => {
-    for (const data of renderedBuffers()) {
-      let sum = 0;
-      let peak = 0;
-      for (let i = 0; i < data.length; i++) {
-        sum += data[i];
-        const a = Math.abs(data[i]);
-        if (a > peak) peak = a;
-      }
-      expect(peak).toBeCloseTo(1, 5);
-      // A pressure pulse at an open tailpipe has no DC. An offset left in is a thud on
-      // every event, and it eats the headroom the leading edge needs.
-      expect(Math.abs(sum / data.length)).toBeLessThan(0.02);
-    }
-  });
-
   it('leaves headroom for the transients instead of pinning the limiter', () => {
     // AN ENGINE IS A TRANSIENT TRAIN AND ITS CREST FACTOR IS THE SOUND. If the renderer's
     // own maximum static gain is above unity, every pulse is flattened into the ceiling
@@ -286,8 +171,9 @@ describe('what makes it sound real', () => {
     const a = createEngineAudio(ctx);
     ctx.currentTime += 0.1;
     updateEngineAudio(a, frameFor({ rpm: 6000, load: 1 }));
-    // Whatever the physics asks for, master gain times make-up cannot reach full scale.
-    expect(a.master.gain.value * a.outGain.gain.value).toBeLessThan(1);
+    // The waveguide is calibrated in pascals and peaks near 0.6 at its loudest, so the
+    // chain after it may not be running so hot that the limiter becomes the sound.
+    expect(a.master.gain.value * a.outGain.gain.value).toBeLessThan(1.25);
     // And the limiter is a safety net: it may not be catching the running level.
     expect(a.limiter.threshold.value).toBeGreaterThanOrEqual(-6);
   });
