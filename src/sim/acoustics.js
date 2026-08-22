@@ -86,6 +86,61 @@ export const ACOUSTIC = {
   PIPE_HZ_MIN: 45,
   PIPE_HZ_MAX: 180,
 
+  // --- Waveguide geometry ---
+  // The exhaust is modelled as what it is: tubes carrying pressure waves that reflect off
+  // every area change. These are the dimensions that model needs, and each one is a real
+  // measurable part rather than a filter setting.
+  //
+  // PRIMARY TUBE DIAMETER. A header primary is sized from the cylinder it serves. Two
+  // anchors from production and race practice bracket it: about 1.625" for a 500 cc
+  // cylinder and about 1.375" for a 250 cc one. Those two put diameter on the fourth root
+  // of swept volume, which is what is used here.
+  PRIMARY_DIA_REF_M: 0.0413,
+  PRIMARY_DIA_REF_CC: 500,
+  PRIMARY_DIA_EXP: 0.25,
+  // COLLECTOR AREA, as a fraction of the summed primary area feeding it. A merge collector
+  // is deliberately a little smaller than the sum of its primaries — that is what makes it
+  // a merge rather than a plenum, and it is why the reflection it sends back is mild.
+  COLLECTOR_AREA_FRAC: 0.88,
+  // How much of the total run is header-and-collector rather than tailpipe.
+  COLLECTOR_TO_TAIL_FRAC: 0.22,
+  // MUFFLER. A reactive muffler is an expansion chamber: the pipe opens into a volume
+  // several times its own area and then necks back down, and each of those steps reflects.
+  // The chamber length sets which frequencies it cancels — a half wavelength in the chamber
+  // comes back in antiphase — and the area ratio sets how hard it does it.
+  MUFFLER_AREA_RATIO: 2.2,
+  MUFFLER_LENGTH_M: 0.36,
+  // How much a packed muffler absorbs per pass, as a lowpass corner in Hz for its own
+  // length. Glass pack and steel wool eat high frequencies far faster than low ones, and
+  // together with the area steps above this lands at about 20 dB off the top and 6 dB off
+  // the bottom — which is the point of a muffler: it takes the treble and leaves the boom.
+  MUFFLER_ABSORB_HZ: 380,
+  // Gas cools on the way down the pipe, so the tailpipe carries a lower speed of sound
+  // than the primaries do. A tailpipe runs a few hundred kelvin below the port.
+  TAIL_TEMP_FRAC: 0.72,
+  // In-cylinder gas at valve opening is hotter than the gas measured downstream.
+  CYLINDER_TEMP_FRAC: 1.15,
+  // Discharge coefficient of the exhaust valve as an orifice.
+  VALVE_CD: 0.72,
+  // Wall friction per metre of pipe, as a fraction of wave amplitude lost. Real pipes are
+  // lossy, and a model without loss rings like a bell forever.
+  WALL_LOSS_PER_M: 0.020,
+  // Boundary-layer loss, as a one-pole corner in Hz TIMES METRES — so a longer tube eats
+  // treble proportionally harder, which is what makes a long system duller than a short
+  // one at the same volume. Anchored at about half a decibel lost at 4 kHz per metre
+  // travelled, which is the right order for steel pipe carrying hot gas.
+  WALL_LOSS_HZ_M: 11000,
+  // How the exhaust valve opens: a ramp of this many CRANK DEGREES to full lift, then a
+  // hold, then the same ramp closing. Fixed degrees rather than a fraction of the window,
+  // because a bigger cam holds the valve open longer — it does not open it more slowly.
+  // Tying the ramp to the window made a 290-degree race cam open lazier than a stock one
+  // and come out duller, which is the opposite of what a big cam sounds like.
+  CAM_RAMP_DEG: 62,
+  // Curvature of that ramp. Below 1 it is convex — off the seat quickly and then easing
+  // into full lift, which is what a real lobe's flank does and what puts an edge on the
+  // blowdown.
+  CAM_RAMP_SHAPE: 0.7,
+
   // --- Pulse shape ---
   // Effective exhaust flow area as a fraction of bore area. A valve head runs about
   // 0.36 of the bore and its curtain area at full lift is roughly 0.8 of its own disc,
@@ -585,6 +640,9 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} pipeHz exhaust fundamental, Hz
  * @property {number} runnerHz primary runner ring, Hz — the note's hard edge
  * @property {number} blowdownRatio pressure ratio across the exhaust valve at EVO
+ * @property {number} evoKpa absolute cylinder pressure at exhaust valve opening, kPa
+ * @property {number} empKpa exhaust manifold pressure the cylinder blows down into, kPa
+ * @property {number} gasTempK exhaust gas temperature at the port, K
  * @property {number} sharpness 0 (soft chuff) to 1 (choked crack)
  * @property {number} pulseLevel pulse pressure amplitude, 1 being a stock naturally
  *   aspirated engine at wide-open throttle. Linear in PRESSURE, so the renderer is the
@@ -609,6 +667,120 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} whistleHz turbo tone, Hz (0 when not boosted)
  * @property {number} bladePassHz compressor blade-pass frequency, Hz (0 when not boosted)
  */
+
+/**
+ * Diameter of one header primary, m.
+ *
+ * Sized from the cylinder it serves, not from the whole engine: a primary carries one
+ * cylinder's exhaust and nothing else. See ACOUSTIC.PRIMARY_DIA_REF_M for the anchors.
+ *
+ * @param {number} displacementL total displacement
+ * @param {number} cyl cylinder count
+ * @returns {number} inside diameter, m
+ */
+export function primaryDiameterM(displacementL, cyl) {
+  const ccPerCyl = (displacementL * 1000) / Math.max(1, cyl);
+  return ACOUSTIC.PRIMARY_DIA_REF_M
+    * Math.pow(ccPerCyl / ACOUSTIC.PRIMARY_DIA_REF_CC, ACOUSTIC.PRIMARY_DIA_EXP);
+}
+
+/**
+ * Area of a circle of the given diameter, m^2.
+ *
+ * @param {number} d diameter, m
+ * @returns {number} area, m^2
+ */
+export function circleAreaM2(d) {
+  return (Math.PI / 4) * d * d;
+}
+
+/**
+ * The exhaust system as a set of tubes, for the waveguide renderer.
+ *
+ * WHY THIS EXISTS AS GEOMETRY RATHER THAN AS FREQUENCIES. `exhaustResonanceHz` and
+ * `runnerResonanceHz` above give the fundamentals, and a renderer can tune a filter to
+ * them — but a filter is not a pipe. A pipe carries a wave down its length, reflects part
+ * of it off every change of area, and sends it back to interfere with what is still
+ * arriving. That is what produces an exhaust note rather than a filtered buzz, and it
+ * cannot be faked with resonators, for three reasons the ear notices:
+ *
+ *   - The reflection off an area change comes back INVERTED. A wave leaving into a bigger
+ *     space returns as a rarefaction, which is what scavenges the cylinder during overlap
+ *     and what makes a header "come on" at its tuned speed.
+ *   - Cylinders TALK TO EACH OTHER through the collector. Cylinder 1's pulse runs back up
+ *     cylinder 3's primary. That crosstalk is a large part of why an engine sounds like one
+ *     object rather than like several separate pops.
+ *   - Everything retunes together with gas temperature, because everything moves with c.
+ *
+ * So this returns lengths and areas, and the renderer builds delay lines out of them.
+ *
+ * @param {object} sys
+ * @param {number} sys.displacementL total displacement, litres
+ * @param {number} sys.cyl cylinder count
+ * @param {number} sys.bore bore, mm
+ * @param {number} sys.compression static compression ratio
+ * @param {string} sys.configuration one of `CONFIG_OPTS`
+ * @param {number} sys.pipeDiaIn tailpipe diameter, inches
+ * @param {number} sys.gasTempK exhaust gas temperature at the port, K
+ * @returns {object} tube lengths, areas, cylinder geometry and gas state
+ */
+export function exhaustGeometry({
+  displacementL, cyl, bore, compression, configuration, pipeDiaIn, gasTempK,
+}) {
+  const events = firingEvents(configuration);
+  const banks = events.some((e) => e.bank === 1) ? 2 : 1;
+  const perBank = Math.max(1, Math.round(cyl / banks));
+
+  const primaryDia = primaryDiameterM(displacementL, cyl);
+  const primaryArea = circleAreaM2(primaryDia);
+  const collectorArea = primaryArea * perBank * ACOUSTIC.COLLECTOR_AREA_FRAC;
+  const tailArea = circleAreaM2(pipeDiaIn * 0.0254);
+
+  // The run splits between header and tailpipe. `exhaustLengthM` is the whole acoustic
+  // path, so the tailpipe is what is left once the primaries and the collector have had
+  // their share.
+  const totalLength = exhaustLengthM({ displacementL, pipeDiaIn });
+  const primaryLength = runnerLengthM(displacementL);
+  const collectorLength = totalLength * ACOUSTIC.COLLECTOR_TO_TAIL_FRAC;
+  const tailLength = Math.max(0.4, totalLength - primaryLength - collectorLength);
+
+  const portK = Math.max(400, gasTempK);
+  return {
+    events,
+    banks,
+    perBank,
+    cyl,
+    primaryLength,
+    primaryArea,
+    collectorLength,
+    collectorArea,
+    tailLength,
+    tailArea,
+    mufflerArea: tailArea * ACOUSTIC.MUFFLER_AREA_RATIO,
+    mufflerLength: ACOUSTIC.MUFFLER_LENGTH_M,
+    mufflerAbsorbHz: ACOUSTIC.MUFFLER_ABSORB_HZ,
+    portK,
+    tailK: portK * ACOUSTIC.TAIL_TEMP_FRAC,
+    cylinderK: portK * ACOUSTIC.CYLINDER_TEMP_FRAC,
+    cPrimary: soundSpeedMs(portK, COEFF.GAMMA_BURNED),
+    cTail: soundSpeedMs(portK * ACOUSTIC.TAIL_TEMP_FRAC, COEFF.GAMMA_BURNED),
+    gamma: COEFF.GAMMA_BURNED,
+    // The cylinder the valve opens out of. The waveguide runs its own piston, because
+    // the exhaust STROKE is half of what a listener hears at low speed and it is a
+    // volume-driven flow rather than a pressure-driven one.
+    sweptM3: (displacementL / Math.max(1, cyl)) / 1000,
+    clearanceM3: ((displacementL / Math.max(1, cyl)) / 1000)
+      / Math.max(1.5, (compression ?? 10) - 1),
+    rodRatio: COEFF.ROD_RATIO,
+    evoDeg: EVO_ATDC,
+    valveArea: exhaustFlowAreaM2(bore),
+    valveCd: ACOUSTIC.VALVE_CD,
+    wallLossPerM: ACOUSTIC.WALL_LOSS_PER_M,
+    wallLossHzM: ACOUSTIC.WALL_LOSS_HZ_M,
+    camRampDeg: ACOUSTIC.CAM_RAMP_DEG,
+    camShape: ACOUSTIC.CAM_RAMP_SHAPE,
+  };
+}
 
 /**
  * Everything the synthesiser needs, derived from one operating point.
@@ -666,6 +838,12 @@ export function acousticDrive({
     pipeHz: exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }),
     runnerHz: runnerResonanceHz({ displacementL, gasTempK }),
     blowdownRatio: ratio,
+    // Cylinder pressure at valve opening, and the manifold it blows down into. The
+    // waveguide renderer needs both as absolute pressures: it opens a real valve between
+    // them and lets an orifice decide the flow, rather than being handed a pulse shape.
+    evoKpa: overpressureKpa + empKpa,
+    empKpa,
+    gasTempK,
     sharpness: pulseSharpness(ratio),
     pulseLevel: clamp(overpressureKpa / ACOUSTIC.BLOWDOWN_REF_KPA, 0, 2),
     pulseRate: clamp(

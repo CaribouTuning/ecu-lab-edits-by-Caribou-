@@ -30,11 +30,12 @@ import {
   R_AIR, RPM, SIXTY_FEET_M, SPARK_MAX_DEG, SPARK_MIN_DEG, TIRE_GRIP, TURBINE_OPTS,
   acousticDrive, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore, deriveEngine,
-  idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById, roadSpeedMs,
-  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount, veRecommendations
+  exhaustGeometry, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById,
+  roadSpeedMs, simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
+  veRecommendations
 } from '../sim/index.js';
 import {
-  beepEngineAudio, createEngineAudio, scheduleExhaustPulses, silenceEngineAudio,
+  beepEngineAudio, createEngineAudio, silenceEngineAudio,
   updateEngineAudio,
 } from './audio/engineAudio.js';
 import {
@@ -1578,14 +1579,26 @@ export default function EngineManagementSandbox() {
       ? live.fuelCut
       : onDrag ? !!dragPt?.limiter : Boolean(onDyno && dynoPhase === 'spooldown');
 
+    const drive = acousticDrive({
+      rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
+      pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
+      compressor: COMPRESSOR_OPTS[compressorIdx],
+      // The sweep only ever measures wide-open points, so the idle and overrun either
+      // side of it have to borrow the nearest one and scale it by throttle.
+      throttle: onDyno ? load : 1,
+    });
     const frame = {
-      drive: acousticDrive({
-        rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
-        pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
-        compressor: COMPRESSOR_OPTS[compressorIdx],
-        // The sweep only ever measures wide-open points, so the idle and overrun either
-        // side of it have to borrow the nearest one and scale it by throttle.
-        throttle: onDyno ? load : 1,
+      drive,
+      // The exhaust system as tubes, for the waveguide. Everything the player can change
+      // about the hardware arrives here: cylinder count and layout set the firing order
+      // and how many primaries meet at each collector, displacement sets their length and
+      // bore, the pipe menu sets the tailpipe, and the gas temperature the cycle computed
+      // sets the speed of sound that every one of those lengths is divided by.
+      geometry: exhaustGeometry({
+        displacementL: engineDerived.displacementL, cyl: engineDerived.cyl,
+        bore: engineConfig.bore, compression: engineConfig.compression,
+        configuration: engineConfig.configuration,
+        pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, gasTempK: drive.gasTempK,
       }),
       rpm,
       configuration: engineConfig.configuration,
@@ -1602,12 +1615,12 @@ export default function EngineManagementSandbox() {
       volume,
     };
 
+    // One call. The crank now turns inside the audio worklet at sample resolution, so
+    // nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
-    // Scheduling runs on every tick, not just when a parameter changed, because it is
-    // what keeps the pulse train in step with the crank.
-    scheduleExhaustPulses(a, frame);
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
-      engineDerived, engineConfig.configuration, exhaustDiaIdx, compressorIdx,
+      engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
+      exhaustDiaIdx, compressorIdx,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
       running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT]);
 
