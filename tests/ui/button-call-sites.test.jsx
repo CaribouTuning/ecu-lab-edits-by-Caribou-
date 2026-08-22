@@ -120,6 +120,10 @@ async function sweep() {
   collect();
   clickButton('RUN DYNO PULL');
   collect();
+  // `disabled={running}` is the entire mechanism behind the disabled-state
+  // contrast fix, and losing it also lets a second pull fire mid-sweep. The
+  // label switches to SWEEPING… while running, so query for that.
+  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'SWEEPING…' })).disabled).toBe(true);
   await waitFor(() => expect(screen.getByRole('button', { name: 'DATALOG' })).toBeTruthy(), { timeout: 5000 });
   clickButton('DATALOG');
   collect();
@@ -157,6 +161,13 @@ describe('every Button the app mounts', () => {
 
     for (const el of found) {
       const label = el.textContent || el.getAttribute('aria-label');
+
+      // Honest here because every Button in the sweep either carries real
+      // label text or is icon-only (Tutorial, Repair engine — the only two
+      // whose textContent is empty), so `|| aria-label` is the whole name,
+      // not a fallback masked by a sub-label sharing the element. Catches a
+      // deleted `title`+`aria-label` pair leaving a nameless icon button.
+      expect({ label, named: Boolean(label) }).toEqual({ label, named: true });
 
       // A mistyped variant produces styles[variant] === undefined, which filter(Boolean)
       // drops: the button renders with no variant class at all and nothing notices.

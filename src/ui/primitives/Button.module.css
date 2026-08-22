@@ -10,7 +10,13 @@
   font-family: var(--sans);
   font-weight: 800;
   letter-spacing: 0.05em;
-  white-space: nowrap;
+  /* No `white-space: nowrap`, and `min-width: 0` so a flex item can shrink
+     below its label's content width. A row like LOAD <preset name> / CANCEL
+     inside a narrow card needs somewhere to go under `nowrap`'s default
+     min-width: auto: it either overflows the card or it wraps. A two-line
+     button that stays inside its container beats a one-line button that
+     escapes it, so wrapping is left on. */
+  min-width: 0;
   cursor: pointer;
   transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
@@ -20,8 +26,15 @@
   outline-offset: 2px;
 }
 
+/* Named, not composited: opacity over --bg compresses fill and label toward
+   each other's backdrop, which drags contrast toward 1:1 rather than
+   preserving it. Naming the disabled colours keeps them moving together
+   for real, at 4.59:1 (--panel3 on --ink2) instead of collapsing to 2.24:1. */
 .button:disabled {
-  opacity: 0.45;
+  opacity: 1;
+  background: var(--panel3);
+  color: var(--ink2);
+  border-color: var(--line);
   cursor: not-allowed;
 }
 
