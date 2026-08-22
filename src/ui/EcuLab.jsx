@@ -345,7 +345,7 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
             {decimals ? current.toFixed(decimals) : Math.round(current)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
-        <button onClick={onClose} style={{ color: T.ink2, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 7, fontSize: 11.5, fontWeight: 700, padding: '8px 14px' }}>DONE</button>
+        <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
       </div>
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current);
@@ -1709,9 +1709,12 @@ export function EcuLabApp() {
                         <div style={{ fontSize: 10.5, color: T.cyan, fontFamily: T.mono, marginTop: 3 }}>{r.cells.join('   ')}</div>
                       </div>
                     ))}
-                    <button onClick={recalcVE} style={{ width: '100%', marginTop: 4, padding: '11px 0', borderRadius: 9, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
+                    {/* Was width:100%. It is the only action in this advisory box and
+                        reads as one at its own width; the box is already the full
+                        content column, so stretching it only made it wider. */}
+                    <Button onClick={recalcVE} style={{ marginTop: 4 }}>
                       ACCEPT RE-LOGGED VALUES
-                    </button>
+                    </Button>
                     <div style={{ fontSize: 10.5, color: T.ink3, textAlign: 'center', marginTop: 6 }}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
                   </div>
                 )
@@ -1837,9 +1840,14 @@ export function EcuLabApp() {
             {ecuInjectorCc !== injectorCc ? (
               <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
                 <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
-                <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })} style={{ display: 'block', width: '100%', marginTop: 9, padding: '10px 0', borderRadius: 8, border: 'none', background: T.acc, color: T.accOn, fontWeight: 800, fontSize: 12.5 }}>
-                  RESCALE ECU TO {injectorCc}cc
-                </button>
+                {/* The wrapper, not the button, is what breaks the line: the button
+                    sits inside a paragraph and is inline-flex, so without a block
+                    parent it would run on from the end of the warning text. */}
+                <div style={{ marginTop: 9 }}>
+                  <Button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })}>
+                    RESCALE ECU TO {injectorCc}cc
+                  </Button>
+                </div>
               </div>
             ) : (
               <div style={{ fontSize: 11, color: T.ok, margin: '6px 0 4px' }}>ECU scaling matches the fitted injectors.</div>
