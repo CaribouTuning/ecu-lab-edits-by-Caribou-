@@ -28,11 +28,15 @@ import {
   ENGINE_PRESETS, EXHAUST_DIA_OPTS, GEARBOX_OPTS, INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD,
   MATERIAL_OPTS, MOD_INFO, MPH_PER_MS, OCTANE_OPTS, PRESET_GROUPS, PSI_TO_KPA, QUARTER_MILE_M,
   R_AIR, RPM, SIXTY_FEET_M, SPARK_MAX_DEG, SPARK_MIN_DEG, TIRE_GRIP, TURBINE_OPTS,
-  applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D, computeEngineerScore,
-  computeHardwareVE, computePullScore, computeTuningScore, deriveEngine, idealExhaustDiameter,
-  interp2, liveStep, makeLiveState, presetById, roadSpeedMs, simulateDragRun, simulateSweep,
-  torqueCurveFromSweep, turbineWithCount, veRecommendations
+  acousticDrive, applyPreset, calibrationAdvice, chargeTempK, clamp, clone2D,
+  computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore, deriveEngine,
+  firingEvents, idealExhaustDiameter, interp2, liveStep, makeLiveState, presetById, roadSpeedMs,
+  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
+import {
+  beepEngineAudio, createEngineAudio, scheduleExhaustPulses, silenceEngineAudio,
+  updateEngineAudio,
+} from './audio/engineAudio.js';
 import {
   T, accAlpha, deltaHeat, heat, horizonGlowAlpha, shadowAlpha, smokeAlpha, statusColor, strip,
 } from './theme.js';
@@ -961,6 +965,14 @@ export default function EngineManagementSandbox() {
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [volume, setVolume] = useState(1);
+  // null until the player runs the self-test; then 'ok' | 'blocked' | 'unavailable'.
+  const [audioStatus, setAudioStatus] = useState(null);
+  // A dyno pull is a sequence, not just a sweep: settle at idle, load it and sweep to
+  // redline, let it spin back down on engine braking, settle again. Those bookends are
+  // most of what a pull SOUNDS like, and without them the whole run is a 1.6 s blip.
+  const [dynoPhase, setDynoPhase] = useState(null);
+  const [dynoRpm, setDynoRpm] = useState(820);
 
   // Every field applyPreset() owns funnels its hand-edit path through one of these
   // two wrappers instead of sprinkling `setPresetId(null)` at each call site — a
@@ -1128,7 +1140,14 @@ export default function EngineManagementSandbox() {
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
 
   const needsMafRecal = mods.intake || turboOn;
-  const changeTab = (t) => { setTab(t); setSelection(null); };
+  const changeTab = (t) => {
+    // Browsers only let audio start from inside a user gesture, so take every tap on the
+    // nav as another chance to unlock it. Without this a player who never presses START
+    // first can navigate the whole app and hear nothing.
+    const a = audioRef.current;
+    if (a && a.ctx.state === 'suspended') a.ctx.resume();
+    setTab(t); setSelection(null);
+  };
 
   const installMod = (key) => {
     if (mods[key]) return;
@@ -1206,73 +1225,20 @@ export default function EngineManagementSandbox() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     try {
-      const ctx = new Ctx();
-      const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
-
-      // An exhaust note is a PULSE TRAIN, not a smooth wave — each cylinder fires a
-      // sharp pressure spike. Building a periodic wave with many harmonics falling
-      // off ~1/n gives that pulse character, which sounds far more like an engine
-      // than a raw sawtooth does.
-      const N = 24;
-      const re = new Float32Array(N), im = new Float32Array(N);
-      for (let n = 1; n < N; n++) { re[n] = 0; im[n] = (1 / n) * Math.exp(-n / 14); }
-      const pulseWave = ctx.createPeriodicWave(re, im, { disableNormalization: false });
-
-      // Two slightly detuned pulse oscillators — real engines never hold a perfectly
-      // pure pitch, and the beating between them is what stops it sounding synthetic.
-      const oscA = ctx.createOscillator(); oscA.setPeriodicWave(pulseWave); oscA.frequency.value = 40;
-      const oscB = ctx.createOscillator(); oscB.setPeriodicWave(pulseWave); oscB.frequency.value = 40; oscB.detune.value = 9;
-      const oscG = ctx.createGain(); oscG.gain.value = 0.5;
-      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 20;
-      const subG = ctx.createGain(); subG.gain.value = 0.35;
-
-      // Exhaust system: a resonant body plus an overall lowpass.
-      const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 320; body.Q.value = 0.9;
-      const bodyG = ctx.createGain(); bodyG.gain.value = 0.8;
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900; filter.Q.value = 2;
-      filter.connect(master); body.connect(bodyG); bodyG.connect(master);
-      oscA.connect(oscG); oscB.connect(oscG); oscG.connect(filter); oscG.connect(body);
-      sub.connect(subG); subG.connect(filter);
-
-      const bufLen = 2 * ctx.sampleRate;
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-      const dch = buf.getChannelData(0);
-      for (let i = 0; i < bufLen; i++) dch[i] = (Math.random() * 2 - 1) * 0.35;
-
-      // Combustion roughness, amplitude-modulated at the firing rate so the noise
-      // arrives in pulses rather than as constant hiss.
-      const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
-      const ng = ctx.createGain(); ng.gain.value = 0.04;
-      const pulseLfo = ctx.createOscillator(); pulseLfo.type = 'sawtooth'; pulseLfo.frequency.value = 40;
-      const pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0.03;
-      pulseLfo.connect(pulseDepth); pulseDepth.connect(ng.gain);
-      noise.connect(ng); ng.connect(filter);
-
-      // LOPE: valve overlap makes combustion inconsistent cylinder-to-cylinder at
-      // idle, so output surges and dips at a slow sub-multiple of the firing rate.
-      // That uneven pulsing is the classic cammed idle.
-      const lopeLfo = ctx.createOscillator(); lopeLfo.type = 'triangle'; lopeLfo.frequency.value = 6;
-      const lopeDepth = ctx.createGain(); lopeDepth.gain.value = 0;
-      lopeLfo.connect(lopeDepth); lopeDepth.connect(master.gain);
-      lopeLfo.start();
-
-      const indG = ctx.createGain(); indG.gain.value = 0;
-      const indFilt = ctx.createBiquadFilter(); indFilt.type = 'bandpass'; indFilt.frequency.value = 1800; indFilt.Q.value = 1.2;
-      const noise2 = ctx.createBufferSource(); noise2.buffer = buf; noise2.loop = true;
-      noise2.connect(indFilt); indFilt.connect(indG); indG.connect(master);
-
-      const whistle = ctx.createOscillator(); whistle.type = 'sine'; whistle.frequency.value = 3000;
-      const whistleG = ctx.createGain(); whistleG.gain.value = 0;
-      whistle.connect(whistleG); whistleG.connect(master);
-      const bovFilt = ctx.createBiquadFilter(); bovFilt.type = 'bandpass'; bovFilt.frequency.value = 2600; bovFilt.Q.value = 0.8;
-      const bovG = ctx.createGain(); bovG.gain.value = 0;
-      const noise3 = ctx.createBufferSource(); noise3.buffer = buf; noise3.loop = true;
-      noise3.connect(bovFilt); bovFilt.connect(bovG); bovG.connect(master);
-
-      oscA.start(); oscB.start(); sub.start(); noise.start(); noise2.start(); noise3.start(); pulseLfo.start();
-      audioRef.current = { ctx, oscA, oscB, oscG, sub, subG, master, filter, body, bodyG, ng, pulseLfo, lopeLfo, lopeDepth, indG, whistle, whistleG, bovG };
+      audioRef.current = createEngineAudio(new Ctx(), firingEvents);
       return audioRef.current;
     } catch { return null; }
+  };
+
+  // A deliberately obvious beep. If this is silent, the problem is the device or the
+  // browser — on an iPhone the physical ring/silent switch mutes web audio even at full
+  // volume — and not the engine model. Worth being able to prove.
+  const testSound = () => {
+    const a = ensureAudio();
+    if (!a) { setAudioStatus('unavailable'); return; }
+    a.ctx.resume();
+    beepEngineAudio(a, { hz: 220, seconds: 0.45, gain: 0.35 });
+    setAudioStatus(a.ctx.state === 'running' ? 'ok' : 'blocked');
   };
 
   // Persistence goes through the storage adapter, which picks whichever backend is
@@ -1335,12 +1301,49 @@ export default function EngineManagementSandbox() {
     persistCareer(nextBest, nextTotal, nextPulls);
     // Bank the scores this pull actually produced, with the build they were measured on.
     setPullScores({ tuning: ts, engineer: es, pull, wasBest, signature: buildSignature });
+    // ---- The pull, as a sequence -----------------------------------------------
+    //   settle     hold idle, so you hear it running before it is loaded
+    //   sweep      load it and take it to redline, drawing the graph as it goes
+    //   spooldown  throttle shut; revs fall on the engine's own friction and pumping
+    //   rest       settle at idle again, and the pull is over
+    // The bookends are not decoration. A pull that teleports from nothing to redline and
+    // stops gives the ear no reference for what changed, and never lets you hear the
+    // overrun — which is where a boosted engine vents.
     const total = r.points.length;
-    let i = 0;
+    const SETTLE_MS = 1400, SWEEP_MS = 1900, DOWN_MS = 2100, REST_MS = 900;
+    const idleRpm = 820;
+    const topRpm = r.points[total - 1].rpm;
+    const t0 = Date.now();
+    setDynoPhase('settle');
+    setDynoRpm(idleRpm);
+    setRevealCount(0);
+
     revealTimer.current = setInterval(() => {
-      i += Math.ceil(total / 30);
-      setRevealCount(Math.min(i, total));
-      if (i >= total) { clearInterval(revealTimer.current); setRunning(false); }
+      const el = Date.now() - t0;
+      if (el < SETTLE_MS) {
+        setDynoPhase('settle');
+        setDynoRpm(idleRpm + Math.sin(el / 90) * 14);
+      } else if (el < SETTLE_MS + SWEEP_MS) {
+        const f = (el - SETTLE_MS) / SWEEP_MS;
+        const idx = Math.min(total, Math.round(f * total));
+        setDynoPhase('sweep');
+        setRevealCount(idx);
+        setDynoRpm(r.points[Math.min(total - 1, Math.max(0, idx - 1))].rpm);
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS) {
+        // Engine braking: fast at first, easing as friction and pumping fall away with
+        // engine speed.
+        const f = (el - SETTLE_MS - SWEEP_MS) / DOWN_MS;
+        setDynoPhase('spooldown');
+        setRevealCount(total);
+        setDynoRpm(idleRpm + (topRpm - idleRpm) * Math.pow(1 - f, 2.2));
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS + REST_MS) {
+        setDynoPhase('rest');
+        setDynoRpm(idleRpm + Math.sin(el / 90) * 12);
+      } else {
+        clearInterval(revealTimer.current);
+        setDynoPhase(null);
+        setRunning(false);
+      }
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
@@ -1514,7 +1517,11 @@ export default function EngineManagementSandbox() {
     setHistogram(null);
   };
 
-  const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
+  // During a pull the RPM comes from the pull SEQUENCE, not from the point being drawn:
+  // the settle and spooldown bookends have no measured point behind them.
+  const currentRpm = running
+    ? dynoRpm
+    : (result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500);
   // A SCORE IS A MEASUREMENT, SO IT IS TAKEN ONCE AND KEPT.
   //
   // This used to be a memo that recomputed the Engineer and Pull scores from whatever
@@ -1534,11 +1541,13 @@ export default function EngineManagementSandbox() {
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
-  const prevBoostRef = useRef(0);
+  //
+  // Nothing here decides what the engine sounds like. `acousticDrive` turns the operating
+  // point into the physical properties of the exhaust note, and `updateEngineAudio`
+  // renders them; this effect only says which engine is running and how hard.
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    const t = a.ctx.currentTime;
 
     const onDyno = tab === 'dyno' && running && result;
     // LIVE is its own screen now, so the live engine is audible on it rather than on HOME.
@@ -1549,77 +1558,77 @@ export default function EngineManagementSandbox() {
     const dragPt = onDrag
       ? (dragResult.trace.find((p) => p.t >= dragT) || dragResult.trace[dragResult.trace.length - 1])
       : null;
-    const audible = onDyno || onLive || onDrag;
+    const audible = Boolean((onDyno || onLive || onDrag) && soundOn);
 
     const rpm = onDrag ? (dragPt?.rpm ?? 0) : onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
-    // The driver's actual throttle position is what shapes the note, which is why a
-    // car being feathered off a spinning tyre sounds different from one that hooked.
-    const load = onDrag ? (dragPt?.throttle ?? 1) : onDyno ? 1 : clamp((live.effThrottle ?? 0) / 100, 0, 1);
-    const boostNow = onDyno ? (dynoPt?.boostPsi ?? 0) : onDrag ? 0 : (live.live?.boostPsi ?? 0);
-    const cut = onLive ? live.fuelCut : onDrag ? !!dragPt?.limiter : false;
+    const point = onDyno ? dynoPt : (live.running ? live.live : null);
+    // The driver's actual throttle position is what shapes the note, which is why a car
+    // being feathered off a spinning tyre sounds different from one that hooked.
+    //
+    // Through a pull it comes from the pull SEQUENCE: the sweep is wide open, the bookends
+    // are not, and the overrun is a closed throttle — which is what makes the blow-off fire
+    // when the pull ends, exactly where you would hear it on a real dyno.
+    const load = onDrag
+      ? (dragPt?.throttle ?? 1)
+      : onDyno
+        ? (dynoPhase === 'sweep' ? 1 : dynoPhase === 'spooldown' ? 0.04 : 0.10)
+        : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+    const cut = onLive
+      ? live.fuelCut
+      : onDrag ? !!dragPt?.limiter : Boolean(onDyno && dynoPhase === 'spooldown');
 
-    const cyl = engineDerived.cyl;
-    const fire = Math.max(6, (rpm / 60) * (cyl / 2));
-    a.oscA.frequency.setTargetAtTime(fire, t, 0.02);
-    a.oscB.frequency.setTargetAtTime(fire, t, 0.02);
-    a.sub.frequency.setTargetAtTime(fire / 2, t, 0.02);
-    a.pulseLfo.frequency.setTargetAtTime(fire, t, 0.02);
+    const frame = {
+      drive: acousticDrive({
+        rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
+        pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
+        compressor: COMPRESSOR_OPTS[compressorIdx],
+        // The sweep only ever measures wide-open points, so the idle and overrun either
+        // side of it have to borrow the nearest one and scale it by throttle.
+        throttle: onDyno ? load : 1,
+      }),
+      rpm,
+      configuration: engineConfig.configuration,
+      load,
+      audible,
+      cut,
+      cranking: Boolean(onLive && live.cranking),
+      pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
+      openExhaust: Boolean(mods.exhaust || mods.headers),
+      intakeFitted: Boolean(mods.intake),
+      // Boost only counts while the throttle is open; dropping it on the overrun is what
+      // the renderer watches for to vent.
+      boostPsi: onDrag || (onDyno && dynoPhase !== 'sweep') ? 0 : (point?.boostPsi ?? 0),
+      volume,
+    };
 
-    // Layout character. A four is rough and buzzy (wider detune, more upper content);
-    // a V8 leans on its low-order rumble; a six sits between.
-    const isFour = cyl === 4, isEight = cyl === 8;
-    a.oscB.detune.setTargetAtTime(isFour ? 16 : isEight ? 6 : 9, t, 0.2);
-    a.oscG.gain.setTargetAtTime(isFour ? 0.55 : isEight ? 0.42 : 0.50, t, 0.1);
-    a.subG.gain.setTargetAtTime(isFour ? 0.20 : isEight ? 0.58 : 0.35, t, 0.1);
-    a.body.frequency.setTargetAtTime(isEight ? 240 : isFour ? 420 : 320, t, 0.15);
-
-    // Exhaust diameter: a bigger pipe is louder, deeper and less restricted.
-    const dia = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia;
-    const diaOpen = 0.72 + (dia - 2.5) * 0.20;
-    const catBack = mods.exhaust || mods.headers;
-    a.filter.frequency.setTargetAtTime((300 + fire * 7 + load * 2400) * diaOpen, t, 0.05);
-    a.filter.Q.setTargetAtTime(isFour ? 3.2 : isEight ? 1.8 : 2.4, t, 0.1);
-    a.bodyG.gain.setTargetAtTime(0.5 + (dia - 2.5) * 0.22, t, 0.15);
-
-    a.indG.gain.setTargetAtTime(mods.intake && audible ? load * 0.055 * (rpm / 7500 + 0.3) : 0, t, 0.06);
-
-    if (turboOn) {
-      a.whistle.frequency.setTargetAtTime(1400 + (rpm / 7500) * 5200, t, 0.08);
-      a.whistleG.gain.setTargetAtTime(audible ? Math.min(0.05, boostNow * 0.006) * load : 0, t, 0.08);
-      if (prevBoostRef.current > 3 && load < 0.15 && audible) {
-        a.bovG.gain.cancelScheduledValues(t);
-        a.bovG.gain.setValueAtTime(0.09, t);
-        a.bovG.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-      }
-      prevBoostRef.current = boostNow;
-    } else {
-      a.whistleG.gain.setTargetAtTime(0, t, 0.1);
-      prevBoostRef.current = 0;
-    }
-
-    // Lope is loudest at idle and washes out as revs rise and combustion evens up.
-    const overlap = engineDerived.overlapDeg || 0;
-    const lopeRate = clamp(fire / 6, 2.5, 14);
-    a.lopeLfo.frequency.setTargetAtTime(lopeRate, t, 0.15);
-    const lopeStrength = audible && overlap > 2 && rpm < 2200
-      ? Math.min(0.085, overlap * 0.0022) * clamp(1 - (rpm - 800) / 1600, 0.15, 1)
-      : 0;
-    a.lopeDepth.gain.setTargetAtTime(lopeStrength, t, 0.12);
-
-    a.ng.gain.setTargetAtTime(live.cranking && onLive ? 0.12 : 0.03 + load * 0.045, t, 0.05);
-    const vol = cut ? 0.012 : 0.05 + load * 0.11;
-    a.master.gain.setTargetAtTime(audible && soundOn ? vol * (catBack ? 1.18 : 1) : 0, t, cut ? 0.015 : 0.06);
+    updateEngineAudio(a, frame);
+    // Scheduling runs on every tick, not just when a parameter changed, because it is
+    // what keeps the pulse train in step with the crank.
+    scheduleExhaustPulses(a, frame);
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
-      engineDerived.cyl, exhaustDiaIdx, mods.intake, mods.exhaust, mods.headers, turboOn,
-      running, currentRpm, revealCount, result, tab, engineDerived.overlapDeg,
-      dragRunning, dragResult, dragT]);
+      engineDerived, engineConfig.configuration, exhaustDiaIdx, compressorIdx,
+      mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
+      running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT]);
+
+  // HARD SILENCE. Scheduled ramps (a blow-off, a flutter burst) can leave a gain parked
+  // open if a run ends mid-ramp, so stopping is its own operation rather than something
+  // the smoothed targets above eventually get around to.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const sounding = (tab === 'live' && (live.running || live.cranking))
+      || (tab === 'dyno' && running)
+      || (tab === 'drag' && dragRunning);
+    if (sounding && soundOn) return;
+    silenceEngineAudio(a);
+  }, [tab, live.running, live.cranking, running, dragRunning, soundOn]);
 
   // Hard-stop audio on unmount or when the tab changes away from a sounding page.
   useEffect(() => {
     return () => {
       const a = audioRef.current;
-      if (a) { try { a.master.gain.setTargetAtTime(0, a.ctx.currentTime, 0.02); } catch { /* noop */ } }
+      if (a) { try { silenceEngineAudio(a); } catch { /* noop */ } }
     };
   }, [tab]);
 
@@ -2130,6 +2139,10 @@ export default function EngineManagementSandbox() {
                     background: live.running || live.cranking ? T.panel2 : T.ok, color: live.running || live.cranking ? T.ink : T.okBg,
                     borderWidth: 1, borderStyle: 'solid', borderColor: live.running || live.cranking ? T.line : T.ok,
                   }}>{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</button>
+                  <button onClick={testSound} title="Test sound" style={{
+                    width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 10.5,
+                    border: `1px solid ${T.line}`, background: T.panel2, color: T.ink2,
+                  }}>TEST</button>
                   <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); setSoundOn((v) => !v); }} title="Engine sound" style={{
                     width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
                     border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
@@ -2138,6 +2151,30 @@ export default function EngineManagementSandbox() {
                 </div>
               </div>
             </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+              <span style={{ fontSize: 10, color: T.ink2, fontWeight: 700, letterSpacing: 0.5 }}>VOL</span>
+              <input
+                type="range" min={0} max={2} step={0.05} value={volume}
+                onChange={(e) => setVolume(Number(e.target.value))}
+                aria-label="Engine volume"
+                style={{ flex: 1, accentColor: T.acc }}
+              />
+              <span style={{ fontFamily: T.mono, fontSize: 11, color: T.ink2, width: 34, textAlign: 'right' }}>
+                {Math.round(volume * 100)}%
+              </span>
+            </div>
+
+            {audioStatus && (
+              <div style={{ fontSize: 11, color: audioStatus === 'ok' ? T.ok : T.warn, marginTop: 8, lineHeight: 1.5 }}>
+                {audioStatus === 'ok'
+                  ? 'Audio is running. If you heard the test beep but not the engine, start it and hold the throttle.'
+                  : audioStatus === 'blocked'
+                    ? 'The browser is still blocking audio — tap START, or any tab, then try TEST again.'
+                    : 'This browser did not provide Web Audio, so engine sound is unavailable.'}
+                <br />On iPhone the physical ring/silent switch mutes web audio even at full volume.
+              </div>
+            )}
 
             <div
               onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); setThrottleInput(100); throttleRef.current = 100; }}
@@ -2805,7 +2842,11 @@ export default function EngineManagementSandbox() {
               boxShadow: running ? 'none' : `0 6px 18px ${accAlpha(0.22)}`,
             }}>
               <Play size={16} />
-              {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
+              {!running ? 'RUN DYNO PULL'
+                : dynoPhase === 'settle' ? 'IDLING…'
+                  : dynoPhase === 'sweep' ? 'SWEEPING…'
+                    : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
+                      : 'SETTLING…'}
             </button>
 
             {result && (
