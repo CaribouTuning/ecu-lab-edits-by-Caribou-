@@ -62,6 +62,7 @@ import { StatTile } from './primitives/StatTile.jsx';
 import { Bar } from './primitives/Bar.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { Select } from './primitives/Select.jsx';
+import { Toggle } from './primitives/Toggle.jsx';
 
 function ExpandableInfo({ title, children }) {
   const [open, setOpen] = useState(false);
@@ -94,20 +95,6 @@ function PickList({ options, value, onChange }) {
           }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
         );
       })}
-    </div>
-  );
-}
-
-function ToggleRow({ label, sub, checked, onChange, color = T.acc }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: 13 }}>
-      <div style={{ marginRight: 10 }}>
-        <div style={{ fontWeight: 700, fontSize: 13.5, color: T.ink }}>{label}</div>
-        {sub && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
-      </div>
-      <button onClick={() => onChange(!checked)} style={{ width: 48, height: 27, borderRadius: 14, border: 'none', position: 'relative', flexShrink: 0, background: checked ? color : T.panel3, transition: 'background .2s' }}>
-        <div style={{ position: 'absolute', top: 3, left: checked ? 24 : 3, width: 21, height: 21, borderRadius: 11, background: T.ink, transition: 'left .2s', boxShadow: `0 1px 3px ${shadowAlpha(0.4)}` }} />
-      </button>
     </div>
   );
 }
@@ -1541,7 +1528,7 @@ export function EcuLabApp() {
               icon={Wind} label="Forced Induction"
               sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
-              <ToggleRow label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
+              <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
 
               <div style={{ maxHeight: turboOn ? 3000 : 0, opacity: turboOn ? 1 : 0, overflow: 'hidden', transition: 'max-height .4s ease, opacity .3s ease' }}>
                 <div style={{ paddingTop: 12 }}>
@@ -1557,7 +1544,7 @@ export function EcuLabApp() {
                   </ExpandableInfo>
 
                   <div style={{ marginTop: 4, marginBottom: 14 }}>
-                    <ToggleRow label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} color={T.cyan} />
+                    <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
                   </div>
 
                   <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Boost Target Curve</div>

@@ -238,13 +238,13 @@ describe('opening and dismissing the overwrite prompt', () => {
 
 
 /**
- * ToggleRow renders its switch as an unlabelled button beside the label text, so it
- * has to be reached through the row rather than by name.
+ * The Toggle primitive renders a `role="switch"` with the label as its accessible
+ * name, so it can be reached directly rather than through the row's DOM shape.
  * @param {string} label
- * @returns {HTMLButtonElement}
+ * @returns {HTMLElement}
  */
 function toggleFor(label) {
-  return screen.getByText(label).parentElement.parentElement.querySelector('button');
+  return screen.getByRole('switch', { name: label });
 }
 
 /**
