@@ -1366,7 +1366,12 @@ export function EcuLabApp() {
             >
               <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
               <Select
-                label="Start from a real engine"
+                // The primitive is inline-block with a 200px floor, so it must be told
+                // to fill this column — the legacy control was width:100% and the
+                // section is a single narrow stack. The margin is the 13px the old one
+                // carried; nothing after it should close up.
+                style={{ display: 'block', marginBottom: 13 }}
+                label="Start From a Real Engine"
                 groups={PRESET_GROUPS.map((g) => ({
                   label: g.manufacturer,
                   // The heading carries the manufacturer, so strip it off the option
