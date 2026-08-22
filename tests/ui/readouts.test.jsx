@@ -20,7 +20,7 @@ afterEach(cleanup);
 
 // WCAG relative-luminance contrast ratio between two hex colours. There is no
 // contrast helper anywhere in this repo — every contrast finding so far (including
-// the two fixed in this PR) was caught by a human reading a diff.
+// the three fixed in this PR) was caught by a human reading a diff.
 function contrast(hexA, hexB) {
   const luminance = (hex) => {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -43,24 +43,37 @@ const tileCss = readFileSync(
   'utf8',
 );
 
+// Button's stylesheet, read the same way and for the same reason. Its `quiet`
+// variant is measured below, beside StatTile's label: same class of defect (a
+// hierarchy token used where a legibility one was needed), same kind of guard.
+const buttonCss = readFileSync(
+  new NodeURL('../../src/ui/primitives/Button.module.css', import.meta.url),
+  'utf8',
+);
+
 // tokens.js keyed by the CSS custom property name it declares (e.g. `accInk` ->
 // `acc-ink`), so a `var(--x)` pulled out of the stylesheet can be resolved to a hex
 // value without hardcoding the mapping a second time.
 const tokensByCssName = new Map(Object.entries(tokens).map(([name, value]) => [camelToKebab(name), value]));
 
 /**
- * The custom-property name (without `--`) a declaration in StatTile.module.css
- * resolves to, e.g. `customPropertyOf('.label', 'color')` -> `'ink2'`. Throws if the
- * selector or declaration isn't found, so a typo here fails loudly instead of
- * silently asserting against `undefined`.
+ * The custom-property name (without `--`) a declaration in `css` resolves to, e.g.
+ * `customPropertyIn(tileCss, 'StatTile.module.css', '.label', 'color')` -> `'ink2'`.
+ * Throws if the selector or declaration isn't found, so a typo here fails loudly
+ * instead of silently asserting against `undefined`.
  */
-function customPropertyOf(selector, property) {
-  const escapedSelector = selector.replace(/[.[\]]/g, '\\$&');
-  const rule = tileCss.match(new RegExp(`${escapedSelector}\\s*{([^}]*)}`));
-  if (!rule) throw new Error(`no "${selector}" rule in StatTile.module.css`);
+function customPropertyIn(css, name, selector, property) {
+  const escapedSelector = selector.replace(/[.[\]()]/g, '\\$&');
+  const rule = css.match(new RegExp(`${escapedSelector}\\s*{([^}]*)}`));
+  if (!rule) throw new Error(`no "${selector}" rule in ${name}`);
   const decl = rule[1].match(new RegExp(`${property}\\s*:\\s*var\\(--([a-z0-9-]+)\\)`));
-  if (!decl) throw new Error(`no "${property}" declaration on "${selector}" in StatTile.module.css`);
+  if (!decl) throw new Error(`no "${property}" declaration on "${selector}" in ${name}`);
   return decl[1];
+}
+
+/** `customPropertyIn` bound to StatTile's stylesheet, which most of this file reads. */
+function customPropertyOf(selector, property) {
+  return customPropertyIn(tileCss, 'StatTile.module.css', selector, property);
 }
 
 /** Resolves a custom-property name read from the stylesheet to its token hex value. */
@@ -134,6 +147,36 @@ describe('StatTile', () => {
     // what `.acc .value` actually sets, clears 9.57:1 — comfortably past the bar,
     // and read from the stylesheet rather than assumed.
     expect(contrast(accValueColor, tileBg)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// Not a readout, but it lives here because this is where the contrast helper is, and
+// because it is the same defect StatTile's label had: a token picked for hierarchy
+// without checking it against the surface it lands on. `quiet` has no fill and no
+// border, so its label is the entire control — if that fails AA the button is not
+// quiet, it is missing.
+describe('Button, quiet variant', () => {
+  // Every surface a quiet button is placed on today: --acc-bg (the journey banner's
+  // SKIP GUIDE), --bg (the tutorial's SKIP and BUILD's RESET ALL TO STOCK). --panel
+  // and --panel2 are the two surfaces it would land on next, and --panel3 is the
+  // lightest surface in the system, so it bounds the whole set.
+  const surfaces = ['bg', 'panel', 'panel2', 'panel3', 'accBg'];
+
+  it('stays readable on every surface it lands on', () => {
+    // `size="sm"` is --fs-xs, 10.5px: small text, so AA wants 4.5:1, not 3:1. --ink3
+    // measured 2.87-3.47:1 across these; --ink2 measures 4.59-6.21:1.
+    const quietColor = tokenFor(customPropertyIn(buttonCss, 'Button.module.css', '.quiet', 'color'));
+    // Collected rather than asserted one at a time, so a failure names the surfaces.
+    const failing = surfaces.filter((surface) => contrast(quietColor, tokens[surface]) < 4.5);
+    expect(failing).toEqual([]);
+  });
+
+  it('brightens on hover rather than dimming', () => {
+    // The hover colour used to be --ink2, which is now the resting colour; leaving it
+    // there would have made hover a no-op.
+    const resting = customPropertyIn(buttonCss, 'Button.module.css', '.quiet', 'color');
+    const hovered = customPropertyIn(buttonCss, 'Button.module.css', '.quiet:hover:not(:disabled)', 'color');
+    expect(contrast(tokenFor(hovered), tokens.bg)).toBeGreaterThan(contrast(tokenFor(resting), tokens.bg));
   });
 });
 

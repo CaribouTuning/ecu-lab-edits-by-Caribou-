@@ -66,13 +66,17 @@
 }
 .danger:hover:not(:disabled) { background: var(--danger); color: var(--bg); }
 
-/* Text-only, for escape hatches that must not compete with the primary action. */
+/* Text-only, for escape hatches that must not compete with the primary action.
+   Quiet is about weight, not legibility: --ink3 measured 2.87-3.47:1 across the
+   surfaces these buttons land on (--acc-bg, --bg), well under AA for 10.5px text,
+   and with no fill or border to read the control by there is nothing else to see.
+   --ink2 clears 4.5:1 everywhere and still sits two steps below the primary. */
 .quiet {
   background: transparent;
   border-color: transparent;
-  color: var(--ink3);
+  color: var(--ink2);
 }
-.quiet:hover:not(:disabled) { color: var(--ink2); }
+.quiet:hover:not(:disabled) { color: var(--ink); }
 
 /* --- sizes --- */
 
