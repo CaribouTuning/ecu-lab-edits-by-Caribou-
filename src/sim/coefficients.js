@@ -62,6 +62,24 @@ export const COEFF = {
   WOSCHNI_C2: 3.24e-3,
   // Mean chamber wall temperature, K. Coolant ~370 K, metal surfaces above it.
   WALL_TEMP_K: 450,
+  // --- Exhaust port: what the EGT probe sees (see the two-stream note in cycle.js) ---
+  // How completely the piston-displaced part of the charge cools toward the port wall on
+  // its way out, as a number of transfer units at the reference flow. Fitted to the
+  // published EGT band for a naturally aspirated gasoline engine — roughly 850 C at wide
+  // open throttle, falling through about 700 at part throttle to 400-500 at light cruise
+  // — because those are the numbers a tuner reads off a gauge and the only ones worth
+  // matching. See EXHAUST_PORT_FLOW_REF for what the reference flow is.
+  EXHAUST_PORT_NTU: 1.0,
+  // Reference value of trappedMass x rpm, in the units the cycle carries them (kg and
+  // rev/min), measured at the stock V6 at wide-open throttle and 6500 RPM: 6.18e-4 kg of
+  // charge times 6500 is about 4.0. Only the RATIO to this matters, so it is a
+  // normaliser rather than a physical quantity — but it has to be the right order of
+  // magnitude or the NTU above stops meaning "at the reference flow".
+  EXHAUST_PORT_FLOW_REF: 4.0,
+  // Turbulent convection puts h at about mdot^0.8, so NTU = hA/(mdot*cp) goes as
+  // mdot^-0.2. Deliberately weak: it is weak in reality, and the blowdown mass fraction
+  // is what carries the load dependence.
+  EXHAUST_PORT_FLOW_EXP: 0.2,
   // Standard atmosphere, Pa — the unit Douaud-Eyzat is written in.
   ATM_PA: 101325,
 
