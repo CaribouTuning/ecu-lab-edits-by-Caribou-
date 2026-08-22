@@ -92,7 +92,7 @@ function frameFor(overrides = {}) {
 
 describe('the engine synthesiser', () => {
   let ctx, graph;
-  beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx, firingEvents); });
+  beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx); });
 
   /** Pushes a frame, advancing the clock first so the parameter throttle lets it through. */
   const push = (frame) => { ctx.currentTime += 0.1; updateEngineAudio(graph, frame); };
@@ -125,19 +125,19 @@ describe('the engine synthesiser', () => {
     expect(idle).toBeGreaterThan(0);
   });
 
-  it('connects only the running layout, so idle layouts cost nothing', () => {
+  it('voices each layout differently without being told how a layout sounds', () => {
+    // Nothing in the graph is built per layout any more — the firing order arrives on the
+    // frame — so the only thing that may differ between two engines here is the voicing.
     push(frameFor({ configuration: 'V8' }));
-    expect(graph.loopConnected.V8).toBe(true);
-    expect(graph.loopConnected.I4).toBe(false);
+    const v8 = graph.body.frequency.value;
     push(frameFor({ configuration: 'I4' }));
-    expect(graph.loopConnected.V8).toBe(false);
-    expect(graph.loopConnected.I4).toBe(true);
+    expect(graph.body.frequency.value).not.toBe(v8);
   });
 });
 
 describe('the exhaust pulse train', () => {
   let ctx, graph;
-  beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx, firingEvents); });
+  beforeEach(() => { ctx = stubContext(); graph = createEngineAudio(ctx); });
 
   /** Runs the scheduler forward and returns the times pulses were scheduled at. */
   function collect(frame, seconds) {
@@ -179,9 +179,18 @@ describe('the exhaust pulse train', () => {
     expect(new Set(bankGaps).size).toBeGreaterThan(1);
   });
 
-  it('stops scheduling once the pulses fuse, leaving the looped train to it', () => {
+  it('keeps placing individual events at redline, where a loop would take over', () => {
+    // A looped buffer is the obvious way to survive 460 events a second, and it is what
+    // this used to do. It cannot be done that way: a loop is pitched by playback rate, so
+    // every resonance in it rises with engine speed like a tape running fast, and the
+    // buffer's own bandwidth is fixed. Measured, handing over to a loop at 5500 rpm cost
+    // 26 dB of content above 4 kHz and collapsed the harmonic comb to 11 dB. Scheduling
+    // every event costs about 20 ms of main thread per second at redline, and is correct.
     const times = collect(frameFor({ rpm: 7000 }), 0.5);
-    expect(times).toHaveLength(0);
+    expect(times.length).toBeGreaterThan(150);
+    // ...and they are still on the crank angles the layout fires at.
+    const gaps = times.slice(1).map((v, i) => v - times[i]);
+    expect(Math.min(...gaps)).toBeGreaterThan(0);
   });
 
   it('schedules nothing when the engine is not audible', () => {
@@ -192,7 +201,7 @@ describe('the exhaust pulse train', () => {
 describe('stopping', () => {
   it('pins every layer to zero rather than gliding towards it', () => {
     const ctx = stubContext();
-    const graph = createEngineAudio(ctx, firingEvents);
+    const graph = createEngineAudio(ctx);
     ctx.currentTime = 0.5;
     updateEngineAudio(graph, frameFor());
     expect(graph.master.gain.value).toBeGreaterThan(0);
@@ -201,9 +210,6 @@ describe('stopping', () => {
     for (const node of [graph.master, graph.pipeOut, graph.indG, graph.whistleG,
       graph.bladeG, graph.rushG, graph.bovG, graph.flutEnv]) {
       expect(node.gain.value).toBe(0);
-    }
-    for (const layout of Object.keys(graph.loopGains)) {
-      for (const g of graph.loopGains[layout]) expect(g.gain.value).toBe(0);
     }
   });
 });
@@ -226,7 +232,7 @@ describe('what makes it sound real', () => {
       built.push(buf.getChannelData(0));
       return buf;
     };
-    createEngineAudio(ctx, firingEvents);
+    createEngineAudio(ctx);
     // The noise beds are long flat random fills; the pulses (90 ms) and cycle loops
     // (40 ms) are the rendered ones.
     return built.filter((d) => d.length > 1000 && d.length < 10000);
@@ -277,7 +283,7 @@ describe('what makes it sound real', () => {
     // exactly what a listener calls "digital", and no work on the pulse survives it.
     // So the chain must be able to reach full scale only on peaks, never on the bed.
     const ctx = stubContext();
-    const a = createEngineAudio(ctx, firingEvents);
+    const a = createEngineAudio(ctx);
     ctx.currentTime += 0.1;
     updateEngineAudio(a, frameFor({ rpm: 6000, load: 1 }));
     // Whatever the physics asks for, master gain times make-up cannot reach full scale.
