@@ -1357,6 +1357,7 @@ export default function EngineManagementSandbox() {
   if (appView === 'start') {
     return (
       <StartScreen
+        onCareer={() => { setAppView('app'); setTab('dash'); }}
         onStart={() => { setAppView('app'); setTab('build'); }}
         onTutorial={() => setAppView('tutorial')}
         version={BUILD_VERSION}
