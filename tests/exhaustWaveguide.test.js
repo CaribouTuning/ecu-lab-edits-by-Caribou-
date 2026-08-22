@@ -148,12 +148,15 @@ describe('the exhaust waveguide', () => {
     }
   });
 
-  it('keeps the peak-to-average ratio of a transient train', () => {
-    // An engine is a train of pressure pulses and its crest factor is the sound. Below
-    // about 6 dB it has been flattened into a slab, which is what "digital" means.
-    for (const rpm of [1500, 3000, 6000]) {
-      expect(levels(run({ rpm, seconds: 1 }).out).crest).toBeGreaterThan(6);
-    }
+  it('keeps the peak-to-average ratio of a transient train, and loses it as the pulses fuse', () => {
+    // An engine is a train of pressure pulses and its crest factor is the sound. Flattened
+    // below about 4 dB it is a slab, which is what "digital" means. But it is not a
+    // constant: at 1500 rpm a V8 fires every ten milliseconds and the ear hears separate
+    // events, and at 6000 it fires every two and a half and they genuinely run together.
+    // A real recording does the same, so the model must not hold the ratio flat.
+    const crests = [1500, 3000, 6000].map((rpm) => levels(run({ rpm, seconds: 1 }).out).crest);
+    for (const c of crests) expect(c).toBeGreaterThan(4);
+    expect(crests[0]).toBeGreaterThan(crests[2] + 4);
   });
 
   it('gets louder with load because the cylinder reaches valve opening higher, not because anything says so', () => {
