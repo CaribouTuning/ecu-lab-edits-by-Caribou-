@@ -360,13 +360,13 @@ function SelectionDock({ data, setData, selection, min, max, decimals, unit, onC
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current);
         return (
-          <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 9, padding: '9px 11px', marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
+          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
             <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} kPa</div>
             <div>{ref.what}</div>
             <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
             <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
             {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
-          </div>
+          </Panel>
         );
       })()}
       <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
@@ -1777,13 +1777,13 @@ export function EcuLabApp() {
                   <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>Edit them yourself — a calibration is yours to make, not something the app should silently rewrite.</div>
                 </div>
               ) : calAdvice.underAdvanced.length > 4 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
                   <b style={{ color: T.accInk }}>Timing left on the table.</b> {calAdvice.underAdvanced.length} cells are more than 3° below what this build would tolerate. Safe, but you are giving away torque — advance them a little at a time and pull between each change.
-                </div>
+                </Panel>
               ) : calAdvice.pastMbt.length > 0 ? (
-                <div style={{ background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
                   <b style={{ color: T.accInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
-                </div>
+                </Panel>
               ) : (
                 <div style={{ background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
                   Spark table sits within the knock limit for this hardware.
@@ -2253,11 +2253,11 @@ export function EcuLabApp() {
                           {[['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]].map(([label, s]) => {
                             const c = statusColor(s.score);
                             return (
-                              <div key={label} style={{ flex: 1, background: T.panel2, border: `1px solid ${T.line}`, borderRadius: 12, padding: 14 }}>
+                              <Panel key={label} style={{ flex: 1 }}>
                                 <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
                                 <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.mono, color: c, marginTop: 2 }}>{s.score}</div>
                                 <div style={{ fontSize: 11, color: c, fontWeight: 700 }}>{s.label}</div>
-                              </div>
+                              </Panel>
                             );
                           })}
                         </div>
