@@ -13,7 +13,7 @@ import { Wrench } from 'lucide-react';
 import React from 'react';
 
 import { Bar } from '../../primitives/Bar.jsx';
-import { BuildSection } from '../../primitives/BuildSection.jsx';
+import { BuildSection } from '../../components/BuildSection.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';

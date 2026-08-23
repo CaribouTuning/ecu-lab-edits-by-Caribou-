@@ -1,0 +1,21 @@
+# Shared components
+
+Components used by more than one screen that are **not** primitives.
+
+`src/ui/primitives/` carries a guarantee: token-driven, styled in a co-located
+`.module.css`, typed, and tested in isolation. Everything in there has been through
+that. These have not — they are markup lifted out of `EcuLab.jsx` during the screen
+split because several screens needed them, and they still carry inline styles.
+
+Keeping them here rather than beside the primitives is the point. Three files in
+`primitives/` with no stylesheet would quietly turn that folder from a promise into a
+location, and the next person adding one would have no way to tell which kind they were
+looking at.
+
+`BuildSection` and `ExpandableInfo` are both hand-rolled disclosures, and neither carries
+`aria-expanded` — issue #81 tracks replacing both with a real `Disclosure` primitive, at
+which point they graduate out of this folder by being deleted.
+
+`BuildSection` keeps its inline `maxHeight` deliberately: `tests/ui/routing-shell.test.jsx`
+reads it to tell an open section from a collapsed one, which is how the fully-collapsed
+route state is pinned.

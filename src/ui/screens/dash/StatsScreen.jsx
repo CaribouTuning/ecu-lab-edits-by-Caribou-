@@ -9,7 +9,7 @@
 import { Trophy } from 'lucide-react';
 import React from 'react';
 
-import { BuildSection } from '../../primitives/BuildSection.jsx';
+import { BuildSection } from '../../components/BuildSection.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';

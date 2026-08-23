@@ -16,8 +16,8 @@
 import { BookOpen } from 'lucide-react';
 import React from 'react';
 
-import { BuildSection } from '../../primitives/BuildSection.jsx';
-import { ExpandableInfo } from '../../primitives/ExpandableInfo.jsx';
+import { BuildSection } from '../../components/BuildSection.jsx';
+import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 
 import styles from './LearnScreen.module.css';
 

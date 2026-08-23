@@ -16,10 +16,10 @@ import { Activity } from 'lucide-react';
 import React from 'react';
 
 import { clamp } from '../../../sim/index.js';
-import { BuildSection } from '../../primitives/BuildSection.jsx';
+import { BuildSection } from '../../components/BuildSection.jsx';
 import { Button } from '../../primitives/Button.jsx';
-import { DialMark } from '../../primitives/DialMark.jsx';
-import { ExpandableInfo } from '../../primitives/ExpandableInfo.jsx';
+import { DialMark } from '../../components/DialMark.jsx';
+import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
