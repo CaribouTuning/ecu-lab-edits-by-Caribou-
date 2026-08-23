@@ -357,9 +357,13 @@ export function runCycle({
 
   // Exhaust temperature, from the cycle's own state at exhaust valve open rather than
   // from a correlation. What leaves the port is the burned zone after blowdown to the
-  // manifold: an irreversible expansion from cylinder pressure, which cools it. This is
-  // the number the turbine should see; `exhaustTempK` in thermo.js is the estimate used
-  // only where the answer is needed BEFORE the cycle can be run.
+  // manifold: an irreversible expansion from cylinder pressure, which cools it.
+  //
+  // This is what the DATALOG reports as EGT. It is not what the turbine balance uses —
+  // that needs an answer before the cycle can run, so it has `exhaustTempK` in thermo.js
+  // instead. An earlier comment here claimed this was "the number the turbine should
+  // see", which is a statement about what ought to be true rather than what is, and it
+  // cost time when issue #47 was being tracked down.
   // The ratio is capped at 1 because blowdown is an EXPANSION — it can only cool. Below
   // roughly half throttle the cylinder is still under manifold pressure when the valve
   // opens, and the uncapped ratio inverted into an isentropic COMPRESSION that heated
@@ -372,13 +376,46 @@ export function runCycle({
     (COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED,
   );
 
+  // THE CHARGE DOES NOT ALL LEAVE THE SAME WAY, AND THAT IS WHAT SETS EGT WITH LOAD.
+  //
+  // Blowdown only accounts for the mass that escapes on its own pressure while the
+  // cylinder is still above the manifold. The REST is pushed out by the piston over the
+  // whole exhaust stroke, at manifold pressure, in contact with a port and chamber
+  // hundreds of kelvin cooler than it is — so it arrives at the probe much cooler than
+  // the blowdown pulse did.
+  //
+  // The split is what makes this strongly load-dependent, and it is why modelling port
+  // heat loss alone cannot fix issue #47. At wide-open throttle the cylinder is far
+  // above the manifold at valve opening, so about 70% of the charge leaves as a hot
+  // blowdown pulse. At 40 kPa it is barely above the manifold at all, so only about 18%
+  // does and the other 82% is pushed out slowly against the walls. Same fuel-air ratio,
+  // same burned-gas temperature, very different exhaust temperature — which is exactly
+  // what a real engine does, and the opposite of what this model used to report.
+  //
+  //     f_blowdown = 1 - (p_man / p_evo)^(1/gamma)
+  //
+  // The displaced remainder approaches wall temperature over its residence time. NTU
+  // carries the weak flow dependence of turbulent convection: h scales about as
+  // mdot^0.8, so NTU = hA/(mdot*cp) scales as mdot^-0.2. That term is deliberately weak,
+  // because it IS weak — a 3.5x change in flow moves it by 28%. The load dependence
+  // above is doing the work, as it should.
+  const blowdownMassFrac = 1 - Math.pow(
+    Math.max(0.05, blowdownRatio), 1 / COEFF.GAMMA_BURNED,
+  );
+  const flowRef = Math.max(1e-9, trappedMassKg * rpm);
+  const ntu = COEFF.EXHAUST_PORT_NTU
+    * Math.pow(COEFF.EXHAUST_PORT_FLOW_REF / flowRef, COEFF.EXHAUST_PORT_FLOW_EXP);
+  const displacedK = COEFF.WALL_TEMP_K
+    + (blowdownK - COEFF.WALL_TEMP_K) * Math.exp(-ntu);
+  const portK = blowdownMassFrac * blowdownK + (1 - blowdownMassFrac) * displacedK;
+
   return {
     imepGrossPa: work / sweptM3,
     peakPressurePa,
     peakPressureDeg,
     peakEndGasK,
     peakBurnedK,
-    exhaustK: Math.max(COEFF.WALL_TEMP_K, blowdownK),
+    exhaustK: Math.max(COEFF.WALL_TEMP_K, portK),
     blowbyFrac,
     knockIntegral,
     mfb50Deg,

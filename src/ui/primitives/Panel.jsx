@@ -5,10 +5,17 @@ import React from 'react';
 import styles from './Panel.module.css';
 
 /**
- * @param {object} props
- * @param {React.ReactNode} props.children
- * @param {boolean} [props.tight] reduce the padding
- * @param {React.ElementType} [props.as] element to render, defaults to a div
+ * @typedef {Object} PanelProps
+ * @property {React.ReactNode} children
+ * @property {boolean} [tight] reduce the padding
+ * @property {React.ElementType} [as] element to render, defaults to a div
+ */
+
+/**
+ * Anything not named above — `style`, `className`, `id`, `aria-*` — lands on the
+ * element, which is how a caller supplies the layout the panel does not own.
+ *
+ * @param {PanelProps & React.HTMLAttributes<HTMLDivElement>} props
  * @returns {React.ReactElement}
  */
 export function Panel({ children, tight = false, as: As = 'div', ...rest }) {

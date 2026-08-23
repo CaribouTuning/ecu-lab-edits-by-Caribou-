@@ -34,7 +34,8 @@ beforeAll(async () => {
  * Runs the model and returns the signal it produced.
  *
  * @param {object} [opts]
- * @returns {{ out: Float32Array, geo: any }}
+ * @returns {{ out: Float32Array, right: Float32Array, geo: any }} the left channel, the
+ *   right channel, and the geometry the model was handed
  */
 function run(opts = {}) {
   const {
