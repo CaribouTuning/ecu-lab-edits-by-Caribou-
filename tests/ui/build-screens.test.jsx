@@ -18,7 +18,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_ENGINE_CONFIG, deriveEngine, idealExhaustDiameter } from '../../src/sim/index.js';
+import { DEFAULT_ENGINE_CONFIG, deriveEngine } from '../../src/sim/index.js';
 import { BoltonsScreen } from '../../src/ui/screens/build/BoltonsScreen.jsx';
 import { EngineScreen } from '../../src/ui/screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from '../../src/ui/screens/build/ExhaustScreen.jsx';
@@ -116,7 +116,10 @@ describe('TurboScreen', () => {
 
 describe('ExhaustScreen', () => {
   it('shows the shell-computed ideal diameter, not one it derived itself', () => {
-    const ideal = idealExhaustDiameter(deriveEngine(DEFAULT_ENGINE_CONFIG).displacementL, 0);
+    // Fabricated — not something the screen's own inputs (default store state)
+    // could ever produce via `idealExhaustDiameter`. If the screen silently
+    // re-derived the value instead of trusting the prop, this would fail.
+    const ideal = 7.77;
     mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} />);
     expect(screen.getByText(new RegExp(`~${ideal.toFixed(2)} in`))).toBeTruthy();
   });
