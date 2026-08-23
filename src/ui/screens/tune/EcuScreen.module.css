@@ -1,6 +1,6 @@
 /* TUNE > ECU (fuel system: octane, injectors, MAF/ECU scaling). */
 
-.wrap { padding: 16px; }
+.wrap { padding: var(--sp-xl); }
 
 .label {
   margin: 12px 0 6px;
