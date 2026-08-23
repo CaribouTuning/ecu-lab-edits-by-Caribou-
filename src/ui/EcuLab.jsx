@@ -528,6 +528,14 @@ export function EcuLabApp() {
   const sectionRef = useRef(route.section);
   sectionRef.current = route.section;
   const toggleCacheRef = useRef(/** @type {Record<string, (sec: string|null) => void>} */ ({}));
+  // `[navigate]` documents what this closure reads, but the cache does not actually
+  // respect it: once a tab's closure is built, `toggleCacheRef` keeps serving that
+  // exact closure for the component's life, even if `navigate` were later to change
+  // identity. That is only safe because `useRoute` guarantees `navigate` never does
+  // — it is `useCallback(..., [])` (see `useRoute.js`), permanently stable — so the
+  // dependency is inert in practice. Kept rather than dropped to `[]` because it is
+  // still the accurate list of what the closure reads; the note above is what
+  // resolves the apparent inconsistency.
   const makeToggleSection = useCallback((t) => {
     if (!toggleCacheRef.current[t]) {
       toggleCacheRef.current[t] = (sec) => navigate({
