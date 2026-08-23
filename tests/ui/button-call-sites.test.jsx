@@ -18,7 +18,7 @@
  * `danger` is spent only on the one destructive confirm.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { URL as NodeURL } from 'node:url';
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -213,11 +213,21 @@ describe('the danger variant', () => {
   });
 });
 
-describe('the Button call sites in EcuLab.jsx', () => {
-  const source = readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8');
+describe('the Button call sites in the shell and its screens', () => {
+  // Every file that can hold one. This used to read EcuLab.jsx alone, which was the
+  // whole app; the screen split moves call sites out of it a tab at a time, so a
+  // single-file scan would quietly measure less of the app after each extraction and
+  // still pass. Walking `src/ui/screens` means a screen extracted tomorrow is covered
+  // the day it lands, without anyone remembering to add it here.
+  const sources = [
+    readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8'),
+    ...readdirSync(new NodeURL('../../src/ui/screens/', import.meta.url), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
+      .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
+  ];
 
   /**
-   * The text of every `<Button …>` opening tag in the file.
+   * The text of every `<Button …>` opening tag across those files.
    *
    * Scanning to the first `>` would stop inside `onClick={() => …}`, so track brace
    * depth and accept only a `>` outside braces.
@@ -225,18 +235,20 @@ describe('the Button call sites in EcuLab.jsx', () => {
    */
   function openingTags() {
     const tags = [];
-    let from = source.indexOf('<Button');
-    while (from !== -1) {
-      let depth = 0;
-      let i = from;
-      for (; i < source.length; i += 1) {
-        const c = source[i];
-        if (c === '{') depth += 1;
-        else if (c === '}') depth -= 1;
-        else if (c === '>' && depth === 0) break;
+    for (const source of sources) {
+      let from = source.indexOf('<Button');
+      while (from !== -1) {
+        let depth = 0;
+        let i = from;
+        for (; i < source.length; i += 1) {
+          const c = source[i];
+          if (c === '{') depth += 1;
+          else if (c === '}') depth -= 1;
+          else if (c === '>' && depth === 0) break;
+        }
+        tags.push(source.slice(from, i + 1));
+        from = source.indexOf('<Button', i);
       }
-      tags.push(source.slice(from, i + 1));
-      from = source.indexOf('<Button', i);
     }
     return tags;
   }
@@ -260,7 +272,12 @@ describe('the Button call sites in EcuLab.jsx', () => {
   it('finds the call sites at all', () => {
     // Guards the scanner, not the code: one that matched nothing would make every
     // test below pass over an empty list.
-    expect(openingTags().length).toBeGreaterThanOrEqual(18);
+    //
+    // 18 was the count when EcuLab.jsx was the only file scanned. Extracting HOME did
+    // not delete a Button, it moved one — so the floor RISES to the total across the
+    // shell and the screens rather than dropping to what is left in the shell. Raise
+    // it again when a screen adds one; lowering it is how this stops guarding anything.
+    expect(openingTags().length).toBeGreaterThanOrEqual(23);
   });
 
   it('names a real variant at every call site, including the ones the sweep cannot mount', () => {

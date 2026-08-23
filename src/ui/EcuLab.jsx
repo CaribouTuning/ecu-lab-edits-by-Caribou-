@@ -31,11 +31,11 @@
  * `ui/primitives/` and `ui/screens/` is tracked as follow-up work — see CONTRIBUTING.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
   Gauge, Grid3x3, Zap, Droplets, Wind, Activity, RotateCcw, Play, AlertTriangle, Info,
-  Wrench, Settings, Package, Flame, ChevronDown, Trophy, TrendingUp, BookOpen, Fuel,
+  Wrench, Settings, Package, Flame, Trophy, TrendingUp, Fuel,
 } from 'lucide-react';
 
 import {
@@ -48,7 +48,7 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone, utilisationColor } from './theme.js';
+import { T, deltaHeat, heat, shadowAlpha, statusColor, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -66,23 +66,13 @@ import { Bar } from './primitives/Bar.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { Select } from './primitives/Select.jsx';
 import { Toggle } from './primitives/Toggle.jsx';
-
-function ExpandableInfo({ title, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
-          <Info size={14} style={{ color: T.acc, flexShrink: 0 }} />{title}
-        </span>
-        <ChevronDown size={15} style={{ color: T.ink3, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-      </button>
-      <div style={{ maxHeight: open ? 900 : 0, opacity: open ? 1 : 0, overflow: 'hidden', transition: 'max-height .3s ease, opacity .2s ease' }}>
-        <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{children}</div>
-      </div>
-    </div>
-  );
-}
+import { BuildSection } from './primitives/BuildSection.jsx';
+import { DialMark } from './primitives/DialMark.jsx';
+import { ExpandableInfo } from './primitives/ExpandableInfo.jsx';
+import { HealthScreen } from './screens/dash/HealthScreen.jsx';
+import { LearnScreen } from './screens/dash/LearnScreen.jsx';
+import { LiveScreen } from './screens/dash/LiveScreen.jsx';
+import { StatsScreen } from './screens/dash/StatsScreen.jsx';
 
 // Full-width descriptive rows for choices that need a subtitle (turbine, injectors).
 function PickList({ options, value, onChange }) {
@@ -146,56 +136,6 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
         {j.cta}
       </Button>
     </div>
-  );
-}
-
-function BuildSection({ active, onClick, icon: Icon, label, sub, children }) {
-  return (
-    <div style={{ marginBottom: 9 }}>
-      <button onClick={onClick} style={{
-        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px',
-        borderRadius: 11, border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left' }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: active ? accAlpha(0.18) : T.panel, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={16} color={active ? T.accInk : T.ink2} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 13.5, color: active ? T.accInk : T.ink }}>{label}</div>
-            {sub && <div style={{ fontSize: 10.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
-          </div>
-        </div>
-        <ChevronDown size={16} style={{ color: active ? T.accInk : T.ink3, flexShrink: 0, marginLeft: 8, transform: active ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-      </button>
-      <div style={{ maxHeight: active ? 3000 : 0, opacity: active ? 1 : 0, overflow: 'hidden', transition: 'max-height .35s ease, opacity .25s ease' }}>
-        <div style={{ padding: '13px 2px 2px' }}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// Signature visual motif: a dial/gauge, used both as the static brand mark
-// (Start screen) and as the live, RPM-driven readout (Dyno tab).
-function DialMark({ size = 64, pct = 0.62, live = false }) {
-  const angle = -120 + pct * 240;
-  return (
-    <svg viewBox="0 0 100 100" width={size} height={size}>
-      <circle cx="50" cy="50" r="44" fill={T.panel2} stroke={T.line} strokeWidth="1.5" />
-      {Array.from({ length: 13 }).map((_, i) => {
-        const a = (-120 + (i / 12) * 240) * (Math.PI / 180);
-        const inner = 34, outer = i % 3 === 0 ? 28 : 31;
-        return (
-          <line key={i}
-            x1={50 + inner * Math.sin(a)} y1={50 - inner * Math.cos(a)}
-            x2={50 + outer * Math.sin(a)} y2={50 - outer * Math.cos(a)}
-            stroke={i > 9 ? T.danger : T.ink3} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
-        );
-      })}
-      <g style={{ transition: live ? 'none' : 'transform .6s cubic-bezier(.34,1.4,.64,1)' }} transform={`rotate(${angle} 50 50)`}>
-        <line x1="50" y1="50" x2="50" y2="20" stroke={T.acc} strokeWidth="3" strokeLinecap="round" />
-      </g>
-      <circle cx="50" cy="50" r="5" fill={T.acc} />
-    </svg>
   );
 }
 
@@ -407,33 +347,6 @@ const TUTORIAL_STEPS = [
     body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
 ];
 
-function LiveGauge({ label, value, unit, color = T.ink, warn }) {
-  return (
-    <div style={{ flex: 1, minWidth: 68, background: T.panel, border: `1px solid ${warn ? T.danger : T.line}`, borderRadius: 9, padding: '8px 9px' }}>
-      <div style={{ fontSize: 8.5, color: T.ink2, letterSpacing: 0.8, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: T.mono, color: warn ? T.danger : color }}>
-        {value}<span style={{ fontSize: 9, color: T.ink3, marginLeft: 2 }}>{unit}</span>
-      </div>
-    </div>
-  );
-}
-
-function TrimBar({ label, value }) {
-  const pct = clamp((value + 25) / 50, 0, 1) * 100;
-  const c = Math.abs(value) > 15 ? T.danger : Math.abs(value) > 8 ? T.warn : T.ok;
-  return (
-    <div style={{ marginBottom: 7 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink2, fontWeight: 700, marginBottom: 3 }}>
-        <span>{label}</span><span style={{ color: c, fontFamily: T.mono }}>{value > 0 ? '+' : ''}{value.toFixed(1)}%</span>
-      </div>
-      <div style={{ height: 5, background: T.panel, borderRadius: 3, position: 'relative', border: `1px solid ${T.line}` }}>
-        <div style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: T.lineHi }} />
-        <div style={{ position: 'absolute', left: `${Math.min(50, pct)}%`, width: `${Math.abs(pct - 50)}%`, top: 0, bottom: 0, background: c, borderRadius: 2 }} />
-      </div>
-    </div>
-  );
-}
-
 // ============================================================
 /**
  * The application body. Exported so a caller can mount it inside its OWN
@@ -619,6 +532,19 @@ export function EcuLabApp() {
   const goSection = (t, sec) => navigate({ view: 'app', tab: t, section: sec });
   /** Toggle a section: clicking the open one closes it, leaving the tab with none. */
   const toggleSection = (t, sec) => navigate({ view: 'app', tab: t, section: route.section === sec ? null : sec });
+  // HOME's screens live in their own files and one of them is memoised, so its
+  // props have to be referentially stable or the memo never bails out. `toggleSection`
+  // above closes over `route.section`, which makes it a new function on every render —
+  // including the twenty a second the live engine causes. Reading the current section
+  // from a ref instead pins the identity for the life of the component. The ref is
+  // written during render, like `liveCfgRef` and `throttleRef` below, and read only
+  // from a click handler, so it cannot be stale by the time it is used.
+  const sectionRef = useRef(route.section);
+  sectionRef.current = route.section;
+  const toggleDashSection = useCallback(
+    (sec) => navigate({ view: 'app', tab: 'dash', section: sectionRef.current === sec ? null : sec }),
+    [navigate],
+  );
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   const changeTab = (t) => { goTab(t); setSelection(null); };
 
@@ -756,6 +682,15 @@ export function EcuLabApp() {
     } catch { return null; }
   };
 
+  // The live panel's sound button. The audio context has to be resumed from the same
+  // user gesture that switches sound on — browsers will not start one otherwise — so
+  // this cannot live in the screen: `ensureAudio` and the context it builds are the
+  // shell's.
+  const toggleSound = () => {
+    if (!soundOn) ensureAudio()?.ctx.resume();
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn });
+  };
+
   // Persistence goes through the storage adapter, which picks whichever backend is
   // available (artifact host, localStorage, or in-memory) so career stats survive a
   // refresh wherever the app is deployed.
@@ -850,6 +785,15 @@ export function EcuLabApp() {
   // crank revolution, so pitch tracks RPM and cylinder count exactly. A lowpass
   // that opens with throttle gives the "load" character — closed throttle is
   // muffled, wide open is bright and raspy.
+  // The throttle pad's three pointer handlers. `throttleRef` is what the 20 Hz loop
+  // actually reads (the interval is installed once and never sees a re-render), so the
+  // dispatch and the ref write are one operation and belong together in the shell that
+  // owns the ref.
+  const setThrottleInput = (value) => {
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value });
+    throttleRef.current = value;
+  };
+
   const startEngine = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
@@ -1118,273 +1062,27 @@ export function EcuLabApp() {
           and the bottom nav below stay full-width chrome rather than letterboxing. */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
+        {/* One component per section, each reading the store for itself. `live` is read
+            ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than
+            passing through a HOME-level parent that would drag the other three with it. */}
         {tab === 'dash' && (
           <div style={{ padding: 16 }}>
             {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 3 }); changeTab('dyno'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
-            <BuildSection
-              active={dashSection === 'live'} onClick={() => toggleSection('dash', 'live')}
-              icon={Activity} label="Live Engine"
-              sub={live.running ? `Running · ${Math.round(live.sensedRpm)} RPM · ${Math.round(live.coolantC)}°C` : live.cranking ? 'Cranking…' : 'Off'}
-            >
-              <Panel style={{ background: T.panel, marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
-                    <div style={{ position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, fontFamily: T.mono, color: live.fuelCut ? T.danger : T.ink }}>{Math.round(live.sensedRpm)}</div>
-                      <div style={{ fontSize: 7, color: T.ink3, letterSpacing: 1, fontWeight: 700 }}>RPM</div>
-                    </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: T.ink2, marginBottom: 8, lineHeight: 1.5 }}>
-                      {live.running
-                        ? (live.limiterCut ? 'Rev limiter — fuel cut to protect the engine.'
-                          : live.dfco ? 'Overrun fuel cut — injectors off while coasting down. Real ECUs do this; it costs nothing to spin.'
-                          : live.coolantC < 70 ? 'Warming up — the ECU is running extra fuel until it reaches temperature.'
-                          : live.closedLoop ? 'Warm and in closed loop — the ECU is trimming fuel against the O2 sensor.'
-                          : 'Open loop — the ECU is following your tables directly, ignoring O2 feedback.')
-                        : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
-                    </div>
-                    <div style={{ display: 'flex', gap: 7 }}>
-                      {/* START was filled with `ok`. Green here is decoration, not
-                          state — the engine is not running when the button says
-                          START — and spending a status colour on an action is the
-                          rule Toggle's docstring closed. It takes the accent; STOP
-                          is the secondary state and takes `ghost`. Not `danger`:
-                          shutting an engine down destroys nothing. */}
-                      <Button
-                        variant={live.running || live.cranking ? 'ghost' : 'primary'}
-                        style={{ flex: 1 }}
-                        onClick={live.running || live.cranking ? stopEngine : startEngine}
-                      >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
-                      <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn }); }} title="Engine sound" style={{
-                        width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
-                        border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
-                        color: soundOn ? T.accInk : T.ink3,
-                      }}>{soundOn ? '♪' : '✕'}</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 100 }); throttleRef.current = 100; }}
-                  onPointerUp={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
-                  onPointerCancel={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
-                  style={{
-                    position: 'relative', overflow: 'hidden',
-                    marginTop: 12, padding: '18px 0', borderRadius: 12, textAlign: 'center', userSelect: 'none',
-                    WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
-                    border: `1px solid ${throttleInput > 0 ? T.acc : T.line}`,
-                    background: throttleInput > 0 ? T.accBg : T.panel2,
-                    color: throttleInput > 0 ? T.accInk : T.ink2, fontWeight: 800, fontSize: 13.5, letterSpacing: 0.5,
-                    touchAction: 'none', opacity: live.running ? 1 : 0.4,
-                    transition: 'background .1s, border-color .1s',
-                  }}
-                >
-                  <div style={{
-                    position: 'absolute', left: 0, top: 0, bottom: 0,
-                    width: `${clamp(live.effThrottle ?? 0, 0, 100)}%`,
-                    background: accAlpha(0.16), transition: 'width .12s',
-                  }} />
-                  <span style={{ position: 'relative' }}>
-                    {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                  <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
-                  <LiveGauge label="MAP" value={Math.round(live.sensedMap)} unit="kPa" />
-                  <LiveGauge label="IAT" value={Math.round(live.sensedIat)} unit="°C" warn={live.sensedIat > 65} />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                  <LiveGauge label="LAMBDA" value={live.sensedLambda.toFixed(2)} unit="λ" color={T.violet} />
-                  <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && live.live.knock)} />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                  <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
-                  <LiveGauge label="DUTY" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
-                  <LiveGauge label="IDLE AIR" value={Math.round(live.idleTrim)} unit="%" />
-                  <LiveGauge label="FUEL" value={live.fuelCut ? 'CUT' : 'ON'} unit="" color={live.fuelCut ? T.warn : T.ok} />
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <TrimBar label="SHORT TERM FUEL TRIM (STFT)" value={live.stft} />
-                  <TrimBar label="LONG TERM FUEL TRIM (LTFT)" value={live.ltft} />
-                </div>
-              </Panel>
-              <ExpandableInfo title="Why these gauges jitter">
-                Every value above is a simulated sensor reading, with real noise and lag — not the exact internal number. That is what a tuner actually sees on a scan tool, and why real logs never look perfectly smooth.
-              </ExpandableInfo>
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'stats'} onClick={() => toggleSection('dash', 'stats')}
-              icon={Trophy} label="Career & Last Pull"
-              sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
-            >
-              <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <StatTile label="BEST PULL" value={bestScore} tone="acc" />
-                <StatTile label="CAREER TOTAL" value={totalScore} tone="alt" />
-                <StatTile label="PULLS" value={pullCount} />
-              </div>
-              {result && scores ? (
-                <>
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
-                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
-                    <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
-                    <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />
-                  </div>
-                </>
-              ) : <Note>No dyno pull logged yet — head to DYNO and run one.</Note>}
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'health'} onClick={() => toggleSection('dash', 'health')}
-              icon={Wrench} label="Engine Health"
-              sub={`${Math.round(overallHealth)}% overall`}
-            >
-              <Panel>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <Bar label="PISTON / RINGS · knock, detonation" value={health.piston} />
-                  <Bar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
-                  <Bar label="VALVES · lean-under-boost heat" value={health.valve} />
-                </div>
-              </Panel>
-              {needsMafRecal && <Note tone="warn">Your intake and/or turbo plumbing changed the MAF reading — head to <b>FUEL</b> to rescale it before your next pull.</Note>}
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'learn'} onClick={() => toggleSection('dash', 'learn')}
-              icon={BookOpen} label="Learn How It Works"
-              sub="Plain-language guide to engine tuning"
-            >
-              <div style={{ fontSize: 12, color: T.ink3, marginBottom: 10, lineHeight: 1.5 }}>Read in order. Each explains a piece of what the live engine is doing right now.</div>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '4px 0 8px' }}>PART 1 · FUNDAMENTALS</div>
-
-              <ExpandableInfo title="1. The whole thing in one paragraph">
-                An engine is an air pump. However much air it swallows decides how much fuel can be burned, and burning fuel is what makes power. The ECU's entire job is to measure the air, add the right amount of fuel, and light it at the right moment. Tuning is adjusting those last two decisions.
-                <br /><br />Everything else in this app — cams, turbos, exhaust diameter, compression — exists to change how much air gets in, or how much of that fuel's energy you can safely extract.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="2. Volumetric efficiency — the master number">
-                VE is how completely a cylinder fills compared to its own swept volume. At 100% VE the cylinder takes in exactly its displacement worth of air at the pressure available. Naturally aspirated engines typically peak around 85–100%; the peak sits at the RPM where the intake and exhaust tuning line up best, which is also where peak torque lands.
-                <br /><br />VE falls off at high RPM because there simply is not enough time to fill the cylinder, and it falls at very low RPM because gas velocity is too low to help. That curve is the shape of your torque curve.
-                <br /><br /><b style={{ color: T.ink }}>Every hardware choice on BUILD moves this table</b> — cam duration slides the peak up or down the RPM range, headers and exhaust add flow up top, bore/stroke ratio biases the whole curve. That is why VE is where hardware becomes visible.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="3. Lambda — the only mixture number that matters">
-                Gasoline burns completely at about 14.7 parts air to 1 part fuel. Divide any AFR by its fuel's stoichiometric ratio and you get <b style={{ color: T.ink }}>lambda</b>: 1.00 is exactly complete combustion, below 1 is rich, above 1 is lean.
-                <br /><br />Lambda matters because it means the same thing on every fuel. E85 is stoichiometric at about 9.8:1, so 12.5:1 means something completely different on E85 than on pump gas — but lambda 0.85 is lambda 0.85 on both.
-                <br /><br />Best power is slightly rich: around <b style={{ color: T.ink }}>lambda 0.87</b> naturally aspirated, and richer still under boost — near 0.83 — because the extra fuel evaporating cools the charge and buys knock margin. Leaner than that under load and you lose power while raising both knock risk and exhaust temperature.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="4. Why timing makes torque, and where it stops">
-                Fuel does not explode instantly — it burns over a few milliseconds. So the spark fires <i>before</i> top dead center, timed so peak cylinder pressure arrives around 16° after TDC, where the crank has the best leverage.
-                <br /><br />Too retarded and you are still burning while the piston runs away: wasted energy, hot exhaust. Too advanced and pressure peaks while the piston is still rising, fighting the crank and building the heat and pressure that cause knock. The best point is <b style={{ color: T.ink }}>MBT</b> — minimum spark for best torque. Past MBT you gain almost nothing and risk everything.
-                <br /><br />MBT moves: higher RPM needs more advance because there is less time for the burn; higher load needs less because the denser charge burns faster.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="5. Knock — what actually destroys engines">
-                Knock is the end gas — the mixture farthest from the spark plug — igniting on its own from heat and pressure before the flame front reaches it. Two flame fronts collide and the pressure spike hammers the piston and ring lands.
-                <br /><br />It is driven by <b style={{ color: T.ink }}>trapped charge mass</b>, not just boost: more air in the cylinder means higher peak pressure. That is why a big cam that breathes better also needs a little less timing, and why the same tune that is safe at part throttle knocks at wide open.
-                <br /><br />What makes it worse: more timing, more boost, more compression, hotter intake air, leaner mixture, lower octane. What buys margin: higher octane, richer mixture, cooler charge (intercooler), aluminium head, less compression.
-                <br /><br /><b style={{ color: T.ink }}>How much is too much?</b> Tuners treat anything sustained above about 2° of retard as damaging, not as an operating point. Zero is the target.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 2 · WHAT THE ECU CALCULATES</div>
-
-              <ExpandableInfo title="6. The control loop, in order">
-                Thousands of times a minute, the ECU runs the same sequence:
-                <br /><br />read sensors → calculate cylinder air mass → decide open or closed loop → work out required fuel mass → convert that to an injector pulse width → apply fuel trims → look up ignition timing → check for knock → retard if needed → fire injectors and coils → update learned values.
-                <br /><br />Everything you edit in this app is one of the lookups inside that loop. The ECU is not deciding anything creative — it is doing arithmetic against your tables, very fast.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="7. Step 1 — how much air is in the cylinder?">
-                This is the ideal gas law, and it is the foundation of every speed-density calculation:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>ρ = MAP ÷ (R × T)</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>airCharge = VE × V_cylinder × ρ</span>
-                <br /><br />MAP is manifold pressure (about 101 kPa at wide open naturally aspirated, higher with boost, down to ~20 kPa at idle). R is the gas constant for air, 287 J/(kg·K). T is charge temperature.
-                <br /><br />Two consequences worth internalising. <b style={{ color: T.ink }}>Boost raises MAP</b>, so it directly multiplies air mass. And <b style={{ color: T.ink }}>compressing air heats it</b>, which lowers density and gives some of that gain back — which is the entire reason intercoolers exist. You can watch both in the datalog's MAP and IAT columns.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="8. Step 2 — how much fuel does that need?">
-                Fuel mass follows directly from air mass and your lambda target:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>fuelMass = airCharge ÷ (λ × stoichRatio)</span>
-                <br /><br />Nothing is fudged here. Because E85's stoichiometric ratio is 9.8 instead of 14.7, the same lambda target automatically demands about 1.5× the fuel mass — it falls straight out of the chemistry, which is why E85 needs a much bigger fuel system for the same power.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="9. Step 3 — pulse width, and the hard time limit">
-                The ECU never commands "fuel" — it commands a number of milliseconds. That comes from the required fuel mass and the injector's flow rating, plus deadtime (the ~1 ms an injector takes to physically open):
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PW = fuelMass ÷ (injectorCC × density ÷ 60000) + deadtime</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>cycleTime = 120000 ÷ RPM&nbsp;&nbsp;(ms per 720° cycle)</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>duty% = PW ÷ cycleTime × 100</span>
-                <br /><br />A four-stroke injects once every two crank revolutions, so at 7500 RPM there are only 16 ms in a cycle. An injector needing 15 of them is at 94% duty. Past about 90% there is no time left, and the mixture goes lean <i>no matter what your AFR table says</i>. This is a physical wall, not a calibration choice.
-                <br /><br /><b style={{ color: T.ink }}>Critical:</b> the ECU calculates that pulse width for the injector size it has been <i>told</i> is fitted. Fit bigger injectors without updating the ECU Injector Size on FUEL and every pulse delivers proportionally more fuel than intended — the engine runs rich everywhere regardless of your tables.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="10. Step 4 — open loop, closed loop, and fuel trims">
-                At part throttle the ECU runs <b style={{ color: T.ink }}>closed loop</b>: it reads the oxygen sensor and corrects fuelling in real time. <b style={{ color: T.ink }}>Short term fuel trim (STFT)</b> is that instant correction; <b style={{ color: T.ink }}>long term fuel trim (LTFT)</b> is what it has learned and stored over time. Watch both on the HOME gauges — fit an intake without rescaling the MAF and you can see STFT swing, then hand off to LTFT as it learns.
-                <br /><br />Above roughly 85 kPa the ECU switches to <b style={{ color: T.ink }}>open loop</b> and stops listening to the O2 sensor entirely, following your tables blind. That is deliberate — at wide open throttle you want a rich power mixture, not stoichiometric.
-                <br /><br />It is also why <b style={{ color: T.ink }}>wide open throttle is where a bad tune bites</b>. Errors that closed loop quietly papers over at cruise pass straight through at full load.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="11. Step 5 — from combustion to torque at the wheels">
-                Fuel energy becomes indicated work on the piston, then the engine pays its own bills. The work is not estimated — the simulator integrates one cylinder through the closed part of its cycle, two crank degrees at a time:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dQ = Wiebe burn fraction × fuel energy</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dp = (γ−1)/V × dQ − γ × p/V × dV</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = ∮ p dV ÷ V_cyl</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PMEP = exhaust pressure − intake pressure</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − friction − PMEP</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>torque = BMEP × Vd ÷ 4π</span>
-                <br /><br /><b style={{ color: T.ink }}>Why integrate instead of multiply?</b> Because spark timing does not scale the work done — it moves <i>when</i> the heat arrives relative to a piston that is somewhere different at every crank angle. Burn too early and rising pressure fights the piston still coming up. Too late and the burn happens into a cylinder already expanding. MBT is where those two losses balance, and it falls out of the integration rather than being looked up.
-                <br /><br />Raising compression makes power the honest way here: a smaller clearance volume means a longer expansion, and the integral simply comes out bigger.
-                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>
-
-              <ExpandableInfo title="12. The loop: change → pull → read → adjust">
-                This is the whole method, and it is not a simplification:
-                <br /><br /><b style={{ color: T.ink }}>1. Change one thing.</b> One table region, one hardware item. Change three and you will not know which one mattered.
-                <br /><br /><b style={{ color: T.ink }}>2. Run a pull.</b> Nothing is known until it is measured. There is no preview in this app on purpose.
-                <br /><br /><b style={{ color: T.ink }}>3. Read the log first.</b> Before looking at the power number, read the Pull Log and check the datalog for gaps between commanded and actual. Power that came with 6° of knock retard is not power you keep.
-                <br /><br /><b style={{ color: T.ink }}>4. Adjust and repeat.</b> The VS. LAST PULL line tells you whether the change helped. Small logged steps beat big guesses, every time.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="13. A worked example — first turbo tune">
-                Fit a turbo on BUILD and run a pull without touching anything. It will score terribly, and here is why: a factory naturally-aspirated calibration has no real tuning above 101 kPa, so the boost rows are just a flat continuation of the wide-open-throttle row — far too much timing and far too lean for the cylinder pressure you have just created.
-                <br /><br /><b style={{ color: T.ink }}>Read the log.</b> It will report knock across most of the range, with the RPM band and how many degrees the ECU pulled.
-                <br /><br /><b style={{ color: T.ink }}>Fix the spark first.</b> On SPARK, pull the 150 and 200 kPa rows down. Roughly 2° per 20 kPa of extra pressure is a sane starting point. Pull again.
-                <br /><br /><b style={{ color: T.ink }}>Then the mixture.</b> On FUEL, richen those same rows toward lambda 0.83 (about 12.2:1). Pull again — you should see knock margin improve as well, because a richer charge resists knock.
-                <br /><br /><b style={{ color: T.ink }}>Then check the fuel system.</b> If the log reports injectors maxed, that is hardware: fit bigger injectors and set the matching ECU Injector Size, or ask for less boost. Nothing in the tables can create fuel that the injectors have no time to deliver.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="14. How to read the datalog columns">
-                The datalog is where diagnosis actually happens. Read it in pairs:
-                <br /><br /><b style={{ color: T.ink }}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was.
-                <br /><br /><b style={{ color: T.ink }}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
-                <br /><br /><b style={{ color: T.ink }}>Airflow</b> — around 200 g/s is typical at redline for an engine near 300 hp, which is a quick sanity check on whether your VE table is plausible.
-                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~980°C cooks turbines and valves; it rises hard with retarded timing and lean mixtures, and a rich mixture is what pulls it back down.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="15. What tuning can fix, and what it can't">
-                <b style={{ color: T.ink }}>Calibration faults — tables fix these completely:</b> knock (pull timing), lean or rich mixture (AFR table), MAF drift after an intake change (MAF scalar), injector mismatch (set the ECU injector size). Fix the cause and the score returns to 100.
-                <br /><br /><b style={{ color: T.ink }}>Physical limits — no table touches these:</b> injectors out of duty cycle, valve float, a compressor past its efficient range, a cam that has moved the powerband somewhere you did not want. The Pull Log always names both routes when you hit one: change the hardware, or ask less of it.
-                <br /><br />Knowing which kind of problem you are looking at is most of what separates a tuner from someone guessing at numbers.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="16. Habits that keep engines alive">
-                Target zero knock, not "acceptable" knock. Stay on the rich side of best power until you have confirmed margin. Never chase a number you have not measured. When something looks wrong, find the cause rather than compensating for it downstream — a MAF error corrected by bending the AFR table will be wrong again the moment load changes.
-                <br /><br />And watch engine health on HOME. Damage here accumulates the way it does in reality: a few destructive pulls, not one dramatic failure.
-              </ExpandableInfo>
-
-            </BuildSection>
+            <LiveScreen
+              active={dashSection === 'live'} onToggle={toggleDashSection}
+              tachFullScaleRpm={tachFullScaleRpm}
+              onStart={startEngine} onStop={stopEngine}
+              onToggleSound={toggleSound} onThrottle={setThrottleInput}
+            />
+            <StatsScreen
+              active={dashSection === 'stats'} onToggle={toggleDashSection}
+              scores={scores}
+            />
+            <HealthScreen
+              active={dashSection === 'health'} onToggle={toggleDashSection}
+              overallHealth={overallHealth} needsMafRecal={needsMafRecal}
+            />
+            <LearnScreen active={dashSection === 'learn'} onToggle={toggleDashSection} />
           </div>
         )}
 
