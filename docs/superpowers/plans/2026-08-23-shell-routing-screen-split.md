@@ -271,14 +271,15 @@ git commit -m "Drive navigation from the URL instead of six useState calls"
 
 ---
 
-### Tasks 4-7: Extract the screens, one tab per task
+### Task 4: Extract the DASH screens
 
-**Task 4 — DASH** (`live`, `stats`, `health`, `learn`, currently `EcuLab.jsx:1095-1365`)
-**Task 5 — BUILD** (`engine`, `boltons`, `turbo`, `exhaust`, `:1366-1681`)
-**Task 6 — TUNE** (`ve`, `timing`, `afr`, `ecu`, `:1682-1952`)
-**Task 7 — DYNO** (`result`, `data`, `log`, `score`, `:1953-2341`)
+**Files:**
+- Create: `src/ui/screens/dash/` — four screens, one per section (`live`, `stats`, `health`, `learn`), each with a co-located `.module.css`
+- Modify: `src/ui/EcuLab.jsx`
 
-Each task creates four files under `src/ui/screens/<tab>/`, moves that tab's markup into them, and deletes it from `EcuLab.jsx`. **The same four steps apply to all four tasks**, so they are written once here rather than repeated:
+The tab block begins around `:1121`; sections at `:1125`, `:1222`, `:1247`, `:1262`. **Those numbers are from before this task and drift as earlier tasks delete markup — locate your sections by their content.**
+
+**Specific to this tab:** `live` is the largest and reads `session.live`, which `LIVE_STEP` rewrites 20 times a second. Whatever you do, keep that re-render inside the live screen — do not let it reach a parent that also renders the other three.
 
 - [ ] **Step 1: Move the markup verbatim first, then adjust**
 
@@ -315,6 +316,158 @@ npm run lint && npm run typecheck
 - `tests/ui/build-store.test.jsx` asserts `expect(total).toBe(8)` for `<Seg>` call sites reached by navigation. If navigation changes shape, re-count it. **Do not relax it to `toBeGreaterThan(0)`.**
 
 **And one contract to decide deliberately, because two tests pin opposite halves of it:** `session-store.test.jsx`'s `tachReading()` asserts exactly one element captioned "RPM" exists, which only holds because tab bodies are conditionally *rendered*. `build-store.test.jsx` finds a boost slider among all sliders on the page, which only holds because collapsed `BuildSection`s *stay mounted*. **Decide whether routed screens unmount or hide, write it down, and make both tests agree with the decision** — do not discover it by whichever fails first.
+
+---
+
+---
+
+### Task 5: Extract the BUILD screens
+
+**Files:**
+- Create: `src/ui/screens/build/` — four screens, one per section (`engine`, `boltons`, `turbo`, `exhaust`), each with a co-located `.module.css`
+- Modify: `src/ui/EcuLab.jsx`
+
+The tab block begins around `:1392`; sections at `:1401`, `:1553`, `:1581`, `:1689`. **Those numbers are from before this task and drift as earlier tasks delete markup — locate your sections by their content.**
+
+**Specific to this tab:** `engine` holds the preset `Select` and the engine-architecture `Seg`s; `turbo` holds the boost-curve editor, whose column buttons are the chart. `boltons` uses `disabled` on its cards to mean *installed*, which is not a `Button` state — leave that markup as it is.
+
+- [ ] **Step 1: Move the markup verbatim first, then adjust**
+
+Copy the JSX across unchanged, get the tests green, and only then convert inline styles to a co-located `.module.css`. Two changes at once in a 300-line block means a failure has two candidate causes.
+
+**Line numbers will have moved** by the time you run — earlier tasks delete markup above you. Locate your section by its content (the section label, the heading text), not by the line numbers above. Two previous tasks in this project were handed stale line numbers and correctly ignored them.
+
+- [ ] **Step 2: Screens read the store, not props**
+
+```jsx
+const [build, dispatch] = useBuild();
+```
+
+**Do not thread domain state through props** — the store exists so screens do not have to. The exception is genuinely local UI state and callbacks the shell owns (navigation, for instance).
+
+Some markup reads values computed in `EcuLab.jsx` — `useMemo` results like `engineDerived`, `hwForVe`, `dutyPreview`. **Decide deliberately** whether each derivation moves into the screen that uses it, or stays and is passed. A derivation used by one screen should move with it. One used by several stays put. Record which you did for each, and why — a derivation silently duplicated into two screens is a bug that will not fail a test.
+
+- [ ] **Step 3: New files are typed**
+
+`EcuLab.jsx` has `@ts-nocheck`; **screen files do not get one.** Only `Button`, `Panel` and `Select` have rest-prop passthrough and `HTMLAttributes` in their types — `Seg`, `Toggle`, `Bar`, `StatTile`, `Eyebrow` and `Note` accept nothing extra. **The first screen that wants `style` or `className` on a `Seg` or `StatTile` will not compile** (this is issue #80). When you hit it, add the passthrough to that primitive following `Panel`'s pattern — a named props typedef intersected with the element's HTML attributes — with a test, rather than reaching for a wrapper div or an `@ts-ignore`.
+
+- [ ] **Step 4: Gate and commit, per tab**
+
+```bash
+npx vitest run tests/ui/ --pool=forks --poolOptions.forks.singleFork
+npm run lint && npm run typecheck
+```
+
+`tests/ui/characterisation.test.jsx` must stay green and unedited throughout. Commit each tab separately.
+
+**Two tests will break during these tasks, both by design, and both must be fixed by re-pointing rather than relaxing:**
+
+- `tests/ui/button-call-sites.test.jsx` source-scans `EcuLab.jsx` and asserts at least 18 opening `<Button>` tags. As call sites move into `screens/`, that count falls. **Re-point it at a glob over the screen files and raise the floor to the new total — do not lower 18.**
+- `tests/ui/build-store.test.jsx` asserts `expect(total).toBe(8)` for `<Seg>` call sites reached by navigation. If navigation changes shape, re-count it. **Do not relax it to `toBeGreaterThan(0)`.**
+
+**And one contract to decide deliberately, because two tests pin opposite halves of it:** `session-store.test.jsx`'s `tachReading()` asserts exactly one element captioned "RPM" exists, which only holds because tab bodies are conditionally *rendered*. `build-store.test.jsx` finds a boost slider among all sliders on the page, which only holds because collapsed `BuildSection`s *stay mounted*. **Decide whether routed screens unmount or hide, write it down, and make both tests agree with the decision** — do not discover it by whichever fails first.
+
+---
+
+---
+
+### Task 6: Extract the TUNE screens
+
+**Files:**
+- Create: `src/ui/screens/tune/` — four screens, one per section (`ve`, `timing`, `afr`, `ecu`), each with a co-located `.module.css`
+- Modify: `src/ui/EcuLab.jsx`
+
+The sub-view switcher is around `:1727`, then views at `:1733`, `:1783`, `:1835`, `:1870`. **Those numbers are from before this task and drift as earlier tasks delete markup — locate your sections by their content.**
+
+**Specific to this tab:** All four views render `TuningGrid` and `SelectionDock`, which carry `data-testid="tuning-grid"` and `data-testid="selection-dock"` that existing tests query. **Those attributes must survive the move.** The switcher itself is one of the three raw tab strips that issue #81 wants on `Seg` — leave it raw here; that is #83's call.
+
+- [ ] **Step 1: Move the markup verbatim first, then adjust**
+
+Copy the JSX across unchanged, get the tests green, and only then convert inline styles to a co-located `.module.css`. Two changes at once in a 300-line block means a failure has two candidate causes.
+
+**Line numbers will have moved** by the time you run — earlier tasks delete markup above you. Locate your section by its content (the section label, the heading text), not by the line numbers above. Two previous tasks in this project were handed stale line numbers and correctly ignored them.
+
+- [ ] **Step 2: Screens read the store, not props**
+
+```jsx
+const [build, dispatch] = useBuild();
+```
+
+**Do not thread domain state through props** — the store exists so screens do not have to. The exception is genuinely local UI state and callbacks the shell owns (navigation, for instance).
+
+Some markup reads values computed in `EcuLab.jsx` — `useMemo` results like `engineDerived`, `hwForVe`, `dutyPreview`. **Decide deliberately** whether each derivation moves into the screen that uses it, or stays and is passed. A derivation used by one screen should move with it. One used by several stays put. Record which you did for each, and why — a derivation silently duplicated into two screens is a bug that will not fail a test.
+
+- [ ] **Step 3: New files are typed**
+
+`EcuLab.jsx` has `@ts-nocheck`; **screen files do not get one.** Only `Button`, `Panel` and `Select` have rest-prop passthrough and `HTMLAttributes` in their types — `Seg`, `Toggle`, `Bar`, `StatTile`, `Eyebrow` and `Note` accept nothing extra. **The first screen that wants `style` or `className` on a `Seg` or `StatTile` will not compile** (this is issue #80). When you hit it, add the passthrough to that primitive following `Panel`'s pattern — a named props typedef intersected with the element's HTML attributes — with a test, rather than reaching for a wrapper div or an `@ts-ignore`.
+
+- [ ] **Step 4: Gate and commit, per tab**
+
+```bash
+npx vitest run tests/ui/ --pool=forks --poolOptions.forks.singleFork
+npm run lint && npm run typecheck
+```
+
+`tests/ui/characterisation.test.jsx` must stay green and unedited throughout. Commit each tab separately.
+
+**Two tests will break during these tasks, both by design, and both must be fixed by re-pointing rather than relaxing:**
+
+- `tests/ui/button-call-sites.test.jsx` source-scans `EcuLab.jsx` and asserts at least 18 opening `<Button>` tags. As call sites move into `screens/`, that count falls. **Re-point it at a glob over the screen files and raise the floor to the new total — do not lower 18.**
+- `tests/ui/build-store.test.jsx` asserts `expect(total).toBe(8)` for `<Seg>` call sites reached by navigation. If navigation changes shape, re-count it. **Do not relax it to `toBeGreaterThan(0)`.**
+
+**And one contract to decide deliberately, because two tests pin opposite halves of it:** `session-store.test.jsx`'s `tachReading()` asserts exactly one element captioned "RPM" exists, which only holds because tab bodies are conditionally *rendered*. `build-store.test.jsx` finds a boost slider among all sliders on the page, which only holds because collapsed `BuildSection`s *stay mounted*. **Decide whether routed screens unmount or hide, write it down, and make both tests agree with the decision** — do not discover it by whichever fails first.
+
+---
+
+---
+
+### Task 7: Extract the DYNO screens
+
+**Files:**
+- Create: `src/ui/screens/dyno/` — four screens, one per section (`result`, `data`, `log`, `score`), each with a co-located `.module.css`
+- Modify: `src/ui/EcuLab.jsx`
+
+The tab block begins around `:1979` and runs to the end of the render. Unlike the other three, its four views are conditionals *inside* one block rather than four sibling sections. **Those numbers are from before this task and drift as earlier tasks delete markup — locate your sections by their content.**
+
+**Specific to this tab:** The dyno result renders recharts inside `ResponsiveContainer`, which needs the `ResizeObserver` stub the jsdom tests install. `RUN DYNO PULL` is `disabled` while running — that prop is load-bearing for contrast and is pinned by a test. The pull log's event tones derive from `e.severity`; do not reintroduce a list of type names.
+
+- [ ] **Step 1: Move the markup verbatim first, then adjust**
+
+Copy the JSX across unchanged, get the tests green, and only then convert inline styles to a co-located `.module.css`. Two changes at once in a 300-line block means a failure has two candidate causes.
+
+**Line numbers will have moved** by the time you run — earlier tasks delete markup above you. Locate your section by its content (the section label, the heading text), not by the line numbers above. Two previous tasks in this project were handed stale line numbers and correctly ignored them.
+
+- [ ] **Step 2: Screens read the store, not props**
+
+```jsx
+const [build, dispatch] = useBuild();
+```
+
+**Do not thread domain state through props** — the store exists so screens do not have to. The exception is genuinely local UI state and callbacks the shell owns (navigation, for instance).
+
+Some markup reads values computed in `EcuLab.jsx` — `useMemo` results like `engineDerived`, `hwForVe`, `dutyPreview`. **Decide deliberately** whether each derivation moves into the screen that uses it, or stays and is passed. A derivation used by one screen should move with it. One used by several stays put. Record which you did for each, and why — a derivation silently duplicated into two screens is a bug that will not fail a test.
+
+- [ ] **Step 3: New files are typed**
+
+`EcuLab.jsx` has `@ts-nocheck`; **screen files do not get one.** Only `Button`, `Panel` and `Select` have rest-prop passthrough and `HTMLAttributes` in their types — `Seg`, `Toggle`, `Bar`, `StatTile`, `Eyebrow` and `Note` accept nothing extra. **The first screen that wants `style` or `className` on a `Seg` or `StatTile` will not compile** (this is issue #80). When you hit it, add the passthrough to that primitive following `Panel`'s pattern — a named props typedef intersected with the element's HTML attributes — with a test, rather than reaching for a wrapper div or an `@ts-ignore`.
+
+- [ ] **Step 4: Gate and commit, per tab**
+
+```bash
+npx vitest run tests/ui/ --pool=forks --poolOptions.forks.singleFork
+npm run lint && npm run typecheck
+```
+
+`tests/ui/characterisation.test.jsx` must stay green and unedited throughout. Commit each tab separately.
+
+**Two tests will break during these tasks, both by design, and both must be fixed by re-pointing rather than relaxing:**
+
+- `tests/ui/button-call-sites.test.jsx` source-scans `EcuLab.jsx` and asserts at least 18 opening `<Button>` tags. As call sites move into `screens/`, that count falls. **Re-point it at a glob over the screen files and raise the floor to the new total — do not lower 18.**
+- `tests/ui/build-store.test.jsx` asserts `expect(total).toBe(8)` for `<Seg>` call sites reached by navigation. If navigation changes shape, re-count it. **Do not relax it to `toBeGreaterThan(0)`.**
+
+**And one contract to decide deliberately, because two tests pin opposite halves of it:** `session-store.test.jsx`'s `tachReading()` asserts exactly one element captioned "RPM" exists, which only holds because tab bodies are conditionally *rendered*. `build-store.test.jsx` finds a boost slider among all sliders on the page, which only holds because collapsed `BuildSection`s *stay mounted*. **Decide whether routed screens unmount or hide, write it down, and make both tests agree with the decision** — do not discover it by whichever fails first.
+
+---
 
 ---
 
