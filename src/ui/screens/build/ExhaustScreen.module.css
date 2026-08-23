@@ -1,0 +1,19 @@
+/* BUILD > Exhaust. */
+
+.label {
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.idealNote {
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--ink3);
+}
+
+.raisedByBoost { color: var(--acc-ink); }
+
+/* Prose emphasis inside the ExpandableInfo panel. */
+.em { color: var(--ink); }

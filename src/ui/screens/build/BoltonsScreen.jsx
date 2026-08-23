@@ -22,7 +22,8 @@ import { BuildSection } from '../../components/BuildSection.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
-import { T } from '../../theme.js';
+
+import styles from './BoltonsScreen.module.css';
 
 /**
  * @param {object} props
@@ -49,23 +50,22 @@ export function BoltonsScreen({ active, onToggle, onResetToStock }) {
       icon={Package} label="Bolt-On Parts"
       sub={`${Object.values(mods).filter((v) => v).length}/4 installed`}
     >
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 9 }}>
+      <div className={styles.resetRow}>
         <Button variant="quiet" size="sm" onClick={onResetToStock}>
           <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
         </Button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className={styles.list}>
         {Object.keys(MOD_INFO).map((key) => (
-          <button key={key} onClick={() => installMod(key)} disabled={mods[key]} style={{
-            textAlign: 'left', padding: '11px 13px', borderRadius: 10,
-            border: `1px solid ${mods[key] ? T.okLine : T.line}`,
-            background: mods[key] ? T.okBg : T.panel2,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: 13, color: mods[key] ? T.ok : T.ink }}>{MOD_INFO[key].label}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 800, color: mods[key] ? T.ok : T.accInk }}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
+          <button
+            key={key} onClick={() => installMod(key)} disabled={mods[key]}
+            className={styles.card} data-installed={mods[key] ? 'true' : 'false'}
+          >
+            <div className={styles.cardHead}>
+              <span className={styles.cardLabel} data-installed={mods[key] ? 'true' : 'false'}>{MOD_INFO[key].label}</span>
+              <span className={styles.cardStatus} data-installed={mods[key] ? 'true' : 'false'}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
             </div>
-            <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 3 }}>{MOD_INFO[key].blurb}</div>
+            <div className={styles.cardBlurb}>{MOD_INFO[key].blurb}</div>
           </button>
         ))}
       </div>

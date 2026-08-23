@@ -25,7 +25,8 @@ import { Seg } from '../../primitives/Seg.jsx';
 import { Select } from '../../primitives/Select.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useSession, useTune } from '../../state/StoreProvider.jsx';
-import { T } from '../../theme.js';
+
+import styles from './EngineScreen.module.css';
 
 /**
  * @typedef {object} EngineDerived
@@ -82,18 +83,21 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
     else applyEnginePreset(preset);
   };
 
+  const floating = engineDerived.floatRpm < engineDerived.redline;
+
   return (
     <BuildSection
       active={active} onClick={() => onToggle('engine')}
       icon={Settings} label="Engine Architecture"
       sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
     >
-      <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
+      <div className={styles.label}>Start From a Real Engine</div>
       <Select
-        // The primitive is inline-block with a 200px floor, so it must be told
-        // to fill this column — the legacy control was width:100% and the
-        // section is a single narrow stack. The margin is the 13px the old one
-        // carried; nothing after it should close up.
+        // Select's wrapper takes `className` straight onto its own hardcoded
+        // `className={styles.wrap}` via rest-prop spread with no merge, so a
+        // caller's class REPLACES the wrap style rather than adding to it —
+        // `style` is the only safe passthrough here today. Kept inline for
+        // that reason rather than moved into the stylesheet.
         style={{ display: 'block', marginBottom: 13 }}
         label="Start From a Real Engine"
         groups={PRESET_GROUPS.map((g) => ({
@@ -119,21 +123,24 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         }}
       />
       {activePreset && (
+        // Panel builds its own className from `tight` and spreads rest props AFTER
+        // it with no merge, so a caller's `className` would replace `tight` outright
+        // rather than adding to it — `style` is the only safe way to add margin here.
         <Panel tight style={{ marginBottom: 13 }}>
-          <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>{activePreset.blurb}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 4, fontWeight: 600 }}>
+          <div className={styles.blurb}>{activePreset.blurb}</div>
+          <div className={styles.statRow}>
             <span>FACTORY RATING</span>
-            <span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>
+            <span className={styles.statValue}>
               {activePreset.factory.crankHp} hp · {activePreset.factory.crankTq} lb-ft
             </span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 600 }}>
+          <div className={styles.statRowLast}>
             <span>YOUR LAST PULL</span>
-            <span style={{ color: result ? T.accInk : T.ink3, fontWeight: 800, fontFamily: T.mono }}>
+            <span className={styles.pullValue} data-have={result ? 'true' : 'false'}>
               {result ? `${result.peakHp} whp · ${result.peakTq} lb-ft` : 'no pull logged'}
             </span>
           </div>
-          <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 7, lineHeight: 1.5 }}>
+          <div className={styles.footnote}>
             Factory figures are at the crank; the dyno here reads at the wheels, so expect roughly 15% less. The factory calibration is deliberately conservative — beating it is the exercise.
           </div>
         </Panel>
@@ -142,14 +149,17 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
       )}
       {presetPrompt && (
-        <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px' }}>
-          <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginBottom: 9 }}>
-            <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
+        <div className={styles.callout}>
+          <div className={styles.calloutText}>
+            <b className={styles.calloutAccent}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
           </div>
-          <div style={{ display: 'flex', gap: 7 }}>
+          <div className={styles.calloutRow}>
             {/* The one `danger` in the app. This prompt is raised ONLY when
                 `hasTuningWork()` is true, so confirming it always destroys
                 hand-edited VE/spark/fuel tables that nothing can restore. */}
+            {/* Button has the same rest-spread-after-className shape as Panel and
+                Select, so `style`, not `className`, is what actually reaches it
+                without discarding its variant class. */}
             <Button variant="danger" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
               LOAD {presetPrompt.name.toUpperCase()}
             </Button>
@@ -160,74 +170,74 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         </div>
       )}
       <Panel tight style={{ marginBottom: 13 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>DISPLACEMENT</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.displacementL.toFixed(2)} L</span></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>BORE : STROKE</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.ratio.toFixed(3)}</span></div>
-        <div style={{ fontSize: 11.5, color: T.accInk, fontWeight: 600 }}>{engineDerived.character}</div>
+        <div className={styles.statRow}><span>DISPLACEMENT</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
+        <div className={styles.statRow}><span>BORE : STROKE</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
+        <div className={styles.character}>{engineDerived.character}</div>
       </Panel>
 
       {!veAdvice.inSync && (
-        <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
-          <b style={{ color: T.accInk }}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b style={{ color: T.ink }}>TUNE &rsaquo; AIR</b> to see which cells changed and why, then accept it there.
+        <div className={styles.callout}>
+          <b className={styles.calloutAccent}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b className={styles.em}>TUNE &rsaquo; AIR</b> to see which cells changed and why, then accept it there.
         </div>
       )}
       <ExpandableInfo title="Why changing hardware does not update your VE table">
         Everything that physically changes how this engine breathes feeds volumetric efficiency: bore/stroke ratio, cylinder count, compression, cam duration, valve springs, head material, intake/headers/exhaust, pipe diameter, turbine backpressure, even fuel choice (E85 evaporates cold enough to measurably densify the charge).
-        <br /><br />But your VE table is a <b style={{ color: T.ink }}>log</b> — a record of what the engine actually flowed last time it was measured. Bolt on a cam and that log does not rewrite itself; it just becomes wrong. In a real shop you would go back to the dyno and re-log airflow before trusting any of it.
+        <br /><br />But your VE table is a <b className={styles.em}>log</b> — a record of what the engine actually flowed last time it was measured. Bolt on a cam and that log does not rewrite itself; it just becomes wrong. In a real shop you would go back to the dyno and re-log airflow before trusting any of it.
         <br /><br />So this app never edits it silently. It tells you what changed, by how much, and in which RPM range — and lets you accept it once you understand why it moved.
-        <br /><br />Note that <b style={{ color: T.ink }}>boost is not part of VE</b>. VE measures how well the cylinder fills relative to the pressure available; boost raises that pressure (MAP) separately. That is why adding boost does not change these numbers, but adding a turbine does — the turbine is a restriction in the exhaust.
+        <br /><br />Note that <b className={styles.em}>boost is not part of VE</b>. VE measures how well the cylinder fills relative to the pressure available; boost raises that pressure (MAP) separately. That is why adding boost does not change these numbers, but adding a turbine does — the turbine is a restriction in the exhaust.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 10, fontWeight: 600 }}>Configuration</div>
+      <div className={styles.label} style={{ marginTop: 10 }}>Configuration</div>
       <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
       <ExpandableInfo title="Why cylinder count and layout matter">
         For the same total displacement, spreading it across more, smaller cylinders means each one needs less peak pressure to make the same overall torque — a small real knock-margin benefit and smoother delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
-      <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
-      <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
+      <div className={styles.labelSpaced}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
+      <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} className={styles.slider} />
+      <div className={styles.labelSpaced}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
+      <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} className={styles.slider} />
       <ExpandableInfo title="Bore, stroke, and engine character">
         Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
-      <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
+      <div className={styles.labelSpaced}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
+      <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} className={styles.slider} />
       <ExpandableInfo title="Compression ratio's trade-off">
         Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
-        Camshaft Duration: {engineConfig.camDuration}° <span style={{ color: T.ink3, fontWeight: 400 }}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
+      <div className={styles.labelSpaced}>
+        Camshaft Duration: {engineConfig.camDuration}° <span className={styles.overlapNote}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
       </div>
-      <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, marginTop: 2 }}>
+      <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
+      <div className={styles.rangeCaption}>
         <span>mild · low-end torque</span><span>wild · top-end power</span>
       </div>
       <ExpandableInfo title="What camshaft duration actually does">
-        Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b style={{ color: T.ink }}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b style={{ color: T.ink }}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
+        Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
         <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. This sandbox models it by sampling the breathing curve at a cam-shifted engine speed, which is the honest way to represent it.
-        <br /><br /><b style={{ color: T.ink }}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
+        <br /><br /><b className={styles.em}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
-        Valve Spring Rate: {engineConfig.springRate} <span style={{ color: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.ink3, fontWeight: 400 }}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
+      <div className={styles.labelSpaced}>
+        Valve Spring Rate: {engineConfig.springRate} <span className={styles.floatCaption} data-float={floating ? 'true' : 'false'}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
       </div>
-      <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} style={{ width: '100%', accentColor: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.cyan }} />
-      {engineDerived.floatRpm < engineDerived.redline && (
-        <div style={{ fontSize: 11.5, color: T.danger, marginTop: 5 }}>
+      <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} className={styles.springSlider} data-float={floating ? 'true' : 'false'} />
+      {floating && (
+        <div className={styles.floatWarning}>
           Springs float below redline — cylinder filling collapses above {Math.round(engineDerived.floatRpm)} RPM. Stiffen them or fit a milder cam.
         </div>
       )}
       <ExpandableInfo title="Why springs decide how far a cam can go">
-        The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b style={{ color: T.ink }}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
+        The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b className={styles.em}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
         <br /><br />Bigger cams open valves further and faster, so they need stiffer springs. That is why "cam and springs" are sold together: fit an aggressive cam on stock springs and you will make <i>less</i> power than stock up top, because you float before you reach the RPM the cam was designed for.
         <br /><br />Stiffness is not free either — every cycle the engine compresses those springs, and that parasitic loss shows up in FMEP. Over-spring a mild cam and you simply lose a little power for nothing.
       </ExpandableInfo>
 
-      <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Block Material</div>
+      <div className={styles.label}>Block Material</div>
       <Seg label="Block Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
-      <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Head Material</div>
+      <div className={styles.labelSpaced}>Head Material</div>
       <Seg label="Head Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
       <ExpandableInfo title="Why block and head material matter">
         Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.

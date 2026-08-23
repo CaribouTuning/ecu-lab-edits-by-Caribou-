@@ -17,7 +17,8 @@ import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
-import { T } from '../../theme.js';
+
+import styles from './ExhaustScreen.module.css';
 
 /**
  * @param {object} props
@@ -37,15 +38,15 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
       icon={Flame} label="Exhaust"
       sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
     >
-      <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Exhaust Diameter</div>
+      <div className={styles.label}>Exhaust Diameter</div>
       <Seg label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
-      <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
+      <div className={styles.idealNote}>
         Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
-        {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
+        {turboOn && Math.max(...boostCurve) > 0 && <span className={styles.raisedByBoost}> (raised by boost)</span>}
       </div>
       <ExpandableInfo title="Why exhaust diameter isn't just 'bigger is better'">
         Undersized piping restricts flow at high RPM, choking VE right when the engine wants air moving fastest. Oversized piping does the opposite at low RPM — exhaust velocity drops, scavenging gets lazy, and low-end response suffers.
-        <br /><br />The long-standing shop rule is about <b style={{ color: T.ink }}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
+        <br /><br />The long-standing shop rule is about <b className={styles.em}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
       </ExpandableInfo>
     </BuildSection>
   );
