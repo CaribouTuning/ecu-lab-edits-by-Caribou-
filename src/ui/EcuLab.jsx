@@ -54,6 +54,8 @@ import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
+import { ROUTES } from './routing.js';
+import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
@@ -442,8 +444,11 @@ function TrimBar({ label, value }) {
  * @returns {React.ReactElement}
  */
 export function EcuLabApp() {
-  const [appView, setAppView] = useState('start');
-  const [tab, setTab] = useState('dash');
+  // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
+  // hooks that used to sit here are all one `route` now — see src/ui/routing.js.
+  const [route, navigate] = useRoute();
+  const appView = route.view;
+  const tab = route.tab;
   // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
   // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
   // changed, from setters to dispatches. All three domain slices are in the store now.
@@ -471,10 +476,20 @@ export function EcuLabApp() {
     result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
-  const [buildSection, setBuildSection] = useState('engine');
-  const [tuneView, setTuneView] = useState('ve');
-  const [dynoView, setDynoView] = useState('result');
-  const [dashSection, setDashSection] = useState('live');
+  // One `route.section` serves all four tabs, narrowed per tab so every call site below
+  // keeps reading the name it always read — and so a later task can move a tab's markup
+  // into a screen file without renaming anything. The narrowing is not decorative:
+  // `tab` is the only thing that says which tab a section belongs to.
+  //
+  // `null` is a REAL value here, not "unset". Each of these is null while that tab's
+  // accordion is fully collapsed, which is the state clicking an open section's own
+  // header produces (see `toggleSection`) and the state `#/build` — a tab with no
+  // section segment — spells. Defaulting it to a section would make closing impossible,
+  // and no existing test would fail.
+  const buildSection = tab === 'build' ? route.section : null;
+  const tuneView = tab === 'tune' ? route.section : null;
+  const dynoView = tab === 'dyno' ? route.section : null;
+  const dashSection = tab === 'dash' ? route.section : null;
   const revealTimer = useRef(null);
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
@@ -598,7 +613,14 @@ export function EcuLabApp() {
   const dutyDangerous = utilisationColor(dutyPreview) === T.danger;
 
   const needsMafRecal = mods.intake || turboOn;
-  const changeTab = (t) => { setTab(t); setSelection(null); };
+  /** Open a tab at its first section — what a tab button means. */
+  const goTab = (t) => navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
+  /** Open a specific section of a tab. */
+  const goSection = (t, sec) => navigate({ view: 'app', tab: t, section: sec });
+  /** Toggle a section: clicking the open one closes it, leaving the tab with none. */
+  const toggleSection = (t, sec) => navigate({ view: 'app', tab: t, section: route.section === sec ? null : sec });
+  const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
+  const changeTab = (t) => { goTab(t); setSelection(null); };
 
   const installMod = (key) => {
     if (mods[key]) return;
@@ -1039,8 +1061,8 @@ export function EcuLabApp() {
   if (appView === 'start') {
     return (
       <StartScreen
-        onStart={() => { setAppView('app'); setTab('build'); }}
-        onTutorial={() => setAppView('tutorial')}
+        onStart={() => goTab('build')}
+        onTutorial={goTutorial}
         version={BUILD_VERSION}
         dial={<DialMark size={92} pct={0.62} />}
       />
@@ -1050,7 +1072,7 @@ export function EcuLabApp() {
     return (
       <TutorialScreen
         steps={TUTORIAL_STEPS}
-        onDone={() => { setAppView('app'); setTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
+        onDone={() => { goTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
       />
     );
   }
@@ -1072,7 +1094,7 @@ export function EcuLabApp() {
                 button whose accessible name depends on the tooltip surviving. Note
                 the lower-case names — the start screen's TUTORIAL button is queried
                 by exact name and must stay the only match. */}
-            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={() => setAppView('tutorial')}>
+            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={goTutorial}>
               <Info size={16} aria-hidden="true" />
             </Button>
             <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={repairEngine}>
@@ -1100,7 +1122,7 @@ export function EcuLabApp() {
           <div style={{ padding: 16 }}>
             {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 3 }); changeTab('dyno'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <BuildSection
-              active={dashSection === 'live'} onClick={() => setDashSection(dashSection === 'live' ? null : 'live')}
+              active={dashSection === 'live'} onClick={() => toggleSection('dash', 'live')}
               icon={Activity} label="Live Engine"
               sub={live.running ? `Running · ${Math.round(live.sensedRpm)} RPM · ${Math.round(live.coolantC)}°C` : live.cranking ? 'Cranking…' : 'Off'}
             >
@@ -1197,7 +1219,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={dashSection === 'stats'} onClick={() => setDashSection(dashSection === 'stats' ? null : 'stats')}
+              active={dashSection === 'stats'} onClick={() => toggleSection('dash', 'stats')}
               icon={Trophy} label="Career & Last Pull"
               sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
             >
@@ -1222,7 +1244,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={dashSection === 'health'} onClick={() => setDashSection(dashSection === 'health' ? null : 'health')}
+              active={dashSection === 'health'} onClick={() => toggleSection('dash', 'health')}
               icon={Wrench} label="Engine Health"
               sub={`${Math.round(overallHealth)}% overall`}
             >
@@ -1237,7 +1259,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={dashSection === 'learn'} onClick={() => setDashSection(dashSection === 'learn' ? null : 'learn')}
+              active={dashSection === 'learn'} onClick={() => toggleSection('dash', 'learn')}
               icon={BookOpen} label="Learn How It Works"
               sub="Plain-language guide to engine tuning"
             >
@@ -1376,7 +1398,7 @@ export function EcuLabApp() {
             </p>
 
             <BuildSection
-              active={buildSection === 'engine'} onClick={() => setBuildSection(buildSection === 'engine' ? null : 'engine')}
+              active={buildSection === 'engine'} onClick={() => toggleSection('build', 'engine')}
               icon={Settings} label="Engine Architecture"
               sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
             >
@@ -1528,7 +1550,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={buildSection === 'boltons'} onClick={() => setBuildSection(buildSection === 'boltons' ? null : 'boltons')}
+              active={buildSection === 'boltons'} onClick={() => toggleSection('build', 'boltons')}
               icon={Package} label="Bolt-On Parts"
               sub={`${Object.values(mods).filter((v) => v).length}/4 installed`}
             >
@@ -1556,7 +1578,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={buildSection === 'turbo'} onClick={() => setBuildSection(buildSection === 'turbo' ? null : 'turbo')}
+              active={buildSection === 'turbo'} onClick={() => toggleSection('build', 'turbo')}
               icon={Wind} label="Forced Induction"
               sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
             >
@@ -1664,7 +1686,7 @@ export function EcuLabApp() {
             </BuildSection>
 
             <BuildSection
-              active={buildSection === 'exhaust'} onClick={() => setBuildSection(buildSection === 'exhaust' ? null : 'exhaust')}
+              active={buildSection === 'exhaust'} onClick={() => toggleSection('build', 'exhaust')}
               icon={Flame} label="Exhaust"
               sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
             >
@@ -1689,7 +1711,7 @@ export function EcuLabApp() {
               const on = tuneView === v.id;
               const Icon = v.icon;
               return (
-                <button key={v.id} onClick={() => { setTuneView(v.id); setSelection(null); }} style={{
+                <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
                   flex: 1, padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
                   border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
@@ -2014,7 +2036,7 @@ export function EcuLabApp() {
                       const on = dynoView === id;
                       const flag = id === 'log' && result.events.length > 0;
                       return (
-                        <button key={id} onClick={() => setDynoView(id)} style={{
+                        <button key={id} onClick={() => goSection('dyno', id)} style={{
                           flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
                           border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
                           color: on ? T.accInk : T.ink2, position: 'relative',
