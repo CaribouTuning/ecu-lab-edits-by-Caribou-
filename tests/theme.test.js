@@ -130,7 +130,11 @@ describe('pull-log event tones', () => {
     // and only caught it by breaking it. What is actually worth guarding is the
     // approach, because reverting to enumerated type names reopens the hole exactly as
     // it was.
-    const source = readFileSync(new NodeURL('../src/ui/EcuLab.jsx', import.meta.url), 'utf8');
+    //
+    // This classification moved from EcuLab.jsx to LogScreen.jsx (DYNO's screen
+    // split, PR 3) — re-pointed here rather than relaxed, same as
+    // button-call-sites.test.jsx re-points at the screens/ glob after each tab moves.
+    const source = readFileSync(new NodeURL('../src/ui/screens/dyno/LogScreen.jsx', import.meta.url), 'utf8');
     const classification = source
       .split('\n')
       .filter((l) => /const is(Danger|Warn|Violet) =/.test(l));

@@ -32,23 +32,22 @@
  */
 
 import React, { useMemo, useEffect, useRef, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
-  Gauge, Grid3x3, Zap, Droplets, Activity, Play, AlertTriangle, Info,
-  Wrench, Settings, Trophy, TrendingUp, Fuel,
+  Gauge, Grid3x3, Zap, Droplets, Activity, Play, Info,
+  Wrench, Settings, TrendingUp, Fuel,
 } from 'lucide-react';
 
 import {
   BARO_KPA, COMPRESSOR_OPTS,
   DEFAULT_MODS, EXHAUST_DIA_OPTS,
-  INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, OCTANE_OPTS,
+  INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, deltaHeat, shadowAlpha, statusColor, utilisationColor } from './theme.js';
+import { T, statusColor, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -59,12 +58,10 @@ import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
-import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { DialMark } from './components/DialMark.jsx';
-import { ExpandableInfo } from './components/ExpandableInfo.jsx';
 import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
@@ -77,6 +74,10 @@ import { AfrScreen } from './screens/tune/AfrScreen.jsx';
 import { EcuScreen } from './screens/tune/EcuScreen.jsx';
 import { TimingScreen } from './screens/tune/TimingScreen.jsx';
 import { VeScreen } from './screens/tune/VeScreen.jsx';
+import { DataScreen } from './screens/dyno/DataScreen.jsx';
+import { LogScreen } from './screens/dyno/LogScreen.jsx';
+import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
+import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
 // Guided first run. Walks a new player through the actual working order a tuner
 // uses — build the engine, calibrate it, hear it run, then measure it — and then
@@ -223,7 +224,7 @@ export function EcuLabApp() {
   // component into screens.
   const [session] = useSession();
   const {
-    loadKpa, soundOn, journeyStep, throttleInput, histogram, health,
+    loadKpa, soundOn, journeyStep, throttleInput, health,
     result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
@@ -267,15 +268,13 @@ export function EcuLabApp() {
 
   const octaneBonus = OCTANE_OPTS[octaneIdx].bonus;
   const engineDerived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
-  // The live tach needle and the dyno chart's RPM axis both used to top out at a
-  // hardcoded 7500 — correct only for the one preset whose redline happened to match
-  // it. Key them off this engine's own redline instead, each with headroom sized for
-  // what it actually needs to show: the tach has to leave room for the rev limiter's
-  // overshoot bounce (liveStep cuts fuel at redline + 100 RPM) without pegging, while
-  // the dyno chart's sweep data never exceeds redline at all, so it only needs enough
-  // padding that the last point isn't jammed against the axis edge.
+  // The live tach needle used to top out at a hardcoded 7500 — correct only for the
+  // one preset whose redline happened to match it. Key it off this engine's own
+  // redline instead, with headroom sized for what it actually needs to show: the
+  // tach has to leave room for the rev limiter's overshoot bounce (liveStep cuts
+  // fuel at redline + 100 RPM) without pegging. (DYNO's own chart axis does the
+  // equivalent thing with tighter headroom — see ResultScreen.jsx.)
   const tachFullScaleRpm = engineDerived.redline * 1.1;
-  const dynoChartMaxRpm = engineDerived.redline * 1.05;
   const idealExhaustDia = useMemo(() => idealExhaustDiameter(engineDerived.displacementL, turboOn ? Math.max(...boostCurve) : 0), [engineDerived, turboOn, boostCurve]);
   const exhaustDiaError = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia - idealExhaustDia;
   const mafErrorBase = useMemo(() => {
@@ -656,43 +655,9 @@ export function EcuLabApp() {
     }));
   }, [result, prevResult, running, revealCount]);
 
-  // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
-  // binned onto the same RPM x MAP grid as the VE table, so the correction can be
-  // applied cell-for-cell. This is what HP Tuners' scanner histogram does.
-  const buildHistogram = () => {
-    if (!result) return;
-    const cells = LOAD.map(() => RPM.map(() => ({ sum: 0, n: 0 })));
-    result.points.forEach((p) => {
-      let ri = 0, best = Infinity;
-      LOAD.forEach((m, i) => { const d = Math.abs(m - p.map); if (d < best) { best = d; ri = i; } });
-      let ci = 0, bc = Infinity;
-      RPM.forEach((r, i) => { const d = Math.abs(r - p.rpm); if (d < bc) { bc = d; ci = i; } });
-      // Airflow error % = how far the ACTUAL mixture sat from what was commanded.
-      //
-      // Sign convention, because getting it backwards makes the tool teach the exact
-      // wrong reflex: the ECU fuels from the VE table, so
-      //     actualAfr / commandedAfr  =  trueVE / tableVE
-      // A positive number therefore means the engine ran LEANER than commanded, which
-      // means it swallowed MORE air than the table claimed, which means the table is
-      // reading low and must come UP by that percentage. Multiplying the cell by
-      // (1 + err/100) drives the table onto the truth in one pass.
-      const err = ((p.afr / p.afrCommanded) - 1) * 100;
-      cells[ri][ci].sum += err; cells[ri][ci].n += 1;
-    });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: cells.map((row) => row.map((c) => (c.n ? c.sum / c.n : null))) });
-  };
-  const applyHistogram = () => {
-    if (!histogram) return;
-    // SET_TABLE carries a value, not a function, so the old functional update
-    // (`setVeEdited((prev) => ...)`) is resolved here against the CURRENT `ve` — the
-    // one already in scope from the store — before dispatching.
-    const nextVe = ve.map((row, ri) => row.map((v, ci) => {
-      const e = histogram[ri][ci];
-      return e == null ? v : Number(clamp(v * (1 + e / 100), 10, 130).toFixed(1));
-    }));
-    dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: nextVe });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null });
-  };
+  // `buildHistogram`/`applyHistogram` moved to DataScreen.jsx: DYNO's DATALOG
+  // section was their only caller, and everything they touch (result, histogram,
+  // ve) is plain store state DataScreen can read for itself.
 
   const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
   const scores = useMemo(() => {
@@ -1041,272 +1006,28 @@ export function EcuLabApp() {
                   </div>
                 )}
 
+                {/* DYNO's gating is irregular ON PURPOSE, not four uniform
+                    `dynoView === x` checks like TUNE's. While a pull is running the
+                    switcher above is hidden and CURVES is the only view that can show
+                    — "the machine is busy, watch this" — regardless of which section
+                    the URL has selected. Normalising these to match TUNE would make a
+                    DATALOG/PULL LOG/SCORE view silently go blank the moment a pull
+                    starts instead of falling back to the live curves. Preserve every
+                    condition exactly. */}
                 {(running || dynoView === 'result') && (
-                <>
-                <Panel tight style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>POWER &amp; TORQUE</div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-                      <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-                      <YAxis stroke={T.ink3} fontSize={10} />
-                      <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      {prevResult && <Line dataKey="prevHp" name="Prev WHP" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      {prevResult && <Line dataKey="prevTorque" name="Prev TQ" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Panel>
-
-                <Panel tight style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-                      <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-                      <YAxis stroke={T.ink3} fontSize={10} />
-                      <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
-                      {/* Series identity colours, not status: both lines are on screen for
-                          every pull, so green and amber here reported a health this chart
-                          never measures. */}
-                      <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Panel>
-                </>
+                  <ResultScreen chartData={chartData} engineDerived={engineDerived} />
                 )}
 
                 {!running && dynoView === 'data' && (
-                  <>
-                    <Eyebrow icon={Info}>Datalog</Eyebrow>
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
-                      One card per RPM breakpoint. Each line pairs <b style={{ color: T.ink }}>what you asked for</b> with <b style={{ color: T.ink }}>what the engine actually did</b> — a mismatch is the ECU telling you something.
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                      {RPM.map((r) => {
-                        const p = result.points.find((pt) => pt.rpm === r);
-                        if (!p) return null;
-                        const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-                        const warn = !bad && (p.duty > 85 || p.egtRisk);
-                        const edge = bad ? T.danger : warn ? T.warn : T.line;
-
-                        // Each row: label, what was asked, what happened, and a verdict.
-                        const rows = [
-                          { k: 'Airflow', asked: p.veTable !== p.ve ? `${p.veTable}% VE` : null, got: `${p.maf} g/s`,
-                            note: p.veTable !== p.ve
-                              ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
-                              : `${p.map} kPa manifold · ${p.ve}% VE`,
-                            ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
-                          { k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
-                            note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
-                            ok: !p.knock },
-                          { k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
-                            note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
-                              : p.richRisk ? 'far richer than commanded — check injector scaling'
-                              : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
-                            ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
-                          // Same "no headroom left" cutoff as the build tab's duty preview,
-                          // asked the same way: utilisationColor owns the band, and this
-                          // reads its verdict rather than restating >90 twice more.
-                          { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
-                            ok: utilisationColor(p.duty) !== T.danger },
-                          { k: 'Heat', asked: null, got: `${p.egt}°C`,
-                            note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
-                            ok: !p.egtRisk },
-                          { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
-                            note: p.pressureRisk
-                              ? 'past what stock pistons and rods take — a mechanical limit, not detonation'
-                              : `what ${p.map} kPa becomes at the top of the stroke, burning at ${p.timing}°`,
-                            ok: !p.pressureRisk },
-                        ];
-
-                        return (
-                          <div key={r} style={{ border: `1px solid ${edge}`, borderRadius: 10, background: T.panel2, overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: bad ? T.dangerBg : warn ? T.warnBg : T.panel }}>
-                              <span style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 14, color: T.ink }}>{r} RPM</span>
-                              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: bad ? T.danger : warn ? T.warn : T.ok }}>
-                                {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
-                              </span>
-                            </div>
-                            <div style={{ padding: '4px 12px 10px' }}>
-                              {rows.map((row, i) => (
-                                <div key={i} style={{ paddingTop: 7 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                                    <span style={{ fontSize: 11.5, color: T.ink2, fontWeight: 600, minWidth: 62 }}>{row.k}</span>
-                                    <span style={{ fontFamily: T.mono, fontSize: 12, color: row.ok ? T.ink : T.danger, fontWeight: 700, textAlign: 'right' }}>
-                                      {row.asked != null && <span style={{ color: T.ink3, fontWeight: 400 }}>{row.asked} → </span>}
-                                      {row.got}
-                                    </span>
-                                  </div>
-                                  <div style={{ fontSize: 10.5, color: row.ok ? T.ink3 : T.dangerInk, lineHeight: 1.4, marginTop: 1 }}>{row.note}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <ExpandableInfo title="How to read a datalog">
-                      Diagnosis happens in the <b style={{ color: T.ink }}>asked → got</b> pairs, not in the power number.
-                      <br /><br /><b style={{ color: T.ink }}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
-                      <br /><br /><b style={{ color: T.ink }}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-                      <br /><br /><b style={{ color: T.ink }}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
-                      <br /><br /><b style={{ color: T.ink }}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
-                      <br /><br /><b style={{ color: T.ink }}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
-                    </ExpandableInfo>
-
-                    <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
-                    <ExpandableInfo title="How real tuners actually correct a VE table">
-                      This is the workflow every professional platform is built around. You log a pull, bin the difference between commanded and actual mixture onto the same RPM x MAP grid as your VE table, then apply that error back into the cells.
-                      <br /><br />A cell reading <b style={{ color: T.ink }}>+6%</b> means the engine ran 6% leaner than you commanded, which can only happen if it actually pulled 6% <i>more</i> air than your VE table claimed — so that cell should go <b style={{ color: T.ink }}>up</b> 6%. A negative cell means the opposite: the table is over-reporting airflow, the ECU is over-fuelling, and the number should come down.
-                      <br /><br />The ECU has no way to measure cylinder filling directly. It fuels from your table and nothing else, so a wrong table means wrong fuel, every time. Blue cells are within tolerance; red means your table is lying to the ECU at that point. Correct, re-pull, repeat until it is flat. A cell you hit squarely lands on the truth in one pass; the rest take a couple, because every logged point is interpolated between four cells.
-                    </ExpandableInfo>
-                    {!histogram ? (
-                      /* Was a cyan-outlined width:100% bar. Cyan is the chart-series
-                         hue — the same borrowed colour Task 6 took off the intercooler
-                         toggle — so this takes the accent like every other action. */
-                      <div style={{ marginBottom: 16 }}>
-                        <Button onClick={buildHistogram}>
-                          BUILD HISTOGRAM FROM THIS PULL
-                        </Button>
-                      </div>
-                    ) : (
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ overflowX: 'auto', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 8 }}>
-                          <div style={{ display: 'inline-block', minWidth: '100%' }}>
-                            <div style={{ display: 'flex' }}>
-                              <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
-                              {RPM.map((r) => (
-                                <div key={r} style={{ width: 51, height: 26, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: `1px solid ${T.line}` }}>{r}</div>
-                              ))}
-                            </div>
-                            {LOAD.map((m, ri) => (
-                              <div key={m} style={{ display: 'flex' }}>
-                                <div style={{ width: 44, height: 32, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: `1px solid ${T.line}` }}>{m}</div>
-                                {RPM.map((_, ci) => {
-                                  const e = histogram[ri][ci];
-                                  const bg = e == null ? T.panel2 : deltaHeat(e);
-                                  return (
-                                    <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : T.ink, fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${shadowAlpha(0.35)}` }}>
-                                      {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <Button style={{ flex: 2 }} onClick={applyHistogram}>
-                            APPLY CORRECTIONS TO VE
-                          </Button>
-                          {/* Not `danger`: discarding throws away a histogram that
-                              BUILD HISTOGRAM regenerates from the same pull. */}
-                          <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })}>
-                            DISCARD
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                  </>
+                  <DataScreen />
                 )}
 
                 {!running && dynoView === 'log' && (
-                  <>
-                    <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
-                    {result.events.length === 0 ? (
-                      <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: 12 }}>
-                        Clean pull — no knock, fueling, or trim issues across the sweep.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {result.events.map((e, i) => {
-                          // The tone comes from the severity the sim already assigns, not from a
-                          // hand-kept list of type names. Those lists named eleven of the twelve
-                          // types `src/sim` emits: `bearing` matched none of them and fell through
-                          // to the chart-series cyan, so the one warning about accumulating
-                          // bottom-end stress rendered as decoration while `pressure`, its acute
-                          // sibling, rendered red. Deriving it means a thirteenth event type gets a
-                          // tone the day it is added instead of silently becoming a chart colour.
-                          //
-                          // `maf` is the one genuine special case: it is a calibration observation
-                          // rather than damage, and violet is the token reserved for that.
-                          const isViolet = e.type === 'maf';
-                          const isDanger = !isViolet && e.severity >= 3;
-                          const isWarn = !isViolet && !isDanger;
-                          const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
-                          const bd = isDanger ? T.dangerLine : isWarn ? T.warnLine : isViolet ? T.violetLine : T.line;
-                          const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
-                          return (
-                            <div key={i} style={{ padding: '11px 12px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                <div style={{ display: 'flex', gap: 8, fontSize: 12.5, fontWeight: 700, color: fg }}>
-                                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                                  <span>{e.msg}</span>
-                                </div>
-                                {e.impact != null && <span style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 800, color: fg, flexShrink: 0 }}>-{e.impact}</span>}
-                              </div>
-                              {e.cause && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 6, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Why: </b>{e.cause}</div>}
-                              {e.fix && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 4, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Try: </b>{e.fix}</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  </>
+                  <LogScreen />
                 )}
 
                 {!running && dynoView === 'score' && scores && (
-                      <>
-                        <Eyebrow icon={Trophy}>Scorecard</Eyebrow>
-                        <Panel style={{ marginBottom: 10, background: T.accBg, border: `1px solid ${T.acc}`, textAlign: 'center' }}>
-                          <div style={{ fontSize: 10, color: T.accInk, letterSpacing: 1.5, fontWeight: 800 }}>PULL SCORE</div>
-                          <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.mono, color: T.accInk, lineHeight: 1.1 }}>{scores.pull}</div>
-                          <div style={{ fontSize: 11.5, color: scores.pull >= bestScore ? T.ok : T.ink2, fontWeight: 700, marginTop: 2 }}>
-                            {scores.pull >= bestScore ? 'NEW BEST' : `Best: ${bestScore}`}
-                          </div>
-                        </Panel>
-                        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                          {[['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]].map(([label, s]) => {
-                            const c = statusColor(s.score);
-                            return (
-                              <Panel key={label} style={{ flex: 1 }}>
-                                <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-                                <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.mono, color: c, marginTop: 2 }}>{s.score}</div>
-                                <div style={{ fontSize: 11, color: c, fontWeight: 700 }}>{s.label}</div>
-                              </Panel>
-                            );
-                          })}
-                        </div>
-                        <Note>Pull Score rewards actual output (peak whp + torque), scaled by how clean (Tuning) and how sound (Engineer) the build is — a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling; every pull is a chance to beat your best.</Note>
-                        {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
-                          <Panel tight style={{ marginBottom: 16, fontSize: 11.5, color: T.ink2, fontFamily: T.mono, lineHeight: 1.8 }}>
-                            {scores.tuning.deductions.map((d, i) => <div key={'t' + i}>{d}</div>)}
-                            {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
-                          </Panel>
-                        )}
-                        {scores.tuning.advisories?.length > 0 && (
-                          <div style={{ marginTop: 8 }}>
-                            <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink3, fontWeight: 800, marginBottom: 4 }}>
-                              HARDWARE TRADE-OFFS · NOT SCORED
-                            </div>
-                            {scores.tuning.advisories.map((a, i) => (
-                              <div key={i} style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>{a}</div>
-                            ))}
-                          </div>
-                        )}
-                  </>
+                  <ScoreScreen scores={scores} />
                 )}
               </>
             )}
