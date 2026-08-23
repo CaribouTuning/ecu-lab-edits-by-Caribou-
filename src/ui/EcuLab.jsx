@@ -502,10 +502,10 @@ export function EcuLabApp() {
   // component into screens.
   const [session] = useSession();
   const {
-    loadKpa, soundOn, volume, journeyStep, throttleInput, histogram, health,
+    loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput,
+    histogram, health,
     result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
     live,
-    dynoPhase, dynoRpm,
   } = session;
   const [buildSection, setBuildSection] = useState('engine');
   const [tuneView, setTuneView] = useState('ve');
