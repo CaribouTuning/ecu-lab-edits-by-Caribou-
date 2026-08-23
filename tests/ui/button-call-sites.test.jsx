@@ -219,9 +219,17 @@ describe('the Button call sites in the shell and its screens', () => {
   // single-file scan would quietly measure less of the app after each extraction and
   // still pass. Walking `src/ui/screens` means a screen extracted tomorrow is covered
   // the day it lands, without anyone remembering to add it here.
+  //
+  // `src/ui/components/` joined the walk when TUNE's split moved `SelectionDock` (a
+  // shared component with its own DONE button) there rather than into any one screen
+  // — the same reasoning as `screens/`: a call site that moves out of EcuLab.jsx into
+  // a shared component must not quietly stop being counted.
   const sources = [
     readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8'),
     ...readdirSync(new NodeURL('../../src/ui/screens/', import.meta.url), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
+      .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
+    ...readdirSync(new NodeURL('../../src/ui/components/', import.meta.url), { recursive: true, withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
       .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
   ];
@@ -273,10 +281,14 @@ describe('the Button call sites in the shell and its screens', () => {
     // Guards the scanner, not the code: one that matched nothing would make every
     // test below pass over an empty list.
     //
-    // 18 was the count when EcuLab.jsx was the only file scanned. Extracting HOME did
-    // not delete a Button, it moved one — so the floor RISES to the total across the
-    // shell and the screens rather than dropping to what is left in the shell. Raise
-    // it again when a screen adds one; lowering it is how this stops guarding anything.
+    // 18 was the count when EcuLab.jsx was the only file scanned. Extracting HOME and
+    // BUILD did not delete a Button, it moved them — so the floor RISES to the total
+    // across the shell, the screens and (since TUNE's split) the shared components
+    // rather than dropping to what is left in the shell. TUNE's own extraction moved
+    // three call sites (VE's ACCEPT RE-LOGGED VALUES, ECU's RESCALE, and
+    // SelectionDock's DONE) but deleted none, so the total stays 23. Raise it again
+    // when a screen or shared component adds one; lowering it is how this stops
+    // guarding anything.
     expect(openingTags().length).toBeGreaterThanOrEqual(23);
   });
 

@@ -67,6 +67,27 @@ describe('Seg', () => {
     fireEvent.click(screen.getByRole('button', { name: 'FUEL' }));
     expect(onChange).toHaveBeenCalledWith('afr');
   });
+
+  // ECU Injector Scaling and DYNO's manifold-pressure picker both key their options
+  // off a number (cc, kPa) rather than a string id — this was already true at
+  // runtime under EcuLab.jsx's @ts-nocheck; the TUNE screen split moved the first of
+  // those two call sites into a typed file, which is what surfaced that Seg's own
+  // types had only ever promised `string`. Proves the widened type describes real
+  // behaviour rather than papering over a call-site cast.
+  const NUMERIC_OPTIONS = [
+    { id: 550, label: '550' },
+    { id: 750, label: '750' },
+  ];
+
+  it('accepts a numeric id, not just a string one', () => {
+    const onChange = vi.fn();
+    render(<Seg label="Size" options={NUMERIC_OPTIONS} value={550} onChange={onChange} />);
+    expect(screen.getByRole('button', { name: '550' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: '750' }).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(screen.getByRole('button', { name: '750' }));
+    // Fails if Seg ever coerces to a string internally — 750 the number, not '750'.
+    expect(onChange).toHaveBeenCalledWith(750);
+  });
 });
 
 describe('Select', () => {
