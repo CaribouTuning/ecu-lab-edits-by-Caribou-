@@ -11,7 +11,8 @@ import { AlertTriangle } from 'lucide-react';
 
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
-import { T } from '../../theme.js';
+
+import styles from './LogScreen.module.css';
 
 /**
  * @returns {React.ReactElement}
@@ -24,11 +25,11 @@ export function LogScreen() {
     <>
       <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
       {result.events.length === 0 ? (
-        <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: 12 }}>
+        <div className={styles.clean}>
           Clean pull — no knock, fueling, or trim issues across the sweep.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className={styles.events}>
           {result.events.map((e, i) => {
             // The tone comes from the severity the sim already assigns, not from a
             // hand-kept list of type names. Those lists named eleven of the twelve
@@ -43,20 +44,18 @@ export function LogScreen() {
             const isViolet = e.type === 'maf';
             const isDanger = !isViolet && e.severity >= 3;
             const isWarn = !isViolet && !isDanger;
-            const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
-            const bd = isDanger ? T.dangerLine : isWarn ? T.warnLine : isViolet ? T.violetLine : T.line;
-            const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
+            const tone = isDanger ? 'danger' : isWarn ? 'warn' : isViolet ? 'violet' : 'default';
             return (
-              <div key={i} style={{ padding: '11px 12px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 12.5, fontWeight: 700, color: fg }}>
-                    <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div key={i} className={styles.event} data-tone={tone}>
+                <div className={styles.eventHead}>
+                  <div className={styles.eventTitle}>
+                    <AlertTriangle size={14} className={styles.eventIcon} />
                     <span>{e.msg}</span>
                   </div>
-                  {e.impact != null && <span style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 800, color: fg, flexShrink: 0 }}>-{e.impact}</span>}
+                  {e.impact != null && <span className={styles.eventImpact}>-{e.impact}</span>}
                 </div>
-                {e.cause && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 6, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Why: </b>{e.cause}</div>}
-                {e.fix && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 4, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Try: </b>{e.fix}</div>}
+                {e.cause && <div className={styles.eventCause}><b className={styles.eventLabel}>Why: </b>{e.cause}</div>}
+                {e.fix && <div className={styles.eventFix}><b className={styles.eventLabel}>Try: </b>{e.fix}</div>}
               </div>
             );
           })}

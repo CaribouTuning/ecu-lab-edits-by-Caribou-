@@ -18,7 +18,9 @@ import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useSession, useTune } from '../../state/StoreProvider.jsx';
-import { deltaHeat, shadowAlpha, T, utilisationColor } from '../../theme.js';
+import { deltaHeat, T, utilisationColor } from '../../theme.js';
+
+import styles from './DataScreen.module.css';
 
 /**
  * @returns {React.ReactElement}
@@ -70,17 +72,17 @@ export function DataScreen() {
   return (
     <>
       <Eyebrow icon={Info}>Datalog</Eyebrow>
-      <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
-        One card per RPM breakpoint. Each line pairs <b style={{ color: T.ink }}>what you asked for</b> with <b style={{ color: T.ink }}>what the engine actually did</b> — a mismatch is the ECU telling you something.
+      <div className={styles.intro}>
+        One card per RPM breakpoint. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+      <div className={styles.cards}>
         {RPM.map((r) => {
           const p = result.points.find((pt) => pt.rpm === r);
           if (!p) return null;
           const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
           const warn = !bad && (p.duty > 85 || p.egtRisk);
-          const edge = bad ? T.danger : warn ? T.warn : T.line;
+          const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
 
           // Each row: label, what was asked, what happened, and a verdict.
           const rows = [
@@ -114,24 +116,24 @@ export function DataScreen() {
           ];
 
           return (
-            <div key={r} style={{ border: `1px solid ${edge}`, borderRadius: 10, background: T.panel2, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: bad ? T.dangerBg : warn ? T.warnBg : T.panel }}>
-                <span style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 14, color: T.ink }}>{r} RPM</span>
-                <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: bad ? T.danger : warn ? T.warn : T.ok }}>
+            <div key={r} className={styles.card} data-tone={tone}>
+              <div className={styles.cardHead}>
+                <span className={styles.cardRpm}>{r} RPM</span>
+                <span className={styles.cardStat}>
                   {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
                 </span>
               </div>
-              <div style={{ padding: '4px 12px 10px' }}>
+              <div className={styles.cardBody}>
                 {rows.map((row, i) => (
-                  <div key={i} style={{ paddingTop: 7 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ fontSize: 11.5, color: T.ink2, fontWeight: 600, minWidth: 62 }}>{row.k}</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 12, color: row.ok ? T.ink : T.danger, fontWeight: 700, textAlign: 'right' }}>
-                        {row.asked != null && <span style={{ color: T.ink3, fontWeight: 400 }}>{row.asked} → </span>}
+                  <div key={i} className={styles.row}>
+                    <div className={styles.rowTop}>
+                      <span className={styles.rowKey}>{row.k}</span>
+                      <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
+                        {row.asked != null && <span className={styles.rowAsked}>{row.asked} → </span>}
                         {row.got}
                       </span>
                     </div>
-                    <div style={{ fontSize: 10.5, color: row.ok ? T.ink3 : T.dangerInk, lineHeight: 1.4, marginTop: 1 }}>{row.note}</div>
+                    <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
                   </div>
                 ))}
               </div>
@@ -141,47 +143,47 @@ export function DataScreen() {
       </div>
 
       <ExpandableInfo title="How to read a datalog">
-        Diagnosis happens in the <b style={{ color: T.ink }}>asked → got</b> pairs, not in the power number.
-        <br /><br /><b style={{ color: T.ink }}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
-        <br /><br /><b style={{ color: T.ink }}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-        <br /><br /><b style={{ color: T.ink }}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
-        <br /><br /><b style={{ color: T.ink }}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
-        <br /><br /><b style={{ color: T.ink }}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
+        Diagnosis happens in the <b className={styles.em}>asked → got</b> pairs, not in the power number.
+        <br /><br /><b className={styles.em}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
+        <br /><br /><b className={styles.em}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
+        <br /><br /><b className={styles.em}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
+        <br /><br /><b className={styles.em}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
+        <br /><br /><b className={styles.em}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
       </ExpandableInfo>
 
       <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
       <ExpandableInfo title="How real tuners actually correct a VE table">
         This is the workflow every professional platform is built around. You log a pull, bin the difference between commanded and actual mixture onto the same RPM x MAP grid as your VE table, then apply that error back into the cells.
-        <br /><br />A cell reading <b style={{ color: T.ink }}>+6%</b> means the engine ran 6% leaner than you commanded, which can only happen if it actually pulled 6% <i>more</i> air than your VE table claimed — so that cell should go <b style={{ color: T.ink }}>up</b> 6%. A negative cell means the opposite: the table is over-reporting airflow, the ECU is over-fuelling, and the number should come down.
+        <br /><br />A cell reading <b className={styles.em}>+6%</b> means the engine ran 6% leaner than you commanded, which can only happen if it actually pulled 6% <i>more</i> air than your VE table claimed — so that cell should go <b className={styles.em}>up</b> 6%. A negative cell means the opposite: the table is over-reporting airflow, the ECU is over-fuelling, and the number should come down.
         <br /><br />The ECU has no way to measure cylinder filling directly. It fuels from your table and nothing else, so a wrong table means wrong fuel, every time. Blue cells are within tolerance; red means your table is lying to the ECU at that point. Correct, re-pull, repeat until it is flat. A cell you hit squarely lands on the truth in one pass; the rest take a couple, because every logged point is interpolated between four cells.
       </ExpandableInfo>
       {!histogram ? (
         /* Was a cyan-outlined width:100% bar. Cyan is the chart-series
            hue — the same borrowed colour Task 6 took off the intercooler
            toggle — so this takes the accent like every other action. */
-        <div style={{ marginBottom: 16 }}>
+        <div className={styles.buildWrap}>
           <Button onClick={buildHistogram}>
             BUILD HISTOGRAM FROM THIS PULL
           </Button>
         </div>
       ) : (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ overflowX: 'auto', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 8 }}>
-            <div style={{ display: 'inline-block', minWidth: '100%' }}>
-              <div style={{ display: 'flex' }}>
-                <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
+        <div className={styles.tableWrap}>
+          <div className={styles.tableScroll}>
+            <div className={styles.tableInner}>
+              <div className={styles.tableRow}>
+                <div className={styles.cornerCell} />
                 {RPM.map((r) => (
-                  <div key={r} style={{ width: 51, height: 26, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: `1px solid ${T.line}` }}>{r}</div>
+                  <div key={r} className={styles.headerCell}>{r}</div>
                 ))}
               </div>
               {LOAD.map((m, ri) => (
-                <div key={m} style={{ display: 'flex' }}>
-                  <div style={{ width: 44, height: 32, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: `1px solid ${T.line}` }}>{m}</div>
+                <div key={m} className={styles.tableRow}>
+                  <div className={styles.loadCell}>{m}</div>
                   {RPM.map((_, ci) => {
                     const e = histogram[ri][ci];
                     const bg = e == null ? T.panel2 : deltaHeat(e);
                     return (
-                      <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : T.ink, fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${shadowAlpha(0.35)}` }}>
+                      <div key={ci} className={styles.dataCell} data-empty={e == null ? 'true' : 'false'} style={{ background: bg }}>
                         {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}
                       </div>
                     );
@@ -190,8 +192,8 @@ export function DataScreen() {
               ))}
             </div>
           </div>
-          <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className={styles.legend}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
+          <div className={styles.actions}>
             <Button style={{ flex: 2 }} onClick={applyHistogram}>
               APPLY CORRECTIONS TO VE
             </Button>

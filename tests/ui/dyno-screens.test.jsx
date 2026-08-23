@@ -25,7 +25,6 @@ import { ResultScreen } from '../../src/ui/screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from '../../src/ui/screens/dyno/ScoreScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
-import { T } from '../../src/ui/theme.js';
 import EcuLab from '../../src/ui/EcuLab.jsx';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (ResultScreen's two
@@ -92,27 +91,6 @@ function mountWithResult(node, session) {
     </StoreProvider>,
   );
   return utils;
-}
-
-/**
- * Resolves a theme token to the string jsdom will actually report back from
- * `style.color` (jsdom normalises a hex literal like `#ff9d9d` to
- * `rgb(255, 157, 157)` once it round-trips through an element's style), by
- * setting it on a disposable, undocumented element and reading it straight back
- * — the same trick `build-store.test.jsx`'s Bar/danger-colour test uses, for the
- * same reason: a hex literal copied out of theme.js would never string-match
- * what the DOM actually holds. Deliberately plain DOM, not `render()`, so it
- * cannot interact with whatever the test around it has already mounted.
- * @param {string} token
- * @returns {string}
- */
-function resolvedColor(token) {
-  const el = document.createElement('div');
-  el.style.color = token;
-  document.body.appendChild(el);
-  const resolved = el.style.color;
-  document.body.removeChild(el);
-  return resolved;
 }
 
 /** One sweep point with every field the DATALOG rows and the histogram read. */
@@ -192,15 +170,15 @@ describe('LogScreen', () => {
     // this reads the decorative chart-cyan colour instead and goes red.
     const event = { type: 'bearing', severity: 3, msg: 'FABRICATED BEARING STRESS EVENT', cause: null, fix: null, impact: null };
     mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
-    const msg = /** @type {HTMLElement} */ (screen.getByText('FABRICATED BEARING STRESS EVENT').closest('div[style]'));
-    expect(msg.style.color).toBe(resolvedColor(T.dangerInk));
+    const card = screen.getByText('FABRICATED BEARING STRESS EVENT').closest('[data-tone]');
+    expect(card.getAttribute('data-tone')).toBe('danger');
   });
 
   it('gives a maf event the violet calibration tone regardless of its severity', () => {
     const event = { type: 'maf', severity: 3, msg: 'FABRICATED MAF TRIM NOTE', cause: null, fix: null, impact: null };
     mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
-    const msg = /** @type {HTMLElement} */ (screen.getByText('FABRICATED MAF TRIM NOTE').closest('div[style]'));
-    expect(msg.style.color).toBe(resolvedColor(T.violet));
+    const card = screen.getByText('FABRICATED MAF TRIM NOTE').closest('[data-tone]');
+    expect(card.getAttribute('data-tone')).toBe('violet');
   });
 });
 

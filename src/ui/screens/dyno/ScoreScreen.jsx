@@ -16,7 +16,9 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
-import { statusColor, T } from '../../theme.js';
+import { statusColor } from '../../theme.js';
+
+import styles from './ScoreScreen.module.css';
 
 /**
  * @typedef {object} Scores
@@ -37,41 +39,41 @@ export function ScoreScreen({ scores }) {
   return (
     <>
       <Eyebrow icon={Trophy}>Scorecard</Eyebrow>
-      <Panel style={{ marginBottom: 10, background: T.accBg, border: `1px solid ${T.acc}`, textAlign: 'center' }}>
-        <div style={{ fontSize: 10, color: T.accInk, letterSpacing: 1.5, fontWeight: 800 }}>PULL SCORE</div>
-        <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.mono, color: T.accInk, lineHeight: 1.1 }}>{scores.pull}</div>
-        <div style={{ fontSize: 11.5, color: scores.pull >= bestScore ? T.ok : T.ink2, fontWeight: 700, marginTop: 2 }}>
+      <Panel className={styles.pullPanel}>
+        <div className={styles.pullLabel}>PULL SCORE</div>
+        <div className={styles.pullValue}>{scores.pull}</div>
+        <div className={styles.pullBest} data-best={scores.pull >= bestScore ? 'true' : 'false'}>
           {scores.pull >= bestScore ? 'NEW BEST' : `Best: ${bestScore}`}
         </div>
       </Panel>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+      <div className={styles.cardsRow}>
         {/** @type {Array<[string, {score: number, label: string}]>} */ (
           [['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]]
         ).map(([label, s]) => {
           const c = statusColor(s.score);
           return (
-            <Panel key={label} style={{ flex: 1 }}>
-              <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-              <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.mono, color: c, marginTop: 2 }}>{s.score}</div>
-              <div style={{ fontSize: 11, color: c, fontWeight: 700 }}>{s.label}</div>
+            <Panel key={label} className={styles.scoreCard}>
+              <div className={styles.scoreLabel}>{label}</div>
+              <div className={styles.scoreValue} style={{ color: c }}>{s.score}</div>
+              <div className={styles.scoreTag} style={{ color: c }}>{s.label}</div>
             </Panel>
           );
         })}
       </div>
       <Note>Pull Score rewards actual output (peak whp + torque), scaled by how clean (Tuning) and how sound (Engineer) the build is — a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling; every pull is a chance to beat your best.</Note>
       {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
-        <Panel tight style={{ marginBottom: 16, fontSize: 11.5, color: T.ink2, fontFamily: T.mono, lineHeight: 1.8 }}>
+        <Panel tight className={styles.deductions}>
           {scores.tuning.deductions.map((d, i) => <div key={'t' + i}>{d}</div>)}
           {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
         </Panel>
       )}
       {scores.tuning.advisories?.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink3, fontWeight: 800, marginBottom: 4 }}>
+        <div className={styles.advisoriesWrap}>
+          <div className={styles.advisoriesLabel}>
             HARDWARE TRADE-OFFS · NOT SCORED
           </div>
           {scores.tuning.advisories.map((a, i) => (
-            <div key={i} style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>{a}</div>
+            <div key={i} className={styles.advisory}>{a}</div>
           ))}
         </div>
       )}

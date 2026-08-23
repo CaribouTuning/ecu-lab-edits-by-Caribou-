@@ -24,6 +24,8 @@ import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
+import styles from './ResultScreen.module.css';
+
 /**
  * @param {object} props
  * @param {Array<object>} props.chartData the shell's, shared with TUNE's ECU screen
@@ -41,8 +43,8 @@ export function ResultScreen({ chartData, engineDerived }) {
 
   return (
     <>
-      <Panel tight style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>POWER &amp; TORQUE</div>
+      <Panel tight className={styles.panel}>
+        <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
             <CartesianGrid stroke={T.line} />
@@ -58,8 +60,8 @@ export function ResultScreen({ chartData, engineDerived }) {
         </ResponsiveContainer>
       </Panel>
 
-      <Panel tight style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
+      <Panel tight className={styles.panel}>
+        <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
             <CartesianGrid stroke={T.line} />
