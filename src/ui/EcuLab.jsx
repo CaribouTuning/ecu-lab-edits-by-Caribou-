@@ -625,7 +625,8 @@ export function EcuLabApp() {
   const {
     loadKpa, soundOn, journeyStep, throttleInput, histogram, health,
     result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
-    live, activeJob, completedJobs, jobResult,
+    live,
+    activeJob, completedJobs, jobResult,
   } = session;
   const [buildSection, setBuildSection] = useState('engine');
   const [tuneView, setTuneView] = useState('ve');
@@ -1162,7 +1163,9 @@ export function EcuLabApp() {
     const t = a.ctx.currentTime;
 
     const onDyno = tab === 'dyno' && running && result;
+    // Which screen the running engine is heard on.
     const onLive = tab === 'live' && (live.running || live.cranking);
+    // And whether it is heard at all: one of those two has to be on screen.
     const audible = onDyno || onLive;
 
     const rpm = onDyno ? currentRpm : live.rpm;
