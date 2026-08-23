@@ -6,6 +6,9 @@
  * that turn a number into a colour.
  */
 
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
@@ -108,5 +111,39 @@ describe('heat', () => {
     const hue = (v) => Number(heat(v, 0, 100).match(/hsl\((-?[\d.]+)/)[1]);
     expect(hue(0)).toBeGreaterThan(hue(50));
     expect(hue(50)).toBeGreaterThan(hue(100));
+  });
+});
+
+describe('pull-log event tones', () => {
+  it('derives the tone from severity instead of listing event types', () => {
+    // EcuLab used to classify pull-log events with three hand-kept lists of type names.
+    // They covered eleven of the twelve types `src/sim` emits — `bearing` matched none,
+    // fell through to the default, and rendered in `T.cyan`, the chart-series hue. A
+    // warning about accumulating bottom-end stress was drawn as decoration while
+    // `pressure`, its acute sibling, was drawn red.
+    //
+    // It now reads `e.severity`, which every event already carries, so no type can fall
+    // through and a thirteenth needs no edit here at all.
+    //
+    // That makes the obvious test — "every emitted type gets a non-cyan tone" — a
+    // tautology: the derivation is total, so it cannot fail. I wrote that version first
+    // and only caught it by breaking it. What is actually worth guarding is the
+    // approach, because reverting to enumerated type names reopens the hole exactly as
+    // it was.
+    const source = readFileSync(new NodeURL('../src/ui/EcuLab.jsx', import.meta.url), 'utf8');
+    const classification = source
+      .split('\n')
+      .filter((l) => /const is(Danger|Warn|Violet) =/.test(l));
+
+    expect(classification.length).toBe(3);
+
+    const derivesFromSeverity = classification.some((l) => /e\.severity/.test(l));
+    expect(derivesFromSeverity).toBe(true);
+
+    // `maf` is the one legitimate name check: it is a calibration observation rather
+    // than damage, so it takes violet on identity, not on severity. Any OTHER type name
+    // appearing here means the lists are back.
+    const named = classification.flatMap((l) => [...l.matchAll(/e\.type === '([a-z]+)'/g)].map((m) => m[1]));
+    expect(named).toEqual(['maf']);
   });
 });

@@ -2213,9 +2213,19 @@ export function EcuLabApp() {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {result.events.map((e, i) => {
-                          const isDanger = e.type === 'knock' || e.type === 'valve' || e.type === 'rich' || e.type === 'injscale' || e.type === 'float' || e.type === 'pressure';
-                          const isWarn = e.type === 'lean' || e.type === 'fuel' || e.type === 'compressor' || e.type === 'cam';
+                          // The tone comes from the severity the sim already assigns, not from a
+                          // hand-kept list of type names. Those lists named eleven of the twelve
+                          // types `src/sim` emits: `bearing` matched none of them and fell through
+                          // to the chart-series cyan, so the one warning about accumulating
+                          // bottom-end stress rendered as decoration while `pressure`, its acute
+                          // sibling, rendered red. Deriving it means a thirteenth event type gets a
+                          // tone the day it is added instead of silently becoming a chart colour.
+                          //
+                          // `maf` is the one genuine special case: it is a calibration observation
+                          // rather than damage, and violet is the token reserved for that.
                           const isViolet = e.type === 'maf';
+                          const isDanger = !isViolet && e.severity >= 3;
+                          const isWarn = !isViolet && !isDanger;
                           const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
                           const bd = isDanger ? T.dangerLine : isWarn ? T.warnLine : isViolet ? T.violetLine : T.line;
                           const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
