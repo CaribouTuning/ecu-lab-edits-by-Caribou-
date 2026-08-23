@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Seg } from '../../src/ui/primitives/Seg.jsx';
 import segStyles from '../../src/ui/primitives/Seg.module.css';
 import { Select } from '../../src/ui/primitives/Select.jsx';
+import selectStyles from '../../src/ui/primitives/Select.module.css';
 import { Toggle } from '../../src/ui/primitives/Toggle.jsx';
 
 // This project's vitest config has no `globals: true` and no setup file, so
@@ -122,6 +123,19 @@ describe('Select', () => {
     const wrap = /** @type {HTMLElement} */ (container.firstChild);
     expect(wrap.style.display).toBe('block');
     expect(wrap.style.marginBottom).toBe('13px');
+  });
+
+  it('adds a caller-supplied className instead of replacing its own', () => {
+    // `className` is documented passthrough ("Anything not named here ... lands
+    // on the wrapper"), but used to live in `...rest`, which spreads after the
+    // wrapper's own class and so overwrote it outright — a caller following the
+    // docblock got an unstyled wrapper with no test failure.
+    const { container } = render(
+      <Select label="Engine" groups={GROUPS} value="n54" onChange={() => {}} className="callerClass" />,
+    );
+    const wrap = /** @type {HTMLElement} */ (container.firstChild);
+    expect(wrap.className).toContain(selectStyles.wrap);
+    expect(wrap.className).toContain('callerClass');
   });
 });
 
