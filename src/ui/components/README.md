@@ -19,3 +19,9 @@ which point they graduate out of this folder by being deleted.
 `BuildSection` keeps its inline `maxHeight` deliberately: `tests/ui/routing-shell.test.jsx`
 reads it to tell an open section from a collapsed one, which is how the fully-collapsed
 route state is pinned.
+
+`PickList` is here for the ordinary reason, not the disclosure one: BUILD's Forced
+Induction screen and TUNE's ECU screen both need a full-width descriptive row for a
+choice with a subtitle (turbine housing, injector size), which is wider than `Seg`'s
+chip layout can hold without wrapping. One screen owning it and the other importing
+across tabs would be a cycle risk the moment either screen moves again.
