@@ -180,6 +180,20 @@ describe('Button, quiet variant', () => {
   });
 });
 
+describe('Seg legibility', () => {
+  it('keeps an unselected option readable on the control it sits in', () => {
+    // The same defect this suite already pins for StatTile's label and Button's quiet
+    // variant, in a third place: --ink3 is a hierarchy token, and on --panel at 10.5px
+    // it measures 3.17:1 against AA's 4.5:1 for small text. It affects roughly thirty
+    // option labels — every unselected option in all eight segmented controls — so it
+    // was the widest of the three and the last one measured.
+    const css = readFileSync(new NodeURL('../../src/ui/primitives/Seg.module.css', import.meta.url), 'utf8');
+    const itemColor = css.match(/\.item \{[^}]*color:\s*var\(--([a-z0-9-]+)\)/)[1];
+    const segBg = css.match(/\.seg \{[^}]*background:\s*var\(--([a-z0-9-]+)\)/)[1];
+    expect(contrast(tokenFor(itemColor), tokenFor(segBg))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('Bar', () => {
   it('exposes itself as a meter with its current value', () => {
     render(<Bar label="Pistons" value={86} />);
