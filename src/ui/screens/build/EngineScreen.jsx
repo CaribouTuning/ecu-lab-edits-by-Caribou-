@@ -170,8 +170,8 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         </div>
       )}
       <Panel tight style={{ marginBottom: 13 }}>
-        <div className={styles.statRow}><span>DISPLACEMENT</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
-        <div className={styles.statRow}><span>BORE : STROKE</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
+        <div className={styles.displacementRow}><span>DISPLACEMENT</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
+        <div className={styles.displacementRow}><span>BORE : STROKE</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
         <div className={styles.character}>{engineDerived.character}</div>
       </Panel>
 
@@ -187,7 +187,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         <br /><br />Note that <b className={styles.em}>boost is not part of VE</b>. VE measures how well the cylinder fills relative to the pressure available; boost raises that pressure (MAP) separately. That is why adding boost does not change these numbers, but adding a turbine does — the turbine is a restriction in the exhaust.
       </ExpandableInfo>
 
-      <div className={styles.label} style={{ marginTop: 10 }}>Configuration</div>
+      <div className={styles.labelSpaced}>Configuration</div>
       <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
       <ExpandableInfo title="Why cylinder count and layout matter">
         For the same total displacement, spreading it across more, smaller cylinders means each one needs less peak pressure to make the same overall torque — a small real knock-margin benefit and smoother delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.

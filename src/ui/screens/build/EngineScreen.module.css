@@ -51,6 +51,17 @@
   color: var(--ink2);
 }
 
+/* Same row shape as .statRow, one pixel more air below it — the displacement panel's
+   own spacing in the original markup, not a shared value with the preset panel's. */
+.displacementRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
 .statValue {
   font-family: var(--mono);
   font-weight: 800;

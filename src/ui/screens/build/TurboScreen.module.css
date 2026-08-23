@@ -77,7 +77,7 @@
   justify-content: flex-end;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-radius: 7px;
   background: var(--panel);
 }
 
@@ -152,7 +152,7 @@
   flex: 1;
   padding: 11px 0;
   border: 1px solid var(--line);
-  border-radius: var(--r-sm);
+  border-radius: 8px;
   background: var(--panel);
   color: var(--acc-ink);
   font-weight: 800;
