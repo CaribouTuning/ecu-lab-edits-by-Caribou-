@@ -93,9 +93,16 @@ describe('BoltonsScreen', () => {
 
 describe('TurboScreen', () => {
   it('reveals the boost editor off the store once the turbo switch is on', () => {
-    mount(<TurboScreen active onToggle={noop} />);
+    const { container } = mount(<TurboScreen active onToggle={noop} />);
     expect(screen.getByText('Not installed')).toBeTruthy();
+    // The boost-columns block is always mounted and hidden with CSS (`data-open`),
+    // the same hide-not-unmount contract BuildSection uses — so the buttons already
+    // exist pre-click. Assert on `data-open` itself, which is what actually flips
+    // with `turboOn`, rather than on button presence, which does not.
+    const subPanel = container.querySelector('[data-open]');
+    expect(subPanel.getAttribute('data-open')).toBe('false');
     fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+    expect(subPanel.getAttribute('data-open')).toBe('true');
     expect(within(screen.getByTestId('boost-columns')).getAllByRole('button')).toHaveLength(8);
   });
 
