@@ -1,0 +1,79 @@
+/* TUNE > SPARK (ignition timing). */
+
+.wrap {
+  padding: var(--sp-xl) var(--sp-xl) 0;
+}
+
+.intro {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+
+.spacer { flex: 1; }
+
+/* The four knock-advisory states are mutually exclusive — only one ever mounts —
+   so each gets its own fixed class rather than a shared one switched at runtime. */
+
+.dangerBanner {
+  margin: 10px 0;
+  padding: 12px 13px;
+  border: 1px solid var(--danger-line);
+  border-radius: 10px;
+  background: var(--danger-bg);
+}
+
+.dangerLabel {
+  margin-bottom: 7px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 800;
+  color: var(--danger-ink);
+}
+
+.dangerBody {
+  margin-bottom: 8px;
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.55;
+}
+
+.dangerCell {
+  margin-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+.dangerMore {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+}
+
+.dangerFooter {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink3);
+}
+
+.advisoryPanel {
+  margin: 10px 0;
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.5;
+}
+
+.okBanner {
+  margin: 10px 0;
+  padding: 11px 13px;
+  border: 1px solid var(--ok-line);
+  border-radius: 10px;
+  background: var(--ok-bg);
+  font-size: 12.5px;
+  color: var(--ok);
+}
+
+/* Prose emphasis, both inside the advisory Panels and the ExpandableInfo panels. */
+.em { color: var(--acc-ink); }
+.emInk { color: var(--ink); }
