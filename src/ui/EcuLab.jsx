@@ -1090,7 +1090,11 @@ export function EcuLabApp() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* Capped so a wide display doesn't stretch every button and paragraph to the
+          screen edge (see tokens.js's contentMax comment for the 1100px reasoning).
+          Capped here, not on the root at the top of this render, so the header above
+          and the bottom nav below stay full-width chrome rather than letterboxing. */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
         {tab === 'dash' && (
           <div style={{ padding: 16 }}>
