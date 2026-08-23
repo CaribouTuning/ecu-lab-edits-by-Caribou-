@@ -15,6 +15,8 @@ import { StatTile } from '../../primitives/StatTile.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { statusTone } from '../../theme.js';
 
+import styles from './StatsScreen.module.css';
+
 /**
  * @typedef {object} Scores
  * @property {number} pull
@@ -42,18 +44,18 @@ export function StatsScreen({ active, onToggle, scores }) {
       icon={Trophy} label="Career & Last Pull"
       sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
     >
-      <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+      <div className={`${styles.row} ${styles.rowGapWide}`}>
         <StatTile label="BEST PULL" value={bestScore} tone="acc" />
         <StatTile label="CAREER TOTAL" value={totalScore} tone="alt" />
         <StatTile label="PULLS" value={pullCount} />
       </div>
       {result && scores ? (
         <>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div className={`${styles.row} ${styles.rowGap}`}>
             <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
             <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div className={styles.row}>
             <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
             <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
             <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />

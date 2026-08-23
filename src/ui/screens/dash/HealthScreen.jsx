@@ -18,6 +18,8 @@ import { Note } from '../../primitives/Note.jsx';
 import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 
+import styles from './HealthScreen.module.css';
+
 /**
  * @param {object} props
  * @param {boolean} props.active whether this is HOME's open section
@@ -38,7 +40,7 @@ export function HealthScreen({ active, onToggle, overallHealth, needsMafRecal })
       sub={`${Math.round(overallHealth)}% overall`}
     >
       <Panel>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className={styles.bars}>
           <Bar label="PISTON / RINGS · knock, detonation" value={health.piston} />
           <Bar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
           <Bar label="VALVES · lean-under-boost heat" value={health.valve} />

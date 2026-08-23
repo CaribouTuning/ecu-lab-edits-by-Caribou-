@@ -780,11 +780,6 @@ export function EcuLabApp() {
     // — re-creating it would restart the engine's 20 Hz clock on every render.
   }, [dispatch]);
 
-  // ---- Engine audio -------------------------------------------------------
-  // Synthesised from the firing frequency: a 4-stroke fires cyl/2 times per
-  // crank revolution, so pitch tracks RPM and cylinder count exactly. A lowpass
-  // that opens with throttle gives the "load" character — closed throttle is
-  // muffled, wide open is bright and raspy.
   // The throttle pad's three pointer handlers. `throttleRef` is what the 20 Hz loop
   // actually reads (the interval is installed once and never sees a re-render), so the
   // dispatch and the ref write are one operation and belong together in the shell that
@@ -794,13 +789,18 @@ export function EcuLabApp() {
     throttleRef.current = value;
   };
 
+  // ---- Engine audio -------------------------------------------------------
+  // Synthesised from the firing frequency: a 4-stroke fires cyl/2 times per
+  // crank revolution, so pitch tracks RPM and cylinder count exactly. A lowpass
+  // that opens with throttle gives the "load" character — closed throttle is
+  // muffled, wide open is bright and raspy.
   const startEngine = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
   };
   const stopEngine = () => {
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0;
+    setThrottleInput(0);
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { running: false, cranking: false } });
   };
 
