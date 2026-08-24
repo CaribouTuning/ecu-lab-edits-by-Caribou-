@@ -1,0 +1,122 @@
+/**
+ * Advisor reports: what the simulation's advisors already concluded, narrowed to
+ * whatever the player currently has selected.
+ *
+ * These invent no analysis. `calibrationAdvice` and `veRecommendations` in
+ * `src/sim/advisors.js` decide what is wrong with a table; these functions only
+ * decide which part of that answer is relevant right now, and how to say it.
+ *
+ * THE ONE RULE: a cell's category is looked up in the advisor's own output
+ * arrays. It is never re-derived by comparing the cell against a threshold. The
+ * classification in `calibrationAdvice` is subtle on purpose — a cell past both
+ * ceilings with MBT the lower of the two is detonating, not merely wasteful, and
+ * getting that backwards tells a player a dangerous cell is safe. Asking the
+ * arrays cannot get it wrong. Recomputing can, and that is the false alarm
+ * issue #34 removed.
+ */
+
+/** @typedef {import('./TuningGrid.jsx').Selection} Selection */
+
+/**
+ * @typedef {object} AdvisorReport
+ * @property {'ok'|'warn'|'danger'|'info'} tone
+ * @property {string} headline plain text, shown on the collapsed summary at <560px
+ * @property {string} state which body the renderer should show
+ * @property {object} detail numbers and cell records the body needs
+ */
+
+/** English, not a template with a stray "1 cells" in it. */
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** Does this category contain the cell at (ri, ci)? */
+const holds = (arr, ri, ci) => arr.some((c) => c.ri === ri && c.ci === ci);
+
+/** How many of a category fall inside the selected row or column? */
+function countIn(arr, selection) {
+  if (selection.type === 'row') return arr.filter((c) => c.ri === selection.row).length;
+  return arr.filter((c) => c.ci === selection.col).length;
+}
+
+/**
+ * @param {object} calAdvice as returned by `calibrationAdvice`
+ * @param {Selection|null} selection
+ * @returns {AdvisorReport}
+ */
+export function sparkReport(calAdvice, selection) {
+  const { spark, overAdvanced, underAdvanced, pastMbt } = calAdvice;
+
+  if (selection && selection.type === 'cell') {
+    const cell = spark.find((c) => c.ri === selection.row && c.ci === selection.col);
+    // No entry means `calibrationAdvice` filtered the cell out as unreachable
+    // (its rule 2): a turbo build never sees 200 kPa at 800 RPM. That is not the
+    // same as a clean cell and must not be reported as one.
+    if (!cell) return { tone: 'info', headline: 'Never reached by this build', state: 'cell-unreachable', detail: {} };
+
+    if (holds(overAdvanced, cell.ri, cell.ci)) {
+      return {
+        tone: 'danger',
+        headline: `${(cell.current - cell.knockCeiling).toFixed(1)} deg past the knock limit`,
+        state: 'cell-over',
+        detail: { cell },
+      };
+    }
+    if (holds(pastMbt, cell.ri, cell.ci)) {
+      return {
+        tone: 'warn',
+        headline: `${(cell.current - cell.mbt).toFixed(1)} deg past MBT`,
+        state: 'cell-past-mbt',
+        detail: { cell },
+      };
+    }
+    if (holds(underAdvanced, cell.ri, cell.ci)) {
+      return {
+        tone: 'warn',
+        headline: `${cell.delta.toFixed(1)} deg below what this build allows`,
+        state: 'cell-under',
+        detail: { cell },
+      };
+    }
+    return { tone: 'ok', headline: 'Inside both ceilings', state: 'cell-ok', detail: { cell } };
+  }
+
+  if (selection) {
+    // A row or column. Same precedence as the table-wide report, scoped to the band.
+    const over = countIn(overAdvanced, selection);
+    if (over > 0) {
+      return {
+        tone: 'danger',
+        headline: `${over} of these cells are past the knock limit`,
+        state: 'group-over',
+        detail: { count: over },
+      };
+    }
+    const under = countIn(underAdvanced, selection);
+    const past = countIn(pastMbt, selection);
+    if (past > 0) {
+      return { tone: 'warn', headline: `${past} of these cells are past MBT`, state: 'group-past-mbt', detail: { count: past } };
+    }
+    if (under > 0) {
+      return { tone: 'warn', headline: `${under} of these cells have advance left`, state: 'group-under', detail: { count: under } };
+    }
+    return { tone: 'ok', headline: 'Nothing flagged in this band', state: 'group-clean', detail: {} };
+  }
+
+  // Table-wide. This precedence IS the fall-through the SPARK screen rendered
+  // before the panel existed, preserved exactly: danger first, then the
+  // opportunity, then the wasted advance, then the all-clear.
+  if (overAdvanced.length > 0) {
+    return {
+      tone: 'danger',
+      headline: `${plural(overAdvanced.length, 'cell')} beyond the knock limit`,
+      state: 'table-over',
+      detail: { count: overAdvanced.length, cells: overAdvanced.slice(0, 5), more: Math.max(0, overAdvanced.length - 5) },
+    };
+  }
+  if (underAdvanced.length > 4) {
+    return { tone: 'warn', headline: 'Timing left on the table', state: 'table-under', detail: { count: underAdvanced.length } };
+  }
+  if (pastMbt.length > 0) {
+    return { tone: 'warn', headline: 'Past peak torque', state: 'table-past-mbt', detail: { count: pastMbt.length } };
+  }
+  return { tone: 'ok', headline: 'Within the knock limit', state: 'table-clean', detail: {} };
+}
