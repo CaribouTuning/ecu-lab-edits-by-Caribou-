@@ -12,7 +12,7 @@
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: var(--ink3);
+  color: var(--ink2);
 }
 
 .value {
@@ -30,7 +30,8 @@
   color: var(--ink2);
 }
 
-.acc .value { color: var(--acc); }
+.acc .value { color: var(--acc-ink); }
+.alt .value { color: var(--cyan); }
 .ok .value { color: var(--ok); }
 .warn .value { color: var(--warn); }
 .danger .value { color: var(--danger); }

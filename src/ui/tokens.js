@@ -124,6 +124,16 @@ export const tokens = Object.freeze({
   spLg: '13px',
   spXl: '16px',
   spXxl: '24px',
+
+  // Content column cap. Nothing in the app set a max-width before this: the root is
+  // 100dvh tall with unconstrained width, so every container was the viewport — which
+  // is why buttons could span the whole screen and why Button's `block` prop shipped
+  // with no adopters. The widest fixed element, the tuning grid, is 452px (44px row
+  // labels + 8 RPM columns x 51px), so the grid isn't the constraint here; prose is —
+  // at fsBase (13.5px) 1100px is roughly 110 characters, past the comfortable 45-90
+  // but acceptable for a dense tool, and it leaves room for a future right-hand panel
+  // beside the grid (452 + ~320 + gaps ~= 820) without a second breakpoint.
+  contentMax: '1100px',
 });
 
 /**

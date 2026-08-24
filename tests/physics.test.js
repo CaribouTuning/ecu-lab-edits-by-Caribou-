@@ -1117,6 +1117,70 @@ describe('exhaust gas temperature', () => {
     const retarded = point({ rpm: 5500, timingVal: 10 }).egt;
     expect(retarded).toBeGreaterThan(advanced);
   });
+
+  /**
+   * Issue #47. EGT used to RISE as the throttle closed — a 40 kPa pull read 1078-1223 C
+   * and tripped the alarm on 61 points out of 61, while wide-open throttle sat calmly at
+   * 875-944. Backwards, and it made the gauge useless for the thing it is for.
+   *
+   * The cause was that the charge was treated as if it all left the cylinder through
+   * blowdown. It does not: only the part that escapes while the cylinder is above the
+   * manifold does, and at light load that is almost none of it. The rest is pushed out by
+   * the piston, slowly, against a port hundreds of degrees cooler.
+   */
+  describe('falls with load, because less of the charge leaves through blowdown', () => {
+    /** Peak EGT anywhere in a pull at the given throttle opening, on the stock V6. */
+    const peakEgtAt = (loadKpa) => {
+      const derived = S.deriveEngine(STOCK);
+      const r = S.simulateSweep({
+        loadKpa, ve: S.DEFAULT_VE, veTruth: S.DEFAULT_VE,
+        timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+        turboOn: false, boostCurve: S.DEFAULT_BOOST,
+        octaneBonus: S.OCTANE_OPTS[0].bonus, octaneLabel: S.OCTANE_OPTS[0].label,
+        fuel: S.OCTANE_OPTS[0], injectorCc: 315, ecuInjectorCc: 315, injectorLabel: '315cc',
+        mods: { ...S.DEFAULT_MODS }, mafScalar: 1, derived,
+        turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+      });
+      return {
+        peak: Math.max(...r.points.map((p) => p.egt)),
+        alarms: r.points.filter((p) => p.egtRisk).length,
+        n: r.points.length,
+      };
+    };
+
+    it('reads coolest at the lightest load, not hottest', () => {
+      const wot = peakEgtAt(S.BARO_KPA).peak;
+      const part = peakEgtAt(40).peak;
+      const cruise = peakEgtAt(20).peak;
+      expect(part).toBeLessThan(wot);
+      expect(cruise).toBeLessThan(part);
+    });
+
+    it('stops alarming on a part-throttle pull', () => {
+      // The symptom that made this reportable: 61 of 61 points over the limit at 40 kPa.
+      for (const loadKpa of [S.BARO_KPA, 70, 40, 20]) {
+        const { alarms, n } = peakEgtAt(loadKpa);
+        expect(alarms, `${Math.round(loadKpa)} kPa alarmed on ${alarms}/${n} points`).toBe(0);
+      }
+    });
+
+    it('keeps wide-open throttle in the band a real gauge shows', () => {
+      // Not asserting a number — asserting that the fix did not simply push everything
+      // down to the wall temperature to make the alarm go away. A naturally aspirated
+      // engine at full load on a rich mixture belongs in the high hundreds.
+      const wot = peakEgtAt(S.BARO_KPA).peak;
+      expect(wot).toBeGreaterThan(650);
+      expect(wot).toBeLessThan(950);
+    });
+
+    it('sends more of the charge out through blowdown as load rises', () => {
+      // The mechanism itself, stated separately from its consequence. Cylinder pressure
+      // at valve opening is what sets the split, and it is much higher at full load.
+      const wot = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+      const light = point({ rpm: 5500, mapKpa: 40 });
+      expect(wot.egt).toBeGreaterThan(light.egt);
+    });
+  });
 });
 
 describe('the spark table bounds', () => {

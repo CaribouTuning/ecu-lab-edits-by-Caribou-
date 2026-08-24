@@ -105,8 +105,8 @@ export const ENGINE_PRESETS = [
       //
       // REFITTED from 202 for the inlet Mach index (#15). That term takes volumetric
       // efficiency out of the top end, so duration comes back up to pay for it: power
-      // lands +1.6% on the published figure, and peak power now falls at 6500 against a
-      // published 6400 instead of climbing into the 7000 limiter.
+      // lands on the published figure (0.0%), and peak power now falls across 6500-6600
+      // against a published 6400 instead of climbing into the 7000 limiter.
       camDuration: 210, springRate: 60,
       redline: 7000,
     },
@@ -138,7 +138,7 @@ export const ENGINE_PRESETS = [
       // then 214 when work started being integrated from a pressure trace. 218 is the
       // refit for the inlet Mach index (#15): that term takes real volumetric efficiency
       // out of the top end, so a little more duration comes back to pay for it. Power
-      // lands +1.9% and torque +3.6% on the published figures.
+      // lands on the published figure (-0.0%) and torque +1.8%.
       //
       // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
       // the 7500 redline, and at 4.4 degrees of overlap this cam never trips the cam
@@ -146,12 +146,11 @@ export const ENGINE_PRESETS = [
       //
       // THE ROLLOFF NOW EXISTS. This preset used to climb monotonically into its limiter
       // and read peak power at 7500, 700 RPM above the published 6800, because nothing in
-      // the shared physics made VE fall at speed. The Mach index is that term, and
-      // simulated peak power now lands at 6500 — 300 RPM under the rating rather than 700
-      // over, and inside what `tests/presets.test.js` allows. What remains missing is
-      // still worth naming: the real engine's rolloff is cam profile, VVEL variable lift
-      // and intake-tract tuning, and the Mach term stands in for all three at once rather
-      // than reproducing any of them.
+      // the shared physics made VE fall at speed. The Mach index is that term, and the
+      // simulated flat top now runs 6500-6900, bracketing the published 6800 rather than
+      // sitting 700 RPM above it. What remains missing is still worth naming: the real
+      // engine's rolloff is cam profile, VVEL variable lift and intake-tract tuning, and
+      // the Mach term stands in for all three at once rather than reproducing any of them.
       camDuration: 218, springRate: 68,
       redline: 7500,
     },

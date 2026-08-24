@@ -182,7 +182,6 @@ function flatTopRpm(points) {
  * through the ordinary rated-RPM assertions.
  */
 
-
 describe('factory calibration validates against real published figures', () => {
   S.ENGINE_PRESETS.forEach((preset) => {
     describe(preset.name, () => {

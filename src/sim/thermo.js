@@ -92,12 +92,17 @@ export function evaporativeCoolingK(fuelMassG, airMassG, fuel) {
 }
 
 /**
- * Exhaust gas temperature leaving the port — the turbine inlet, and the number the
- * datalog reports as EGT.
+ * Exhaust gas temperature for the TURBINE BALANCE, K.
  *
- * ONE MODEL, TWO CONSUMERS — the turbine balance (which runs before the cycle can, so it
- * cannot use the cycle's own answer) and the datalog gauge. Keep them on this one call:
- * they were separate expressions once and disagreed about the same gas.
+ * NOT the number the datalog reports as EGT — that comes from `runCycle`'s `exhaustK`,
+ * measured off the integrated pressure trace and then cooled through the port. This
+ * docstring claimed otherwise and was wrong (issue #47); the two have not been the same
+ * call since the crank-angle cycle landed, and saying they were sent readers looking for
+ * the EGT bug in the wrong file.
+ *
+ * This one exists because the turbine balance has to price the expansion BEFORE the
+ * cycle can run — that is the fixed point it is solving — so it cannot use the cycle's
+ * own answer and needs a correlation instead.
  *
  * Load raises it steeply then SATURATES — past a full charge, extra air brings extra
  * expansion work and a richer mixture too. Retard is the big term (burning fuel on the
