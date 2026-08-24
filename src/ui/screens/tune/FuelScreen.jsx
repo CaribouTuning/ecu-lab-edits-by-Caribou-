@@ -1,7 +1,7 @@
 /**
  * TUNE > FUEL (air-fuel ratio target).
  *
- * `calAdvice` is the shell's — see the note in `TimingScreen.jsx` for why it is a
+ * `calAdvice` is the shell's — see the note in `SparkScreen.jsx` for why it is a
  * shell-level computation rather than one this screen (or SPARK's) repeats.
  */
 
@@ -16,17 +16,17 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
-import styles from './AfrScreen.module.css';
+import styles from './FuelScreen.module.css';
 
 /** @typedef {import('../../components/TuningGrid.jsx').Selection} Selection */
-/** @typedef {import('./TimingScreen.jsx').CalAdvice} CalAdvice */
+/** @typedef {import('./SparkScreen.jsx').CalAdvice} CalAdvice */
 
 /**
  * @param {object} props
  * @param {CalAdvice} props.calAdvice the shell's — also read by the SPARK screen
  * @returns {React.ReactElement}
  */
-export function AfrScreen({ calAdvice }) {
+export function FuelScreen({ calAdvice }) {
   const [tune, dispatch] = useTune();
   const { afr, selection } = tune;
   /** @param {Selection|null} value */

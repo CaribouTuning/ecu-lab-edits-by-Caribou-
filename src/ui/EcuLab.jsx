@@ -52,18 +52,19 @@ import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { DialMark } from './components/DialMark.jsx';
-import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
-import { TurboScreen } from './screens/build/TurboScreen.jsx';
+import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
+import { InductionScreen } from './screens/build/InductionScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
 import { StatsScreen } from './screens/dash/StatsScreen.jsx';
-import { AfrScreen } from './screens/tune/AfrScreen.jsx';
-import { EcuScreen } from './screens/tune/EcuScreen.jsx';
-import { TimingScreen } from './screens/tune/TimingScreen.jsx';
-import { VeScreen } from './screens/tune/VeScreen.jsx';
+import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
+import { FuelScreen } from './screens/tune/FuelScreen.jsx';
+import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
+import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
+import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
@@ -192,8 +193,8 @@ export function EcuLabApp() {
     presetId,
   } = build;
   // `presetPrompt` and `boostSel` are read from the store directly by EngineScreen
-  // and TurboScreen now — neither is a shell-level derivation, so there is nothing
-  // to destructure here once their one call site each moved with them.
+  // and InductionScreen now — neither is a shell-level derivation, so there is
+  // nothing to destructure here once their one call site each moved with them.
   //
   // The TUNE slice — calibration tables, the unsaved-work flag, and the grid cursor.
   // Same destructuring shape as `build` above; `dispatch` is the SAME function
@@ -203,8 +204,8 @@ export function EcuLabApp() {
   const { ve, timing, afr } = tune;
   // `tablesDirty` is read from the store directly by EngineScreen now (it is
   // `hasTuningWork()`'s one input) — nothing else in the shell reads it.
-  // `selection` itself is read from the store directly by VeScreen/TimingScreen/
-  // AfrScreen now — the shell only still needs `setSelection` below, to clear the
+  // `selection` itself is read from the store directly by AirflowScreen/SparkScreen/
+  // FuelScreen now — the shell only still needs `setSelection` below, to clear the
   // cursor on tab/view navigation, which is nav-adjacent and stays here.
   // The SESSION slice — everything about the current run and career progress that is
   // neither hardware nor calibration. Same destructuring shape again, same `dispatch`.
@@ -310,7 +311,7 @@ export function EcuLabApp() {
     [engineConfig, mods, hwForVe],
   );
 
-  // `recalcVE` moved into VeScreen — its one caller — where it dispatches off this
+  // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
   // same `veTruth`, passed down as a prop since it also feeds `calAdvice` below and
   // the dyno payload.
 
@@ -340,8 +341,8 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
-  // `dutyDangerous` moved into EcuScreen — its one reader — computed there off this
-  // same `dutyPreview`, which stays here because the score breakdown and dyno
+  // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
+  // this same `dutyPreview`, which stays here because the score breakdown and dyno
   // payload below also read it.
 
   const needsMafRecal = mods.intake || turboOn;
@@ -768,10 +769,11 @@ export function EcuLabApp() {
   // TUNE's own sub-view switcher below is unrelated: it is a second level of
   // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 've', label: 'AIR', icon: Grid3x3 },
-    { id: 'timing', label: 'SPARK', icon: Zap },
-    { id: 'afr', label: 'FUEL', icon: Droplets },
-    { id: 'ecu', label: 'ECU', icon: Fuel },
+    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3 },
+    { id: 'spark', label: 'SPARK', icon: Zap },
+    { id: 'fuel', label: 'FUEL', icon: Droplets },
+    { id: 'injectors', label: 'INJECTORS', icon: Fuel },
+    { id: 'sensors', label: 'SENSORS', icon: Activity },
   ];
 
   if (appView === 'start') {
@@ -825,7 +827,7 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {/* ---------- BUILD: engine architecture, parts, forced induction ---------- */}
+        {/* ---------- BUILD: engine architecture, induction, fuel system, exhaust ---------- */}
         {/* One component per section, each reading the store for itself. `engineDerived`,
             `activePreset` and `veAdvice` are the shell's: each feeds a second consumer
             elsewhere (the tach/dyno chart, the header's engine label, the AIR screen's
@@ -843,13 +845,13 @@ export function EcuLabApp() {
             <EngineScreen
               active={buildSection === 'engine'} onToggle={toggleBuildSection}
               engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
-            />
-            <BoltonsScreen
-              active={buildSection === 'boltons'} onToggle={toggleBuildSection}
               onResetToStock={resetToStock}
             />
-            <TurboScreen
-              active={buildSection === 'turbo'} onToggle={toggleBuildSection}
+            <InductionScreen
+              active={buildSection === 'induction'} onToggle={toggleBuildSection}
+            />
+            <FuelSystemScreen
+              active={buildSection === 'fuel'} onToggle={toggleBuildSection}
             />
             <ExhaustScreen
               active={buildSection === 'exhaust'} onToggle={toggleBuildSection}
@@ -860,13 +862,18 @@ export function EcuLabApp() {
 
         {/* ---------- TUNE: sub-view switcher for the calibration tables ---------- */}
         {tab === 'tune' && (
-          <div style={{ display: 'flex', gap: 6, padding: '14px 16px 0' }}>
+          // flexWrap + a real flex-basis (rather than the old `flex: 1` /
+          // flex-basis:0%) so five items wrap to a second row on narrow
+          // viewports instead of shrinking below their min-content width and
+          // overflowing the column. No media query needed, so this doesn't
+          // touch the hand-maintained breakpoint list in tokens.css.
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 16px 0' }}>
             {TUNE_VIEWS.map((v) => {
               const on = tuneView === v.id;
               const Icon = v.icon;
               return (
                 <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
-                  flex: 1, padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                  flex: '1 1 88px', padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
                   border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
                   color: on ? T.accInk : T.ink2,
@@ -884,18 +891,15 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {tab === 'tune' && tuneView === 've' && <VeScreen veAdvice={veAdvice} veTruth={veTruth} />}
+        {tab === 'tune' && tuneView === 'airflow' && <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} />}
 
-        {tab === 'tune' && tuneView === 'timing' && <TimingScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'spark' && <SparkScreen calAdvice={calAdvice} />}
 
-        {tab === 'tune' && tuneView === 'afr' && <AfrScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'fuel' && <FuelScreen calAdvice={calAdvice} />}
 
-        {tab === 'tune' && tuneView === 'ecu' && (
-          <EcuScreen
-            dutyPreview={dutyPreview} fuel={fuel} injectorCc={injectorCc}
-            needsMafRecal={needsMafRecal} chartData={chartData} result={result}
-          />
-        )}
+        {tab === 'tune' && tuneView === 'injectors' && <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc} />}
+
+        {tab === 'tune' && tuneView === 'sensors' && <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result} />}
 
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (

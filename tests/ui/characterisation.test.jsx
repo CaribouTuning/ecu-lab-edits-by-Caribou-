@@ -11,6 +11,16 @@
  * These do not describe what the app SHOULD do. They describe what it does now, so the
  * refactor has something to preserve. If one of these fails after the extraction, the
  * extraction is wrong — do not edit the test to match the new behaviour.
+ *
+ * FIRST CHANGE SINCE WRITING (the UI re-sectioning PR, task 6): the file had stayed
+ * byte-identical through seven merged PRs until this one, which renamed TUNE's four
+ * sub-views to five (AIR -> AIRFLOW, plus the new INJECTORS/SENSORS split) and moved
+ * the octane explainer onto a BUILD accordion. Only queries moved to keep pointing at
+ * the same real behaviour — the AIR button is now found by its new AIRFLOW label, and
+ * the header build line is now found by `getByTestId('build-line')` instead of
+ * `getByText(/oct/)`, because that regex started also matching the (permanently
+ * mounted) octane explainer prose once it existed. No assertion changed: every
+ * expectation here checks exactly what it checked before.
  */
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -82,7 +92,7 @@ describe('navigation', () => {
     // pass even if the tab body never moved. Assert on a marker that only exists
     // while that tab's body is mounted instead.
     const marker = {
-      TUNE: () => screen.getByRole('button', { name: 'AIR' }), // TUNE_VIEWS sub-tab
+      TUNE: () => screen.getByRole('button', { name: 'AIRFLOW' }), // TUNE_VIEWS sub-tab
       DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
       HOME: () => screen.getByText('Live Engine'),
       BUILD: () => screen.getByText('Garage'),
@@ -99,8 +109,16 @@ describe('the header reflects the build', () => {
     launch();
     // The header line is `${engineName} · ${turbo} · ${octane} oct · ${injector} · ${version}`.
     // Pin that it renders at all and carries an octane figure; the exact preset name is
-    // not the point.
-    expect(screen.getByText(/oct/)).toBeTruthy();
+    // not the point. Query by testid, not text: BUILD's accordion sections stay
+    // mounted when collapsed, so a `getByText(/oct/)` also matches the Fuel System
+    // section's octane explainer prose once that section exists in the DOM.
+    //
+    // Assert on the CONTENT, not just that the element exists. The retired
+    // `getByText(/oct/)` implicitly pinned that the line carries an octane figure —
+    // a bare `getByTestId(...)` would still pass with the octane segment deleted
+    // entirely, which is a weaker test than the one it replaced. Scoping to the
+    // element AND matching the figure is stronger than either.
+    expect(screen.getByTestId('build-line').textContent).toMatch(/\S+ oct\b/);
   });
 });
 
@@ -115,7 +133,7 @@ describe('loading a preset', () => {
       .find((v) => v && v !== picker.value);
     fireEvent.change(picker, { target: { value: target } });
     // With a preset loaded the header shows its NAME, not the "3.0L I6" fallback.
-    expect(screen.getByText(/oct/).textContent).not.toMatch(/^\d\.\dL /);
+    expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
   });
 });
 
@@ -151,7 +169,7 @@ describe('editing a calibration table', () => {
     fireEvent.click(dock.getByRole('button', { name: '+1' }));
 
     // Header falls back to the derived "3.0L I6" form once the preset is invalidated.
-    expect(screen.getByText(/oct/).textContent).toMatch(/^\d\.\dL /);
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^\d\.\dL /);
   });
 });
 

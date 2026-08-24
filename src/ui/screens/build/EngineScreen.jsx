@@ -10,7 +10,7 @@
  * advisory panel. One definition each, passed in.
  */
 
-import { Settings } from 'lucide-react';
+import { RotateCcw, Settings } from 'lucide-react';
 import React from 'react';
 
 import {
@@ -51,9 +51,12 @@ import styles from './EngineScreen.module.css';
  * @param {EngineDerived} props.engineDerived
  * @param {object|null} props.activePreset the catalogue entry `presetId` names, or null
  * @param {VeAdvice} props.veAdvice
+ * @param {() => void} props.onResetToStock wipes the calibration back to a stock
+ *   baseline. The shell owns it because it rebuilds the VE table from `hwForVe`, a
+ *   derivation several other screens and the sim payload also read.
  * @returns {React.ReactElement}
  */
-export function EngineScreen({ active, onToggle, engineDerived, activePreset, veAdvice }) {
+export function EngineScreen({ active, onToggle, engineDerived, activePreset, veAdvice, onResetToStock }) {
   const [build, dispatch] = useBuild();
   const { engineConfig, presetId, presetPrompt } = build;
   const [tune] = useTune();
@@ -243,6 +246,16 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.
       </ExpandableInfo>
       <Note>Changing bore, stroke, or configuration does not retroactively rewrite your VE/timing/AFR tables — you will feel the shift on your next dyno pull and can re-tune from there, just like swapping a real short block.</Note>
+      {/* RESET ALL TO STOCK sits with the preset picker because both set the WHOLE
+          build to a known state — one to a factory engine, one to a generic stock
+          baseline. It came off the dissolved BoltonsScreen, where it had lived only
+          because bolt-ons were what it reset; it is not a bolt-on action and it is
+          certainly not an exhaust one. */}
+      <div className={styles.resetRow}>
+        <Button variant="quiet" size="sm" onClick={onResetToStock}>
+          <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
+        </Button>
+      </div>
     </BuildSection>
   );
 }

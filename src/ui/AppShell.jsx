@@ -229,8 +229,12 @@ export function StatusStrip({ onTutorial, onRepair }) {
         </div>
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
-            by its `oct` and split the engine name off its first `·` segment. */}
-        <div className={styles.engine}>
+            by `data-testid="build-line"` and split the engine name off its first `·`
+            segment. Query by this testid rather than by text — BUILD's accordion
+            sections stay mounted when collapsed, so any BUILD-tab prose containing
+            "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
+            for a text-based query. */}
+        <div className={styles.engine} data-testid="build-line">
           {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
         </div>
         <StripField label="BOOST" value={turboOn ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />

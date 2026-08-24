@@ -1,5 +1,5 @@
 /**
- * TUNE > AIR (volumetric efficiency).
+ * TUNE > AIRFLOW (volumetric efficiency).
  *
  * `veAdvice` is the shell's: it also feeds BUILD's Engine Architecture screen (the
  * stale-VE callout there), so the shell keeps owning the one computation rather than
@@ -20,7 +20,7 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
-import styles from './VeScreen.module.css';
+import styles from './AirflowScreen.module.css';
 
 /** @typedef {import('../../components/TuningGrid.jsx').Selection} Selection */
 
@@ -39,7 +39,7 @@ import styles from './VeScreen.module.css';
  *   the shell's, also read by `calAdvice` and the dyno payload
  * @returns {React.ReactElement}
  */
-export function VeScreen({ veAdvice, veTruth }) {
+export function AirflowScreen({ veAdvice, veTruth }) {
   const [tune, dispatch] = useTune();
   const { ve, selection } = tune;
   /** @param {Selection|null} value */
