@@ -20,6 +20,16 @@
     gap: var(--sp-xl);
     align-items: start;
   }
+
+  /* A grid item's automatic minimum size is its content's, not zero, so a wide
+     child could still push this track past the content cap even though the
+     track itself is sized `minmax(0, 1fr)`. The tuning grid carries its own
+     `overflow-x: auto` wrapper, which should already zero that contribution —
+     this makes it unconditional rather than dependent on a descendant's
+     styling two levels down. */
+  .main {
+    min-width: 0;
+  }
 }
 
 .intro {
