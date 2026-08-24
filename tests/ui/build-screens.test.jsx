@@ -18,12 +18,11 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_ENGINE_CONFIG, deriveEngine } from '../../src/sim/index.js';
-import { BoltonsScreen } from '../../src/ui/screens/build/BoltonsScreen.jsx';
+import { DEFAULT_ENGINE_CONFIG, MOD_INFO, deriveEngine } from '../../src/sim/index.js';
 import { EngineScreen } from '../../src/ui/screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from '../../src/ui/screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from '../../src/ui/screens/build/FuelSystemScreen.jsx';
-import { TurboScreen } from '../../src/ui/screens/build/TurboScreen.jsx';
+import { InductionScreen } from '../../src/ui/screens/build/InductionScreen.jsx';
 import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
@@ -69,32 +68,9 @@ describe('EngineScreen', () => {
   });
 });
 
-describe('BoltonsScreen', () => {
-  it('installs a part through the store when its card is clicked', () => {
-    mount(<BoltonsScreen active onToggle={noop} onResetToStock={noop} />);
-    const install = screen.getAllByRole('button').find((b) => b.textContent.includes('INSTALL') && !/** @type {HTMLButtonElement} */ (b).disabled);
-    fireEvent.click(install);
-    expect(screen.getByText(/1\/4 installed/)).toBeTruthy();
-  });
-
-  it('reports which section it is when its header is clicked', () => {
-    const onToggle = vi.fn();
-    mount(<BoltonsScreen active={false} onToggle={onToggle} onResetToStock={noop} />);
-    fireEvent.click(screen.getByText('Bolt-On Parts'));
-    expect(onToggle).toHaveBeenCalledWith('boltons');
-  });
-
-  it('calls the shell-owned reset rather than doing it itself', () => {
-    const onResetToStock = vi.fn();
-    mount(<BoltonsScreen active onToggle={noop} onResetToStock={onResetToStock} />);
-    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
-    expect(onResetToStock).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('TurboScreen', () => {
+describe('InductionScreen', () => {
   it('reveals the boost editor off the store once the turbo switch is on', () => {
-    const { container } = mount(<TurboScreen active onToggle={noop} />);
+    const { container } = mount(<InductionScreen active onToggle={noop} />);
     expect(screen.getByText('Not installed')).toBeTruthy();
     // The boost-columns block is always mounted and hidden with CSS (`data-open`),
     // the same hide-not-unmount contract BuildSection uses — so the buttons already
@@ -109,9 +85,20 @@ describe('TurboScreen', () => {
 
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
-    mount(<TurboScreen active={false} onToggle={onToggle} />);
-    fireEvent.click(screen.getByText('Forced Induction'));
-    expect(onToggle).toHaveBeenCalledWith('turbo');
+    mount(<InductionScreen active={false} onToggle={onToggle} />);
+    fireEvent.click(screen.getByText('Induction'));
+    expect(onToggle).toHaveBeenCalledWith('induction');
+  });
+
+  it('installs the intake bolt-on through the store when its card is clicked', () => {
+    // `boltons` dissolved into this screen and ExhaustScreen — this is the induction
+    // half's only card. If `installMod` were dropped or mis-wired on the move out of
+    // BoltonsScreen, the card would render but the click would never flip
+    // `data-installed`, and this would fail.
+    mount(<InductionScreen active onToggle={noop} />);
+    const install = screen.getAllByRole('button').find((b) => b.textContent.includes('INSTALL') && !/** @type {HTMLButtonElement} */ (b).disabled);
+    fireEvent.click(install);
+    expect(screen.getByText(MOD_INFO.intake.label).closest('button').getAttribute('data-installed')).toBe('true');
   });
 });
 
@@ -158,14 +145,51 @@ describe('ExhaustScreen', () => {
     // could ever produce via `idealExhaustDiameter`. If the screen silently
     // re-derived the value instead of trusting the prop, this would fail.
     const ideal = 7.77;
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} />);
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} onResetToStock={noop} />);
     expect(screen.getByText(new RegExp(`~${ideal.toFixed(2)} in`))).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
-    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
+    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} onResetToStock={noop} />);
     fireEvent.click(screen.getByText('Exhaust'));
     expect(onToggle).toHaveBeenCalledWith('exhaust');
+  });
+
+  it('installs the exhaust and headers bolt-ons through the store when their cards are clicked', () => {
+    // The exhaust half of the dissolved BoltonsScreen — both remaining cards land
+    // here. Clicking each in turn and reading `data-installed` back off the DOM
+    // catches either card losing its `installMod` wiring on the move.
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} onResetToStock={noop} />);
+    fireEvent.click(screen.getByText(MOD_INFO.exhaust.label).closest('button'));
+    fireEvent.click(screen.getByText(MOD_INFO.headers.label).closest('button'));
+    expect(screen.getByText(MOD_INFO.exhaust.label).closest('button').getAttribute('data-installed')).toBe('true');
+    expect(screen.getByText(MOD_INFO.headers.label).closest('button').getAttribute('data-installed')).toBe('true');
+  });
+
+  it('calls the shell-owned reset rather than doing it itself', () => {
+    // RESET ALL TO STOCK moved here with the mod cards — ExhaustScreen dispatches
+    // nothing of its own for it, only calls the prop the shell passed down.
+    const onResetToStock = vi.fn();
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} onResetToStock={onResetToStock} />);
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
+    expect(onResetToStock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the dissolved Bolt-On Parts section', () => {
+  it('leaves no bolt-on without a screen', () => {
+    // `boltons` dissolved into Induction and Exhaust. A fourth mod added to MOD_INFO
+    // later would otherwise be installable by nothing — this fails the day that
+    // happens. It also fails the other way: if a mod were rendered on BOTH screens
+    // (e.g. left behind on Induction after also being added to Exhaust), the merged
+    // list would contain a duplicate key and the sorted-array equality would no
+    // longer match Object.keys(MOD_INFO)'s sorted, deduplicated list.
+    mount(<InductionScreen active onToggle={noop} />);
+    const onInduction = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
+    cleanup();
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={2.5} onResetToStock={noop} />);
+    const onExhaust = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
+    expect([...onInduction, ...onExhaust].sort()).toEqual(Object.keys(MOD_INFO).sort());
   });
 });

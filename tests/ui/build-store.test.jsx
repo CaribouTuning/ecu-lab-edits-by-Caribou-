@@ -258,6 +258,17 @@ function TuneProbe({ onTune }) {
   return null;
 }
 
+/**
+ * Reports the store's `build` slice to the test on every change.
+ * @param {{onBuild: (build: *) => void}} props
+ * @returns {null}
+ */
+function BuildProbe({ onBuild }) {
+  const [build] = useBuild();
+  React.useEffect(() => { onBuild(build); }, [onBuild, build]);
+  return null;
+}
+
 describe('choosing a turbine', () => {
   it('drops the twin-turbo count the preset installed', () => {
     // SET_TURBINE resets `turbineCount` to 1 as well as setting `turbineIdx`, because
@@ -271,12 +282,12 @@ describe('choosing a turbine', () => {
     expect(twin).toBeTruthy();
     fireEvent.change(picker, { target: { value: twin.id } });
 
-    // The Forced Induction summary is where the count is legible: it reads "Twin
+    // The Induction summary is where the count is legible: it reads "Twin
     // <housing> turbine" above 1 and the bare housing name at 1.
     const inductionSummary = () => screen.getByText(/turbine · peak/).textContent;
     expect(inductionSummary()).toMatch(/Twin/);
 
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const current = TURBINE_OPTS[applyPreset(twin).turbineIdx].label;
     const other = TURBINE_OPTS.map((o) => o.label).find((l) => l !== current);
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${other}`) }));
@@ -309,10 +320,11 @@ describe('resetting the calibration to stock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
     // Turbo on in BOTH runs, so the hardware half of the VE calculation is identical
     // and the only difference between them is the mod set.
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted.
     if (withIntake) {
-      fireEvent.click(screen.getByText('Bolt-On Parts'));
       fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
     }
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
@@ -367,9 +379,11 @@ describe('accepting a re-logged VE table', () => {
 
     // Drift the hardware away from the stock VE table the store starts with, so
     // veAdvice.inSync goes false and the ACCEPT button actually renders.
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
+    // but opening it here matches how a real player would reach the card).
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
@@ -406,9 +420,11 @@ describe('applying a fuel-trim histogram', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
 
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
+    // but opening it here matches how a real player would reach the card).
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
@@ -469,7 +485,7 @@ describe('the injector-duty preview call site', () => {
     // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
     // dial the boost target at 6500 RPM to its maximum.
     fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
 
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
@@ -581,7 +597,7 @@ describe('every toggle', () => {
     // truthy with the name gone and the fallback made the assertion unfailable. An
     // earlier version of this test had exactly that bug.
     launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const switches = screen.getAllByRole('switch');
     expect(switches.length).toBeGreaterThan(1);
     switches.forEach((sw) => {
@@ -595,7 +611,7 @@ describe('every toggle', () => {
     // test whose threshold happens to need turboOn — change that number and a broken
     // turbo switch would pass the whole suite.
     launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
     expect(summary()).toBe('Not installed');
 
@@ -610,15 +626,30 @@ describe('every toggle', () => {
     // The intercooler had no coverage at all, before this migration or after. It is
     // also the call site that lost a prop in the swap, so it is the one most likely to
     // have been broken by it.
-    launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    //
+    // BoltonsScreen's dissolve removed the "N/4 installed" summary this test used to
+    // read as its independent confirmation that the click reached `mods`, not just
+    // the switch's own re-render — so a BuildProbe reads `mods.intercooler` off the
+    // store directly instead, which is a strictly stronger check than the old count
+    // (that count could stay right by coincidence if a DIFFERENT mod flipped).
+    /** @type {*} */
+    let build;
+    render(
+      <StoreProvider>
+        <BuildProbe onBuild={(b) => { build = b; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByText('Induction'));
     const intercooler = screen.getByRole('switch', { name: /Intercooler/ });
     expect(intercooler.getAttribute('aria-checked')).toBe('false');
+    expect(build.mods.intercooler).toBe(false);
 
     fireEvent.click(intercooler);
 
     expect(screen.getByRole('switch', { name: /Intercooler/ }).getAttribute('aria-checked')).toBe('true');
-    // And it reached the build, not just the switch: the parts count reads the mod set.
-    expect(screen.getByText(/[1-4]\/4 installed/)).toBeTruthy();
+    // And it reached the build, not just the switch.
+    expect(build.mods.intercooler).toBe(true);
   });
 });

@@ -52,11 +52,10 @@ import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { DialMark } from './components/DialMark.jsx';
-import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
-import { TurboScreen } from './screens/build/TurboScreen.jsx';
+import { InductionScreen } from './screens/build/InductionScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
@@ -194,8 +193,8 @@ export function EcuLabApp() {
     presetId,
   } = build;
   // `presetPrompt` and `boostSel` are read from the store directly by EngineScreen
-  // and TurboScreen now — neither is a shell-level derivation, so there is nothing
-  // to destructure here once their one call site each moved with them.
+  // and InductionScreen now — neither is a shell-level derivation, so there is
+  // nothing to destructure here once their one call site each moved with them.
   //
   // The TUNE slice — calibration tables, the unsaved-work flag, and the grid cursor.
   // Same destructuring shape as `build` above; `dispatch` is the SAME function
@@ -827,7 +826,7 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {/* ---------- BUILD: engine architecture, parts, forced induction ---------- */}
+        {/* ---------- BUILD: engine architecture, induction, fuel system, exhaust ---------- */}
         {/* One component per section, each reading the store for itself. `engineDerived`,
             `activePreset` and `veAdvice` are the shell's: each feeds a second consumer
             elsewhere (the tach/dyno chart, the header's engine label, the AIR screen's
@@ -846,19 +845,15 @@ export function EcuLabApp() {
               active={buildSection === 'engine'} onToggle={toggleBuildSection}
               engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
             />
-            <BoltonsScreen
-              active={buildSection === 'boltons'} onToggle={toggleBuildSection}
-              onResetToStock={resetToStock}
-            />
-            <TurboScreen
-              active={buildSection === 'turbo'} onToggle={toggleBuildSection}
+            <InductionScreen
+              active={buildSection === 'induction'} onToggle={toggleBuildSection}
             />
             <FuelSystemScreen
               active={buildSection === 'fuel'} onToggle={toggleBuildSection}
             />
             <ExhaustScreen
               active={buildSection === 'exhaust'} onToggle={toggleBuildSection}
-              idealExhaustDia={idealExhaustDia}
+              idealExhaustDia={idealExhaustDia} onResetToStock={resetToStock}
             />
           </div>
         )}

@@ -74,7 +74,7 @@ function sectionIsOpen(label) {
   return Number.parseFloat(body.style.maxHeight) > 0;
 }
 
-const BUILD_SECTION_LABELS = ['Engine Architecture', 'Bolt-On Parts', 'Forced Induction', 'Exhaust'];
+const BUILD_SECTION_LABELS = ['Engine Architecture', 'Induction', 'Exhaust'];
 
 describe('a deep link on a cold load', () => {
   it('renders the linked screen without anyone clicking first', () => {

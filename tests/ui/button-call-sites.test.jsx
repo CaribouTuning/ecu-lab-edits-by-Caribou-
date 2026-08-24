@@ -79,7 +79,7 @@ async function sweep() {
   collect();
 
   // BUILD is the landing tab, and its sections arrive collapsed.
-  for (const section of ['Engine Architecture', 'Bolt-On Parts', 'Forced Induction', 'Exhaust']) {
+  for (const section of ['Engine Architecture', 'Induction', 'Exhaust']) {
     fireEvent.click(screen.getByText(section));
     collect();
   }

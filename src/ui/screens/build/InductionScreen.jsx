@@ -1,15 +1,17 @@
 /**
- * BUILD > Forced Induction.
+ * BUILD > Induction.
  *
- * Turbo kit toggle, turbine and compressor sizing, intercooler, and the boost target
- * curve editor: eight RPM columns as bar buttons, tap one to select it, then edit it
- * below with full-width controls.
+ * Turbo kit toggle, turbine and compressor sizing, intercooler, the boost target
+ * curve editor (eight RPM columns as bar buttons, tap one to select it, then edit it
+ * below with full-width controls), and the Cold Air Intake bolt-on — the one
+ * installable part whose physics live on the induction side rather than the exhaust
+ * side. See ExhaustScreen for the other two (Cat-Back Exhaust, Long-Tube Headers).
  */
 
 import { Wind } from 'lucide-react';
 import React from 'react';
 
-import { COMPRESSOR_OPTS, RPM, TURBINE_OPTS, clamp } from '../../../sim/index.js';
+import { COMPRESSOR_OPTS, MOD_INFO, RPM, TURBINE_OPTS, clamp } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { PickList } from '../../components/PickList.jsx';
@@ -21,7 +23,12 @@ import { Toggle } from '../../primitives/Toggle.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
-import styles from './TurboScreen.module.css';
+import styles from './InductionScreen.module.css';
+
+// `boltons` dissolved into this screen and ExhaustScreen — this is the induction
+// half. Keep reading label/blurb off MOD_INFO rather than copying the strings, or
+// this list forks from the catalogue it is meant to be a view onto.
+const MODS_HERE = ['intake'];
 
 /**
  * @param {object} props
@@ -29,7 +36,7 @@ import styles from './TurboScreen.module.css';
  * @param {(section: string) => void} props.onToggle opens or closes a BUILD section
  * @returns {React.ReactElement}
  */
-export function TurboScreen({ active, onToggle }) {
+export function InductionScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
   const {
     turboOn, boostCurve, boostSel, turbineIdx, turbineCount, compressorIdx, mods,
@@ -44,16 +51,42 @@ export function TurboScreen({ active, onToggle }) {
     value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
   });
 
+  const installMod = (key) => {
+    if (mods[key]) return;
+    // Fitting a part changes airflow but does NOT edit your logged VE table — the
+    // VE tab will show the gap and let you accept it once you understand why.
+    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
+  };
+
   const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
   const peakOverCeiling = Math.max(...boostCurve) > ceiling;
   const selectedOverCeiling = boostCurve[boostSel] > ceiling;
 
   return (
     <BuildSection
-      active={active} onClick={() => onToggle('turbo')}
-      icon={Wind} label="Forced Induction"
+      active={active} onClick={() => onToggle('induction')}
+      icon={Wind} label="Induction"
       sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
     >
+      {/* The card markup below is verbatim out of the dissolved BoltonsScreen: a plain
+          `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
+          visually with `data-installed` rather than a `Button` variant — see the brief
+          for why this stays a plain button. */}
+      <div className={styles.list}>
+        {MODS_HERE.map((key) => (
+          <button
+            key={key} onClick={() => installMod(key)} disabled={mods[key]}
+            className={styles.card} data-installed={mods[key] ? 'true' : 'false'}
+          >
+            <div className={styles.cardHead}>
+              <span className={styles.cardLabel} data-installed={mods[key] ? 'true' : 'false'}>{MOD_INFO[key].label}</span>
+              <span className={styles.cardStatus} data-installed={mods[key] ? 'true' : 'false'}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
+            </div>
+            <div className={styles.cardBlurb}>{MOD_INFO[key].blurb}</div>
+          </button>
+        ))}
+      </div>
+
       <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
 
       <div className={styles.subPanel} data-open={turboOn ? 'true' : 'false'}>
