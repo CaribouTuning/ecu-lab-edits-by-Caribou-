@@ -1,6 +1,6 @@
 /* BUILD > Exhaust.
  *
- * `.resetRow`/`.list`/`.card*` below are carried over verbatim from the dissolved
+ * `.list`/`.card*` below are carried over verbatim from the dissolved
  * BoltonsScreen's stylesheet — `installed` is switched with a data attribute the
  * same way HOME's screens switch theirs, and the card's `disabled` attribute is the
  * accessibility signal, this is the visual one. */
@@ -22,13 +22,6 @@
 
 /* Prose emphasis inside the ExpandableInfo panel. */
 .em { color: var(--ink); }
-
-.resetRow {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 14px;
-  margin-bottom: 9px;
-}
 
 .list {
   display: flex;

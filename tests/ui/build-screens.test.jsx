@@ -44,7 +44,7 @@ const veAdvice = { inSync: true, maxAbs: 0 };
 describe('EngineScreen', () => {
   it('reads the engine config off the store rather than off a prop', () => {
     mount(
-      <EngineScreen active onToggle={noop} engineDerived={engineDerived} activePreset={null} veAdvice={veAdvice} />,
+      <EngineScreen active onToggle={noop} engineDerived={engineDerived} activePreset={null} veAdvice={veAdvice} onResetToStock={noop} />,
     );
     // Configuration comes straight from the store's default build, not a prop.
     expect(screen.getByRole('group', { name: 'Configuration' })).toBeTruthy();
@@ -54,7 +54,7 @@ describe('EngineScreen', () => {
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
     mount(
-      <EngineScreen active={false} onToggle={onToggle} engineDerived={engineDerived} activePreset={null} veAdvice={veAdvice} />,
+      <EngineScreen active={false} onToggle={onToggle} engineDerived={engineDerived} activePreset={null} veAdvice={veAdvice} onResetToStock={noop} />,
     );
     fireEvent.click(screen.getByText('Engine Architecture'));
     expect(onToggle).toHaveBeenCalledWith('engine');
@@ -62,10 +62,26 @@ describe('EngineScreen', () => {
 
   it('raises the stale-VE callout only when the shell says the tables are out of sync', () => {
     mount(
-      <EngineScreen active onToggle={noop} engineDerived={engineDerived} activePreset={null} veAdvice={{ inSync: false, maxAbs: 12 }} />,
+      <EngineScreen active onToggle={noop} engineDerived={engineDerived} activePreset={null} veAdvice={{ inSync: false, maxAbs: 12 }} onResetToStock={noop} />,
     );
     expect(screen.getByText(/Your VE table is now stale/)).toBeTruthy();
   });
+  it('calls the shell-owned reset rather than doing it itself', () => {
+    // RESET ALL TO STOCK lives beside the preset picker: both set the WHOLE build to a
+    // known state. EngineScreen dispatches nothing of its own for it — the shell owns
+    // the reset because it rebuilds the VE table from `hwForVe`, which several other
+    // screens and the sim payload also read.
+    const onResetToStock = vi.fn();
+    mount(
+      <EngineScreen
+        active onToggle={noop} engineDerived={engineDerived} activePreset={null}
+        veAdvice={veAdvice} onResetToStock={onResetToStock}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
+    expect(onResetToStock).toHaveBeenCalledTimes(1);
+  });
+
 });
 
 describe('InductionScreen', () => {
@@ -145,13 +161,13 @@ describe('ExhaustScreen', () => {
     // could ever produce via `idealExhaustDiameter`. If the screen silently
     // re-derived the value instead of trusting the prop, this would fail.
     const ideal = 7.77;
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} onResetToStock={noop} />);
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} />);
     expect(screen.getByText(new RegExp(`~${ideal.toFixed(2)} in`))).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
-    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} onResetToStock={noop} />);
+    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
     fireEvent.click(screen.getByText('Exhaust'));
     expect(onToggle).toHaveBeenCalledWith('exhaust');
   });
@@ -160,21 +176,13 @@ describe('ExhaustScreen', () => {
     // The exhaust half of the dissolved BoltonsScreen — both remaining cards land
     // here. Clicking each in turn and reading `data-installed` back off the DOM
     // catches either card losing its `installMod` wiring on the move.
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} onResetToStock={noop} />);
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} />);
     fireEvent.click(screen.getByText(MOD_INFO.exhaust.label).closest('button'));
     fireEvent.click(screen.getByText(MOD_INFO.headers.label).closest('button'));
     expect(screen.getByText(MOD_INFO.exhaust.label).closest('button').getAttribute('data-installed')).toBe('true');
     expect(screen.getByText(MOD_INFO.headers.label).closest('button').getAttribute('data-installed')).toBe('true');
   });
 
-  it('calls the shell-owned reset rather than doing it itself', () => {
-    // RESET ALL TO STOCK moved here with the mod cards — ExhaustScreen dispatches
-    // nothing of its own for it, only calls the prop the shell passed down.
-    const onResetToStock = vi.fn();
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} onResetToStock={onResetToStock} />);
-    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
-    expect(onResetToStock).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('the dissolved Bolt-On Parts section', () => {
@@ -188,7 +196,7 @@ describe('the dissolved Bolt-On Parts section', () => {
     mount(<InductionScreen active onToggle={noop} />);
     const onInduction = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     cleanup();
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={2.5} onResetToStock={noop} />);
+    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={2.5} />);
     const onExhaust = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     expect([...onInduction, ...onExhaust].sort()).toEqual(Object.keys(MOD_INFO).sort());
   });

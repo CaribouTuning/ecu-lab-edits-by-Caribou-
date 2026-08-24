@@ -844,6 +844,7 @@ export function EcuLabApp() {
             <EngineScreen
               active={buildSection === 'engine'} onToggle={toggleBuildSection}
               engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
+              onResetToStock={resetToStock}
             />
             <InductionScreen
               active={buildSection === 'induction'} onToggle={toggleBuildSection}
@@ -853,7 +854,7 @@ export function EcuLabApp() {
             />
             <ExhaustScreen
               active={buildSection === 'exhaust'} onToggle={toggleBuildSection}
-              idealExhaustDia={idealExhaustDia} onResetToStock={resetToStock}
+              idealExhaustDia={idealExhaustDia}
             />
           </div>
         )}

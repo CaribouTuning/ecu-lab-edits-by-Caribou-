@@ -9,21 +9,14 @@
  * `idealExhaustDia` is the shell's: it also feeds `exhaustDiaError`, which several
  * other consumers (the score breakdown, the dyno payload) read, so the shell keeps
  * owning the one computation rather than this screen recomputing half of it.
- *
- * `onResetToStock` is also the shell's: it rebuilds the VE table from `hwForVe`, a
- * derivation several other screens and the sim payload also read, so the shell keeps
- * owning both the derivation and the dispatch built on top of it. It lands on this
- * screen (rather than InductionScreen) because it has to live somewhere, and this is
- * the BoltonsScreen-descended screen whose prop shape wasn't pinned to Turbo's.
  */
 
-import { Flame, RotateCcw } from 'lucide-react';
+import { Flame } from 'lucide-react';
 import React from 'react';
 
 import { EXHAUST_DIA_OPTS, MOD_INFO } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
-import { Button } from '../../primitives/Button.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
@@ -41,13 +34,9 @@ const MODS_HERE = ['exhaust', 'headers'];
  * @param {(section: string) => void} props.onToggle opens or closes a BUILD section
  * @param {number} props.idealExhaustDia the shop-rule ideal diameter for this
  *   build's displacement and boost, in inches
- * @param {() => void} props.onResetToStock rebuilds the calibration for stock mods
- *   against the currently-fitted hardware
  * @returns {React.ReactElement}
  */
-export function ExhaustScreen({
-  active, onToggle, idealExhaustDia, onResetToStock,
-}) {
+export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
   const [build, dispatch] = useBuild();
   const { exhaustDiaIdx, turboOn, boostCurve, mods } = build;
 
@@ -79,11 +68,6 @@ export function ExhaustScreen({
           `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
           visually with `data-installed` rather than a `Button` variant — see the brief
           for why this stays a plain button. */}
-      <div className={styles.resetRow}>
-        <Button variant="quiet" size="sm" onClick={onResetToStock}>
-          <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
-        </Button>
-      </div>
       <div className={styles.list}>
         {MODS_HERE.map((key) => (
           <button
