@@ -1,21 +1,6 @@
-// @ts-nocheck
-/*
- * This file opts out of type checking, deliberately and temporarily.
- *
- * `tsconfig.json` leaves EcuLab.jsx out of `include` because it is still one large
- * untyped component. That keeps it from being checked as a ROOT file — but `include`
- * and `exclude` only choose root files. tsc still checks anything a root file imports
- * transitively, so the moment a test under `tests/` imports this module, its ~26
- * pre-existing type errors fail `npm run typecheck`.
- *
- * This directive is what actually holds the line the tsconfig comment describes, and it
- * lets the characterisation tests import the component normally instead of hiding it
- * from tsc behind a dynamic import.
- *
- * It disappears with the file: PR 3 splits this component into typed screens.
- */
 /**
- * ECU LAB — the application shell and screens.
+ * ECU LAB — the composition root: store provider, shell, and the route switch that
+ * hands each tab's markup to its screen components.
  *
  * WHAT THIS FILE IS
  * Presentation only. It reads the simulation's output but contains no physics — if
@@ -23,12 +8,16 @@
  * instead. That separation is what keeps the physics testable in plain Node.
  *
  * LAYOUT
- * Shared primitives first, then the screens. Screens are plain conditional blocks
- * inside one component, each marked with a banner comment.
+ * This used to be one large single-component app; it has been split into
+ * `ui/primitives/`, `ui/screens/` and `ui/AppShell.jsx`. What remains here is the
+ * store setup, the pieces still shared across more than one screen (`JourneyBanner`,
+ * `Tach`, the tutorial content), and the top-level component that reads the route and
+ * renders the right screen into the shell.
  *
- * KNOWN WORK IN PROGRESS
- * This file is still the original single-component app. Decomposing it into
- * `ui/primitives/` and `ui/screens/` is tracked as follow-up work — see CONTRIBUTING.
+ * TYPE CHECKING
+ * No longer opts out. This file used to carry `@ts-nocheck` while it was one large
+ * untyped component; now that it is a thin, typed root, it is checked like everything
+ * else under `npm run typecheck`.
  */
 
 import React, { useMemo, useEffect, useRef, useCallback } from 'react';
@@ -219,10 +208,10 @@ export function EcuLabApp() {
   // cursor on tab/view navigation, which is nav-adjacent and stays here.
   // The SESSION slice — everything about the current run and career progress that is
   // neither hardware nor calibration. Same destructuring shape again, same `dispatch`.
-  // What is left as local `useState` below is deliberate: `appView`, `tab`,
-  // `buildSection`, `tuneView`, `dynoView` and `dashSection` are VIEW state (which
-  // screen and which accordion panel is open), which PR 3 moves when it splits this
-  // component into screens.
+  // There is no local `useState` left in this file: `appView`, `tab`, `buildSection`,
+  // `tuneView`, `dynoView` and `dashSection` were VIEW state (which screen and which
+  // accordion panel is open) and have all moved into the URL — see `useRoute()` above
+  // and `route.section`, narrowed per tab, just below.
   const [session] = useSession();
   const {
     loadKpa, soundOn, journeyStep, throttleInput, health,
