@@ -285,12 +285,23 @@ Add to `tests/ui/tune-screens.test.jsx`, inside the existing describes:
 
 ```jsx
 it('mounts exactly one advisor panel', () => {
-  mount(<SparkScreen calAdvice={emptyCalAdvice} />);
+  mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
   expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
 });
 ```
 
-Use the file's existing `mount` helper and its existing fabricated advice objects. Write the equivalent in the `AirflowScreen` and `FuelScreen` describes.
+`QUIET_CAL_ADVICE` is the file's existing blank fixture (`tests/ui/tune-screens.test.jsx:78`) — use it and the existing `mount` helper, and write the equivalent in the `AirflowScreen` and `FuelScreen` describes.
+
+**Extend that fixture in this task.** It is currently
+`{ overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] }` — the four
+category arrays and nothing else, which was sufficient while the screens only read
+those four. `sparkReport` and `fuelReport` also read `spark` and `fuelAdv`, so add
+`spark: []` and `fuelAdv: []` to it now, matching the real shape
+`calibrationAdvice` returns. Do this by growing the fixture, **not** by making the
+report functions tolerate a missing array: a report that quietly copes with
+`calAdvice.spark === undefined` would also quietly cope with the shell forgetting to
+pass it, and the panel would show "never reached by this build" for every cell in a
+correctly-built table.
 
 - [ ] **Step 4: Run and verify**
 
