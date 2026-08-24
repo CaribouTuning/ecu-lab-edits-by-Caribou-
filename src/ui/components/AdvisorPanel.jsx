@@ -40,16 +40,18 @@ function AdvisorPanelImpl({ headline, tone, children }) {
       data-open={open ? 'true' : 'false'}
       data-tone={tone}
     >
-      <button
-        type="button"
-        className={styles.summary}
-        aria-expanded={open ? 'true' : 'false'}
-        onClick={() => setOpen((v) => !v)}
-      >
+      <div className={styles.head}>
         <span className={styles.eyebrow}>ADVISOR</span>
         <span className={styles.headline}>{headline}</span>
         <ChevronDown size={15} className={styles.chevron} aria-hidden="true" />
-      </button>
+        <button
+          type="button"
+          className={styles.toggle}
+          aria-expanded={open ? 'true' : 'false'}
+          aria-label={open ? 'Hide advisor detail' : 'Show advisor detail'}
+          onClick={() => setOpen((v) => !v)}
+        />
+      </div>
       <div className={styles.body}>{children}</div>
     </section>
   );

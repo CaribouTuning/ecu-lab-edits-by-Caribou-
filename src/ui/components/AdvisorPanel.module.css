@@ -2,6 +2,7 @@
    that. Chrome only — see the header comment in AdvisorPanel.jsx. */
 
 .panel {
+  --advisor-accent: var(--ink2);
   border: 1px solid var(--line);
   border-left: 3px solid var(--advisor-accent);
   border-radius: 10px;
@@ -9,18 +10,27 @@
   padding: 12px 13px;
 }
 
-.summary {
+.head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-sm);
   width: 100%;
+}
+
+.toggle {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   padding: 0;
   border: none;
   background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
   cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
 }
 
 .eyebrow {
@@ -42,7 +52,7 @@
   transition: transform 0.15s ease;
 }
 
-[data-open='true'] .chevron {
+.panel[data-open='true'] .chevron {
   transform: rotate(180deg);
 }
 
@@ -54,23 +64,23 @@
   line-height: 1.55;
 }
 
-[data-open='true'] .body {
+.panel[data-open='true'] .body {
   display: block;
 }
 
-[data-tone='danger'] {
+.panel[data-tone='danger'] {
   --advisor-accent: var(--danger);
 }
 
-[data-tone='warn'] {
+.panel[data-tone='warn'] {
   --advisor-accent: var(--warn);
 }
 
-[data-tone='ok'] {
+.panel[data-tone='ok'] {
   --advisor-accent: var(--ok);
 }
 
-[data-tone='info'] {
+.panel[data-tone='info'] {
   --advisor-accent: var(--cyan);
 }
 
@@ -83,8 +93,8 @@
     top: var(--sp-xl);
   }
 
-  .summary {
-    pointer-events: none;
+  .toggle {
+    display: none;
   }
 
   .chevron {
