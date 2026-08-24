@@ -187,7 +187,22 @@ function AdvisorPanelImpl({ headline, tone, children }) {
 export const AdvisorPanel = React.memo(AdvisorPanelImpl);
 ```
 
-**Note on the accessible name:** the toggle's name comes from its text content, which begins with "ADVISOR" — that is what `getByRole('button', { name: /advisor/i })` matches. If you change the eyebrow text, change the test's query with it.
+**CORRECTION, applied during Task 1's review.** The markup above shipped and was then
+fixed, because it was wrong in a way the plan did not foresee. Wrapping the eyebrow and
+headline in the toggle button, and neutralising that button at >=560px with
+`pointer-events: none`, meant that on every desktop viewport the panel announced
+`aria-expanded="false"` while its body was fully visible — the wrong state, which is worse
+than the missing state issue #81 was filed about. It also left a focusable button that did
+nothing. jsdom applies no CSS, so the task's own accessibility test never reached the width
+where its claim became false.
+
+The shipped shape: eyebrow, headline and chevron live in an always-rendered `.head`; the
+toggle is a transparent button positioned over it (`inset: 0`) carrying an `aria-label` and
+`aria-expanded`; at >=560px that button gets `display: none`, which removes it from the
+accessibility tree along with its now-meaningless state. The headline text therefore exists
+in the DOM exactly once at every width. Later tasks depend only on the props
+(`headline`, `tone`, `children`) and on `data-testid="advisor-panel"`, neither of which
+changed.
 
 - [ ] **Step 4: Write the stylesheet**
 
