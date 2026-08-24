@@ -292,6 +292,12 @@ describe('resetting the calibration to stock', () => {
    * @returns {number[][]}
    */
   function veAfterReset(withIntake) {
+    // This helper runs TWICE inside one test, so the global per-test hash reset in
+    // tests/setup.js is not enough: navigation lives in the URL now, and the second
+    // call would otherwise boot straight into wherever the first call left off —
+    // past the start screen the line below clicks. Setup only; nothing asserted here
+    // changes.
+    window.location.hash = '';
     /** @type {*} */
     let tune;
     render(

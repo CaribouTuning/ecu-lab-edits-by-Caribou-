@@ -17,5 +17,9 @@ export default defineConfig({
     // the physics suite down for everyone.
     environment: 'node',
     include: ['tests/**/*.test.{js,jsx}'],
+    // Resets `window.location.hash` before every test. Navigation lives in the URL
+    // now, and jsdom shares one `window` across a whole file, so without this each
+    // test inherits the previous one's route. See tests/setup.js.
+    setupFiles: ['./tests/setup.js'],
   },
 });

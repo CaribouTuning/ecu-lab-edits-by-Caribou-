@@ -43,6 +43,17 @@ describe('Panel', () => {
     const { container } = render(<Panel style={{ marginBottom: 13 }}>x</Panel>);
     expect(/** @type {HTMLElement} */ (container.firstChild).style.marginBottom).toBe('13px');
   });
+
+  it('adds a caller-supplied className instead of replacing its own', () => {
+    // `className` is documented passthrough ("Anything not named above ... lands
+    // on the element"), but used to live in `...rest`, which spreads after the
+    // computed class list and so overwrote it outright — a caller following the
+    // docblock got an unstyled panel with no test failure.
+    render(<Panel className="callerClass">x</Panel>);
+    const el = screen.getByText('x');
+    expect(el.className).toContain(panelStyles.panel);
+    expect(el.className).toContain('callerClass');
+  });
 });
 
 describe('Eyebrow', () => {

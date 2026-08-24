@@ -18,7 +18,12 @@ import styles from './Panel.module.css';
  * @param {PanelProps & React.HTMLAttributes<HTMLDivElement>} props
  * @returns {React.ReactElement}
  */
-export function Panel({ children, tight = false, as: As = 'div', ...rest }) {
-  const className = [styles.panel, tight && styles.tight].filter(Boolean).join(' ');
-  return <As className={className} {...rest}>{children}</As>;
+export function Panel({
+  children, tight = false, as: As = 'div', className, ...rest
+}) {
+  // `className` is pulled out and merged rather than left in `...rest`, so a
+  // caller-supplied class is additive instead of clobbering the panel's own
+  // generated classes when `{...rest}` spreads after it.
+  const classes = [styles.panel, tight && styles.tight, className].filter(Boolean).join(' ');
+  return <As className={classes} {...rest}>{children}</As>;
 }
