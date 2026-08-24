@@ -84,5 +84,6 @@
      token — it is recorded here instead. 560px is the project's one
      breakpoint (small-tablet-and-up); it must be kept in sync by hand across
      every file that uses it: src/ui/screens/StartScreen.module.css,
-     src/ui/screens/TutorialScreen.module.css and src/ui/AppShell.module.css. */
+     src/ui/screens/TutorialScreen.module.css, src/ui/AppShell.module.css and
+     src/ui/components/AdvisorPanel.module.css. */
 }

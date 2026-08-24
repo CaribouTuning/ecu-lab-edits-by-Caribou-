@@ -1,0 +1,97 @@
+/* AdvisorPanel: a right-hand rail at >=560px, a tap-to-open disclosure below
+   that. Chrome only — see the header comment in AdvisorPanel.jsx. */
+
+.panel {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--advisor-accent);
+  border-radius: 10px;
+  background: var(--panel2);
+  padding: 12px 13px;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 800;
+  color: var(--ink3);
+}
+
+.headline {
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--advisor-accent);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--ink3);
+  transition: transform 0.15s ease;
+}
+
+[data-open='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  display: none;
+  margin-top: var(--sp-md);
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.55;
+}
+
+[data-open='true'] .body {
+  display: block;
+}
+
+[data-tone='danger'] {
+  --advisor-accent: var(--danger);
+}
+
+[data-tone='warn'] {
+  --advisor-accent: var(--warn);
+}
+
+[data-tone='ok'] {
+  --advisor-accent: var(--ok);
+}
+
+[data-tone='info'] {
+  --advisor-accent: var(--cyan);
+}
+
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css, which lists every file that uses it. Kept in sync by hand with
+   StartScreen.module.css, TutorialScreen.module.css and AppShell.module.css. */
+@media (min-width: 560px) {
+  .panel {
+    position: sticky;
+    top: var(--sp-xl);
+  }
+
+  .summary {
+    pointer-events: none;
+  }
+
+  .chevron {
+    display: none;
+  }
+
+  .body {
+    display: block;
+  }
+}
