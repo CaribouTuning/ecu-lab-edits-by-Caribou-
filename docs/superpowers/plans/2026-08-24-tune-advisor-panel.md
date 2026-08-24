@@ -192,7 +192,7 @@ export const AdvisorPanel = React.memo(AdvisorPanelImpl);
 - [ ] **Step 4: Write the stylesheet**
 
 Requirements, in tokens only:
-- `.panel` — bordered surface, `var(--panel-2)` background, `var(--line)` border, `10px` radius, matching the banner treatment already in `SparkScreen.module.css`.
+- `.panel` — bordered surface, `var(--panel2)` background, `var(--line)` border, `10px` radius, matching the banner treatment already in `SparkScreen.module.css`.
 - `.summary` — a full-width unstyled button row: eyebrow, headline, chevron. `.chevron` rotates 180deg when the panel is open.
 - `.body` — `display: none` by default; `[data-open="true"] .body { display: block; }`.
 - `[data-tone="danger"]` / `"warn"` / `"ok"` / `"info"` set `--advisor-accent` to `var(--danger)` / `var(--warn)` / `var(--ok)` / `var(--cyan)`; `.headline` and the panel's left border read that variable. **A local custom property is the only place tone becomes a colour** — do not write four copies of the headline rule.
