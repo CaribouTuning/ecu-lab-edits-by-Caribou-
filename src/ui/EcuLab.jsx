@@ -769,10 +769,11 @@ export function EcuLabApp() {
   // TUNE's own sub-view switcher below is unrelated: it is a second level of
   // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 've', label: 'AIR', icon: Grid3x3 },
-    { id: 'timing', label: 'SPARK', icon: Zap },
-    { id: 'afr', label: 'FUEL', icon: Droplets },
-    { id: 'ecu', label: 'ECU', icon: Fuel },
+    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3 },
+    { id: 'spark', label: 'SPARK', icon: Zap },
+    { id: 'fuel', label: 'FUEL', icon: Droplets },
+    { id: 'injectors', label: 'INJECTORS', icon: Fuel },
+    { id: 'sensors', label: 'SENSORS', icon: Activity },
   ];
 
   if (appView === 'start') {
@@ -861,13 +862,18 @@ export function EcuLabApp() {
 
         {/* ---------- TUNE: sub-view switcher for the calibration tables ---------- */}
         {tab === 'tune' && (
-          <div style={{ display: 'flex', gap: 6, padding: '14px 16px 0' }}>
+          // flexWrap + a real flex-basis (rather than the old `flex: 1` /
+          // flex-basis:0%) so five items wrap to a second row on narrow
+          // viewports instead of shrinking below their min-content width and
+          // overflowing the column. No media query needed, so this doesn't
+          // touch the hand-maintained breakpoint list in tokens.css.
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 16px 0' }}>
             {TUNE_VIEWS.map((v) => {
               const on = tuneView === v.id;
               const Icon = v.icon;
               return (
                 <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
-                  flex: 1, padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                  flex: '1 1 88px', padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
                   border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
                   color: on ? T.accInk : T.ink2,
