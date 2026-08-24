@@ -83,6 +83,6 @@
   /* Breakpoint. `@media` cannot read a custom property, so this cannot be a
      token — it is recorded here instead. 560px is the project's one
      breakpoint (small-tablet-and-up); it must be kept in sync by hand across
-     every file that uses it: src/ui/screens/StartScreen.module.css and
-     src/ui/screens/TutorialScreen.module.css. */
+     every file that uses it: src/ui/screens/StartScreen.module.css,
+     src/ui/screens/TutorialScreen.module.css and src/ui/AppShell.module.css. */
 }

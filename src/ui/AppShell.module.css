@@ -1,0 +1,227 @@
+/* The application chrome: the section nav and the status strip.
+   See AppShell.jsx for what each block is for. */
+
+.shell {
+  display: flex;
+  /* Below the breakpoint the nav is a BOTTOM bar, so the nav element comes first in
+     the DOM (a screen reader and a keyboard reach navigation before the page body)
+     and is reversed into place visually. At the breakpoint the same element becomes
+     the left sidebar and the order is already right, so the reverse is dropped. */
+  flex-direction: column-reverse;
+  flex: 1;
+  /* Without this a long tab body stretches the flex item instead of scrolling
+     inside `.content`, and the bottom nav is pushed off the viewport. */
+  min-height: 0;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  /* Lets `.engine` below actually shrink and ellipsise rather than forcing the
+     strip wider than the sidebar leaves room for. */
+  min-width: 0;
+}
+
+/* ---------- The nav ---------- */
+
+.nav {
+  display: flex;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  /* Home-indicator clearance on a phone. Zeroed at the breakpoint, where this is a
+     side rail and nothing sits under the bottom edge. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.navItem {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 9px bottom is off the spacing ramp on purpose: it is the optical match for the
+     10px top once the label's own line-height is counted. */
+  gap: 4px;
+  padding: var(--sp-md) 0 9px;
+  border: none;
+  background: none;
+  color: var(--ink3);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.navItem[aria-current='page'] { color: var(--acc-ink); }
+
+/* The active marker. Driven off `aria-current` rather than a second `active` class,
+   so the thing a sighted user sees and the thing a screen reader is told cannot
+   drift apart — the styling is not merely paired with the ARIA, it is the ARIA. */
+.navItem[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 30%;
+  left: 30%;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--acc);
+}
+
+.navLabel {
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+/* ---------- The status strip ---------- */
+
+.strip {
+  flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Capped to the same column as the content below it, so the strip's readouts line up
+   with the screen they describe instead of running to the edge of a wide display. */
+.stripInner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-lg);
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-sm) var(--sp-xl);
+}
+
+/* 11px is off the font-size ramp deliberately: this is the header's build line moved
+   here verbatim, and 10.5px (--fs-xs) is a re-size of an existing element rather than
+   the adoption of a token. */
+.engine {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink2);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.field {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sp-xs);
+}
+
+.fieldLabel {
+  color: var(--ink3);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.fieldValue {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+
+.fieldValue[data-tone='ok'] { color: var(--ok); }
+.fieldValue[data-tone='warn'] { color: var(--warn); }
+.fieldValue[data-tone='danger'] { color: var(--danger); }
+
+/* 4px tall, so the 2px radius is pinned to half its own height rather than to the
+   radius ramp; 54px wide is the width at which the bar still reads as a gauge next
+   to a two-character percentage. */
+.healthTrack {
+  width: 54px;
+  height: 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--panel2);
+}
+
+.healthFill {
+  height: 100%;
+  transition: width 0.4s;
+}
+
+.healthFill[data-tone='ok'] { background: var(--ok); }
+.healthFill[data-tone='warn'] { background: var(--warn); }
+.healthFill[data-tone='danger'] { background: var(--danger); }
+
+.run {
+  flex-shrink: 0;
+  color: var(--ok);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+/* The strip's two icon buttons (Tutorial, Repair engine). 6px is off the spacing
+   ramp on purpose: it is the header's original gap, carried over verbatim rather
+   than snapped to --sp-xs (3px) or --sp-sm (7px). */
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* ---------- The content column ---------- */
+
+/* The scroller AND the cap: one element, exactly as the shell carried it before this
+   file existed (see tokens.js's contentMax comment for the 1100px reasoning). The
+   header, nav and strip stay full-width chrome rather than letterboxing with it. */
+.content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--content-max);
+  min-height: 0;
+  margin: 0 auto;
+  overflow-y: auto;
+}
+
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css, which lists every file that uses it. Kept in sync by hand with
+   StartScreen.module.css and TutorialScreen.module.css.
+
+   This is the whole responsive story: the bottom bar becomes a side rail. A left
+   sidebar on a phone would eat a third of the width for four labels, and a bottom
+   bar on a desktop is a phone affordance on a machine with a pointer. */
+@media (min-width: 560px) {
+  .shell { flex-direction: row; }
+
+  .nav {
+    flex-direction: column;
+    width: 76px;
+    padding-top: var(--sp-md);
+    padding-bottom: 0;
+    border-top: none;
+    border-right: 1px solid var(--line);
+  }
+
+  .navItem {
+    flex: 0 0 auto;
+    padding: var(--sp-lg) 0;
+  }
+
+  /* The marker rotates with the rail: a top edge under a bottom bar, a leading edge
+     beside a side rail. */
+  .navItem[aria-current='page']::before {
+    top: 20%;
+    right: auto;
+    bottom: 20%;
+    left: 0;
+    width: 2px;
+    height: auto;
+    border-radius: 0 2px 2px 0;
+  }
+}

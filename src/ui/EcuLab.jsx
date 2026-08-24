@@ -33,8 +33,8 @@
 
 import React, { useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  Gauge, Grid3x3, Zap, Droplets, Activity, Play, Info,
-  Wrench, Settings, TrendingUp, Fuel,
+  Grid3x3, Zap, Droplets, Activity, Play,
+  Settings, TrendingUp, Fuel,
 } from 'lucide-react';
 
 import {
@@ -47,9 +47,10 @@ import {
   deriveEngine, idealExhaustDiameter, interp2, presetById,
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
-import { T, statusColor, utilisationColor } from './theme.js';
+import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
+import { AppShell } from './AppShell.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
@@ -395,7 +396,19 @@ export function EcuLabApp() {
   const toggleDashSection = makeToggleSection('dash');
   const toggleBuildSection = makeToggleSection('build');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
-  const changeTab = (t) => { goTab(t); setSelection(null); };
+  // `AppShell`'s `SideNav` is `React.memo`'d and reads no store, so at 20 Hz it only
+  // stays skipped if `onNavigate` is referentially stable — see AppShell.jsx's header.
+  // `goTab`/`setSelection` above are plain closures rebuilt every render, so calling
+  // them from here would still make a new `changeTab` on every render even inside a
+  // `useCallback`; the body is inlined against `navigate` and `dispatch` instead,
+  // which are each stable for the life of the store (see the `[dispatch]` and
+  // `[navigate]` notes elsewhere in this file), so this closure is genuinely stable
+  // for the component's life, the same guarantee `makeToggleSection` gives its
+  // per-tab closures above.
+  const changeTab = useCallback((t) => {
+    navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
+    dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
+  }, [navigate, dispatch]);
 
   const resetToStock = () => {
     // Wipes the calibration back to a generic stock baseline — which, if a factory
@@ -753,22 +766,18 @@ export function EcuLabApp() {
     };
   }, [tab]);
 
+  // `engineName`/`overallColor` are gone: both were the header's, and the header is
+  // gone with them — `StatusStrip` in AppShell.jsx now derives the same figures from
+  // the store itself rather than being handed them from here (see that file's header
+  // for why it reads the store directly instead of taking props). `overallHealth`
+  // stays: HealthScreen below still reads it as a prop.
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
-  const overallColor = statusColor(overallHealth);
   const activePreset = presetId ? presetById(presetId) : null;
-  const engineName = activePreset
-    ? activePreset.name
-    : `${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
 
-  // Four top-level destinations instead of seven. The three tuning tables and the
-  // fuel/ECU controls now live under TUNE as sub-views — same depth, far less to
-  // scan, and much bigger touch targets.
-  const TABS = [
-    { id: 'dash', label: 'HOME', icon: Gauge },
-    { id: 'build', label: 'BUILD', icon: Settings },
-    { id: 'tune', label: 'TUNE', icon: Grid3x3 },
-    { id: 'dyno', label: 'DYNO', icon: Activity },
-  ];
+  // The four top-level destinations moved into AppShell.jsx's NAV_ITEMS — one
+  // definition for the section nav rather than this file's copy and the shell's.
+  // TUNE's own sub-view switcher below is unrelated: it is a second level of
+  // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
     { id: 've', label: 'AIR', icon: Grid3x3 },
     { id: 'timing', label: 'SPARK', icon: Zap },
@@ -797,44 +806,11 @@ export function EcuLabApp() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '13px 16px 12px', borderBottom: `1px solid ${T.line}`, background: T.panel }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: 2, color: T.accInk, fontWeight: 800 }}>CARIBOU TUNING</div>
-            <div style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: 0.2 }}>ECU Lab</div>
-            <div style={{ fontSize: 11, color: T.ink2, marginTop: 3, fontFamily: T.mono }}>
-              {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
-                button whose accessible name depends on the tooltip surviving. Note
-                the lower-case names — the start screen's TUTORIAL button is queried
-                by exact name and must stay the only match. */}
-            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={goTutorial}>
-              <Info size={16} aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={repairEngine}>
-              <Wrench size={16} aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
-          <div style={{ flex: 1, height: 4, background: T.panel2, borderRadius: 2, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-            <div style={{ width: `${overallHealth}%`, height: '100%', background: overallColor, transition: 'width .4s' }} />
-          </div>
-          <span style={{ fontSize: 10, color: overallColor, fontWeight: 800, fontFamily: T.mono }}>{Math.round(overallHealth)}%</span>
-          {live.running && <span style={{ fontSize: 9.5, color: T.ok, fontWeight: 800, letterSpacing: 0.5 }}>● RUNNING</span>}
-        </div>
-      </div>
-
-      {/* Content */}
-      {/* Capped so a wide display doesn't stretch every button and paragraph to the
-          screen edge (see tokens.js's contentMax comment for the 1100px reasoning).
-          Capped here, not on the root at the top of this render, so the header above
-          and the bottom nav below stay full-width chrome rather than letterboxing. */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', width: '100%', maxWidth: 'var(--content-max)', margin: '0 auto' }}>
+      {/* The nav, the status strip and the capped content column are all `AppShell`'s
+          now — see AppShell.jsx for what each owns and why. This outer div stays: it
+          is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
+          not chrome AppShell has any opinion about. */}
+      <AppShell route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine}>
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
         {/* One component per section, each reading the store for itself. `live` is read
             ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than
@@ -1033,26 +1009,7 @@ export function EcuLabApp() {
             )}
           </div>
         )}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{ display: 'flex', borderTop: `1px solid ${T.line}`, background: T.panel, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => changeTab(t.id)} style={{
-              flex: 1, padding: '10px 0 9px', background: 'none', border: 'none', position: 'relative',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              color: active ? T.accInk : T.ink3,
-            }}>
-              {active && <div style={{ position: 'absolute', top: 0, left: '30%', right: '30%', height: 2, background: T.acc, borderRadius: '0 0 2px 2px' }} />}
-              <Icon size={17} />
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.3 }}>{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      </AppShell>
     </div>
   );
 }

@@ -224,8 +224,15 @@ describe('the Button call sites in the shell and its screens', () => {
   // shared component with its own DONE button) there rather than into any one screen
   // — the same reasoning as `screens/`: a call site that moves out of EcuLab.jsx into
   // a shared component must not quietly stop being counted.
+  //
+  // `src/ui/AppShell.jsx` joined the same way: wiring the app shell moved the header's
+  // Tutorial and Repair-engine buttons out of EcuLab.jsx and into the strip
+  // `AppShell.jsx` renders, so a scan that stopped at `screens/`/`components/` would
+  // undercount by exactly those two — not because a Button was deleted, but because
+  // the file holding it is a third kind of home this test did not yet know about.
   const sources = [
     readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8'),
+    readFileSync(new NodeURL('../../src/ui/AppShell.jsx', import.meta.url), 'utf8'),
     ...readdirSync(new NodeURL('../../src/ui/screens/', import.meta.url), { recursive: true, withFileTypes: true })
       .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
       .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
@@ -286,9 +293,13 @@ describe('the Button call sites in the shell and its screens', () => {
     // across the shell, the screens and (since TUNE's split) the shared components
     // rather than dropping to what is left in the shell. TUNE's own extraction moved
     // three call sites (VE's ACCEPT RE-LOGGED VALUES, ECU's RESCALE, and
-    // SelectionDock's DONE) but deleted none, so the total stays 23. Raise it again
-    // when a screen or shared component adds one; lowering it is how this stops
-    // guarding anything.
+    // SelectionDock's DONE) but deleted none, so the total stays 23.
+    //
+    // Wiring `AppShell` moved two more (Tutorial, Repair engine) out of EcuLab.jsx and
+    // into AppShell.jsx, which is why that file joined `sources` above — the total is
+    // still 23 because a move nets zero, not because nothing happened. Raise the floor
+    // when a screen or shared component adds a real call site; lowering it is how this
+    // stops guarding anything.
     expect(openingTags().length).toBeGreaterThanOrEqual(23);
   });
 
