@@ -6,7 +6,7 @@ import { sparkReport } from '../../src/ui/components/advisorReports.js';
 const cell = (ri, ci, over) => ({
   ri, ci, rpm: 1000 * (ci + 1), map: 100 + ri * 20,
   current: over ? 24 : 18, suggested: 18, delta: over ? -6 : 0,
-  mbt: 22, knockCeiling: 20,
+  mbt: 22, knockCeiling: 20, knockLimited: false,
 });
 
 /** Assembles a calAdvice whose category arrays genuinely contain the cells named. */
@@ -47,6 +47,13 @@ describe('sparkReport, no selection', () => {
     expect(r.state).toBe('table-clean');
     expect(r.tone).toBe('ok');
   });
+
+  it('keeps the table-wide fall-through order, which is the reverse', () => {
+    // Under-advanced is checked first table-wide, but only past a four-cell floor,
+    // so a single under-advanced cell loses to any past-MBT cell here.
+    const r = sparkReport(advice({ under: [cell(0, 0)], past: [cell(0, 1)] }), null);
+    expect(r.state).toBe('table-past-mbt');
+  });
 });
 
 describe('sparkReport, one cell selected', () => {
@@ -84,6 +91,29 @@ describe('sparkReport, one cell selected', () => {
     expect(r.state).toBe('cell-ok');
     expect(r.tone).toBe('ok');
   });
+
+  it('names the gap past MBT', () => {
+    const c = { ...cell(2, 2), current: 25, mbt: 22 };
+    const r = sparkReport(advice({ past: [c] }), { type: 'cell', row: 2, col: 2 });
+    expect(r.headline).toBe('3.0 deg past MBT');
+  });
+
+  it('names the gap for a cell past BOTH ceilings, with MBT the lower one', () => {
+    // The exact geometry advisors.js warns about: this cell is detonating, and a
+    // classifier that ordered by which ceiling is lower would file it as merely
+    // wasteful. The existing membership test uses mbt ABOVE knockCeiling, so it
+    // never reproduces this shape.
+    const c = { ...cell(3, 4), current: 26, mbt: 18, knockCeiling: 22, knockLimited: false };
+    const r = sparkReport(advice({ over: [c] }), { type: 'cell', row: 3, col: 4 });
+    expect(r.state).toBe('cell-over');
+    expect(r.headline).toBe('4.0 deg past the knock limit');
+  });
+
+  it('names the gap for an under-advanced cell', () => {
+    const c = { ...cell(1, 1), delta: 5 };
+    const r = sparkReport(advice({ under: [c] }), { type: 'cell', row: 1, col: 1 });
+    expect(r.headline).toBe('5.0 deg below what this build allows');
+  });
 });
 
 describe('sparkReport, a row or column selected', () => {
@@ -107,5 +137,15 @@ describe('sparkReport, a row or column selected', () => {
   it('is clean when nothing in the group is flagged', () => {
     const r = sparkReport(advice({ over: [cell(1, 5, true)] }), { type: 'row', row: 3 });
     expect(r.state).toBe('group-clean');
+  });
+
+  it('puts past-MBT ahead of under-advanced within a band', () => {
+    const r = sparkReport(advice({ under: [cell(3, 0)], past: [cell(3, 1)] }), { type: 'row', row: 3 });
+    expect(r.state).toBe('group-past-mbt');
+  });
+
+  it('uses singular verb agreement for a single flagged cell', () => {
+    const r = sparkReport(advice({ over: [cell(3, 1, true)] }), { type: 'row', row: 3 });
+    expect(r.headline).toBe('1 of these cells is past the knock limit');
   });
 });

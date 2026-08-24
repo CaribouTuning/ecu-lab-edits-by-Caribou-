@@ -80,23 +80,26 @@ export function sparkReport(calAdvice, selection) {
   }
 
   if (selection) {
-    // A row or column. Same precedence as the table-wide report, scoped to the band.
+    // A row or column. Danger first as always, then severity order — past MBT
+    // before under-advanced, the reverse of the table-wide fall-through below,
+    // and with no four-cell floor: the player picked this band deliberately, so
+    // one flagged cell in it is worth saying.
     const over = countIn(overAdvanced, selection);
     if (over > 0) {
       return {
         tone: 'danger',
-        headline: `${over} of these cells are past the knock limit`,
+        headline: `${over} of these cells ${over === 1 ? 'is' : 'are'} past the knock limit`,
         state: 'group-over',
         detail: { count: over },
       };
     }
-    const under = countIn(underAdvanced, selection);
     const past = countIn(pastMbt, selection);
     if (past > 0) {
-      return { tone: 'warn', headline: `${past} of these cells are past MBT`, state: 'group-past-mbt', detail: { count: past } };
+      return { tone: 'warn', headline: `${past} of these cells ${past === 1 ? 'is' : 'are'} past MBT`, state: 'group-past-mbt', detail: { count: past } };
     }
+    const under = countIn(underAdvanced, selection);
     if (under > 0) {
-      return { tone: 'warn', headline: `${under} of these cells have advance left`, state: 'group-under', detail: { count: under } };
+      return { tone: 'warn', headline: `${under} of these cells ${under === 1 ? 'has' : 'have'} advance left`, state: 'group-under', detail: { count: under } };
     }
     return { tone: 'ok', headline: 'Nothing flagged in this band', state: 'group-clean', detail: {} };
   }
