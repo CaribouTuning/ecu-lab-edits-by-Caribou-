@@ -60,10 +60,10 @@ import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
 import { StatsScreen } from './screens/dash/StatsScreen.jsx';
-import { AfrScreen } from './screens/tune/AfrScreen.jsx';
+import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
 import { EcuScreen } from './screens/tune/EcuScreen.jsx';
-import { TimingScreen } from './screens/tune/TimingScreen.jsx';
-import { VeScreen } from './screens/tune/VeScreen.jsx';
+import { FuelScreen } from './screens/tune/FuelScreen.jsx';
+import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
@@ -203,8 +203,8 @@ export function EcuLabApp() {
   const { ve, timing, afr } = tune;
   // `tablesDirty` is read from the store directly by EngineScreen now (it is
   // `hasTuningWork()`'s one input) — nothing else in the shell reads it.
-  // `selection` itself is read from the store directly by VeScreen/TimingScreen/
-  // AfrScreen now — the shell only still needs `setSelection` below, to clear the
+  // `selection` itself is read from the store directly by AirflowScreen/SparkScreen/
+  // FuelScreen now — the shell only still needs `setSelection` below, to clear the
   // cursor on tab/view navigation, which is nav-adjacent and stays here.
   // The SESSION slice — everything about the current run and career progress that is
   // neither hardware nor calibration. Same destructuring shape again, same `dispatch`.
@@ -310,7 +310,7 @@ export function EcuLabApp() {
     [engineConfig, mods, hwForVe],
   );
 
-  // `recalcVE` moved into VeScreen — its one caller — where it dispatches off this
+  // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
   // same `veTruth`, passed down as a prop since it also feeds `calAdvice` below and
   // the dyno payload.
 
@@ -884,11 +884,11 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {tab === 'tune' && tuneView === 've' && <VeScreen veAdvice={veAdvice} veTruth={veTruth} />}
+        {tab === 'tune' && tuneView === 'airflow' && <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} />}
 
-        {tab === 'tune' && tuneView === 'timing' && <TimingScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'spark' && <SparkScreen calAdvice={calAdvice} />}
 
-        {tab === 'tune' && tuneView === 'afr' && <AfrScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'fuel' && <FuelScreen calAdvice={calAdvice} />}
 
         {tab === 'tune' && tuneView === 'ecu' && (
           <EcuScreen

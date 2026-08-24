@@ -22,10 +22,10 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
-import { AfrScreen } from '../../src/ui/screens/tune/AfrScreen.jsx';
+import { AirflowScreen } from '../../src/ui/screens/tune/AirflowScreen.jsx';
 import { EcuScreen } from '../../src/ui/screens/tune/EcuScreen.jsx';
-import { TimingScreen } from '../../src/ui/screens/tune/TimingScreen.jsx';
-import { VeScreen } from '../../src/ui/screens/tune/VeScreen.jsx';
+import { FuelScreen } from '../../src/ui/screens/tune/FuelScreen.jsx';
+import { SparkScreen } from '../../src/ui/screens/tune/SparkScreen.jsx';
 import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
 
 // jsdom has no ResizeObserver, and EcuScreen's FUEL TRIM panel mounts recharts'
@@ -54,14 +54,14 @@ function mount(node) {
   return render(<StoreProvider>{node}</StoreProvider>);
 }
 
-// A blank calAdvice — none of the four advisory arrays trip — so TimingScreen and
-// AfrScreen tests that are not exercising the advisory itself land on each
+// A blank calAdvice — none of the four advisory arrays trip — so SparkScreen and
+// FuelScreen tests that are not exercising the advisory itself land on each
 // screen's quiet default state instead of tripping over unrelated fixture noise.
 const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] };
 
-describe('VeScreen', () => {
+describe('AirflowScreen', () => {
   it('mounts the shared TuningGrid and SelectionDock with their test ids intact', () => {
-    mount(<VeScreen veAdvice={null} veTruth={[]} />);
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
     // The dock is selection-gated — nothing is selected on a fresh store — so it
     // only appears once a cell is clicked, same as inside the full app.
@@ -73,13 +73,13 @@ describe('VeScreen', () => {
 
   it('shows the shell-computed veAdvice sync gap, not one it derived itself', () => {
     // Fabricated — not a value `veRecommendations` could produce for the default
-    // store's engine, and VeScreen never imports that function itself.
+    // store's engine, and AirflowScreen never imports that function itself.
     const veAdvice = {
       inSync: false,
       maxAbs: 42.3,
       recs: [{ rpmText: 'FABRICATED 9999 RPM', text: 'fabricated advisory text', cells: ['9999@1 -> 2'] }],
     };
-    mount(<VeScreen veAdvice={veAdvice} veTruth={[]} />);
+    mount(<AirflowScreen veAdvice={veAdvice} veTruth={[]} />);
     expect(screen.getByText('42% max gap')).toBeTruthy();
     expect(screen.getByText('FABRICATED 9999 RPM')).toBeTruthy();
   });
@@ -88,7 +88,7 @@ describe('VeScreen', () => {
     // 6 rows (LOAD) x 8 cols (RPM), filled with a value no default build's VE table
     // would ever land on uniformly across every cell.
     const veTruth = Array.from({ length: 6 }, () => Array(8).fill(77));
-    mount(<VeScreen veAdvice={{ inSync: false, maxAbs: 1, recs: [] }} veTruth={veTruth} />);
+    mount(<AirflowScreen veAdvice={{ inSync: false, maxAbs: 1, recs: [] }} veTruth={veTruth} />);
     fireEvent.click(screen.getByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' }));
     // Every grid cell now reads 77 — proof the dispatched value was this exact
     // prop, not a recomputation off the store's own engineConfig/mods.
@@ -98,9 +98,9 @@ describe('VeScreen', () => {
   });
 });
 
-describe('TimingScreen', () => {
+describe('SparkScreen', () => {
   it('mounts the shared TuningGrid with its test id intact', () => {
-    mount(<TimingScreen calAdvice={QUIET_CAL_ADVICE} />);
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
   });
 
@@ -111,20 +111,20 @@ describe('TimingScreen', () => {
       overAdvanced: [{ map: 999, rpm: 9999, current: 11, suggested: 22 }],
       underAdvanced: [], pastMbt: [], wrongMix: [],
     };
-    mount(<TimingScreen calAdvice={calAdvice} />);
+    mount(<SparkScreen calAdvice={calAdvice} />);
     expect(screen.getByText('1 CELLS BEYOND THE KNOCK LIMIT')).toBeTruthy();
     expect(screen.getByText(/999 kPa \/ 9999 RPM: 11° → 22°/)).toBeTruthy();
   });
 
   it('falls through the danger/under-advanced/past-MBT states to the clean-table message when every advisory is empty', () => {
-    mount(<TimingScreen calAdvice={QUIET_CAL_ADVICE} />);
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
   });
 });
 
-describe('AfrScreen', () => {
+describe('FuelScreen', () => {
   it('mounts the shared TuningGrid with its test id intact', () => {
-    mount(<AfrScreen calAdvice={QUIET_CAL_ADVICE} />);
+    mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
   });
 
@@ -135,7 +135,7 @@ describe('AfrScreen', () => {
       overAdvanced: [], underAdvanced: [], pastMbt: [],
       wrongMix: [{ map: 888, rpm: 7777, current: 12.3, suggested: 11.1, delta: -1, delivered: 99, target: 88 }],
     };
-    mount(<AfrScreen calAdvice={calAdvice} />);
+    mount(<FuelScreen calAdvice={calAdvice} />);
     expect(screen.getByText('1 HIGH-LOAD CELLS OFF BEST POWER')).toBeTruthy();
     expect(screen.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
   });

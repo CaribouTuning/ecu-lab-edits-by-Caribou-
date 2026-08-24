@@ -19,7 +19,7 @@ import { Panel } from '../../primitives/Panel.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
-import styles from './TimingScreen.module.css';
+import styles from './SparkScreen.module.css';
 
 /** @typedef {import('../../components/TuningGrid.jsx').Selection} Selection */
 
@@ -36,7 +36,7 @@ import styles from './TimingScreen.module.css';
  * @param {CalAdvice} props.calAdvice the shell's — also read by the FUEL screen
  * @returns {React.ReactElement}
  */
-export function TimingScreen({ calAdvice }) {
+export function SparkScreen({ calAdvice }) {
   const [tune, dispatch] = useTune();
   const { timing, selection } = tune;
   /** @param {Selection|null} value */
