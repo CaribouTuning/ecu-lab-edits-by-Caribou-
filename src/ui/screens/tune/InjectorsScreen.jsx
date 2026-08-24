@@ -51,15 +51,7 @@ export function InjectorsScreen({ dutyPreview, injectorCc }) {
     <div className={styles.wrap}>
       <Eyebrow icon={Fuel}>Injectors</Eyebrow>
       {!turboOn && <Note>Naturally aspirated — no turbo installed. Add one on <b>BUILD</b> if you want boost to tune around.</Note>}
-      {/* "fuel choice", not "octane": the header strip always prints a literal
-          "N oct" fuel figure, and both characterisation.test.jsx and
-          build-store.test.jsx read it with screen.getByText(/oct/) — a second,
-          lowercase "octane" anywhere reachable from the same tree turns that
-          unrelated assertion ambiguous. This Note only mounts on TUNE > Injectors
-          with turboOn, so today it cannot collide with a BUILD-tab render, but the
-          word is avoided here too rather than leaving a landmine for whichever
-          screen next moves onto this tab. */}
-      {turboOn && <Note>Turbo hardware, fuel choice and physical injectors live on <b>BUILD</b> — this tab is ECU-side fuel calibration: injector scaling and duty cycle.</Note>}
+      {turboOn && <Note>Turbo hardware, fuel octane and physical injectors live on <b>BUILD</b> — this tab is ECU-side fuel calibration: injector scaling and duty cycle.</Note>}
 
       <div className={styles.label}>
         ECU Injector Scaling <span className={styles.subLabel}>— what the ECU thinks is fitted</span>

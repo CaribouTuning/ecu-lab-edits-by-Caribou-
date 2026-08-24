@@ -112,7 +112,13 @@ describe('the header reflects the build', () => {
     // not the point. Query by testid, not text: BUILD's accordion sections stay
     // mounted when collapsed, so a `getByText(/oct/)` also matches the Fuel System
     // section's octane explainer prose once that section exists in the DOM.
-    expect(screen.getByTestId('build-line')).toBeTruthy();
+    //
+    // Assert on the CONTENT, not just that the element exists. The retired
+    // `getByText(/oct/)` implicitly pinned that the line carries an octane figure —
+    // a bare `getByTestId(...)` would still pass with the octane segment deleted
+    // entirely, which is a weaker test than the one it replaced. Scoping to the
+    // element AND matching the figure is stronger than either.
+    expect(screen.getByTestId('build-line').textContent).toMatch(/\S+ oct\b/);
   });
 });
 
