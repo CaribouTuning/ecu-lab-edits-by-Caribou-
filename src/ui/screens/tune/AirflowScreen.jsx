@@ -12,6 +12,7 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
+import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
@@ -49,47 +50,52 @@ export function AirflowScreen({ veAdvice, veTruth }) {
   return (
     <>
       <div className={styles.wrap}>
-        <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
-        <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
-        <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} />
+        <div className={styles.main}>
+          <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
+          <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
+          <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} />
 
-        {veAdvice && (
-          veAdvice.inSync ? (
-            <div className={styles.inSyncBanner}>
-              <Info size={15} className={styles.inSyncIcon} />
-              <div>VE table matches your current hardware. Nothing to correct.</div>
-            </div>
-          ) : (
-            <div className={styles.staleBanner}>
-              <div className={styles.staleHead}>
-                <div className={styles.staleLabel}>VE OUT OF SYNC WITH HARDWARE</div>
-                <div className={styles.staleGap}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
+          {veAdvice && (
+            veAdvice.inSync ? (
+              <div className={styles.inSyncBanner}>
+                <Info size={15} className={styles.inSyncIcon} />
+                <div>VE table matches your current hardware. Nothing to correct.</div>
               </div>
-              <div className={styles.staleBody}>
-                Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
-              </div>
-              {veAdvice.recs.map((r, i) => (
-                <div key={i} className={styles.rec}>
-                  <div className={styles.recTitle}>{r.rpmText}</div>
-                  <div className={styles.recText}>{r.text}</div>
-                  <div className={styles.recCells}>{r.cells.join('   ')}</div>
+            ) : (
+              <div className={styles.staleBanner}>
+                <div className={styles.staleHead}>
+                  <div className={styles.staleLabel}>VE OUT OF SYNC WITH HARDWARE</div>
+                  <div className={styles.staleGap}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
                 </div>
-              ))}
-              {/* Was width:100%. It is the only action in this advisory box and
-                  reads as one at its own width; the box is already the full
-                  content column, so stretching it only made it wider. */}
-              <Button onClick={recalcVE} style={{ marginTop: 4 }}>
-                ACCEPT RE-LOGGED VALUES
-              </Button>
-              <div className={styles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
-            </div>
-          )
-        )}
+                <div className={styles.staleBody}>
+                  Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
+                </div>
+                {veAdvice.recs.map((r, i) => (
+                  <div key={i} className={styles.rec}>
+                    <div className={styles.recTitle}>{r.rpmText}</div>
+                    <div className={styles.recText}>{r.text}</div>
+                    <div className={styles.recCells}>{r.cells.join('   ')}</div>
+                  </div>
+                ))}
+                {/* Was width:100%. It is the only action in this advisory box and
+                    reads as one at its own width; the box is already the full
+                    content column, so stretching it only made it wider. */}
+                <Button onClick={recalcVE} style={{ marginTop: 4 }}>
+                  ACCEPT RE-LOGGED VALUES
+                </Button>
+                <div className={styles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
+              </div>
+            )
+          )}
 
-        <ExpandableInfo title="What VE actually means">
-          VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
-          <br /><br /><b className={styles.em}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — the Bolt-Ons on BUILD already move it for you when you install parts. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
-        </ExpandableInfo>
+          <ExpandableInfo title="What VE actually means">
+            VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
+            <br /><br /><b className={styles.em}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — the Bolt-Ons on BUILD already move it for you when you install parts. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
+          </ExpandableInfo>
+        </div>
+        <AdvisorPanel headline="Advisor" tone="info">
+          <p>Placeholder — filled in by the next task.</p>
+        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={ve} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value })} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />

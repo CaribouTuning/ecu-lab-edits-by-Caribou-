@@ -74,10 +74,12 @@ function OctaneProbe({ index }) {
   );
 }
 
-// A blank calAdvice — none of the four advisory arrays trip — so SparkScreen and
+// A blank calAdvice — none of the six advisory arrays trip — so SparkScreen and
 // FuelScreen tests that are not exercising the advisory itself land on each
 // screen's quiet default state instead of tripping over unrelated fixture noise.
-const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] };
+// `spark` and `fuelAdv` are here too, matching the real shape `calibrationAdvice`
+// returns, since `sparkReport` and `fuelReport` (added in later tasks) read them.
+const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [], spark: [], fuelAdv: [] };
 
 describe('AirflowScreen', () => {
   it('mounts the shared TuningGrid and SelectionDock with their test ids intact', () => {
@@ -116,6 +118,11 @@ describe('AirflowScreen', () => {
     const cells = within(grid).getAllByRole('button').filter((b) => b.textContent === '77');
     expect(cells).toHaveLength(48);
   });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
+  });
 });
 
 describe('SparkScreen', () => {
@@ -140,6 +147,11 @@ describe('SparkScreen', () => {
     mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
   });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
+  });
 });
 
 describe('FuelScreen', () => {
@@ -158,6 +170,11 @@ describe('FuelScreen', () => {
     mount(<FuelScreen calAdvice={calAdvice} />);
     expect(screen.getByText('1 HIGH-LOAD CELLS OFF BEST POWER')).toBeTruthy();
     expect(screen.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+  });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
   });
 });
 
