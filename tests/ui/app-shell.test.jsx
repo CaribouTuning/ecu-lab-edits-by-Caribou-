@@ -198,3 +198,24 @@ describe('the engine-run light', () => {
     expect(screen.queryByText('● RUNNING')).toBeNull();
   });
 });
+
+describe('the app\'s name', () => {
+  it('is still in the chrome once the player is past the start screen', () => {
+    // The regression this guards: the old hand-rolled header (deleted with it,
+    // d5d9f66) carried "CARIBOU TUNING" / "ECU Lab" as its own two lines, but
+    // StatusStrip had no equivalent — so once a player pressed START, neither
+    // string appeared anywhere in the running app. They only survived on
+    // StartScreen (pre-launch) and ErrorBoundary (crash screen), and this test
+    // renders neither of those after the click: EcuLab.jsx returns one of three
+    // disjoint subtrees keyed on `appView` ('start' | 'tutorial' | the AppShell
+    // tree), so pressing START unmounts StartScreen outright rather than merely
+    // hiding it. If AppShell's own brand block were missing, these queries would
+    // find nothing at all post-click — not a leftover match from the start screen,
+    // and ErrorBoundary is never mounted here since nothing throws.
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+
+    expect(screen.getByText('CARIBOU TUNING')).toBeTruthy();
+    expect(screen.getByText('ECU Lab')).toBeTruthy();
+  });
+});

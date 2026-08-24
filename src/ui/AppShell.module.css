@@ -96,6 +96,30 @@
   padding: var(--sp-sm) var(--sp-xl);
 }
 
+/* The maker + product name, restored from the old header this strip replaced (see
+   AppShell.jsx). Both lines sit on the font-size ramp — sized down a step from the
+   header's own scale so the pair reads as a slim strip's leading mark, not a
+   transplant of the original hero-sized wordmark. */
+.brand {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  white-space: nowrap;
+}
+
+.brandMaker {
+  color: var(--acc-ink);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.brandProduct {
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
 /* 11px is off the font-size ramp deliberately: this is the header's build line moved
    here verbatim, and 10.5px (--fs-xs) is a re-size of an existing element rather than
    the adoption of a token. */

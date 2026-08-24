@@ -218,6 +218,15 @@ export function StatusStrip({ onTutorial, onRepair }) {
   return (
     <div className={styles.strip}>
       <div className={styles.stripInner}>
+        {/* The maker + product name. The old hand-rolled header (deleted with it,
+            d5d9f66) carried these as its own two-line block; StatusStrip had no
+            equivalent, so once a player pressed START the app was nameless. Restored
+            here at the strip's leading edge, sized for a slim strip rather than a
+            transplant of the header's larger type scale — see AppShell.module.css. */}
+        <div className={styles.brand}>
+          <span className={styles.brandMaker}>CARIBOU TUNING</span>
+          <span className={styles.brandProduct}>ECU Lab</span>
+        </div>
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
             by its `oct` and split the engine name off its first `·` segment. */}
