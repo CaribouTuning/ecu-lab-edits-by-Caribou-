@@ -29,7 +29,8 @@ import { FuelScreen } from '../../src/ui/screens/tune/FuelScreen.jsx';
 import { InjectorsScreen } from '../../src/ui/screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from '../../src/ui/screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from '../../src/ui/screens/tune/SparkScreen.jsx';
-import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
+import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { StoreProvider, useBuild } from '../../src/ui/state/StoreProvider.jsx';
 
 // jsdom has no ResizeObserver, and EcuScreen's FUEL TRIM panel mounts recharts'
 // <ResponsiveContainer> once a result exists, which throws without one. Same stub
@@ -55,6 +56,22 @@ afterEach(cleanup);
  */
 function mount(node) {
   return render(<StoreProvider>{node}</StoreProvider>);
+}
+
+/**
+ * Dispatches `SET_BUILD_FIELD` directly against whatever store it is mounted
+ * under — the same pattern `StoreProvider.test.jsx`'s Probe components use.
+ * The octane picker moved to BUILD > Fuel System (Task 4), so this stands in
+ * for it in `InjectorsScreen`'s own test file without importing a BUILD screen
+ * here, dispatching the exact action `FuelSystemScreen`'s Seg would.
+ */
+function OctaneProbe({ index }) {
+  const [, dispatch] = useBuild();
+  return (
+    <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: index })}>
+      probe-set-octane
+    </button>
+  );
 }
 
 // A blank calAdvice — none of the four advisory arrays trip — so SparkScreen and
@@ -162,18 +179,30 @@ describe('InjectorsScreen', () => {
   it('derives the duty panel fuel note from the store octane selection, not a fuel prop', () => {
     // InjectorsScreen does not take a `fuel` prop at all (see the brief's
     // Interfaces block) — the duty panel's stoich note has to come from
-    // `OCTANE_OPTS[octaneIdx]` read off the store, via the same `octaneIdx` this
-    // screen already owns for its Fuel Octane `Seg`. Default octaneIdx is 91
-    // octane (stoich 14.7, note hidden below its `< 14` threshold); E85 is the
-    // only option with stoich < 14, so switching the Seg to it and seeing the
-    // note appear can only be explained by a store-driven derivation — a screen
-    // that quietly needed a `fuel` prop would render `undefined` here and throw.
-    // `/\bstoich\b/` (not `/stoich/`) so this does not false-match the octane
-    // ExpandableInfo's own prose, which says "stoichiometric" a few lines down.
-    mount(<InjectorsScreen {...quietProps} />);
+    // `OCTANE_OPTS[octaneIdx]` read off the store. The Fuel Octane `Seg` itself now
+    // lives on BUILD > Fuel System (Task 4), so `OctaneProbe` dispatches the same
+    // `SET_BUILD_FIELD` action it would, under the same StoreProvider as
+    // InjectorsScreen. Default octaneIdx is 91 octane (stoich 14.7, note hidden
+    // below its `< 14` threshold); E85 (index 3) is the only option with stoich <
+    // 14, so dispatching it and seeing the note appear can only be explained by a
+    // store-driven derivation — a screen that quietly needed a `fuel` prop would
+    // render `undefined` here and throw. `/\bstoich\b/` (not `/stoich/`) so this
+    // does not false-match the injector-scaling ExpandableInfo's own prose.
+    mount(<><OctaneProbe index={3} /><InjectorsScreen {...quietProps} /></>);
     expect(screen.queryByText(/\bstoich\b/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'E85' }));
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-octane' }));
     expect(screen.getByText('E85 stoich 9.8:1')).toBeTruthy();
+  });
+
+  it('keeps the fuel octane and physical injector picker off the injectors screen', () => {
+    // Fuel octane and physical injectors moved to BUILD > Fuel System (Task 4) —
+    // this screen keeps only the ECU-side scaling. '91' and '315cc (stock)' are
+    // the default-store option labels the Octane Seg and injector PickList would
+    // render if either control had come along with the ECU scaling instead of
+    // being left behind; if it had, these would be non-null.
+    mount(<InjectorsScreen {...quietProps} />);
+    expect(screen.queryByRole('button', { name: '91' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '315cc (stock)' })).toBeNull();
   });
 
   it('shows the shell-computed injectorCc in the scaling-mismatch warning, not INJECTOR_OPTS[injIdx].cc', () => {

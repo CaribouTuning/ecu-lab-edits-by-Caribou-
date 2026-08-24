@@ -55,6 +55,7 @@ import { DialMark } from './components/DialMark.jsx';
 import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
+import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { TurboScreen } from './screens/build/TurboScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
@@ -851,6 +852,9 @@ export function EcuLabApp() {
             />
             <TurboScreen
               active={buildSection === 'turbo'} onToggle={toggleBuildSection}
+            />
+            <FuelSystemScreen
+              active={buildSection === 'fuel'} onToggle={toggleBuildSection}
             />
             <ExhaustScreen
               active={buildSection === 'exhaust'} onToggle={toggleBuildSection}

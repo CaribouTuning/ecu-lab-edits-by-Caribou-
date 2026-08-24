@@ -1,16 +1,9 @@
-/* TUNE > Injectors (fuel system: octane, injectors, ECU injector scaling). */
+/* TUNE > Injectors (ECU-side fuel calibration: injector scaling, duty cycle). */
 
 .wrap { padding: var(--sp-xl); }
 
 .label {
   margin: 12px 0 6px;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--ink2);
-}
-
-.labelTight {
-  margin: 10px 0 6px;
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--ink2);
@@ -23,7 +16,6 @@
 
 /* Prose emphasis inside the ExpandableInfo panels. */
 .em { color: var(--ink); }
-.emAcc { color: var(--acc-ink); }
 
 .mismatchBanner {
   margin: 8px 0;

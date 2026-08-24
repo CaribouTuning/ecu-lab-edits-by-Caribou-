@@ -1,13 +1,18 @@
 /**
- * TUNE > Injectors (fuel system: octane, physical injectors, ECU injector scaling).
+ * TUNE > Injectors (ECU-side fuel calibration: injector scaling and duty cycle).
+ *
+ * Fuel octane and the physical injector choice moved to BUILD > Fuel System — what
+ * is FITTED lives there now. This screen keeps what the ECU BELIEVES is fitted (the
+ * scaling `Seg`, RESCALE) and what that belief costs at the injector (duty preview).
  *
  * `dutyPreview` and `injectorCc` are the shell's rather than this screen's own: both
  * feed the score breakdown and the dyno payload too, so the shell keeps owning them.
- * `fuel`, by contrast, is a pure lookup off `octaneIdx` — which this screen already
- * reads from the store for the Octane `Seg` — so it is derived here rather than
- * threaded down as its own prop. `dutyDangerous` has exactly one reader — this
- * screen's duty panel — so it is computed here too, off the shared `dutyPreview`,
- * rather than threaded down as its own prop.
+ * `fuel`, by contrast, is a pure lookup off `octaneIdx` — which this screen no longer
+ * has a control for, but still reads from the store for the duty panel's E85 stoich
+ * note — so it is derived here rather than threaded down as its own prop.
+ * `dutyDangerous` has exactly one reader — this screen's duty panel — so it is
+ * computed here too, off the shared `dutyPreview`, rather than threaded down as its
+ * own prop.
  */
 
 import React from 'react';
@@ -16,7 +21,6 @@ import { Fuel } from 'lucide-react';
 
 import { INJECTOR_OPTS, OCTANE_OPTS } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
-import { PickList } from '../../components/PickList.jsx';
 import { Bar } from '../../primitives/Bar.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -39,7 +43,7 @@ import styles from './InjectorsScreen.module.css';
  */
 export function InjectorsScreen({ dutyPreview, injectorCc }) {
   const [build, dispatch] = useBuild();
-  const { turboOn, octaneIdx, injIdx, ecuInjectorCc } = build;
+  const { turboOn, octaneIdx, ecuInjectorCc } = build;
   const fuel = OCTANE_OPTS[octaneIdx];
   const dutyDangerous = utilisationColor(dutyPreview) === T.danger;
 
@@ -47,18 +51,16 @@ export function InjectorsScreen({ dutyPreview, injectorCc }) {
     <div className={styles.wrap}>
       <Eyebrow icon={Fuel}>Fuel System</Eyebrow>
       {!turboOn && <Note>Naturally aspirated — no turbo installed. Add one on <b>BUILD</b> if you want boost to tune around.</Note>}
-      {turboOn && <Note>Turbo hardware and the boost target curve live on <b>BUILD</b> — this tab is fuel-side tuning: octane, injectors, and MAF/ECU.</Note>}
+      {/* "fuel choice", not "octane": the header strip always prints a literal
+          "N oct" fuel figure, and both characterisation.test.jsx and
+          build-store.test.jsx read it with screen.getByText(/oct/) — a second,
+          lowercase "octane" anywhere reachable from the same tree turns that
+          unrelated assertion ambiguous. This Note only mounts on TUNE > Injectors
+          with turboOn, so today it cannot collide with a BUILD-tab render, but the
+          word is avoided here too rather than leaving a landmine for whichever
+          screen next moves onto this tab. */}
+      {turboOn && <Note>Turbo hardware, fuel choice and physical injectors live on <b>BUILD</b> — this tab is ECU-side fuel calibration: injector scaling and duty cycle.</Note>}
 
-      <div className={styles.label}>Fuel Octane</div>
-      <Seg label="Fuel Octane" options={OCTANE_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
-      <ExpandableInfo title="What octane actually does — and what E85 costs you">
-        Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
-        <br /><br /><b className={styles.em}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b className={styles.emAcc}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
-        <br /><br />That trade — huge knock resistance, huge fuel demand — is exactly why serious E85 builds pair it with bigger injectors and a bigger pump, and why "just run E85" is not a shortcut around a fuel system.
-      </ExpandableInfo>
-
-      <div className={styles.labelTight}>Fuel Injectors</div>
-      <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />
       <div className={styles.label}>
         ECU Injector Scaling <span className={styles.subLabel}>— what the ECU thinks is fitted</span>
       </div>
