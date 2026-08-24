@@ -15,7 +15,7 @@ describe('parseRoute', () => {
   });
 
   it('reads a tab and section', () => {
-    expect(parseRoute('#/tune/timing')).toEqual({ view: 'app', tab: 'tune', section: 'timing' });
+    expect(parseRoute('#/tune/spark')).toEqual({ view: 'app', tab: 'tune', section: 'spark' });
   });
 
   it('falls back for an unknown tab rather than rendering nothing', () => {
@@ -31,6 +31,24 @@ describe('parseRoute', () => {
     expect(parseRoute('#/build/engine/')).toEqual({ view: 'app', tab: 'build', section: 'engine' });
     expect(parseRoute('#/build/engine/extra')).toEqual({ view: 'app', tab: 'build', section: 'engine' });
   });
+
+  it('routes the five TUNE sections and the four BUILD sections', () => {
+    expect(ROUTES.tune).toEqual(['airflow', 'spark', 'fuel', 'injectors', 'sensors']);
+    expect(ROUTES.build).toEqual(['engine', 'induction', 'fuel', 'exhaust']);
+  });
+
+  it('namespaces `fuel` by tab so the two never collide', () => {
+    // `fuel` is a section of BOTH tabs. They are distinct routes because the tab
+    // segment is read first — this is what makes the shared id safe rather than a bug.
+    expect(parseRoute('#/build/fuel')).toEqual({ view: 'app', tab: 'build', section: 'fuel' });
+    expect(parseRoute('#/tune/fuel')).toEqual({ view: 'app', tab: 'tune', section: 'fuel' });
+  });
+
+  it('degrades a stale deep link to the tab instead of rendering blank', () => {
+    // `#/tune/ve` was a real URL before this change. A bookmark must not break the app.
+    expect(parseRoute('#/tune/ve')).toEqual({ view: 'app', tab: 'tune', section: null });
+    expect(parseRoute('#/build/boltons')).toEqual({ view: 'app', tab: 'build', section: null });
+  });
 });
 
 describe('formatRoute', () => {
@@ -42,7 +60,7 @@ describe('formatRoute', () => {
       { view: 'start', tab: null, section: null },
       { view: 'tutorial', tab: null, section: null },
       { view: 'app', tab: 'dash', section: null },
-      { view: 'app', tab: 'tune', section: 'timing' },
+      { view: 'app', tab: 'tune', section: 'spark' },
     ];
     cases.forEach((route) => {
       expect(parseRoute(formatRoute(route))).toEqual(route);
@@ -56,7 +74,7 @@ describe('formatRoute', () => {
     expect(formatRoute({ view: 'start', tab: null, section: null })).toBe('#/');
     expect(formatRoute({ view: 'tutorial', tab: null, section: null })).toBe('#/tutorial');
     expect(formatRoute({ view: 'app', tab: 'dash', section: null })).toBe('#/dash');
-    expect(formatRoute({ view: 'app', tab: 'tune', section: 'timing' })).toBe('#/tune/timing');
+    expect(formatRoute({ view: 'app', tab: 'tune', section: 'spark' })).toBe('#/tune/spark');
   });
 
   it('round-trips every tab/section pair walked from ROUTES itself', () => {
