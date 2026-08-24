@@ -145,8 +145,9 @@
   color: var(--danger);
 }
 
-/* Carried over verbatim from the dissolved BoltonsScreen's stylesheet, along with the
-   RESET ALL TO STOCK button it lays out. */
+/* Carried over from the dissolved BoltonsScreen's stylesheet along with the RESET ALL
+   TO STOCK button it lays out. `margin-top` is the one change: on BoltonsScreen this
+   row was the first element and needed none, whereas here it follows a Note. */
 .resetRow {
   display: flex;
   justify-content: flex-end;

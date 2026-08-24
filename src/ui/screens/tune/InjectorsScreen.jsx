@@ -49,7 +49,7 @@ export function InjectorsScreen({ dutyPreview, injectorCc }) {
 
   return (
     <div className={styles.wrap}>
-      <Eyebrow icon={Fuel}>Fuel System</Eyebrow>
+      <Eyebrow icon={Fuel}>Injectors</Eyebrow>
       {!turboOn && <Note>Naturally aspirated — no turbo installed. Add one on <b>BUILD</b> if you want boost to tune around.</Note>}
       {/* "fuel choice", not "octane": the header strip always prints a literal
           "N oct" fuel figure, and both characterisation.test.jsx and
