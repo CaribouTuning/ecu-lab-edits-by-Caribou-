@@ -61,8 +61,9 @@ import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
 import { StatsScreen } from './screens/dash/StatsScreen.jsx';
 import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
-import { EcuScreen } from './screens/tune/EcuScreen.jsx';
 import { FuelScreen } from './screens/tune/FuelScreen.jsx';
+import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
+import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
@@ -340,8 +341,8 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
-  // `dutyDangerous` moved into EcuScreen — its one reader — computed there off this
-  // same `dutyPreview`, which stays here because the score breakdown and dyno
+  // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
+  // this same `dutyPreview`, which stays here because the score breakdown and dyno
   // payload below also read it.
 
   const needsMafRecal = mods.intake || turboOn;
@@ -890,12 +891,9 @@ export function EcuLabApp() {
 
         {tab === 'tune' && tuneView === 'fuel' && <FuelScreen calAdvice={calAdvice} />}
 
-        {tab === 'tune' && tuneView === 'ecu' && (
-          <EcuScreen
-            dutyPreview={dutyPreview} fuel={fuel} injectorCc={injectorCc}
-            needsMafRecal={needsMafRecal} chartData={chartData} result={result}
-          />
-        )}
+        {tab === 'tune' && tuneView === 'injectors' && <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc} />}
+
+        {tab === 'tune' && tuneView === 'sensors' && <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result} />}
 
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (

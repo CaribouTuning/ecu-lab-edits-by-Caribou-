@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * The four TUNE screens, mounted on their own.
+ * The five TUNE screens, mounted on their own.
  *
  * `characterisation.test.jsx` and `build-store.test.jsx` already drive all of this
  * through the whole app, and they are the tests that say TUNE still works. What
@@ -11,11 +11,13 @@
  * `build-screens.test.jsx` and `dash-screens.test.jsx` pin for BUILD and HOME.
  *
  * Every shell-owned prop these screens take (`veAdvice`, `veTruth`, `calAdvice`,
- * `dutyPreview`, `fuel`, `injectorCc`, `needsMafRecal`, `result`) is asserted here
- * with a value the screen's own inputs (default store state) could not have
- * produced — not a value that happens to match what the real computation would
- * give a default build, which would pass just as well if the screen quietly
- * recomputed it instead of trusting the prop.
+ * `dutyPreview`, `injectorCc`, `needsMafRecal`, `result`) is asserted here with a
+ * value the screen's own inputs (default store state) could not have produced —
+ * not a value that happens to match what the real computation would give a
+ * default build, which would pass just as well if the screen quietly recomputed
+ * it instead of trusting the prop. `InjectorsScreen` and `SensorsScreen` are what
+ * `EcuScreen` used to be before this file's PR split its two concerns apart — see
+ * their own describe blocks below for the test that proves the split is genuine.
  */
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
@@ -23,8 +25,9 @@ import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import { AirflowScreen } from '../../src/ui/screens/tune/AirflowScreen.jsx';
-import { EcuScreen } from '../../src/ui/screens/tune/EcuScreen.jsx';
 import { FuelScreen } from '../../src/ui/screens/tune/FuelScreen.jsx';
+import { InjectorsScreen } from '../../src/ui/screens/tune/InjectorsScreen.jsx';
+import { SensorsScreen } from '../../src/ui/screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from '../../src/ui/screens/tune/SparkScreen.jsx';
 import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
 
@@ -141,31 +144,36 @@ describe('FuelScreen', () => {
   });
 });
 
-describe('EcuScreen', () => {
-  const quietProps = {
-    dutyPreview: 10, fuel: { label: 'Q', stoich: 14.7, density: 0.74 }, injectorCc: 315,
-    needsMafRecal: false, chartData: [], result: null,
-  };
+describe('InjectorsScreen', () => {
+  const quietProps = { dutyPreview: 10, injectorCc: 315 };
 
   it('shows the shell-computed duty preview as dangerous only past its own threshold, not a recomputed one', () => {
     // 137 lands well past utilisationColor's own >90 danger band; nothing in
-    // EcuScreen computes duty itself, so this can only come from the prop.
-    mount(<EcuScreen {...quietProps} dutyPreview={137} />);
+    // InjectorsScreen computes duty itself, so this can only come from the prop.
+    mount(<InjectorsScreen {...quietProps} dutyPreview={137} />);
     expect(screen.getByText('Undersized for this build — expect forced lean-out')).toBeTruthy();
   });
 
   it('does not show the duty warning when the shell says duty has headroom', () => {
-    mount(<EcuScreen {...quietProps} dutyPreview={10} />);
+    mount(<InjectorsScreen {...quietProps} dutyPreview={10} />);
     expect(screen.queryByText('Undersized for this build — expect forced lean-out')).toBeNull();
   });
 
-  it('shows the shell-computed fuel, not the store octane label it could read itself', () => {
-    // EcuScreen reads `octaneIdx` off the store for the Seg control, but the
-    // stoich note reads the `fuel` PROP — a fabricated label/stoich the default
-    // store's OCTANE_OPTS[octaneIdx] could never produce proves it is not quietly
-    // recomputing `OCTANE_OPTS[octaneIdx]` for this line too.
-    mount(<EcuScreen {...quietProps} fuel={{ label: 'FABTANE', stoich: 9.9, density: 1 }} />);
-    expect(screen.getByText('FABTANE stoich 9.9:1')).toBeTruthy();
+  it('derives the duty panel fuel note from the store octane selection, not a fuel prop', () => {
+    // InjectorsScreen does not take a `fuel` prop at all (see the brief's
+    // Interfaces block) — the duty panel's stoich note has to come from
+    // `OCTANE_OPTS[octaneIdx]` read off the store, via the same `octaneIdx` this
+    // screen already owns for its Fuel Octane `Seg`. Default octaneIdx is 91
+    // octane (stoich 14.7, note hidden below its `< 14` threshold); E85 is the
+    // only option with stoich < 14, so switching the Seg to it and seeing the
+    // note appear can only be explained by a store-driven derivation — a screen
+    // that quietly needed a `fuel` prop would render `undefined` here and throw.
+    // `/\bstoich\b/` (not `/stoich/`) so this does not false-match the octane
+    // ExpandableInfo's own prose, which says "stoichiometric" a few lines down.
+    mount(<InjectorsScreen {...quietProps} />);
+    expect(screen.queryByText(/\bstoich\b/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'E85' }));
+    expect(screen.getByText('E85 stoich 9.8:1')).toBeTruthy();
   });
 
   it('shows the shell-computed injectorCc in the scaling-mismatch warning, not INJECTOR_OPTS[injIdx].cc', () => {
@@ -173,24 +181,40 @@ describe('EcuScreen', () => {
     // ecuInjectorCc default is also 315 — matched, so with the real injectorCc this
     // screen would show the "matches" note instead. A fabricated, wildly different
     // injectorCc forces the mismatch branch and proves the number in it is the prop.
-    mount(<EcuScreen {...quietProps} injectorCc={12345} />);
+    mount(<InjectorsScreen {...quietProps} injectorCc={12345} />);
     expect(screen.getByRole('button', { name: 'RESCALE ECU TO 12345cc' })).toBeTruthy();
   });
+
+  it('keeps the MAF scalar off the injectors screen', () => {
+    // The whole point of the split: `ecu` held two concerns. If the MAF controls
+    // came along with the injector markup, the split did not happen — it renamed.
+    mount(<InjectorsScreen dutyPreview={50} injectorCc={550} />);
+    expect(screen.queryByText(/MAF/i)).toBeNull();
+  });
+});
+
+describe('SensorsScreen', () => {
+  const quietProps = { needsMafRecal: false, chartData: [], result: null };
 
   it('shows the shell-computed needsMafRecal, not one derived from the store mods it also reads', () => {
     // Default store: no intake, no turbo — the screen's own mods/turboOn would say
     // recal is not needed. Forcing the prop true proves the STATUS line answers to
     // the shell's computation, not to the mods/turboOn this same screen also reads
     // for the explanatory sub-note.
-    mount(<EcuScreen {...quietProps} needsMafRecal />);
+    mount(<SensorsScreen {...quietProps} needsMafRecal />);
     expect(screen.getByText('HARDWARE CHANGED')).toBeTruthy();
   });
 
   it('shows the FUEL TRIM chart only when the shell says a pull result exists', () => {
-    mount(<EcuScreen {...quietProps} result={null} />);
+    mount(<SensorsScreen {...quietProps} result={null} />);
     expect(screen.queryByText('FUEL TRIM — LAST PULL')).toBeNull();
     cleanup();
-    mount(<EcuScreen {...quietProps} result={{ points: [] }} chartData={[{ rpm: 1500, trimPct: 2 }]} />);
+    mount(<SensorsScreen {...quietProps} result={{ points: [] }} chartData={[{ rpm: 1500, trimPct: 2 }]} />);
     expect(screen.getByText('FUEL TRIM — LAST PULL')).toBeTruthy();
+  });
+
+  it('keeps injector scaling off the sensors screen', () => {
+    mount(<SensorsScreen needsMafRecal={false} chartData={[]} result={null} />);
+    expect(screen.queryByRole('button', { name: /RESCALE ECU/ })).toBeNull();
   });
 });
