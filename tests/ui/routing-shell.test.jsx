@@ -74,7 +74,7 @@ function sectionIsOpen(label) {
   return Number.parseFloat(body.style.maxHeight) > 0;
 }
 
-const BUILD_SECTION_LABELS = ['Engine Architecture', 'Induction', 'Exhaust'];
+const BUILD_SECTION_LABELS = ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust'];
 
 describe('a deep link on a cold load', () => {
   it('renders the linked screen without anyone clicking first', () => {
@@ -83,7 +83,7 @@ describe('a deep link on a cold load', () => {
     // to hear about — someone opening the link in a fresh tab. That reads as "deep
     // links were never implemented" rather than as a bug, which is why no amount of
     // clicking-based testing finds it.
-    window.location.hash = '#/tune/timing';
+    window.location.hash = '#/tune/spark';
     mount();
 
     expect(screen.queryByRole('button', { name: 'START' })).toBeNull();
@@ -107,11 +107,11 @@ describe('clicking a tab', () => {
     expect(window.location.hash).toBe('#/build/engine');
 
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
-    expect(window.location.hash).toBe('#/tune/ve');
+    expect(window.location.hash).toBe('#/tune/airflow');
 
     // Sub-tab strips are part of the address too, one level down.
     fireEvent.click(screen.getByRole('button', { name: 'SPARK' }));
-    expect(window.location.hash).toBe('#/tune/timing');
+    expect(window.location.hash).toBe('#/tune/spark');
     expect(screen.getByText('Ignition Timing')).toBeTruthy();
   });
 
@@ -123,6 +123,31 @@ describe('clicking a tab', () => {
     for (const [tab, label] of [['dash', 'HOME'], ['build', 'BUILD'], ['tune', 'TUNE'], ['dyno', 'DYNO']]) {
       fireEvent.click(screen.getByRole('button', { name: label }));
       expect(window.location.hash).toBe(`#/${tab}/${ROUTES[tab][0]}`);
+    }
+  });
+
+  it('routes every TUNE sub-tab to the screen with a matching id, not just a highlighted button', () => {
+    // TUNE_VIEWS (the switcher's own id list, in EcuLab.jsx) and the `tuneView === '…'`
+    // mount conditions right below it are two separate hand-written lists with nothing
+    // that forces them to agree. Get one id wrong and the switcher still lights up —
+    // `on = tuneView === v.id` reads the same id it navigates to — while the section
+    // below the switcher silently renders nothing, because no mount condition matches
+    // the URL. characterisation.test.jsx's TUNE marker only proves a switcher button
+    // exists, not that a view rendered, because the switcher itself is part of the TUNE
+    // tab body: it would still be there even if every mount condition were wrong. This
+    // is the test that actually looks below the switcher for each of the five ids.
+    launch();
+    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    const views = {
+      AIRFLOW: 'Volumetric Efficiency',
+      SPARK: 'Ignition Timing',
+      FUEL: 'Air-Fuel Ratio Target',
+      INJECTORS: 'Injectors',
+      SENSORS: 'Fuel Control & MAF Scaling',
+    };
+    for (const [tabLabel, ownEyebrow] of Object.entries(views)) {
+      fireEvent.click(screen.getByRole('button', { name: tabLabel }));
+      expect(screen.getByText(ownEyebrow)).toBeTruthy();
     }
   });
 });

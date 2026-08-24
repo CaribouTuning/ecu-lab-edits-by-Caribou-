@@ -79,12 +79,12 @@ async function sweep() {
   collect();
 
   // BUILD is the landing tab, and its sections arrive collapsed.
-  for (const section of ['Engine Architecture', 'Induction', 'Exhaust']) {
+  for (const section of ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust']) {
     fireEvent.click(screen.getByText(section));
     collect();
   }
   // Fitting a part leaves the logged VE table behind the hardware, which is what
-  // puts the ACCEPT RE-LOGGED VALUES advisory on TUNE > AIR.
+  // puts the ACCEPT RE-LOGGED VALUES advisory on TUNE > AIRFLOW.
   const uninstalled = screen.getAllByRole('button')
     .filter((b) => b.textContent.includes('INSTALL') && !(/** @type {HTMLButtonElement} */ (b).disabled));
   fireEvent.click(uninstalled[0]);
@@ -92,7 +92,9 @@ async function sweep() {
 
   clickButton(/TUNE/);
   collect();
-  for (const view of ['AIR', 'SPARK', 'FUEL', 'ECU']) {
+  // INJECTORS visited last: the scaling-mismatch step right after this loop needs
+  // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
+  for (const view of ['AIRFLOW', 'SPARK', 'FUEL', 'SENSORS', 'INJECTORS']) {
     clickButton(view);
     collect();
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
@@ -103,8 +105,8 @@ async function sweep() {
       collect();
     }
   }
-  // Still on ECU: telling the ECU a different injector size is fitted raises the
-  // scaling-mismatch warning and its RESCALE button.
+  // Still on TUNE > Injectors: telling the ECU a different injector size is fitted
+  // raises the scaling-mismatch warning and its RESCALE button.
   const scaling = within(screen.getByRole('group', { name: 'ECU Injector Scaling' })).getAllByRole('button');
   fireEvent.click(scaling.find((b) => b.getAttribute('aria-pressed') === 'false'));
   collect();

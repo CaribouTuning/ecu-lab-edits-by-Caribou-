@@ -64,10 +64,15 @@ function presetPicker() {
  * The header line is `${engineName} · ${turbo} · ${octane} oct · ...`, where
  * `engineName` is the loaded preset's name if one is loaded and a derived "3.0L I6"
  * form if not. Its leading segment is therefore exactly the thing `presetId` drives.
+ *
+ * Queries by `data-testid="build-line"` rather than `getByText(/oct/)`: BUILD's
+ * accordion sections stay mounted when collapsed, and FuelSystemScreen's octane
+ * explainer prose also contains "oct", which made the old text query ambiguous
+ * once that section existed.
  * @returns {string}
  */
 function headerEngineName() {
-  return screen.getByText(/oct/).textContent.split('·')[0].trim();
+  return screen.getByTestId('build-line').textContent.split('·')[0].trim();
 }
 
 /** Renders the app and clicks past the start screen. */
@@ -472,15 +477,16 @@ describe('the injector-duty preview call site', () => {
   it('paints the Duty bar as dangerous, not healthy, once duty cycle has no headroom left', () => {
     // TUNE/readouts.test.jsx's describe('Bar') proves the PRIMITIVE inverts colour
     // correctly given higherIsBetter={false} — it renders Bar in isolation. It says
-    // nothing about whether EcuLab's own INJECTOR DUTY PREVIEW call site (ECU Fuel
-    // System, EcuLab.jsx ~1924) actually PASSES that prop. A reviewer flipped it to
-    // higherIsBetter={true} — 95% duty, an injector out of headroom and about to lean
-    // the mixture out, painted bright green — and all existing tests, including the
-    // Bar unit tests, stayed green. This drives the real app to a build that reaches
-    // a genuinely dangerous duty cycle and reads the colour off the rendered bar.
+    // nothing about whether InjectorsScreen's own INJECTOR DUTY PREVIEW call site
+    // (TUNE > Injectors, src/ui/screens/tune/InjectorsScreen.jsx) actually PASSES
+    // that prop. A reviewer flipped it to higherIsBetter={true} — 95% duty, an
+    // injector out of headroom and about to lean the mixture out, painted bright
+    // green — and all existing tests, including the Bar unit tests, stayed green.
+    // This drives the real app to a build that reaches a genuinely dangerous duty
+    // cycle and reads the colour off the rendered bar.
     launch();
 
-    // dutyPreview (EcuLab.jsx:639) is computed at WOT @ 6500 RPM. It scales inversely
+    // dutyPreview (EcuLab.jsx:331) is computed at WOT @ 6500 RPM. It scales inversely
     // with ecuInjectorCc (a fresh build already starts at 315cc, the smallest on the
     // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
     // dial the boost target at 6500 RPM to its maximum.
@@ -505,7 +511,7 @@ describe('the injector-duty preview call site', () => {
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
 
     const meter = screen.getByRole('meter', { name: 'Duty' });
     const dutyValue = Number(meter.getAttribute('aria-valuenow'));
@@ -568,20 +574,32 @@ describe('every segmented control', () => {
     // Counting pressed options catches that without naming a single call site, so a
     // ninth Seg added later is covered the day it appears.
     launch();
+    // launch() lands on BUILD. Every BuildSection accordion mounts unconditionally —
+    // only `max-height` hides the collapsed ones — and jsdom's getByRole does not
+    // treat `max-height: 0` as hidden (only display:none/hidden/aria-hidden are
+    // excluded), so this first count already picks up every Seg on BUILD: three on
+    // EngineScreen (Configuration, Block Material, Head Material), one on
+    // InductionScreen (Compressor Size), one on FuelSystemScreen (Fuel Octane) and
+    // one on ExhaustScreen (Exhaust Diameter) — six — regardless of which section is
+    // open.
     let total = expectEverySegHasOneSelection();
 
-    // The remaining Segs are on other tabs, and the two ECU ones are behind a sub-view
-    // that is not the default.
+    // The remaining two Segs are not on BUILD. ECU Injector Scaling is on TUNE >
+    // Injectors, which is not the default sub-view, so it needs an explicit click.
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
     total += expectEverySegHasOneSelection();
 
+    // DYNO's manifold-pressure picker (EcuLab.jsx) is the eighth and last, and is on
+    // the default DYNO sub-view so no further click is needed to reach it.
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
     // above would each pass on whatever happened to be showing. Eight is the count of
-    // <Seg> call sites in EcuLab.jsx today.
+    // <Seg> call sites across the app today — they live in the screen components now,
+    // not in EcuLab.jsx (see the breakdown above) — confirmed by
+    // `grep -rn '<Seg\b' src/ui | grep -v '\.module\.css'`.
     expect(total).toBe(8);
   });
 });
