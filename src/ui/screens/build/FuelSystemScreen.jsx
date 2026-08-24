@@ -44,16 +44,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       <div className={styles.label}>Fuel Octane</div>
       <Seg label="Fuel Octane" options={OCTANE_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
       <ExpandableInfo title="What Fuel Octane actually does — and what E85 costs you">
-        {/* "Octane"/"Fuel Octane" kept capitalized everywhere below rather than the
-            original prose's lowercase "octane" mid-sentence: `BuildSection` hides
-            with `max-height: 0`, not unmount, so this text sits in the DOM on every
-            BUILD-tab render whether the section is open or not — and the header
-            strip (`AppShell.module.css`'s `.engine`) always prints a literal
-            "N oct" fuel figure alongside it. `characterisation.test.jsx` and
-            `build-store.test.jsx` both read that header with `screen.getByText(/oct/)`;
-            a lowercase "octane" anywhere in this permanently-mounted block becomes a
-            second match and turns an unrelated header assertion ambiguous. */}
-        Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." A higher rating tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
+        Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
         <br /><br /><b className={styles.em}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b className={styles.emAcc}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview on <b className={styles.em}>TUNE &rsaquo; Injectors</b> change the moment you select it.
         <br /><br />That trade — huge knock resistance, huge fuel demand — is exactly why serious E85 builds pair it with bigger injectors and a bigger pump, and why "just run E85" is not a shortcut around a fuel system.
       </ExpandableInfo>
