@@ -15,6 +15,14 @@
   color: var(--cyan);
 }
 
+/* FUEL's two mixture directions, coloured differently — carried over from
+   FuelScreen.module.css's `.cell[data-richen='true']`. Richen (this cell is
+   lean) is the dangerous direction; lean-out is an ordinary cyan readout, so
+   only 'true' gets a rule. Scoped to .bannerCell so it only ever applies to
+   the AFR cell lines that carry the attribute — SPARK's cell lines never set
+   data-richen at all. */
+.bannerCell[data-richen='true'] { color: var(--danger-ink); }
+
 .bannerMore {
   margin-top: 3px;
   font-size: var(--fs-xs);
@@ -35,6 +43,13 @@
 }
 
 .em { color: var(--acc-ink); }
+
+/* A second emphasis token, not a duplicate of `.em`: SPARK's moved banners
+   used var(--acc-ink) for emphasis, but FuelScreen.module.css's own `.em`
+   (used by the mixture banner's <b>delivered</b>) was var(--ink) — a
+   different colour. Reusing `.em` here would have silently recoloured that
+   emphasis on the move; this class preserves the token it actually carried. */
+.emInk { color: var(--ink); }
 
 /* All-clear tint, layered onto `.prose` (never replacing it — margin still
    comes from there). `table-clean` restores the green the old `.okBanner`

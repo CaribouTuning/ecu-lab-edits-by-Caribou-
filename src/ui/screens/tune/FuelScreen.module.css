@@ -41,47 +41,8 @@
 
 .spacer { flex: 1; }
 
-.banner {
-  margin: 10px 0;
-  padding: 12px 13px;
-  border: 1px solid var(--acc);
-  border-radius: 10px;
-  background: var(--panel2);
-}
-
-.label {
-  margin-bottom: 7px;
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-weight: 800;
-  color: var(--acc-ink);
-}
-
-.body {
-  margin-bottom: 8px;
-  font-size: var(--fs-sm);
-  color: var(--ink2);
-  line-height: 1.55;
-}
-
-/* One row per cell, coloured by whether the fix is to richen (danger — this cell
-   is lean) or lean out (an ordinary cyan data readout, not a warning). Cells in a
-   single render can carry either state, so this is a data attribute rather than
-   two separate elements, matching TurboScreen's boost-column convention. */
-.cell {
-  margin-bottom: 2px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--cyan);
-}
-
-.cell[data-richen='true'] { color: var(--danger-ink); }
-
-.more {
-  margin-top: 3px;
-  font-size: var(--fs-xs);
-  color: var(--ink3);
-}
-
-/* Prose emphasis inside the ExpandableInfo panel. */
+/* Prose emphasis inside the ExpandableInfo panel. The mixture-advisory banner
+   that used to live in this file (and the sibling .banner/.label/.body/.cell/
+   .more classes it used) moved into TuneAdvisory.module.css along with the
+   markup — see TuneAdvisory.jsx. */
 .em { color: var(--ink); }

@@ -16,7 +16,6 @@
 
 import React from 'react';
 
-import fuelStyles from '../screens/tune/FuelScreen.module.css';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -162,7 +161,7 @@ function TimingAdvisory({ report }) {
  */
 function AfrCellLine({ cell }) {
   return (
-    <div className={fuelStyles.cell} data-richen={cell.delta < 0 ? 'true' : 'false'}>
+    <div className={styles.bannerCell} data-richen={cell.delta < 0 ? 'true' : 'false'}>
       {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'} · delivered {cell.delivered}, wants {cell.target}
     </div>
   );
@@ -184,11 +183,11 @@ function AfrAdvisory({ report }) {
     case 'table-off':
       return (
         <>
-          <div className={fuelStyles.body}>
-            Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b className={fuelStyles.em}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
+          <div className={styles.bannerBody}>
+            Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b className={styles.emInk}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
           </div>
           {detail.cells.map((c, i) => <AfrCellLine key={i} cell={c} />)}
-          {detail.more > 0 && <div className={fuelStyles.more}>…and {detail.more} more</div>}
+          {detail.more > 0 && <div className={styles.bannerMore}>…and {detail.more} more</div>}
         </>
       );
     // FUEL had no clean state at all — the old banner simply did not render
