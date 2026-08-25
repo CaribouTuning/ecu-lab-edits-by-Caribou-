@@ -21,13 +21,14 @@ reads it to tell an open section from a collapsed one, which is how the fully-co
 route state is pinned.
 
 `PickList` is here for the ordinary reason, not the disclosure one: BUILD's Forced
-Induction screen and TUNE's ECU screen both need a full-width descriptive row for a
+Induction screen and TUNE's Injectors screen both need a full-width descriptive row for a
 choice with a subtitle (turbine housing, injector size), which is wider than `Seg`'s
 chip layout can hold without wrapping. One screen owning it and the other importing
 across tabs would be a cycle risk the moment either screen moves again.
 
 `TuningGrid` and `SelectionDock` are the same ordinary reason as `PickList`: TUNE's
-AIR, SPARK and FUEL screens each mount both, and TUNE's own ECU screen needs neither
+AIRFLOW, SPARK and FUEL screens each mount both, and TUNE's Injectors and Sensors
+screens need neither
 — so they belong to the tab as a whole rather than to any one screen inside it. Both
 still carry the `data-testid`s (`tuning-grid`, `selection-dock`) that
 `button-call-sites.test.jsx` and `characterisation.test.jsx` query, unchanged by the
