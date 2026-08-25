@@ -246,8 +246,14 @@ describe('UNDO / REDO', () => {
   });
 
   it('puts the table back', () => {
+    // One `start`, threaded through both dispatches, so this can assert reference
+    // equality: restore must hand back the SAME array the snapshot captured, not a
+    // recomputed one that merely looks equal. Two independent `makeInitialState()`
+    // calls would defeat that — the function's own header documents that it returns a
+    // fresh object graph every time, and `ve` is recomputed by `computeHardwareVE`.
     const start = makeInitialState();
-    const s = reducer(edited(), { type: ACTIONS.UNDO });
+    const edit = reducer(start, { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] });
+    const s = reducer(edit, { type: ACTIONS.UNDO });
     expect(s.tune.ve).toBe(start.tune.ve);
     expect(s.history.past).toHaveLength(0);
     expect(s.history.future).toHaveLength(1);
