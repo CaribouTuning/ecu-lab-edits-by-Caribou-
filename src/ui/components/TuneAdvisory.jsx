@@ -18,7 +18,6 @@ import React from 'react';
 
 import { Button } from '../primitives/Button.jsx';
 
-import veStyles from '../screens/tune/AirflowScreen.module.css';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -265,14 +264,14 @@ function VeAdvisory({ report, onAcceptVe }) {
     case 'table-stale':
       return (
         <>
-          <div className={veStyles.staleBody}>
+          <div className={styles.staleBody}>
             Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
           </div>
           {detail.recs.map((r, i) => (
-            <div key={i} className={veStyles.rec}>
-              <div className={veStyles.recTitle}>{r.rpmText}</div>
-              <div className={veStyles.recText}>{r.text}</div>
-              <div className={veStyles.recCells}>{r.cells.join('   ')}</div>
+            <div key={i} className={styles.rec}>
+              <div className={styles.recTitle}>{r.rpmText}</div>
+              <div className={styles.recText}>{r.text}</div>
+              <div className={styles.recCells}>{r.cells.join('   ')}</div>
             </div>
           ))}
           {/* Was width:100%. It is the only action in this advisory box and
@@ -281,7 +280,7 @@ function VeAdvisory({ report, onAcceptVe }) {
           <Button onClick={onAcceptVe} style={{ marginTop: 4 }}>
             ACCEPT RE-LOGGED VALUES
           </Button>
-          <div className={veStyles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
+          <div className={styles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
         </>
       );
 
