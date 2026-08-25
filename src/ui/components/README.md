@@ -32,3 +32,12 @@ AIR, SPARK and FUEL screens each mount both, and TUNE's own ECU screen needs nei
 still carry the `data-testid`s (`tuning-grid`, `selection-dock`) that
 `button-call-sites.test.jsx` and `characterisation.test.jsx` query, unchanged by the
 move.
+
+`TuneAdvisory` is the ordinary reason once more, one layer up: `AdvisorPanel` is chrome
+only (see its own header comment) and `advisorReports.js` only classifies, so something
+has to turn a report into prose, and SPARK, FUEL and AIRFLOW all need one. `kind` picks
+the body; `report.state` (from `sparkReport`/`fuelReport`/`veReport` in
+`advisorReports.js`) picks which of that body's cases renders, and `report.detail`
+supplies the numbers. It is pure — no store access, no computation — so the screens stay
+the only thing in TUNE that talks to the store, and `advisorReports.js` stays the only
+thing that decides what a cell's category means.

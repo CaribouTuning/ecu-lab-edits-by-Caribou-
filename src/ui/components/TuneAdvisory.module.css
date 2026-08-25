@@ -1,0 +1,49 @@
+/* TuneAdvisory: prose bodies for the advisor panel's per-state reports.
+   No border, no background, no radius here — AdvisorPanel.module.css already
+   renders and colours that surface from `data-tone`; nesting a second bordered
+   box inside it would double up the chrome the old per-screen banners used to
+   own on their own. */
+
+.bannerBody {
+  margin-bottom: 8px;
+}
+
+.bannerCell {
+  margin-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+.bannerMore {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+}
+
+.bannerFooter {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink3);
+}
+
+/* AdvisorPanel's own .body already sets the base font-size/colour/line-height
+   every state here inherits; this class only carries the vertical rhythm
+   between states, matching the old .advisoryPanel's margin. */
+.prose {
+  margin: 0;
+}
+
+.em { color: var(--acc-ink); }
+
+.cellStats {
+  margin: 6px 0 8px;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: var(--sp-sm);
+  row-gap: 2px;
+  font-size: var(--fs-sm);
+}
+
+.cellStats dt { color: var(--ink3); }
+.cellStats dd { margin: 0; color: var(--ink); font-family: var(--mono); }
