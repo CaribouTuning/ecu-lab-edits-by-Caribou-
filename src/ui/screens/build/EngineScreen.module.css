@@ -1,0 +1,156 @@
+/* BUILD > Engine Architecture.
+ *
+ * The float warning on the valve-spring slider is the one genuinely stateful bit
+ * here — it is switched with a data attribute, the same convention HOME's screens
+ * use, rather than an inline ternary. Everything else on this screen is constant
+ * once rendered. */
+
+.label {
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+/* The slider labels (Bore, Stroke, Compression, Camshaft Duration, Valve Spring
+   Rate, Head Material) sit between two controls rather than after a heading, so
+   they carry air above as well as below. */
+.labelSpaced {
+  margin: 10px 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+/* Select and Panel both spread rest props AFTER their own computed `className`
+   with no merge, so passing a class from here would silently replace their base
+   styling rather than add to it. The 13px margins around the preset picker and
+   the two tight Panels stay inline `style` for that reason — see the call sites. */
+
+.blurb {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.statRowLast {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+/* Same row shape as .statRow, one pixel more air below it — the displacement panel's
+   own spacing in the original markup, not a shared value with the preset panel's. */
+.displacementRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.statValue {
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* The pull figure only earns the accent once there is a pull to report; until then
+   it reads as a quiet placeholder rather than a real value. */
+.pullValue {
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--ink3);
+}
+
+.pullValue[data-have='true'] { color: var(--acc-ink); }
+
+.footnote {
+  margin-top: 7px;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--ink3);
+}
+
+/* The stale-VE banner and the preset-overwrite prompt are the same box: an
+   accent-bordered callout for something the player needs to act on. */
+.callout {
+  margin: 4px 0 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--acc);
+  border-radius: 10px;
+  background: var(--panel2);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--ink2);
+}
+
+.calloutText { margin-bottom: 9px; }
+
+.calloutAccent { color: var(--acc-ink); }
+
+.calloutRow { display: flex; gap: var(--sp-sm); }
+
+.character {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--acc-ink);
+}
+
+/* Prose emphasis inside the ExpandableInfo panels: lifts a phrase out of their
+   --ink2 body text to full --ink. A reading aid, not a status. */
+.em { color: var(--ink); }
+
+.slider { width: 100%; accent-color: var(--acc); }
+
+.rangeCaption {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+  font-size: 9.5px;
+  color: var(--ink3);
+}
+
+.overlapNote {
+  font-weight: 400;
+  color: var(--ink3);
+}
+
+/* Valve spring rate is the one control on this screen whose default accent isn't
+   the app accent — cyan, matching the "float at N RPM" caption beside it — because
+   it is reporting a physical limit (float speed), not just taking a hardware input.
+   Danger replaces both the moment the springs float below redline. */
+.floatCaption { font-weight: 400; color: var(--ink3); }
+.floatCaption[data-float='true'] { color: var(--danger); }
+
+.springSlider { width: 100%; accent-color: var(--cyan); }
+.springSlider[data-float='true'] { accent-color: var(--danger); }
+
+.floatWarning {
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+
+/* Carried over from the dissolved BoltonsScreen's stylesheet along with the RESET ALL
+   TO STOCK button it lays out. `margin-top` is the one change: on BoltonsScreen this
+   row was the first element and needed none, whereas here it follows a Note. */
+.resetRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+  margin-bottom: 9px;
+}

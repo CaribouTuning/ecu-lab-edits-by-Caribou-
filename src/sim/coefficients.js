@@ -62,6 +62,24 @@ export const COEFF = {
   WOSCHNI_C2: 3.24e-3,
   // Mean chamber wall temperature, K. Coolant ~370 K, metal surfaces above it.
   WALL_TEMP_K: 450,
+  // --- Exhaust port: what the EGT probe sees (see the two-stream note in cycle.js) ---
+  // How completely the piston-displaced part of the charge cools toward the port wall on
+  // its way out, as a number of transfer units at the reference flow. Fitted to the
+  // published EGT band for a naturally aspirated gasoline engine — roughly 850 C at wide
+  // open throttle, falling through about 700 at part throttle to 400-500 at light cruise
+  // — because those are the numbers a tuner reads off a gauge and the only ones worth
+  // matching. See EXHAUST_PORT_FLOW_REF for what the reference flow is.
+  EXHAUST_PORT_NTU: 1.0,
+  // Reference value of trappedMass x rpm, in the units the cycle carries them (kg and
+  // rev/min), measured at the stock V6 at wide-open throttle and 6500 RPM: 6.18e-4 kg of
+  // charge times 6500 is about 4.0. Only the RATIO to this matters, so it is a
+  // normaliser rather than a physical quantity — but it has to be the right order of
+  // magnitude or the NTU above stops meaning "at the reference flow".
+  EXHAUST_PORT_FLOW_REF: 4.0,
+  // Turbulent convection puts h at about mdot^0.8, so NTU = hA/(mdot*cp) goes as
+  // mdot^-0.2. Deliberately weak: it is weak in reality, and the blowdown mass fraction
+  // is what carries the load dependence.
+  EXHAUST_PORT_FLOW_EXP: 0.2,
   // Standard atmosphere, Pa — the unit Douaud-Eyzat is written in.
   ATM_PA: 101325,
 
@@ -346,6 +364,37 @@ export const COEFF = {
   // Average peak pressure that raises the bottom-end advisory. Above a healthy NA pull
   // (~65 bar averaged), so it means "boosted-engine loading", not "you drove it".
   BEARING_EVENT_BAR: 60,
+
+  // --- Inlet Mach index: the high-speed breathing limit (see engine.js) ---
+  // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a
+  // modern four-valve head runs two intake valves at roughly 0.36 of the bore each, so
+  // the equivalent single valve is 0.36 * sqrt(2) = 0.509 of the bore, and the factor is
+  // 1 / 0.509^2 = 3.86.
+  MACH_BORE_VALVE_FACTOR: 3.86,
+  // Where choking starts to cost volumetric efficiency, and how fast it costs it.
+  //
+  // THESE TWO ARE FITTED, and it is worth being straight about to what. Taylor's own
+  // 2-valve data puts the knee near Z = 0.5-0.6; a modern 4-valve head with the geometry
+  // above never gets near that, which is precisely WHY these engines rev as far as they
+  // do. So the absolute threshold here is not Taylor's — it stands in for everything
+  // else that stops a real engine breathing at speed and that this model has no term
+  // for: cam profile running out of area, intake runner tuning falling off its resonant
+  // peak, and port velocity. Those are what actually roll a VQ35HR over at 6800.
+  //
+  // What IS carried over from the physics, and what makes this worth doing as a Mach
+  // index rather than as a curve fit against RPM, is the DEPENDENCE: rolloff scales with
+  // mean piston speed against the speed of sound, so a long-stroke engine chokes at
+  // fewer revolutions than a short-stroke one of the same displacement, and a hotter
+  // charge chokes later. Both are real, both fall out for free, and neither was in the
+  // model before.
+  //
+  // Fitted against the published peak-power RPM of the shipped naturally aspirated
+  // engines, which are the only engines here whose peak the boost curve does not already
+  // place. See the note in presets.js on what moved as a result.
+  MACH_Z_CRIT: 0.155,
+  MACH_VE_LOSS: 10,
+  // A choked engine still breathes something at the limiter.
+  MACH_VE_FLOOR: 0.55,
 
   // --- Camshaft & valvetrain ---
   CAM_PEAK_SHIFT_PER_DEG: 32,  // RPM the VE peak moves per degree of extra duration

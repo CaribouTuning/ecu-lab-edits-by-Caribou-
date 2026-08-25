@@ -1,0 +1,75 @@
+/* DYNO > PULL LOG. */
+
+/* 10px border-radius here and on `.event` below is deliberately off the radius
+   ramp (9/12 are the neighbours) rather than snapped onto either — same call
+   as BUILD's boost-columns panel. */
+.clean {
+  font-size: 12.5px;
+  color: var(--ok);
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event {
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+}
+.event[data-tone='danger'] { background: var(--danger-bg); border-color: var(--danger-line); }
+.event[data-tone='warn'] { background: var(--warn-bg); border-color: var(--warn-line); }
+.event[data-tone='violet'] { background: var(--violet-bg); border-color: var(--violet-line); }
+
+.eventHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.eventTitle {
+  display: flex;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cyan);
+}
+.event[data-tone='danger'] .eventTitle { color: var(--danger-ink); }
+.event[data-tone='warn'] .eventTitle { color: var(--warn-ink); }
+.event[data-tone='violet'] .eventTitle { color: var(--violet); }
+
+.eventIcon { flex-shrink: 0; margin-top: 1px; }
+
+.eventImpact {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 800;
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+.event[data-tone='danger'] .eventImpact { color: var(--danger-ink); }
+.event[data-tone='warn'] .eventImpact { color: var(--warn-ink); }
+.event[data-tone='violet'] .eventImpact { color: var(--violet); }
+
+.eventCause {
+  font-size: 11.5px;
+  color: var(--ink2);
+  margin-top: 6px;
+  padding-left: 22px;
+}
+
+.eventFix {
+  font-size: 11.5px;
+  color: var(--ink2);
+  margin-top: 4px;
+  padding-left: 22px;
+}
+
+.eventLabel { color: var(--ink-soft); }

@@ -72,4 +72,15 @@ describe('Button', () => {
     render(<Button aria-label="Run a dyno pull">GO</Button>);
     expect(screen.getByLabelText('Run a dyno pull')).toBeTruthy();
   });
+
+  it('adds a caller-supplied className instead of replacing its own', () => {
+    // `className` used to be part of `...rest`, which spreads after the computed
+    // class list and so overwrote it outright — a caller following the normal
+    // React passthrough convention got an unstyled button with no test failure.
+    render(<Button className="callerClass">GO</Button>);
+    const el = screen.getByRole('button');
+    expect(el.className).toContain(styles.button);
+    expect(el.className).toContain(styles.primary);
+    expect(el.className).toContain('callerClass');
+  });
 });

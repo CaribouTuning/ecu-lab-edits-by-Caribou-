@@ -21,7 +21,7 @@ import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
 const WOT_ROW = 2;
 
 /** A cell delta below this (percent) is not worth reporting. */
-const VE_NOTABLE_PCT = 2.5;
+export const VE_NOTABLE_PCT = 2.5;
 
 /** Safety left under the calculated knock limit when advising, degrees. */
 const KNOCK_SAFETY_DEG = 1.5;
@@ -40,7 +40,7 @@ const MIX_NOTABLE_AFR = 0.45;
  * to these rows: below it the target is stoichiometric and the trims own it, so
  * best-power advice would be actively wrong.
  */
-const OPEN_LOOP_KPA = 85;
+export const OPEN_LOOP_KPA = 85;
 
 /**
  * Slack above the boost target when deciding whether a row is reachable, kPa. Enough to

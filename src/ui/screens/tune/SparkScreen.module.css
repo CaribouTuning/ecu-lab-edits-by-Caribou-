@@ -1,0 +1,47 @@
+/* TUNE > SPARK (ignition timing). */
+
+.wrap {
+  padding: var(--sp-xl) var(--sp-xl) 0;
+}
+
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css, which lists every file that uses it. Kept in sync by hand with
+   StartScreen.module.css, TutorialScreen.module.css, AppShell.module.css and
+   AdvisorPanel.module.css.
+
+   `minmax(0, 1fr)` rather than a bare `1fr`: the tuning grid is a wide
+   fixed-width child, and a bare `1fr` track refuses to shrink below its
+   content's intrinsic width, which would push the advisor rail past the
+   content cap and off the screen. */
+@media (min-width: 560px) {
+  .wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: var(--sp-xl);
+    align-items: start;
+  }
+
+  /* A grid item's automatic minimum size is its content's, not zero, so a wide
+     child could still push this track past the content cap even though the
+     track itself is sized `minmax(0, 1fr)`. The tuning grid carries its own
+     `overflow-x: auto` wrapper, which should already zero that contribution —
+     this makes it unconditional rather than dependent on a descendant's
+     styling two levels down. */
+  .main {
+    min-width: 0;
+  }
+}
+
+.intro {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+
+.spacer { flex: 1; }
+
+/* Prose emphasis inside the ExpandableInfo panels. The knock-advisory banners
+   that used to live in this file (and the sibling .em token they used for
+   their own emphasis) moved into TuneAdvisory.module.css along with the
+   markup — see TuneAdvisory.jsx. */
+.emInk { color: var(--ink); }
