@@ -608,7 +608,11 @@ git commit -m "Add sparkReport: narrow the knock advisor to the current selectio
 
 ### Task 4: `TuneAdvisory` renders the spark report, and SPARK's banner moves in
 
-Two commits, in this order. **Stage 1 moves the markup verbatim; stage 2 converts it to the new stylesheet.** That is the technique the screen split used, and it is what makes a fidelity slip visible: hand-audit stage 2's diff against stage 1 before committing it, because no test in this repo sees a className.
+Two commits, in this order. **Stage 1 moves the markup verbatim; stage 2 converts it to the new stylesheet.** No test in this repo sees a className, so the audit between them is the only thing standing between a "verbatim" move and a silent visual regression.
+
+**AUDIT AGAINST THE PRE-TASK FILE, NOT AGAINST STAGE 1.** Task 4 shipped a real regression through the naive version of this check. Its `table-clean` state used `.okBanner` (`color: var(--ok)`, green — an unambiguous all-clear) before the move; the supposedly-verbatim stage-1 commit wrote `.advisoryPanel`, the warn-tier class, so the message lost its green and now inherits neutral gray from the panel body. The substitution happened INSIDE stage 1, which makes stage 2's audit — whose baseline IS stage 1 — structurally incapable of seeing it. The implementer's hand-audit then repeated the error by listing the state under the wrong source class, so the check never once ran against the real original.
+
+For every element that moved, re-derive from the original screen file which class it carried, then confirm the rule it now resolves to has the same colour token, size, weight and spacing — **including whatever it inherits** from `AdvisorPanel.module.css`'s `.body`, which supplies `font-size`, `color` and `line-height` to any element that stops declaring them. Build that mapping yourself from the original; never accept one someone else wrote.
 
 **Files:**
 - Create: `src/ui/components/TuneAdvisory.jsx`, `src/ui/components/TuneAdvisory.module.css`
