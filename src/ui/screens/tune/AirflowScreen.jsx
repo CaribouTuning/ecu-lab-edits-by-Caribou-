@@ -10,13 +10,14 @@
 
 import React from 'react';
 
-import { Grid3x3, Info } from 'lucide-react';
+import { Grid3x3 } from 'lucide-react';
 
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
+import { veReport } from '../../components/advisorReports.js';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
+import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
-import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -30,6 +31,12 @@ import styles from './AirflowScreen.module.css';
  * @property {boolean} inSync
  * @property {number} maxAbs
  * @property {Array<{rpmText: string, text: string, cells: string[]}>} recs
+ * @property {Array<{rpm: number, pct: number, from: number, to: number}>} [deltas]
+ *   one per RPM column, measured at the wide-open-throttle row only — read by
+ *   `veReport` for a cell/col selection, never by this screen directly.
+ *   Optional here only because a handful of pre-existing tests fabricate a
+ *   `VeAdvice` that never exercises a cell/col selection; the real shell's
+ *   value (`veRecommendations`' return) always has it.
  */
 
 /**
@@ -46,6 +53,9 @@ export function AirflowScreen({ veAdvice, veTruth }) {
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
   const recalcVE = () => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: veTruth });
+  // A handful of `.some()`-free array reads, no allocation in the hot path —
+  // plainly on every render, matching SparkScreen/FuelScreen.
+  const report = veReport(veAdvice, selection);
 
   return (
     <>
@@ -55,46 +65,13 @@ export function AirflowScreen({ veAdvice, veTruth }) {
           <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
           <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} />
 
-          {veAdvice && (
-            veAdvice.inSync ? (
-              <div className={styles.inSyncBanner}>
-                <Info size={15} className={styles.inSyncIcon} />
-                <div>VE table matches your current hardware. Nothing to correct.</div>
-              </div>
-            ) : (
-              <div className={styles.staleBanner}>
-                <div className={styles.staleHead}>
-                  <div className={styles.staleLabel}>VE OUT OF SYNC WITH HARDWARE</div>
-                  <div className={styles.staleGap}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
-                </div>
-                <div className={styles.staleBody}>
-                  Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
-                </div>
-                {veAdvice.recs.map((r, i) => (
-                  <div key={i} className={styles.rec}>
-                    <div className={styles.recTitle}>{r.rpmText}</div>
-                    <div className={styles.recText}>{r.text}</div>
-                    <div className={styles.recCells}>{r.cells.join('   ')}</div>
-                  </div>
-                ))}
-                {/* Was width:100%. It is the only action in this advisory box and
-                    reads as one at its own width; the box is already the full
-                    content column, so stretching it only made it wider. */}
-                <Button onClick={recalcVE} style={{ marginTop: 4 }}>
-                  ACCEPT RE-LOGGED VALUES
-                </Button>
-                <div className={styles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
-              </div>
-            )
-          )}
-
           <ExpandableInfo title="What VE actually means">
             VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
             <br /><br /><b className={styles.em}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — the Bolt-Ons on BUILD already move it for you when you install parts. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
           </ExpandableInfo>
         </div>
-        <AdvisorPanel headline="Advisor" tone="info">
-          <p>Placeholder — filled in by the next task.</p>
+        <AdvisorPanel headline={report.headline} tone={report.tone}>
+          <TuneAdvisory kind="ve" report={report} onAcceptVe={recalcVE} />
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />

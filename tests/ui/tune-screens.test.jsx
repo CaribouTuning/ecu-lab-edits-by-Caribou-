@@ -117,8 +117,11 @@ describe('AirflowScreen', () => {
       recs: [{ rpmText: 'FABRICATED 9999 RPM', text: 'fabricated advisory text', cells: ['9999@1 -> 2'] }],
     };
     mount(<AirflowScreen veAdvice={veAdvice} veTruth={[]} />);
-    expect(screen.getByText('42% max gap')).toBeTruthy();
-    expect(screen.getByText('FABRICATED 9999 RPM')).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // maxAbs is folded into the panel headline now (veReport's table-stale
+    // state), not a standalone '42% max gap' string.
+    expect(panel.getByText('VE out of sync — 42% max gap')).toBeTruthy();
+    expect(panel.getByText('FABRICATED 9999 RPM')).toBeTruthy();
   });
 
   it('writes the shell-computed veTruth into the store on ACCEPT RE-LOGGED VALUES, not one it derived itself', () => {
@@ -132,6 +135,50 @@ describe('AirflowScreen', () => {
     const grid = screen.getByTestId('tuning-grid');
     const cells = within(grid).getAllByRole('button').filter((b) => b.textContent === '77');
     expect(cells).toHaveLength(48);
+  });
+
+  it('narrows to the selected column rather than the whole table', () => {
+    // deltas[3] is the only column-scoped number veReport is allowed to read
+    // for a cell/col selection — arbitrary index, veReport looks it up by
+    // selection.col, it never touches TuningGrid's real geometry.
+    const veAdvice = {
+      inSync: false,
+      maxAbs: 42.3,
+      recs: [{ rpmText: 'FABRICATED 9999 RPM', text: 'fabricated advisory text', cells: ['9999@1 -> 2'] }],
+      deltas: [
+        { rpm: 800, pct: 0, from: 50, to: 50 },
+        { rpm: 1500, pct: 0, from: 50, to: 50 },
+        { rpm: 2500, pct: 0, from: 50, to: 50 },
+        { rpm: 3500, pct: 18.2, from: 60, to: 71 },
+      ],
+    };
+    mount(<><SelectionProbe value={{ type: 'col', col: 3 }} /><AirflowScreen veAdvice={veAdvice} veTruth={[]} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table-wide headline is gone; the panel now reports THIS column's
+    // measured gap instead, and says plainly it belongs to the column.
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeNull();
+    expect(panel.getByText('18% more air here than your table assumes')).toBeTruthy();
+    expect(panel.getByText(/This gap belongs to the RPM column, not to this one cell\./)).toBeTruthy();
+  });
+
+  it('falls back to the table-wide report for a row selection — there is no column-scoped number for a row', () => {
+    const veAdvice = { inSync: false, maxAbs: 42.3, recs: [], deltas: [{ rpm: 800, pct: 18.2, from: 60, to: 71 }] };
+    mount(<><SelectionProbe value={{ type: 'row', row: 1 }} /><AirflowScreen veAdvice={veAdvice} veTruth={[]} /></>);
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('VE out of sync — 42% max gap')).toBeTruthy();
+  });
+
+  it('shows a no-advice state instead of throwing when veAdvice is null, and keeps the panel mounted', () => {
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // The brief gives one string for this state, used as both the collapsed
+    // headline and the expanded body, so it legitimately appears twice.
+    expect(panel.getAllByText('No airflow comparison available for this build yet.')).toHaveLength(2);
   });
 
   it('mounts exactly one advisor panel', () => {

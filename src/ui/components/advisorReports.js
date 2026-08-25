@@ -184,3 +184,63 @@ export function fuelReport(calAdvice, selection) {
   }
   return { tone: 'ok', headline: 'High-load mixture is on best power', state: 'table-clean', detail: {} };
 }
+
+/**
+ * @param {{inSync: boolean, recs: object[], deltas?: object[], maxAbs: number}|null} veAdvice
+ *   as returned by `veRecommendations`, or `null` — the shell has no VE comparison
+ *   to offer for every build (see `AirflowScreen`'s existing `{veAdvice && (…)}` guard).
+ *   `deltas` is optional only in the type — a `cell`/`col` selection reads it and
+ *   would throw if it were genuinely missing; the real shell's value always has it.
+ * @param {Selection|null} selection
+ * @returns {AdvisorReport}
+ */
+export function veReport(veAdvice, selection) {
+  if (!veAdvice) {
+    return { tone: 'info', headline: 'No airflow comparison available for this build yet.', state: 'no-advice', detail: {} };
+  }
+
+  // `veRecommendations` measures every delta at the wide-open-throttle row only
+  // (WOT_ROW, private to src/sim/advisors.js) — there is no per-cell VE gap to
+  // report, only one gap per RPM column. `deltas` is indexed by that column
+  // position directly (RPM.map's own index), the same index TuningGrid uses for
+  // its columns, so a `cell` or `col` selection can look the column up by
+  // `selection.col`. A `row` selection has nothing column-scoped to say — it
+  // falls through to the table-wide states below, same as no selection at all.
+  if (selection && (selection.type === 'cell' || selection.type === 'col')) {
+    const delta = veAdvice.deltas[selection.col];
+    const pct = delta.pct;
+    // Every category lookup elsewhere in this file is membership in an
+    // advisor-computed array (the ONE RULE, see the file header) — there is no
+    // such array here to look a column up in, only a continuous percentage, so
+    // this is the one place in the file allowed to threshold a number itself.
+    // 'ok' is reserved for a delta that would display as 0%; anything that
+    // would render "N% more/less air" with a nonzero N is worth a warn tone.
+    // Never 'danger': a VE mismatch by itself is not a hazard — it is the
+    // fuel/spark tables computed from it that would need correcting, and
+    // those are their own screens' job, not this one's.
+    const tone = Math.round(pct) === 0 ? 'ok' : 'warn';
+    // Math.abs, not a bare pct.toFixed(0): the plan's literal template keeps
+    // the sign, which would print "-15% less air" for a negative delta — a
+    // double negative that says the opposite of what it means. fuelReport's
+    // cell-off headline already established the fix for the same shape of bug
+    // (`Math.abs(cell.delta).toFixed(1)` paired with a direction word); this
+    // mirrors it rather than reproducing the sign twice.
+    return {
+      tone,
+      headline: `${Math.abs(pct).toFixed(0)}% ${pct > 0 ? 'more' : 'less'} air here than your table assumes`,
+      state: selection.type === 'cell' ? 'cell-gap' : 'col-gap',
+      detail: { rpm: delta.rpm, from: delta.from, to: delta.to, pct },
+    };
+  }
+
+  if (veAdvice.inSync) {
+    return { tone: 'ok', headline: 'VE matches your hardware', state: 'table-sync', detail: {} };
+  }
+
+  return {
+    tone: 'warn',
+    headline: `VE out of sync — ${veAdvice.maxAbs.toFixed(0)}% max gap`,
+    state: 'table-stale',
+    detail: { maxAbs: veAdvice.maxAbs, recs: veAdvice.recs },
+  };
+}

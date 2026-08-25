@@ -16,6 +16,9 @@
 
 import React from 'react';
 
+import { Button } from '../primitives/Button.jsx';
+
+import veStyles from '../screens/tune/AirflowScreen.module.css';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -24,13 +27,13 @@ import styles from './TuneAdvisory.module.css';
  * @param {object} props
  * @param {'ve'|'timing'|'afr'} props.kind
  * @param {AdvisorReport} props.report
- * @param {() => void} [props.onAcceptVe] only read by the `'ve'` kind (Task 6)
+ * @param {() => void} [props.onAcceptVe] only read by the `'ve'` kind
  * @returns {React.ReactElement|null}
  */
-// eslint-disable-next-line no-unused-vars -- onAcceptVe is part of the interface Tasks 5/6 extend; the 've' kind lands in Task 6.
 export function TuneAdvisory({ kind, report, onAcceptVe }) {
   if (kind === 'timing') return <TimingAdvisory report={report} />;
   if (kind === 'afr') return <AfrAdvisory report={report} />;
+  if (kind === 've') return <VeAdvisory report={report} onAcceptVe={onAcceptVe} />;
   return null;
 }
 
@@ -232,6 +235,74 @@ function AfrAdvisory({ report }) {
       return <div className={styles.prose}>Select a single cell to see its numbers.</div>;
     case 'group-clean':
       return <div className={`${styles.prose} ${styles.ok}`}>Select a single cell to see its numbers.</div>;
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * @param {object} props
+ * @param {AdvisorReport} props.report
+ * @param {() => void} [props.onAcceptVe]
+ * @returns {React.ReactElement|null}
+ */
+function VeAdvisory({ report, onAcceptVe }) {
+  const { state, detail } = report;
+
+  switch (state) {
+    // Table-wide, verbatim from the old `.inSyncBanner` text — the bordered/
+    // tinted flex box and its Info icon do NOT come along, same reasoning as
+    // every other table-wide state in this file: the panel already renders and
+    // colours that surface from `report.tone`.
+    case 'table-sync':
+      return <div className={`${styles.prose} ${styles.ok}`}>VE table matches your current hardware. Nothing to correct.</div>;
+    // Table-wide, verbatim from the old `.staleBanner` body — its `.staleHead`
+    // (the "VE OUT OF SYNC WITH HARDWARE" label plus the max-gap figure) does
+    // NOT come along either: both numbers are already folded into
+    // `report.headline`, the same move SPARK's `.dangerLabel` and FUEL's
+    // `.label` made.
+    case 'table-stale':
+      return (
+        <>
+          <div className={veStyles.staleBody}>
+            Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
+          </div>
+          {detail.recs.map((r, i) => (
+            <div key={i} className={veStyles.rec}>
+              <div className={veStyles.recTitle}>{r.rpmText}</div>
+              <div className={veStyles.recText}>{r.text}</div>
+              <div className={veStyles.recCells}>{r.cells.join('   ')}</div>
+            </div>
+          ))}
+          {/* Was width:100%. It is the only action in this advisory box and
+              reads as one at its own width; the box is already the full
+              content column, so stretching it only made it wider. */}
+          <Button onClick={onAcceptVe} style={{ marginTop: 4 }}>
+            ACCEPT RE-LOGGED VALUES
+          </Button>
+          <div className={veStyles.acceptNote}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
+        </>
+      );
+
+    // A single cell or column. Neither state existed before the panel —
+    // AirflowScreen never narrowed to a selection — so there is no old markup
+    // to preserve. `veRecommendations` only measures at wide-open throttle, one
+    // gap per RPM column, so both states report the SAME number (the column's)
+    // and say plainly that it is the column's, never inventing a per-cell one.
+    case 'cell-gap':
+    case 'col-gap':
+      return (
+        <div className={styles.prose}>
+          <div className={styles.bannerCell}>{detail.rpm} RPM: {detail.from}% &rarr; {detail.to}%</div>
+          Measured at wide-open throttle. This gap belongs to the RPM column, not to this one cell.
+        </div>
+      );
+
+    // No shell comparison at all for this build (`veAdvice` is `null`) — keep
+    // the panel mounted rather than throwing or rendering nothing.
+    case 'no-advice':
+      return <div className={styles.prose}>No airflow comparison available for this build yet.</div>;
 
     default:
       return null;

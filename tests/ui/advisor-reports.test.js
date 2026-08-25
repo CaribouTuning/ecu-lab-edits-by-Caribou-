@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { OPEN_LOOP_KPA } from '../../src/sim/index.js';
-import { fuelReport, sparkReport } from '../../src/ui/components/advisorReports.js';
+import { fuelReport, sparkReport, veReport } from '../../src/ui/components/advisorReports.js';
 
 /** A spark entry; only the fields the report reads. */
 const cell = (ri, ci, over) => ({
@@ -268,5 +268,100 @@ describe('fuelReport, a row or column selected', () => {
   it('uses singular verb agreement for a single flagged cell', () => {
     const r = fuelReport(fuelAdvice({ wrongMix: [afrCell(3, 1)] }), { type: 'row', row: 3 });
     expect(r.headline).toBe('1 of these cells is off best power');
+  });
+});
+
+/**
+ * A `deltas` entry as `veRecommendations` builds it: `RPM.map((rpm, ci) => ({rpm,
+ * pct, from, to}))`. There is no `ci` field on the object itself — the array's own
+ * index IS the column index, which is the whole reason `veReport` is allowed to
+ * read `deltas[selection.col]` without inventing a lookup.
+ */
+const delta = (rpm, pct, from = 50, to = 50) => ({ rpm, pct, from, to });
+
+describe('veReport, no selection (table-wide)', () => {
+  it('reports sync when veRecommendations found nothing notable', () => {
+    const r = veReport({ inSync: true, recs: [], deltas: [delta(800, 0.4)], maxAbs: 0.4 }, null);
+    expect(r.state).toBe('table-sync');
+    expect(r.tone).toBe('ok');
+    expect(r.headline).toBe('VE matches your hardware');
+  });
+
+  it('reports the max gap when out of sync', () => {
+    const r = veReport({ inSync: false, recs: [], deltas: [delta(800, 12.3)], maxAbs: 12.3 }, null);
+    expect(r.state).toBe('table-stale');
+    expect(r.tone).toBe('warn');
+    expect(r.headline).toBe('VE out of sync — 12% max gap');
+  });
+
+  it('carries the recs through in detail, for the panel to render one per band', () => {
+    const recs = [{ band: 'low-RPM', rpmText: '800–1500 RPM', pct: 12, text: 'Raise the low-RPM cells...', cells: ['800 RPM: 50 -> 56'] }];
+    const r = veReport({ inSync: false, recs, deltas: [delta(800, 12)], maxAbs: 12 }, null);
+    expect(r.detail.recs).toBe(recs);
+  });
+
+  it('returns a no-advice state instead of throwing when veAdvice is null', () => {
+    const r = veReport(null, null);
+    expect(r.state).toBe('no-advice');
+    expect(r.tone).toBe('info');
+    expect(r.headline).toBe('No airflow comparison available for this build yet.');
+  });
+
+  it('returns no-advice even with a selection present — there is nothing to narrow to without veAdvice', () => {
+    const r = veReport(null, { type: 'cell', row: 2, col: 3 });
+    expect(r.state).toBe('no-advice');
+  });
+});
+
+describe('veReport, a cell or column selected', () => {
+  it('reports the COLUMN delta for a cell selection, never a per-cell gap that does not exist', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 20, deltas: [delta(800, 2), delta(1500, 2), delta(2500, 2), delta(3500, 20.4, 60, 72)] };
+    const r = veReport(veAdvice, { type: 'cell', row: 5, col: 3 });
+    expect(r.state).toBe('cell-gap');
+    expect(r.headline).toBe('20% more air here than your table assumes');
+    expect(r.detail).toEqual({ rpm: 3500, from: 60, to: 72, pct: 20.4 });
+  });
+
+  it('reports the same column delta for a column selection', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 20, deltas: [delta(800, 2), delta(1500, 2), delta(2500, 2), delta(3500, 20.4, 60, 72)] };
+    const r = veReport(veAdvice, { type: 'col', col: 3 });
+    expect(r.state).toBe('col-gap');
+    expect(r.headline).toBe('20% more air here than your table assumes');
+  });
+
+  it('says "less" and reports a warn tone for a negative delta', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 15, deltas: [delta(800, -15.4, 60, 50)] };
+    const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.tone).toBe('warn');
+    expect(r.headline).toBe('15% less air here than your table assumes');
+  });
+
+  it('is ok-toned when the column delta rounds to a 0% display, never claiming a gap that would not show', () => {
+    const veAdvice = { inSync: true, recs: [], maxAbs: 0.4, deltas: [delta(800, 0.4)] };
+    const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.tone).toBe('ok');
+    expect(r.headline).toBe('0% more air here than your table assumes');
+  });
+
+  it('never indexes deltas by a row — two different rows selected with the same column agree', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 20, deltas: [delta(800, 5), delta(1500, 20, 60, 72)] };
+    const a = veReport(veAdvice, { type: 'cell', row: 0, col: 1 });
+    const b = veReport(veAdvice, { type: 'cell', row: 5, col: 1 });
+    expect(a).toEqual(b);
+  });
+});
+
+describe('veReport, a row selected', () => {
+  it('falls back to the table-wide report — there is no column-scoped number for a whole row', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 33, deltas: [delta(800, 33)] };
+    const r = veReport(veAdvice, { type: 'row', row: 2 });
+    expect(r.state).toBe('table-stale');
+    expect(r.headline).toBe('VE out of sync — 33% max gap');
+  });
+
+  it('falls back to table-sync for a row selection when the table is in sync', () => {
+    const veAdvice = { inSync: true, recs: [], maxAbs: 0.1, deltas: [delta(800, 0.1)] };
+    const r = veReport(veAdvice, { type: 'row', row: 2 });
+    expect(r.state).toBe('table-sync');
   });
 });
