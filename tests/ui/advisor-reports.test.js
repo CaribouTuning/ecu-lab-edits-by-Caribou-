@@ -318,7 +318,7 @@ describe('veReport, a cell or column selected', () => {
     const veAdvice = { inSync: false, recs: [], maxAbs: 20, deltas: [delta(800, 2), delta(1500, 2), delta(2500, 2), delta(3500, 20.4, 60, 72)] };
     const r = veReport(veAdvice, { type: 'cell', row: 5, col: 3 });
     expect(r.state).toBe('cell-gap');
-    expect(r.headline).toBe('20% more air here than your table assumes');
+    expect(r.headline).toBe('20% more air at 3500 RPM than your table assumes');
     expect(r.detail).toEqual({ rpm: 3500, from: 60, to: 72, pct: 20.4 });
   });
 
@@ -326,21 +326,48 @@ describe('veReport, a cell or column selected', () => {
     const veAdvice = { inSync: false, recs: [], maxAbs: 20, deltas: [delta(800, 2), delta(1500, 2), delta(2500, 2), delta(3500, 20.4, 60, 72)] };
     const r = veReport(veAdvice, { type: 'col', col: 3 });
     expect(r.state).toBe('col-gap');
-    expect(r.headline).toBe('20% more air here than your table assumes');
+    expect(r.headline).toBe('20% more air at 3500 RPM than your table assumes');
   });
 
   it('says "less" and reports a warn tone for a negative delta', () => {
     const veAdvice = { inSync: false, recs: [], maxAbs: 15, deltas: [delta(800, -15.4, 60, 50)] };
     const r = veReport(veAdvice, { type: 'col', col: 0 });
     expect(r.tone).toBe('warn');
-    expect(r.headline).toBe('15% less air here than your table assumes');
+    expect(r.headline).toBe('15% less air at 800 RPM than your table assumes');
   });
 
-  it('is ok-toned when the column delta rounds to a 0% display, never claiming a gap that would not show', () => {
+  // The Critical regression test: veRecommendations' own VE_NOTABLE_PCT (2.5)
+  // is the threshold, not a UI-invented one. A pct of 0.4 rounds to a 0%
+  // display either way, but the point of this test is that the boundary is
+  // 2.5, not 0.5 — proven by the sibling test below at pct 1 (also under 2.5,
+  // and nowhere near rounding to 0% on its own).
+  it('is sync-toned when the column delta rounds to a 0% display, never claiming a gap that would not show', () => {
     const veAdvice = { inSync: true, recs: [], maxAbs: 0.4, deltas: [delta(800, 0.4)] };
     const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.state).toBe('col-sync');
     expect(r.tone).toBe('ok');
-    expect(r.headline).toBe('0% more air here than your table assumes');
+    expect(r.headline).toBe('Matches your hardware at 800 RPM');
+  });
+
+  // The Critical's exact regression shape: a pct between 0.5 and 2.5 (here,
+  // -0.87 — the real default build's 800 RPM column) must be 'ok'/'col-sync',
+  // never the 'warn'/'col-gap' a 0.5%-ish threshold would have produced.
+  it('is ok/col-sync for a delta between 0.5 and 2.5, below VE_NOTABLE_PCT', () => {
+    const veAdvice = { inSync: true, recs: [], maxAbs: 0.87, deltas: [delta(800, -0.87, 60, 59.5)] };
+    const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.state).toBe('col-sync');
+    expect(r.tone).toBe('ok');
+  });
+
+  // Finding 2's regression: pct === 0 must not hit the ungrammatical
+  // "0% less air" — it has to land in col-sync, whose headline has no
+  // more/less word to get wrong.
+  it('routes pct exactly 0 into col-sync, not a "0% less" headline', () => {
+    const veAdvice = { inSync: true, recs: [], maxAbs: 0, deltas: [delta(4500, 0, 60, 60)] };
+    const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.state).toBe('col-sync');
+    expect(r.tone).toBe('ok');
+    expect(r.headline).toBe('Matches your hardware at 4500 RPM');
   });
 
   it('never indexes deltas by a row — two different rows selected with the same column agree', () => {
@@ -349,19 +376,30 @@ describe('veReport, a cell or column selected', () => {
     const b = veReport(veAdvice, { type: 'cell', row: 5, col: 1 });
     expect(a).toEqual(b);
   });
+
+  it('falls through to the table-wide report when deltas is missing entirely', () => {
+    const veAdvice = { inSync: false, recs: [], maxAbs: 33 };
+    const r = veReport(veAdvice, { type: 'col', col: 0 });
+    expect(r.state).toBe('table-stale');
+  });
 });
 
 describe('veReport, a row selected', () => {
-  it('falls back to the table-wide report — there is no column-scoped number for a whole row', () => {
+  // Finding 4: a row selection must never fall through to table-stale, whose
+  // body carries the whole-table ACCEPT RE-LOGGED VALUES button — a row
+  // selection has no column-scoped answer, so it gets its own state instead,
+  // with no accept button.
+  it('reports group-ve for a row selection instead of falling back to the table-wide report', () => {
     const veAdvice = { inSync: false, recs: [], maxAbs: 33, deltas: [delta(800, 33)] };
     const r = veReport(veAdvice, { type: 'row', row: 2 });
-    expect(r.state).toBe('table-stale');
-    expect(r.headline).toBe('VE out of sync — 33% max gap');
+    expect(r.state).toBe('group-ve');
+    expect(r.tone).toBe('info');
+    expect(r.headline).toBe('VE is measured per RPM column');
   });
 
-  it('falls back to table-sync for a row selection when the table is in sync', () => {
+  it('reports group-ve for a row selection even when the table is in sync', () => {
     const veAdvice = { inSync: true, recs: [], maxAbs: 0.1, deltas: [delta(800, 0.1)] };
     const r = veReport(veAdvice, { type: 'row', row: 2 });
-    expect(r.state).toBe('table-sync');
+    expect(r.state).toBe('group-ve');
   });
 });

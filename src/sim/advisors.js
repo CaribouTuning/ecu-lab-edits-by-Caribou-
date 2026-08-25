@@ -21,7 +21,7 @@ import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
 const WOT_ROW = 2;
 
 /** A cell delta below this (percent) is not worth reporting. */
-const VE_NOTABLE_PCT = 2.5;
+export const VE_NOTABLE_PCT = 2.5;
 
 /** Safety left under the calculated knock limit when advising, degrees. */
 const KNOCK_SAFETY_DEG = 1.5;

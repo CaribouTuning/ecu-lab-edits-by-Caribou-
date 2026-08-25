@@ -7,9 +7,14 @@
  * the responsive mechanics can be tested without fabricating advice objects.
  *
  * Reads no store. The store is one context and every consumer re-renders on
- * every dispatch, `LIVE_STEP` at 20Hz included, so this takes props and is
- * memoised — the panel re-renders when the selection or the advice changes and
- * not when the engine ticks.
+ * every dispatch, `LIVE_STEP` at 20Hz included, so this takes props rather than
+ * reading the store itself and is wrapped in `React.memo`. That memoisation
+ * does not currently stop a re-render on every tick — each screen constructs
+ * a fresh `<TuneAdvisory …>` element inline on every render, so the `children`
+ * prop is never referentially equal and the shallow comparison never hits.
+ * `React.memo` and the prop-only design are still the right call: they are
+ * what would make a future memoised `<TuneAdvisory>` element actually skip a
+ * re-render, and they keep this component ignorant of the store either way.
  */
 
 import React, { useState } from 'react';

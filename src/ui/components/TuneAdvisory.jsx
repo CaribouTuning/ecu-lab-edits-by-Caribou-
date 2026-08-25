@@ -10,8 +10,7 @@
  * convenience).
  *
  * `kind` distinguishes the three grid screens sharing this component: SPARK
- * (`'timing'`, this task), FUEL (`'afr'`) and AIRFLOW (`'ve'`), the latter two
- * arriving in Tasks 5 and 6.
+ * (`'timing'`), FUEL (`'afr'`) and AIRFLOW (`'ve'`).
  */
 
 import React from 'react';
@@ -38,7 +37,9 @@ export function TuneAdvisory({ kind, report, onAcceptVe }) {
 
 /**
  * The cell's coordinates and its four numbers, as a small definition list.
- * Shared by every `cell-*` state below.
+ * Shared by the four timing states below (`cell-over`, `cell-past-mbt`,
+ * `cell-under`, `cell-ok`) — AFR's `cell-ok` hand-rolls its own line instead,
+ * since a fuel cell has no knock ceiling or MBT to show.
  * @param {object} props
  * @param {object} props.cell a `spark` row from `calibrationAdvice`
  * @returns {React.ReactElement}
@@ -155,7 +156,7 @@ function TimingAdvisory({ report }) {
 /**
  * One AFR cell's coordinates and its commanded/suggested numbers, formatted
  * exactly as `FuelScreen`'s old banner formatted a wrongMix row — `data-richen`
- * stays on it, since `FuelScreen.module.css` colours the two directions
+ * stays on it, since `TuneAdvisory.module.css:24` colours the two directions
  * differently and that distinction has to survive wherever this line appears.
  * @param {object} props
  * @param {object} props.cell a `fuelAdv` row from `calibrationAdvice`
@@ -295,6 +296,32 @@ function VeAdvisory({ report, onAcceptVe }) {
         <div className={styles.prose}>
           <div className={styles.bannerCell}>{detail.rpm} RPM: {detail.from}% &rarr; {detail.to}%</div>
           Measured at wide-open throttle. This gap belongs to the RPM column, not to this one cell.
+        </div>
+      );
+    // The below-threshold counterpart to cell-gap/col-gap — the column's gap
+    // is smaller than `VE_NOTABLE_PCT`, the same cutoff `veRecommendations`
+    // itself uses to decide a column is not worth flagging, so this reads as
+    // an all-clear rather than a muted warning.
+    case 'cell-sync':
+    case 'col-sync':
+      return (
+        <div className={`${styles.prose} ${styles.ok}`}>
+          <div className={styles.bannerCell}>{detail.rpm} RPM: {detail.from}% &rarr; {detail.to}%</div>
+          Measured at wide-open throttle. This column matches your hardware.
+        </div>
+      );
+
+    // A selected row. `veRecommendations` reports one gap per RPM column, never
+    // per row, so there is no row-scoped number to narrow to — unlike SPARK and
+    // FUEL's `group-*` states, which count flagged cells inside the band. This
+    // deliberately does NOT fall through to `table-stale`: that body carries
+    // the ACCEPT RE-LOGGED VALUES button, which writes every row in the table,
+    // and a player who selected one row must never be shown a button that
+    // silently overwrites the other five.
+    case 'group-ve':
+      return (
+        <div className={styles.prose}>
+          VE is measured per RPM column, at wide-open throttle — a row has no gap of its own to report. Select a column header, or a single cell, to see the gap for that RPM.
         </div>
       );
 

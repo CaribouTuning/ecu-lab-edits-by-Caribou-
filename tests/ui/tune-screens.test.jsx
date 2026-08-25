@@ -161,16 +161,22 @@ describe('AirflowScreen', () => {
     // The table-wide headline is gone; the panel now reports THIS column's
     // measured gap instead, and says plainly it belongs to the column.
     expect(panel.queryByText('VE out of sync — 42% max gap')).toBeNull();
-    expect(panel.getByText('18% more air here than your table assumes')).toBeTruthy();
+    expect(panel.getByText('18% more air at 3500 RPM than your table assumes')).toBeTruthy();
     expect(panel.getByText(/This gap belongs to the RPM column, not to this one cell\./)).toBeTruthy();
   });
 
-  it('falls back to the table-wide report for a row selection — there is no column-scoped number for a row', () => {
+  it('reports group-ve for a row selection, with no whole-table accept button — there is no column-scoped number for a row', () => {
+    // Finding 4: a row selection used to fall through to table-stale, whose
+    // body renders ACCEPT RE-LOGGED VALUES — a button that writes every row,
+    // not just the one selected. A row selection now gets its own state
+    // instead, and that button must not appear.
     const veAdvice = { inSync: false, maxAbs: 42.3, recs: [], deltas: [{ rpm: 800, pct: 18.2, from: 60, to: 71 }] };
     mount(<><SelectionProbe value={{ type: 'row', row: 1 }} /><AirflowScreen veAdvice={veAdvice} veTruth={[]} /></>);
     fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
     const panel = within(screen.getByTestId('advisor-panel'));
-    expect(panel.getByText('VE out of sync — 42% max gap')).toBeTruthy();
+    expect(panel.getByText('VE is measured per RPM column')).toBeTruthy();
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeNull();
+    expect(panel.queryByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' })).toBeNull();
   });
 
   it('shows a no-advice state instead of throwing when veAdvice is null, and keeps the panel mounted', () => {
