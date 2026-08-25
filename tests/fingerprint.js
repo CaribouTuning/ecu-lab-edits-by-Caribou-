@@ -35,16 +35,27 @@
  * the documented cure (regenerate the baseline) walked contributors into revalidating
  * regressions against their own toolchain. That is issue #48.
  *
- * WHY SEVEN. Measured, not guessed. Perturbing every Math.pow, Math.exp and Math.log
- * result by one ULP — a fair model of what a new V8 does — moves exactly one of the
- * 349,231 committed fields, and moves it by 1.5e-9 relative. Seven significant figures
- * is a 1e-7 grid, so it absorbs that with two orders to spare, and still absorbs it at
- * a deliberately unfair sixteen ULP. It stays absurdly tight against anything physical:
- * a change of one part in ten million in a torque figure is not a physics change anyone
- * could mean. `is immune to floating-point noise` in fingerprint.test.js holds this
- * property down permanently.
+ * WHY SEVEN. Measured, not guessed, and re-measured against the physics as it stands.
+ * Perturbing every Math.pow, Math.exp and Math.log result by one ULP — a fair model of
+ * what a new V8 does — moves 34 of the 349,195 committed fields, by at most 1.5e-9
+ * relative; at a deliberately unfair sixteen ULP it moves 44 of them by at most 1.5e-8.
+ * Seven significant figures is a 1e-7 grid, so it absorbs even the sixteen-ULP case with
+ * an order to spare. Counting how many survive each candidate quantiser is what picks
+ * the seven:
  *
- * The one field that drifts is worth naming, because it says what the real hazard is:
+ *   quantiser          1 ULP    4 ULP   16 ULP     (fields still differing)
+ *   6 decimals (old)       1        1        1
+ *   9 sig figs             1        1        1
+ *   8 sig figs             0        0        1
+ *   7 sig figs             0        0        0
+ *
+ * Eight is not enough; seven is. And seven stays absurdly tight against anything
+ * physical: a change of one part in ten million in a torque figure is not a physics
+ * change anyone could mean. `is immune to floating-point noise` in fingerprint.test.js
+ * holds this property down permanently.
+ *
+ * The single field that survives the old quantiser is worth naming, because it says what
+ * the real hazard is:
  * `bsfc` at 800 RPM and 40 kPa on mis-scaled injectors, where the engine makes almost
  * no power and BSFC is fuel divided by a denominator approaching zero. A ratio near a
  * singularity has no stable relative precision at any tolerance. Quantising is what

@@ -762,6 +762,86 @@ describe('engine configuration and friction', () => {
   });
 });
 
+/**
+ * THE HIGH-SPEED BREATHING LIMIT — issue #15.
+ *
+ * The app teaches that power "rises with RPM, then falls as the valves cannot flow fast
+ * enough", and the model then contradicted it: nothing made VE fall at speed, so every
+ * naturally aspirated engine climbed monotonically into its limiter and had no power peak
+ * at all. Two presets carried a written exception saying exactly that.
+ *
+ * The missing term is the inlet Mach index — how close the charge is to choking on its
+ * way past the valve. What makes it worth doing as physics rather than as a curve fit
+ * against RPM is the dependence it brings for free: it keys on MEAN PISTON SPEED against
+ * the speed of sound, so a long-stroke engine chokes at fewer revolutions, and a hotter
+ * charge chokes later.
+ */
+describe('the inlet Mach index', () => {
+  const STROKE = S.DEFAULT_ENGINE_CONFIG.stroke;
+  const BORE = S.DEFAULT_ENGINE_CONFIG.bore;
+
+  it('is mean piston speed against the speed of sound', () => {
+    // 2 x stroke x rev/s, the standard definition.
+    expect(S.meanPistonSpeedMs(81.4, 6000)).toBeCloseTo(2 * 0.0814 * 100, 6);
+    // And the index is that, scaled by the bore-to-valve geometry.
+    const z = S.inletMachIndex(BORE, 81.4, 6000);
+    expect(z).toBeCloseTo(
+      S.COEFF.MACH_BORE_VALVE_FACTOR * S.meanPistonSpeedMs(81.4, 6000) / S.SONIC_AMBIENT_MS, 6,
+    );
+  });
+
+  it('costs nothing through the mid-range and bites at the top', () => {
+    expect(S.machVeMultiplier(BORE, STROKE, 3000)).toBe(1);
+    expect(S.machVeMultiplier(BORE, STROKE, 7500)).toBeLessThan(1);
+    // Monotonic once it starts, so there is no speed at which revving harder helps.
+    const at = (rpm) => S.machVeMultiplier(BORE, STROKE, rpm);
+    expect(at(7500)).toBeLessThan(at(6500));
+    expect(at(6500)).toBeLessThanOrEqual(at(5500));
+  });
+
+  it('chokes a long-stroke engine at fewer revolutions than a short-stroke one', () => {
+    // The payoff for keying on piston speed rather than RPM: this is why an undersquare
+    // engine cannot rev, and it now falls out of the model instead of being asserted.
+    const longStroke = S.machVeMultiplier(BORE, 100, 6500);
+    const shortStroke = S.machVeMultiplier(BORE, 70, 6500);
+    expect(longStroke).toBeLessThan(shortStroke);
+  });
+
+  it('chokes later on a hot charge, because sound travels faster in it', () => {
+    const cold = S.machVeMultiplier(BORE, STROKE, 7500, 298);
+    const hot = S.machVeMultiplier(BORE, STROKE, 7500, 400);
+    expect(hot).toBeGreaterThan(cold);
+  });
+
+  it('never starves the engine completely', () => {
+    expect(S.machVeMultiplier(BORE, 120, 9000)).toBeGreaterThanOrEqual(S.COEFF.MACH_VE_FLOOR);
+  });
+
+  it('gives a naturally aspirated engine a power peak before its redline', () => {
+    // The headline of the issue, asserted on the shipped engines rather than in the
+    // abstract: both naturally aspirated presets used to climb into the limiter.
+    for (const preset of S.ENGINE_PRESETS) {
+      const p = S.applyPreset(preset);
+      if (p.turboOn) continue;                       // a boost curve places these itself
+      const derived = S.deriveEngine(p.engineConfig);
+      const r = S.simulateSweep({
+        loadKpa: 100, ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        turboOn: false, boostCurve: p.boostCurve,
+        octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, octaneLabel: 'x',
+        fuel: S.OCTANE_OPTS[p.octaneIdx], injectorCc: S.INJECTOR_OPTS[p.injIdx].cc,
+        ecuInjectorCc: p.ecuInjectorCc, injectorLabel: 'x', mods: p.mods, mafScalar: 1,
+        derived, turbine: S.presetTurbine(preset),
+        compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      });
+      const peakHp = Math.max(...r.points.map((x) => x.hp));
+      const peakRpm = Math.max(...r.points.filter((x) => x.hp === peakHp).map((x) => x.rpm));
+      const atRedline = r.points[r.points.length - 1].hp;
+      expect(peakRpm, `${preset.id} still peaks at its limiter`).toBeLessThan(derived.redline);
+      expect(atRedline, `${preset.id} does not fall away after its peak`).toBeLessThan(peakHp);
+    }
+  });
+});
+
 describe('per-engine redline', () => {
   const sweepTo = (redline) => {
     const cfg = { ...STOCK, redline };
@@ -1036,6 +1116,70 @@ describe('exhaust gas temperature', () => {
     const advanced = point({ rpm: 5500, timingVal: 30 }).egt;
     const retarded = point({ rpm: 5500, timingVal: 10 }).egt;
     expect(retarded).toBeGreaterThan(advanced);
+  });
+
+  /**
+   * Issue #47. EGT used to RISE as the throttle closed — a 40 kPa pull read 1078-1223 C
+   * and tripped the alarm on 61 points out of 61, while wide-open throttle sat calmly at
+   * 875-944. Backwards, and it made the gauge useless for the thing it is for.
+   *
+   * The cause was that the charge was treated as if it all left the cylinder through
+   * blowdown. It does not: only the part that escapes while the cylinder is above the
+   * manifold does, and at light load that is almost none of it. The rest is pushed out by
+   * the piston, slowly, against a port hundreds of degrees cooler.
+   */
+  describe('falls with load, because less of the charge leaves through blowdown', () => {
+    /** Peak EGT anywhere in a pull at the given throttle opening, on the stock V6. */
+    const peakEgtAt = (loadKpa) => {
+      const derived = S.deriveEngine(STOCK);
+      const r = S.simulateSweep({
+        loadKpa, ve: S.DEFAULT_VE, veTruth: S.DEFAULT_VE,
+        timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+        turboOn: false, boostCurve: S.DEFAULT_BOOST,
+        octaneBonus: S.OCTANE_OPTS[0].bonus, octaneLabel: S.OCTANE_OPTS[0].label,
+        fuel: S.OCTANE_OPTS[0], injectorCc: 315, ecuInjectorCc: 315, injectorLabel: '315cc',
+        mods: { ...S.DEFAULT_MODS }, mafScalar: 1, derived,
+        turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+      });
+      return {
+        peak: Math.max(...r.points.map((p) => p.egt)),
+        alarms: r.points.filter((p) => p.egtRisk).length,
+        n: r.points.length,
+      };
+    };
+
+    it('reads coolest at the lightest load, not hottest', () => {
+      const wot = peakEgtAt(S.BARO_KPA).peak;
+      const part = peakEgtAt(40).peak;
+      const cruise = peakEgtAt(20).peak;
+      expect(part).toBeLessThan(wot);
+      expect(cruise).toBeLessThan(part);
+    });
+
+    it('stops alarming on a part-throttle pull', () => {
+      // The symptom that made this reportable: 61 of 61 points over the limit at 40 kPa.
+      for (const loadKpa of [S.BARO_KPA, 70, 40, 20]) {
+        const { alarms, n } = peakEgtAt(loadKpa);
+        expect(alarms, `${Math.round(loadKpa)} kPa alarmed on ${alarms}/${n} points`).toBe(0);
+      }
+    });
+
+    it('keeps wide-open throttle in the band a real gauge shows', () => {
+      // Not asserting a number — asserting that the fix did not simply push everything
+      // down to the wall temperature to make the alarm go away. A naturally aspirated
+      // engine at full load on a rich mixture belongs in the high hundreds.
+      const wot = peakEgtAt(S.BARO_KPA).peak;
+      expect(wot).toBeGreaterThan(650);
+      expect(wot).toBeLessThan(950);
+    });
+
+    it('sends more of the charge out through blowdown as load rises', () => {
+      // The mechanism itself, stated separately from its consequence. Cylinder pressure
+      // at valve opening is what sets the split, and it is much higher at full load.
+      const wot = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+      const light = point({ rpm: 5500, mapKpa: 40 });
+      expect(wot.egt).toBeGreaterThan(light.egt);
+    });
   });
 });
 
