@@ -17,6 +17,7 @@ import { reducer } from './reducer.js';
 /** @typedef {import('./initialState.js').BuildState} BuildState */
 /** @typedef {import('./initialState.js').TuneState} TuneState */
 /** @typedef {import('./initialState.js').SessionState} SessionState */
+/** @typedef {import('./initialState.js').HistoryState} HistoryState */
 /** @typedef {import('./reducer.js').StoreAction} StoreAction */
 
 /** @typedef {[StoreState, React.Dispatch<StoreAction>]} StoreContextValue */
@@ -84,4 +85,13 @@ export function useTune() {
 export function useSession() {
   const [state, dispatch] = useStore();
   return [state.session, dispatch];
+}
+
+/**
+ * The HISTORY slice: the undo and redo stacks.
+ * @returns {[HistoryState, React.Dispatch<StoreAction>]}
+ */
+export function useHistory() {
+  const [state, dispatch] = useStore();
+  return [state.history, dispatch];
 }

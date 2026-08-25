@@ -25,7 +25,9 @@
  * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, presetById } from '../../sim/index.js';
+
+import { HISTORY_LIMIT, restore, snapshot } from './history.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -53,6 +55,8 @@ export const ACTIONS = Object.freeze({
   BANK_PULL: 'BANK_PULL',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
+  UNDO: 'UNDO',
+  REDO: 'REDO',
 });
 
 /**
@@ -289,7 +293,10 @@ export const ACTIONS = Object.freeze({
  * @param {StoreAction} action
  * @returns {StoreState}
  */
-export function reducer(state, action) {
+/**
+ * Every case except UNDO/REDO. Wrapped by `reducer` below, which is what callers use.
+ */
+function baseReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_BUILD_FIELD:
       return {
@@ -482,4 +489,88 @@ export function reducer(state, action) {
       // bails out of the re-render instead of scheduling one for a no-op.
       return state;
   }
+}
+
+/**
+ * The three actions that destroy calibration the player cannot otherwise get back.
+ *
+ * Hardware writes are deliberately absent: every hardware control already displays its
+ * own current value, so it is self-reversing, and undo must not become a time machine
+ * over banked career progress.
+ */
+const UNDOABLE = new Set([ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET, ACTIONS.RESET_TO_STOCK]);
+
+/**
+ * Names what an undoable action did, for the undo button's `aria-label` and BUILD's
+ * post-load offer. Lives here rather than in history.js because it needs `ACTIONS` and
+ * the preset catalogue, and history.js must not import this module.
+ * @param {any} action
+ * @returns {string}
+ */
+function labelFor(action) {
+  switch (action.type) {
+    case ACTIONS.SET_TABLE:
+      return { ve: 'VE edit', timing: 'Spark edit', afr: 'Fuel edit' }[action.table];
+    case ACTIONS.APPLY_PRESET: {
+      const preset = presetById(action.preset.presetId);
+      return `Preset · ${preset ? preset.name : 'factory calibration'}`;
+    }
+    default:
+      return 'Reset to stock';
+  }
+}
+
+/**
+ * The store's reducer: `baseReducer` plus the undo stack.
+ *
+ * Recording is a WRAPPER rather than a line inside each undoable case, so the three
+ * existing cases stay exactly as they were and a fourth undoable action is one entry in
+ * `UNDOABLE` rather than a fourth place to remember. It stays a pure function of
+ * `(state, action)` — no clock, no coalescing keys, no merge logic. The dock's slider
+ * commits once on release instead (see SelectionDock.jsx), which is what keeps a drag
+ * from becoming eighteen undo steps without any of that machinery.
+ *
+ * @param {StoreState} state
+ * @param {any} action
+ * @returns {StoreState}
+ */
+export function reducer(state, action) {
+  if (action.type === ACTIONS.UNDO) {
+    const { past, future } = state.history;
+    if (past.length === 0) return state;
+    const entry = past[past.length - 1];
+    return {
+      ...restore(state, entry.before),
+      history: {
+        past: past.slice(0, -1),
+        future: [{ label: entry.label, before: snapshot(state) }, ...future],
+      },
+    };
+  }
+
+  if (action.type === ACTIONS.REDO) {
+    const { past, future } = state.history;
+    if (future.length === 0) return state;
+    const entry = future[0];
+    return {
+      ...restore(state, entry.before),
+      history: {
+        past: [...past, { label: entry.label, before: snapshot(state) }].slice(-HISTORY_LIMIT),
+        future: future.slice(1),
+      },
+    };
+  }
+
+  const next = baseReducer(state, action);
+  if (!UNDOABLE.has(action.type)) return next;
+  return {
+    ...next,
+    history: {
+      past: [...state.history.past, { label: labelFor(action), before: snapshot(state) }]
+        .slice(-HISTORY_LIMIT),
+      // A new edit abandons the redo branch: keeping it would let redo jump the player
+      // onto a timeline they had already left.
+      future: [],
+    },
+  };
 }

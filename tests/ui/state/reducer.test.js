@@ -38,6 +38,14 @@ function makeSentinelState() {
   const init = makeInitialState();
   const state = /** @type {any} */ ({});
   for (const slice of Object.keys(init)) {
+    // `history` is structural, not scalar: the reducer spreads `past`, and
+    // `[...'SENTINEL::history.past']` would silently become 24 single characters.
+    // A real empty stack still starts unequal to anything a write produces, which is
+    // all `changedFieldKeys` needs.
+    if (slice === 'history') {
+      state[slice] = { past: [], future: [] };
+      continue;
+    }
     const sliceState = /** @type {any} */ ({});
     for (const field of Object.keys(/** @type {any} */ (init)[slice])) {
       sliceState[field] = `SENTINEL::${slice}.${field}`;
@@ -90,9 +98,9 @@ const N54_PRESET = {
 };
 
 describe('makeInitialState', () => {
-  it('returns the three slices', () => {
+  it('returns the four slices', () => {
     const s = makeInitialState();
-    expect(Object.keys(s).sort()).toEqual(['build', 'session', 'tune']);
+    expect(Object.keys(s).sort()).toEqual(['build', 'history', 'session', 'tune']);
   });
 
   it('starts with no preset loaded and clean tables', () => {
@@ -486,7 +494,7 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // contract this action documents: a stray write grows the changed set past 21, a
   // dropped write shrinks it below 21, and the failure message names the field either
   // way.
-  it('changes exactly the 21 documented fields — no more, no fewer', () => {
+  it('changes exactly the 21 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -498,6 +506,9 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.presetId', 'build.presetPrompt',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
       'session.result', 'session.prevResult',
+      // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
+      // belong in the exact-write-surface contract like any other field it touches.
+      'history.past', 'history.future',
     ];
 
     expect([...changed].sort()).toEqual([...expected].sort());
@@ -775,5 +786,125 @@ describe('BANK_PULL', () => {
     const after = reducer(before, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
     expect(after.build).toBe(before.build);
     expect(after.tune).toBe(before.tune);
+  });
+});
+
+describe('UNDO / REDO', () => {
+  /** A state with one hand VE edit already applied. */
+  const edited = () => reducer(
+    makeInitialState(),
+    { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] },
+  );
+
+  it('records the state BEFORE an edit, not after', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] });
+    expect(after.history.past).toHaveLength(1);
+    expect(after.history.past[0].before.tune.ve).toBe(before.tune.ve);
+    expect(after.history.past[0].label).toBe('VE edit');
+  });
+
+  it('puts the table back', () => {
+    const start = makeInitialState();
+    const s = reducer(edited(), { type: ACTIONS.UNDO });
+    // Deep equality, not `toBe`: `start` and `edited()` each call `makeInitialState()`
+    // independently, and its own file header documents that every call returns "a
+    // fresh object graph" — `computeHardwareVE` recomputes `ve` from scratch each time,
+    // so two independently-built initial states are never the SAME array, only an
+    // equal one. Reference equality is guaranteed only against the exact snapshot
+    // `edited()` itself recorded, which `start` is not.
+    expect(s.tune.ve).toEqual(start.tune.ve);
+    expect(s.history.past).toHaveLength(0);
+    expect(s.history.future).toHaveLength(1);
+  });
+
+  it('restores tablesDirty, not just the numbers', () => {
+    // A history that carried only the table would leave the player's unsaved-work flag
+    // stuck true after undoing their only edit.
+    expect(edited().tune.tablesDirty).toBe(true);
+    expect(reducer(edited(), { type: ACTIONS.UNDO }).tune.tablesDirty).toBe(false);
+  });
+
+  it('restores presetId, because SET_TABLE cleared it', () => {
+    // The reason the snapshot is a projection of BOTH slices. SET_TABLE clears
+    // presetId in the same pass it writes the table; undo has to put the label back or
+    // the header goes on disowning a preset the player never actually left.
+    const loaded = { ...makeInitialState() };
+    loaded.build = { ...loaded.build, presetId: 'n54' };
+    const dirty = reducer(loaded, { type: ACTIONS.SET_TABLE, table: 'timing', value: [[9]] });
+    expect(dirty.build.presetId).toBeNull();
+    expect(reducer(dirty, { type: ACTIONS.UNDO }).build.presetId).toBe('n54');
+  });
+
+  it('restores the build fields APPLY_PRESET overwrote', () => {
+    const before = makeInitialState();
+    const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(after.build.turboOn).toBe(true);
+    const undone = reducer(after, { type: ACTIONS.UNDO });
+    expect(undone.build.turboOn).toBe(false);
+    expect(undone.build.engineConfig).toBe(before.build.engineConfig);
+    expect(undone.build.presetId).toBeNull();
+  });
+
+  it('labels a preset load with the preset name', () => {
+    const after = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(after.history.past[0].label).toBe('Preset · BMW N54');
+  });
+
+  it('labels a reset', () => {
+    const after = reducer(makeInitialState(), { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(after.history.past[0].label).toBe('Reset to stock');
+  });
+
+  it('redo puts the edit back', () => {
+    const undone = reducer(edited(), { type: ACTIONS.UNDO });
+    const redone = reducer(undone, { type: ACTIONS.REDO });
+    expect(redone.tune.ve).toEqual([[42]]);
+    expect(redone.history.past).toHaveLength(1);
+    expect(redone.history.future).toHaveLength(0);
+  });
+
+  it('a new edit clears the redo stack', () => {
+    // Otherwise redo would jump the player onto a branch they had already left.
+    const undone = reducer(edited(), { type: ACTIONS.UNDO });
+    expect(undone.history.future).toHaveLength(1);
+    const branched = reducer(undone, { type: ACTIONS.SET_TABLE, table: 've', value: [[7]] });
+    expect(branched.history.future).toHaveLength(0);
+  });
+
+  it('caps the stack at 50 and drops the OLDEST entry', () => {
+    let s = makeInitialState();
+    for (let i = 0; i < 60; i += 1) {
+      s = reducer(s, { type: ACTIONS.SET_TABLE, table: 've', value: [[i]] });
+    }
+    expect(s.history.past).toHaveLength(50);
+    // Entry 0 must be the snapshot taken before edit #10 — i.e. holding edit #9's
+    // value. Asserting the LENGTH alone would pass just as well for a cap that
+    // discarded the newest entries, which is the opposite of what undo needs.
+    expect(s.history.past[0].before.tune.ve).toEqual([[9]]);
+  });
+
+  it('undo and redo on an empty stack return the SAME object', () => {
+    // Reference equality, not deep equality: React's useReducer bails out of the
+    // re-render only when the reducer returns the identical object.
+    const s = makeInitialState();
+    expect(reducer(s, { type: ACTIONS.UNDO })).toBe(s);
+    expect(reducer(s, { type: ACTIONS.REDO })).toBe(s);
+  });
+
+  it('does not record actions that are not undoable', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+    expect(s.history.past).toHaveLength(0);
+  });
+
+  it('does not restore dyno results', () => {
+    // A deliberate asymmetry, spec'd: undo brings back hardware and calibration, but
+    // re-showing a banked score beside a build that was just reverted would state
+    // something false.
+    const withResult = { ...makeInitialState() };
+    withResult.session = { ...withResult.session, result: { peakHp: 400 } };
+    const loaded = reducer(withResult, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(loaded.session.result).toBeNull();
+    expect(reducer(loaded, { type: ACTIONS.UNDO }).session.result).toBeNull();
   });
 });
