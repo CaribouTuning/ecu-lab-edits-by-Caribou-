@@ -4,6 +4,34 @@
   padding: var(--sp-xl) var(--sp-xl) 0;
 }
 
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css, which lists every file that uses it. Kept in sync by hand with
+   StartScreen.module.css, TutorialScreen.module.css, AppShell.module.css and
+   AdvisorPanel.module.css.
+
+   `minmax(0, 1fr)` rather than a bare `1fr`: the tuning grid is a wide
+   fixed-width child, and a bare `1fr` track refuses to shrink below its
+   content's intrinsic width, which would push the advisor rail past the
+   content cap and off the screen. */
+@media (min-width: 560px) {
+  .wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: var(--sp-xl);
+    align-items: start;
+  }
+
+  /* A grid item's automatic minimum size is its content's, not zero, so a wide
+     child could still push this track past the content cap even though the
+     track itself is sized `minmax(0, 1fr)`. The tuning grid carries its own
+     `overflow-x: auto` wrapper, which should already zero that contribution —
+     this makes it unconditional rather than dependent on a descendant's
+     styling two levels down. */
+  .main {
+    min-width: 0;
+  }
+}
+
 .intro {
   margin-bottom: 12px;
   font-size: 12.5px;
@@ -13,92 +41,9 @@
 
 .spacer { flex: 1; }
 
-/* The two advisory banners are mutually exclusive — only one of `inSyncBanner` or
-   `staleBanner` is ever mounted, so each gets its own fixed class rather than a
-   shared one switched by a data attribute. */
-
-.inSyncBanner {
-  display: flex;
-  gap: 8px;
-  margin: 10px 0;
-  padding: 11px 13px;
-  border: 1px solid var(--ok-line);
-  border-radius: 10px;
-  background: var(--ok-bg);
-  color: var(--ok);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.inSyncIcon {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.staleBanner {
-  margin: 10px 0;
-  padding: 12px 13px;
-  border: 1px solid var(--acc);
-  border-radius: 10px;
-  background: var(--panel2);
-}
-
-.staleHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.staleLabel {
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-weight: 800;
-  color: var(--acc-ink);
-}
-
-.staleGap {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--acc-ink);
-}
-
-.staleBody {
-  margin-bottom: 9px;
-  font-size: var(--fs-sm);
-  color: var(--ink2);
-  line-height: 1.55;
-}
-
-.rec { margin-bottom: 9px; }
-
-.recTitle {
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.recText {
-  margin-top: 2px;
-  font-size: 11.5px;
-  color: var(--ink2);
-  line-height: 1.5;
-}
-
-.recCells {
-  margin-top: 3px;
-  font-family: var(--mono);
-  font-size: var(--fs-xs);
-  color: var(--cyan);
-}
-
-.acceptNote {
-  margin-top: 6px;
-  font-size: var(--fs-xs);
-  color: var(--ink3);
-  text-align: center;
-}
-
-/* Prose emphasis inside the ExpandableInfo panel. */
+/* Prose emphasis inside the ExpandableInfo panel. The VE-sync advisory that
+   used to live in this file (and the sibling .inSyncBanner/.inSyncIcon/
+   .staleBanner/.staleHead/.staleLabel/.staleGap/.staleBody/.rec/.recTitle/
+   .recText/.recCells/.acceptNote classes it used) moved into
+   TuneAdvisory.module.css along with the markup — see TuneAdvisory.jsx. */
 .em { color: var(--ink); }

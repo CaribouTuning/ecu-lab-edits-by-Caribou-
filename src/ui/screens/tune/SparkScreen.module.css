@@ -4,6 +4,34 @@
   padding: var(--sp-xl) var(--sp-xl) 0;
 }
 
+/* 560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css, which lists every file that uses it. Kept in sync by hand with
+   StartScreen.module.css, TutorialScreen.module.css, AppShell.module.css and
+   AdvisorPanel.module.css.
+
+   `minmax(0, 1fr)` rather than a bare `1fr`: the tuning grid is a wide
+   fixed-width child, and a bare `1fr` track refuses to shrink below its
+   content's intrinsic width, which would push the advisor rail past the
+   content cap and off the screen. */
+@media (min-width: 560px) {
+  .wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: var(--sp-xl);
+    align-items: start;
+  }
+
+  /* A grid item's automatic minimum size is its content's, not zero, so a wide
+     child could still push this track past the content cap even though the
+     track itself is sized `minmax(0, 1fr)`. The tuning grid carries its own
+     `overflow-x: auto` wrapper, which should already zero that contribution —
+     this makes it unconditional rather than dependent on a descendant's
+     styling two levels down. */
+  .main {
+    min-width: 0;
+  }
+}
+
 .intro {
   margin-bottom: 12px;
   font-size: 12.5px;
@@ -12,68 +40,8 @@
 
 .spacer { flex: 1; }
 
-/* The four knock-advisory states are mutually exclusive — only one ever mounts —
-   so each gets its own fixed class rather than a shared one switched at runtime. */
-
-.dangerBanner {
-  margin: 10px 0;
-  padding: 12px 13px;
-  border: 1px solid var(--danger-line);
-  border-radius: 10px;
-  background: var(--danger-bg);
-}
-
-.dangerLabel {
-  margin-bottom: 7px;
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-weight: 800;
-  color: var(--danger-ink);
-}
-
-.dangerBody {
-  margin-bottom: 8px;
-  font-size: var(--fs-sm);
-  color: var(--ink2);
-  line-height: 1.55;
-}
-
-.dangerCell {
-  margin-bottom: 2px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--cyan);
-}
-
-.dangerMore {
-  margin-top: 3px;
-  font-size: var(--fs-xs);
-  color: var(--ink3);
-}
-
-.dangerFooter {
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--ink3);
-}
-
-.advisoryPanel {
-  margin: 10px 0;
-  font-size: var(--fs-sm);
-  color: var(--ink2);
-  line-height: 1.5;
-}
-
-.okBanner {
-  margin: 10px 0;
-  padding: 11px 13px;
-  border: 1px solid var(--ok-line);
-  border-radius: 10px;
-  background: var(--ok-bg);
-  font-size: 12.5px;
-  color: var(--ok);
-}
-
-/* Prose emphasis, both inside the advisory Panels and the ExpandableInfo panels. */
-.em { color: var(--acc-ink); }
+/* Prose emphasis inside the ExpandableInfo panels. The knock-advisory banners
+   that used to live in this file (and the sibling .em token they used for
+   their own emphasis) moved into TuneAdvisory.module.css along with the
+   markup — see TuneAdvisory.jsx. */
 .emInk { color: var(--ink); }

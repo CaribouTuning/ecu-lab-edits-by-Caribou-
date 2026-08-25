@@ -30,7 +30,7 @@ import { InjectorsScreen } from '../../src/ui/screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from '../../src/ui/screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from '../../src/ui/screens/tune/SparkScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { StoreProvider, useBuild } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 
 // jsdom has no ResizeObserver, and EcuScreen's FUEL TRIM panel mounts recharts'
 // <ResponsiveContainer> once a result exists, which throws without one. Same stub
@@ -74,10 +74,27 @@ function OctaneProbe({ index }) {
   );
 }
 
-// A blank calAdvice — none of the four advisory arrays trip — so SparkScreen and
+/**
+ * Dispatches `SET_TUNE_FIELD` for `selection` against whatever store it is
+ * mounted under — same pattern as `OctaneProbe` above, standing in for a
+ * `TuningGrid` click so the advisor panel's selection-scoped path can be
+ * exercised without needing real grid geometry.
+ */
+function SelectionProbe({ value }) {
+  const [, dispatch] = useTune();
+  return (
+    <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value })}>
+      probe-set-selection
+    </button>
+  );
+}
+
+// A blank calAdvice — none of the six advisory arrays trip — so SparkScreen and
 // FuelScreen tests that are not exercising the advisory itself land on each
 // screen's quiet default state instead of tripping over unrelated fixture noise.
-const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] };
+// `spark` and `fuelAdv` are here too, matching the real shape `calibrationAdvice`
+// returns, since `sparkReport` and `fuelReport` (added in later tasks) read them.
+const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [], spark: [], fuelAdv: [] };
 
 describe('AirflowScreen', () => {
   it('mounts the shared TuningGrid and SelectionDock with their test ids intact', () => {
@@ -100,8 +117,11 @@ describe('AirflowScreen', () => {
       recs: [{ rpmText: 'FABRICATED 9999 RPM', text: 'fabricated advisory text', cells: ['9999@1 -> 2'] }],
     };
     mount(<AirflowScreen veAdvice={veAdvice} veTruth={[]} />);
-    expect(screen.getByText('42% max gap')).toBeTruthy();
-    expect(screen.getByText('FABRICATED 9999 RPM')).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // maxAbs is folded into the panel headline now (veReport's table-stale
+    // state), not a standalone '42% max gap' string.
+    expect(panel.getByText('VE out of sync — 42% max gap')).toBeTruthy();
+    expect(panel.getByText('FABRICATED 9999 RPM')).toBeTruthy();
   });
 
   it('writes the shell-computed veTruth into the store on ACCEPT RE-LOGGED VALUES, not one it derived itself', () => {
@@ -115,6 +135,61 @@ describe('AirflowScreen', () => {
     const grid = screen.getByTestId('tuning-grid');
     const cells = within(grid).getAllByRole('button').filter((b) => b.textContent === '77');
     expect(cells).toHaveLength(48);
+  });
+
+  it('narrows to the selected column rather than the whole table', () => {
+    // deltas[3] is the only column-scoped number veReport is allowed to read
+    // for a cell/col selection — arbitrary index, veReport looks it up by
+    // selection.col, it never touches TuningGrid's real geometry.
+    const veAdvice = {
+      inSync: false,
+      maxAbs: 42.3,
+      recs: [{ rpmText: 'FABRICATED 9999 RPM', text: 'fabricated advisory text', cells: ['9999@1 -> 2'] }],
+      deltas: [
+        { rpm: 800, pct: 0, from: 50, to: 50 },
+        { rpm: 1500, pct: 0, from: 50, to: 50 },
+        { rpm: 2500, pct: 0, from: 50, to: 50 },
+        { rpm: 3500, pct: 18.2, from: 60, to: 71 },
+      ],
+    };
+    mount(<><SelectionProbe value={{ type: 'col', col: 3 }} /><AirflowScreen veAdvice={veAdvice} veTruth={[]} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table-wide headline is gone; the panel now reports THIS column's
+    // measured gap instead, and says plainly it belongs to the column.
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeNull();
+    expect(panel.getByText('18% more air at 3500 RPM than your table assumes')).toBeTruthy();
+    expect(panel.getByText(/This gap belongs to the RPM column, not to this one cell\./)).toBeTruthy();
+  });
+
+  it('reports group-ve for a row selection, with no whole-table accept button — there is no column-scoped number for a row', () => {
+    // Finding 4: a row selection used to fall through to table-stale, whose
+    // body renders ACCEPT RE-LOGGED VALUES — a button that writes every row,
+    // not just the one selected. A row selection now gets its own state
+    // instead, and that button must not appear.
+    const veAdvice = { inSync: false, maxAbs: 42.3, recs: [], deltas: [{ rpm: 800, pct: 18.2, from: 60, to: 71 }] };
+    mount(<><SelectionProbe value={{ type: 'row', row: 1 }} /><AirflowScreen veAdvice={veAdvice} veTruth={[]} /></>);
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('VE is measured per RPM column')).toBeTruthy();
+    expect(panel.queryByText('VE out of sync — 42% max gap')).toBeNull();
+    expect(panel.queryByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' })).toBeNull();
+  });
+
+  it('shows a no-advice state instead of throwing when veAdvice is null, and keeps the panel mounted', () => {
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // The brief gives one string for this state, used as both the collapsed
+    // headline and the expanded body, so it legitimately appears twice.
+    expect(panel.getAllByText('No airflow comparison available for this build yet.')).toHaveLength(2);
+  });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
   });
 });
 
@@ -132,13 +207,43 @@ describe('SparkScreen', () => {
       underAdvanced: [], pastMbt: [], wrongMix: [],
     };
     mount(<SparkScreen calAdvice={calAdvice} />);
-    expect(screen.getByText('1 CELLS BEYOND THE KNOCK LIMIT')).toBeTruthy();
-    expect(screen.getByText(/999 kPa \/ 9999 RPM: 11° → 22°/)).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // Singular — the pre-panel banner read '1 CELLS BEYOND THE KNOCK LIMIT',
+    // a latent copy bug the plural helper in `sparkReport` fixes.
+    expect(panel.getByText('1 cell beyond the knock limit')).toBeTruthy();
+    expect(panel.getByText(/999 kPa \/ 9999 RPM: 11° → 22°/)).toBeTruthy();
   });
 
   it('falls through the danger/under-advanced/past-MBT states to the clean-table message when every advisory is empty', () => {
     mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
-    expect(screen.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
+  });
+
+  it('narrows to the selected cell rather than the whole table', () => {
+    // ri/ci 2,3 is arbitrary — sparkReport looks the cell up by coordinate, it
+    // never touches TuningGrid's real geometry, so any pair works here.
+    const calAdvice = {
+      overAdvanced: [{ ri: 2, ci: 3, map: 999, rpm: 9999, current: 30, suggested: 22 }],
+      underAdvanced: [], pastMbt: [], wrongMix: [],
+      spark: [{
+        ri: 2, ci: 3, map: 999, rpm: 9999, current: 30, suggested: 22, knockCeiling: 25, mbt: 20, delta: -8,
+      }],
+    };
+    mount(<><SelectionProbe value={{ type: 'cell', row: 2, col: 3 }} /><SparkScreen calAdvice={calAdvice} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('1 cell beyond the knock limit')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table count is gone; the panel now reports THIS cell instead.
+    expect(panel.queryByText('1 cell beyond the knock limit')).toBeNull();
+    expect(panel.getByText('5.0 deg past the knock limit')).toBeTruthy();
+  });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
   });
 });
 
@@ -156,8 +261,37 @@ describe('FuelScreen', () => {
       wrongMix: [{ map: 888, rpm: 7777, current: 12.3, suggested: 11.1, delta: -1, delivered: 99, target: 88 }],
     };
     mount(<FuelScreen calAdvice={calAdvice} />);
-    expect(screen.getByText('1 HIGH-LOAD CELLS OFF BEST POWER')).toBeTruthy();
-    expect(screen.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // Singular — the pre-panel banner always read '1 HIGH-LOAD CELLS OFF BEST
+    // POWER', a latent copy bug the plural helper in `fuelReport` fixes.
+    expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
+    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+  });
+
+  it('narrows to the selected cell rather than the whole table', () => {
+    // ri/ci 2,3 is arbitrary — fuelReport looks the cell up by coordinate, it
+    // never touches TuningGrid's real geometry, so any pair works here.
+    const calAdvice = {
+      overAdvanced: [], underAdvanced: [], pastMbt: [],
+      wrongMix: [{ ri: 2, ci: 3, map: 999, rpm: 9999, current: 12.3, suggested: 11.1, delta: -1.2, delivered: 99, target: 88 }],
+      fuelAdv: [{
+        ri: 2, ci: 3, map: 999, rpm: 9999, current: 12.3, suggested: 11.1, delta: -1.2, delivered: 99, target: 88,
+      }],
+    };
+    mount(<><SelectionProbe value={{ type: 'cell', row: 2, col: 3 }} /><FuelScreen calAdvice={calAdvice} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table count is gone; the panel now reports THIS cell instead.
+    expect(panel.queryByText('1 high-load cell off best power')).toBeNull();
+    expect(panel.getByText('1.2 AFR lean of best power')).toBeTruthy();
+  });
+
+  it('mounts exactly one advisor panel', () => {
+    mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getAllByTestId('advisor-panel')).toHaveLength(1);
   });
 });
 
