@@ -95,7 +95,7 @@ function TimingAdvisory({ report }) {
         </div>
       );
     case 'table-clean':
-      return <div className={styles.prose}>Spark table sits within the knock limit for this hardware.</div>;
+      return <div className={`${styles.prose} ${styles.ok}`}>Spark table sits within the knock limit for this hardware.</div>;
 
     // A single selected cell. These states did not exist before the panel —
     // `SparkScreen` never narrowed to a selection — so there is no old markup
@@ -123,7 +123,7 @@ function TimingAdvisory({ report }) {
       );
     case 'cell-ok':
       return (
-        <div className={styles.prose}>
+        <div className={`${styles.prose} ${styles.ok}`}>
           <CellStats cell={detail.cell} />
           Inside both the knock limit and MBT. Nothing to correct here.
         </div>
@@ -140,8 +140,9 @@ function TimingAdvisory({ report }) {
     case 'group-over':
     case 'group-past-mbt':
     case 'group-under':
-    case 'group-clean':
       return <div className={styles.prose}>Select a single cell to see its numbers.</div>;
+    case 'group-clean':
+      return <div className={`${styles.prose} ${styles.ok}`}>Select a single cell to see its numbers.</div>;
 
     default:
       return null;

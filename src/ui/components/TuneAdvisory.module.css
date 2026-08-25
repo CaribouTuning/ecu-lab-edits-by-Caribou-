@@ -36,6 +36,18 @@
 
 .em { color: var(--acc-ink); }
 
+/* All-clear tint, layered onto `.prose` (never replacing it — margin still
+   comes from there). `table-clean` restores the green the old `.okBanner`
+   carried before this state moved into the panel and lost its colour by
+   inheriting `.body`'s neutral `--ink2` instead.
+   `cell-ok` and `group-clean` are new states this PR introduced with no prior
+   styling to restore — but they are also all-clear tone='ok' states, and it
+   would read as a bug for a player to see a green all-clear on the whole
+   table yet a gray one on the single cell or row/column they just selected.
+   So all three share this class rather than only the one with history. Do not
+   split them back apart without re-litigating that. */
+.ok { color: var(--ok); }
+
 .cellStats {
   margin: 6px 0 8px;
   display: grid;
