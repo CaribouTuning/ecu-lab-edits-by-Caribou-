@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { sparkReport } from '../../src/ui/components/advisorReports.js';
+import { OPEN_LOOP_KPA } from '../../src/sim/index.js';
+import { fuelReport, sparkReport } from '../../src/ui/components/advisorReports.js';
 
 /** A spark entry; only the fields the report reads. */
 const cell = (ri, ci, over) => ({
@@ -13,6 +14,22 @@ const cell = (ri, ci, over) => ({
 function advice({ over = [], under = [], past = [] } = {}) {
   const all = [...over, ...under, ...past];
   return { spark: all, fuelAdv: [], overAdvanced: over, underAdvanced: under, pastMbt: past, wrongMix: [] };
+}
+
+/**
+ * A fuelAdv entry; only the fields `fuelReport` reads. `map` defaults well
+ * above `OPEN_LOOP_KPA` (open loop, mixture advice applies); `delta` defaults
+ * negative (suggested is richer than current, i.e. the cell is lean).
+ */
+const afrCell = (ri, ci, { map = OPEN_LOOP_KPA + 10, delta = -0.8 } = {}) => ({
+  ri, ci, rpm: 1000 * (ci + 1), map,
+  current: 12.5, suggested: Number((12.5 + delta).toFixed(2)), delta,
+  delivered: 12.3, target: 12.0, duty: 50,
+});
+
+/** Assembles a calAdvice whose fuel arrays genuinely contain the cells named. */
+function fuelAdvice({ fuelAdv = [], wrongMix = [] } = {}) {
+  return { spark: [], overAdvanced: [], underAdvanced: [], pastMbt: [], fuelAdv, wrongMix };
 }
 
 describe('sparkReport, no selection', () => {
@@ -147,5 +164,109 @@ describe('sparkReport, a row or column selected', () => {
   it('uses singular verb agreement for a single flagged cell', () => {
     const r = sparkReport(advice({ over: [cell(3, 1, true)] }), { type: 'row', row: 3 });
     expect(r.headline).toBe('1 of these cells is past the knock limit');
+  });
+});
+
+describe('fuelReport, no selection', () => {
+  it('flags high-load cells off best power', () => {
+    const r = fuelReport(fuelAdvice({ wrongMix: [afrCell(3, 4)] }), null);
+    expect(r.state).toBe('table-off');
+    expect(r.tone).toBe('warn');
+    expect(r.headline).toBe('1 high-load cell off best power');
+  });
+
+  it('pluralises the headline', () => {
+    const r = fuelReport(fuelAdvice({ wrongMix: [afrCell(3, 4), afrCell(3, 5)] }), null);
+    expect(r.headline).toBe('2 high-load cells off best power');
+  });
+
+  it('is clean when wrongMix is empty', () => {
+    const r = fuelReport(fuelAdvice(), null);
+    expect(r.state).toBe('table-clean');
+    expect(r.tone).toBe('ok');
+    expect(r.headline).toBe('High-load mixture is on best power');
+  });
+});
+
+describe('fuelReport, one cell selected', () => {
+  it('classifies by membership in wrongMix, not by comparing delta itself', () => {
+    // This cell's own delta (0.1) is well under MIX_NOTABLE_AFR and would never
+    // land in wrongMix if the report recomputed the threshold itself. The
+    // advisor nonetheless filed it as off-target — the report must follow that,
+    // the same membership rule sparkReport pins.
+    const c = afrCell(3, 4, { delta: 0.1 });
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c], wrongMix: [c] }), { type: 'cell', row: 3, col: 4 });
+    expect(r.state).toBe('cell-off');
+    expect(r.tone).toBe('warn');
+  });
+
+  it('names a negative delta as lean of best power — the suggestion is richer, so the cell is lean', () => {
+    const c = afrCell(3, 4, { delta: -0.8 });
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c], wrongMix: [c] }), { type: 'cell', row: 3, col: 4 });
+    expect(r.headline).toBe('0.8 AFR lean of best power');
+  });
+
+  it('names a positive delta as rich of best power — the suggestion is leaner, so the cell is rich', () => {
+    const c = afrCell(3, 4, { delta: 0.8 });
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c], wrongMix: [c] }), { type: 'cell', row: 3, col: 4 });
+    expect(r.headline).toBe('0.8 AFR rich of best power');
+  });
+
+  it('reports closed loop even when the cell has a large delta', () => {
+    // Below OPEN_LOOP_KPA the trims own the cell — this is deliberately
+    // fabricated with both a huge delta AND wrongMix membership, to prove the
+    // closed-loop check binds first and unconditionally, not because a real
+    // wrongMix could ever contain a sub-OPEN_LOOP_KPA cell (calibrationAdvice's
+    // own filter would never put one there).
+    const c = afrCell(3, 4, { map: OPEN_LOOP_KPA - 5, delta: -5 });
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c], wrongMix: [c] }), { type: 'cell', row: 3, col: 4 });
+    expect(r.state).toBe('cell-closed-loop');
+    expect(r.tone).toBe('info');
+    expect(r.headline).toBe('Closed loop — the trims own this cell');
+  });
+
+  it('says a cell the engine never reaches is unreachable, not on target', () => {
+    const c = afrCell(3, 4);
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c], wrongMix: [c] }), { type: 'cell', row: 0, col: 0 });
+    expect(r.state).toBe('cell-unreachable');
+    expect(r.tone).toBe('info');
+  });
+
+  it('reports an open-loop cell not in wrongMix as on target', () => {
+    const c = afrCell(2, 2);
+    const r = fuelReport(fuelAdvice({ fuelAdv: [c] }), { type: 'cell', row: 2, col: 2 });
+    expect(r.state).toBe('cell-ok');
+    expect(r.tone).toBe('ok');
+    expect(r.headline).toBe('On best power');
+  });
+});
+
+describe('fuelReport, a row or column selected', () => {
+  it('counts the flagged cells inside the selected row', () => {
+    const r = fuelReport(
+      fuelAdvice({ wrongMix: [afrCell(3, 1), afrCell(3, 2), afrCell(1, 5)] }),
+      { type: 'row', row: 3 },
+    );
+    expect(r.state).toBe('group-off');
+    expect(r.headline).toBe('2 of these cells are off best power');
+  });
+
+  it('counts down the column when a column is selected', () => {
+    const r = fuelReport(
+      fuelAdvice({ wrongMix: [afrCell(1, 4), afrCell(3, 4), afrCell(3, 0)] }),
+      { type: 'col', col: 4 },
+    );
+    expect(r.headline).toBe('2 of these cells are off best power');
+  });
+
+  it('is clean when nothing in the group is flagged', () => {
+    const r = fuelReport(fuelAdvice({ wrongMix: [afrCell(1, 5)] }), { type: 'row', row: 3 });
+    expect(r.state).toBe('group-clean');
+    expect(r.tone).toBe('ok');
+  });
+
+  it('uses singular verb agreement for a single flagged cell', () => {
+    const r = fuelReport(fuelAdvice({ wrongMix: [afrCell(3, 1)] }), { type: 'row', row: 3 });
+    expect(r.headline).toBe('1 of these cells is off best power');
   });
 });

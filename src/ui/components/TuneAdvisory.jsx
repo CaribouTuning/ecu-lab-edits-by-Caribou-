@@ -16,6 +16,7 @@
 
 import React from 'react';
 
+import fuelStyles from '../screens/tune/FuelScreen.module.css';
 import styles from './TuneAdvisory.module.css';
 
 /** @typedef {import('./advisorReports.js').AdvisorReport} AdvisorReport */
@@ -30,6 +31,7 @@ import styles from './TuneAdvisory.module.css';
 // eslint-disable-next-line no-unused-vars -- onAcceptVe is part of the interface Tasks 5/6 extend; the 've' kind lands in Task 6.
 export function TuneAdvisory({ kind, report, onAcceptVe }) {
   if (kind === 'timing') return <TimingAdvisory report={report} />;
+  if (kind === 'afr') return <AfrAdvisory report={report} />;
   return null;
 }
 
@@ -140,6 +142,94 @@ function TimingAdvisory({ report }) {
     case 'group-over':
     case 'group-past-mbt':
     case 'group-under':
+      return <div className={styles.prose}>Select a single cell to see its numbers.</div>;
+    case 'group-clean':
+      return <div className={`${styles.prose} ${styles.ok}`}>Select a single cell to see its numbers.</div>;
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * One AFR cell's coordinates and its commanded/suggested numbers, formatted
+ * exactly as `FuelScreen`'s old banner formatted a wrongMix row — `data-richen`
+ * stays on it, since `FuelScreen.module.css` colours the two directions
+ * differently and that distinction has to survive wherever this line appears.
+ * @param {object} props
+ * @param {object} props.cell a `fuelAdv` row from `calibrationAdvice`
+ * @returns {React.ReactElement}
+ */
+function AfrCellLine({ cell }) {
+  return (
+    <div className={fuelStyles.cell} data-richen={cell.delta < 0 ? 'true' : 'false'}>
+      {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'} · delivered {cell.delivered}, wants {cell.target}
+    </div>
+  );
+}
+
+/**
+ * @param {object} props
+ * @param {AdvisorReport} props.report
+ * @returns {React.ReactElement|null}
+ */
+function AfrAdvisory({ report }) {
+  const { state, detail } = report;
+
+  switch (state) {
+    // Table-wide. FuelScreen's old banner, moved here verbatim — the outer
+    // bordered/tinted box and the "N HIGH-LOAD CELLS..." label do NOT come
+    // along, same as SPARK: the panel already renders that surface from
+    // `report.tone` and shows the label's content as `report.headline`.
+    case 'table-off':
+      return (
+        <>
+          <div className={fuelStyles.body}>
+            Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b className={fuelStyles.em}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
+          </div>
+          {detail.cells.map((c, i) => <AfrCellLine key={i} cell={c} />)}
+          {detail.more > 0 && <div className={fuelStyles.more}>…and {detail.more} more</div>}
+        </>
+      );
+    // FUEL had no clean state at all — the old banner simply did not render
+    // when wrongMix was empty. The panel always renders something, so this is
+    // genuinely new prose, not a moved state.
+    case 'table-clean':
+      return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware.</div>;
+
+    // A single selected cell. None of these states existed before the panel —
+    // FuelScreen never narrowed to a selection — so there is no old markup to
+    // preserve.
+    case 'cell-off':
+      return (
+        <div className={styles.prose}>
+          <AfrCellLine cell={detail.cell} />
+          Best-power mixture shifts with boost, and this cell is judged on what the engine actually delivered, not on what the table commanded. Type the suggested value into the cell to land on target.
+        </div>
+      );
+    case 'cell-closed-loop':
+      return (
+        <div className={styles.prose}>
+          Below open-loop boost the ECU targets stoichiometric and the fuel trims correct any error live. Best-power mixture advice does not apply here — this cell belongs to the trims, not this table.
+        </div>
+      );
+    case 'cell-ok':
+      return (
+        <div className={`${styles.prose} ${styles.ok}`}>
+          <div className={styles.bannerCell}>{detail.cell.map} kPa / {detail.cell.rpm} RPM: {detail.cell.current}:1</div>
+          Delivered mixture lands on the best-power target here. Nothing to correct.
+        </div>
+      );
+    case 'cell-unreachable':
+      return (
+        <div className={styles.prose}>
+          This build never reaches this manifold pressure at this engine speed, so the advisor has nothing to say about the cell. It is still yours to edit — it just will not be used.
+        </div>
+      );
+
+    // A selected row or column. Only one category applies to FUEL, unlike
+    // SPARK's three, so the body just points at the fix.
+    case 'group-off':
       return <div className={styles.prose}>Select a single cell to see its numbers.</div>;
     case 'group-clean':
       return <div className={`${styles.prose} ${styles.ok}`}>Select a single cell to see its numbers.</div>;

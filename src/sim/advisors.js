@@ -40,7 +40,7 @@ const MIX_NOTABLE_AFR = 0.45;
  * to these rows: below it the target is stoichiometric and the trims own it, so
  * best-power advice would be actively wrong.
  */
-const OPEN_LOOP_KPA = 85;
+export const OPEN_LOOP_KPA = 85;
 
 /**
  * Slack above the boost target when deciding whether a row is reachable, kPa. Enough to

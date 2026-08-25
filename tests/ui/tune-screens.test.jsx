@@ -208,8 +208,32 @@ describe('FuelScreen', () => {
       wrongMix: [{ map: 888, rpm: 7777, current: 12.3, suggested: 11.1, delta: -1, delivered: 99, target: 88 }],
     };
     mount(<FuelScreen calAdvice={calAdvice} />);
-    expect(screen.getByText('1 HIGH-LOAD CELLS OFF BEST POWER')).toBeTruthy();
-    expect(screen.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // Singular — the pre-panel banner always read '1 HIGH-LOAD CELLS OFF BEST
+    // POWER', a latent copy bug the plural helper in `fuelReport` fixes.
+    expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
+    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+  });
+
+  it('narrows to the selected cell rather than the whole table', () => {
+    // ri/ci 2,3 is arbitrary — fuelReport looks the cell up by coordinate, it
+    // never touches TuningGrid's real geometry, so any pair works here.
+    const calAdvice = {
+      overAdvanced: [], underAdvanced: [], pastMbt: [],
+      wrongMix: [{ ri: 2, ci: 3, map: 999, rpm: 9999, current: 12.3, suggested: 11.1, delta: -1.2, delivered: 99, target: 88 }],
+      fuelAdv: [{
+        ri: 2, ci: 3, map: 999, rpm: 9999, current: 12.3, suggested: 11.1, delta: -1.2, delivered: 99, target: 88,
+      }],
+    };
+    mount(<><SelectionProbe value={{ type: 'cell', row: 2, col: 3 }} /><FuelScreen calAdvice={calAdvice} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table count is gone; the panel now reports THIS cell instead.
+    expect(panel.queryByText('1 high-load cell off best power')).toBeNull();
+    expect(panel.getByText('1.2 AFR lean of best power')).toBeTruthy();
   });
 
   it('mounts exactly one advisor panel', () => {

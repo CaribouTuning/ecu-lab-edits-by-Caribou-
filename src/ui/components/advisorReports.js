@@ -15,6 +15,8 @@
  * issue #34 removed.
  */
 
+import { OPEN_LOOP_KPA } from '../../sim/index.js';
+
 /** @typedef {import('./TuningGrid.jsx').Selection} Selection */
 
 /**
@@ -122,4 +124,63 @@ export function sparkReport(calAdvice, selection) {
     return { tone: 'warn', headline: 'Past peak torque', state: 'table-past-mbt', detail: { count: pastMbt.length } };
   }
   return { tone: 'ok', headline: 'Within the knock limit', state: 'table-clean', detail: {} };
+}
+
+/**
+ * @param {object} calAdvice as returned by `calibrationAdvice`
+ * @param {Selection|null} selection
+ * @returns {AdvisorReport}
+ */
+export function fuelReport(calAdvice, selection) {
+  const { fuelAdv, wrongMix } = calAdvice;
+
+  if (selection && selection.type === 'cell') {
+    const cell = fuelAdv.find((c) => c.ri === selection.row && c.ci === selection.col);
+    // No entry means `calibrationAdvice` filtered the cell out as unreachable
+    // (its rule 2), the same reason `sparkReport` can miss a lookup — not the
+    // same thing as a cell that is on target.
+    if (!cell) return { tone: 'info', headline: 'Never reached by this build', state: 'cell-unreachable', detail: {} };
+
+    // Closed loop binds before membership, and unconditionally: the trims own
+    // this cell regardless of how large its delta is, so a big number here is
+    // not a reason to override the rule and report it anyway.
+    if (cell.map < OPEN_LOOP_KPA) {
+      return { tone: 'info', headline: 'Closed loop — the trims own this cell', state: 'cell-closed-loop', detail: { cell } };
+    }
+
+    if (holds(wrongMix, cell.ri, cell.ci)) {
+      const direction = cell.delta < 0 ? 'lean' : 'rich';
+      return {
+        tone: 'warn',
+        headline: `${Math.abs(cell.delta).toFixed(1)} AFR ${direction} of best power`,
+        state: 'cell-off',
+        detail: { cell },
+      };
+    }
+    return { tone: 'ok', headline: 'On best power', state: 'cell-ok', detail: { cell } };
+  }
+
+  if (selection) {
+    // A row or column. Only one category here, unlike sparkReport's three, so
+    // there is no severity order to preserve — just the count in the band.
+    const off = countIn(wrongMix, selection);
+    if (off > 0) {
+      return { tone: 'warn', headline: `${off} of these cells ${off === 1 ? 'is' : 'are'} off best power`, state: 'group-off', detail: { count: off } };
+    }
+    return { tone: 'ok', headline: 'Nothing flagged in this band', state: 'group-clean', detail: {} };
+  }
+
+  // Table-wide. FUEL never had a fall-through order to preserve — the old
+  // banner only ever showed one thing, the wrongMix count, and simply did not
+  // render when it was empty. table-clean is new prose the panel needs
+  // because, unlike the old banner, it always renders something.
+  if (wrongMix.length > 0) {
+    return {
+      tone: 'warn',
+      headline: `${plural(wrongMix.length, 'high-load cell')} off best power`,
+      state: 'table-off',
+      detail: { count: wrongMix.length, cells: wrongMix.slice(0, 5), more: Math.max(0, wrongMix.length - 5) },
+    };
+  }
+  return { tone: 'ok', headline: 'High-load mixture is on best power', state: 'table-clean', detail: {} };
 }

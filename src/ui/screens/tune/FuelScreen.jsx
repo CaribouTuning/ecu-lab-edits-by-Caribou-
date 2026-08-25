@@ -10,7 +10,9 @@ import React from 'react';
 import { Droplets } from 'lucide-react';
 
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
+import { fuelReport } from '../../components/advisorReports.js';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
+import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -32,6 +34,9 @@ export function FuelScreen({ calAdvice }) {
   const { afr, selection } = tune;
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
+  // A handful of `.some()` scans over at most 96 cells, no allocation in the
+  // hot path — plainly on every render, not memoised.
+  const report = fuelReport(calAdvice, selection);
 
   return (
     <>
@@ -40,22 +45,6 @@ export function FuelScreen({ calAdvice }) {
           <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
           <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} />
-          {calAdvice.wrongMix.length > 0 && (
-            <div className={styles.banner}>
-              <div className={styles.label}>
-                {calAdvice.wrongMix.length} HIGH-LOAD CELLS OFF BEST POWER
-              </div>
-              <div className={styles.body}>
-                Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b className={styles.em}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
-              </div>
-              {calAdvice.wrongMix.slice(0, 5).map((c, i) => (
-                <div key={i} className={styles.cell} data-richen={c.delta < 0 ? 'true' : 'false'}>
-                  {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'} · delivered {c.delivered}, wants {c.target}
-                </div>
-              ))}
-              {calAdvice.wrongMix.length > 5 && <div className={styles.more}>…and {calAdvice.wrongMix.length - 5} more</div>}
-            </div>
-          )}
 
           <ExpandableInfo title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits richer, because the extra fuel absorbs heat as it vaporizes, cooling combustion enough to make more power before knock becomes the limit. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
@@ -64,8 +53,8 @@ export function FuelScreen({ calAdvice }) {
             <br /><br /><b className={styles.em}>As a beginner:</b> when in doubt, go richer (a lower number), not leaner. A rich cell costs a little power; a lean cell under load is how you actually damage something.
           </ExpandableInfo>
         </div>
-        <AdvisorPanel headline="Advisor" tone="info">
-          <p>Placeholder — filled in by the next task.</p>
+        <AdvisorPanel headline={report.headline} tone={report.tone}>
+          <TuneAdvisory kind="afr" report={report} />
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
