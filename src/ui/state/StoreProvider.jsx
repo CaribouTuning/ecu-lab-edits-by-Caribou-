@@ -1,11 +1,12 @@
 /**
  * The store's React binding.
  *
- * One `useReducer`, one context carrying `[state, dispatch]`, and three hooks —
- * `useBuild`, `useTune`, `useSession` — that each select their own slice. Consumers
- * see the three-way split the design doc specifies; internally it stays one state
- * tree, for the reasons in reducer.js's file header (cross-slice actions like
- * SET_TABLE, and APPLY_PRESET/RESET_TO_STOCK to come, must land in a single pass).
+ * One `useReducer`, one context carrying `[state, dispatch]`, and four hooks —
+ * `useBuild`, `useTune`, `useSession`, `useHistory` — that each select their own
+ * slice. Consumers see the per-slice split the design doc specifies; internally it
+ * stays one state tree, for the reasons in reducer.js's file header (cross-slice
+ * actions like SET_TABLE, and APPLY_PRESET/RESET_TO_STOCK, must land in a single
+ * pass).
  */
 
 import React, { createContext, useContext, useReducer } from 'react';

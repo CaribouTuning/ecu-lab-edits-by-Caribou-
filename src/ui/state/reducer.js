@@ -260,8 +260,12 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * The root reducer. No `Date.now()`, no mutation of `state` or any of its slices —
- * every case that changes a slice returns a NEW object for that slice only, and every
+ * Every case except UNDO/REDO. Wrapped by `reducer` below, which adds the undo stack
+ * on top and is what callers actually use — see that function's own doc for what the
+ * wrapper does and why it stays pure too.
+ *
+ * No `Date.now()`, no mutation of `state` or any of its slices — every case that
+ * changes a slice returns a NEW object for that slice only, and every
  * slice it does not touch keeps its existing reference (so `React.memo`/`useMemo`
  * consumers downstream can bail out on an unrelated dispatch).
  *
@@ -292,9 +296,6 @@ export const ACTIONS = Object.freeze({
  * @param {StoreState} state
  * @param {StoreAction} action
  * @returns {StoreState}
- */
-/**
- * Every case except UNDO/REDO. Wrapped by `reducer` below, which is what callers use.
  */
 function baseReducer(state, action) {
   switch (action.type) {
@@ -515,8 +516,16 @@ function labelFor(action) {
       const preset = presetById(action.preset.presetId);
       return `Preset · ${preset ? preset.name : 'factory calibration'}`;
     }
-    default:
+    case ACTIONS.RESET_TO_STOCK:
       return 'Reset to stock';
+    default:
+      // UNDOABLE lists exactly three action types, and `reducer` below only ever
+      // calls `labelFor` for an action already confirmed to be in that set — so this
+      // branch is unreachable BY CONSTRUCTION today. It throws instead of quietly
+      // returning 'Reset to stock' so that if a fourth action is ever added to
+      // UNDOABLE without a matching case here, it fails loudly at the call site
+      // instead of mislabelling every undo button for that action "Reset to stock".
+      throw new Error(`labelFor: no label defined for undoable action type "${action.type}"`);
   }
 }
 

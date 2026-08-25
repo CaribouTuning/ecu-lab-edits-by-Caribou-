@@ -10,6 +10,12 @@
  * shape means one restore path. A per-action shape would mean three, and a fourth
  * undoable action added later could produce a half-restored state that no test
  * thought to cover.
+ *
+ * The union's rule for membership is: HARDWARE AND CALIBRATION, NEVER UI CURSORS.
+ * Two fields an undoable action does write are deliberately excluded even though
+ * that might look like a missed field at a glance — `tune.selection` and
+ * `build.presetPrompt` — see the comments on TUNE_KEYS and BUILD_KEYS below for why
+ * each one specifically is a cursor rather than state worth restoring.
  */
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -23,9 +29,17 @@
 export const HISTORY_LIMIT = 50;
 
 /**
- * BUILD fields an undoable action can overwrite. APPLY_PRESET writes all thirteen;
- * RESET_TO_STOCK writes three; SET_TABLE writes one. The snapshot carries the union
- * so `restore` never has to know which action it is undoing.
+ * BUILD fields an undoable action can overwrite. APPLY_PRESET actually writes
+ * FOURTEEN build fields, not the thirteen listed here — it also sets
+ * `presetPrompt: null`, which is deliberately absent from this list. `presetPrompt`
+ * is a cursor/UI-state field, not hardware — `reducer.js`'s own typedef for
+ * `SET_PRESET_PROMPT` already describes it that way — it tracks whether the
+ * overwrite-confirmation modal is open, exactly like `tune.selection` below tracks
+ * the grid highlight. Restoring it on undo would re-open a "load this preset?" modal
+ * immediately after the player undid loading that preset, which is worse than
+ * leaving it closed. RESET_TO_STOCK writes three of the fields below; SET_TABLE
+ * writes one. The snapshot carries the union of the hardware/calibration fields so
+ * `restore` never has to know which action it is undoing.
  */
 const BUILD_KEYS = [
   'engineConfig', 'mods', 'turboOn', 'boostCurve', 'turbineIdx', 'turbineCount',
@@ -36,9 +50,10 @@ const BUILD_KEYS = [
 /**
  * TUNE fields an undoable action can overwrite.
  *
- * `selection` is deliberately absent: it is a cursor, not calibration. Restoring it
- * would make undo move the player's highlight around, and the grid's dimensions never
- * change, so a selection is always still valid after a restore.
+ * `selection` is deliberately absent, for the same "hardware and calibration, never UI
+ * cursors" reason `presetPrompt` is absent from BUILD_KEYS above: it is a cursor, not
+ * calibration. Restoring it would make undo move the player's highlight around, and the
+ * grid's dimensions never change, so a selection is always still valid after a restore.
  */
 const TUNE_KEYS = ['ve', 'timing', 'afr', 'tablesDirty'];
 

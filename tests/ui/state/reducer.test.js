@@ -15,6 +15,7 @@ import {
   OCTANE_OPTS,
 } from '../../../src/sim/index.js';
 import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
+import { snapshot } from '../../../src/ui/state/history.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
 
@@ -805,15 +806,15 @@ describe('UNDO / REDO', () => {
   });
 
   it('puts the table back', () => {
+    // One `start`, threaded through both dispatches, so this can assert reference
+    // equality: restore must hand back the SAME array the snapshot captured, not a
+    // recomputed one that merely looks equal. Two independent `makeInitialState()`
+    // calls would defeat that — the function's own header documents that it returns a
+    // fresh object graph every time, and `ve` is recomputed by `computeHardwareVE`.
     const start = makeInitialState();
-    const s = reducer(edited(), { type: ACTIONS.UNDO });
-    // Deep equality, not `toBe`: `start` and `edited()` each call `makeInitialState()`
-    // independently, and its own file header documents that every call returns "a
-    // fresh object graph" — `computeHardwareVE` recomputes `ve` from scratch each time,
-    // so two independently-built initial states are never the SAME array, only an
-    // equal one. Reference equality is guaranteed only against the exact snapshot
-    // `edited()` itself recorded, which `start` is not.
-    expect(s.tune.ve).toEqual(start.tune.ve);
+    const edit = reducer(start, { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] });
+    const s = reducer(edit, { type: ACTIONS.UNDO });
+    expect(s.tune.ve).toBe(start.tune.ve);
     expect(s.history.past).toHaveLength(0);
     expect(s.history.future).toHaveLength(1);
   });
@@ -900,11 +901,171 @@ describe('UNDO / REDO', () => {
   it('does not restore dyno results', () => {
     // A deliberate asymmetry, spec'd: undo brings back hardware and calibration, but
     // re-showing a banked score beside a build that was just reverted would state
-    // something false.
+    // something false. Both result AND prevResult must stay cleared — a snapshot that
+    // dropped only one of the pair would leave the OTHER field's stale score sitting
+    // next to the reverted build.
     const withResult = { ...makeInitialState() };
-    withResult.session = { ...withResult.session, result: { peakHp: 400 } };
+    withResult.session = {
+      ...withResult.session,
+      result: { peakHp: 400 },
+      prevResult: { peakHp: 350 },
+    };
     const loaded = reducer(withResult, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     expect(loaded.session.result).toBeNull();
-    expect(reducer(loaded, { type: ACTIONS.UNDO }).session.result).toBeNull();
+    expect(loaded.session.prevResult).toBeNull();
+    const undone = reducer(loaded, { type: ACTIONS.UNDO });
+    expect(undone.session.result).toBeNull();
+    expect(undone.session.prevResult).toBeNull();
+  });
+
+  it('labels each table edit distinctly', () => {
+    const timing = reducer(
+      makeInitialState(),
+      { type: ACTIONS.SET_TABLE, table: 'timing', value: [[9]] },
+    );
+    expect(timing.history.past[0].label).toBe('Spark edit');
+
+    const afr = reducer(
+      makeInitialState(),
+      { type: ACTIONS.SET_TABLE, table: 'afr', value: [[9]] },
+    );
+    expect(afr.history.past[0].label).toBe('Fuel edit');
+  });
+
+  it('falls back to a generic label for an unknown preset id', () => {
+    // presetById() finds nothing for an id not in the catalogue — the label must not
+    // blow up or fall through to some OTHER action's label, it names the calibration
+    // generically instead.
+    const unknownPreset = { ...N54_PRESET, presetId: 'not-a-real-preset-id' };
+    const after = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: unknownPreset });
+    expect(after.history.past[0].label).toBe('Preset · factory calibration');
+  });
+
+  it('walks the stack in order across three edits: undo unwinds newest-first, redo replays oldest-first', () => {
+    // The two plausible wrong implementations this guards against:
+    //   (1) undo reading `past[0]`/slicing `past.slice(1)` instead of the LAST entry —
+    //       that would make undo FIFO and reverse the OLDEST edit first;
+    //   (2) redo pushing onto the END of `future` instead of the front — that would
+    //       replay edits in the wrong order.
+    // Every other test in this file operates on a stack of depth <= 1, so none of them
+    // can tell those implementations apart from a correct one.
+    const s0 = makeInitialState();
+    const s1 = reducer(s0, { type: ACTIONS.SET_TABLE, table: 've', value: [[1]] });
+    const s2 = reducer(s1, { type: ACTIONS.SET_TABLE, table: 've', value: [[2]] });
+    const s3 = reducer(s2, { type: ACTIONS.SET_TABLE, table: 've', value: [[3]] });
+    expect(s3.tune.ve).toEqual([[3]]);
+
+    const u1 = reducer(s3, { type: ACTIONS.UNDO });
+    expect(u1.tune.ve).toEqual([[2]]);
+    const u2 = reducer(u1, { type: ACTIONS.UNDO });
+    expect(u2.tune.ve).toEqual([[1]]);
+    const u3 = reducer(u2, { type: ACTIONS.UNDO });
+    // Reference equality against the ORIGINAL table, not merely `toEqual([[...]])` —
+    // proves undo #3 walked all the way back to s0, not just to some equal-looking
+    // value.
+    expect(u3.tune.ve).toBe(s0.tune.ve);
+    expect(u3.history.past).toHaveLength(0);
+    expect(u3.history.future).toHaveLength(3);
+
+    const r1 = reducer(u3, { type: ACTIONS.REDO });
+    expect(r1.tune.ve).toEqual([[1]]);
+    const r2 = reducer(r1, { type: ACTIONS.REDO });
+    expect(r2.tune.ve).toEqual([[2]]);
+    const r3 = reducer(r2, { type: ACTIONS.REDO });
+    expect(r3.tune.ve).toEqual([[3]]);
+    expect(r3.history.past).toHaveLength(3);
+    expect(r3.history.future).toHaveLength(0);
+  });
+});
+
+describe('snapshot field coverage', () => {
+  // Literal, not derived from BUILD_KEYS/TUNE_KEYS: importing the same list the
+  // module iterates over would let a key deleted from both the list AND this
+  // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
+  // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
+  it('snapshots exactly the documented 13 build and 4 tune fields', () => {
+    const snap = snapshot(makeInitialState());
+    expect(Object.keys(snap.build).sort()).toEqual([
+      'boostCurve', 'compressorIdx', 'ecuInjectorCc', 'engineConfig', 'exhaustDiaIdx',
+      'injIdx', 'mafScalar', 'mods', 'octaneIdx', 'presetId', 'turbineCount',
+      'turbineIdx', 'turboOn',
+    ]);
+    expect(Object.keys(snap.tune).sort()).toEqual(['afr', 'tablesDirty', 'timing', 've']);
+  });
+
+  // Every field below is seeded to a value that differs from BOTH its
+  // makeInitialState() default AND the value APPLY_PRESET's N54_PRESET fixture writes.
+  // That double difference is load-bearing: turbineIdx, compressorIdx and
+  // exhaustDiaIdx all happen to share the SAME value between the default state and
+  // this particular preset (1, 1 and 2 respectively), and mafScalar/tablesDirty are
+  // 1.0/false on both sides too — a seed that collapsed onto either value would let a
+  // dropped BUILD_KEYS/TUNE_KEYS entry go completely unnoticed here.
+  it('round-trips every snapshotted field through APPLY_PRESET + UNDO', () => {
+    /** @type {import('../../../src/sim/index.js').EngineConfig} */
+    const beforeEngineConfig = {
+      configuration: 'V8', bore: 101.1, stroke: 92.2, compression: 8.8,
+      blockMaterial: 'Cast Iron', headMaterial: 'Cast Iron',
+    };
+    const beforeMods = { intake: true, exhaust: true, headers: true, intercooler: true };
+    const beforeBoostCurve = [3, 3, 3, 3, 3, 3, 3, 3];
+    const beforeVe = [[55]];
+    const beforeTiming = [[33]];
+    const beforeAfr = [[7]];
+
+    const start = { ...makeInitialState() };
+    start.build = {
+      ...start.build,
+      engineConfig: beforeEngineConfig,
+      mods: beforeMods,
+      turboOn: false,
+      boostCurve: beforeBoostCurve,
+      turbineIdx: 3,
+      turbineCount: 4,
+      compressorIdx: 3,
+      injIdx: 9,
+      ecuInjectorCc: 999,
+      octaneIdx: 9,
+      exhaustDiaIdx: 6,
+      mafScalar: 0.77,
+      presetId: 'placeholder-preset',
+    };
+    start.tune = {
+      ...start.tune,
+      ve: beforeVe,
+      timing: beforeTiming,
+      afr: beforeAfr,
+      tablesDirty: true,
+    };
+
+    const applied = reducer(start, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    // Sanity: confirm the preset really did overwrite every one of these fields, so a
+    // failure below can only mean undo did not restore them — not that they were
+    // never touched in the first place.
+    expect(applied.build.turboOn).toBe(true);
+    expect(applied.build.turbineIdx).toBe(1);
+    expect(applied.build.compressorIdx).toBe(1);
+    expect(applied.build.exhaustDiaIdx).toBe(2);
+    expect(applied.build.mafScalar).toBe(1.0);
+    expect(applied.tune.tablesDirty).toBe(false);
+
+    const undone = reducer(applied, { type: ACTIONS.UNDO });
+
+    expect(undone.build.engineConfig).toBe(beforeEngineConfig);
+    expect(undone.build.mods).toBe(beforeMods);
+    expect(undone.build.turboOn).toBe(false);
+    expect(undone.build.boostCurve).toBe(beforeBoostCurve);
+    expect(undone.build.turbineIdx).toBe(3);
+    expect(undone.build.turbineCount).toBe(4);
+    expect(undone.build.compressorIdx).toBe(3);
+    expect(undone.build.injIdx).toBe(9);
+    expect(undone.build.ecuInjectorCc).toBe(999);
+    expect(undone.build.octaneIdx).toBe(9);
+    expect(undone.build.exhaustDiaIdx).toBe(6);
+    expect(undone.build.mafScalar).toBe(0.77);
+    expect(undone.build.presetId).toBe('placeholder-preset');
+    expect(undone.tune.ve).toBe(beforeVe);
+    expect(undone.tune.timing).toBe(beforeTiming);
+    expect(undone.tune.afr).toBe(beforeAfr);
+    expect(undone.tune.tablesDirty).toBe(true);
   });
 });
