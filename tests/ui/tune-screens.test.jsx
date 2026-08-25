@@ -30,7 +30,7 @@ import { InjectorsScreen } from '../../src/ui/screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from '../../src/ui/screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from '../../src/ui/screens/tune/SparkScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { StoreProvider, useBuild } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 
 // jsdom has no ResizeObserver, and EcuScreen's FUEL TRIM panel mounts recharts'
 // <ResponsiveContainer> once a result exists, which throws without one. Same stub
@@ -70,6 +70,21 @@ function OctaneProbe({ index }) {
   return (
     <button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: index })}>
       probe-set-octane
+    </button>
+  );
+}
+
+/**
+ * Dispatches `SET_TUNE_FIELD` for `selection` against whatever store it is
+ * mounted under — same pattern as `OctaneProbe` above, standing in for a
+ * `TuningGrid` click so the advisor panel's selection-scoped path can be
+ * exercised without needing real grid geometry.
+ */
+function SelectionProbe({ value }) {
+  const [, dispatch] = useTune();
+  return (
+    <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value })}>
+      probe-set-selection
     </button>
   );
 }
@@ -139,13 +154,38 @@ describe('SparkScreen', () => {
       underAdvanced: [], pastMbt: [], wrongMix: [],
     };
     mount(<SparkScreen calAdvice={calAdvice} />);
-    expect(screen.getByText('1 CELLS BEYOND THE KNOCK LIMIT')).toBeTruthy();
-    expect(screen.getByText(/999 kPa \/ 9999 RPM: 11° → 22°/)).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    // Singular — the pre-panel banner read '1 CELLS BEYOND THE KNOCK LIMIT',
+    // a latent copy bug the plural helper in `sparkReport` fixes.
+    expect(panel.getByText('1 cell beyond the knock limit')).toBeTruthy();
+    expect(panel.getByText(/999 kPa \/ 9999 RPM: 11° → 22°/)).toBeTruthy();
   });
 
   it('falls through the danger/under-advanced/past-MBT states to the clean-table message when every advisory is empty', () => {
     mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
-    expect(screen.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('Spark table sits within the knock limit for this hardware.')).toBeTruthy();
+  });
+
+  it('narrows to the selected cell rather than the whole table', () => {
+    // ri/ci 2,3 is arbitrary — sparkReport looks the cell up by coordinate, it
+    // never touches TuningGrid's real geometry, so any pair works here.
+    const calAdvice = {
+      overAdvanced: [{ ri: 2, ci: 3, map: 999, rpm: 9999, current: 30, suggested: 22 }],
+      underAdvanced: [], pastMbt: [], wrongMix: [],
+      spark: [{
+        ri: 2, ci: 3, map: 999, rpm: 9999, current: 30, suggested: 22, knockCeiling: 25, mbt: 20, delta: -8,
+      }],
+    };
+    mount(<><SelectionProbe value={{ type: 'cell', row: 2, col: 3 }} /><SparkScreen calAdvice={calAdvice} /></>);
+    const panel = within(screen.getByTestId('advisor-panel'));
+    expect(panel.getByText('1 cell beyond the knock limit')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'probe-set-selection' }));
+
+    // The table count is gone; the panel now reports THIS cell instead.
+    expect(panel.queryByText('1 cell beyond the knock limit')).toBeNull();
+    expect(panel.getByText('5.0 deg past the knock limit')).toBeTruthy();
   });
 
   it('mounts exactly one advisor panel', () => {
