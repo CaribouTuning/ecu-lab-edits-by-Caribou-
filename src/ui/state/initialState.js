@@ -58,7 +58,11 @@ import {
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
  * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
- *   the currently selected calibration-grid cell, row or column, or null
+ *   the currently selected calibration-grid cell, row, column or range, or null
+ * @property {boolean} rangeMode whether a tap on the grid starts or extends a RECTANGLE
+ *   rather than selecting one cell. Beside `selection` because it is the mode that
+ *   selection is taken in, and one flag rather than three: AIR, SPARK and FUEL all
+ *   render the same grid and a tuner switching between them means the same thing by it.
  */
 
 /**
@@ -132,6 +136,7 @@ export function makeInitialState() {
       afr: clone2D(DEFAULT_AFR),
       tablesDirty: false,
       selection: null,
+      rangeMode: false,
     },
     session: {
       running: false,

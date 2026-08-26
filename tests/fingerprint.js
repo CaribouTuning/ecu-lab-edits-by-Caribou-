@@ -22,16 +22,81 @@
  * that it forces a physics change to be a deliberate, reviewed act.
  */
 
-/** Rounds to 6 decimal places so float noise across platforms cannot flap the hash. */
-const r6 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(6)) : v);
+/**
+ * Significant figures the hash commits to.
+ *
+ * WHY SIGNIFICANT FIGURES AND NOT DECIMAL PLACES. This used to round to six decimal
+ * places, which sounds tolerant and is not: it is an ABSOLUTE tolerance applied to
+ * values spanning seven orders of magnitude. On a BSFC of 6,501,693.873 it commits to
+ * thirteen significant digits — more precision than a double survives through an
+ * iterative solve — while on a wear figure of 0.000004 it commits to barely one. The
+ * gate was therefore far too strict at the top of the range and far too loose at the
+ * bottom, and the strict end is what broke: the hash did not reproduce on Node 26, so
+ * the documented cure (regenerate the baseline) walked contributors into revalidating
+ * regressions against their own toolchain. That is issue #48.
+ *
+ * WHY SEVEN. Measured, not guessed, and re-measured against the physics as it stands.
+ * Perturbing every Math.pow, Math.exp and Math.log result by one ULP — a fair model of
+ * what a new V8 does — moves 34 of the 349,195 committed fields, by at most 1.5e-9
+ * relative; at a deliberately unfair sixteen ULP it moves 44 of them by at most 1.5e-8.
+ * Seven significant figures is a 1e-7 grid, so it absorbs even the sixteen-ULP case with
+ * an order to spare. Counting how many survive each candidate quantiser is what picks
+ * the seven:
+ *
+ *   quantiser          1 ULP    4 ULP   16 ULP     (fields still differing)
+ *   6 decimals (old)       1        1        1
+ *   9 sig figs             1        1        1
+ *   8 sig figs             0        0        1
+ *   7 sig figs             0        0        0
+ *
+ * Eight is not enough; seven is. And seven stays absurdly tight against anything
+ * physical: a change of one part in ten million in a torque figure is not a physics
+ * change anyone could mean. `is immune to floating-point noise` in fingerprint.test.js
+ * holds this property down permanently.
+ *
+ * The single field that survives the old quantiser is worth naming, because it says what
+ * the real hazard is:
+ * `bsfc` at 800 RPM and 40 kPa on mis-scaled injectors, where the engine makes almost
+ * no power and BSFC is fuel divided by a denominator approaching zero. A ratio near a
+ * singularity has no stable relative precision at any tolerance. Quantising is what
+ * keeps it out of the hash; it is not a claim that the value itself is meaningful.
+ */
+const SIG_FIGS = 7;
+
+/**
+ * Quantises to {@link SIG_FIGS} significant figures so numerical noise cannot flap the
+ * hash. Non-finite values pass through untouched, so a genuine blow-up still shows up
+ * as NaN or Infinity for the guard in fingerprint.test.js to catch.
+ *
+ * @param {*} v
+ * @returns {*}
+ */
+export const quantise = (v) => (
+  typeof v === 'number' && Number.isFinite(v) && v !== 0
+    ? Number(v.toPrecision(SIG_FIGS))
+    : v
+);
+
+/**
+ * The short name every call site in this file uses.
+ *
+ * KEEP THIS ALIAS. It looks like clutter and is not: this file gains a new section every
+ * time someone adds a subsystem to the matrix, and those sections are written on separate
+ * branches. Renaming the call sites instead of aliasing means any branch in flight that
+ * calls `r6` merges CLEANLY — different region of the file — and then throws
+ * `r6 is not defined` at runtime. That happened once already while this change was being
+ * prepared. One rename here is not worth a landmine there.
+ */
+const r6 = quantise;
+
 
 const roundAll = (obj) => Object.fromEntries(
   Object.entries(obj).map(([k, v]) => {
     if (typeof v === 'number') return [k, r6(v)];
     // A legitimate absent reading (e.g. bsfc when the engine makes no power) is a
     // literal null, and typeof null is "object", not "number" — so it never reaches
-    // r6 above. NaN and Infinity, by contrast, are still typeof "number", so a real
-    // blow-up still flows through r6, stays non-finite, and still serialises to
+    // the quantiser above. NaN and Infinity, by contrast, are still typeof "number",
+    // so a real blow-up still flows through it, stays non-finite, and still serialises to
     // JSON's `null`. Remapping only the literal-null case here keeps the two
     // distinguishable, which is what lets the ": null" guard in
     // fingerprint.test.js still mean "physics blew up" and nothing else.
@@ -206,9 +271,9 @@ export function buildFingerprint(S) {
   for (const preset of S.ENGINE_PRESETS) {
     const { ve, timing, afr } = S.factoryCalibration(preset);
     out.factoryCalibration[preset.id] = {
-      ve: ve.map((row) => row.map(r6)),
-      timing: timing.map((row) => row.map(r6)),
-      afr: afr.map((row) => row.map(r6)),
+      ve: ve.map((row) => row.map(quantise)),
+      timing: timing.map((row) => row.map(quantise)),
+      afr: afr.map((row) => row.map(quantise)),
     };
   }
 

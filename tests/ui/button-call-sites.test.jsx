@@ -18,7 +18,7 @@
  * `danger` is spent only on the one destructive confirm.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { URL as NodeURL } from 'node:url';
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -81,12 +81,12 @@ async function sweep() {
   collect();
 
   // BUILD is the landing tab, and its sections arrive collapsed.
-  for (const section of ['Engine Architecture', 'Bolt-On Parts', 'Forced Induction', 'Exhaust']) {
+  for (const section of ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust']) {
     fireEvent.click(screen.getByText(section));
     collect();
   }
   // Fitting a part leaves the logged VE table behind the hardware, which is what
-  // puts the ACCEPT RE-LOGGED VALUES advisory on TUNE > AIR.
+  // puts the ACCEPT RE-LOGGED VALUES advisory on TUNE > AIRFLOW.
   const uninstalled = screen.getAllByRole('button')
     .filter((b) => b.textContent.includes('INSTALL') && !(/** @type {HTMLButtonElement} */ (b).disabled));
   fireEvent.click(uninstalled[0]);
@@ -94,7 +94,9 @@ async function sweep() {
 
   clickButton(/TUNE/);
   collect();
-  for (const view of ['AIR', 'SPARK', 'FUEL', 'ECU']) {
+  // INJECTORS visited last: the scaling-mismatch step right after this loop needs
+  // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
+  for (const view of ['AIRFLOW', 'SPARK', 'FUEL', 'SENSORS', 'INJECTORS']) {
     clickButton(view);
     collect();
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
@@ -105,8 +107,8 @@ async function sweep() {
       collect();
     }
   }
-  // Still on ECU: telling the ECU a different injector size is fitted raises the
-  // scaling-mismatch warning and its RESCALE button.
+  // Still on TUNE > Injectors: telling the ECU a different injector size is fitted
+  // raises the scaling-mismatch warning and its RESCALE button.
   const scaling = within(screen.getByRole('group', { name: 'ECU Injector Scaling' })).getAllByRole('button');
   fireEvent.click(scaling.find((b) => b.getAttribute('aria-pressed') === 'false'));
   collect();
@@ -216,11 +218,36 @@ describe('the danger variant', () => {
   });
 });
 
-describe('the Button call sites in EcuLab.jsx', () => {
-  const source = readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8');
+describe('the Button call sites in the shell and its screens', () => {
+  // Every file that can hold one. This used to read EcuLab.jsx alone, which was the
+  // whole app; the screen split moves call sites out of it a tab at a time, so a
+  // single-file scan would quietly measure less of the app after each extraction and
+  // still pass. Walking `src/ui/screens` means a screen extracted tomorrow is covered
+  // the day it lands, without anyone remembering to add it here.
+  //
+  // `src/ui/components/` joined the walk when TUNE's split moved `SelectionDock` (a
+  // shared component with its own DONE button) there rather than into any one screen
+  // — the same reasoning as `screens/`: a call site that moves out of EcuLab.jsx into
+  // a shared component must not quietly stop being counted.
+  //
+  // `src/ui/AppShell.jsx` joined the same way: wiring the app shell moved the header's
+  // Tutorial and Repair-engine buttons out of EcuLab.jsx and into the strip
+  // `AppShell.jsx` renders, so a scan that stopped at `screens/`/`components/` would
+  // undercount by exactly those two — not because a Button was deleted, but because
+  // the file holding it is a third kind of home this test did not yet know about.
+  const sources = [
+    readFileSync(new NodeURL('../../src/ui/EcuLab.jsx', import.meta.url), 'utf8'),
+    readFileSync(new NodeURL('../../src/ui/AppShell.jsx', import.meta.url), 'utf8'),
+    ...readdirSync(new NodeURL('../../src/ui/screens/', import.meta.url), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
+      .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
+    ...readdirSync(new NodeURL('../../src/ui/components/', import.meta.url), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.jsx'))
+      .map((e) => readFileSync(`${e.parentPath ?? e.path}/${e.name}`, 'utf8')),
+  ];
 
   /**
-   * The text of every `<Button …>` opening tag in the file.
+   * The text of every `<Button …>` opening tag across those files.
    *
    * Scanning to the first `>` would stop inside `onClick={() => …}`, so track brace
    * depth and accept only a `>` outside braces.
@@ -228,18 +255,20 @@ describe('the Button call sites in EcuLab.jsx', () => {
    */
   function openingTags() {
     const tags = [];
-    let from = source.indexOf('<Button');
-    while (from !== -1) {
-      let depth = 0;
-      let i = from;
-      for (; i < source.length; i += 1) {
-        const c = source[i];
-        if (c === '{') depth += 1;
-        else if (c === '}') depth -= 1;
-        else if (c === '>' && depth === 0) break;
+    for (const source of sources) {
+      let from = source.indexOf('<Button');
+      while (from !== -1) {
+        let depth = 0;
+        let i = from;
+        for (; i < source.length; i += 1) {
+          const c = source[i];
+          if (c === '{') depth += 1;
+          else if (c === '}') depth -= 1;
+          else if (c === '>' && depth === 0) break;
+        }
+        tags.push(source.slice(from, i + 1));
+        from = source.indexOf('<Button', i);
       }
-      tags.push(source.slice(from, i + 1));
-      from = source.indexOf('<Button', i);
     }
     return tags;
   }
@@ -263,7 +292,27 @@ describe('the Button call sites in EcuLab.jsx', () => {
   it('finds the call sites at all', () => {
     // Guards the scanner, not the code: one that matched nothing would make every
     // test below pass over an empty list.
-    expect(openingTags().length).toBeGreaterThanOrEqual(18);
+    //
+    // 18 was the count when EcuLab.jsx was the only file scanned. Extracting HOME and
+    // BUILD did not delete a Button, it moved them — so the floor RISES to the total
+    // across the shell, the screens and (since TUNE's split) the shared components
+    // rather than dropping to what is left in the shell. TUNE's own extraction moved
+    // three call sites (VE's ACCEPT RE-LOGGED VALUES, ECU's RESCALE, and
+    // SelectionDock's DONE) but deleted none, so the total stays 23.
+    //
+    // Wiring `AppShell` moved two more (Tutorial, Repair engine) out of EcuLab.jsx and
+    // into AppShell.jsx, which is why that file joined `sources` above — the total is
+    // still 23 because a move nets zero, not because nothing happened. Raise the floor
+    // when a screen or shared component adds a real call site; lowering it is how this
+    // stops guarding anything.
+    //
+    // 22, not 23, and this is the one lowering that is honest: the start screen now
+    // offers three ways in (CAREER, SANDBOX, TUTORIAL) rendered from `WAYS_IN` in ONE
+    // mapped `<Button>` where it previously had two hand-written tags. That is a
+    // rendered button MORE and a source tag fewer, and the scanner counts source tags.
+    // The sweep below still reaches all three, by label, which is what actually guards
+    // them.
+    expect(openingTags().length).toBeGreaterThanOrEqual(22);
   });
 
   it('names a real variant at every call site, including the ones the sweep cannot mount', () => {
