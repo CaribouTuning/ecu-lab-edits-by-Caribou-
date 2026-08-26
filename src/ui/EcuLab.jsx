@@ -1028,7 +1028,10 @@ export default function EngineManagementSandbox() {
   // So `doRun` banks the scores it actually computed, and this holds them unchanged. The
   // app's whole method is change one thing, MEASURE, revert; a score that moves without a
   // measurement contradicts the thing it is teaching.
-  const scores = pullScores;
+  // Keep the completed pull's scores banked, but do not expose them while the next
+  // sweep is animating. `result` is replaced at sweep start, so showing `pullScores`
+  // here during `running` would publish the next pull's final grade before its reveal.
+  const scores = running ? null : pullScores;
 
   // True when the build has moved since the pull these scores came from.
   const scoresStale = !!scores && scores.signature !== buildSignature;
