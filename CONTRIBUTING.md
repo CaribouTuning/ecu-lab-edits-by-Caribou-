@@ -59,12 +59,18 @@ reason.
 
 ```bash
 npm test          # physics intent tests + behavioural fingerprint
-npm run lint
+npm run lint      # warnings fail too — see below
 npm run typecheck # JSDoc types are checked with tsc --checkJs
 npm run build     # make sure it still builds
 ```
 
 CI runs all four on every PR.
+
+`lint` runs with `--max-warnings 0`, so a warning fails the build exactly like an error
+does. That is deliberate: `react-hooks/exhaustive-deps` is a warning by default, and a
+missing dependency in this app does not throw — it shows the player a score computed from
+hardware they have since changed, silently and with no visual cue. A rule that cannot fail
+the build is a rule nobody fixes.
 
 `main` is protected: every change lands through a pull request with CI green and the
 branch up to date. That applies to maintainers too — nobody pushes to `main` directly.
@@ -151,6 +157,19 @@ the knock envelope moves torque, which moves the event log, which moves the scor
    change without re-deriving it.
 
 Never update the fixture just to make CI green. That defeats the entire point.
+
+The hash is quantised to seven significant figures, not to decimal places, so that it
+cannot move on floating-point noise. That distinction is the whole of #48: an absolute
+tolerance committed thirteen significant digits on a BSFC in the millions while
+committing barely one on a wear figure of 0.000004, and the strict end did not survive a
+Node upgrade — which walked contributors into regenerating the baseline against their own
+toolchain. `is immune to floating-point noise` in `fingerprint.test.js` holds the property
+down: it perturbs every `Math.pow`, `Math.exp` and `Math.log` by up to sixteen ULP and
+requires the serialised fingerprint to come out byte for byte identical.
+
+If that test ever fails, do not widen `SIG_FIGS` to make it pass. Find what became
+numerically unstable first — a quantity whose relative precision has collapsed is usually
+a division by something approaching zero, and the fix belongs in the physics.
 
 ## Writing tests
 

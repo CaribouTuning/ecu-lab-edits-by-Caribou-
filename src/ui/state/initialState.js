@@ -82,6 +82,10 @@ import {
  *   compares it against 3 and clamps it to 0..100 (`src/sim/live.js`)
  * @property {number} loadKpa the dyno sweep's fixed manifold load, kPa
  * @property {boolean} soundOn whether the engine-note synth is enabled
+ * @property {'ok'|'blocked'|'unavailable'|null} audioStatus what the last press of TEST
+ *   found, or null before one. Here rather than as local state because the shell owns
+ *   the audio context that produces it and the live screen is what displays it, so it
+ *   would otherwise be a prop threaded between them for no other reason.
  * @property {number} volume engine-note output trim, 0..2, 1 being unity. A setting
  *   that sits beside `soundOn` rather than view state, because it survives navigation
  *   and is the same knob whichever screen the engine is heard on.
@@ -151,6 +155,7 @@ export function makeInitialState() {
       throttleInput: 0,
       loadKpa: 100,
       soundOn: true,
+      audioStatus: null,
       volume: 1,
       dynoPhase: null,
       dynoRpm: 820,

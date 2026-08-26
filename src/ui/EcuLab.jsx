@@ -1,21 +1,6 @@
-// @ts-nocheck
-/*
- * This file opts out of type checking, deliberately and temporarily.
- *
- * `tsconfig.json` leaves EcuLab.jsx out of `include` because it is still one large
- * untyped component. That keeps it from being checked as a ROOT file — but `include`
- * and `exclude` only choose root files. tsc still checks anything a root file imports
- * transitively, so the moment a test under `tests/` imports this module, its ~26
- * pre-existing type errors fail `npm run typecheck`.
- *
- * This directive is what actually holds the line the tsconfig comment describes, and it
- * lets the characterisation tests import the component normally instead of hiding it
- * from tsc behind a dynamic import.
- *
- * It disappears with the file: PR 3 splits this component into typed screens.
- */
 /**
- * ECU LAB — the application shell and screens.
+ * ECU LAB — the composition root: store provider, shell, and the route switch that
+ * hands each tab's markup to its screen components.
  *
  * WHAT THIS FILE IS
  * Presentation only. It reads the simulation's output but contains no physics — if
@@ -23,88 +8,71 @@
  * instead. That separation is what keeps the physics testable in plain Node.
  *
  * LAYOUT
- * Shared primitives first, then the screens. Screens are plain conditional blocks
- * inside one component, each marked with a banner comment.
+ * This used to be one large single-component app; it has been split into
+ * `ui/primitives/`, `ui/screens/` and `ui/AppShell.jsx`. What remains here is the
+ * store setup, the pieces still shared across more than one screen (`JourneyBanner`,
+ * `Tach`, the tutorial content), and the top-level component that reads the route and
+ * renders the right screen into the shell.
  *
- * KNOWN WORK IN PROGRESS
- * This file is still the original single-component app. Decomposing it into
- * `ui/primitives/` and `ui/screens/` is tracked as follow-up work — see CONTRIBUTING.
+ * TYPE CHECKING
+ * No longer opts out. This file used to carry `@ts-nocheck` while it was one large
+ * untyped component; now that it is a thin, typed root, it is checked like everything
+ * else under `npm run typecheck`.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  Gauge, Grid3x3, Zap, Droplets, Wind, Activity, RotateCcw, Play, AlertTriangle, Info,
-  Wrench, Settings, Package, Flame, ChevronDown, Trophy, TrendingUp, BookOpen, Fuel,
+  Grid3x3, Zap, Droplets, Activity, Play,
+  Settings, TrendingUp, Fuel,
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT,
-  DEFAULT_MODS, ENGINE_PRESETS, EXHAUST_DIA_OPTS,
-  INJ_DEADTIME_MS, INJECTOR_OPTS, LOAD, MATERIAL_OPTS, MOD_INFO, OCTANE_OPTS,
-  PRESET_GROUPS, PSI_TO_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
-  R_AIR, RPM, TURBINE_OPTS, acousticDrive, applyPreset, calibrationAdvice, chargeTempK,
-  clamp, clone2D, computeEngineerScore, computeHardwareVE, computePullScore,
-  computeTuningScore, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2,
-  presetById, simulateSweep, turbineWithCount, veRecommendations
+  BARO_KPA, COMPRESSOR_OPTS,
+  DEFAULT_MODS, EXHAUST_DIA_OPTS,
+  INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
+  PSI_TO_KPA,
+  R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
+  computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, presetById,
+  simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import {
   beepEngineAudio, createEngineAudio, silenceEngineAudio,
   updateEngineAudio,
 } from './audio/engineAudio.js';
-import {
-  T, accAlpha, deltaHeat, heat, shadowAlpha, statusColor, statusTone, utilisationColor,
-} from './theme.js';
+import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
+import { AppShell } from './AppShell.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
+import { ROUTES } from './routing.js';
+import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
-import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
-import { Bar } from './primitives/Bar.jsx';
 import { Seg } from './primitives/Seg.jsx';
-import { Select } from './primitives/Select.jsx';
-import { Toggle } from './primitives/Toggle.jsx';
-
-function ExpandableInfo({ title, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
-      <button onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
-          <Info size={14} style={{ color: T.acc, flexShrink: 0 }} />{title}
-        </span>
-        <ChevronDown size={15} style={{ color: T.ink3, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-      </button>
-      <div style={{ maxHeight: open ? 900 : 0, opacity: open ? 1 : 0, overflow: 'hidden', transition: 'max-height .3s ease, opacity .2s ease' }}>
-        <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// Full-width descriptive rows for choices that need a subtitle (turbine, injectors).
-function PickList({ options, value, onChange }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 }}>
-      {options.map((o) => {
-        const active = o.value === value;
-        return (
-          <button key={o.value} onClick={() => onChange(o.value)} style={{
-            textAlign: 'left', padding: '11px 13px', borderRadius: 9, fontWeight: 600, fontSize: 13,
-            border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
-            color: active ? T.accInk : T.inkSoft,
-          }}>{o.label}{o.sub && <div style={{ fontSize: 11, color: T.ink2, marginTop: 2, fontWeight: 400 }}>{o.sub}</div>}</button>
-        );
-      })}
-    </div>
-  );
-}
+import { DialMark } from './components/DialMark.jsx';
+import { EngineScreen } from './screens/build/EngineScreen.jsx';
+import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
+import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
+import { InductionScreen } from './screens/build/InductionScreen.jsx';
+import { HealthScreen } from './screens/dash/HealthScreen.jsx';
+import { LearnScreen } from './screens/dash/LearnScreen.jsx';
+import { LiveScreen } from './screens/dash/LiveScreen.jsx';
+import { StatsScreen } from './screens/dash/StatsScreen.jsx';
+import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
+import { FuelScreen } from './screens/tune/FuelScreen.jsx';
+import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
+import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
+import { SparkScreen } from './screens/tune/SparkScreen.jsx';
+import { DataScreen } from './screens/dyno/DataScreen.jsx';
+import { LogScreen } from './screens/dyno/LogScreen.jsx';
+import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
+import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
 // Guided first run. Walks a new player through the actual working order a tuner
 // uses — build the engine, calibrate it, hear it run, then measure it — and then
@@ -153,56 +121,6 @@ function JourneyBanner({ step, onAdvance, onDismiss }) {
   );
 }
 
-function BuildSection({ active, onClick, icon: Icon, label, sub, children }) {
-  return (
-    <div style={{ marginBottom: 9 }}>
-      <button onClick={onClick} style={{
-        width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px',
-        borderRadius: 11, border: `1px solid ${active ? T.acc : T.line}`, background: active ? T.accBg : T.panel2,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, textAlign: 'left' }}>
-          <div style={{ width: 32, height: 32, borderRadius: 9, background: active ? accAlpha(0.18) : T.panel, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={16} color={active ? T.accInk : T.ink2} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 13.5, color: active ? T.accInk : T.ink }}>{label}</div>
-            {sub && <div style={{ fontSize: 10.5, color: T.ink2, marginTop: 1 }}>{sub}</div>}
-          </div>
-        </div>
-        <ChevronDown size={16} style={{ color: active ? T.accInk : T.ink3, flexShrink: 0, marginLeft: 8, transform: active ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
-      </button>
-      <div style={{ maxHeight: active ? 3000 : 0, opacity: active ? 1 : 0, overflow: 'hidden', transition: 'max-height .35s ease, opacity .25s ease' }}>
-        <div style={{ padding: '13px 2px 2px' }}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// Signature visual motif: a dial/gauge, used both as the static brand mark
-// (Start screen) and as the live, RPM-driven readout (Dyno tab).
-function DialMark({ size = 64, pct = 0.62, live = false }) {
-  const angle = -120 + pct * 240;
-  return (
-    <svg viewBox="0 0 100 100" width={size} height={size}>
-      <circle cx="50" cy="50" r="44" fill={T.panel2} stroke={T.line} strokeWidth="1.5" />
-      {Array.from({ length: 13 }).map((_, i) => {
-        const a = (-120 + (i / 12) * 240) * (Math.PI / 180);
-        const inner = 34, outer = i % 3 === 0 ? 28 : 31;
-        return (
-          <line key={i}
-            x1={50 + inner * Math.sin(a)} y1={50 - inner * Math.cos(a)}
-            x2={50 + outer * Math.sin(a)} y2={50 - outer * Math.cos(a)}
-            stroke={i > 9 ? T.danger : T.ink3} strokeWidth={i % 3 === 0 ? 1.6 : 1} />
-        );
-      })}
-      <g style={{ transition: live ? 'none' : 'transform .6s cubic-bezier(.34,1.4,.64,1)' }} transform={`rotate(${angle} 50 50)`}>
-        <line x1="50" y1="50" x2="50" y2="20" stroke={T.acc} strokeWidth="3" strokeLinecap="round" />
-      </g>
-      <circle cx="50" cy="50" r="5" fill={T.acc} />
-    </svg>
-  );
-}
-
 function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   const pct = clamp(rpm / fullScaleRpm, 0, 1);
   // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
@@ -235,163 +153,6 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   );
 }
 
-// ============================================================
-function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
-  const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
-  const selectCell = (row, col) => setSelection({ type: 'cell', row, col });
-  const selectRow = (row) => setSelection({ type: 'row', row });
-  const selectCol = (col) => setSelection({ type: 'col', col });
-  const isSelected = (row, col) => {
-    if (!selection) return false;
-    if (selection.type === 'cell') return selection.row === row && selection.col === col;
-    if (selection.type === 'row') return selection.row === row;
-    if (selection.type === 'col') return selection.col === col;
-    return false;
-  };
-  return (
-    <div data-testid="tuning-grid">
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
-      <span>MAP kPa &darr;</span><span>RPM &rarr;</span>
-    </div>
-    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: `1px solid ${T.line}`, borderRadius: 10 }}>
-      <div style={{ display: 'inline-block', minWidth: '100%' }}>
-        <div style={{ display: 'flex' }}>
-          <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
-          {RPM.map((r, ci) => (
-            <button key={r} onClick={() => selectCol(ci)} style={{
-              width: 51, height: 30, flexShrink: 0, border: 'none', borderBottom: `1px solid ${T.line}`, borderLeft: `1px solid ${T.line}`,
-              background: selection?.type === 'col' && selection.col === ci ? T.acc : T.panel,
-              color: selection?.type === 'col' && selection.col === ci ? T.accOn : T.ink2,
-              fontFamily: T.mono, fontSize: 10, fontWeight: 700,
-            }}>{r}</button>
-          ))}
-        </div>
-        {LOAD.map((load, ri) => (
-          <div key={load} style={{ display: 'flex' }}>
-            <button onClick={() => selectRow(ri)} style={{
-              width: 44, height: 37, flexShrink: 0, border: 'none', borderRight: `1px solid ${T.line}`, borderTop: `1px solid ${T.line}`,
-              background: selection?.type === 'row' && selection.row === ri ? T.acc : T.panel,
-              color: selection?.type === 'row' && selection.row === ri ? T.accOn : T.ink2,
-              fontFamily: T.mono, fontSize: 10, fontWeight: 700,
-            }}>{load}</button>
-            {data[ri].map((val, ci) => (
-              <button key={ci} onClick={() => selectCell(ri, ci)} style={{
-                width: 51, height: 37, flexShrink: 0,
-                border: isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid ${shadowAlpha(0.35)}`,
-                background: heat(val, min, max), color: T.ink,
-                fontFamily: T.mono, fontSize: 12, fontWeight: 700,
-              }}>{fmt(val)}</button>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-    </div>
-  );
-}
-
-// Reference data for a selected cell. Deliberately DESCRIPTIVE, not predictive:
-// it tells you what this parameter does and what range is normal here, but never
-// simulates an outcome — only a real dyno pull produces results in this sandbox.
-function cellReference(kind, row, col, value) {
-  const rpm = RPM[col], map = LOAD[row];
-  const boosted = map > 105, wot = map >= 95, cruise = map <= 70;
-  const highRpm = rpm >= 5500, lowRpm = rpm <= 2500;
-  if (kind === 've') {
-    const typical = boosted ? '95-110%' : wot ? (highRpm ? '80-95%' : lowRpm ? '60-75%' : '90-100%') : (cruise ? '55-80%' : '75-90%');
-    return {
-      what: 'Cylinder filling efficiency at this manifold pressure — how completely the cylinder fills relative to the pressure available.',
-      typical: `Typical here: ${typical}.`,
-      affects: 'Feeds the air-mass calculation (airCharge = VE x V_cyl x MAP/RT). Raising it raises fuel demand and pulse width at this point.',
-      note: boosted ? 'Above ~105 kPa you are in boost — these rows only get used once a turbo is fitted.' : null,
-    };
-  }
-  if (kind === 'timing') {
-    const typical = boosted ? '14-24°' : wot ? (lowRpm ? '12-20°' : highRpm ? '28-38°' : '22-32°') : '32-45°';
-    return {
-      what: 'Spark advance before top dead center, aiming to land peak cylinder pressure ~16° after TDC.',
-      typical: `Typical here: ${typical}. Low manifold pressure tolerates far more advance; boost tolerates much less.`,
-      affects: 'Torque rises toward MBT then flattens. Beyond the knock limit the ECU pulls it back during the pull.',
-      note: boosted && value > 28 ? 'Aggressive for a boosted cell — cylinder pressure is already high here.' : null,
-    };
-  }
-  const typical = boosted ? '11.5-12.3:1' : wot ? '12.5-13.2:1' : cruise ? '14.7:1 (stoich, closed loop)' : '13.5-14.5:1';
-  return {
-    what: 'Commanded air:fuel ratio, gasoline-equivalent. Divide by 14.7 for lambda.',
-    typical: `Typical here: ${typical}.`,
-    affects: 'Sets fuel mass, and therefore pulse width and duty cycle. Richer cools combustion and resists knock; leaner raises EGT and knock risk.',
-    note: boosted && value > 12.8 ? 'Lean for a boosted cell — this is where lean mixtures burn pistons.' : cruise && value < 14 ? 'Richer than needed for cruise — wastes fuel with no power gain at this load.' : null,
-  };
-}
-
-function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind }) {
-  if (!selection) return null;
-  let current;
-  if (selection.type === 'cell') current = data[selection.row][selection.col];
-  else if (selection.type === 'row') current = data[selection.row].reduce((a, b) => a + b, 0) / data[selection.row].length;
-  else current = data.reduce((a, r) => a + r[selection.col], 0) / data.length;
-
-  const apply = (delta) => {
-    const next = clone2D(data);
-    if (selection.type === 'cell') next[selection.row][selection.col] = Number(clamp(next[selection.row][selection.col] + delta, min, max).toFixed(2));
-    else if (selection.type === 'row') next[selection.row] = next[selection.row].map((v) => Number(clamp(v + delta, min, max).toFixed(2)));
-    else next.forEach((r) => { r[selection.col] = Number(clamp(r[selection.col] + delta, min, max).toFixed(2)); });
-    setData(next);
-  };
-  const setAbs = (v) => {
-    const next = clone2D(data);
-    if (selection.type === 'cell') next[selection.row][selection.col] = clamp(v, min, max);
-    else if (selection.type === 'row') next[selection.row] = next[selection.row].map(() => clamp(v, min, max));
-    else next.forEach((r) => { r[selection.col] = clamp(v, min, max); });
-    setData(next);
-  };
-  const smallStep = decimals ? 0.1 : 1;
-  const bigStep = decimals ? 1 : 5;
-  let sel = 'Cell';
-  if (selection.type === 'row') sel = `Row · ${LOAD[selection.row]} kPa MAP`;
-  else if (selection.type === 'col') sel = `Column · ${RPM[selection.col]} RPM`;
-  else sel = `${RPM[selection.col]} RPM · ${LOAD[selection.row]} kPa MAP`;
-
-  return (
-    <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-        <div>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
-            {decimals ? current.toFixed(decimals) : Math.round(current)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
-          </div>
-        </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
-      </div>
-      {selection.type === 'cell' && kind && (() => {
-        const ref = cellReference(kind, selection.row, selection.col, current);
-        return (
-          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
-            <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} kPa</div>
-            <div>{ref.what}</div>
-            <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
-            <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
-            {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
-          </Panel>
-        );
-      })()}
-      <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
-      <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
-        {/* One colour for all four: the +/- is already in the label. Painting the
-            positive steps with the status green said "raising this cell is good", which
-            is not something a stepper can know — and spending the status scale on a sign
-            is what teaches a player to ignore it where it means something. */}
-        {[-bigStep, -smallStep, smallStep, bigStep].map((d, i) => (
-          <button key={i} onClick={() => apply(d)} style={{
-            flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
-            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
-          }}>{d > 0 ? '+' : ''}{d}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const TUTORIAL_STEPS = [
   { title: 'This is an air pump',
     body: 'An engine makes power by burning fuel, and it can only burn as much fuel as it has air to burn it with. So everything starts with airflow. The ECU measures the air, decides how much fuel to inject, and picks the moment to light it. Tuning is adjusting those last two decisions.' },
@@ -410,33 +171,6 @@ const TUTORIAL_STEPS = [
   { title: 'Chase the score',
     body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
 ];
-
-function LiveGauge({ label, value, unit, color = T.ink, warn }) {
-  return (
-    <div style={{ flex: 1, minWidth: 68, background: T.panel, border: `1px solid ${warn ? T.danger : T.line}`, borderRadius: 9, padding: '8px 9px' }}>
-      <div style={{ fontSize: 8.5, color: T.ink2, letterSpacing: 0.8, fontWeight: 700 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, fontFamily: T.mono, color: warn ? T.danger : color }}>
-        {value}<span style={{ fontSize: 9, color: T.ink3, marginLeft: 2 }}>{unit}</span>
-      </div>
-    </div>
-  );
-}
-
-function TrimBar({ label, value }) {
-  const pct = clamp((value + 25) / 50, 0, 1) * 100;
-  const c = Math.abs(value) > 15 ? T.danger : Math.abs(value) > 8 ? T.warn : T.ok;
-  return (
-    <div style={{ marginBottom: 7 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink2, fontWeight: 700, marginBottom: 3 }}>
-        <span>{label}</span><span style={{ color: c, fontFamily: T.mono }}>{value > 0 ? '+' : ''}{value.toFixed(1)}%</span>
-      </div>
-      <div style={{ height: 5, background: T.panel, borderRadius: 3, position: 'relative', border: `1px solid ${T.line}` }}>
-        <div style={{ position: 'absolute', left: '50%', top: -1, bottom: -1, width: 1, background: T.lineHi }} />
-        <div style={{ position: 'absolute', left: `${Math.min(50, pct)}%`, width: `${Math.abs(pct - 50)}%`, top: 0, bottom: 0, background: c, borderRadius: 2 }} />
-      </div>
-    </div>
-  );
-}
 
 // ============================================================
 /**
@@ -477,8 +211,11 @@ export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
 export function EcuLabApp() {
-  const [appView, setAppView] = useState('start');
-  const [tab, setTab] = useState('dash');
+  // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
+  // hooks that used to sit here are all one `route` now — see src/ui/routing.js.
+  const [route, navigate] = useRoute();
+  const appView = route.view;
+  const tab = route.tab;
   // The BUILD slice — hardware and ECU configuration — lives in the store. Destructured
   // so every READ site below stays a bare `engineConfig` / `mods` / ...; only the WRITES
   // changed, from setters to dispatches. All three domain slices are in the store now.
@@ -486,43 +223,54 @@ export function EcuLabApp() {
   const {
     engineConfig, mods, turboOn, boostCurve, octaneIdx, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
-    presetId, presetPrompt, boostSel,
+    presetId,
   } = build;
+  // `presetPrompt` and `boostSel` are read from the store directly by EngineScreen
+  // and InductionScreen now — neither is a shell-level derivation, so there is
+  // nothing to destructure here once their one call site each moved with them.
+  //
   // The TUNE slice — calibration tables, the unsaved-work flag, and the grid cursor.
   // Same destructuring shape as `build` above; `dispatch` is the SAME function
   // useBuild() returned (one reducer, one useReducer call — see StoreProvider.jsx),
   // so it is not re-bound here.
   const [tune] = useTune();
-  const { ve, timing, afr, tablesDirty, selection } = tune;
+  const { ve, timing, afr } = tune;
+  // `tablesDirty` is read from the store directly by EngineScreen now (it is
+  // `hasTuningWork()`'s one input) — nothing else in the shell reads it.
+  // `selection` itself is read from the store directly by AirflowScreen/SparkScreen/
+  // FuelScreen now — the shell only still needs `setSelection` below, to clear the
+  // cursor on tab/view navigation, which is nav-adjacent and stays here.
   // The SESSION slice — everything about the current run and career progress that is
   // neither hardware nor calibration. Same destructuring shape again, same `dispatch`.
-  // What is left as local `useState` below is deliberate: `appView`, `tab`,
-  // `buildSection`, `tuneView`, `dynoView` and `dashSection` are VIEW state (which
-  // screen and which accordion panel is open), which PR 3 moves when it splits this
-  // component into screens.
+  // There is no local `useState` left in this file: `appView`, `tab`, `buildSection`,
+  // `tuneView`, `dynoView` and `dashSection` were VIEW state (which screen and which
+  // accordion panel is open) and have all moved into the URL — see `useRoute()` above
+  // and `route.section`, narrowed per tab, just below.
   const [session] = useSession();
   const {
-    loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput,
-    histogram, health,
+    loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
     result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
-  const [buildSection, setBuildSection] = useState('engine');
-  const [tuneView, setTuneView] = useState('ve');
-  const [dynoView, setDynoView] = useState('result');
-  const [dashSection, setDashSection] = useState('live');
+  // One `route.section` serves all four tabs, narrowed per tab so every call site below
+  // keeps reading the name it always read — and so a later task can move a tab's markup
+  // into a screen file without renaming anything. The narrowing is not decorative:
+  // `tab` is the only thing that says which tab a section belongs to.
+  //
+  // `null` is a REAL value here, not "unset". Each of these is null while that tab's
+  // accordion is fully collapsed, which is the state clicking an open section's own
+  // header produces (see `toggleSection`) and the state `#/build` — a tab with no
+  // section segment — spells. Defaulting it to a section would make closing impossible,
+  // and no existing test would fail.
+  const buildSection = tab === 'build' ? route.section : null;
+  const tuneView = tab === 'tune' ? route.section : null;
+  const dynoView = tab === 'dyno' ? route.section : null;
+  const dashSection = tab === 'dash' ? route.section : null;
   const revealTimer = useRef(null);
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
-  // The one piece of audio state that stays local, because it is genuinely VIEW state:
-  // null until the player presses TEST, then 'ok' | 'blocked' | 'unavailable'. It says
-  // what the last self-test found, not anything about the engine. `soundOn`, `volume`,
-  // `dynoPhase` and `dynoRpm` all live in the session slice — the first two are settings
-  // that sit beside each other, and the last two are run state that belongs next to
-  // `running` and `revealCount`.
-  const [audioStatus, setAudioStatus] = useState(null);
   const setSession = (field, value) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field, value });
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
@@ -534,10 +282,9 @@ export function EcuLabApp() {
   // and its three derived setters (`setVeEdited`/`setTimingEdited`/`setAfrEdited`) are
   // gone; every table-edit call site below dispatches SET_TABLE directly.
   //
-  // `clearPresetId` itself survives with a narrower job: CLEAR_PRESET_ID touches
-  // `presetId` alone, with no `tablesDirty` side effect, for the one caller that wants
-  // exactly that — the preset picker's "Custom build" option, below.
-  const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
+  // `CLEAR_PRESET_ID` (touches `presetId` alone, no `tablesDirty` side effect) is
+  // dispatched from EngineScreen now — its one caller, the preset picker's "Custom
+  // build" option, moved there with the rest of the Engine Architecture section.
   // The build-side analogue of a table edit is a cursor, not a calibration edit:
   // `SET_TUNE_FIELD` deliberately does NOT clear `presetId` or flag `tablesDirty`
   // (see reducer.js), so moving the highlighted grid cell never disowns a loaded
@@ -546,15 +293,13 @@ export function EcuLabApp() {
 
   const octaneBonus = OCTANE_OPTS[octaneIdx].bonus;
   const engineDerived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
-  // The live tach needle and the dyno chart's RPM axis both used to top out at a
-  // hardcoded 7500 — correct only for the one preset whose redline happened to match
-  // it. Key them off this engine's own redline instead, each with headroom sized for
-  // what it actually needs to show: the tach has to leave room for the rev limiter's
-  // overshoot bounce (liveStep cuts fuel at redline + 100 RPM) without pegging, while
-  // the dyno chart's sweep data never exceeds redline at all, so it only needs enough
-  // padding that the last point isn't jammed against the axis edge.
+  // The live tach needle used to top out at a hardcoded 7500 — correct only for the
+  // one preset whose redline happened to match it. Key it off this engine's own
+  // redline instead, with headroom sized for what it actually needs to show: the
+  // tach has to leave room for the rev limiter's overshoot bounce (liveStep cuts
+  // fuel at redline + 100 RPM) without pegging. (DYNO's own chart axis does the
+  // equivalent thing with tighter headroom — see ResultScreen.jsx.)
   const tachFullScaleRpm = engineDerived.redline * 1.1;
-  const dynoChartMaxRpm = engineDerived.redline * 1.05;
   const idealExhaustDia = useMemo(() => idealExhaustDiameter(engineDerived.displacementL, turboOn ? Math.max(...boostCurve) : 0), [engineDerived, turboOn, boostCurve]);
   const exhaustDiaError = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia - idealExhaustDia;
   const mafErrorBase = useMemo(() => {
@@ -600,16 +345,10 @@ export function EcuLabApp() {
     [engineConfig, mods, hwForVe],
   );
 
-  const recalcVE = () => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: veTruth });
+  // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
+  // same `veTruth`, passed down as a prop since it also feeds `calAdvice` below and
+  // the dyno payload.
 
-  // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
-  // structurally impossible for the curve to be the wrong length or to contain a
-  // non-number, which is what previously let a single edit poison the whole sim.
-  const setBoostAt = (i, value) => dispatch({
-    type: ACTIONS.SET_BUILD_FIELD,
-    field: 'boostCurve',
-    value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
-  });
   const calAdvice = useMemo(() => calibrationAdvice({
     ve, veTruth, timing, afr, derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor: COMPRESSOR_OPTS[compressorIdx],
@@ -636,27 +375,71 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
-  // Single source of truth for the "no headroom left" cutoff is utilisationColor's
-  // own >90 band — comparing its output rather than re-testing dutyPreview keeps this
-  // caption from becoming a fourth copy of the threshold.
-  const dutyDangerous = utilisationColor(dutyPreview) === T.danger;
+  // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
+  // this same `dutyPreview`, which stays here because the score breakdown and dyno
+  // payload below also read it.
 
   const needsMafRecal = mods.intake || turboOn;
-  const changeTab = (t) => {
+  /** Open a tab at its first section — what a tab button means. */
+  const goTab = (t) => navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
+  /** Open a specific section of a tab. */
+  const goSection = (t, sec) => navigate({ view: 'app', tab: t, section: sec });
+  // Screens live in their own files, and some are memoised (LearnScreen today; any
+  // BUILD/TUNE/DYNO screen that earns it tomorrow), so their `onToggle` prop has to be
+  // REFERENTIALLY STABLE or the memo never bails out. A plain closure over
+  // `route.section` is a new function every render — including the twenty a second the
+  // live engine causes — which is why `sectionRef` exists: it is written during render
+  // (like `liveCfgRef`/`throttleRef` below) and read only from a click handler, so it
+  // cannot be stale by the time one fires.
+  //
+  // `makeToggleSection` is that pattern generalised to all four tabs instead of copied
+  // once per tab: it hands back one cached closure per tab id, built once and reused
+  // for the component's life, so `toggleBuildSection` below and `toggleDashSection`
+  // are both stable — and a TUNE or DYNO screen that wants the same stability later
+  // just calls `makeToggleSection('tune')` / `makeToggleSection('dyno')` rather than
+  // getting a fifth hand-written copy of this closure.
+  const sectionRef = useRef(route.section);
+  sectionRef.current = route.section;
+  const toggleCacheRef = useRef(/** @type {Record<string, (sec: string|null) => void>} */ ({}));
+  // `[navigate]` documents what this closure reads, but the cache does not actually
+  // respect it: once a tab's closure is built, `toggleCacheRef` keeps serving that
+  // exact closure for the component's life, even if `navigate` were later to change
+  // identity. That is only safe because `useRoute` guarantees `navigate` never does
+  // — it is `useCallback(..., [])` (see `useRoute.js`), permanently stable — so the
+  // dependency is inert in practice. Kept rather than dropped to `[]` because it is
+  // still the accurate list of what the closure reads; the note above is what
+  // resolves the apparent inconsistency.
+  const makeToggleSection = useCallback((t) => {
+    if (!toggleCacheRef.current[t]) {
+      toggleCacheRef.current[t] = (sec) => navigate({
+        view: 'app', tab: t, section: sectionRef.current === sec ? null : sec,
+      });
+    }
+    return toggleCacheRef.current[t];
+  }, [navigate]);
+  const toggleDashSection = makeToggleSection('dash');
+  const toggleBuildSection = makeToggleSection('build');
+  const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
+  // `AppShell`'s `SideNav` is `React.memo`'d and reads no store, so at 20 Hz it only
+  // stays skipped if `onNavigate` is referentially stable — see AppShell.jsx's header.
+  // `goTab`/`setSelection` above are plain closures rebuilt every render, so calling
+  // them from here would still make a new `changeTab` on every render even inside a
+  // `useCallback`; the body is inlined against `navigate` and `dispatch` instead,
+  // which are each stable for the life of the store (see the `[dispatch]` and
+  // `[navigate]` notes elsewhere in this file), so this closure is genuinely stable
+  // for the component's life, the same guarantee `makeToggleSection` gives its
+  // per-tab closures above.
+  const changeTab = useCallback((t) => {
     // Browsers only let audio start from inside a user gesture, so take every tap on the
     // nav as another chance to unlock it. Without this a player who never presses START
-    // first can navigate the whole app and hear nothing.
+    // first can navigate the whole app and hear nothing. `audioRef` is a ref, so reading
+    // it here costs this closure none of the stability the note above depends on.
     const a = audioRef.current;
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
-    setTab(t); setSelection(null);
-  };
+    navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
+    dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
+  }, [navigate, dispatch]);
 
-  const installMod = (key) => {
-    if (mods[key]) return;
-    // Fitting a part changes airflow but does NOT edit your logged VE table — the
-    // VE tab will show the gap and let you accept it once you understand why.
-    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
-  };
   const resetToStock = () => {
     // Wipes the calibration back to a generic stock baseline — which, if a factory
     // preset was loaded, is NOT that preset's validated tables, so RESET_TO_STOCK
@@ -676,40 +459,6 @@ export function EcuLabApp() {
   // caller at all — so this is an ADDED dispatch, not a converted one. Drop it and the
   // button goes inert with nothing raising an error: see tests/ui/session-store.test.jsx.
   const repairEngine = () => dispatch({ type: ACTIONS.REPAIR_ENGINE });
-  // Actions cannot carry functions, so the old functional update becomes a patch the
-  // reducer merges into the engineConfig it already holds. It invalidates the preset
-  // label like every other hardware write.
-  const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
-
-  /** Whether the player has unsaved calibration work — hand-edited VE/spark/fuel —
-   *  that loading a preset would silently overwrite. Tracked directly via
-   *  `tablesDirty` rather than pull count: pullCount is restored from career
-   *  storage on load, so it nags a returning player on an untouched default
-   *  engine, and it misses a player who edited every table but never pulled. */
-  const hasTuningWork = () => tablesDirty;
-
-  const applyEnginePreset = (preset) => {
-    const p = applyPreset(preset);
-    // The whole BUILD slice — including `mafScalar` back to 1.0, and `presetId` SET
-    // rather than cleared — lands in ONE pass. That is what the original's comment
-    // about not routing these writes through the invalidating setters was working
-    // around: there is no longer a "last call" whose ordering decides the outcome.
-    //
-    // NOTE the payload is applyPreset()'s OUTPUT, not the raw catalogue entry — the
-    // raw entry has no `engineConfig`, so passing it builds an engine with no short
-    // block.
-    // APPLY_PRESET writes all three slices in that one pass — including clearing
-    // `session.result` and `session.prevResult`, so that a factory rating from the
-    // newly loaded engine never sits next to a pull logged on whatever was running
-    // before it. The two local `setResult(null)`/`setPrevResult(null)` calls that used
-    // to follow this line were mirroring writes the reducer already made.
-    dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
-  };
-
-  const choosePreset = (preset) => {
-    if (hasTuningWork()) dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: preset });
-    else applyEnginePreset(preset);
-  };
 
   const ensureAudio = () => {
     if (audioRef.current) return audioRef.current;
@@ -721,15 +470,25 @@ export function EcuLabApp() {
     } catch { return null; }
   };
 
-  // A deliberately obvious beep. If this is silent, the problem is the device or the
-  // browser — on an iPhone the physical ring/silent switch mutes web audio even at full
-  // volume — and not the engine model. Worth being able to prove.
+  // The live panel's sound button. The audio context has to be resumed from the same
+  // user gesture that switches sound on — browsers will not start one otherwise — so
+  // this cannot live in the screen: `ensureAudio` and the context it builds are the
+  // shell's.
+  const toggleSound = () => {
+    if (!soundOn) ensureAudio()?.ctx.resume();
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn });
+  };
+
+  // A deliberately obvious beep, for the same reason and from the same place: if this is
+  // silent the problem is the device or the browser — on an iPhone the physical
+  // ring/silent switch mutes web audio even at full volume — and not the engine model.
+  // Worth being able to prove.
   const testSound = () => {
     const a = ensureAudio();
-    if (!a) { setAudioStatus('unavailable'); return; }
+    if (!a) { setSession('audioStatus', 'unavailable'); return; }
     a.ctx.resume();
     beepEngineAudio(a, { hz: 220, seconds: 0.45, gain: 0.35 });
-    setAudioStatus(a.ctx.state === 'running' ? 'ok' : 'blocked');
+    setSession('audioStatus', a.ctx.state === 'running' ? 'ok' : 'blocked');
   };
 
   // Persistence goes through the storage adapter, which picks whichever backend is
@@ -850,6 +609,15 @@ export function EcuLabApp() {
     // — re-creating it would restart the engine's 20 Hz clock on every render.
   }, [dispatch]);
 
+  // The throttle pad's three pointer handlers. `throttleRef` is what the 20 Hz loop
+  // actually reads (the interval is installed once and never sees a re-render), so the
+  // dispatch and the ref write are one operation and belong together in the shell that
+  // owns the ref.
+  const setThrottleInput = (value) => {
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value });
+    throttleRef.current = value;
+  };
+
   // ---- Engine audio -------------------------------------------------------
   // Nothing about the note is decided here. `acousticDrive` turns the operating point
   // into the physical properties of the exhaust — firing geometry, blowdown pressure
@@ -861,7 +629,7 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
   };
   const stopEngine = () => {
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0;
+    setThrottleInput(0);
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { running: false, cranking: false } });
   };
 
@@ -907,43 +675,9 @@ export function EcuLabApp() {
     }));
   }, [result, prevResult, running, revealCount]);
 
-  // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
-  // binned onto the same RPM x MAP grid as the VE table, so the correction can be
-  // applied cell-for-cell. This is what HP Tuners' scanner histogram does.
-  const buildHistogram = () => {
-    if (!result) return;
-    const cells = LOAD.map(() => RPM.map(() => ({ sum: 0, n: 0 })));
-    result.points.forEach((p) => {
-      let ri = 0, best = Infinity;
-      LOAD.forEach((m, i) => { const d = Math.abs(m - p.map); if (d < best) { best = d; ri = i; } });
-      let ci = 0, bc = Infinity;
-      RPM.forEach((r, i) => { const d = Math.abs(r - p.rpm); if (d < bc) { bc = d; ci = i; } });
-      // Airflow error % = how far the ACTUAL mixture sat from what was commanded.
-      //
-      // Sign convention, because getting it backwards makes the tool teach the exact
-      // wrong reflex: the ECU fuels from the VE table, so
-      //     actualAfr / commandedAfr  =  trueVE / tableVE
-      // A positive number therefore means the engine ran LEANER than commanded, which
-      // means it swallowed MORE air than the table claimed, which means the table is
-      // reading low and must come UP by that percentage. Multiplying the cell by
-      // (1 + err/100) drives the table onto the truth in one pass.
-      const err = ((p.afr / p.afrCommanded) - 1) * 100;
-      cells[ri][ci].sum += err; cells[ri][ci].n += 1;
-    });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: cells.map((row) => row.map((c) => (c.n ? c.sum / c.n : null))) });
-  };
-  const applyHistogram = () => {
-    if (!histogram) return;
-    // SET_TABLE carries a value, not a function, so the old functional update
-    // (`setVeEdited((prev) => ...)`) is resolved here against the CURRENT `ve` — the
-    // one already in scope from the store — before dispatching.
-    const nextVe = ve.map((row, ri) => row.map((v, ci) => {
-      const e = histogram[ri][ci];
-      return e == null ? v : Number(clamp(v * (1 + e / 100), 10, 130).toFixed(1));
-    }));
-    dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: nextVe });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null });
-  };
+  // `buildHistogram`/`applyHistogram` moved to DataScreen.jsx: DYNO's DATALOG
+  // section was their only caller, and everything they touch (result, histogram,
+  // ve) is plain store state DataScreen can read for itself.
 
   const currentRpm = running
     ? dynoRpm
@@ -1055,35 +789,31 @@ export function EcuLabApp() {
     };
   }, [tab]);
 
+  // `engineName`/`overallColor` are gone: both were the header's, and the header is
+  // gone with them — `StatusStrip` in AppShell.jsx now derives the same figures from
+  // the store itself rather than being handed them from here (see that file's header
+  // for why it reads the store directly instead of taking props). `overallHealth`
+  // stays: HealthScreen below still reads it as a prop.
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
-  const overallColor = statusColor(overallHealth);
   const activePreset = presetId ? presetById(presetId) : null;
-  const engineName = activePreset
-    ? activePreset.name
-    : `${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
 
-  // Four top-level destinations instead of seven. The three tuning tables and the
-  // fuel/ECU controls now live under TUNE as sub-views — same depth, far less to
-  // scan, and much bigger touch targets.
-  const TABS = [
-    { id: 'dash', label: 'HOME', icon: Gauge },
-    { id: 'build', label: 'BUILD', icon: Settings },
-    { id: 'tune', label: 'TUNE', icon: Grid3x3 },
-    { id: 'dyno', label: 'DYNO', icon: Activity },
-  ];
+  // The four top-level destinations moved into AppShell.jsx's NAV_ITEMS — one
+  // definition for the section nav rather than this file's copy and the shell's.
+  // TUNE's own sub-view switcher below is unrelated: it is a second level of
+  // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 've', label: 'AIR', icon: Grid3x3 },
-    { id: 'timing', label: 'SPARK', icon: Zap },
-    { id: 'afr', label: 'FUEL', icon: Droplets },
-    { id: 'ecu', label: 'ECU', icon: Fuel },
+    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3 },
+    { id: 'spark', label: 'SPARK', icon: Zap },
+    { id: 'fuel', label: 'FUEL', icon: Droplets },
+    { id: 'injectors', label: 'INJECTORS', icon: Fuel },
+    { id: 'sensors', label: 'SENSORS', icon: Activity },
   ];
-  const gridProps = { selection, setSelection };
 
   if (appView === 'start') {
     return (
       <StartScreen
-        onStart={() => { setAppView('app'); setTab('build'); }}
-        onTutorial={() => setAppView('tutorial')}
+        onStart={() => goTab('build')}
+        onTutorial={goTutorial}
         version={BUILD_VERSION}
         dial={<DialMark size={92} pct={0.62} />}
       />
@@ -1093,348 +823,51 @@ export function EcuLabApp() {
     return (
       <TutorialScreen
         steps={TUTORIAL_STEPS}
-        onDone={() => { setAppView('app'); setTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
+        onDone={() => { goTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
       />
     );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '13px 16px 12px', borderBottom: `1px solid ${T.line}`, background: T.panel }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ fontSize: 10, letterSpacing: 2, color: T.accInk, fontWeight: 800 }}>CARIBOU TUNING</div>
-            <div style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: 0.2 }}>ECU Lab</div>
-            <div style={{ fontSize: 11, color: T.ink2, marginTop: 3, fontFamily: T.mono }}>
-              {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
-                button whose accessible name depends on the tooltip surviving. Note
-                the lower-case names — the start screen's TUTORIAL button is queried
-                by exact name and must stay the only match. */}
-            <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={() => setAppView('tutorial')}>
-              <Info size={16} aria-hidden="true" />
-            </Button>
-            <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={repairEngine}>
-              <Wrench size={16} aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9 }}>
-          <div style={{ flex: 1, height: 4, background: T.panel2, borderRadius: 2, overflow: 'hidden', border: `1px solid ${T.line}` }}>
-            <div style={{ width: `${overallHealth}%`, height: '100%', background: overallColor, transition: 'width .4s' }} />
-          </div>
-          <span style={{ fontSize: 10, color: overallColor, fontWeight: 800, fontFamily: T.mono }}>{Math.round(overallHealth)}%</span>
-          {live.running && <span style={{ fontSize: 9.5, color: T.ok, fontWeight: 800, letterSpacing: 0.5 }}>● RUNNING</span>}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* The nav, the status strip and the capped content column are all `AppShell`'s
+          now — see AppShell.jsx for what each owns and why. This outer div stays: it
+          is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
+          not chrome AppShell has any opinion about. */}
+      <AppShell route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine}>
         {/* ---------- HOME: live engine, career stats, health, learning ---------- */}
+        {/* One component per section, each reading the store for itself. `live` is read
+            ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than
+            passing through a HOME-level parent that would drag the other three with it. */}
         {tab === 'dash' && (
           <div style={{ padding: 16 }}>
             {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 3 }); changeTab('dyno'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
-            <BuildSection
-              active={dashSection === 'live'} onClick={() => setDashSection(dashSection === 'live' ? null : 'live')}
-              icon={Activity} label="Live Engine"
-              sub={live.running ? `Running · ${Math.round(live.sensedRpm)} RPM · ${Math.round(live.coolantC)}°C` : live.cranking ? 'Cranking…' : 'Off'}
-            >
-              <Panel style={{ background: T.panel, marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
-                    <div style={{ position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-                      <div style={{ fontSize: 17, fontWeight: 800, fontFamily: T.mono, color: live.fuelCut ? T.danger : T.ink }}>{Math.round(live.sensedRpm)}</div>
-                      <div style={{ fontSize: 7, color: T.ink3, letterSpacing: 1, fontWeight: 700 }}>RPM</div>
-                    </div>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, color: T.ink2, marginBottom: 8, lineHeight: 1.5 }}>
-                      {live.running
-                        ? (live.limiterCut ? 'Rev limiter — fuel cut to protect the engine.'
-                          : live.dfco ? 'Overrun fuel cut — injectors off while coasting down. Real ECUs do this; it costs nothing to spin.'
-                          : live.coolantC < 70 ? 'Warming up — the ECU is running extra fuel until it reaches temperature.'
-                          : live.closedLoop ? 'Warm and in closed loop — the ECU is trimming fuel against the O2 sensor.'
-                          : 'Open loop — the ECU is following your tables directly, ignoring O2 feedback.')
-                        : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
-                    </div>
-                    <div style={{ display: 'flex', gap: 7 }}>
-                      {/* START was filled with `ok`. Green here is decoration, not
-                          state — the engine is not running when the button says
-                          START — and spending a status colour on an action is the
-                          rule Toggle's docstring closed. It takes the accent; STOP
-                          is the secondary state and takes `ghost`. Not `danger`:
-                          shutting an engine down destroys nothing. */}
-                      <Button
-                        variant={live.running || live.cranking ? 'ghost' : 'primary'}
-                        style={{ flex: 1 }}
-                        onClick={live.running || live.cranking ? stopEngine : startEngine}
-                      >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
-                      {/* Plays one note through the same graph the engine uses, so a
-                          player whose browser has blocked audio finds out here rather
-                          than by wondering why a running engine is silent. `ghost` for
-                          the same reason STOP is: it is a secondary action. */}
-                      <Button variant="ghost" title="Test sound" onClick={testSound}>TEST</Button>
-                      <button onClick={() => { if (!soundOn) ensureAudio()?.ctx.resume(); setSession('soundOn', !soundOn); }} title="Engine sound" style={{
-                        width: 46, padding: '11px 0', borderRadius: 9, fontWeight: 800, fontSize: 13,
-                        border: `1px solid ${soundOn ? T.acc : T.line}`, background: soundOn ? T.accBg : T.panel2,
-                        color: soundOn ? T.accInk : T.ink3,
-                      }}>{soundOn ? '♪' : '✕'}</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 100 }); throttleRef.current = 100; }}
-                  onPointerUp={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
-                  onPointerCancel={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'throttleInput', value: 0 }); throttleRef.current = 0; }}
-                  style={{
-                    position: 'relative', overflow: 'hidden',
-                    marginTop: 12, padding: '18px 0', borderRadius: 12, textAlign: 'center', userSelect: 'none',
-                    WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
-                    border: `1px solid ${throttleInput > 0 ? T.acc : T.line}`,
-                    background: throttleInput > 0 ? T.accBg : T.panel2,
-                    color: throttleInput > 0 ? T.accInk : T.ink2, fontWeight: 800, fontSize: 13.5, letterSpacing: 0.5,
-                    touchAction: 'none', opacity: live.running ? 1 : 0.4,
-                    transition: 'background .1s, border-color .1s',
-                  }}
-                >
-                  <div style={{
-                    position: 'absolute', left: 0, top: 0, bottom: 0,
-                    width: `${clamp(live.effThrottle ?? 0, 0, 100)}%`,
-                    background: accAlpha(0.16), transition: 'width .12s',
-                  }} />
-                  <span style={{ position: 'relative' }}>
-                    {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
-                  <span style={{ fontSize: 10, color: T.ink2, fontWeight: 700, letterSpacing: 0.5 }}>VOL</span>
-                  <input
-                    type="range" min={0} max={2} step={0.05} value={volume}
-                    onChange={(e) => setSession('volume', Number(e.target.value))}
-                    aria-label="Engine volume"
-                    style={{ flex: 1, accentColor: T.acc }}
-                  />
-                  <span style={{ fontFamily: T.mono, fontSize: 11, color: T.ink2, width: 34, textAlign: 'right' }}>
-                    {Math.round(volume * 100)}%
-                  </span>
-                </div>
-
-                {audioStatus && (
-                  <div style={{ fontSize: 11, color: audioStatus === 'ok' ? T.ok : T.warn, marginTop: 8, lineHeight: 1.5 }}>
-                    {audioStatus === 'ok'
-                      ? 'Audio is running. If you heard the test beep but not the engine, start it and hold the throttle.'
-                      : audioStatus === 'blocked'
-                        ? 'The browser is still blocking audio — tap START, or any tab, then try TEST again.'
-                        : 'This browser did not provide Web Audio, so engine sound is unavailable.'}
-                    <br />On iPhone the physical ring/silent switch mutes web audio even at full volume.
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                  <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
-                  <LiveGauge label="MAP" value={Math.round(live.sensedMap)} unit="kPa" />
-                  <LiveGauge label="IAT" value={Math.round(live.sensedIat)} unit="°C" warn={live.sensedIat > 65} />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                  <LiveGauge label="LAMBDA" value={live.sensedLambda.toFixed(2)} unit="λ" color={T.violet} />
-                  <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-                  <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && live.live.knock)} />
-                </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                  <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
-                  <LiveGauge label="DUTY" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
-                  <LiveGauge label="IDLE AIR" value={Math.round(live.idleTrim)} unit="%" />
-                  <LiveGauge label="FUEL" value={live.fuelCut ? 'CUT' : 'ON'} unit="" color={live.fuelCut ? T.warn : T.ok} />
-                </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <TrimBar label="SHORT TERM FUEL TRIM (STFT)" value={live.stft} />
-                  <TrimBar label="LONG TERM FUEL TRIM (LTFT)" value={live.ltft} />
-                </div>
-              </Panel>
-              <ExpandableInfo title="Why these gauges jitter">
-                Every value above is a simulated sensor reading, with real noise and lag — not the exact internal number. That is what a tuner actually sees on a scan tool, and why real logs never look perfectly smooth.
-              </ExpandableInfo>
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'stats'} onClick={() => setDashSection(dashSection === 'stats' ? null : 'stats')}
-              icon={Trophy} label="Career & Last Pull"
-              sub={result ? `Best ${bestScore} · ${pullCount} pulls logged` : `${pullCount} pulls logged`}
-            >
-              <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <StatTile label="BEST PULL" value={bestScore} tone="acc" />
-                <StatTile label="CAREER TOTAL" value={totalScore} tone="alt" />
-                <StatTile label="PULLS" value={pullCount} />
-              </div>
-              {result && scores ? (
-                <>
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
-                    <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
-                    <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
-                    <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />
-                  </div>
-                </>
-              ) : <Note>No dyno pull logged yet — head to DYNO and run one.</Note>}
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'health'} onClick={() => setDashSection(dashSection === 'health' ? null : 'health')}
-              icon={Wrench} label="Engine Health"
-              sub={`${Math.round(overallHealth)}% overall`}
-            >
-              <Panel>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <Bar label="PISTON / RINGS · knock, detonation" value={health.piston} />
-                  <Bar label="BEARINGS · sustained cylinder pressure" value={health.bearing} />
-                  <Bar label="VALVES · lean-under-boost heat" value={health.valve} />
-                </div>
-              </Panel>
-              {needsMafRecal && <Note tone="warn">Your intake and/or turbo plumbing changed the MAF reading — head to <b>FUEL</b> to rescale it before your next pull.</Note>}
-            </BuildSection>
-
-            <BuildSection
-              active={dashSection === 'learn'} onClick={() => setDashSection(dashSection === 'learn' ? null : 'learn')}
-              icon={BookOpen} label="Learn How It Works"
-              sub="Plain-language guide to engine tuning"
-            >
-              <div style={{ fontSize: 12, color: T.ink3, marginBottom: 10, lineHeight: 1.5 }}>Read in order. Each explains a piece of what the live engine is doing right now.</div>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '4px 0 8px' }}>PART 1 · FUNDAMENTALS</div>
-
-              <ExpandableInfo title="1. The whole thing in one paragraph">
-                An engine is an air pump. However much air it swallows decides how much fuel can be burned, and burning fuel is what makes power. The ECU's entire job is to measure the air, add the right amount of fuel, and light it at the right moment. Tuning is adjusting those last two decisions.
-                <br /><br />Everything else in this app — cams, turbos, exhaust diameter, compression — exists to change how much air gets in, or how much of that fuel's energy you can safely extract.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="2. Volumetric efficiency — the master number">
-                VE is how completely a cylinder fills compared to its own swept volume. At 100% VE the cylinder takes in exactly its displacement worth of air at the pressure available. Naturally aspirated engines typically peak around 85–100%; the peak sits at the RPM where the intake and exhaust tuning line up best, which is also where peak torque lands.
-                <br /><br />VE falls off at high RPM because there simply is not enough time to fill the cylinder, and it falls at very low RPM because gas velocity is too low to help. That curve is the shape of your torque curve.
-                <br /><br /><b style={{ color: T.ink }}>Every hardware choice on BUILD moves this table</b> — cam duration slides the peak up or down the RPM range, headers and exhaust add flow up top, bore/stroke ratio biases the whole curve. That is why VE is where hardware becomes visible.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="3. Lambda — the only mixture number that matters">
-                Gasoline burns completely at about 14.7 parts air to 1 part fuel. Divide any AFR by its fuel's stoichiometric ratio and you get <b style={{ color: T.ink }}>lambda</b>: 1.00 is exactly complete combustion, below 1 is rich, above 1 is lean.
-                <br /><br />Lambda matters because it means the same thing on every fuel. E85 is stoichiometric at about 9.8:1, so 12.5:1 means something completely different on E85 than on pump gas — but lambda 0.85 is lambda 0.85 on both.
-                <br /><br />Best power is slightly rich: around <b style={{ color: T.ink }}>lambda 0.87</b> naturally aspirated, and richer still under boost — near 0.83 — because the extra fuel evaporating cools the charge and buys knock margin. Leaner than that under load and you lose power while raising both knock risk and exhaust temperature.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="4. Why timing makes torque, and where it stops">
-                Fuel does not explode instantly — it burns over a few milliseconds. So the spark fires <i>before</i> top dead center, timed so peak cylinder pressure arrives around 16° after TDC, where the crank has the best leverage.
-                <br /><br />Too retarded and you are still burning while the piston runs away: wasted energy, hot exhaust. Too advanced and pressure peaks while the piston is still rising, fighting the crank and building the heat and pressure that cause knock. The best point is <b style={{ color: T.ink }}>MBT</b> — minimum spark for best torque. Past MBT you gain almost nothing and risk everything.
-                <br /><br />MBT moves: higher RPM needs more advance because there is less time for the burn; higher load needs less because the denser charge burns faster.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="5. Knock — what actually destroys engines">
-                Knock is the end gas — the mixture farthest from the spark plug — igniting on its own from heat and pressure before the flame front reaches it. Two flame fronts collide and the pressure spike hammers the piston and ring lands.
-                <br /><br />It is driven by <b style={{ color: T.ink }}>trapped charge mass</b>, not just boost: more air in the cylinder means higher peak pressure. That is why a big cam that breathes better also needs a little less timing, and why the same tune that is safe at part throttle knocks at wide open.
-                <br /><br />What makes it worse: more timing, more boost, more compression, hotter intake air, leaner mixture, lower octane. What buys margin: higher octane, richer mixture, cooler charge (intercooler), aluminium head, less compression.
-                <br /><br /><b style={{ color: T.ink }}>How much is too much?</b> Tuners treat anything sustained above about 2° of retard as damaging, not as an operating point. Zero is the target.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 2 · WHAT THE ECU CALCULATES</div>
-
-              <ExpandableInfo title="6. The control loop, in order">
-                Thousands of times a minute, the ECU runs the same sequence:
-                <br /><br />read sensors → calculate cylinder air mass → decide open or closed loop → work out required fuel mass → convert that to an injector pulse width → apply fuel trims → look up ignition timing → check for knock → retard if needed → fire injectors and coils → update learned values.
-                <br /><br />Everything you edit in this app is one of the lookups inside that loop. The ECU is not deciding anything creative — it is doing arithmetic against your tables, very fast.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="7. Step 1 — how much air is in the cylinder?">
-                This is the ideal gas law, and it is the foundation of every speed-density calculation:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>ρ = MAP ÷ (R × T)</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>airCharge = VE × V_cylinder × ρ</span>
-                <br /><br />MAP is manifold pressure (about 101 kPa at wide open naturally aspirated, higher with boost, down to ~20 kPa at idle). R is the gas constant for air, 287 J/(kg·K). T is charge temperature.
-                <br /><br />Two consequences worth internalising. <b style={{ color: T.ink }}>Boost raises MAP</b>, so it directly multiplies air mass. And <b style={{ color: T.ink }}>compressing air heats it</b>, which lowers density and gives some of that gain back — which is the entire reason intercoolers exist. You can watch both in the datalog's MAP and IAT columns.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="8. Step 2 — how much fuel does that need?">
-                Fuel mass follows directly from air mass and your lambda target:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>fuelMass = airCharge ÷ (λ × stoichRatio)</span>
-                <br /><br />Nothing is fudged here. Because E85's stoichiometric ratio is 9.8 instead of 14.7, the same lambda target automatically demands about 1.5× the fuel mass — it falls straight out of the chemistry, which is why E85 needs a much bigger fuel system for the same power.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="9. Step 3 — pulse width, and the hard time limit">
-                The ECU never commands "fuel" — it commands a number of milliseconds. That comes from the required fuel mass and the injector's flow rating, plus deadtime (the ~1 ms an injector takes to physically open):
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PW = fuelMass ÷ (injectorCC × density ÷ 60000) + deadtime</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>cycleTime = 120000 ÷ RPM&nbsp;&nbsp;(ms per 720° cycle)</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>duty% = PW ÷ cycleTime × 100</span>
-                <br /><br />A four-stroke injects once every two crank revolutions, so at 7500 RPM there are only 16 ms in a cycle. An injector needing 15 of them is at 94% duty. Past about 90% there is no time left, and the mixture goes lean <i>no matter what your AFR table says</i>. This is a physical wall, not a calibration choice.
-                <br /><br /><b style={{ color: T.ink }}>Critical:</b> the ECU calculates that pulse width for the injector size it has been <i>told</i> is fitted. Fit bigger injectors without updating the ECU Injector Size on FUEL and every pulse delivers proportionally more fuel than intended — the engine runs rich everywhere regardless of your tables.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="10. Step 4 — open loop, closed loop, and fuel trims">
-                At part throttle the ECU runs <b style={{ color: T.ink }}>closed loop</b>: it reads the oxygen sensor and corrects fuelling in real time. <b style={{ color: T.ink }}>Short term fuel trim (STFT)</b> is that instant correction; <b style={{ color: T.ink }}>long term fuel trim (LTFT)</b> is what it has learned and stored over time. Watch both on the HOME gauges — fit an intake without rescaling the MAF and you can see STFT swing, then hand off to LTFT as it learns.
-                <br /><br />Above roughly 85 kPa the ECU switches to <b style={{ color: T.ink }}>open loop</b> and stops listening to the O2 sensor entirely, following your tables blind. That is deliberate — at wide open throttle you want a rich power mixture, not stoichiometric.
-                <br /><br />It is also why <b style={{ color: T.ink }}>wide open throttle is where a bad tune bites</b>. Errors that closed loop quietly papers over at cruise pass straight through at full load.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="11. Step 5 — from combustion to torque at the wheels">
-                Fuel energy becomes indicated work on the piston, then the engine pays its own bills. The work is not estimated — the simulator integrates one cylinder through the closed part of its cycle, two crank degrees at a time:
-                <br /><br /><span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dQ = Wiebe burn fraction × fuel energy</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>dp = (γ−1)/V × dQ − γ × p/V × dV</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>IMEP = ∮ p dV ÷ V_cyl</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>PMEP = exhaust pressure − intake pressure</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>BMEP = IMEP − friction − PMEP</span><br />
-                <span style={{ fontFamily: T.mono, color: T.cyan, fontSize: 11.5 }}>torque = BMEP × Vd ÷ 4π</span>
-                <br /><br /><b style={{ color: T.ink }}>Why integrate instead of multiply?</b> Because spark timing does not scale the work done — it moves <i>when</i> the heat arrives relative to a piston that is somewhere different at every crank angle. Burn too early and rising pressure fights the piston still coming up. Too late and the burn happens into a cylinder already expanding. MBT is where those two losses balance, and it falls out of the integration rather than being looked up.
-                <br /><br />Raising compression makes power the honest way here: a smaller clearance volume means a longer expansion, and the integral simply comes out bigger.
-                <br /><br /><b style={{ color: T.ink }}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800, margin: '14px 0 8px' }}>PART 3 · THE TUNING PROCESS</div>
-
-              <ExpandableInfo title="12. The loop: change → pull → read → adjust">
-                This is the whole method, and it is not a simplification:
-                <br /><br /><b style={{ color: T.ink }}>1. Change one thing.</b> One table region, one hardware item. Change three and you will not know which one mattered.
-                <br /><br /><b style={{ color: T.ink }}>2. Run a pull.</b> Nothing is known until it is measured. There is no preview in this app on purpose.
-                <br /><br /><b style={{ color: T.ink }}>3. Read the log first.</b> Before looking at the power number, read the Pull Log and check the datalog for gaps between commanded and actual. Power that came with 6° of knock retard is not power you keep.
-                <br /><br /><b style={{ color: T.ink }}>4. Adjust and repeat.</b> The VS. LAST PULL line tells you whether the change helped. Small logged steps beat big guesses, every time.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="13. A worked example — first turbo tune">
-                Fit a turbo on BUILD and run a pull without touching anything. It will score terribly, and here is why: a factory naturally-aspirated calibration has no real tuning above 101 kPa, so the boost rows are just a flat continuation of the wide-open-throttle row — far too much timing and far too lean for the cylinder pressure you have just created.
-                <br /><br /><b style={{ color: T.ink }}>Read the log.</b> It will report knock across most of the range, with the RPM band and how many degrees the ECU pulled.
-                <br /><br /><b style={{ color: T.ink }}>Fix the spark first.</b> On SPARK, pull the 150 and 200 kPa rows down. Roughly 2° per 20 kPa of extra pressure is a sane starting point. Pull again.
-                <br /><br /><b style={{ color: T.ink }}>Then the mixture.</b> On FUEL, richen those same rows toward lambda 0.83 (about 12.2:1). Pull again — you should see knock margin improve as well, because a richer charge resists knock.
-                <br /><br /><b style={{ color: T.ink }}>Then check the fuel system.</b> If the log reports injectors maxed, that is hardware: fit bigger injectors and set the matching ECU Injector Size, or ask for less boost. Nothing in the tables can create fuel that the injectors have no time to deliver.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="14. How to read the datalog columns">
-                The datalog is where diagnosis actually happens. Read it in pairs:
-                <br /><br /><b style={{ color: T.ink }}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was.
-                <br /><br /><b style={{ color: T.ink }}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
-                <br /><br /><b style={{ color: T.ink }}>Airflow</b> — around 200 g/s is typical at redline for an engine near 300 hp, which is a quick sanity check on whether your VE table is plausible.
-                <br /><br /><b style={{ color: T.ink }}>Injectors</b> — duty above 90% is the wall. <b style={{ color: T.ink }}>Heat</b> — sustained EGT above ~980°C cooks turbines and valves; it rises hard with retarded timing and lean mixtures, and a rich mixture is what pulls it back down.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="15. What tuning can fix, and what it can't">
-                <b style={{ color: T.ink }}>Calibration faults — tables fix these completely:</b> knock (pull timing), lean or rich mixture (AFR table), MAF drift after an intake change (MAF scalar), injector mismatch (set the ECU injector size). Fix the cause and the score returns to 100.
-                <br /><br /><b style={{ color: T.ink }}>Physical limits — no table touches these:</b> injectors out of duty cycle, valve float, a compressor past its efficient range, a cam that has moved the powerband somewhere you did not want. The Pull Log always names both routes when you hit one: change the hardware, or ask less of it.
-                <br /><br />Knowing which kind of problem you are looking at is most of what separates a tuner from someone guessing at numbers.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="16. Habits that keep engines alive">
-                Target zero knock, not "acceptable" knock. Stay on the rich side of best power until you have confirmed margin. Never chase a number you have not measured. When something looks wrong, find the cause rather than compensating for it downstream — a MAF error corrected by bending the AFR table will be wrong again the moment load changes.
-                <br /><br />And watch engine health on HOME. Damage here accumulates the way it does in reality: a few destructive pulls, not one dramatic failure.
-              </ExpandableInfo>
-
-            </BuildSection>
+            <LiveScreen
+              active={dashSection === 'live'} onToggle={toggleDashSection}
+              tachFullScaleRpm={tachFullScaleRpm}
+              onStart={startEngine} onStop={stopEngine}
+              onToggleSound={toggleSound} onThrottle={setThrottleInput}
+              onTestSound={testSound}
+            />
+            <StatsScreen
+              active={dashSection === 'stats'} onToggle={toggleDashSection}
+              scores={scores}
+            />
+            <HealthScreen
+              active={dashSection === 'health'} onToggle={toggleDashSection}
+              overallHealth={overallHealth} needsMafRecal={needsMafRecal}
+            />
+            <LearnScreen active={dashSection === 'learn'} onToggle={toggleDashSection} />
           </div>
         )}
 
-        {/* ---------- BUILD: engine architecture, parts, forced induction ---------- */}
+        {/* ---------- BUILD: engine architecture, induction, fuel system, exhaust ---------- */}
+        {/* One component per section, each reading the store for itself. `engineDerived`,
+            `activePreset` and `veAdvice` are the shell's: each feeds a second consumer
+            elsewhere (the tach/dyno chart, the header's engine label, the AIR screen's
+            advisory), so they stay here and are passed down rather than recomputed.
+            `idealExhaustDia` stays for the same reason — it is the input to
+            `exhaustDiaError`, which the score breakdown and the dyno payload also read. */}
         {tab === 'build' && (
           <div style={{ padding: 16 }}>
             {journeyStep === 0 && <JourneyBanner step={0} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 1 }); changeTab('tune'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
@@ -1443,322 +876,38 @@ export function EcuLabApp() {
               Design the car before you tune it. Tap a section to open it — every choice inside changes real physics elsewhere in the sandbox.
             </p>
 
-            <BuildSection
-              active={buildSection === 'engine'} onClick={() => setBuildSection(buildSection === 'engine' ? null : 'engine')}
-              icon={Settings} label="Engine Architecture"
-              sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
-            >
-              <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Start From a Real Engine</div>
-              <Select
-                // The primitive is inline-block with a 200px floor, so it must be told
-                // to fill this column — the legacy control was width:100% and the
-                // section is a single narrow stack. The margin is the 13px the old one
-                // carried; nothing after it should close up.
-                style={{ display: 'block', marginBottom: 13 }}
-                label="Start From a Real Engine"
-                groups={PRESET_GROUPS.map((g) => ({
-                  label: g.manufacturer,
-                  // The heading carries the manufacturer, so strip it off the option
-                  // where the name spells it the same way: "BMW B58B30M0" under a "BMW"
-                  // heading becomes "B58B30M0". The two Volkswagens are deliberately
-                  // left alone — they are named "VW EA888.3 (...)" against a
-                  // "Volkswagen" heading, so this replace finds nothing and they keep
-                  // their prefix. That reads fine (VW is the badge, Volkswagen the
-                  // maker) and is not worth an abbreviation table in the UI layer.
-                  options: g.presets.map((p) => ({
-                    label: `${p.name.replace(`${p.manufacturer} `, '')} · ${p.factory.crankHp} hp`,
-                    value: p.id,
-                  })),
-                }))}
-                extra={[{ label: 'Custom build', value: '__custom__' }]}
-                value={presetId ?? '__custom__'}
-                onChange={(v) => {
-                  if (v === '__custom__') { clearPresetId(); return; }
-                  const p = ENGINE_PRESETS.find((e) => e.id === v);
-                  if (p) choosePreset(p);
-                }}
-              />
-              {activePreset && (
-                <Panel tight style={{ marginBottom: 13 }}>
-                  <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>{activePreset.blurb}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 4, fontWeight: 600 }}>
-                    <span>FACTORY RATING</span>
-                    <span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>
-                      {activePreset.factory.crankHp} hp · {activePreset.factory.crankTq} lb-ft
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 600 }}>
-                    <span>YOUR LAST PULL</span>
-                    <span style={{ color: result ? T.accInk : T.ink3, fontWeight: 800, fontFamily: T.mono }}>
-                      {result ? `${result.peakHp} whp · ${result.peakTq} lb-ft` : 'no pull logged'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 7, lineHeight: 1.5 }}>
-                    Factory figures are at the crank; the dyno here reads at the wheels, so expect roughly 15% less. The factory calibration is deliberately conservative — beating it is the exercise.
-                  </div>
-                </Panel>
-              )}
-              {!presetId && (
-                <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
-              )}
-              {presetPrompt && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px' }}>
-                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5, marginBottom: 9 }}>
-                    <b style={{ color: T.accInk }}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
-                  </div>
-                  <div style={{ display: 'flex', gap: 7 }}>
-                    {/* The one `danger` in the app. This prompt is raised ONLY when
-                        `hasTuningWork()` is true, so confirming it always destroys
-                        hand-edited VE/spark/fuel tables that nothing can restore. */}
-                    <Button variant="danger" style={{ flex: 1 }} onClick={() => applyEnginePreset(presetPrompt)}>
-                      LOAD {presetPrompt.name.toUpperCase()}
-                    </Button>
-                    <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_PRESET_PROMPT, value: null })}>
-                      CANCEL
-                    </Button>
-                  </div>
-                </div>
-              )}
-              <Panel tight style={{ marginBottom: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>DISPLACEMENT</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.displacementL.toFixed(2)} L</span></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, marginBottom: 5, fontWeight: 600 }}><span>BORE : STROKE</span><span style={{ color: T.ink, fontWeight: 800, fontFamily: T.mono }}>{engineDerived.ratio.toFixed(3)}</span></div>
-                <div style={{ fontSize: 11.5, color: T.accInk, fontWeight: 600 }}>{engineDerived.character}</div>
-              </Panel>
-
-              {!veAdvice.inSync && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '11px 13px', margin: '4px 0 10px', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
-                  <b style={{ color: T.accInk }}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b style={{ color: T.ink }}>TUNE &rsaquo; AIR</b> to see which cells changed and why, then accept it there.
-                </div>
-              )}
-              <ExpandableInfo title="Why changing hardware does not update your VE table">
-                Everything that physically changes how this engine breathes feeds volumetric efficiency: bore/stroke ratio, cylinder count, compression, cam duration, valve springs, head material, intake/headers/exhaust, pipe diameter, turbine backpressure, even fuel choice (E85 evaporates cold enough to measurably densify the charge).
-                <br /><br />But your VE table is a <b style={{ color: T.ink }}>log</b> — a record of what the engine actually flowed last time it was measured. Bolt on a cam and that log does not rewrite itself; it just becomes wrong. In a real shop you would go back to the dyno and re-log airflow before trusting any of it.
-                <br /><br />So this app never edits it silently. It tells you what changed, by how much, and in which RPM range — and lets you accept it once you understand why it moved.
-                <br /><br />Note that <b style={{ color: T.ink }}>boost is not part of VE</b>. VE measures how well the cylinder fills relative to the pressure available; boost raises that pressure (MAP) separately. That is why adding boost does not change these numbers, but adding a turbine does — the turbine is a restriction in the exhaust.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 10, fontWeight: 600 }}>Configuration</div>
-              <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
-              <ExpandableInfo title="Why cylinder count and layout matter">
-                For the same total displacement, spreading it across more, smaller cylinders means each one needs less peak pressure to make the same overall torque — a small real knock-margin benefit and smoother delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
-              <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
-              <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-              <ExpandableInfo title="Bore, stroke, and engine character">
-                Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
-              <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-              <ExpandableInfo title="Compression ratio's trade-off">
-                Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
-                Camshaft Duration: {engineConfig.camDuration}° <span style={{ color: T.ink3, fontWeight: 400 }}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
-              </div>
-              <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} style={{ width: '100%', accentColor: T.acc }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, marginTop: 2 }}>
-                <span>mild · low-end torque</span><span>wild · top-end power</span>
-              </div>
-              <ExpandableInfo title="What camshaft duration actually does">
-                Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b style={{ color: T.ink }}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b style={{ color: T.ink }}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
-                <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. This sandbox models it by sampling the breathing curve at a cam-shifted engine speed, which is the honest way to represent it.
-                <br /><br /><b style={{ color: T.ink }}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>
-                Valve Spring Rate: {engineConfig.springRate} <span style={{ color: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.ink3, fontWeight: 400 }}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
-              </div>
-              <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} style={{ width: '100%', accentColor: engineDerived.floatRpm < engineDerived.redline ? T.danger : T.cyan }} />
-              {engineDerived.floatRpm < engineDerived.redline && (
-                <div style={{ fontSize: 11.5, color: T.danger, marginTop: 5 }}>
-                  Springs float below redline — cylinder filling collapses above {Math.round(engineDerived.floatRpm)} RPM. Stiffen them or fit a milder cam.
-                </div>
-              )}
-              <ExpandableInfo title="Why springs decide how far a cam can go">
-                The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b style={{ color: T.ink }}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
-                <br /><br />Bigger cams open valves further and faster, so they need stiffer springs. That is why "cam and springs" are sold together: fit an aggressive cam on stock springs and you will make <i>less</i> power than stock up top, because you float before you reach the RPM the cam was designed for.
-                <br /><br />Stiffness is not free either — every cycle the engine compresses those springs, and that parasitic loss shows up in FMEP. Over-spring a mild cam and you simply lose a little power for nothing.
-              </ExpandableInfo>
-
-              <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Block Material</div>
-              <Seg label="Block Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
-              <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Head Material</div>
-              <Seg label="Head Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
-              <ExpandableInfo title="Why block and head material matter">
-                Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.
-              </ExpandableInfo>
-              <Note>Changing bore, stroke, or configuration does not retroactively rewrite your VE/timing/AFR tables — you will feel the shift on your next dyno pull and can re-tune from there, just like swapping a real short block.</Note>
-            </BuildSection>
-
-            <BuildSection
-              active={buildSection === 'boltons'} onClick={() => setBuildSection(buildSection === 'boltons' ? null : 'boltons')}
-              icon={Package} label="Bolt-On Parts"
-              sub={`${Object.values(mods).filter((v) => v).length}/4 installed`}
-            >
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 9 }}>
-                <Button variant="quiet" size="sm" onClick={resetToStock}>
-                  <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
-                </Button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {Object.keys(MOD_INFO).map((key) => (
-                  <button key={key} onClick={() => installMod(key)} disabled={mods[key]} style={{
-                    textAlign: 'left', padding: '11px 13px', borderRadius: 10,
-                    border: `1px solid ${mods[key] ? T.okLine : T.line}`,
-                    background: mods[key] ? T.okBg : T.panel2,
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: mods[key] ? T.ok : T.ink }}>{MOD_INFO[key].label}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 800, color: mods[key] ? T.ok : T.accInk }}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
-                    </div>
-                    <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 3 }}>{MOD_INFO[key].blurb}</div>
-                  </button>
-                ))}
-              </div>
-
-            </BuildSection>
-
-            <BuildSection
-              active={buildSection === 'turbo'} onClick={() => setBuildSection(buildSection === 'turbo' ? null : 'turbo')}
-              icon={Wind} label="Forced Induction"
-              sub={turboOn ? `On · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi` : 'Not installed'}
-            >
-              <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: v })} />
-
-              <div style={{ maxHeight: turboOn ? 3000 : 0, opacity: turboOn ? 1 : 0, overflow: 'hidden', transition: 'max-height .4s ease, opacity .3s ease' }}>
-                <div style={{ paddingTop: 12 }}>
-                  <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Turbine Size</div>
-                  <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
-                  <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, marginTop: 4, fontWeight: 600 }}>Compressor Size</div>
-                  <Seg label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
-                  <div style={{ fontSize: 11, color: T.ink3, marginBottom: 10, marginTop: 4 }}>Ceiling before it runs outside its efficient range: ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi</div>
-                  <ExpandableInfo title="Turbine vs. compressor — different jobs">
-                    The turbine sits in the exhaust and spins from exhaust energy — its size sets how quickly it spools (small = fast but chokes exhaust flow up top; large = laggy but flows more at redline). The compressor sits in the intake and does the actual pressurizing — its size sets a practical boost ceiling before it's forced outside its efficient operating range, making hot, inefficient, knock-prone air.
-                    <br /><br />Real turbo shops size compressors by required <b style={{ color: T.ink }}>airflow</b>, not boost pressure. The industry rule of thumb is about <b style={{ color: T.ink }}>10 crank horsepower per lb/min of air</b> (roughly 8.5 whp after drivetrain loss) — so a 400 whp target needs a compressor good for roughly 47 lb/min, which you then check against the manufacturer's compressor map.
-                    <br /><br />Note that this figure barely changes with fuel. E85 needs far more fuel by volume, but it also releases almost exactly the same energy per unit of <i>air</i> as gasoline, so airflow — not fuel type — sets the power ceiling. Octane still helps, but through better timing, not through a bigger number here.
-                  </ExpandableInfo>
-
-                  <div style={{ marginTop: 4, marginBottom: 14 }}>
-                    <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
-                  </div>
-
-                  <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Boost Target Curve</div>
-
-                  <Panel tight style={{ marginBottom: 10 }}>
-                    {/* Tap a bar to select that RPM point, then edit it below with full-width controls. */}
-                    <div data-testid="boost-columns" style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 104 }}>
-                      {RPM.map((r, i) => {
-                        const on = boostSel === i;
-                        const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
-                        const over = boostCurve[i] > ceiling;
-                        return (
-                          <button key={r} onClick={() => dispatch({ type: ACTIONS.SET_BOOST_SEL, value: i })} style={{
-                            flex: 1, height: '100%', padding: 0, borderRadius: 7,
-                            border: `1px solid ${on ? T.acc : T.line}`,
-                            background: on ? T.accBg : T.panel,
-                            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden',
-                          }}>
-                            <div style={{ fontSize: 10, fontFamily: T.mono, fontWeight: 800, color: over ? T.danger : on ? T.accInk : T.ink2, paddingBottom: 2 }}>
-                              {boostCurve[i]}
-                            </div>
-                            <div style={{
-                              height: `${(boostCurve[i] / 25) * 72}%`, minHeight: boostCurve[i] > 0 ? 3 : 0,
-                              background: over ? T.danger : on ? T.acc : T.lineHi,
-                              borderRadius: '3px 3px 0 0', transition: 'height .12s',
-                            }} />
-                            <div style={{ fontSize: 8, color: on ? T.accInk : T.ink3, fontFamily: T.mono, padding: '3px 0' }}>
-                              {r >= 1000 ? (r / 1000).toFixed(1) + 'k' : r}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </Panel>
-
-                  <Panel tight style={{ marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                      <span style={{ fontSize: 10.5, letterSpacing: 1, color: T.ink2, fontWeight: 700 }}>{RPM[boostSel]} RPM</span>
-                      <span style={{ fontFamily: T.mono, fontSize: 24, fontWeight: 800, color: boostCurve[boostSel] > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.accInk }}>
-                        {boostCurve[boostSel]}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 3 }}>psi</span>
-                      </span>
-                    </div>
-                    <input type="range" min={0} max={25} step={1} value={boostCurve[boostSel]}
-                      onChange={(e) => setBoostAt(boostSel, Number(e.target.value))}
-                      style={{ width: '100%', accentColor: T.acc }} />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      {[-5, -1, 1, 5].map((d) => (
-                        <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
-                          style={{ flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-                            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 14 }}>
-                          {d > 0 ? '+' : ''}{d}
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => clamp(Number(boostCurve[boostSel]) || 0, 0, 25)) })}>
-                        FLAT ACROSS ALL
-                      </Button>
-                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                        onClick={() => { const peak = boostCurve[boostSel]; dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map((r) => Math.round(peak * clamp((r - 1500) / 2600, 0, 1))) }); }}>
-                        SPOOL RAMP
-                      </Button>
-                      {/* Built from RPM so the curve can never be shorter than the
-                          axis. A hand-written literal previously had seven entries
-                          for eight breakpoints, and the next edit put NaN through
-                          the entire simulation. */}
-                      <Button variant="ghost" size="sm" style={{ flex: 1 }}
-                        onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: RPM.map(() => 0) })}>
-                        ZERO
-                      </Button>
-                    </div>
-                    <div style={{ fontSize: 10.5, color: Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? T.danger : T.ink3, marginTop: 8 }}>
-                      Compressor efficient to ~{COMPRESSOR_OPTS[compressorIdx].boostCeiling} psi{Math.max(...boostCurve) > COMPRESSOR_OPTS[compressorIdx].boostCeiling ? ' — you are past it, expect hot inefficient air' : ''}
-                    </div>
-                  </Panel>
-
-                  <Note tone="warn">Stock calibrations have no real tuning above ~101 kPa. Adding boost without retarding SPARK and richening FUEL in the high-MAP rows will knock hard — run a pull and read the log.</Note>
-
-                  <ExpandableInfo title="Why boost costs you timing">
-                    Boost packs more air and fuel into the same cylinder volume before combustion starts, raising peak pressure and temperature for a given amount of spark advance. The same timing that was safe with no boost becomes knock-prone at 8-10 psi through the same head and pistons — which is why boosted tunes run less initial timing than a naturally aspirated tune, and why timing has to come out further as boost climbs. Set your target here, then dial in TIMING and AFR to match.
-                  </ExpandableInfo>
-                </div>
-              </div>
-            </BuildSection>
-
-            <BuildSection
-              active={buildSection === 'exhaust'} onClick={() => setBuildSection(buildSection === 'exhaust' ? null : 'exhaust')}
-              icon={Flame} label="Exhaust"
-              sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
-            >
-              <div style={{ fontSize: 12, color: T.ink2, marginBottom: 6, fontWeight: 600 }}>Exhaust Diameter</div>
-              <Seg label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
-              <div style={{ fontSize: 11, color: T.ink3, marginBottom: 4 }}>
-                Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
-                {turboOn && Math.max(...boostCurve) > 0 && <span style={{ color: T.accInk }}> (raised by boost)</span>}
-              </div>
-              <ExpandableInfo title="Why exhaust diameter isn't just 'bigger is better'">
-                Undersized piping restricts flow at high RPM, choking VE right when the engine wants air moving fastest. Oversized piping does the opposite at low RPM — exhaust velocity drops, scavenging gets lazy, and low-end response suffers.
-                <br /><br />The long-standing shop rule is about <b style={{ color: T.ink }}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
-              </ExpandableInfo>
-            </BuildSection>
+            <EngineScreen
+              active={buildSection === 'engine'} onToggle={toggleBuildSection}
+              engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
+              onResetToStock={resetToStock}
+            />
+            <InductionScreen
+              active={buildSection === 'induction'} onToggle={toggleBuildSection}
+            />
+            <FuelSystemScreen
+              active={buildSection === 'fuel'} onToggle={toggleBuildSection}
+            />
+            <ExhaustScreen
+              active={buildSection === 'exhaust'} onToggle={toggleBuildSection}
+              idealExhaustDia={idealExhaustDia}
+            />
           </div>
         )}
 
         {/* ---------- TUNE: sub-view switcher for the calibration tables ---------- */}
         {tab === 'tune' && (
-          <div style={{ display: 'flex', gap: 6, padding: '14px 16px 0' }}>
+          // flexWrap + a real flex-basis (rather than the old `flex: 1` /
+          // flex-basis:0%) so five items wrap to a second row on narrow
+          // viewports instead of shrinking below their min-content width and
+          // overflowing the column. No media query needed, so this doesn't
+          // touch the hand-maintained breakpoint list in tokens.css.
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 16px 0' }}>
             {TUNE_VIEWS.map((v) => {
               const on = tuneView === v.id;
               const Icon = v.icon;
               return (
-                <button key={v.id} onClick={() => { setTuneView(v.id); setSelection(null); }} style={{
-                  flex: 1, padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
+                  flex: '1 1 88px', padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
                   alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
                   border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
                   color: on ? T.accInk : T.ink2,
@@ -1776,250 +925,15 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {tab === 'tune' && tuneView === 've' && (
-          <>
-            <div style={{ padding: '16px 16px 0' }}>
-              <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
-              <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12, lineHeight: 1.5 }}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
-              <TuningGrid data={ve} min={10} max={130} decimals={0} {...gridProps} />
+        {tab === 'tune' && tuneView === 'airflow' && <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} />}
 
-              {veAdvice && (
-                veAdvice.inSync ? (
-                  <div style={{ display: 'flex', gap: 8, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok, lineHeight: 1.5 }}>
-                    <Info size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <div>VE table matches your current hardware. Nothing to correct.</div>
-                  </div>
-                ) : (
-                  <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>VE OUT OF SYNC WITH HARDWARE</div>
-                      <div style={{ fontSize: 11, fontFamily: T.mono, color: T.accInk, fontWeight: 700 }}>{veAdvice.maxAbs.toFixed(0)}% max gap</div>
-                    </div>
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 9 }}>
-                      Your hardware changed but this table is still the old log. Here is what re-logging airflow on the dyno would actually show:
-                    </div>
-                    {veAdvice.recs.map((r, i) => (
-                      <div key={i} style={{ marginBottom: 9 }}>
-                        <div style={{ fontSize: 12, color: T.ink, fontWeight: 700 }}>{r.rpmText}</div>
-                        <div style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5, marginTop: 2 }}>{r.text}</div>
-                        <div style={{ fontSize: 10.5, color: T.cyan, fontFamily: T.mono, marginTop: 3 }}>{r.cells.join('   ')}</div>
-                      </div>
-                    ))}
-                    {/* Was width:100%. It is the only action in this advisory box and
-                        reads as one at its own width; the box is already the full
-                        content column, so stretching it only made it wider. */}
-                    <Button onClick={recalcVE} style={{ marginTop: 4 }}>
-                      ACCEPT RE-LOGGED VALUES
-                    </Button>
-                    <div style={{ fontSize: 10.5, color: T.ink3, textAlign: 'center', marginTop: 6 }}>Or type them in yourself — these are the measured targets, not a suggestion.</div>
-                  </div>
-                )
-              )}
+        {tab === 'tune' && tuneView === 'spark' && <SparkScreen calAdvice={calAdvice} />}
 
-              <ExpandableInfo title="What VE actually means">
-                VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
-                <br /><br /><b style={{ color: T.ink }}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — the Bolt-Ons on BUILD already move it for you when you install parts. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
-              </ExpandableInfo>
-            </div>
-            <div style={{ flex: 1 }} />
-            <SelectionDock data={ve} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value })} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />
-          </>
-        )}
+        {tab === 'tune' && tuneView === 'fuel' && <FuelScreen calAdvice={calAdvice} />}
 
-        {tab === 'tune' && tuneView === 'timing' && (
-          <>
-            <div style={{ padding: '16px 16px 0' }}>
-              <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
-              <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12 }}>Degrees of spark advance before top dead center (° BTDC).</div>
-              <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} {...gridProps} />
-              {calAdvice.overAdvanced.length > 0 ? (
-                <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1, color: T.dangerInk, fontWeight: 800, marginBottom: 7 }}>
-                    {calAdvice.overAdvanced.length} CELLS BEYOND THE KNOCK LIMIT
-                  </div>
-                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>
-                    Your current hardware will not tolerate this much advance here. These cells are asking for more timing than the charge, octane and compression allow:
-                  </div>
-                  {calAdvice.overAdvanced.slice(0, 5).map((c, i) => (
-                    <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: T.cyan, marginBottom: 2 }}>
-                      {c.map} kPa / {c.rpm} RPM: {c.current}° → {c.suggested}°
-                    </div>
-                  ))}
-                  {calAdvice.overAdvanced.length > 5 && <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 3 }}>…and {calAdvice.overAdvanced.length - 5} more</div>}
-                  <div style={{ fontSize: 11, color: T.ink3, marginTop: 8 }}>Edit them yourself — a calibration is yours to make, not something the app should silently rewrite.</div>
-                </div>
-              ) : calAdvice.underAdvanced.length > 4 ? (
-                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
-                  <b style={{ color: T.accInk }}>Timing left on the table.</b> {calAdvice.underAdvanced.length} cells are more than 3° below what this build would tolerate. Safe, but you are giving away torque — advance them a little at a time and pull between each change.
-                </Panel>
-              ) : calAdvice.pastMbt.length > 0 ? (
-                <Panel tight style={{ margin: '10px 0', fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
-                  <b style={{ color: T.accInk }}>Past peak torque.</b> {calAdvice.pastMbt.length} cells command more advance than the burn can use — the charge is already finishing where it should, so the extra degrees are working against the piston on its way up rather than adding torque. Not dangerous here — these cells are inside the knock limit — but pulling them back gains a little power and buys margin.
-                </Panel>
-              ) : (
-                <div style={{ background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: '11px 13px', margin: '10px 0', fontSize: 12.5, color: T.ok }}>
-                  Spark table sits within the knock limit for this hardware.
-                </div>
-              )}
+        {tab === 'tune' && tuneView === 'injectors' && <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc} />}
 
-              <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
-                The VE table auto-syncs because volumetric efficiency is a <b style={{ color: T.ink }}>measurement of the hardware</b> — swap a cam and a tuner simply re-logs airflow, and the numbers are what they are.
-                <br /><br />Spark and fuel are different: they are <b style={{ color: T.ink }}>your calibration</b>, a set of judgement calls about how much risk to take for how much power. A real ECU does not retune itself when you bolt on a turbo — it keeps running the old numbers into the new hardware, which is exactly how engines get hurt.
-                <br /><br />So the app tells you what the hardware will now tolerate, and leaves the editing to you. That gap between "what the engine can take" and "what your table asks for" is the entire job.
-              </ExpandableInfo>
-
-              <ExpandableInfo title="Why timing has a sweet spot (MBT)">
-                Combustion is not instant — the flame front takes time to burn through the mixture. Timing decides when the burn starts so peak cylinder pressure lands just after top dead center, where it does useful work. Advance too far and pressure peaks before the piston is ready, fighting the crank and risking knock; retard too far and you are burning fuel after the piston has already started down, wasting it as heat. MBT is the earliest timing that still lands the burn right — past it, more advance buys almost nothing, only risk.
-                <br /><br /><b style={{ color: T.ink }}>As a beginner:</b> nudge one cell 1-2° at a time, run a pull, and read the log. If it comes back clean with no knock event, you probably still have room. If you see a knock warning, that cell is your new ceiling — back off to what the log suggests and move on.
-              </ExpandableInfo>
-            </div>
-            <div style={{ flex: 1 }} />
-            <SelectionDock data={timing} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
-          </>
-        )}
-
-        {tab === 'tune' && tuneView === 'afr' && (
-          <>
-            <div style={{ padding: '16px 16px 0' }}>
-              <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
-              <div style={{ fontSize: 12.5, color: T.ink2, marginBottom: 12, lineHeight: 1.5 }}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-              <TuningGrid data={afr} min={10} max={18} decimals={1} {...gridProps} />
-              {calAdvice.wrongMix.length > 0 && (
-                <div style={{ background: T.panel2, border: `1px solid ${T.acc}`, borderRadius: 10, padding: '12px 13px', margin: '10px 0' }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1, color: T.accInk, fontWeight: 800, marginBottom: 7 }}>
-                    {calAdvice.wrongMix.length} HIGH-LOAD CELLS OFF BEST POWER
-                  </div>
-                  <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 8 }}>
-                    Best-power mixture shifts with boost — richer as cylinder pressure rises. These cells are judged on what the engine actually <b style={{ color: T.ink }}>delivered</b>, not on what the table commanded: if your MAF or injector scaling is off, the two are not the same number, and the delivered one is the one the pistons feel. The suggestion is the value to type into the cell to land on target.
-                  </div>
-                  {calAdvice.wrongMix.slice(0, 5).map((c, i) => (
-                    <div key={i} style={{ fontSize: 11, fontFamily: T.mono, color: c.delta < 0 ? T.dangerInk : T.cyan, marginBottom: 2 }}>
-                      {c.map} kPa / {c.rpm} RPM: {c.current}:1 → {c.suggested}:1 {c.delta < 0 ? '(richen)' : '(lean out)'} · delivered {c.delivered}, wants {c.target}
-                    </div>
-                  ))}
-                  {calAdvice.wrongMix.length > 5 && <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 3 }}>…and {calAdvice.wrongMix.length - 5} more</div>}
-                </div>
-              )}
-
-              <ExpandableInfo title="Why AFR trades power for safety">
-                14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits richer, because the extra fuel absorbs heat as it vaporizes, cooling combustion enough to make more power before knock becomes the limit. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
-                <br /><br /><b style={{ color: T.ink }}>Best power is not one number.</b> Naturally aspirated engines make best torque near lambda 0.85-0.92 (about 12.5-13.5:1 on gasoline). Under boost, best power moves richer — near lambda 0.82-0.85 (about 12.0-12.5:1) — because you are deliberately buying charge cooling to hold off knock. This sandbox moves its best-power target with your boost level, so the same AFR table that was ideal naturally aspirated reads genuinely lean once you are on 8 psi.
-                <br /><br /><b style={{ color: T.ink }}>Reading it in lambda:</b> lambda is AFR divided by the fuel's stoichiometric point, so lambda 0.85 means the same relative richness on any fuel. That is why tuners talk in lambda once E85 enters the picture — 12.5:1 means something completely different on E85 than on pump gas.
-                <br /><br /><b style={{ color: T.ink }}>As a beginner:</b> when in doubt, go richer (a lower number), not leaner. A rich cell costs a little power; a lean cell under load is how you actually damage something.
-              </ExpandableInfo>
-            </div>
-            <div style={{ flex: 1 }} />
-            <SelectionDock data={afr} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value })} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
-          </>
-        )}
-
-        {tab === 'tune' && tuneView === 'ecu' && (
-          <div style={{ padding: 16 }}>
-            <Eyebrow icon={Fuel}>Fuel System</Eyebrow>
-            {!turboOn && <Note>Naturally aspirated — no turbo installed. Add one on <b>BUILD</b> if you want boost to tune around.</Note>}
-            {turboOn && <Note>Turbo hardware and the boost target curve live on <b>BUILD</b> — this tab is fuel-side tuning: octane, injectors, and MAF/ECU.</Note>}
-
-            <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>Fuel Octane</div>
-            <Seg label="Fuel Octane" options={OCTANE_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={OCTANE_OPTS[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: OCTANE_OPTS.findIndex((o) => o.label === v) })} />
-            <ExpandableInfo title="What octane actually does — and what E85 costs you">
-              Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit.
-              <br /><br /><b style={{ color: T.ink }}>E85 is not a free upgrade.</b> Its stoichiometric point is about 9.8:1, not gasoline's 14.7:1 — so hitting the same lambda takes roughly <b style={{ color: T.accInk }}>1.43× the fuel volume</b>. Switch to E85 without upsizing injectors and you will run out of duty cycle long before you cash in that knock margin. Watch the duty preview below change the moment you select it.
-              <br /><br />That trade — huge knock resistance, huge fuel demand — is exactly why serious E85 builds pair it with bigger injectors and a bigger pump, and why "just run E85" is not a shortcut around a fuel system.
-            </ExpandableInfo>
-
-            <div style={{ fontSize: 12, color: T.ink2, margin: '10px 0 6px', fontWeight: 600 }}>Fuel Injectors</div>
-            <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />
-            <div style={{ fontSize: 12, color: T.ink2, margin: '12px 0 6px', fontWeight: 600 }}>
-              ECU Injector Scaling <span style={{ color: T.ink3, fontWeight: 400 }}>— what the ECU thinks is fitted</span>
-            </div>
-            <Seg label="ECU Injector Scaling" options={INJECTOR_OPTS.map((o) => ({ label: `${o.cc}`, id: o.cc }))} value={ecuInjectorCc} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: v })} equal />
-            {ecuInjectorCc !== injectorCc ? (
-              <div style={{ background: T.dangerBg, border: `1px solid ${T.dangerLine}`, borderRadius: 10, padding: '11px 13px', margin: '8px 0', fontSize: 12, color: T.dangerInk, lineHeight: 1.5 }}>
-                <b>Scaling mismatch.</b> Hardware is {injectorCc}cc but the ECU is calibrated for {ecuInjectorCc}cc — every pulse delivers about {((injectorCc / ecuInjectorCc) * 100).toFixed(0)}% of the intended fuel, so the engine runs {injectorCc > ecuInjectorCc ? 'far too rich' : 'dangerously lean'} everywhere.
-                {/* The wrapper, not the button, is what breaks the line: the button
-                    sits inside a paragraph and is inline-flex, so without a block
-                    parent it would run on from the end of the warning text. */}
-                <div style={{ marginTop: 9 }}>
-                  <Button onClick={() => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'ecuInjectorCc', value: injectorCc })}>
-                    RESCALE ECU TO {injectorCc}cc
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 11, color: T.ok, margin: '6px 0 4px' }}>ECU scaling matches the fitted injectors.</div>
-            )}
-            <ExpandableInfo title="Injector scaling — the step everyone forgets">
-              The ECU never commands "fuel" — it commands a pulse width, calculated for the injector size it has been <i>told</i> is fitted. Bolt in bigger injectors without updating that number and every pulse delivers proportionally more fuel than intended, so the engine runs rich everywhere regardless of what your AFR table says.
-              <br /><br />Every real tuning platform has this constant: UpRev calls it the <b style={{ color: T.ink }}>K-fuel multiplier</b> (lower it for bigger injectors), HP Tuners calls it <b style={{ color: T.ink }}>injector flow rate</b>. It is the first thing you change after a fuel system upgrade, before touching any table.
-            </ExpandableInfo>
-
-            <ExpandableInfo title="Why injector duty cycle limits everything">
-              Injectors flow a rated amount of fuel, and the ECU controls delivery by varying how long each stays open per cycle. As RPM and airflow rise, more fuel is needed in less time, and eventually the injector is open almost the whole cycle — that is duty cycle nearing 100%. Past about 90%, there is no more room to add fuel even if the AFR table calls for it, so the mixture leans out on its own regardless of what you commanded.
-            </ExpandableInfo>
-
-            <Panel tight style={{ marginTop: 6, marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>INJECTOR DUTY PREVIEW · WOT @ 6500 RPM</div>
-                {fuel.stoich < 14 && <div style={{ fontSize: 10, color: T.accInk, fontFamily: T.mono, fontWeight: 700 }}>{fuel.label} stoich {fuel.stoich}:1</div>}
-              </div>
-              <div style={{ marginTop: 8 }}>
-                <Bar label="Duty" value={dutyPreview} higherIsBetter={false} />
-              </div>
-              {/* The figure itself is the Bar's, now that it has a label row of its own —
-                  restating it here put the same number on screen twice, seven pixels
-                  apart. What is left is the part the Bar cannot say: what an undersized
-                  injector is about to do to the mixture. */}
-              {dutyDangerous && (
-                <div style={{ fontSize: 12, marginTop: 7, color: T.dangerInk }}>
-                  Undersized for this build — expect forced lean-out
-                </div>
-              )}
-            </Panel>
-
-            <Eyebrow icon={Zap}>Fuel Control &amp; MAF Scaling</Eyebrow>
-            <Panel style={{ marginBottom: 13 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.ink2, fontWeight: 700 }}>
-                <span>MAF RECAL STATUS</span>
-                <span style={{ color: needsMafRecal ? T.warn : T.ok, fontWeight: 800 }}>{needsMafRecal ? 'HARDWARE CHANGED' : 'STOCK — OK'}</span>
-              </div>
-              {needsMafRecal && (
-                <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 7 }}>
-                  {mods.intake && turboOn ? 'Intake + turbo plumbing' : mods.intake ? 'Intake' : 'Turbo plumbing'} changed how air reads across the MAF. Dial in the scalar below, then confirm with a dyno pull.
-                </div>
-              )}
-            </Panel>
-            <div style={{ fontSize: 12, color: T.ink2, marginBottom: 7, fontWeight: 600 }}>MAF Scalar</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 6 }}>
-              <input type="range" min={0.75} max={1.25} step={0.01} value={mafScalar} onChange={(e) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mafScalar', value: Number(e.target.value) })} style={{ flex: 1, accentColor: T.acc }} />
-              <div style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 15, width: 52, textAlign: 'right', color: T.ink }}>{mafScalar.toFixed(2)}</div>
-            </div>
-            <ExpandableInfo title="VE tuning vs. MAF tuning — platforms differ">
-              This sandbox exposes a VE table because that is the clearest way to teach airflow. Real platforms split into two camps.
-              <br /><br /><b style={{ color: T.ink }}>Speed-density platforms</b> (GM via HP Tuners/EFILive) index a VE table by RPM and MAP — exactly the axes here — and you tune VE directly.
-              <br /><br /><b style={{ color: T.ink }}>MAF-based platforms</b> (Nissan via UpRev) barely expose VE at all. Instead you tune a <b style={{ color: T.ink }}>MAF curve indexed by sensor voltage</b>, whose values map to grams per second, plus the K-fuel multiplier and a fuel compensation table. Same physics, different control surface: on a Nissan you correct airflow by reshaping the MAF curve rather than a VE grid.
-              <br /><br />Everything you learn here transfers — just expect the knobs to be named differently depending on the platform.
-            </ExpandableInfo>
-
-            <ExpandableInfo title="How MAF-based fueling actually works">
-              The MAF sensor reports airflow as a voltage, using a curve calibrated for the stock intake's exact diameter. Change the housing size and the same real airflow produces a different voltage, so the ECU's load calculation is wrong even though your fuel/timing tables did not change. At part throttle, closed-loop O2 feedback quietly corrects most of this; at wide-open throttle the ECU usually runs open-loop and blind to the O2 sensor, so the error goes straight through — which is why WOT is where bad MAF scaling shows up hardest.
-              <br /><br /><b style={{ color: T.ink }}>As a beginner:</b> do not guess the scalar. Install the part, run a pull, then check the AFR trace and the MAF trim log entry on DYNO — they will tell you which direction and roughly how far to move it.
-            </ExpandableInfo>
-            {result && (
-              <Panel tight style={{ marginTop: 6 }}>
-                <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, marginBottom: 6 }}>FUEL TRIM — LAST PULL</div>
-                <ResponsiveContainer width="100%" height={150}>
-                  <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-                    <CartesianGrid stroke={T.line} />
-                    <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} />
-                    <YAxis stroke={T.ink3} fontSize={10} unit="%" />
-                    <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-                    <Line dataKey="trimPct" name="MAF trim %" stroke={T.violet} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </Panel>
-            )}
-          </div>
-        )}
+        {tab === 'tune' && tuneView === 'sensors' && <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result} />}
 
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (
@@ -2090,7 +1004,7 @@ export function EcuLabApp() {
                       const on = dynoView === id;
                       const flag = id === 'log' && result.events.length > 0;
                       return (
-                        <button key={id} onClick={() => setDynoView(id)} style={{
+                        <button key={id} onClick={() => goSection('dyno', id)} style={{
                           flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
                           border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
                           color: on ? T.accInk : T.ink2, position: 'relative',
@@ -2103,297 +1017,34 @@ export function EcuLabApp() {
                   </div>
                 )}
 
+                {/* DYNO's gating is irregular ON PURPOSE, not four uniform
+                    `dynoView === x` checks like TUNE's. While a pull is running the
+                    switcher above is hidden and CURVES is the only view that can show
+                    — "the machine is busy, watch this" — regardless of which section
+                    the URL has selected. Normalising these to match TUNE would make a
+                    DATALOG/PULL LOG/SCORE view silently go blank the moment a pull
+                    starts instead of falling back to the live curves. Preserve every
+                    condition exactly. */}
                 {(running || dynoView === 'result') && (
-                <>
-                <Panel tight style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>POWER &amp; TORQUE</div>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-                      <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-                      <YAxis stroke={T.ink3} fontSize={10} />
-                      <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      {prevResult && <Line dataKey="prevHp" name="Prev WHP" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      {prevResult && <Line dataKey="prevTorque" name="Prev TQ" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-                      <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Panel>
-
-                <Panel tight style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 10, color: T.ink2, letterSpacing: 1, fontWeight: 700, padding: '2px 0 8px' }}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-                      <CartesianGrid stroke={T.line} />
-                      <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-                      <YAxis stroke={T.ink3} fontSize={10} />
-                      <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                      <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
-                      {/* Series identity colours, not status: both lines are on screen for
-                          every pull, so green and amber here reported a health this chart
-                          never measures. */}
-                      <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-                      <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Panel>
-                </>
+                  <ResultScreen chartData={chartData} engineDerived={engineDerived} />
                 )}
 
                 {!running && dynoView === 'data' && (
-                  <>
-                    <Eyebrow icon={Info}>Datalog</Eyebrow>
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
-                      One card per RPM breakpoint. Each line pairs <b style={{ color: T.ink }}>what you asked for</b> with <b style={{ color: T.ink }}>what the engine actually did</b> — a mismatch is the ECU telling you something.
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                      {RPM.map((r) => {
-                        const p = result.points.find((pt) => pt.rpm === r);
-                        if (!p) return null;
-                        const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-                        const warn = !bad && (p.duty > 85 || p.egtRisk);
-                        const edge = bad ? T.danger : warn ? T.warn : T.line;
-
-                        // Each row: label, what was asked, what happened, and a verdict.
-                        const rows = [
-                          { k: 'Airflow', asked: p.veTable !== p.ve ? `${p.veTable}% VE` : null, got: `${p.maf} g/s`,
-                            note: p.veTable !== p.ve
-                              ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
-                              : `${p.map} kPa manifold · ${p.ve}% VE`,
-                            ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
-                          { k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
-                            note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
-                            ok: !p.knock },
-                          { k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
-                            note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
-                              : p.richRisk ? 'far richer than commanded — check injector scaling'
-                              : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
-                            ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
-                          // Same "no headroom left" cutoff as the build tab's duty preview,
-                          // asked the same way: utilisationColor owns the band, and this
-                          // reads its verdict rather than restating >90 twice more.
-                          { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-                            note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
-                            ok: utilisationColor(p.duty) !== T.danger },
-                          { k: 'Heat', asked: null, got: `${p.egt}°C`,
-                            note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
-                            ok: !p.egtRisk },
-                          { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
-                            note: p.pressureRisk
-                              ? 'past what stock pistons and rods take — a mechanical limit, not detonation'
-                              : `what ${p.map} kPa becomes at the top of the stroke, burning at ${p.timing}°`,
-                            ok: !p.pressureRisk },
-                        ];
-
-                        return (
-                          <div key={r} style={{ border: `1px solid ${edge}`, borderRadius: 10, background: T.panel2, overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: bad ? T.dangerBg : warn ? T.warnBg : T.panel }}>
-                              <span style={{ fontFamily: T.mono, fontWeight: 800, fontSize: 14, color: T.ink }}>{r} RPM</span>
-                              <span style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: bad ? T.danger : warn ? T.warn : T.ok }}>
-                                {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
-                              </span>
-                            </div>
-                            <div style={{ padding: '4px 12px 10px' }}>
-                              {rows.map((row, i) => (
-                                <div key={i} style={{ paddingTop: 7 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                                    <span style={{ fontSize: 11.5, color: T.ink2, fontWeight: 600, minWidth: 62 }}>{row.k}</span>
-                                    <span style={{ fontFamily: T.mono, fontSize: 12, color: row.ok ? T.ink : T.danger, fontWeight: 700, textAlign: 'right' }}>
-                                      {row.asked != null && <span style={{ color: T.ink3, fontWeight: 400 }}>{row.asked} → </span>}
-                                      {row.got}
-                                    </span>
-                                  </div>
-                                  <div style={{ fontSize: 10.5, color: row.ok ? T.ink3 : T.dangerInk, lineHeight: 1.4, marginTop: 1 }}>{row.note}</div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <ExpandableInfo title="How to read a datalog">
-                      Diagnosis happens in the <b style={{ color: T.ink }}>asked → got</b> pairs, not in the power number.
-                      <br /><br /><b style={{ color: T.ink }}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
-                      <br /><br /><b style={{ color: T.ink }}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-                      <br /><br /><b style={{ color: T.ink }}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
-                      <br /><br /><b style={{ color: T.ink }}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
-                      <br /><br /><b style={{ color: T.ink }}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
-                    </ExpandableInfo>
-
-                    <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
-                    <ExpandableInfo title="How real tuners actually correct a VE table">
-                      This is the workflow every professional platform is built around. You log a pull, bin the difference between commanded and actual mixture onto the same RPM x MAP grid as your VE table, then apply that error back into the cells.
-                      <br /><br />A cell reading <b style={{ color: T.ink }}>+6%</b> means the engine ran 6% leaner than you commanded, which can only happen if it actually pulled 6% <i>more</i> air than your VE table claimed — so that cell should go <b style={{ color: T.ink }}>up</b> 6%. A negative cell means the opposite: the table is over-reporting airflow, the ECU is over-fuelling, and the number should come down.
-                      <br /><br />The ECU has no way to measure cylinder filling directly. It fuels from your table and nothing else, so a wrong table means wrong fuel, every time. Blue cells are within tolerance; red means your table is lying to the ECU at that point. Correct, re-pull, repeat until it is flat. A cell you hit squarely lands on the truth in one pass; the rest take a couple, because every logged point is interpolated between four cells.
-                    </ExpandableInfo>
-                    {!histogram ? (
-                      /* Was a cyan-outlined width:100% bar. Cyan is the chart-series
-                         hue — the same borrowed colour Task 6 took off the intercooler
-                         toggle — so this takes the accent like every other action. */
-                      <div style={{ marginBottom: 16 }}>
-                        <Button onClick={buildHistogram}>
-                          BUILD HISTOGRAM FROM THIS PULL
-                        </Button>
-                      </div>
-                    ) : (
-                      <div style={{ marginBottom: 16 }}>
-                        <div style={{ overflowX: 'auto', border: `1px solid ${T.line}`, borderRadius: 10, marginBottom: 8 }}>
-                          <div style={{ display: 'inline-block', minWidth: '100%' }}>
-                            <div style={{ display: 'flex' }}>
-                              <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
-                              {RPM.map((r) => (
-                                <div key={r} style={{ width: 51, height: 26, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: `1px solid ${T.line}` }}>{r}</div>
-                              ))}
-                            </div>
-                            {LOAD.map((m, ri) => (
-                              <div key={m} style={{ display: 'flex' }}>
-                                <div style={{ width: 44, height: 32, flexShrink: 0, background: T.panel, color: T.ink2, fontFamily: T.mono, fontSize: 9.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: `1px solid ${T.line}` }}>{m}</div>
-                                {RPM.map((_, ci) => {
-                                  const e = histogram[ri][ci];
-                                  const bg = e == null ? T.panel2 : deltaHeat(e);
-                                  return (
-                                    <div key={ci} style={{ width: 51, height: 32, flexShrink: 0, background: bg, color: e == null ? T.ink3 : T.ink, fontFamily: T.mono, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${shadowAlpha(0.35)}` }}>
-                                      {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 10.5, color: T.ink3, marginBottom: 8 }}>Cells show % airflow error (blank = not visited during this pull). Rows are MAP kPa, columns RPM.</div>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                          <Button style={{ flex: 2 }} onClick={applyHistogram}>
-                            APPLY CORRECTIONS TO VE
-                          </Button>
-                          {/* Not `danger`: discarding throws away a histogram that
-                              BUILD HISTOGRAM regenerates from the same pull. */}
-                          <Button variant="ghost" style={{ flex: 1 }} onClick={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: null })}>
-                            DISCARD
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                  </>
+                  <DataScreen />
                 )}
 
                 {!running && dynoView === 'log' && (
-                  <>
-                    <Eyebrow icon={AlertTriangle}>Pull Log</Eyebrow>
-                    {result.events.length === 0 ? (
-                      <div style={{ fontSize: 12.5, color: T.ok, background: T.okBg, border: `1px solid ${T.okLine}`, borderRadius: 10, padding: 12 }}>
-                        Clean pull — no knock, fueling, or trim issues across the sweep.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {result.events.map((e, i) => {
-                          // The tone comes from the severity the sim already assigns, not from a
-                          // hand-kept list of type names. Those lists named eleven of the twelve
-                          // types `src/sim` emits: `bearing` matched none of them and fell through
-                          // to the chart-series cyan, so the one warning about accumulating
-                          // bottom-end stress rendered as decoration while `pressure`, its acute
-                          // sibling, rendered red. Deriving it means a thirteenth event type gets a
-                          // tone the day it is added instead of silently becoming a chart colour.
-                          //
-                          // `maf` is the one genuine special case: it is a calibration observation
-                          // rather than damage, and violet is the token reserved for that.
-                          const isViolet = e.type === 'maf';
-                          const isDanger = !isViolet && e.severity >= 3;
-                          const isWarn = !isViolet && !isDanger;
-                          const bg = isDanger ? T.dangerBg : isWarn ? T.warnBg : isViolet ? T.violetBg : T.panel2;
-                          const bd = isDanger ? T.dangerLine : isWarn ? T.warnLine : isViolet ? T.violetLine : T.line;
-                          const fg = isDanger ? T.dangerInk : isWarn ? T.warnInk : isViolet ? T.violet : T.cyan;
-                          return (
-                            <div key={i} style={{ padding: '11px 12px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                                <div style={{ display: 'flex', gap: 8, fontSize: 12.5, fontWeight: 700, color: fg }}>
-                                  <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                                  <span>{e.msg}</span>
-                                </div>
-                                {e.impact != null && <span style={{ fontSize: 11, fontFamily: T.mono, fontWeight: 800, color: fg, flexShrink: 0 }}>-{e.impact}</span>}
-                              </div>
-                              {e.cause && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 6, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Why: </b>{e.cause}</div>}
-                              {e.fix && <div style={{ fontSize: 11.5, color: T.ink2, marginTop: 4, paddingLeft: 22 }}><b style={{ color: T.inkSoft }}>Try: </b>{e.fix}</div>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                  </>
+                  <LogScreen />
                 )}
 
                 {!running && dynoView === 'score' && scores && (
-                      <>
-                        <Eyebrow icon={Trophy}>Scorecard</Eyebrow>
-                        <Panel style={{ marginBottom: 10, background: T.accBg, border: `1px solid ${T.acc}`, textAlign: 'center' }}>
-                          <div style={{ fontSize: 10, color: T.accInk, letterSpacing: 1.5, fontWeight: 800 }}>PULL SCORE</div>
-                          <div style={{ fontSize: 40, fontWeight: 800, fontFamily: T.mono, color: T.accInk, lineHeight: 1.1 }}>{scores.pull}</div>
-                          <div style={{ fontSize: 11.5, color: scores.pull >= bestScore ? T.ok : T.ink2, fontWeight: 700, marginTop: 2 }}>
-                            {scores.pull >= bestScore ? 'NEW BEST' : `Best: ${bestScore}`}
-                          </div>
-                        </Panel>
-                        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                          {[['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]].map(([label, s]) => {
-                            const c = statusColor(s.score);
-                            return (
-                              <Panel key={label} style={{ flex: 1 }}>
-                                <div style={{ fontSize: 9.5, color: T.ink2, letterSpacing: 1, fontWeight: 700 }}>{label}</div>
-                                <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.mono, color: c, marginTop: 2 }}>{s.score}</div>
-                                <div style={{ fontSize: 11, color: c, fontWeight: 700 }}>{s.label}</div>
-                              </Panel>
-                            );
-                          })}
-                        </div>
-                        <Note>Pull Score rewards actual output (peak whp + torque), scaled by how clean (Tuning) and how sound (Engineer) the build is — a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling; every pull is a chance to beat your best.</Note>
-                        {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
-                          <Panel tight style={{ marginBottom: 16, fontSize: 11.5, color: T.ink2, fontFamily: T.mono, lineHeight: 1.8 }}>
-                            {scores.tuning.deductions.map((d, i) => <div key={'t' + i}>{d}</div>)}
-                            {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
-                          </Panel>
-                        )}
-                        {scores.tuning.advisories?.length > 0 && (
-                          <div style={{ marginTop: 8 }}>
-                            <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink3, fontWeight: 800, marginBottom: 4 }}>
-                              HARDWARE TRADE-OFFS · NOT SCORED
-                            </div>
-                            {scores.tuning.advisories.map((a, i) => (
-                              <div key={i} style={{ fontSize: 11.5, color: T.ink2, lineHeight: 1.5 }}>{a}</div>
-                            ))}
-                          </div>
-                        )}
-                  </>
+                  <ScoreScreen scores={scores} />
                 )}
               </>
             )}
           </div>
         )}
-      </div>
-
-      {/* Bottom nav */}
-      <div style={{ display: 'flex', borderTop: `1px solid ${T.line}`, background: T.panel, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          const active = tab === t.id;
-          return (
-            <button key={t.id} onClick={() => changeTab(t.id)} style={{
-              flex: 1, padding: '10px 0 9px', background: 'none', border: 'none', position: 'relative',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              color: active ? T.accInk : T.ink3,
-            }}>
-              {active && <div style={{ position: 'absolute', top: 0, left: '30%', right: '30%', height: 2, background: T.acc, borderRadius: '0 0 2px 2px' }} />}
-              <Icon size={17} />
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.3 }}>{t.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      </AppShell>
     </div>
   );
 }

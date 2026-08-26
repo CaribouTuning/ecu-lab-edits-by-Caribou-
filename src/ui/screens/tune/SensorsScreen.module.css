@@ -1,0 +1,62 @@
+/* TUNE > Sensors (fuel control & MAF scaling: recal status, MAF scalar, fuel trim). */
+
+.wrap { padding: var(--sp-xl); }
+
+/* Prose emphasis inside the ExpandableInfo panels. */
+.em { color: var(--ink); }
+
+.mafPanel { margin-bottom: 13px; }
+
+.mafHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+
+/* Whether the MAF needs recalibrating is a two-state readout with its own colour
+   each way, same convention as TurboScreen's data-selected/data-over. */
+.mafStatus { font-weight: 800; color: var(--ok); }
+.mafStatus[data-needs-recal='true'] { color: var(--warn); }
+
+.mafNote {
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--ink2);
+}
+
+.scalarLabel {
+  margin-bottom: 7px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.scalarRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 6px;
+}
+
+.scalarSlider { flex: 1; accent-color: var(--acc); }
+
+.scalarValue {
+  width: 52px;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 15px;
+  text-align: right;
+  color: var(--ink);
+}
+
+.trimPanel { margin-top: 6px; }
+
+.trimLabel {
+  margin-bottom: 6px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--ink2);
+}

@@ -64,10 +64,15 @@ function presetPicker() {
  * The header line is `${engineName} · ${turbo} · ${octane} oct · ...`, where
  * `engineName` is the loaded preset's name if one is loaded and a derived "3.0L I6"
  * form if not. Its leading segment is therefore exactly the thing `presetId` drives.
+ *
+ * Queries by `data-testid="build-line"` rather than `getByText(/oct/)`: BUILD's
+ * accordion sections stay mounted when collapsed, and FuelSystemScreen's octane
+ * explainer prose also contains "oct", which made the old text query ambiguous
+ * once that section existed.
  * @returns {string}
  */
 function headerEngineName() {
-  return screen.getByText(/oct/).textContent.split('·')[0].trim();
+  return screen.getByTestId('build-line').textContent.split('·')[0].trim();
 }
 
 /** Renders the app and clicks past the start screen. */
@@ -258,6 +263,17 @@ function TuneProbe({ onTune }) {
   return null;
 }
 
+/**
+ * Reports the store's `build` slice to the test on every change.
+ * @param {{onBuild: (build: *) => void}} props
+ * @returns {null}
+ */
+function BuildProbe({ onBuild }) {
+  const [build] = useBuild();
+  React.useEffect(() => { onBuild(build); }, [onBuild, build]);
+  return null;
+}
+
 describe('choosing a turbine', () => {
   it('drops the twin-turbo count the preset installed', () => {
     // SET_TURBINE resets `turbineCount` to 1 as well as setting `turbineIdx`, because
@@ -271,12 +287,12 @@ describe('choosing a turbine', () => {
     expect(twin).toBeTruthy();
     fireEvent.change(picker, { target: { value: twin.id } });
 
-    // The Forced Induction summary is where the count is legible: it reads "Twin
+    // The Induction summary is where the count is legible: it reads "Twin
     // <housing> turbine" above 1 and the bare housing name at 1.
     const inductionSummary = () => screen.getByText(/turbine · peak/).textContent;
     expect(inductionSummary()).toMatch(/Twin/);
 
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const current = TURBINE_OPTS[applyPreset(twin).turbineIdx].label;
     const other = TURBINE_OPTS.map((o) => o.label).find((l) => l !== current);
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${other}`) }));
@@ -292,6 +308,12 @@ describe('resetting the calibration to stock', () => {
    * @returns {number[][]}
    */
   function veAfterReset(withIntake) {
+    // This helper runs TWICE inside one test, so the global per-test hash reset in
+    // tests/setup.js is not enough: navigation lives in the URL now, and the second
+    // call would otherwise boot straight into wherever the first call left off —
+    // past the start screen the line below clicks. Setup only; nothing asserted here
+    // changes.
+    window.location.hash = '';
     /** @type {*} */
     let tune;
     render(
@@ -303,10 +325,11 @@ describe('resetting the calibration to stock', () => {
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
     // Turbo on in BOTH runs, so the hardware half of the VE calculation is identical
     // and the only difference between them is the mod set.
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted.
     if (withIntake) {
-      fireEvent.click(screen.getByText('Bolt-On Parts'));
       fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
     }
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
@@ -361,9 +384,11 @@ describe('accepting a re-logged VE table', () => {
 
     // Drift the hardware away from the stock VE table the store starts with, so
     // veAdvice.inSync goes false and the ACCEPT button actually renders.
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
+    // but opening it here matches how a real player would reach the card).
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
@@ -400,9 +425,11 @@ describe('applying a fuel-trim histogram', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
 
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    fireEvent.click(screen.getByText('Bolt-On Parts'));
+    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
+    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
+    // but opening it here matches how a real player would reach the card).
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
@@ -450,20 +477,21 @@ describe('the injector-duty preview call site', () => {
   it('paints the Duty bar as dangerous, not healthy, once duty cycle has no headroom left', () => {
     // TUNE/readouts.test.jsx's describe('Bar') proves the PRIMITIVE inverts colour
     // correctly given higherIsBetter={false} — it renders Bar in isolation. It says
-    // nothing about whether EcuLab's own INJECTOR DUTY PREVIEW call site (ECU Fuel
-    // System, EcuLab.jsx ~1924) actually PASSES that prop. A reviewer flipped it to
-    // higherIsBetter={true} — 95% duty, an injector out of headroom and about to lean
-    // the mixture out, painted bright green — and all existing tests, including the
-    // Bar unit tests, stayed green. This drives the real app to a build that reaches
-    // a genuinely dangerous duty cycle and reads the colour off the rendered bar.
+    // nothing about whether InjectorsScreen's own INJECTOR DUTY PREVIEW call site
+    // (TUNE > Injectors, src/ui/screens/tune/InjectorsScreen.jsx) actually PASSES
+    // that prop. A reviewer flipped it to higherIsBetter={true} — 95% duty, an
+    // injector out of headroom and about to lean the mixture out, painted bright
+    // green — and all existing tests, including the Bar unit tests, stayed green.
+    // This drives the real app to a build that reaches a genuinely dangerous duty
+    // cycle and reads the colour off the rendered bar.
     launch();
 
-    // dutyPreview (EcuLab.jsx:639) is computed at WOT @ 6500 RPM. It scales inversely
+    // dutyPreview (EcuLab.jsx:331) is computed at WOT @ 6500 RPM. It scales inversely
     // with ecuInjectorCc (a fresh build already starts at 315cc, the smallest on the
     // menu, so no edit is needed there) and rises with airflow — so fit a turbo and
     // dial the boost target at 6500 RPM to its maximum.
     fireEvent.click(screen.getByRole('button', { name: /BUILD/ }));
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
 
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
@@ -483,7 +511,7 @@ describe('the injector-duty preview call site', () => {
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
 
     const meter = screen.getByRole('meter', { name: 'Duty' });
     const dutyValue = Number(meter.getAttribute('aria-valuenow'));
@@ -546,20 +574,32 @@ describe('every segmented control', () => {
     // Counting pressed options catches that without naming a single call site, so a
     // ninth Seg added later is covered the day it appears.
     launch();
+    // launch() lands on BUILD. Every BuildSection accordion mounts unconditionally —
+    // only `max-height` hides the collapsed ones — and jsdom's getByRole does not
+    // treat `max-height: 0` as hidden (only display:none/hidden/aria-hidden are
+    // excluded), so this first count already picks up every Seg on BUILD: three on
+    // EngineScreen (Configuration, Block Material, Head Material), one on
+    // InductionScreen (Compressor Size), one on FuelSystemScreen (Fuel Octane) and
+    // one on ExhaustScreen (Exhaust Diameter) — six — regardless of which section is
+    // open.
     let total = expectEverySegHasOneSelection();
 
-    // The remaining Segs are on other tabs, and the two ECU ones are behind a sub-view
-    // that is not the default.
+    // The remaining two Segs are not on BUILD. ECU Injector Scaling is on TUNE >
+    // Injectors, which is not the default sub-view, so it needs an explicit click.
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'ECU' }));
+    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
     total += expectEverySegHasOneSelection();
 
+    // DYNO's manifold-pressure picker (EcuLab.jsx) is the eighth and last, and is on
+    // the default DYNO sub-view so no further click is needed to reach it.
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
     // above would each pass on whatever happened to be showing. Eight is the count of
-    // <Seg> call sites in EcuLab.jsx today.
+    // <Seg> call sites across the app today — they live in the screen components now,
+    // not in EcuLab.jsx (see the breakdown above) — confirmed by
+    // `grep -rn '<Seg\b' src/ui | grep -v '\.module\.css'`.
     expect(total).toBe(8);
   });
 });
@@ -575,7 +615,7 @@ describe('every toggle', () => {
     // truthy with the name gone and the fallback made the assertion unfailable. An
     // earlier version of this test had exactly that bug.
     launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const switches = screen.getAllByRole('switch');
     expect(switches.length).toBeGreaterThan(1);
     switches.forEach((sw) => {
@@ -589,7 +629,7 @@ describe('every toggle', () => {
     // test whose threshold happens to need turboOn — change that number and a broken
     // turbo switch would pass the whole suite.
     launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    fireEvent.click(screen.getByText('Induction'));
     const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
     expect(summary()).toBe('Not installed');
 
@@ -604,15 +644,30 @@ describe('every toggle', () => {
     // The intercooler had no coverage at all, before this migration or after. It is
     // also the call site that lost a prop in the swap, so it is the one most likely to
     // have been broken by it.
-    launch();
-    fireEvent.click(screen.getByText('Forced Induction'));
+    //
+    // BoltonsScreen's dissolve removed the "N/4 installed" summary this test used to
+    // read as its independent confirmation that the click reached `mods`, not just
+    // the switch's own re-render — so a BuildProbe reads `mods.intercooler` off the
+    // store directly instead, which is a strictly stronger check than the old count
+    // (that count could stay right by coincidence if a DIFFERENT mod flipped).
+    /** @type {*} */
+    let build;
+    render(
+      <StoreProvider>
+        <BuildProbe onBuild={(b) => { build = b; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByText('Induction'));
     const intercooler = screen.getByRole('switch', { name: /Intercooler/ });
     expect(intercooler.getAttribute('aria-checked')).toBe('false');
+    expect(build.mods.intercooler).toBe(false);
 
     fireEvent.click(intercooler);
 
     expect(screen.getByRole('switch', { name: /Intercooler/ }).getAttribute('aria-checked')).toBe('true');
-    // And it reached the build, not just the switch: the parts count reads the mod set.
-    expect(screen.getByText(/[1-4]\/4 installed/)).toBeTruthy();
+    // And it reached the build, not just the switch.
+    expect(build.mods.intercooler).toBe(true);
   });
 });

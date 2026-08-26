@@ -13,14 +13,23 @@
  * Pass --report to also write a full JSON dump to `fingerprint.report.json`
  * (gitignored) so you can diff two runs cell by cell.
  *
- * REFUSES TO RUN on a Node major that CI does not use. The hash is float-sensitive, and
- * V8's transcendental results move by an ULP or so between major releases — enough to
- * change it, because the raw-float fields are rounded to six ABSOLUTE decimals, which is
- * well inside that. Regenerating on the wrong runtime therefore produces a baseline CI
- * cannot reproduce, and because the documented ritual for a failing gate is "review the
- * diff, then run this", the failure mode is a contributor silently rebaselining the whole
- * behavioural gate against their own toolchain. Verified concretely: one untouched commit
- * passes on 20.18.1 and 22.23.2 and fails on 26.0.0, same machine.
+ * REFUSES TO RUN on a Node major that CI does not use. This is now belt-and-braces
+ * rather than the load-bearing defence it was: the matrix is quantised to seven
+ * SIGNIFICANT figures (see the SIG_FIGS note in tests/fingerprint.js), which absorbs the
+ * ULP-scale drift in V8's transcendentals with an order of magnitude to spare, and
+ * `is immune to floating-point noise` in tests/fingerprint.test.js holds that down. The
+ * hash used to round to six ABSOLUTE decimals, which was well inside that drift, so one
+ * untouched commit passed on 20.18.1 and 22.23.2 and failed on 26.0.0 on the same
+ * machine. That was issue #48, and it is fixed.
+ *
+ * The guard stays because the quantiser proves a narrower thing than this guard covers.
+ * The immunity test models a new V8 by perturbing Math.pow, Math.exp and Math.log; it
+ * cannot speak for a genuinely different libm, a different rounding mode, or a quantity
+ * that becomes unstable later. And the failure mode it protects against is expensive out
+ * of proportion to the inconvenience: the documented ritual for a failing gate is "review
+ * the diff, then run this", so a contributor meets what looks like "you broke the
+ * physics" and is walked into rebaselining the whole behavioural gate against their own
+ * toolchain.
  *
  * Override with ALLOW_ANY_NODE=1 if you are deliberately investigating that drift.
  */

@@ -30,9 +30,15 @@ import styles from './Select.module.css';
  * @param {SelectProps & React.HTMLAttributes<HTMLDivElement>} props
  * @returns {React.ReactElement}
  */
-export function Select({ label, groups, extra = [], value, onChange, ...rest }) {
+export function Select({
+  label, groups, extra = [], value, onChange, className, ...rest
+}) {
+  // `className` is pulled out and merged rather than left in `...rest`, so a
+  // caller-supplied class is additive instead of clobbering the wrapper's own
+  // generated class when `{...rest}` spreads after it.
+  const wrapClassName = [styles.wrap, className].filter(Boolean).join(' ');
   return (
-    <div className={styles.wrap} {...rest}>
+    <div className={wrapClassName} {...rest}>
       <select
         className={styles.select}
         aria-label={label}
