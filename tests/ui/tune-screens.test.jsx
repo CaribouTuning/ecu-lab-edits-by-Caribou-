@@ -108,6 +108,15 @@ describe('AirflowScreen', () => {
     expect(screen.getByTestId('selection-dock')).toBeTruthy();
   });
 
+  it('mounts UndoControls above the grid', () => {
+    // Task 2's headline requirement — AIRFLOW, SPARK and FUEL each mount the ↶ ↷
+    // pair — was previously held only incidentally, by TUNE routing to AIRFLOW by
+    // default. Pinned here, standalone, per screen.
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    expect(screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
+  });
+
   it('shows the shell-computed veAdvice sync gap, not one it derived itself', () => {
     // Fabricated — not a value `veRecommendations` could produce for the default
     // store's engine, and AirflowScreen never imports that function itself.
@@ -199,6 +208,14 @@ describe('SparkScreen', () => {
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
   });
 
+  it('mounts UndoControls above the grid', () => {
+    // See the matching test in the AirflowScreen block above for why this is
+    // pinned per screen rather than left to TUNE's default sub-route.
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
+  });
+
   it('shows the shell-computed knock-limit advisory, not one it derived itself', () => {
     // Fabricated cells: no default build's `calibrationAdvice` would report a cell
     // at 999 kPa (off the LOAD axis entirely) or suggest 22° from 11°.
@@ -251,6 +268,14 @@ describe('FuelScreen', () => {
   it('mounts the shared TuningGrid with its test id intact', () => {
     mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
+  });
+
+  it('mounts UndoControls above the grid', () => {
+    // See the matching test in the AirflowScreen block above for why this is
+    // pinned per screen rather than left to TUNE's default sub-route.
+    mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
+    expect(screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
   });
 
   it('shows the shell-computed wrong-mixture advisory, not one it derived itself', () => {

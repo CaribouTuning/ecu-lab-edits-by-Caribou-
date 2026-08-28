@@ -11,7 +11,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { UndoControls } from '../../src/ui/components/UndoControls.jsx';
@@ -25,6 +25,9 @@ class ResizeObserverStub {
 }
 const hadResizeObserver = 'ResizeObserver' in window;
 if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
+afterAll(() => {
+  if (!hadResizeObserver) delete window.ResizeObserver;
+});
 
 afterEach(cleanup);
 
@@ -56,6 +59,13 @@ function EditThree() {
   );
 }
 
+/** Renders the VE table's top-left cell, so a redo that actually replays SET_TABLE
+ *  is directly observable, not just its label/disabled bookkeeping. */
+function ReadVeCell() {
+  const [tune] = useTune();
+  return <div data-testid="ve-cell">{tune.ve[0][0]}</div>;
+}
+
 function mount() {
   return render(
     <StoreProvider>
@@ -80,8 +90,24 @@ const redoBtn = () => screen.getByRole('button', { name: /^(Redo|Nothing to redo
 describe('UndoControls', () => {
   it('starts with both buttons disabled', () => {
     mount();
-    expect(/** @type {HTMLButtonElement} */ (undoBtn()).disabled).toBe(true);
-    expect(/** @type {HTMLButtonElement} */ (redoBtn()).disabled).toBe(true);
+    const undo = /** @type {HTMLButtonElement} */ (undoBtn());
+    const redo = /** @type {HTMLButtonElement} */ (redoBtn());
+    expect(undo.disabled).toBe(true);
+    expect(redo.disabled).toBe(true);
+    // The exact disabled-state strings, not just the prefix the query above
+    // matches on.
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(redo.getAttribute('aria-label')).toBe('Nothing to redo');
+    // The hover tooltip carries the same text as the accessible name.
+    expect(undo.getAttribute('title')).toBe(undo.getAttribute('aria-label'));
+    expect(redo.getAttribute('title')).toBe(redo.getAttribute('aria-label'));
+  });
+
+  it('renders undo before redo in DOM order', () => {
+    const { container } = mount();
+    const buttons = container.querySelectorAll('button');
+    expect(buttons[0]).toBe(undoBtn());
+    expect(buttons[1]).toBe(redoBtn());
   });
 
   it('names what it would undo', () => {
@@ -97,6 +123,25 @@ describe('UndoControls', () => {
     fireEvent.click(undoBtn());
     expect(/** @type {HTMLButtonElement} */ (redoBtn()).disabled).toBe(false);
     expect(redoBtn().getAttribute('aria-label')).toBe('Redo VE edit');
+  });
+
+  it('redo actually replays the edit it names, not a no-op', () => {
+    // The mirror of undo's own click-handler coverage: undoing then redoing the
+    // same edit must bring the exact edited value back, not merely flip the
+    // disabled flag redo's label already proves it tracks.
+    render(
+      <StoreProvider>
+        <UndoControls />
+        <EditOnce />
+        <ReadVeCell />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT' }));
+    expect(screen.getByTestId('ve-cell').textContent).toBe('42');
+    fireEvent.click(undoBtn());
+    expect(screen.getByTestId('ve-cell').textContent).not.toBe('42');
+    fireEvent.click(redoBtn());
+    expect(screen.getByTestId('ve-cell').textContent).toBe('42');
   });
 
   it('names the MOST RECENT edit to undo, not the oldest', () => {
@@ -148,7 +193,12 @@ describe('UndoControls', () => {
 
     fireEvent.click(undoBtn());
 
-    // ...and undo gives it back.
+    // ...and undo gives it back. The negative regex alone would pass for ANY
+    // preset restored, including the wrong one — this names the specific preset
+    // the picker loaded (the first option in the first optgroup, the Nissan
+    // group, over an untouched default store) so a restore that hands back a
+    // different preset fails here instead of slipping through.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
   });
 });

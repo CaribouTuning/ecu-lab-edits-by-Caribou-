@@ -8,10 +8,12 @@
  * edit"), so the control is not a bare glyph to a screen reader, and the disabled
  * state carries its own reason ("Nothing to undo") rather than going silent.
  *
- * `React.memo` matters here: LIVE_STEP dispatches at 20 Hz and the store is a single
- * context, so every consumer re-renders on every action regardless of the slice it
- * reads (see AppShell.jsx, "THE 20 Hz PROBLEM"). Memoising bails this out whenever the
- * stacks have not moved.
+ * `React.memo` would NOT help here and is deliberately absent. The store is a single
+ * context, so every consumer re-renders on every dispatch — including LIVE_STEP at
+ * 20 Hz — regardless of the slice it reads (see AppShell.jsx, "THE 20 Hz PROBLEM").
+ * memo only blocks re-renders driven by a parent's props. Two buttons and two string
+ * reads is cheap; the fix for the 20 Hz problem is splitting the context, not
+ * memoising its consumers.
  */
 
 import { Redo2, Undo2 } from 'lucide-react';
@@ -23,7 +25,7 @@ import { useHistory } from '../state/StoreProvider.jsx';
 import styles from './UndoControls.module.css';
 
 /** @returns {React.ReactElement} */
-export const UndoControls = React.memo(function UndoControls() {
+export function UndoControls() {
   const [history, dispatch] = useHistory();
   const { past, future } = history;
   const undoLabel = past.length ? `Undo ${past[past.length - 1].label}` : 'Nothing to undo';
@@ -46,4 +48,4 @@ export const UndoControls = React.memo(function UndoControls() {
       </button>
     </div>
   );
-});
+}

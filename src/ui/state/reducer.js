@@ -254,7 +254,7 @@ export const ACTIONS = Object.freeze({
 /**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the eleven specific typedefs above become
+ * shape is assignable to `StoreAction` and the seventeen specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
