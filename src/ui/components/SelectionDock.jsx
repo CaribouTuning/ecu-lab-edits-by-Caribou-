@@ -128,7 +128,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     // A drag that ends where it began is not an edit. Committing it would burn an
     // undo slot AND, via SET_TABLE, clear build.presetId and set tablesDirty —
     // disowning a factory calibration the player never actually changed.
-    if (draft === current) { setDraft(null); return; }
+    //
+    // Cells only: for a row or column `current` is the MEAN, so landing on it is a
+    // real edit that flattens every cell to that value, not a no-op.
+    if (selection.type === 'cell' && draft === current) { setDraft(null); return; }
     setAbs(draft);
     setDraft(null);
   };

@@ -90,12 +90,18 @@ function EcuLabTuneHarness() {
       <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'row', row: 0 } })}>
         SELECT ROW
       </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'col', col: 0 } })}>
+        SELECT COL
+      </button>
       {/* The cell the first SELECT targets, so a test can assert WHICH value was
           committed rather than only how many entries were recorded. */}
       <output data-testid="cell">{tune.timing[0][0]}</output>
       {/* Row 0 in full, so a row-selection commit can be pinned across all 8 cells
           rather than spot-checked at one index. */}
       <output data-testid="row0">{JSON.stringify(tune.timing[0])}</output>
+      {/* Column 0 in full (one entry per row), the mirror of row0 for a col-selection
+          commit. */}
+      <output data-testid="col0">{JSON.stringify(tune.timing.map((r) => r[0]))}</output>
       <SelectionDock
         data={tune.timing}
         setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })}
@@ -467,7 +473,45 @@ describe('the dock slider commits once, on release', () => {
     // No history entry burned, table untouched...
     expect(screen.getByTestId('depth').textContent).toBe('0');
     expect(screen.getByTestId('cell').textContent).toBe('10');
-    // ...and the draft was still cleared on the way out, not left dangling.
+    // This does NOT prove the draft was cleared: here draft === current === 10, so
+    // `shown` reads 10 whether or not `setDraft(null)` ran. The test below ("the
+    // draft is cleared even when a no-op drag ends where it started") is the one
+    // that moves `current` after the release and actually bites on that clear.
+    expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
+  });
+
+  it('the draft is cleared even when a no-op drag ends where it started', () => {
+    // NEW-2: commitDraft's early return is `{ setDraft(null); return; }`. The B2 test
+    // above cannot show the `setDraft(null)` half of that matters, because on its path
+    // draft === current === 10 already, so the readout reads 10 either way. This test
+    // moves `current` AFTER the no-op release, with the selection never changing, so a
+    // stale draft and a cleared one disagree.
+    render(
+      <StoreProvider>
+        <UndoControls />
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
+    expect(screen.getByTestId('cell').textContent).toBe('11'); // depth 1, current now 11
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    fireEvent.change(slider, { target: { value: '11' } }); // back to where THIS drag started
+    fireEvent.pointerUp(slider);
+
+    // The no-op guard fired: no second entry, table still 11.
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('11');
+
+    fireEvent.click(undoBtn()); // real undo of the +1 -> table back to 10
+
+    // Shipped: the abandoned draft was cleared, so the dock follows the table to 10.
+    // Under a mutant that drops `setDraft(null)` from the no-op branch, the stale
+    // draft (11) is still showing and this reads '11°' instead.
     expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
   });
 
@@ -523,5 +567,65 @@ describe('the dock slider commits once, on release', () => {
 
     expect(screen.getByTestId('depth').textContent).toBe('1'); // one entry, not eight
     expect(screen.getByTestId('row0').textContent).toBe('[20,20,20,20,20,20,20,20]');
+  });
+
+  it('flattening a row onto its own exact mean is still a real edit and must commit', () => {
+    // F1 / NEW-1: for a row/col selection `current` is the MEAN, not a stored value.
+    // The no-op guard in commitDraft compares `draft === current` — correct for a cell,
+    // where equality really does mean nothing changed, but wrong here: landing the
+    // slider exactly on the row's mean and releasing is a genuine edit (it flattens
+    // every cell to that value), and an unscoped guard silently discards it.
+    //
+    // Row 0 starts [10,14,20,26,30,32,33,34] (sum 199). +1 on cell(0,0) makes it
+    // [11,14,20,26,30,32,33,34], sum 200, mean EXACTLY 25 — the row selection's
+    // `current` for the rest of this test.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
+    expect(screen.getByTestId('row0').textContent).toBe('[11,14,20,26,30,32,33,34]');
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT ROW' })); // row 0, current (mean) 25
+    expect(screen.getByTestId('dock-readout').textContent).toBe('25°');
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    fireEvent.change(slider, { target: { value: '25' } }); // lands exactly back on the mean
+    fireEvent.pointerUp(slider);
+
+    // An unscoped `draft === current` guard would treat this as a no-op and throw the
+    // fan-out away, leaving depth 1 and the row unchanged. The real behaviour is that
+    // this flattens the row and burns a second undo entry.
+    expect(screen.getByTestId('depth').textContent).toBe('2');
+    expect(screen.getByTestId('row0').textContent).toBe('[25,25,25,25,25,25,25,25]');
+  });
+
+  it('commits one value across the whole column as a single entry, for a column selection', () => {
+    // F3 / NEW-3: M1 pinned the row fan-out but left its mirror, the column branch of
+    // `setAbs`, entirely uncovered. Column 0 starts [10,10,10,14,16,14]
+    // (DEFAULT_TIMING[*][0]).
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT COL' })); // col 0
+    expect(screen.getByTestId('col0').textContent).toBe('[10,10,10,14,16,14]');
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '20' } });
+    expect(screen.getByTestId('depth').textContent).toBe('0'); // still just a draft
+
+    fireEvent.pointerUp(slider);
+
+    expect(screen.getByTestId('depth').textContent).toBe('1'); // one entry, not six
+    expect(screen.getByTestId('col0').textContent).toBe('[20,20,20,20,20,20]');
   });
 });
