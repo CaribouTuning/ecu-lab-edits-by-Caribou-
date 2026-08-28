@@ -1073,15 +1073,60 @@ describe('EngineScreen — the undo offer', () => {
     mount(<EngineScreen active onToggle={noop} {...props} />);
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));
+    const was = picker.value;
     const target = [...picker.querySelectorAll('option')]
       .map((o) => o.value)
       .find((v) => v && v !== picker.value);
     fireEvent.change(picker, { target: { value: target } });
+    expect(picker.value).toBe(target);
 
     fireEvent.click(screen.getByRole('button', { name: /^Undo Preset · / }));
 
+    // The offer going away is NOT sufficient evidence: a button that dispatches
+    // nothing and merely hides the Note passes that assertion too. Assert the preset
+    // load was actually reversed.
+    expect(picker.value).toBe(was);
     // Undone: the offer goes with it, because the top of the stack is gone.
     expect(screen.queryByRole('button', { name: /^Undo Preset · / })).toBeNull();
+  });
+
+  it('offers to undo a reset to stock, naming it', () => {
+    // The Note appears for a preset load OR a reset — both are the destructive acts
+    // this offer exists for. Testing only the preset case would let an implementation
+    // that matches on `Preset · ` alone pass while leaving the reset, which throws
+    // away EVERYTHING, with no offer at all.
+    //
+    // `onResetToStock` is a PROP, so the shared `props` object's `noop` would dispatch
+    // nothing and this test would pass without a reset ever happening. Wire a real one
+    // the way EcuLab.jsx does. `ve` is supplied by the caller, not the reducer — the
+    // current table is fine here, since what is under test is the history entry, not
+    // which numbers a reset computes.
+    function WithRealReset() {
+      const [tune, dispatch] = useTune();
+      return (
+        <EngineScreen
+          active onToggle={noop} {...props}
+          onResetToStock={() => dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: tune.ve })}
+        />
+      );
+    }
+    mount(<WithRealReset />);
+    const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
+      .find((el) => el.querySelector('optgroup'));
+    const target = [...picker.querySelectorAll('option')]
+      .map((o) => o.value)
+      .find((v) => v && v !== picker.value);
+    fireEvent.change(picker, { target: { value: target } });
+    expect(picker.value).toBe(target);
+
+    fireEvent.click(screen.getByRole('button', { name: /^RESET TO STOCK$/i }));
+    // The reset cleared presetId, so the picker no longer names the preset.
+    expect(picker.value).not.toBe(target);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo Reset to stock' }));
+
+    // The reset is reversed, so the preset it wiped is selected again.
+    expect(picker.value).toBe(target);
   });
 
   it('does not offer undo for a plain hardware change', () => {
@@ -1096,7 +1141,7 @@ describe('EngineScreen — the undo offer', () => {
 });
 ```
 
-This reuses the file's existing `mount` (`:36`), `noop` (`:40`), `engineDerived` (`:41`) and `veAdvice` (`:42`) — do not define a second set. Add `within` to the `@testing-library/react` import if it is not there already. `MATERIAL_OPTS` is `['Cast Iron', 'Aluminum']` (`src/sim/hardware.js:45`) and the default block is `Aluminum`, so clicking `Cast Iron` is a real change rather than a no-op the reducer would skip.
+This reuses the file's existing `mount` (`:36`), `noop` (`:40`), `engineDerived` (`:41`) and `veAdvice` (`:42`) — do not define a second set. Add `within` to the `@testing-library/react` import if it is not there already, and add `useTune` to the existing `StoreProvider.jsx` import plus an `ACTIONS` import from `../../src/ui/state/reducer.js` — the reset test needs both. `MATERIAL_OPTS` is `['Cast Iron', 'Aluminum']` (`src/sim/hardware.js:45`) and the default block is `Aluminum`, so clicking `Cast Iron` is a real change rather than a no-op the reducer would skip.
 
 - [ ] **Step 2: Run and watch it fail**
 
@@ -1241,8 +1286,61 @@ describe('keyboard shortcuts', () => {
     fireEvent.keyDown(window, { key: 'z' });
     expect(cell().textContent).toBe(edited);
   });
+
+  it('redoes on Ctrl+Y, the Windows spelling', () => {
+    // The handler accepts 'y' as well as shift+z. Nothing else asserts it, so the
+    // `key !== 'y'` half of the guard could be deleted and every other test here would
+    // still pass — leaving Ctrl+Y silently dead for every Windows player.
+    const before = launchWithEdit();
+    const cell = () => within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const edited = cell().textContent;
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(cell().textContent).toBe(before);
+
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('ignores the shortcut while focus is in a select or a contenteditable', () => {
+    // The INPUT case above is the only guard any other test exercises, so the SELECT
+    // and isContentEditable halves could both be dropped with the suite still green.
+    // SELECT is not hypothetical here: BUILD's preset picker is one, and stealing
+    // Cmd+Z from an open picker takes the browser's own behaviour away from it.
+    launchWithEdit();
+    const cell = () => within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const edited = cell().textContent;
+
+    const select = document.createElement('select');
+    document.body.appendChild(select);
+    fireEvent.keyDown(select, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    select.remove();
+
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    document.body.appendChild(editable);
+    fireEvent.keyDown(editable, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    editable.remove();
+  });
 });
 ```
+
+Note on the contenteditable case: jsdom does not implement `isContentEditable`, so
+setting `contentEditable = 'true'` leaves the property `undefined` and that assertion
+would pass for the wrong reason. Define it on the element explicitly so the guard is
+actually exercised:
+
+```jsx
+Object.defineProperty(editable, 'isContentEditable', { value: true });
+```
+
+Add that line immediately after `editable.contentEditable = 'true';`. Verify it matters
+by deleting the `|| (el && el.isContentEditable)` clause from the handler and confirming
+this test fails.
 
 - [ ] **Step 2: Run and watch it fail**
 
