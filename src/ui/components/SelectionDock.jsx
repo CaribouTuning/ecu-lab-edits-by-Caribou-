@@ -74,6 +74,19 @@ function cellReference(kind, row, col, value) {
  * @returns {React.ReactElement|null}
  */
 export function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind }) {
+  // The slider's in-flight value. React maps onChange on a range input to the `input`
+  // event, so a drag fires it continuously; committing each one would turn a single
+  // drag into eighteen undo steps. The draft holds the value while the finger is down
+  // and commits exactly once on release.
+  const [draft, setDraft] = React.useState(/** @type {number|null} */ (null));
+
+  // A new selection is a new cell: drop any draft left over from the last one, or the
+  // slider would open showing the previous cell's in-flight value.
+  const selKey = selection
+    ? `${selection.type}:${selection.row ?? ''}:${selection.col ?? ''}`
+    : '';
+  React.useEffect(() => { setDraft(null); }, [selKey]);
+
   if (!selection) return null;
   let current;
   if (selection.type === 'cell') current = data[selection.row][selection.col];
@@ -94,6 +107,14 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     else next.forEach((r) => { r[selection.col] = clamp(v, min, max); });
     setData(next);
   };
+  // What the slider and the big readout show: the finger's position while dragging,
+  // the table's committed value otherwise.
+  const shown = draft === null ? current : draft;
+  const commitDraft = () => {
+    if (draft === null) return;
+    setAbs(draft);
+    setDraft(null);
+  };
   const smallStep = decimals ? 0.1 : 1;
   const bigStep = decimals ? 1 : 5;
   let sel = 'Cell';
@@ -107,7 +128,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
           <div style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
-            {decimals ? current.toFixed(decimals) : Math.round(current)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
+            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
@@ -124,7 +145,13 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
           </Panel>
         );
       })()}
-      <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
+      <input
+        type="range" min={min} max={max} step={smallStep} value={shown}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={commitDraft}
+        onKeyUp={commitDraft}
+        style={{ width: '100%', accentColor: T.acc }}
+      />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
         {/* One colour for all four: the +/- is already in the label. Painting the
             positive steps with the status green said "raising this cell is good", which

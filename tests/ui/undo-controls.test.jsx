@@ -14,9 +14,10 @@ import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
+import { SelectionDock } from '../../src/ui/components/SelectionDock.jsx';
 import { UndoControls } from '../../src/ui/components/UndoControls.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { StoreProvider, useTune } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider, useHistory, useTune } from '../../src/ui/state/StoreProvider.jsx';
 
 class ResizeObserverStub {
   observe() {}
@@ -64,6 +65,30 @@ function EditThree() {
 function ReadVeCell() {
   const [tune] = useTune();
   return <div data-testid="ve-cell">{tune.ve[0][0]}</div>;
+}
+
+/** A bare SelectionDock over the store's timing table, with a cell pre-selectable. */
+function EcuLabTuneHarness() {
+  const [tune, dispatch] = useTune();
+  return (
+    <>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 0, col: 0 } })}>
+        SELECT
+      </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 1, col: 1 } })}>
+        SELECT OTHER
+      </button>
+      {/* The cell the first SELECT targets, so a test can assert WHICH value was
+          committed rather than only how many entries were recorded. */}
+      <output data-testid="cell">{tune.timing[0][0]}</output>
+      <SelectionDock
+        data={tune.timing}
+        setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })}
+        selection={tune.selection} min={-5} max={50} decimals={0} unit="°"
+        onClose={() => {}} kind="timing"
+      />
+    </>
+  );
 }
 
 function mount() {
@@ -214,5 +239,94 @@ describe('UndoControls', () => {
     // different preset fails here instead of slipping through.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
     expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
+  });
+});
+
+describe('the dock slider commits once, on release', () => {
+  /** Reports the undo depth into the DOM so a test can read it. */
+  function Depth() {
+    const [history] = useHistory();
+    return <output data-testid="depth">{history.past.length}</output>;
+  }
+
+  it('records ONE history entry for a drag, not one per intermediate value', () => {
+    // React maps onChange on a range input to the `input` event, so a real drag fires
+    // it continuously — roughly 18 times from 12 to 30 degrees. Recorded naively, undo
+    // would walk back one slider pixel at a time.
+    //
+    // Asserting the DEPTH is the point. Asserting only the final table value would
+    // pass just as well with eighteen entries recorded.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '20' } });
+    fireEvent.change(slider, { target: { value: '25' } });
+    fireEvent.change(slider, { target: { value: '30' } });
+
+    // Mid-drag: nothing committed yet.
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.pointerUp(slider);
+
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    // ...and it must commit the LAST draft, not the first. Depth alone cannot tell
+    // those apart: an implementation that commits the value it saw when the drag
+    // started records exactly one entry too, and would silently write 20 where the
+    // player released at 30.
+    expect(screen.getByTestId('cell').textContent).toBe('30');
+  });
+
+  it('commits on key release too, so the slider is usable from the keyboard', () => {
+    // A keyboard user arrows the slider instead of dragging it. If only onPointerUp
+    // commits, their edit is held in the draft forever and never reaches the table —
+    // the control looks like it works and silently discards every change.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '22' } });
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.keyUp(slider, { key: 'ArrowRight' });
+
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('22');
+  });
+
+  it('drops an uncommitted draft when the selection moves to another cell', () => {
+    // The draft is per-cell. Without the reset, selecting a new cell keeps showing the
+    // previous cell's abandoned value, and the next release would write that stale
+    // number into a cell the player never dragged.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
+    const slider = screen.getByRole('slider');
+    const before = screen.getByTestId('cell').textContent;
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('40');
+
+    // Move to a different cell without releasing: the abandoned 40 must not follow.
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT OTHER' }));
+
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).not.toBe('40');
+    // Nothing was ever committed, and the first cell still holds its original value.
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe(before);
   });
 });
