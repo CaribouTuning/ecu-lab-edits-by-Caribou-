@@ -184,7 +184,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       {undoable && (
         <Note tone="warn">
           <span className={styles.undoRow}>
-            <span>{top.label} replaced your VE, spark and fuel tables.</span>
+            <span>{top.label} replaced your tune. Undo restores the tables and hardware as they were before it.</span>
             <Button
               variant="quiet" size="sm"
               aria-label={`Undo ${top.label}`}

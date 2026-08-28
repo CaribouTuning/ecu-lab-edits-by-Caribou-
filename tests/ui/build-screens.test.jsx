@@ -208,6 +208,19 @@ describe('EngineScreen — the undo offer', () => {
     fireEvent.change(picker, { target: { value: target } });
     expect(picker.value).toBe(target);
 
+    // The prefix regex above is the brief's own query, kept as-is. It is satisfied by
+    // construction if the label is ever hardcoded wrong, so it is not enough on its
+    // own — pin the FULL accessible name as a literal too, naming the preset actually
+    // selected (`target` resolves to 'vq35de-revup', the default engine).
+    expect(screen.getByRole('button', { name: 'Undo Preset · Nissan VQ35DE Rev-Up' })).toBeTruthy();
+    // The visible sentence and the button's visible label are the only things a
+    // sighted player reads — every query above goes through `aria-label`, so nothing
+    // else pins them. Literal text, not derived from anything the component reads.
+    expect(screen.getByText(
+      'Preset · Nissan VQ35DE Rev-Up replaced your tune. Undo restores the tables and hardware as they were before it.',
+    )).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Undo Preset · / }).textContent).toBe('UNDO');
+
     fireEvent.click(screen.getByRole('button', { name: /^Undo Preset · / }));
 
     // The offer going away is NOT sufficient evidence: a button that dispatches
@@ -251,6 +264,13 @@ describe('EngineScreen — the undo offer', () => {
     // The reset cleared presetId, so the picker no longer names the preset.
     expect(picker.value).not.toBe(target);
 
+    // The visible sentence and the button's visible label, pinned as literals — the
+    // 'Reset to stock' label shape, not the 'Preset · ' one covered above.
+    expect(screen.getByText(
+      'Reset to stock replaced your tune. Undo restores the tables and hardware as they were before it.',
+    )).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Undo Reset to stock' }).textContent).toBe('UNDO');
+
     fireEvent.click(screen.getByRole('button', { name: 'Undo Reset to stock' }));
 
     // The reset is reversed, so the preset it wiped is selected again.
@@ -282,7 +302,11 @@ describe('EngineScreen — the undo offer', () => {
       .find((v) => v && v !== picker.value);
     fireEvent.change(picker, { target: { value: target } });
     // The offer is up, so its disappearance below cannot be a false negative.
-    expect(screen.getByRole('button', { name: /^Undo Preset · / })).toBeTruthy();
+    // `getByRole` already throws if the element is absent, so a bare `.toBeTruthy()`
+    // here would assert nothing beyond the query itself — pin the actual accessible
+    // name as a literal instead, so this line carries real weight.
+    expect(screen.getByRole('button', { name: /^Undo Preset · / }).getAttribute('aria-label'))
+      .toBe('Undo Preset · Nissan VQ35DE Rev-Up');
 
     fireEvent.click(screen.getByRole('button', { name: 'EDIT VE' }));
 
@@ -296,6 +320,12 @@ describe('EngineScreen — the undo offer', () => {
     mount(<EngineScreen active onToggle={noop} {...props} />);
     const materials = within(screen.getByRole('group', { name: 'Block Material' }));
     fireEvent.click(materials.getByRole('button', { name: 'Cast Iron' }));
+    // Without this, a neutered `onChange` that writes nothing would pass the assertion
+    // below too — it would just be "nothing happened" rather than "a real hardware
+    // write happened and produced no offer". `Seg` reflects the store's value back as
+    // `aria-pressed`, so this proves the click actually reached the reducer.
+    expect(materials.getByRole('button', { name: 'Cast Iron' }).getAttribute('aria-pressed')).toBe('true');
+    expect(materials.getByRole('button', { name: 'Aluminum' }).getAttribute('aria-pressed')).toBe('false');
     expect(screen.queryByRole('button', { name: /^Undo / })).toBeNull();
   });
 });
