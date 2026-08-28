@@ -98,7 +98,10 @@ describe('UndoControls', () => {
     // matches on.
     expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
     expect(redo.getAttribute('aria-label')).toBe('Nothing to redo');
-    // The hover tooltip carries the same text as the accessible name.
+    // The hover tooltip carries the same text as the accessible name. Derived on
+    // purpose here — the literals are asserted two lines up, so this pins the
+    // RELATIONSHIP. The populated case is pinned separately, below: in the empty
+    // state a title frozen to the hardcoded fallback would satisfy this too.
     expect(undo.getAttribute('title')).toBe(undo.getAttribute('aria-label'));
     expect(redo.getAttribute('title')).toBe(redo.getAttribute('aria-label'));
   });
@@ -108,6 +111,17 @@ describe('UndoControls', () => {
     const buttons = container.querySelectorAll('button');
     expect(buttons[0]).toBe(undoBtn());
     expect(buttons[1]).toBe(redoBtn());
+  });
+
+  it('keeps the tooltip tracking the entry once there is one to name', () => {
+    // The empty-state test above pins title === aria-label, but BOTH are the
+    // hardcoded fallback there, so a title that never tracks the entry passes it.
+    // Literal, and taken after an edit, so the tooltip has to follow the label.
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT' }));
+    expect(undoBtn().getAttribute('title')).toBe('Undo VE edit');
+    fireEvent.click(undoBtn());
+    expect(redoBtn().getAttribute('title')).toBe('Redo VE edit');
   });
 
   it('names what it would undo', () => {
@@ -188,7 +202,7 @@ describe('UndoControls', () => {
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
 
-    // The edit disowned the preset: the header falls back to the derived "3.0L I6".
+    // The edit disowned the preset: the header falls back to the derived "3.5L V6".
     expect(screen.getByTestId('build-line').textContent).toMatch(/^\d\.\dL /);
 
     fireEvent.click(undoBtn());
