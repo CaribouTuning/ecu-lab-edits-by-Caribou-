@@ -38,11 +38,38 @@ function EditOnce() {
   );
 }
 
+/** Dispatches one edit per table, so the stack holds three distinguishable entries. */
+function EditThree() {
+  const [, dispatch] = useTune();
+  return (
+    <>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: [[1]] })}>
+        EDIT VE
+      </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value: [[2]] })}>
+        EDIT SPARK
+      </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value: [[3]] })}>
+        EDIT FUEL
+      </button>
+    </>
+  );
+}
+
 function mount() {
   return render(
     <StoreProvider>
       <UndoControls />
       <EditOnce />
+    </StoreProvider>,
+  );
+}
+
+function mountThree() {
+  return render(
+    <StoreProvider>
+      <UndoControls />
+      <EditThree />
     </StoreProvider>,
   );
 }
@@ -70,6 +97,29 @@ describe('UndoControls', () => {
     fireEvent.click(undoBtn());
     expect(/** @type {HTMLButtonElement} */ (redoBtn()).disabled).toBe(false);
     expect(redoBtn().getAttribute('aria-label')).toBe('Redo VE edit');
+  });
+
+  it('names the MOST RECENT edit to undo, not the oldest', () => {
+    // past is a stack: VE then Spark then Fuel means Fuel is on top, and undo
+    // reverses the top of the stack first. If the label read the wrong end, this
+    // would say "Undo VE edit" instead.
+    mountThree();
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT VE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT SPARK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT FUEL' }));
+    expect(undoBtn().getAttribute('aria-label')).toBe('Undo Fuel edit');
+  });
+
+  it('names the NEXT redo after two undos, not the last one undone', () => {
+    // Undoing Fuel then Spark leaves future = [Spark, Fuel] (head-first): Spark is
+    // next in line to be replayed, so redo must name Spark, not Fuel.
+    mountThree();
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT VE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT SPARK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT FUEL' }));
+    fireEvent.click(undoBtn()); // undoes Fuel edit -> future = [Fuel]
+    fireEvent.click(undoBtn()); // undoes Spark edit -> future = [Spark, Fuel]
+    expect(redoBtn().getAttribute('aria-label')).toBe('Redo Spark edit');
   });
 
   it('puts the preset label back when a table edit is undone', () => {
