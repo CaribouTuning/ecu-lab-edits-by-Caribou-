@@ -1131,6 +1131,38 @@ describe('EngineScreen — the undo offer', () => {
     expect(picker.value).toBe(target);
   });
 
+  it('withdraws the offer once a later edit sits on top of the preset load', () => {
+    // The offer reads the TOP of the stack — `past[past.length - 1]`. Every other test
+    // here creates at most ONE entry before looking, so `past[0]` would satisfy all of
+    // them while reversing the wrong thing. This is the discriminator: after a table
+    // edit lands on top, the top is a 'VE edit', the button would no longer undo the
+    // preset load, and offering it would be a lie about what the click does.
+    function WithTableEdit() {
+      const [tune, dispatch] = useTune();
+      return (
+        <>
+          <button onClick={() => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: tune.ve })}>
+            EDIT VE
+          </button>
+          <EngineScreen active onToggle={noop} {...props} />
+        </>
+      );
+    }
+    mount(<WithTableEdit />);
+    const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
+      .find((el) => el.querySelector('optgroup'));
+    const target = [...picker.querySelectorAll('option')]
+      .map((o) => o.value)
+      .find((v) => v && v !== picker.value);
+    fireEvent.change(picker, { target: { value: target } });
+    // The offer is up, so its disappearance below cannot be a false negative.
+    expect(screen.getByRole('button', { name: /^Undo Preset · / })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT VE' }));
+
+    expect(screen.queryByRole('button', { name: /^Undo / })).toBeNull();
+  });
+
   it('does not offer undo for a plain hardware change', () => {
     // Hardware writes are not undoable, so an offer here would be a lie about what the
     // button does. "Block Material" is a Seg on this screen (`EngineScreen.jsx:242`)
