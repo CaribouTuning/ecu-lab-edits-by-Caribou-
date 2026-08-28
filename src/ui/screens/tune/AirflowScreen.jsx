@@ -18,6 +18,7 @@ import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -61,7 +62,10 @@ export function AirflowScreen({ veAdvice, veTruth }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
+          <div className={styles.gridHead}>
+            <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
+            <UndoControls />
+          </div>
           <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data.</div>
           <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} />
 

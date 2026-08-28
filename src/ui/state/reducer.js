@@ -239,6 +239,19 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * Steps the undo stack back one entry, restoring the snapshot `past[past.length - 1]`
+ * carries and pushing the pre-undo state onto `future`. No payload: the reducer reads
+ * everything it needs off `state.history` itself.
+ * @typedef {{type: 'UNDO'}} UndoAction
+ */
+
+/**
+ * Steps the redo stack forward one entry, replaying the snapshot `future[0]` carries.
+ * The mirror of `UndoAction` — see there for why no payload travels on the action.
+ * @typedef {{type: 'REDO'}} RedoAction
+ */
+
+/**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
  * shape is assignable to `StoreAction` and the eleven specific typedefs above become
@@ -248,7 +261,7 @@ export const ACTIONS = Object.freeze({
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
  *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
- *   LivePatchAction
+ *   LivePatchAction | UndoAction | RedoAction
  * } KnownStoreAction
  */
 
