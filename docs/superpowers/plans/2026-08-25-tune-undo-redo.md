@@ -32,7 +32,7 @@
 | `src/ui/state/reducer.js` | Existing `reducer` renamed to `baseReducer`; new `reducer` wrapper records history and handles `UNDO`/`REDO`. Owns `labelFor()`, because that needs `ACTIONS` and `presetById`. |
 | `src/ui/state/initialState.js` | Adds the `history` slice and its typedef. |
 | `src/ui/state/StoreProvider.jsx` | Adds `useHistory()` beside the three existing slice hooks. |
-| `src/ui/components/UndoControls.jsx` + `.module.css` **(new)** | The ↶ ↷ pair. Reads `history`, dispatches `UNDO`/`REDO`. `React.memo`'d. |
+| `src/ui/components/UndoControls.jsx` + `.module.css` **(new)** | The ↶ ↷ pair. Reads `history`, dispatches `UNDO`/`REDO`. |
 | `src/ui/components/SelectionDock.jsx` | Slider becomes commit-on-release. |
 | `src/ui/screens/tune/{Airflow,Spark,Fuel}Screen.jsx` + `.module.css` | Mount `UndoControls` in a `.gridHead` row beside the `Eyebrow`. |
 | `src/ui/screens/build/EngineScreen.jsx` + `.module.css` | The post-preset/post-reset UNDO `Note`. |
@@ -665,10 +665,12 @@ Create `src/ui/components/UndoControls.jsx`:
  * edit"), so the control is not a bare glyph to a screen reader, and the disabled
  * state carries its own reason ("Nothing to undo") rather than going silent.
  *
- * `React.memo` matters here: LIVE_STEP dispatches at 20 Hz and the store is a single
- * context, so every consumer re-renders on every action regardless of the slice it
- * reads (see AppShell.jsx, "THE 20 Hz PROBLEM"). Memoising bails this out whenever the
- * stacks have not moved.
+ * `React.memo` would NOT help here and is deliberately absent. The store is a single
+ * context, so every consumer re-renders on every dispatch — including LIVE_STEP at
+ * 20 Hz — regardless of the slice it reads (see AppShell.jsx, "THE 20 Hz PROBLEM").
+ * memo only blocks re-renders driven by a parent's props. Two buttons and two string
+ * reads is cheap; the fix for the 20 Hz problem is splitting the context, not
+ * memoising its consumers.
  */
 
 import { Redo2, Undo2 } from 'lucide-react';
@@ -680,7 +682,7 @@ import { useHistory } from '../state/StoreProvider.jsx';
 import styles from './UndoControls.module.css';
 
 /** @returns {React.ReactElement} */
-export const UndoControls = React.memo(function UndoControls() {
+export function UndoControls() {
   const [history, dispatch] = useHistory();
   const { past, future } = history;
   const undoLabel = past.length ? `Undo ${past[past.length - 1].label}` : 'Nothing to undo';
@@ -703,7 +705,7 @@ export const UndoControls = React.memo(function UndoControls() {
       </button>
     </div>
   );
-});
+}
 ```
 
 Create `src/ui/components/UndoControls.module.css`:

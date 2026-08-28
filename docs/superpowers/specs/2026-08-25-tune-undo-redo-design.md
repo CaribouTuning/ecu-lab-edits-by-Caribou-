@@ -164,9 +164,16 @@ makes undo depth depend on how fast the player happened to drag.
 **`src/ui/components/UndoControls.jsx` + `.module.css`** (new) — the ↶ ↷ pair. Each button
 is disabled when its stack is empty and takes its `aria-label` from the entry it would
 reverse ("Undo VE edit"). Mounted in the grid header on TUNE's AIRFLOW, SPARK and FUEL.
-A `React.memo`'d leaf: `LIVE_STEP` dispatches at 20 Hz and the store is a single context,
-so every consumer re-renders on every action (`AppShell.jsx`, "THE 20 Hz PROBLEM"). This
-must not add to that.
+**Correction, made during implementation.** This section originally called for a
+`React.memo`'d leaf, reasoning that `LIVE_STEP` dispatches at 20 Hz and the store is a
+single context, so every consumer re-renders on every action (`AppShell.jsx`, "THE 20 Hz
+PROBLEM"). That reasoning was wrong about what `memo` does. The review measured it: five
+unrelated dispatches took the component's render count from 1 to 6 with the wrapper in
+place. `React.memo` only blocks re-renders driven by a parent's props; a component
+reading context re-renders whenever the context value changes, which is exactly the 20 Hz
+case. The wrapper is gone, and the component's header says so, because the next reader
+would otherwise copy it. The real fix for the 20 Hz problem is splitting the context —
+out of scope here, and not something two buttons and two string reads justify.
 
 **`src/ui/components/SelectionDock.jsx`** — the draft-value slider described above.
 
