@@ -85,7 +85,16 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   const selKey = selection
     ? `${selection.type}:${selection.row ?? ''}:${selection.col ?? ''}`
     : '';
-  React.useEffect(() => { setDraft(null); }, [selKey]);
+  // Adjusting state when a prop changes, done during render rather than in a
+  // useEffect: an effect only runs after the browser has already painted this
+  // render, so for one frame `shown` would show the PREVIOUS cell's draft against
+  // the NEW cell's `current`. Comparing against the last-seen key here and
+  // resetting before this render is returned avoids that frame entirely.
+  const [prevSelKey, setPrevSelKey] = React.useState(selKey);
+  if (selKey !== prevSelKey) {
+    setPrevSelKey(selKey);
+    setDraft(null);
+  }
 
   if (!selection) return null;
   let current;
@@ -94,6 +103,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   else current = data.reduce((a, r) => a + r[selection.col], 0) / data.length;
 
   const apply = (delta) => {
+    // A stepper click is a new intent on this cell: any draft left over from a drag
+    // that never released is abandoned, not pending. Without this it survives and the
+    // NEXT release overwrites the value this click just committed.
+    setDraft(null);
     const next = clone2D(data);
     if (selection.type === 'cell') next[selection.row][selection.col] = Number(clamp(next[selection.row][selection.col] + delta, min, max).toFixed(2));
     else if (selection.type === 'row') next[selection.row] = next[selection.row].map((v) => Number(clamp(v + delta, min, max).toFixed(2)));
@@ -112,6 +125,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   const shown = draft === null ? current : draft;
   const commitDraft = () => {
     if (draft === null) return;
+    // A drag that ends where it began is not an edit. Committing it would burn an
+    // undo slot AND, via SET_TABLE, clear build.presetId and set tablesDirty —
+    // disowning a factory calibration the player never actually changed.
+    if (draft === current) { setDraft(null); return; }
     setAbs(draft);
     setDraft(null);
   };
@@ -127,7 +144,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
+          <div data-testid="dock-readout" style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
             {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
           </div>
         </div>

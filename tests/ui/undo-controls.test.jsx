@@ -78,9 +78,24 @@ function EcuLabTuneHarness() {
       <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 1, col: 1 } })}>
         SELECT OTHER
       </button>
+      {/* Same row as SELECT (row 0), a different column: isolates selKey's col
+          component from its row component. */}
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 0, col: 1 } })}>
+        SELECT SAME ROW
+      </button>
+      {/* Same column as SELECT (col 0), a different row: the mirror isolation. */}
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 3, col: 0 } })}>
+        SELECT SAME COL
+      </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'row', row: 0 } })}>
+        SELECT ROW
+      </button>
       {/* The cell the first SELECT targets, so a test can assert WHICH value was
           committed rather than only how many entries were recorded. */}
       <output data-testid="cell">{tune.timing[0][0]}</output>
+      {/* Row 0 in full, so a row-selection commit can be pinned across all 8 cells
+          rather than spot-checked at one index. */}
+      <output data-testid="row0">{JSON.stringify(tune.timing[0])}</output>
       <SelectionDock
         data={tune.timing}
         setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })}
@@ -317,16 +332,196 @@ describe('the dock slider commits once, on release', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
     const slider = screen.getByRole('slider');
-    const before = screen.getByTestId('cell').textContent;
     fireEvent.change(slider, { target: { value: '40' } });
     expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('40');
 
     // Move to a different cell without releasing: the abandoned 40 must not follow.
     fireEvent.click(screen.getByRole('button', { name: 'SELECT OTHER' }));
 
-    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).not.toBe('40');
-    // Nothing was ever committed, and the first cell still holds its original value.
+    // Literals, not `not.toBe('40')` (passes for any non-40 value, including another
+    // stale draft) or a value re-read from the component's own earlier render. 14 is
+    // DEFAULT_TIMING[1][1], cell(1,1)'s real committed value.
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('14');
+    // Nothing was ever committed, and the first cell still holds its original value —
+    // 10, DEFAULT_TIMING[0][0].
     expect(screen.getByTestId('depth').textContent).toBe('0');
-    expect(screen.getByTestId('cell').textContent).toBe(before);
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+  });
+
+  it('drops an uncommitted draft when the selection moves to a different column in the same row', () => {
+    // T2: selKey must include the column, not just the row. The two prior tests only
+    // ever move (0,0) -> (1,1), which differs in both indices, so a selKey missing
+    // EITHER one would still satisfy them. This isolates the column.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('40');
+
+    // Same row, next column over: cell(0,1), current 14 (DEFAULT_TIMING[0][1]).
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT SAME ROW' }));
+
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('14');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('14°');
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+  });
+
+  it('drops an uncommitted draft when the selection moves to a different row in the same column', () => {
+    // T3: the mirror of T2 — selKey must include the row, not just the column.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('40');
+
+    // Same column, a different row: cell(3,0), current 14 (DEFAULT_TIMING[3][0]).
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT SAME COL' }));
+
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('14');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('14°');
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+  });
+
+  it('the live readout tracks the drag mid-flight, not just the slider', () => {
+    // T1: the live readout is the stated mitigation for this task's accepted cost
+    // (the grid's heat tint now updates on release, not continuously) — nothing else
+    // in the suite ever reads it. Pins `shown`, not `current`, feeding the big number.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+
+    // Mid-drag: nothing committed yet, but the readout already reads the drag.
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('40°');
+  });
+
+  it('a stepper click clears a draft left over from a drag that never released', () => {
+    // B1: a pointercancel (touch gesture taken over by scroll, mouse released outside
+    // the window) leaves the draft live with no pointerup ever landing. Reaching for a
+    // stepper instead must win outright — not queue behind the abandoned drag.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
+
+    // The stepper commits against the TABLE's value (10), not the abandoned draft (40).
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('11');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('11°');
+
+    // The drag's pointerup finally arrives, late. Without the fix this recommits the
+    // abandoned 40 over the stepper's edit; with it, there is nothing left to commit.
+    fireEvent.pointerUp(slider);
+
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('11');
+  });
+
+  it('a drag that ends where it started does not commit', () => {
+    // B2: dragging 10 -> 40 -> back to 10 and releasing must not burn an undo entry
+    // or, via SET_TABLE, clear build.presetId / set tablesDirty for a table that
+    // never actually changed.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    fireEvent.change(slider, { target: { value: '10' } }); // back to where it started
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.pointerUp(slider);
+
+    // No history entry burned, table untouched...
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+    // ...and the draft was still cleared on the way out, not left dangling.
+    expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
+  });
+
+  it('clears the draft after a normal commit, so a later change to the table is not masked by it', () => {
+    // T4: `commitDraft` must null the draft on the success path too, not only on the
+    // `draft === null` early return. Deleting that clear leaves the dock pinned to the
+    // last dragged value forever. A later stepper click can't prove this on its own
+    // any more (B1 also clears the draft, from the stepper side) — so this drives the
+    // table out from under the dock a different way: undoing the very commit that
+    // just happened, with the selection never changing.
+    render(
+      <StoreProvider>
+        <UndoControls />
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '40' } });
+    fireEvent.pointerUp(slider); // commits 40, depth 1
+
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('40');
+
+    fireEvent.click(undoBtn());
+
+    // The table is back to 10. If the draft were never cleared after the commit, the
+    // dock would still show the abandoned 40 here instead of following the table.
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('10');
+  });
+
+  it('commits one value across the whole row as a single entry, for a row selection', () => {
+    // M1: all prior tests here select a `cell`. For a row, `current` is a mean and
+    // `setAbs` fans the released value across all 8 cells of the row — verified
+    // correct by the reviewer, but previously unpinned.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT ROW' })); // row 0
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '20' } });
+    expect(screen.getByTestId('depth').textContent).toBe('0'); // still just a draft
+
+    fireEvent.pointerUp(slider);
+
+    expect(screen.getByTestId('depth').textContent).toBe('1'); // one entry, not eight
+    expect(screen.getByTestId('row0').textContent).toBe('[20,20,20,20,20,20,20,20]');
   });
 });
