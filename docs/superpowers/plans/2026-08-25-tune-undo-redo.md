@@ -683,7 +683,7 @@ import styles from './UndoControls.module.css';
 
 /** @returns {React.ReactElement} */
 export function UndoControls() {
-  const [history, dispatch] = useHistory();
+  const [history] = useHistory();  // NOT [history, dispatch] — `dispatch` is already bound by useBuild() in this scope, and redeclaring it is a syntax error. It is the same function either way.
   const { past, future } = history;
   const undoLabel = past.length ? `Undo ${past[past.length - 1].label}` : 'Nothing to undo';
   const redoLabel = future.length ? `Redo ${future[0].label}` : 'Nothing to redo';
@@ -1121,7 +1121,7 @@ describe('EngineScreen — the undo offer', () => {
     fireEvent.change(picker, { target: { value: target } });
     expect(picker.value).toBe(target);
 
-    fireEvent.click(screen.getByRole('button', { name: /^RESET TO STOCK$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/i }));
     // The reset cleared presetId, so the picker no longer names the preset.
     expect(picker.value).not.toBe(target);
 
@@ -1195,7 +1195,7 @@ import { useHistory } from '../../state/StoreProvider.jsx';
 Inside the component, beside the existing `useBuild()` call:
 
 ```js
-  const [history, dispatch] = useHistory();
+  const [history] = useHistory();  // NOT [history, dispatch] — `dispatch` is already bound by useBuild() in this scope, and redeclaring it is a syntax error. It is the same function either way.
   // Only the two acts that replace the whole calibration get an offer here. A table
   // edit is undoable too, but its undo lives above the grid on TUNE, where the edit
   // happened — an offer on BUILD for something the player did on another tab would be
