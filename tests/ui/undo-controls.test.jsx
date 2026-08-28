@@ -629,3 +629,114 @@ describe('the dock slider commits once, on release', () => {
     expect(screen.getByTestId('col0').textContent).toBe('[20,20,20,20,20,20]');
   });
 });
+
+describe('keyboard shortcuts', () => {
+  // `cells[0]` in TuningGrid's DOM order is the RPM=800 COLUMN HEADER button (the
+  // header row is rendered before any data row, and header text is plain digits too,
+  // so it passes the same regex filter) — not a data cell. Its own text never changes
+  // no matter what gets edited, so picking it here would make `edited` equal `before`
+  // by construction, failing every assertion below for the wrong reason before the
+  // keyboard shortcut is even exercised. Mid-array — same fix the preset-label test
+  // above this describe block already uses — lands on a real data cell instead.
+  const dataCell = (list) => list[Math.floor(list.length / 2)];
+
+  // Returns the PRE-edit value, not the post-edit one: the brief's literal version
+  // read `cells[0].textContent` AFTER the `+1` click had already fired, so it handed
+  // back the edited value. The very next line in every test below reads the grid
+  // again with nothing in between, so `edited` and that returned value would always
+  // be identical DOM state — `expect(edited).not.toBe(before)` could never pass, on
+  // any cell, regardless of the keyboard handler. Capturing the value before the
+  // dock dispatch (edit still happens as the documented side effect) is what makes
+  // `before` actually mean "before".
+  function launchWithEdit() {
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    const grid = within(screen.getByTestId('tuning-grid'));
+    const cells = grid.getAllByRole('button')
+      .filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
+    fireEvent.click(dataCell(cells));
+    const before = dataCell(cells).textContent;
+    const dock = within(screen.getByTestId('selection-dock'));
+    fireEvent.click(dock.getByRole('button', { name: '+1' }));
+    return before;
+  }
+
+  it('undoes on Cmd+Z and redoes on Cmd+Shift+Z', () => {
+    const before = launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+    expect(edited).not.toBe(before);
+
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(before);
+
+    fireEvent.keyDown(window, { key: 'z', metaKey: true, shiftKey: true });
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('ignores the shortcut while focus is in a text field', () => {
+    // Otherwise the app would steal undo from the field the player is typing in.
+    launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    input.remove();
+  });
+
+  it('ignores a bare z with no modifier', () => {
+    launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+    fireEvent.keyDown(window, { key: 'z' });
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('redoes on Ctrl+Y, the Windows spelling', () => {
+    // The handler accepts 'y' as well as shift+z. Nothing else asserts it, so the
+    // `key !== 'y'` half of the guard could be deleted and every other test here would
+    // still pass — leaving Ctrl+Y silently dead for every Windows player.
+    const before = launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    expect(cell().textContent).toBe(before);
+
+    fireEvent.keyDown(window, { key: 'y', ctrlKey: true });
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('ignores the shortcut while focus is in a select or a contenteditable', () => {
+    // The INPUT case above is the only guard any other test exercises, so the SELECT
+    // and isContentEditable halves could both be dropped with the suite still green.
+    // SELECT is not hypothetical here: BUILD's preset picker is one, and stealing
+    // Cmd+Z from an open picker takes the browser's own behaviour away from it.
+    launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+
+    const select = document.createElement('select');
+    document.body.appendChild(select);
+    fireEvent.keyDown(select, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    select.remove();
+
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    Object.defineProperty(editable, 'isContentEditable', { value: true });
+    document.body.appendChild(editable);
+    fireEvent.keyDown(editable, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    editable.remove();
+  });
+});
