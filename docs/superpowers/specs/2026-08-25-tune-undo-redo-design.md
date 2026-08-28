@@ -71,6 +71,20 @@ live-engine model, navigation, and grid selection. Every hardware control alread
 displays its own current value, so it is self-reversing; and undo must not become a time
 machine over banked career progress.
 
+**Correction, made during implementation.** "Not undoable" above means *does not push a
+history entry* — it does NOT mean undo leaves hardware alone. The snapshot is the union
+of every field an undoable action can touch, and that includes thirteen build fields, so
+undoing a preset load or a reset restores the hardware as it was at that moment. A
+hardware change made *after* an undoable action is therefore reversed by undoing that
+action, silently, even though the hardware change pushed nothing itself.
+
+That is the correct behaviour — undoing a preset load means returning to the state before
+it, and a partial restore would be worse. But it makes the wording of BUILD's offer
+load-bearing: the Note must say that undo restores tables **and hardware**, or it
+promises a smaller click than the one it performs. The original sentence named only the
+three tables, which was false; the review caught it, and the human chose to keep the
+behaviour and fix the sentence.
+
 ## Design
 
 ### The `history` slice
