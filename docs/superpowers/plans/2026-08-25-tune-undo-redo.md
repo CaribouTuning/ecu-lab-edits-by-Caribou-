@@ -21,7 +21,7 @@
 - **History depth is 50**, capped with `.slice(-HISTORY_LIMIT)`.
 - **The reducer stays pure.** No `Date.now()`, no coalescing keys, no merge logic inside it.
 - **Never `git stash`** in any form, never `git add -A`/`git add .`, never `git add node_modules`. ` D node_modules` in `git status` is a known pre-existing condition — leave it. Stage explicit paths only.
-- Run tests as `npx vitest run --pool=forks --poolOptions.forks.singleFork <path>`.
+- Run tests as `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork <path>`.
 - Full check suite before the PR: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
 
 ## File Structure
@@ -353,7 +353,7 @@ describe('UNDO / REDO', () => {
 
 - [ ] **Step 4: Run the tests and watch them fail**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js`
 
 Expected: the `UNDO / REDO` suite fails — `ACTIONS.UNDO` is `undefined`, so every dispatch hits the reducer's `default` case and returns state unchanged, and `s.history` is `undefined`. The `makeInitialState` and APPLY_PRESET shape tests should already pass once Step 2 landed.
 
@@ -496,19 +496,19 @@ export function useHistory() {
 
 - [ ] **Step 7: Run the tests and watch them pass**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js`
 Expected: PASS, all suites.
 
 Then run the whole suite — the store shape changed, so anything reading it is in scope:
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork`
 Expected: PASS. If anything outside `reducer.test.js` fails, report it rather than editing that test — the Blast Radius section says only two tests should have needed changes, so a third is a finding.
 
 - [ ] **Step 8: Verify the cap test can actually fail**
 
 A test that cannot fail is worse than no test. Temporarily change `.slice(-HISTORY_LIMIT)` in the `UNDOABLE` branch to `.slice(0, HISTORY_LIMIT)` (keep oldest, drop newest — the plausible wrong version).
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js -t 'caps the stack'`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/state/reducer.test.js -t 'caps the stack'`
 Expected: FAIL on the `past[0].before.tune.ve` assertion.
 
 Revert the change and re-run to confirm PASS.
@@ -647,7 +647,7 @@ describe('UndoControls', () => {
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
 Expected: FAIL — `Failed to resolve import ".../UndoControls.jsx"`.
 
 - [ ] **Step 3: Write the component**
@@ -789,10 +789,10 @@ correct behaviour, not a bug. What is undoable lives in `src/ui/state/reducer.js
 
 - [ ] **Step 6: Run the tests**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
 Expected: PASS, 4 tests.
 
-Then: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/`
+Then: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/`
 Expected: PASS. `button-call-sites.test.jsx` sweeps every rendered `.button` class — `UndoControls` uses its own class, not `Button`, so it should not appear there. If that test fails, report it rather than editing it.
 
 - [ ] **Step 7: Commit**
@@ -852,6 +852,59 @@ describe('the dock slider commits once, on release', () => {
     fireEvent.pointerUp(slider);
 
     expect(screen.getByTestId('depth').textContent).toBe('1');
+    // ...and it must commit the LAST draft, not the first. Depth alone cannot tell
+    // those apart: an implementation that commits the value it saw when the drag
+    // started records exactly one entry too, and would silently write 20 where the
+    // player released at 30.
+    expect(screen.getByTestId('cell').textContent).toBe('30');
+  });
+
+  it('commits on key release too, so the slider is usable from the keyboard', () => {
+    // A keyboard user arrows the slider instead of dragging it. If only onPointerUp
+    // commits, their edit is held in the draft forever and never reaches the table —
+    // the control looks like it works and silently discards every change.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '22' } });
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.keyUp(slider, { key: 'ArrowRight' });
+
+    expect(screen.getByTestId('depth').textContent).toBe('1');
+    expect(screen.getByTestId('cell').textContent).toBe('22');
+  });
+
+  it('drops an uncommitted draft when the selection moves to another cell', () => {
+    // The draft is per-cell. Without the reset, selecting a new cell keeps showing the
+    // previous cell's abandoned value, and the next release would write that stale
+    // number into a cell the player never dragged.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' }));
+    const slider = screen.getByRole('slider');
+    const before = screen.getByTestId('cell').textContent;
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(screen.getByRole('slider').value).toBe('40');
+
+    // Move to a different cell without releasing: the abandoned 40 must not follow.
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT OTHER' }));
+
+    expect(screen.getByRole('slider').value).not.toBe('40');
+    // Nothing was ever committed, and the first cell still holds its original value.
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe(before);
   });
 });
 ```
@@ -867,6 +920,12 @@ function EcuLabTuneHarness() {
       <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 0, col: 0 } })}>
         SELECT
       </button>
+      <button onClick={() => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 1, col: 1 } })}>
+        SELECT OTHER
+      </button>
+      {/* The cell the first SELECT targets, so a test can assert WHICH value was
+          committed rather than only how many entries were recorded. */}
+      <output data-testid="cell">{tune.timing[0][0]}</output>
       <SelectionDock
         data={tune.timing}
         setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })}
@@ -889,7 +948,7 @@ import { StoreProvider, useHistory, useTune } from '../../src/ui/state/StoreProv
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'commits once'`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'commits once'`
 Expected: FAIL — depth reads `3` after the three `change` events and before any `pointerUp`.
 
 - [ ] **Step 3: Make the slider hold a draft**
@@ -958,17 +1017,17 @@ Leave `cellReference` and the four stepper buttons untouched: a stepper click is
 
 - [ ] **Step 4: Run the tests**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
 Expected: PASS, 5 tests.
 
-Then: `npx vitest run --pool=forks --poolOptions.forks.singleFork`
+Then: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork`
 Expected: PASS. `characterisation.test.jsx` must still pass **unmodified** — it drives the `+1` stepper, not the slider.
 
 - [ ] **Step 5: Verify the test can fail**
 
 Temporarily change `onChange={(e) => setDraft(Number(e.target.value))}` back to `onChange={(e) => setAbs(Number(e.target.value))}`.
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'commits once'`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'commits once'`
 Expected: FAIL at the mid-drag assertion, depth `3` instead of `0`.
 
 Revert and re-run to confirm PASS.
@@ -1041,7 +1100,7 @@ This reuses the file's existing `mount` (`:36`), `noop` (`:40`), `engineDerived`
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/build-screens.test.jsx -t 'undo offer'`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/build-screens.test.jsx -t 'undo offer'`
 Expected: FAIL — no such button.
 
 - [ ] **Step 3: Add the offer**
@@ -1100,10 +1159,10 @@ Check `Note`'s props before using `tone="warn"` — read `src/ui/primitives/Note
 
 - [ ] **Step 4: Run the tests**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/build-screens.test.jsx`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/build-screens.test.jsx`
 Expected: PASS.
 
-Then: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/`
+Then: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/`
 Expected: PASS. `button-call-sites.test.jsx` sweeps `Button` call sites and this adds one — if it reports a new unguarded call site, fix the call site, not the test.
 
 - [ ] **Step 5: Commit**
@@ -1187,7 +1246,7 @@ describe('keyboard shortcuts', () => {
 
 - [ ] **Step 2: Run and watch it fail**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'keyboard shortcuts'`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx -t 'keyboard shortcuts'`
 Expected: FAIL — the cell keeps its edited value after Cmd+Z.
 
 - [ ] **Step 3: Add the handler**
@@ -1221,13 +1280,13 @@ In `src/ui/EcuLab.jsx`, beside the other `useEffect`s:
 
 - [ ] **Step 4: Run the tests**
 
-Run: `npx vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
+Run: `./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork tests/ui/undo-controls.test.jsx`
 Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Run the full check suite**
 
 ```bash
-npx vitest run --pool=forks --poolOptions.forks.singleFork
+./node_modules/.bin/vitest run --pool=forks --poolOptions.forks.singleFork
 npm run lint
 npm run typecheck
 npm run build
