@@ -11,7 +11,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { SelectionDock } from '../../src/ui/components/SelectionDock.jsx';
@@ -323,6 +323,39 @@ describe('the dock slider commits once, on release', () => {
 
     expect(screen.getByTestId('depth').textContent).toBe('1');
     expect(screen.getByTestId('cell').textContent).toBe('22');
+  });
+
+  it('does NOT commit on a Cmd/Ctrl+Z keyup, so undo cannot masquerade as an edit', () => {
+    // F4: EcuLab's global keydown handler blocks Cmd/Ctrl+Z on this INPUT, but the
+    // matching KEYUP still bubbles here. Before the fix, that keyup reached
+    // commitDraft unconditionally and committed whatever draft was pending — turning
+    // "press undo" into "commit an edit and burn an undo slot". Reproduced exactly as
+    // in the review: a drag whose pointerup never arrived (e.g. a pointercancel),
+    // then a Cmd+Z keydown+keyup on the slider itself.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '42' } }); // drag with no pointerup
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+
+    fireEvent.keyDown(slider, { key: 'z', metaKey: true });
+    fireEvent.keyUp(slider, { key: 'z', metaKey: true });
+
+    // The abandoned draft (42) must NOT have been committed.
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+
+    // Ctrl+Z (the Windows/Linux spelling) must be caught the same way.
+    fireEvent.keyDown(slider, { key: 'z', ctrlKey: true });
+    fireEvent.keyUp(slider, { key: 'z', ctrlKey: true });
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe('10');
   });
 
   it('drops an uncommitted draft when the selection moves to another cell', () => {
@@ -648,8 +681,11 @@ describe('keyboard shortcuts', () => {
   // any cell, regardless of the keyboard handler. Capturing the value before the
   // dock dispatch (edit still happens as the documented side effect) is what makes
   // `before` actually mean "before".
+  // Returns { before, unmount }, not just the pre-edit value: F7 (listener cleanup)
+  // needs a handle to unmount the real render, and reusing this helper for that test
+  // keeps the same launch path every other test in this block already exercises.
   function launchWithEdit() {
-    render(<EcuLab />);
+    const { unmount } = render(<EcuLab />);
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
     const grid = within(screen.getByTestId('tuning-grid'));
@@ -659,11 +695,11 @@ describe('keyboard shortcuts', () => {
     const before = dataCell(cells).textContent;
     const dock = within(screen.getByTestId('selection-dock'));
     fireEvent.click(dock.getByRole('button', { name: '+1' }));
-    return before;
+    return { before, unmount };
   }
 
   it('undoes on Cmd+Z and redoes on Cmd+Shift+Z', () => {
-    const before = launchWithEdit();
+    const { before } = launchWithEdit();
     const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
       .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
@@ -676,12 +712,79 @@ describe('keyboard shortcuts', () => {
     expect(cell().textContent).toBe(edited);
   });
 
-  it('ignores the shortcut while focus is in a text field', () => {
-    // Otherwise the app would steal undo from the field the player is typing in.
-    launchWithEdit();
+  it('redoes on Cmd+Shift+Z using the real uppercase key browsers report', () => {
+    // Per UI Events, KeyboardEvent.key reflects the character AFTER modifiers are
+    // applied, so Chrome/Firefox/Safari all report key: "Z" (uppercase) for
+    // Cmd+Shift+Z — not lowercase 'z' with shiftKey true, which is what the test
+    // above (and every fabricated event in this file until now) actually fires.
+    // Without .toLowerCase() in the handler this redo would be silently dead in
+    // every real browser while still passing a suite that only ever sends 'z'.
+    const { before } = launchWithEdit();
     const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
       .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
+    expect(edited).not.toBe(before);
+
+    fireEvent.keyDown(window, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(before);
+
+    fireEvent.keyDown(window, { key: 'Z', metaKey: true, shiftKey: true });
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('leaves Cmd+A and Cmd+C alone: not undo, and not swallowed', () => {
+    // Each half of `key !== 'z' && key !== 'y'` is pinned individually elsewhere in
+    // this file, but nothing proves the guard's EXCLUSIVITY — that a modified key
+    // which is neither z nor y is left alone. Without the whole line, Cmd+A/Cmd+C
+    // (and even a bare Cmd keypress) would dispatch UNDO and swallow the browser's
+    // own select-all/copy via preventDefault(). fireEvent.keyDown returns `true`
+    // exactly when preventDefault() was NOT called, so this checks both at once.
+    const { before } = launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+    expect(edited).not.toBe(before);
+
+    expect(fireEvent.keyDown(window, { key: 'a', metaKey: true })).toBe(true);
+    expect(cell().textContent).toBe(edited);
+
+    expect(fireEvent.keyDown(window, { key: 'c', metaKey: true })).toBe(true);
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('prevents the browser default on the shortcut, so it does not also fire', () => {
+    // fireEvent.keyDown resolves to `false` exactly when preventDefault() was called
+    // on the dispatched event. Without this the app's own undo would fire ALONGSIDE
+    // Firefox's page-level undo / Safari's Cmd+Y History.
+    launchWithEdit();
+    expect(fireEvent.keyDown(window, { key: 'z', metaKey: true })).toBe(false);
+  });
+
+  it('ignores Ctrl+Alt (AltGr), which types a real character on many European layouts', () => {
+    // Windows/Linux report AltGr as Ctrl+Alt together. Without excluding altKey,
+    // AltGr+Z / AltGr+Y on those layouts would undo/redo and swallow the typed
+    // character instead. `toBe(true)` here proves it was NOT swallowed, the same
+    // literal-return technique as the preventDefault test above.
+    const { before } = launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+    expect(edited).not.toBe(before);
+
+    expect(fireEvent.keyDown(window, { key: 'z', ctrlKey: true, altKey: true })).toBe(true);
+    expect(cell().textContent).toBe(edited);
+
+    expect(fireEvent.keyDown(window, { key: 'y', ctrlKey: true, altKey: true })).toBe(true);
+    expect(cell().textContent).toBe(edited);
+  });
+
+  it('ignores the shortcut while focus is in a text field', () => {
+    // Otherwise the app would steal undo from the field the player is typing in.
+    const { before } = launchWithEdit();
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
+    const edited = cell().textContent;
+    expect(edited).not.toBe(before);
 
     const input = document.createElement('input');
     document.body.appendChild(input);
@@ -691,10 +794,12 @@ describe('keyboard shortcuts', () => {
   });
 
   it('ignores a bare z with no modifier', () => {
-    launchWithEdit();
+    const { before } = launchWithEdit();
     const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
       .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
+    expect(edited).not.toBe(before);
+
     fireEvent.keyDown(window, { key: 'z' });
     expect(cell().textContent).toBe(edited);
   });
@@ -703,10 +808,11 @@ describe('keyboard shortcuts', () => {
     // The handler accepts 'y' as well as shift+z. Nothing else asserts it, so the
     // `key !== 'y'` half of the guard could be deleted and every other test here would
     // still pass — leaving Ctrl+Y silently dead for every Windows player.
-    const before = launchWithEdit();
+    const { before } = launchWithEdit();
     const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
       .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
+    expect(edited).not.toBe(before);
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
     expect(cell().textContent).toBe(before);
@@ -715,21 +821,30 @@ describe('keyboard shortcuts', () => {
     expect(cell().textContent).toBe(edited);
   });
 
-  it('ignores the shortcut while focus is in a select or a contenteditable', () => {
-    // The INPUT case above is the only guard any other test exercises, so the SELECT
-    // and isContentEditable halves could both be dropped with the suite still green.
-    // SELECT is not hypothetical here: BUILD's preset picker is one, and stealing
-    // Cmd+Z from an open picker takes the browser's own behaviour away from it.
-    launchWithEdit();
+  it('ignores the shortcut while focus is in a select, a textarea, or a contenteditable', () => {
+    // The INPUT case above is the only guard any other test exercises, so the SELECT,
+    // TEXTAREA and isContentEditable halves could all be dropped with the suite still
+    // green. SELECT is not hypothetical here: BUILD's preset picker is one, and
+    // stealing Cmd+Z from an open picker takes the browser's own behaviour away from
+    // it. No <textarea> exists anywhere in src/ui today, so TEXTAREA's impact is nil,
+    // but the guard clause should still be held rather than left dead.
+    const { before } = launchWithEdit();
     const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
       .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
+    expect(edited).not.toBe(before);
 
     const select = document.createElement('select');
     document.body.appendChild(select);
     fireEvent.keyDown(select, { key: 'z', metaKey: true });
     expect(cell().textContent).toBe(edited);
     select.remove();
+
+    const textarea = document.createElement('textarea');
+    document.body.appendChild(textarea);
+    fireEvent.keyDown(textarea, { key: 'z', metaKey: true });
+    expect(cell().textContent).toBe(edited);
+    textarea.remove();
 
     const editable = document.createElement('div');
     editable.contentEditable = 'true';
@@ -738,5 +853,34 @@ describe('keyboard shortcuts', () => {
     fireEvent.keyDown(editable, { key: 'z', metaKey: true });
     expect(cell().textContent).toBe(edited);
     editable.remove();
+  });
+
+  it('removes the keydown listener on unmount', () => {
+    // Coverage for the effect's cleanup, not a defect: `return () =>
+    // window.removeEventListener('keydown', onKey)` is already correct today (the
+    // review instrumented it: exactly one add, one matching remove). But replacing
+    // that cleanup with `() => {}` still leaves a fully green suite — every other
+    // test here unmounts via afterEach(cleanup) with nothing left in the DOM to
+    // observe a leaked listener against. Spying on add/removeEventListener directly
+    // is what actually catches it: after unmount, the SAME function reference handed
+    // to addEventListener must come back out of removeEventListener.
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    const { unmount } = render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+
+    const keydownAdds = addSpy.mock.calls.filter((call) => call[0] === 'keydown');
+    expect(keydownAdds.length).toBe(1);
+    const handler = keydownAdds[0][1];
+
+    unmount();
+
+    const keydownRemoves = removeSpy.mock.calls.filter((call) => call[0] === 'keydown');
+    expect(keydownRemoves.length).toBe(1);
+    expect(keydownRemoves[0][1]).toBe(handler);
+
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });

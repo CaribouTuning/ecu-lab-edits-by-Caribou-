@@ -135,6 +135,17 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     setAbs(draft);
     setDraft(null);
   };
+  // A modifier-shortcut key release must not reach commitDraft. EcuLab's global
+  // Cmd/Ctrl+Z handler blocks its *keydown* on this element (tagName === 'INPUT'),
+  // but the matching *keyup* still bubbles here — and without this guard it would
+  // commit whatever draft is pending, turning "press undo" into "commit an edit
+  // and burn an undo slot" (see tests/ui/undo-controls.test.jsx). An ordinary
+  // arrow-key release (no metaKey/ctrlKey) must still commit — that is Task 3's
+  // existing keyboard-usable slider, unaffected by this.
+  const onSliderKeyUp = (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    commitDraft();
+  };
   const smallStep = decimals ? 0.1 : 1;
   const bigStep = decimals ? 1 : 5;
   let sel = 'Cell';
@@ -169,7 +180,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         type="range" min={min} max={max} step={smallStep} value={shown}
         onChange={(e) => setDraft(Number(e.target.value))}
         onPointerUp={commitDraft}
-        onKeyUp={commitDraft}
+        onKeyUp={onSliderKeyUp}
         style={{ width: '100%', accentColor: T.acc }}
       />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>

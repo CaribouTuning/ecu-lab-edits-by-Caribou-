@@ -657,7 +657,10 @@ export function EcuLabApp() {
   useEffect(() => {
     /** @param {KeyboardEvent} e */
     const onKey = (e) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
+      // Ctrl+Alt is AltGr on many European keyboard layouts, where AltGr+Z / AltGr+Y
+      // types a real character. Excluding altKey keeps this handler from stealing
+      // that keystroke and swallowing it with preventDefault().
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
       const key = e.key.toLowerCase();
       if (key !== 'z' && key !== 'y') return;
       // Never steal undo from a field the player is typing in.
