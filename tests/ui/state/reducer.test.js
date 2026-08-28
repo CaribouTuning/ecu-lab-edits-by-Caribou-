@@ -918,6 +918,24 @@ describe('UNDO / REDO', () => {
     expect(undone.session.prevResult).toBeNull();
   });
 
+  it('preserves the entry label when moving it between past and future', () => {
+    // Task 2 uses history.future[0].label for the redo button's accessible name, so a
+    // relabel on the way through UNDO or REDO would silently mislabel it. The existing
+    // ordering tests above only assert stack LENGTHS, which a hardcoded label could
+    // still pass.
+    const after = reducer(
+      makeInitialState(),
+      { type: ACTIONS.SET_TABLE, table: 'timing', value: [[9]] },
+    );
+    expect(after.history.past[0].label).toBe('Spark edit');
+
+    const undone = reducer(after, { type: ACTIONS.UNDO });
+    expect(undone.history.future[0].label).toBe('Spark edit');
+
+    const redone = reducer(undone, { type: ACTIONS.REDO });
+    expect(redone.history.past[0].label).toBe('Spark edit');
+  });
+
   it('labels each table edit distinctly', () => {
     const timing = reducer(
       makeInitialState(),
@@ -975,6 +993,42 @@ describe('UNDO / REDO', () => {
     expect(r3.tune.ve).toEqual([[3]]);
     expect(r3.history.past).toHaveLength(3);
     expect(r3.history.future).toHaveLength(0);
+  });
+});
+
+describe('restore leaves deliberately-excluded cursor fields alone', () => {
+  // Both `build.presetPrompt` and `tune.selection` are cursor/UI-state fields,
+  // deliberately absent from BUILD_KEYS/TUNE_KEYS in history.js — see that file's own
+  // comments for why each one specifically is excluded. APPLY_PRESET itself SETS
+  // presetPrompt: null and selection: null as part of its own write (reducer.js), so
+  // this test does not expect undo to bring back their pre-APPLY_PRESET seeded
+  // values — they were never captured in the snapshot to begin with, so they must
+  // stay null through UNDO too. `boostSel`, which APPLY_PRESET never touches at all,
+  // is the control: it must survive both the preset load and the undo completely
+  // untouched.
+  it('keeps boostSel untouched and presetPrompt/selection excluded, through APPLY_PRESET and UNDO', () => {
+    const seeded = { ...makeInitialState() };
+    seeded.build = { ...seeded.build, boostSel: 7, presetPrompt: { id: 'seed-prompt' } };
+    seeded.tune = { ...seeded.tune, selection: { type: 'cell', row: 9, col: 9 } };
+
+    const applied = reducer(seeded, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    // Sanity: confirm APPLY_PRESET's own write really did null these two, and left
+    // boostSel alone, so a failure below can only mean UNDO got it wrong, not the setup.
+    expect(applied.build.presetPrompt).toBeNull();
+    expect(applied.tune.selection).toBeNull();
+    expect(applied.build.boostSel).toBe(7);
+
+    const undone = reducer(applied, { type: ACTIONS.UNDO });
+    // boostSel was never part of the snapshot at all, so it must ride through
+    // untouched — this is the field a `build: { ...before.build }` restore bug would
+    // silently drop to undefined.
+    expect(undone.build.boostSel).toBe(7);
+    // Deliberately excluded from the snapshot: undo must NOT resurrect the
+    // pre-APPLY_PRESET seeded values here, or it would re-open the
+    // overwrite-confirmation modal / move the grid highlight right after the player
+    // undid loading the preset.
+    expect(undone.build.presetPrompt).toBeNull();
+    expect(undone.tune.selection).toBeNull();
   });
 });
 
