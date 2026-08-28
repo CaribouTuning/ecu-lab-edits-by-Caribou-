@@ -1271,6 +1271,11 @@ Append to `tests/ui/undo-controls.test.jsx`:
 
 ```jsx
 describe('keyboard shortcuts', () => {
+  // Mid-array, NOT [0]: in TuningGrid's DOM order the first numeric-looking button is
+  // the static RPM=800 axis HEADER, whose text never changes. This is the same index
+  // the file's own pre-existing tests use, for the same reason.
+  const dataCell = (list) => list[Math.floor(list.length / 2)];
+
   function launchWithEdit() {
     render(<EcuLab />);
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
@@ -1278,16 +1283,21 @@ describe('keyboard shortcuts', () => {
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button')
       .filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
-    fireEvent.click(cells[0]);
+    const target = dataCell(cells);
+    // Read the value BEFORE the edit. Reading it after would compare the post-edit
+    // state against itself, and every `expect(edited).not.toBe(before)` downstream
+    // would be an assertion that cannot fail.
+    const before = target.textContent;
+    fireEvent.click(target);
     const dock = within(screen.getByTestId('selection-dock'));
     fireEvent.click(dock.getByRole('button', { name: '+1' }));
-    return cells[0].textContent;
+    return before;
   }
 
   it('undoes on Cmd+Z and redoes on Cmd+Shift+Z', () => {
     const before = launchWithEdit();
-    const cell = () => within(screen.getByTestId('tuning-grid'))
-      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
     expect(edited).not.toBe(before);
 
@@ -1301,8 +1311,8 @@ describe('keyboard shortcuts', () => {
   it('ignores the shortcut while focus is in a text field', () => {
     // Otherwise the app would steal undo from the field the player is typing in.
     launchWithEdit();
-    const cell = () => within(screen.getByTestId('tuning-grid'))
-      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
 
     const input = document.createElement('input');
@@ -1314,8 +1324,8 @@ describe('keyboard shortcuts', () => {
 
   it('ignores a bare z with no modifier', () => {
     launchWithEdit();
-    const cell = () => within(screen.getByTestId('tuning-grid'))
-      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
     fireEvent.keyDown(window, { key: 'z' });
     expect(cell().textContent).toBe(edited);
@@ -1326,8 +1336,8 @@ describe('keyboard shortcuts', () => {
     // `key !== 'y'` half of the guard could be deleted and every other test here would
     // still pass — leaving Ctrl+Y silently dead for every Windows player.
     const before = launchWithEdit();
-    const cell = () => within(screen.getByTestId('tuning-grid'))
-      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
 
     fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
@@ -1343,8 +1353,8 @@ describe('keyboard shortcuts', () => {
     // SELECT is not hypothetical here: BUILD's preset picker is one, and stealing
     // Cmd+Z from an open picker takes the browser's own behaviour away from it.
     launchWithEdit();
-    const cell = () => within(screen.getByTestId('tuning-grid'))
-      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent))[0];
+    const cell = () => dataCell(within(screen.getByTestId('tuning-grid'))
+      .getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent)));
     const edited = cell().textContent;
 
     const select = document.createElement('select');
