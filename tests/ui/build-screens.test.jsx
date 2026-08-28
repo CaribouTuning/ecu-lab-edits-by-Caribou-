@@ -23,7 +23,8 @@ import { EngineScreen } from '../../src/ui/screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from '../../src/ui/screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from '../../src/ui/screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from '../../src/ui/screens/build/InductionScreen.jsx';
-import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
+import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { StoreProvider, useTune } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
 
@@ -183,6 +184,120 @@ describe('ExhaustScreen', () => {
     expect(screen.getByText(MOD_INFO.headers.label).closest('button').getAttribute('data-installed')).toBe('true');
   });
 
+});
+
+describe('EngineScreen — the undo offer', () => {
+  /** The prop bundle this file already uses for EngineScreen, at :47. */
+  const props = {
+    engineDerived, activePreset: null, veAdvice, onResetToStock: noop,
+  };
+
+  it('offers nothing before anything destructive has happened', () => {
+    mount(<EngineScreen active onToggle={noop} {...props} />);
+    expect(screen.queryByRole('button', { name: /^Undo / })).toBeNull();
+  });
+
+  it('offers to undo a preset load, naming the preset', () => {
+    mount(<EngineScreen active onToggle={noop} {...props} />);
+    const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
+      .find((el) => el.querySelector('optgroup'));
+    const was = picker.value;
+    const target = [...picker.querySelectorAll('option')]
+      .map((o) => o.value)
+      .find((v) => v && v !== picker.value);
+    fireEvent.change(picker, { target: { value: target } });
+    expect(picker.value).toBe(target);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Undo Preset · / }));
+
+    // The offer going away is NOT sufficient evidence: a button that dispatches
+    // nothing and merely hides the Note passes that assertion too. Assert the preset
+    // load was actually reversed.
+    expect(picker.value).toBe(was);
+    // Undone: the offer goes with it, because the top of the stack is gone.
+    expect(screen.queryByRole('button', { name: /^Undo Preset · / })).toBeNull();
+  });
+
+  it('offers to undo a reset to stock, naming it', () => {
+    // The Note appears for a preset load OR a reset — both are the destructive acts
+    // this offer exists for. Testing only the preset case would let an implementation
+    // that matches on `Preset · ` alone pass while leaving the reset, which throws
+    // away EVERYTHING, with no offer at all.
+    //
+    // `onResetToStock` is a PROP, so the shared `props` object's `noop` would dispatch
+    // nothing and this test would pass without a reset ever happening. Wire a real one
+    // the way EcuLab.jsx does. `ve` is supplied by the caller, not the reducer — the
+    // current table is fine here, since what is under test is the history entry, not
+    // which numbers a reset computes.
+    function WithRealReset() {
+      const [tune, dispatch] = useTune();
+      return (
+        <EngineScreen
+          active onToggle={noop} {...props}
+          onResetToStock={() => dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: tune.ve })}
+        />
+      );
+    }
+    mount(<WithRealReset />);
+    const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
+      .find((el) => el.querySelector('optgroup'));
+    const target = [...picker.querySelectorAll('option')]
+      .map((o) => o.value)
+      .find((v) => v && v !== picker.value);
+    fireEvent.change(picker, { target: { value: target } });
+    expect(picker.value).toBe(target);
+
+    fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/i }));
+    // The reset cleared presetId, so the picker no longer names the preset.
+    expect(picker.value).not.toBe(target);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo Reset to stock' }));
+
+    // The reset is reversed, so the preset it wiped is selected again.
+    expect(picker.value).toBe(target);
+  });
+
+  it('withdraws the offer once a later edit sits on top of the preset load', () => {
+    // The offer reads the TOP of the stack — `past[past.length - 1]`. Every other test
+    // here creates at most ONE entry before looking, so `past[0]` would satisfy all of
+    // them while reversing the wrong thing. This is the discriminator: after a table
+    // edit lands on top, the top is a 'VE edit', the button would no longer undo the
+    // preset load, and offering it would be a lie about what the click does.
+    function WithTableEdit() {
+      const [tune, dispatch] = useTune();
+      return (
+        <>
+          <button onClick={() => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: tune.ve })}>
+            EDIT VE
+          </button>
+          <EngineScreen active onToggle={noop} {...props} />
+        </>
+      );
+    }
+    mount(<WithTableEdit />);
+    const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
+      .find((el) => el.querySelector('optgroup'));
+    const target = [...picker.querySelectorAll('option')]
+      .map((o) => o.value)
+      .find((v) => v && v !== picker.value);
+    fireEvent.change(picker, { target: { value: target } });
+    // The offer is up, so its disappearance below cannot be a false negative.
+    expect(screen.getByRole('button', { name: /^Undo Preset · / })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'EDIT VE' }));
+
+    expect(screen.queryByRole('button', { name: /^Undo / })).toBeNull();
+  });
+
+  it('does not offer undo for a plain hardware change', () => {
+    // Hardware writes are not undoable, so an offer here would be a lie about what the
+    // button does. "Block Material" is a Seg on this screen (`EngineScreen.jsx:242`)
+    // that dispatches SET_ENGINE_CONFIG_PATCH — a hardware write, not a calibration one.
+    mount(<EngineScreen active onToggle={noop} {...props} />);
+    const materials = within(screen.getByRole('group', { name: 'Block Material' }));
+    fireEvent.click(materials.getByRole('button', { name: 'Cast Iron' }));
+    expect(screen.queryByRole('button', { name: /^Undo / })).toBeNull();
+  });
 });
 
 describe('the dissolved Bolt-On Parts section', () => {
