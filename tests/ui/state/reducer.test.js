@@ -1274,6 +1274,42 @@ describe('new work abandons the redo branch', () => {
       .history.future).toHaveLength(1);
     expect(reducer(undoneLoad(), { type: ACTIONS.REPAIR_ENGINE })
       .history.future).toHaveLength(1);
+    // BANK_PULL is the excluded action a player fires most often between an undo and a
+    // redo — a dyno pull is the obvious thing to do to check whether the undo helped.
+    // It writes only session bookkeeping, so a redo cannot overwrite any of it.
+    expect(reducer(undoneLoad(), {
+      type: ACTIONS.BANK_PULL,
+      result: { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } },
+      pullScore: 50,
+    }).history.future).toHaveLength(1);
+  });
+
+  it('abandons the redo branch WITHOUT discarding the undo stack', () => {
+    // The clear rebuilds `history`, so it has to carry `past` across explicitly. Every
+    // other test here starts from a stack whose `past` is already empty, which is why
+    // `past: []` in that branch passed the whole suite: fitting a turbo after an undo
+    // would have thrown away every undo step the player still had.
+    let s = reducer(makeInitialState(), { type: ACTIONS.SET_TABLE, table: 've', value: [[1]] });
+    s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: [[2]] });
+    s = reducer(s, { type: ACTIONS.UNDO });
+    expect(s.history.past).toHaveLength(1);
+    expect(s.history.future).toHaveLength(1);
+
+    const built = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+
+    expect(built.history.future).toHaveLength(0);
+    // The surviving entry is still the FIRST edit's, so undo still walks back correctly.
+    expect(built.history.past).toHaveLength(1);
+    expect(built.history.past[0].label).toBe('VE edit');
+  });
+
+  it('a tune write to a SNAPSHOTTED field clears it, unlike a cursor write', () => {
+    // The exclusion above is structural, not a fact about today's callers: SET_TUNE_FIELD
+    // is the one action whose write surface depends on its payload. `selection` is a
+    // cursor and must not clear; `ve` is in the snapshot and must, or a redo would
+    // overwrite it.
+    const wrote = reducer(undoneLoad(), { type: ACTIONS.SET_TUNE_FIELD, field: 've', value: [[3]] });
+    expect(wrote.history.future).toHaveLength(0);
   });
 
   it('leaves the history object itself alone when there is nothing to abandon', () => {

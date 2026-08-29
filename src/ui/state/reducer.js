@@ -28,7 +28,7 @@
 import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, presetById } from '../../sim/index.js';
 
 import {
-  HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot,
+  HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -562,6 +562,26 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  * new work?" — they reach `future: []` through the recording branch below rather than
  * through this Set, and listing them keeps the two from disagreeing on paper.
  */
+/**
+ * Does this action write a field some snapshot carries, and therefore abandon a live
+ * redo branch?
+ *
+ * `SET_TUNE_FIELD` needs the extra question because it is the one action whose write
+ * surface depends on its payload rather than its type. Its five production callers all
+ * pass `field: 'selection'` — a cursor, outside the snapshot, and written by `changeTab`
+ * on every tab switch, so treating it as new work would mean walking from TUNE to BUILD
+ * killed the redo the player crossed tabs to reach. But nothing in the type stops a
+ * caller passing `'ve'`, and that write WOULD be overwritten by a redo. Asking the
+ * snapshot's own key list makes the exclusion structural instead of an observation about
+ * today's callers.
+ * @param {any} action
+ * @returns {boolean}
+ */
+function clearsRedo(action) {
+  if (action.type === ACTIONS.SET_TUNE_FIELD) return snapshotsTuneField(action.field);
+  return CLEARS_REDO.has(action.type);
+}
+
 const CLEARS_REDO = new Set([
   ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,
   ACTIONS.SET_ENGINE_CONFIG_PATCH, ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET,
@@ -669,7 +689,7 @@ export function reducer(state, action) {
   // Not recordable, but still new work: a hardware write is not undoable (the control
   // shows its own value) yet it changes fields a redo would overwrite, so it abandons
   // the redo branch just the same. See CLEARS_REDO for what counts and what must not.
-  if (!CLEARS_REDO.has(action.type) || state.history.future.length === 0) return next;
+  if (!clearsRedo(action) || state.history.future.length === 0) return next;
   return {
     ...next,
     history: { past: state.history.past, future: [] },

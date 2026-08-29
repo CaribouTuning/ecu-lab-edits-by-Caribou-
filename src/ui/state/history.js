@@ -72,6 +72,22 @@ const BUILD_KEYS = [
 const TUNE_KEYS = ['ve', 'timing', 'afr', 'tablesDirty'];
 
 /**
+ * Does a write to `tune.<field>` touch something a snapshot carries?
+ *
+ * `reducer.js` asks this so `SET_TUNE_FIELD`'s exclusion from the redo-clearing set is
+ * STRUCTURAL rather than a fact about who happens to call it. Every production caller
+ * passes `field: 'selection'` today — a cursor, outside the snapshot — but nothing stops
+ * a future one passing `'ve'`, and that write would then survive alongside a live redo
+ * branch that overwrites exactly it. Asking the key list directly closes that by
+ * construction, and keeps the list itself private to this module.
+ * @param {string} field
+ * @returns {boolean}
+ */
+export function snapshotsTuneField(field) {
+  return TUNE_KEYS.includes(field);
+}
+
+/**
  * Captures the undoable projection of a state tree.
  * @param {StoreState} state
  * @returns {Snapshot}
