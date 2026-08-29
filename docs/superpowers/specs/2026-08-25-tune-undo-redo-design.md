@@ -103,9 +103,27 @@ touch, rather than a per-action shape:
   `exhaustDiaIdx`, `mafScalar`, `presetId`
 - from `tune`: `ve`, `timing`, `afr`, `tablesDirty`
 
-One shape means one `snapshot()` and one `restore()`. A per-action shape would mean three
-restore paths, and a fourth undoable action added later could produce a half-restored
-state that no test thought to cover.
+One shape means one `snapshot()`. A per-action *capture* shape would mean a fourth
+undoable action added later could snapshot too little and produce a half-restored state
+that no test thought to cover.
+
+**Correction, made during the final review.** This section originally extended that
+argument to `restore()` as well — one shape, one restore path. That half was wrong, and
+the review proved it: `SET_TABLE` writes only `build.presetId` on the build side, so
+restoring all thirteen build fields when undoing a table edit reverts hardware the player
+installed *after* that edit. Turn the turbo on, then press undo on a VE edit, and the
+turbo silently comes off under the label "Undo VE edit".
+
+Capture stays uniform; **restore is now scoped to what the undone action actually wrote**.
+Undoing a `SET_TABLE` restores `presetId` and the tune fields and leaves the other twelve
+build fields alone. `APPLY_PRESET` and `RESET_TO_STOCK` still restore everything, because
+undoing a preset load genuinely does mean returning to the state before it. The entry
+carries the scope so `restore` does not have to import the action types.
+
+The same review found the matching gap on the other side: only undoable actions cleared
+`future`, so a redo could replay a snapshot over hardware built since the undo and destroy
+it. Any build- or tune-writing action now clears the redo stack. `LIVE_STEP` is excluded —
+at 20 Hz it would empty `future` before a player could reach the button.
 
 `label` names what would be undone — `"VE edit"`, `"Preset · N54 Twin Turbo"`,
 `"Reset to stock"`. It is load-bearing twice over: it gives the buttons a real
