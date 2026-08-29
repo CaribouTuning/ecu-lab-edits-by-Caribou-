@@ -27,7 +27,9 @@
 
 import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, presetById } from '../../sim/index.js';
 
-import { HISTORY_LIMIT, restore, snapshot } from './history.js';
+import {
+  HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot,
+} from './history.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -506,13 +508,65 @@ function baseReducer(state, action) {
 }
 
 /**
- * The three actions that destroy calibration the player cannot otherwise get back.
+ * The three actions that destroy calibration the player cannot otherwise get back,
+ * each mapped to HOW MUCH of its snapshot an undo puts back (history.js).
  *
  * Hardware writes are deliberately absent: every hardware control already displays its
  * own current value, so it is self-reversing, and undo must not become a time machine
  * over banked career progress.
+ *
+ * The scope is per-action because the snapshot is not: `snapshot()` captures the union
+ * of every field ANY of these three can write, so replaying an entry in full would put
+ * back fields the recorded action never touched. `SET_TABLE`'s entire build-side write
+ * is `presetId`, so RESTORE_CALIBRATION is exactly its write surface; the other two
+ * replace the whole build, so RESTORE_ALL is exactly theirs.
+ *
+ * A map rather than a Set plus a lookup elsewhere: `UNDOABLE` is derived from its keys
+ * below, so a fourth undoable action cannot be added to the membership list without
+ * also declaring what its undo restores.
  */
-const UNDOABLE = new Set([ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET, ACTIONS.RESET_TO_STOCK]);
+const UNDO_SCOPE = Object.freeze({
+  [ACTIONS.SET_TABLE]: RESTORE_CALIBRATION,
+  [ACTIONS.APPLY_PRESET]: RESTORE_ALL,
+  [ACTIONS.RESET_TO_STOCK]: RESTORE_ALL,
+});
+
+const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
+
+/**
+ * Every action that counts as NEW WORK, and therefore abandons the redo branch.
+ *
+ * The membership rule is: does this case write a field the snapshot carries — the
+ * hardware and calibration in BUILD_KEYS/TUNE_KEYS? Those are precisely the fields a
+ * later REDO would overwrite, so leaving `future` alive across one of them lets redo
+ * throw away work the player did after the undo, labelled only with what the redone
+ * action was. That was reachable: APPLY_PRESET -> UNDO -> fit a turbo, build a boost
+ * curve, pick a fuel -> REDO, and the octane goes back to the preset's under the
+ * label "Redo Preset · Nissan VQ35HR".
+ *
+ * Excluded, and why each one has to be:
+ *  - LIVE_STEP / LIVE_PATCH write `session.live`. LIVE_STEP alone fires at 20 Hz, so
+ *    including it would destroy the redo branch within one tick of the engine
+ *    running — undo would be unusable on any tab while the engine idles.
+ *  - SET_SESSION_FIELD, BANK_PULL, REPAIR_ENGINE write `session` only, which no
+ *    snapshot carries and no restore touches.
+ *  - SET_BOOST_SEL, SET_PRESET_PROMPT, SET_TUNE_FIELD are cursors and UI state:
+ *    `boostSel`, `presetPrompt` and `selection` are all deliberately outside the
+ *    snapshot (see history.js). SET_TUNE_FIELD is the generic tune setter, but its
+ *    only callers pass `selection` — and one of them is the tab switch, so counting
+ *    it as new work would mean walking from TUNE to BUILD silently killed the redo
+ *    a player crossed tabs to reach.
+ *  - UNDO/REDO manage `future` themselves.
+ *
+ * The three UNDOABLE actions are listed here too, for one list that answers "is this
+ * new work?" — they reach `future: []` through the recording branch below rather than
+ * through this Set, and listing them keeps the two from disagreeing on paper.
+ */
+const CLEARS_REDO = new Set([
+  ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,
+  ACTIONS.SET_ENGINE_CONFIG_PATCH, ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET,
+  ACTIONS.RESET_TO_STOCK,
+]);
 
 /**
  * Names what an undoable action did, for the undo button's `aria-label` and BUILD's
@@ -523,8 +577,17 @@ const UNDOABLE = new Set([ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET, ACTIONS.RESET
  */
 function labelFor(action) {
   switch (action.type) {
-    case ACTIONS.SET_TABLE:
-      return { ve: 'VE edit', timing: 'Spark edit', afr: 'Fuel edit' }[action.table];
+    case ACTIONS.SET_TABLE: {
+      const label = { ve: 'VE edit', timing: 'Spark edit', afr: 'Fuel edit' }[action.table];
+      // Same reasoning as the `default` branch below, and it needs stating twice
+      // because the failure this one prevents is worse. An unrecognised table used to
+      // return `undefined`, which was pushed onto the stack as the entry's label; the
+      // crash then happened in EngineScreen.jsx, on BUILD, at `top.label.startsWith(...)`
+      // — a TypeError on a different screen, at a stack naming neither the dispatch nor
+      // the table. Throwing here names both.
+      if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
+      return label;
+    }
     case ACTIONS.APPLY_PRESET: {
       const preset = presetById(action.preset.presetId);
       return `Preset · ${preset ? preset.name : 'factory calibration'}`;
@@ -562,10 +625,12 @@ export function reducer(state, action) {
     if (past.length === 0) return state;
     const entry = past[past.length - 1];
     return {
-      ...restore(state, entry.before),
+      ...restore(state, entry.before, entry.scope),
       history: {
         past: past.slice(0, -1),
-        future: [{ label: entry.label, before: snapshot(state) }, ...future],
+        // The scope rides along with the entry in both directions, so a redo puts
+        // back exactly as much as the undo took away.
+        future: [{ label: entry.label, before: snapshot(state), scope: entry.scope }, ...future],
       },
     };
   }
@@ -575,24 +640,38 @@ export function reducer(state, action) {
     if (future.length === 0) return state;
     const entry = future[0];
     return {
-      ...restore(state, entry.before),
+      ...restore(state, entry.before, entry.scope),
       history: {
-        past: [...past, { label: entry.label, before: snapshot(state) }].slice(-HISTORY_LIMIT),
+        past: [...past, { label: entry.label, before: snapshot(state), scope: entry.scope }]
+          .slice(-HISTORY_LIMIT),
         future: future.slice(1),
       },
     };
   }
 
   const next = baseReducer(state, action);
-  if (!UNDOABLE.has(action.type)) return next;
+  if (UNDOABLE.has(action.type)) {
+    return {
+      ...next,
+      history: {
+        past: [...state.history.past, {
+          label: labelFor(action),
+          before: snapshot(state),
+          scope: UNDO_SCOPE[action.type],
+        }].slice(-HISTORY_LIMIT),
+        // A new edit abandons the redo branch: keeping it would let redo jump the
+        // player onto a timeline they had already left.
+        future: [],
+      },
+    };
+  }
+
+  // Not recordable, but still new work: a hardware write is not undoable (the control
+  // shows its own value) yet it changes fields a redo would overwrite, so it abandons
+  // the redo branch just the same. See CLEARS_REDO for what counts and what must not.
+  if (!CLEARS_REDO.has(action.type) || state.history.future.length === 0) return next;
   return {
     ...next,
-    history: {
-      past: [...state.history.past, { label: labelFor(action), before: snapshot(state) }]
-        .slice(-HISTORY_LIMIT),
-      // A new edit abandons the redo branch: keeping it would let redo jump the player
-      // onto a timeline they had already left.
-      future: [],
-    },
+    history: { past: state.history.past, future: [] },
   };
 }

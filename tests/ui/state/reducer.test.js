@@ -15,7 +15,9 @@ import {
   OCTANE_OPTS,
 } from '../../../src/sim/index.js';
 import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
-import { snapshot } from '../../../src/ui/state/history.js';
+import {
+  RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot,
+} from '../../../src/ui/state/history.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
 
@@ -727,6 +729,30 @@ describe('LIVE_STEP and LIVE_PATCH', () => {
     expect(after.session.live.coolantC).toBe(before.session.live.coolantC);
   });
 
+  it('LIVE_STEP does not abandon the redo branch', () => {
+    // B2's one hard exclusion. This action arrives 20 times a second for as long as
+    // the app is open, so counting an engine tick as new work would destroy any redo
+    // branch within 50 ms of the player creating one — undo/redo would look broken on
+    // every tab while the engine idles. Driven with the engine RUNNING, so the
+    // early-return path is not what makes this pass.
+    const loaded = reducer(running(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const undone = reducer(loaded, { type: ACTIONS.UNDO });
+    expect(undone.history.future).toHaveLength(1);
+
+    let s = undone;
+    for (let i = 0; i < 20; i += 1) s = reducer(s, step);
+    expect(s.session.live.rpm).not.toBe(undone.session.live.rpm); // it really did integrate
+    expect(s.history.future).toHaveLength(1);
+  });
+
+  it('LIVE_PATCH does not abandon the redo branch either', () => {
+    const loaded = reducer(running(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const undone = reducer(loaded, { type: ACTIONS.UNDO });
+    const stopped = reducer(undone, { type: ACTIONS.LIVE_PATCH, patch: { running: false } });
+    expect(stopped.session.live.running).toBe(false);
+    expect(stopped.history.future).toHaveLength(1);
+  });
+
   it('neither action disowns a loaded preset', () => {
     // Running the engine is not a build edit.
     const before = running();
@@ -936,6 +962,19 @@ describe('UNDO / REDO', () => {
     expect(redone.history.past[0].label).toBe('Spark edit');
   });
 
+  it('refuses to record a table it has no label for, AT the dispatch', () => {
+    // F5. The lookup used to hand back `undefined` for an unrecognised table and the
+    // entry was pushed with `label: undefined`; the failure then surfaced as a
+    // TypeError inside EngineScreen's `top.label.startsWith(...)` — on BUILD, a
+    // different screen entirely, at a stack naming neither the dispatch nor the table.
+    // Unreachable from the UI today, exactly like the `default` branch beside it, and
+    // held for the same reason that branch is documented at length.
+    expect(() => reducer(
+      makeInitialState(),
+      /** @type {*} */ ({ type: ACTIONS.SET_TABLE, table: 'boost', value: [[1]] }),
+    )).toThrow(/no label defined for table "boost"/);
+  });
+
   it('labels each table edit distinctly', () => {
     const timing = reducer(
       makeInitialState(),
@@ -993,6 +1032,257 @@ describe('UNDO / REDO', () => {
     expect(r3.tune.ve).toEqual([[3]]);
     expect(r3.history.past).toHaveLength(3);
     expect(r3.history.future).toHaveLength(0);
+  });
+});
+
+describe('undo scope — an entry restores only what its action wrote', () => {
+  /**
+   * A build with every hardware field moved off its default, so a restore that
+   * overreaches has something visible to overwrite. Literals throughout; none of these
+   * is the makeInitialState() default and none is what N54_PRESET writes.
+   * @param {*} state
+   * @returns {*}
+   */
+  function withHandBuiltHardware(state) {
+    const next = { ...state };
+    next.build = {
+      ...next.build,
+      turboOn: true, octaneIdx: 2, exhaustDiaIdx: 5, injIdx: 4, mafScalar: 0.88,
+    };
+    return next;
+  }
+
+  it('undoing a table edit leaves hardware fitted AFTER the edit alone', () => {
+    // B1. SET_TABLE's entire build-side write is `presetId`, but the snapshot carries
+    // all thirteen build fields — so a restore that replayed the whole snapshot took
+    // a turbo fitted after the edit back off, under the label "Undo VE edit".
+    const start = makeInitialState();
+    const edit = reducer(start, { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] });
+    const built = withHandBuiltHardware(edit);
+
+    const undone = reducer(built, { type: ACTIONS.UNDO });
+
+    // The calibration side IS reversed: the table goes back to the exact array the
+    // snapshot captured, and the unsaved-work flag with it.
+    expect(undone.tune.ve).toBe(start.tune.ve);
+    expect(undone.tune.tablesDirty).toBe(false);
+    // ...and every hardware field built afterwards survives, as literals.
+    expect(undone.build.turboOn).toBe(true);
+    expect(undone.build.octaneIdx).toBe(2);
+    expect(undone.build.exhaustDiaIdx).toBe(5);
+    expect(undone.build.injIdx).toBe(4);
+    expect(undone.build.mafScalar).toBe(0.88);
+  });
+
+  it('undoing a table edit still puts the preset label back, the one build field it wrote', () => {
+    // The other side of the same scope: narrowing the restore must not narrow it to
+    // nothing. SET_TABLE clears `presetId` in the pass that writes the table, so undo
+    // has to hand it back or the header goes on disowning a preset the player never
+    // left — while the twelve fields around it stay untouched.
+    const loaded = { ...makeInitialState() };
+    loaded.build = { ...loaded.build, presetId: 'n54', turboOn: true, octaneIdx: 2 };
+    const edit = reducer(loaded, { type: ACTIONS.SET_TABLE, table: 'timing', value: [[9]] });
+    expect(edit.build.presetId).toBeNull();
+
+    const undone = reducer(edit, { type: ACTIONS.UNDO });
+
+    expect(undone.build.presetId).toBe('n54');
+    expect(undone.build.turboOn).toBe(true);
+    expect(undone.build.octaneIdx).toBe(2);
+  });
+
+  it('undoing a PRESET LOAD reverts the hardware too — the scopes are not the same', () => {
+    // The exclusivity between the two scopes, driven through the reducer rather than
+    // read off the entry. APPLY_PRESET replaces the whole build, so "return to the
+    // state before it" has to include hardware changed since; the test above says the
+    // opposite for SET_TABLE, and only both together pin the distinction.
+    const start = makeInitialState();
+    const loaded = reducer(start, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const built = withHandBuiltHardware(loaded);
+    expect(built.build.octaneIdx).toBe(2);
+
+    const undone = reducer(built, { type: ACTIONS.UNDO });
+
+    // Back to the pre-preset defaults, not to the hand-built values above.
+    expect(undone.build.turboOn).toBe(false);
+    expect(undone.build.octaneIdx).toBe(0);
+    expect(undone.build.exhaustDiaIdx).toBe(start.build.exhaustDiaIdx);
+    expect(undone.build.injIdx).toBe(0);
+    expect(undone.build.mafScalar).toBe(1.0);
+    expect(undone.build.engineConfig).toBe(start.build.engineConfig);
+  });
+
+  it('carries the scope on the entry, in both directions', () => {
+    // The scope lives on the entry rather than being re-derived from the action,
+    // because history.js may not import ACTIONS. If UNDO or REDO dropped it while
+    // moving the entry between the stacks, `restore` would have nothing to go on.
+    const edit = reducer(makeInitialState(), { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] });
+    expect(edit.history.past[0].scope).toBe('calibration');
+
+    const undone = reducer(edit, { type: ACTIONS.UNDO });
+    expect(undone.history.future[0].scope).toBe('calibration');
+
+    const redone = reducer(undone, { type: ACTIONS.REDO });
+    expect(redone.history.past[0].scope).toBe('calibration');
+  });
+
+  it('records the wider scope for the two actions that replace the whole build', () => {
+    const loaded = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(loaded.history.past[0].scope).toBe('all');
+
+    const reset = reducer(makeInitialState(), { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(reset.history.past[0].scope).toBe('all');
+  });
+});
+
+describe('restore scopes, on their own', () => {
+  // The reducer tests above pin the scopes through real sequences. These pin `restore`
+  // itself, which is where the exclusivity actually lives — and where a REDO's scope
+  // is observable at all: between an undo and its redo, nothing may write a snapshotted
+  // build field without abandoning the redo branch (see below), so no reducer sequence
+  // can tell the two scopes apart on the redo side.
+
+  /** A snapshot whose every value is distinguishable from the state it goes back into. */
+  const before = {
+    build: {
+      engineConfig: { configuration: 'V8' }, mods: { intake: true }, turboOn: true,
+      boostCurve: [9], turbineIdx: 7, turbineCount: 2, compressorIdx: 7, injIdx: 7,
+      ecuInjectorCc: 777, octaneIdx: 7, exhaustDiaIdx: 7, mafScalar: 0.77,
+      presetId: 'snapshotted-preset',
+    },
+    tune: { ve: [[55]], timing: [[33]], afr: [[7]], tablesDirty: true },
+  };
+
+  /** The live state the snapshot is restored into — no field shared with `before`. */
+  const live = () => ({
+    build: {
+      engineConfig: { configuration: 'I4' }, mods: { intake: false }, turboOn: false,
+      boostCurve: [1], turbineIdx: 1, turbineCount: 1, compressorIdx: 1, injIdx: 1,
+      ecuInjectorCc: 111, octaneIdx: 1, exhaustDiaIdx: 1, mafScalar: 1.0,
+      presetId: 'live-preset', boostSel: 4, presetPrompt: null,
+    },
+    tune: { ve: [[1]], timing: [[1]], afr: [[1]], tablesDirty: false, selection: 'live-selection' },
+    session: 'live-session',
+  });
+
+  it('the wide scope puts every snapshotted build field back', () => {
+    const out = /** @type {*} */ (restore(/** @type {*} */ (live()), /** @type {*} */ (before), RESTORE_ALL));
+    expect(out.build.turboOn).toBe(true);
+    expect(out.build.turbineIdx).toBe(7);
+    expect(out.build.ecuInjectorCc).toBe(777);
+    expect(out.build.mafScalar).toBe(0.77);
+    expect(out.build.presetId).toBe('snapshotted-preset');
+  });
+
+  it('the narrow scope puts back presetId and NOTHING else on the build side', () => {
+    const out = /** @type {*} */ (restore(/** @type {*} */ (live()), /** @type {*} */ (before), RESTORE_CALIBRATION));
+    expect(out.build.presetId).toBe('snapshotted-preset');
+    // The other twelve stay as the live state had them — literals, not `not.toBe`,
+    // which would pass for any wrong value including a third one.
+    expect(out.build.turboOn).toBe(false);
+    expect(out.build.turbineIdx).toBe(1);
+    expect(out.build.turbineCount).toBe(1);
+    expect(out.build.compressorIdx).toBe(1);
+    expect(out.build.injIdx).toBe(1);
+    expect(out.build.ecuInjectorCc).toBe(111);
+    expect(out.build.octaneIdx).toBe(1);
+    expect(out.build.exhaustDiaIdx).toBe(1);
+    expect(out.build.mafScalar).toBe(1.0);
+    expect(out.build.boostCurve).toEqual([1]);
+    expect(out.build.engineConfig).toEqual({ configuration: 'I4' });
+    expect(out.build.mods).toEqual({ intake: false });
+  });
+
+  it('both scopes put the whole tune projection back, and leave the cursors alone', () => {
+    for (const scope of [RESTORE_ALL, RESTORE_CALIBRATION]) {
+      const out = /** @type {*} */ (
+        restore(/** @type {*} */ (live()), /** @type {*} */ (before), /** @type {*} */ (scope))
+      );
+      expect(out.tune.ve).toEqual([[55]]);
+      expect(out.tune.timing).toEqual([[33]]);
+      expect(out.tune.afr).toEqual([[7]]);
+      expect(out.tune.tablesDirty).toBe(true);
+      // Outside the snapshot, so untouched under either scope.
+      expect(out.tune.selection).toBe('live-selection');
+      expect(out.build.boostSel).toBe(4);
+      expect(out.session).toBe('live-session');
+    }
+  });
+
+  it('throws on a scope it does not implement, rather than restoring some arbitrary subset', () => {
+    // The same choice `labelFor`'s default branch makes: an entry recorded with no
+    // scope would otherwise put back a half-state and look like a bug elsewhere.
+    expect(() => restore(/** @type {*} */ (live()), /** @type {*} */ (before), /** @type {*} */ (undefined)))
+      .toThrow(/unknown scope/);
+    expect(() => restore(/** @type {*} */ (live()), /** @type {*} */ (before), /** @type {*} */ ('tables')))
+      .toThrow(/unknown scope/);
+  });
+});
+
+describe('new work abandons the redo branch', () => {
+  /** A state with a preset load undone, so `future` holds exactly one entry. */
+  function undoneLoad() {
+    const loaded = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const undone = reducer(loaded, { type: ACTIONS.UNDO });
+    expect(undone.history.future).toHaveLength(1);
+    return undone;
+  }
+
+  it('a hardware write clears future, even though it records no undo entry', () => {
+    // B2. Only UNDOABLE actions used to clear `future`, so hardware built after an
+    // undo sat alongside a live redo branch that would overwrite exactly those
+    // fields — REDO then replaced a hand-picked octane with the preset's, under a
+    // label naming only the preset.
+    const built = reducer(undoneLoad(), { type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: 2 });
+    expect(built.history.future).toHaveLength(0);
+    // ...and it is still not undoable: clearing the branch is not the same as
+    // recording one.
+    expect(built.history.past).toHaveLength(0);
+  });
+
+  it('every other write to a snapshotted field clears it too', () => {
+    // SET_BUILD_FIELD above is one of four. Each is checked from its own fresh
+    // `undoneLoad()` so no one of them can pass on another's account.
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_TURBINE, value: 2 })
+      .history.future).toHaveLength(0);
+    expect(reducer(undoneLoad(), { type: ACTIONS.CLEAR_PRESET_ID })
+      .history.future).toHaveLength(0);
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { bore: 90 } })
+      .history.future).toHaveLength(0);
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_TABLE, table: 've', value: [[7]] })
+      .history.future).toHaveLength(0);
+  });
+
+  it('moving the grid selection does NOT clear it', () => {
+    // `selection` is a cursor, outside the snapshot — and `changeTab` writes it on
+    // every tab switch, so counting it as new work would mean walking from TUNE to
+    // BUILD silently killed the redo the player crossed tabs to reach.
+    const moved = reducer(undoneLoad(), {
+      type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 1, col: 1 },
+    });
+    expect(moved.history.future).toHaveLength(1);
+  });
+
+  it('session-only and cursor writes do NOT clear it', () => {
+    // None of these touches a field any snapshot carries, so a redo cannot overwrite
+    // anything they did.
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_BOOST_SEL, value: 6 })
+      .history.future).toHaveLength(1);
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_PRESET_PROMPT, value: { id: 'x' } })
+      .history.future).toHaveLength(1);
+    expect(reducer(undoneLoad(), { type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: 3 })
+      .history.future).toHaveLength(1);
+    expect(reducer(undoneLoad(), { type: ACTIONS.REPAIR_ENGINE })
+      .history.future).toHaveLength(1);
+  });
+
+  it('leaves the history object itself alone when there is nothing to abandon', () => {
+    // The clear allocates a new history only when `future` is non-empty, so the
+    // ordinary case — a hardware write with no redo branch live — keeps the same
+    // object and React's bail-out machinery downstream sees no change.
+    const start = makeInitialState();
+    const built = reducer(start, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+    expect(built.history).toBe(start.history);
   });
 });
 

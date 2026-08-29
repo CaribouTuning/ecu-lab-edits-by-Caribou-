@@ -91,14 +91,22 @@ import {
  * The undo stack. `past` is oldest-first, so the next thing UNDO reverses is the LAST
  * element; `future` is newest-first, so REDO takes element 0.
  *
- * Each entry holds the state BEFORE its action ran, and a `label` naming what would be
- * undone. The label is load-bearing twice: it gives the undo buttons a real
- * `aria-label` instead of a bare glyph, and it is how BUILD decides whether the top of
- * the stack is a preset load worth offering to reverse.
+ * Each entry holds the state BEFORE its action ran, a `label` naming what would be
+ * undone, and the `scope` saying how much of that snapshot goes back. The label is
+ * load-bearing twice: it gives the undo buttons a real `aria-label` instead of a bare
+ * glyph, and it is how BUILD decides whether the top of the stack is a preset load
+ * worth offering to reverse. The scope is what keeps a uniform snapshot from being
+ * replayed over fields the recorded action never wrote — see `restore` in history.js.
+ *
+ * @typedef {{
+ *   label: string,
+ *   before: import('./history.js').Snapshot,
+ *   scope: import('./history.js').RestoreScope,
+ * }} HistoryEntry
  *
  * @typedef {object} HistoryState
- * @property {{label: string, before: import('./history.js').Snapshot}[]} past
- * @property {{label: string, before: import('./history.js').Snapshot}[]} future
+ * @property {HistoryEntry[]} past
+ * @property {HistoryEntry[]} future
  */
 
 /**

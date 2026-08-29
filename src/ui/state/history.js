@@ -5,11 +5,25 @@
  * `ACTIONS` back from there would be a cycle — which is also why `labelFor()`
  * lives in the reducer rather than here.
  *
- * The snapshot is UNIFORM: it captures the union of every field any undoable
- * action can overwrite, not the subset a particular action happens to touch. One
- * shape means one restore path. A per-action shape would mean three, and a fourth
- * undoable action added later could produce a half-restored state that no test
- * thought to cover.
+ * CAPTURE is UNIFORM: `snapshot` records the union of every field any undoable
+ * action can overwrite, not the subset a particular action happens to touch. That
+ * half of the original design is unchanged and stays — one shape means a snapshot
+ * cannot be half-taken, and a fourth undoable action added later cannot forget a
+ * field.
+ *
+ * RESTORE is NOT uniform, and the original argument for making it so was wrong. It
+ * read "one shape means one restore path", but a single restore path puts back all
+ * thirteen build fields regardless of what the undone action actually wrote — so
+ * `SET_TABLE ve` -> `SET_BUILD_FIELD turboOn = true` -> UNDO silently took the turbo
+ * back off, under a label reading "Undo VE edit". The snapshot was never wrong; the
+ * assumption that every entry should be played back in full was. So an entry now
+ * carries a SCOPE alongside its snapshot, and `restore` puts back only as much as
+ * that scope names — see {@link RESTORE_ALL} and {@link RESTORE_CALIBRATION}.
+ *
+ * The scope is a plain string on the entry rather than something derived from the
+ * action type here, because deriving it would mean importing `ACTIONS` — the cycle
+ * this file's header opens by ruling out. `reducer.js` names the scope when it
+ * records the entry; this file only knows the two names and what each puts back.
  *
  * The union's rule for membership is: HARDWARE AND CALIBRATION, NEVER UI CURSORS.
  * Two fields an undoable action does write are deliberately excluded even though
@@ -73,16 +87,53 @@ export function snapshot(state) {
 }
 
 /**
- * Puts a snapshot back, leaving every field it does not carry alone — `session`
- * entirely, and `tune.selection`.
+ * Puts back EVERY snapshotted field — all thirteen build fields and all four tune
+ * fields. The scope for an action that replaces the whole calibration and the
+ * hardware under it: APPLY_PRESET and RESET_TO_STOCK. Undoing a preset load
+ * genuinely means "return to the state before it", so anything the player changed
+ * afterwards is meant to go with it.
+ */
+export const RESTORE_ALL = 'all';
+
+/**
+ * Puts back the four tune fields and `build.presetId` ONLY, leaving the other twelve
+ * build fields exactly as they are. The scope for SET_TABLE, whose entire build-side
+ * write IS `presetId` (a hand edit disowns the preset). Restoring more than that is
+ * how a VE edit's undo used to remove a turbo fitted after it.
+ *
+ * `presetId` is restored rather than left alone for the same reason it is cleared on
+ * the way in: put the table back without it and the header goes on disowning a preset
+ * the player never actually left.
+ */
+export const RESTORE_CALIBRATION = 'calibration';
+
+/** @typedef {typeof RESTORE_ALL | typeof RESTORE_CALIBRATION} RestoreScope */
+
+/**
+ * Puts a snapshot back, as far as `scope` names, leaving every field it does not
+ * touch alone — `session` entirely, `tune.selection`, and under
+ * {@link RESTORE_CALIBRATION} every build field except `presetId`.
  * @param {StoreState} state
  * @param {Snapshot} before
+ * @param {RestoreScope} scope
  * @returns {StoreState}
  */
-export function restore(state, before) {
-  return {
-    ...state,
-    build: { ...state.build, ...before.build },
-    tune: { ...state.tune, ...before.tune },
-  };
+export function restore(state, before, scope) {
+  // The tune side is the same under both scopes: SET_TABLE writes a table and
+  // `tablesDirty`, APPLY_PRESET/RESET_TO_STOCK write all four, and putting back a
+  // table the action never touched is a no-op because the snapshot holds the value
+  // that is already there.
+  const tune = { ...state.tune, ...before.tune };
+  switch (scope) {
+    case RESTORE_ALL:
+      return { ...state, build: { ...state.build, ...before.build }, tune };
+    case RESTORE_CALIBRATION:
+      return { ...state, build: { ...state.build, presetId: before.build.presetId }, tune };
+    default:
+      // Same reasoning as `labelFor`'s default branch in reducer.js: an entry
+      // recorded with no scope, or with a scope this function does not implement,
+      // would otherwise restore some arbitrary subset and look like a physics or
+      // state bug somewhere else entirely. Fail here, naming the scope.
+      throw new Error(`restore: unknown scope "${scope}"`);
+  }
 }
