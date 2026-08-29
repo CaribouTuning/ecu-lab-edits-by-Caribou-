@@ -135,9 +135,15 @@ const redoBtn = () => screen.getByRole('button', { name: /^(Redo|Nothing to redo
 
 describe('UndoControls', () => {
   it('starts with both buttons disabled', () => {
-    mount();
-    const undo = /** @type {HTMLButtonElement} */ (undoBtn());
-    const redo = /** @type {HTMLButtonElement} */ (redoBtn());
+    // POSITIONAL, not by accessible name. `undoBtn()`/`redoBtn()` match on the very
+    // strings this test asserts, so swapping the two fallbacks between the buttons
+    // swapped which button each helper found and both literal assertions below held
+    // against the wrong element — the test derived its subject from the string under
+    // test and survived the exact mutation its comment names. The row renders undo
+    // first (pinned by the document-order test below), and the third button belongs
+    // to EditOnce.
+    const { container } = mount();
+    const [undo, redo] = /** @type {HTMLButtonElement[]} */ ([...container.querySelectorAll('button')]);
     expect(undo.disabled).toBe(true);
     expect(redo.disabled).toBe(true);
     // The exact disabled-state strings, not just the prefix the query above
@@ -264,10 +270,15 @@ describe('UndoControls', () => {
 });
 
 describe('the dock slider commits once, on release', () => {
-  /** Reports the undo depth into the DOM so a test can read it. */
+  /** Reports both stack depths into the DOM so a test can read them. */
   function Depth() {
     const [history] = useHistory();
-    return <output data-testid="depth">{history.past.length}</output>;
+    return (
+      <>
+        <output data-testid="depth">{history.past.length}</output>
+        <output data-testid="redo-depth">{history.future.length}</output>
+      </>
+    );
   }
 
   it('records ONE history entry for a drag, not one per intermediate value', () => {
@@ -325,13 +336,18 @@ describe('the dock slider commits once, on release', () => {
     expect(screen.getByTestId('cell').textContent).toBe('22');
   });
 
-  it('does NOT commit on a Cmd/Ctrl+Z keyup, so undo cannot masquerade as an edit', () => {
-    // F4: EcuLab's global keydown handler blocks Cmd/Ctrl+Z on this INPUT, but the
-    // matching KEYUP still bubbles here. Before the fix, that keyup reached
-    // commitDraft unconditionally and committed whatever draft was pending — turning
-    // "press undo" into "commit an edit and burn an undo slot". Reproduced exactly as
-    // in the review: a drag whose pointerup never arrived (e.g. a pointercancel),
-    // then a Cmd+Z keydown+keyup on the slider itself.
+  it('does NOT commit anywhere in the FULL Cmd/Ctrl+Z sequence, modifier release included', () => {
+    // EcuLab's global keydown handler blocks Cmd/Ctrl+Z on this INPUT, but the
+    // matching KEYUPs still bubble here, and an unguarded keyup committed whatever
+    // draft was pending — turning "press undo" into "commit an edit and burn an undo
+    // slot".
+    //
+    // All FOUR events, in the order a browser really produces them. The earlier
+    // version of this test fired only the middle two, and the guard it was written
+    // against (`if (e.metaKey || e.ctrlKey) return;`) passed it while still committing
+    // on the fourth: modifier flags on a keyup report the state AFTER the event, so
+    // `metaKey` is FALSE on the release of Meta itself. Stopping at `keyup z` pins one
+    // case and not the boundary between cases.
     render(
       <StoreProvider>
         <Depth />
@@ -344,18 +360,70 @@ describe('the dock slider commits once, on release', () => {
     fireEvent.change(slider, { target: { value: '42' } }); // drag with no pointerup
     expect(screen.getByTestId('depth').textContent).toBe('0');
 
+    fireEvent.keyDown(slider, { key: 'Meta', metaKey: true });
     fireEvent.keyDown(slider, { key: 'z', metaKey: true });
     fireEvent.keyUp(slider, { key: 'z', metaKey: true });
+    fireEvent.keyUp(slider, { key: 'Meta', metaKey: false });
 
     // The abandoned draft (42) must NOT have been committed.
     expect(screen.getByTestId('depth').textContent).toBe('0');
     expect(screen.getByTestId('cell').textContent).toBe('10');
 
-    // Ctrl+Z (the Windows/Linux spelling) must be caught the same way.
+    // Ctrl+Z (the Windows/Linux spelling) must be caught the same way, release of the
+    // Control key included.
+    fireEvent.keyDown(slider, { key: 'Control', ctrlKey: true });
     fireEvent.keyDown(slider, { key: 'z', ctrlKey: true });
     fireEvent.keyUp(slider, { key: 'z', ctrlKey: true });
+    fireEvent.keyUp(slider, { key: 'Control', ctrlKey: false });
     expect(screen.getByTestId('depth').textContent).toBe('0');
     expect(screen.getByTestId('cell').textContent).toBe('10');
+  });
+
+  it('does NOT commit on the release of a key that cannot move a slider', () => {
+    // The whitelist's other side. The guard names the keys that DO change a range
+    // input's value, so every other release — Tab away, a letter typed with the
+    // control focused, Shift on its own — must leave the draft alone. A blacklist
+    // spelled as "not a modifier" would pass the Cmd+Z test above (once its fourth
+    // event is handled) and still commit on all of these.
+    render(
+      <StoreProvider>
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '42' } });
+
+    for (const key of ['Tab', 'a', 'Shift', 'Enter', 'Escape']) {
+      fireEvent.keyUp(slider, { key });
+    }
+
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+  });
+
+  it('commits on every key release that DOES move a range input', () => {
+    // The arrow-release test above covers ArrowRight alone, so a whitelist of exactly
+    // one key would satisfy it and silently break Home/End/PageUp/PageDown — the keys
+    // a range input also responds to. Each is driven from a fresh mount so none can
+    // pass on another's account, and the committed VALUE is asserted, not just depth.
+    for (const key of ['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']) {
+      const { unmount } = render(
+        <StoreProvider>
+          <Depth />
+          <EcuLabTuneHarness />
+        </StoreProvider>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+      fireEvent.change(screen.getByRole('slider'), { target: { value: '27' } });
+      fireEvent.keyUp(screen.getByRole('slider'), { key });
+
+      expect(screen.getByTestId('depth').textContent).toBe('1');
+      expect(screen.getByTestId('cell').textContent).toBe('27');
+      unmount();
+    }
   });
 
   it('drops an uncommitted draft when the selection moves to another cell', () => {
@@ -578,6 +646,49 @@ describe('the dock slider commits once, on release', () => {
     expect(screen.getByTestId('cell').textContent).toBe('10');
     expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
     expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('10');
+  });
+
+  it('drops an abandoned draft when an UNDO changes the table under the same cell', () => {
+    // F2. The draft is dropped when the SELECTION moves and when a stepper is clicked,
+    // but an undo changes the table with the selection unchanged — and the abandoned
+    // draft used to survive it. The grid went back to 10 while the dock's big readout,
+    // the stated mitigation for this task's accepted cost, still read 42; a late
+    // pointerup then wrote 42 back over the undo and took the redo branch with it.
+    render(
+      <StoreProvider>
+        <UndoControls />
+        <Depth />
+        <EcuLabTuneHarness />
+      </StoreProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
+    fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
+    expect(screen.getByTestId('cell').textContent).toBe('11'); // depth 1, current now 11
+
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '42' } }); // drag with no pointerup
+    expect(screen.getByTestId('dock-readout').textContent).toBe('42°');
+
+    fireEvent.click(undoBtn()); // table back to 10, selection untouched
+
+    // The dock follows the table instead of going on showing the abandoned drag.
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('10°');
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('10');
+    expect(screen.getByTestId('redo-depth').textContent).toBe('1');
+
+    // The drag's pointerup finally arrives, late: there is nothing left to commit, so
+    // the undo stands and the redo it created is still there.
+    fireEvent.pointerUp(slider);
+
+    expect(screen.getByTestId('cell').textContent).toBe('10');
+    expect(screen.getByTestId('depth').textContent).toBe('0');
+    expect(screen.getByTestId('redo-depth').textContent).toBe('1');
+    // The other side of this reset — that it does NOT fire mid-drag — is held by the
+    // drag tests at the top of this block, which assert the value the drag committed
+    // on release. A reset that fired while `data` held still would leave the draft
+    // null there and commit nothing. Not duplicated here.
   });
 
   it('commits one value across the whole row as a single entry, for a row selection', () => {

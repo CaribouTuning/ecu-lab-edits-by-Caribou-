@@ -61,6 +61,17 @@ function cellReference(kind, row, col, value) {
 }
 
 /**
+ * Every key a range input responds to by changing its own value — the complete set
+ * per the HTML spec's slider behaviour. A key release only commits the draft if it is
+ * one of these, so Task 3's keyboard-usable slider still works while no other release
+ * (a modifier's own keyup above all) can commit anything.
+ */
+const COMMIT_KEYS = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'Home', 'End', 'PageUp', 'PageDown',
+]);
+
+/**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against LOAD/RPM
  * @param {(next: number[][]) => void} props.setData
@@ -91,8 +102,21 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   // the NEW cell's `current`. Comparing against the last-seen key here and
   // resetting before this render is returned avoids that frame entirely.
   const [prevSelKey, setPrevSelKey] = React.useState(selKey);
-  if (selKey !== prevSelKey) {
+  // ...and the same treatment for the TABLE moving under a still-selected cell. An
+  // undo (or any other external write) replaces `data` without touching `selection`,
+  // and an abandoned draft used to survive that: the grid went back to 10 while the
+  // dock's readout and slider still showed 42, and a late `pointerup` then wrote 42
+  // back over the undo and destroyed the redo branch with it. `apply()` already
+  // abandons the draft for exactly this reason when the write comes from a stepper;
+  // this is the same reasoning applied to a write from outside.
+  //
+  // Safe against a live drag: a drag commits nothing, so `data` keeps the same
+  // reference from the first `change` to the `pointerup` that ends it. The reference,
+  // not a deep compare — every write path here goes through `clone2D`.
+  const [prevData, setPrevData] = React.useState(data);
+  if (selKey !== prevSelKey || data !== prevData) {
     setPrevSelKey(selKey);
+    setPrevData(data);
     setDraft(null);
   }
 
@@ -135,15 +159,16 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     setAbs(draft);
     setDraft(null);
   };
-  // A modifier-shortcut key release must not reach commitDraft. EcuLab's global
-  // Cmd/Ctrl+Z handler blocks its *keydown* on this element (tagName === 'INPUT'),
-  // but the matching *keyup* still bubbles here — and without this guard it would
-  // commit whatever draft is pending, turning "press undo" into "commit an edit
-  // and burn an undo slot" (see tests/ui/undo-controls.test.jsx). An ordinary
-  // arrow-key release (no metaKey/ctrlKey) must still commit — that is Task 3's
-  // existing keyboard-usable slider, unaffected by this.
+  // Only a key that actually moved the slider may commit. A WHITELIST, not a
+  // modifier blacklist: the browser's real sequence for undo is keydown Meta ->
+  // keydown z -> keyup z -> keyup META, and on that last event `metaKey` is already
+  // false (modifier flags on a keyup report the state AFTER it), so a
+  // `if (e.metaKey || e.ctrlKey) return;` guard lets it through and commits the
+  // pending draft — turning "press undo" into "commit an edit and burn an undo slot",
+  // the exact bug the guard was added for. Naming the keys that CAN change a range
+  // input's value leaves nothing to enumerate on the other side.
   const onSliderKeyUp = (e) => {
-    if (e.metaKey || e.ctrlKey) return;
+    if (!COMMIT_KEYS.has(e.key)) return;
     commitDraft();
   };
   const smallStep = decimals ? 0.1 : 1;
