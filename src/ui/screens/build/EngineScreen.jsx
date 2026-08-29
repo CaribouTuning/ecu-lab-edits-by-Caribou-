@@ -167,8 +167,12 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
           </div>
           <div className={styles.calloutRow}>
             {/* The one `danger` in the app. This prompt is raised ONLY when
-                `hasTuningWork()` is true, so confirming it always destroys
-                hand-edited VE/spark/fuel tables that nothing can restore. */}
+                `hasTuningWork()` is true, so confirming it always overwrites
+                hand-edited VE/spark/fuel tables. It is no longer irreversible —
+                APPLY_PRESET is undoable, and the offer to undo it renders a few
+                lines below — but it is still a whole calibration replaced in one
+                click, and the undo stack is 50 deep and lives only for the session,
+                so the warning stays. */}
             {/* Button has the same rest-spread-after-className shape as Panel and
                 Select, so `style`, not `className`, is what actually reaches it
                 without discarding its variant class. */}

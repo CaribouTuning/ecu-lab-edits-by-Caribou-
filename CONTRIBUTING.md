@@ -201,7 +201,6 @@ Roughly in order of value to the project:
 - `resetToStock` resets about a third of what its label claims.
 - Bolt-ons can be installed but never uninstalled, which blocks the app's own
   "change one thing, measure, revert" method.
-- No undo/redo on table edits.
 
 **Features**
 

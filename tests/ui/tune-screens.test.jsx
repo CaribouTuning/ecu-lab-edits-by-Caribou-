@@ -129,9 +129,15 @@ describe('AirflowScreen', () => {
     // pair — was previously held only incidentally, by TUNE routing to AIRFLOW by
     // default. Pinned here, standalone, per screen.
     mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
     const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
-    expect(undo).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
     expectAboveTheGrid(undo);
   });
 
@@ -230,9 +236,15 @@ describe('SparkScreen', () => {
     // See the matching test in the AirflowScreen block above for why this is
     // pinned per screen rather than left to TUNE's default sub-route.
     mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
     const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
-    expect(undo).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
     expectAboveTheGrid(undo);
   });
 
@@ -294,9 +306,15 @@ describe('FuelScreen', () => {
     // See the matching test in the AirflowScreen block above for why this is
     // pinned per screen rather than left to TUNE's default sub-route.
     mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
     const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
-    expect(undo).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ })).toBeTruthy();
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
     expectAboveTheGrid(undo);
   });
 
