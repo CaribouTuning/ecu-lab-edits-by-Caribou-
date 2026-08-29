@@ -22,7 +22,7 @@
  * pass with the dispatch stubbed out.
  */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -417,6 +417,128 @@ describe('banking a pull', () => {
     expect(saved.pulls).toBe(1);
     expect(saved.total).toBeGreaterThan(0);
     expect(saved.best).toBe(saved.total);
+  });
+
+  // -----------------------------------------------------------------------------
+  // Issue #29. The scorecard used to recompute the Engineer and Pull scores from the
+  // hardware selected AT RENDER TIME and grade them against the LAST pull's dyno
+  // output. Change the setup after a pull and that finished run was silently re-graded
+  // as though it had been made on the new one — a number the engine never produced,
+  // from a session that never happened — and the Pull Score moved with it, so it could
+  // climb past `bestScore` and light up NEW BEST with nobody having run anything.
+  //
+  // Nothing below stubs a score. Each test runs a REAL pull through the real sim,
+  // reads the real figure off the scorecard, changes something, and reads it again:
+  // the assertion is that a number on screen did not move while no pull was run. That
+  // is the entire claim, and it is not checkable any other way — every intermediate
+  // layer (the memo, the store, the props) would look correct with the bug in place.
+  // -----------------------------------------------------------------------------
+  describe('and then changing the setup without running another', () => {
+    it('leaves the banked scores exactly as measured, and says they are last pull\'s', async () => {
+      launch();
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: 10000 },
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      const measured = statTile('PULL SCORE');
+      // Guard the setup: a scorecard showing nothing would make the comparison below
+      // pass for the wrong reason.
+      expect(Number(measured)).toBeGreaterThan(0);
+      expect(screen.queryByText(/before your latest change/)).toBeNull();
+
+      // The dyno's own load selector, chosen because it is a MEASURED input that can
+      // be changed without leaving the scorecard — no navigation, no other write, and
+      // the score panel stays mounted across it. A pull at 40 kPa is a different
+      // measurement of the same engine, so these figures are no longer what running
+      // now would produce.
+      fireEvent.click(screen.getByRole('button', { name: '40 kPa' }));
+
+      expect(statTile('PULL SCORE')).toBe(measured);
+      expect(screen.getByText(/before your latest change/)).toBeTruthy();
+    });
+
+    it('does not re-grade a finished pull against hardware fitted afterwards', async () => {
+      // The headline case from the issue, driven through a real hardware control:
+      // change the exhaust after the pull. Under the old memo the Engineer Score
+      // recomputed to 92 (`-8 Exhaust diameter poorly matched to displacement`) and
+      // dragged the Pull Score down with it — on a dyno session that had already ended,
+      // through a pipe the engine never ran.
+      //
+      // Exhaust diameter rather than the turbo switch, and the difference matters: the
+      // default boost curve is all zeros, so fitting a turbo alone moves NO engineer
+      // rule for the stock engine, and a "fit a turbo" version of this test passes with
+      // the bug fully in place. Verified by running it against the old memo.
+      launch();
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: 10000 },
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      const measured = {
+        pull: statTile('PULL SCORE'),
+        tuning: statTile('TUNING SCORE'),
+        engineer: statTile('ENGINEER SCORE'),
+      };
+      expect(Number(measured.pull)).toBeGreaterThan(0);
+
+      // BUILD > EXHAUST > fit a 4.0" pipe, then back to the scorecard.
+      fireEvent.click(screen.getByRole('button', { name: 'BUILD' }));
+      fireEvent.click(screen.getByText('Exhaust'));
+      fireEvent.click(screen.getByRole('button', { name: '4.0"' }));
+      // Guard the interaction, not just the outcome: an equality assertion passes
+      // trivially if the pipe was never actually changed.
+      expect(screen.getByRole('button', { name: '4.0"' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+
+      expect({
+        pull: statTile('PULL SCORE'),
+        tuning: statTile('TUNING SCORE'),
+        engineer: statTile('ENGINEER SCORE'),
+      }).toEqual(measured);
+      expect(screen.getByText(/before your latest change/)).toBeTruthy();
+    });
+
+    it('goes back to current when an undo puts the setup back', async () => {
+      // Staleness is a comparison against the LIVE setup, not a flag latched at the
+      // moment something changed. Undo the edit and the banked scores describe the car
+      // on screen again — so the warning has to clear itself, or it becomes noise the
+      // player learns to ignore.
+      launch();
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: 10000 },
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      const measured = statTile('PULL SCORE');
+
+      // A calibration edit, not a hardware one: SET_TABLE is what the undo stack
+      // records, and the tables are the inputs a tuner changes most between pulls.
+      // Same route into the grid as characterisation.test.jsx — a cell has to be
+      // selected before the dock that edits it exists.
+      fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+      const grid = within(screen.getByTestId('tuning-grid'));
+      const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
+      fireEvent.click(cells[Math.floor(cells.length / 2)]);
+      const dock = within(screen.getByTestId('selection-dock'));
+      fireEvent.click(dock.getByRole('button', { name: '+1' }));
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      expect(screen.getByText(/before your latest change/)).toBeTruthy();
+      expect(statTile('PULL SCORE')).toBe(measured);
+
+      fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+
+      expect(screen.queryByText(/before your latest change/)).toBeNull();
+      expect(statTile('PULL SCORE')).toBe(measured);
+    });
   });
 });
 
