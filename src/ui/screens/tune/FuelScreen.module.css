@@ -4,6 +4,12 @@
   padding: var(--sp-xl) var(--sp-xl) 0;
 }
 
+.gridHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+
 /* 560px is the project's one breakpoint — see the note beside the scale in
    tokens.css, which lists every file that uses it. Kept in sync by hand with
    StartScreen.module.css, TutorialScreen.module.css, AppShell.module.css and

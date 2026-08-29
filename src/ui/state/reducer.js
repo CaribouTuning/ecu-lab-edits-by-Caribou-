@@ -25,7 +25,11 @@
  * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, presetById } from '../../sim/index.js';
+
+import {
+  HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
+} from './history.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -53,6 +57,8 @@ export const ACTIONS = Object.freeze({
   BANK_PULL: 'BANK_PULL',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
+  UNDO: 'UNDO',
+  REDO: 'REDO',
 });
 
 /**
@@ -235,16 +241,29 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * Steps the undo stack back one entry, restoring the snapshot `past[past.length - 1]`
+ * carries and pushing the pre-undo state onto `future`. No payload: the reducer reads
+ * everything it needs off `state.history` itself.
+ * @typedef {{type: 'UNDO'}} UndoAction
+ */
+
+/**
+ * Steps the redo stack forward one entry, replaying the snapshot `future[0]` carries.
+ * The mirror of `UndoAction` — see there for why no payload travels on the action.
+ * @typedef {{type: 'REDO'}} RedoAction
+ */
+
+/**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the eleven specific typedefs above become
+ * shape is assignable to `StoreAction` and the seventeen specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
  *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
- *   LivePatchAction
+ *   LivePatchAction | UndoAction | RedoAction
  * } KnownStoreAction
  */
 
@@ -256,8 +275,12 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * The root reducer. No `Date.now()`, no mutation of `state` or any of its slices —
- * every case that changes a slice returns a NEW object for that slice only, and every
+ * Every case except UNDO/REDO. Wrapped by `reducer` below, which adds the undo stack
+ * on top and is what callers actually use — see that function's own doc for what the
+ * wrapper does and why it stays pure too.
+ *
+ * No `Date.now()`, no mutation of `state` or any of its slices — every case that
+ * changes a slice returns a NEW object for that slice only, and every
  * slice it does not touch keeps its existing reference (so `React.memo`/`useMemo`
  * consumers downstream can bail out on an unrelated dispatch).
  *
@@ -289,7 +312,7 @@ export const ACTIONS = Object.freeze({
  * @param {StoreAction} action
  * @returns {StoreState}
  */
-export function reducer(state, action) {
+function baseReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_BUILD_FIELD:
       return {
@@ -482,4 +505,193 @@ export function reducer(state, action) {
       // bails out of the re-render instead of scheduling one for a no-op.
       return state;
   }
+}
+
+/**
+ * The three actions that destroy calibration the player cannot otherwise get back,
+ * each mapped to HOW MUCH of its snapshot an undo puts back (history.js).
+ *
+ * Hardware writes are deliberately absent: every hardware control already displays its
+ * own current value, so it is self-reversing, and undo must not become a time machine
+ * over banked career progress.
+ *
+ * The scope is per-action because the snapshot is not: `snapshot()` captures the union
+ * of every field ANY of these three can write, so replaying an entry in full would put
+ * back fields the recorded action never touched. `SET_TABLE`'s entire build-side write
+ * is `presetId`, so RESTORE_CALIBRATION is exactly its write surface; the other two
+ * replace the whole build, so RESTORE_ALL is exactly theirs.
+ *
+ * A map rather than a Set plus a lookup elsewhere: `UNDOABLE` is derived from its keys
+ * below, so a fourth undoable action cannot be added to the membership list without
+ * also declaring what its undo restores.
+ */
+const UNDO_SCOPE = Object.freeze({
+  [ACTIONS.SET_TABLE]: RESTORE_CALIBRATION,
+  [ACTIONS.APPLY_PRESET]: RESTORE_ALL,
+  [ACTIONS.RESET_TO_STOCK]: RESTORE_ALL,
+});
+
+const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
+
+/**
+ * Every action that counts as NEW WORK, and therefore abandons the redo branch.
+ *
+ * The membership rule is: does this case write a field the snapshot carries — the
+ * hardware and calibration in BUILD_KEYS/TUNE_KEYS? Those are precisely the fields a
+ * later REDO would overwrite, so leaving `future` alive across one of them lets redo
+ * throw away work the player did after the undo, labelled only with what the redone
+ * action was. That was reachable: APPLY_PRESET -> UNDO -> fit a turbo, build a boost
+ * curve, pick a fuel -> REDO, and the octane goes back to the preset's under the
+ * label "Redo Preset · Nissan VQ35HR".
+ *
+ * Excluded, and why each one has to be:
+ *  - LIVE_STEP / LIVE_PATCH write `session.live`. LIVE_STEP alone fires at 20 Hz, so
+ *    including it would destroy the redo branch within one tick of the engine
+ *    running — undo would be unusable on any tab while the engine idles.
+ *  - SET_SESSION_FIELD, BANK_PULL, REPAIR_ENGINE write `session` only, which no
+ *    snapshot carries and no restore touches.
+ *  - SET_BOOST_SEL, SET_PRESET_PROMPT, SET_TUNE_FIELD are cursors and UI state:
+ *    `boostSel`, `presetPrompt` and `selection` are all deliberately outside the
+ *    snapshot (see history.js). SET_TUNE_FIELD is the generic tune setter, but its
+ *    only callers pass `selection` — and one of them is the tab switch, so counting
+ *    it as new work would mean walking from TUNE to BUILD silently killed the redo
+ *    a player crossed tabs to reach.
+ *  - UNDO/REDO manage `future` themselves.
+ *
+ * The three UNDOABLE actions are listed here too, for one list that answers "is this
+ * new work?" — they reach `future: []` through the recording branch below rather than
+ * through this Set, and listing them keeps the two from disagreeing on paper.
+ */
+/**
+ * Does this action write a field some snapshot carries, and therefore abandon a live
+ * redo branch?
+ *
+ * `SET_TUNE_FIELD` needs the extra question because it is the one action whose write
+ * surface depends on its payload rather than its type. Its five production callers all
+ * pass `field: 'selection'` — a cursor, outside the snapshot, and written by `changeTab`
+ * on every tab switch, so treating it as new work would mean walking from TUNE to BUILD
+ * killed the redo the player crossed tabs to reach. But nothing in the type stops a
+ * caller passing `'ve'`, and that write WOULD be overwritten by a redo. Asking the
+ * snapshot's own key list makes the exclusion structural instead of an observation about
+ * today's callers.
+ * @param {any} action
+ * @returns {boolean}
+ */
+function clearsRedo(action) {
+  if (action.type === ACTIONS.SET_TUNE_FIELD) return snapshotsTuneField(action.field);
+  return CLEARS_REDO.has(action.type);
+}
+
+const CLEARS_REDO = new Set([
+  ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,
+  ACTIONS.SET_ENGINE_CONFIG_PATCH, ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET,
+  ACTIONS.RESET_TO_STOCK,
+]);
+
+/**
+ * Names what an undoable action did, for the undo button's `aria-label` and BUILD's
+ * post-load offer. Lives here rather than in history.js because it needs `ACTIONS` and
+ * the preset catalogue, and history.js must not import this module.
+ * @param {any} action
+ * @returns {string}
+ */
+function labelFor(action) {
+  switch (action.type) {
+    case ACTIONS.SET_TABLE: {
+      const label = { ve: 'VE edit', timing: 'Spark edit', afr: 'Fuel edit' }[action.table];
+      // Same reasoning as the `default` branch below, and it needs stating twice
+      // because the failure this one prevents is worse. An unrecognised table used to
+      // return `undefined`, which was pushed onto the stack as the entry's label; the
+      // crash then happened in EngineScreen.jsx, on BUILD, at `top.label.startsWith(...)`
+      // — a TypeError on a different screen, at a stack naming neither the dispatch nor
+      // the table. Throwing here names both.
+      if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
+      return label;
+    }
+    case ACTIONS.APPLY_PRESET: {
+      const preset = presetById(action.preset.presetId);
+      return `Preset · ${preset ? preset.name : 'factory calibration'}`;
+    }
+    case ACTIONS.RESET_TO_STOCK:
+      return 'Reset to stock';
+    default:
+      // UNDOABLE lists exactly three action types, and `reducer` below only ever
+      // calls `labelFor` for an action already confirmed to be in that set — so this
+      // branch is unreachable BY CONSTRUCTION today. It throws instead of quietly
+      // returning 'Reset to stock' so that if a fourth action is ever added to
+      // UNDOABLE without a matching case here, it fails loudly at the call site
+      // instead of mislabelling every undo button for that action "Reset to stock".
+      throw new Error(`labelFor: no label defined for undoable action type "${action.type}"`);
+  }
+}
+
+/**
+ * The store's reducer: `baseReducer` plus the undo stack.
+ *
+ * Recording is a WRAPPER rather than a line inside each undoable case, so the three
+ * existing cases stay exactly as they were and a fourth undoable action is one entry in
+ * `UNDOABLE` rather than a fourth place to remember. It stays a pure function of
+ * `(state, action)` — no clock, no coalescing keys, no merge logic. The dock's slider
+ * commits once on release instead (see SelectionDock.jsx), which is what keeps a drag
+ * from becoming eighteen undo steps without any of that machinery.
+ *
+ * @param {StoreState} state
+ * @param {any} action
+ * @returns {StoreState}
+ */
+export function reducer(state, action) {
+  if (action.type === ACTIONS.UNDO) {
+    const { past, future } = state.history;
+    if (past.length === 0) return state;
+    const entry = past[past.length - 1];
+    return {
+      ...restore(state, entry.before, entry.scope),
+      history: {
+        past: past.slice(0, -1),
+        // The scope rides along with the entry in both directions, so a redo puts
+        // back exactly as much as the undo took away.
+        future: [{ label: entry.label, before: snapshot(state), scope: entry.scope }, ...future],
+      },
+    };
+  }
+
+  if (action.type === ACTIONS.REDO) {
+    const { past, future } = state.history;
+    if (future.length === 0) return state;
+    const entry = future[0];
+    return {
+      ...restore(state, entry.before, entry.scope),
+      history: {
+        past: [...past, { label: entry.label, before: snapshot(state), scope: entry.scope }]
+          .slice(-HISTORY_LIMIT),
+        future: future.slice(1),
+      },
+    };
+  }
+
+  const next = baseReducer(state, action);
+  if (UNDOABLE.has(action.type)) {
+    return {
+      ...next,
+      history: {
+        past: [...state.history.past, {
+          label: labelFor(action),
+          before: snapshot(state),
+          scope: UNDO_SCOPE[action.type],
+        }].slice(-HISTORY_LIMIT),
+        // A new edit abandons the redo branch: keeping it would let redo jump the
+        // player onto a timeline they had already left.
+        future: [],
+      },
+    };
+  }
+
+  // Not recordable, but still new work: a hardware write is not undoable (the control
+  // shows its own value) yet it changes fields a redo would overwrite, so it abandons
+  // the redo branch just the same. See CLEARS_REDO for what counts and what must not.
+  if (!clearsRedo(action) || state.history.future.length === 0) return next;
+  return {
+    ...next,
+    history: { past: state.history.past, future: [] },
+  };
 }

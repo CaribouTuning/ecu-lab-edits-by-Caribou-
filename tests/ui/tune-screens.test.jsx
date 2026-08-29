@@ -96,6 +96,22 @@ function SelectionProbe({ value }) {
 // returns, since `sparkReport` and `fuelReport` (added in later tasks) read them.
 const QUIET_CAL_ADVICE = { overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [], spark: [], fuelAdv: [] };
 
+/**
+ * Pins that the undo pair sits in the grid header ABOVE the table, not merely
+ * somewhere on the screen. `getByRole` alone passes with the control moved below
+ * <TuningGrid>, which is not what the plan asked for and not where a player looks
+ * for it. jsdom applies no CSS, so document order is the only position this suite
+ * can observe — which is exactly the property that matters here.
+ * @param {HTMLElement} control
+ */
+function expectAboveTheGrid(control) {
+  const grid = screen.getByTestId('tuning-grid');
+  // querySelectorAll returns elements in document order, so comparing indices says
+  // which comes first without reaching for compareDocumentPosition's bitmask.
+  const inOrder = Array.from(document.querySelectorAll('*'));
+  expect(inOrder.indexOf(control)).toBeLessThan(inOrder.indexOf(grid));
+}
+
 describe('AirflowScreen', () => {
   it('mounts the shared TuningGrid and SelectionDock with their test ids intact', () => {
     mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
@@ -106,6 +122,23 @@ describe('AirflowScreen', () => {
     const grid = screen.getByTestId('tuning-grid');
     fireEvent.click(within(grid).getAllByRole('button').at(-1));
     expect(screen.getByTestId('selection-dock')).toBeTruthy();
+  });
+
+  it('mounts UndoControls in the header above the grid', () => {
+    // Task 2's headline requirement — AIRFLOW, SPARK and FUEL each mount the ↶ ↷
+    // pair — was previously held only incidentally, by TUNE routing to AIRFLOW by
+    // default. Pinned here, standalone, per screen.
+    mount(<AirflowScreen veAdvice={null} veTruth={[]} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
+    const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
+    expectAboveTheGrid(undo);
   });
 
   it('shows the shell-computed veAdvice sync gap, not one it derived itself', () => {
@@ -199,6 +232,22 @@ describe('SparkScreen', () => {
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
   });
 
+  it('mounts UndoControls in the header above the grid', () => {
+    // See the matching test in the AirflowScreen block above for why this is
+    // pinned per screen rather than left to TUNE's default sub-route.
+    mount(<SparkScreen calAdvice={QUIET_CAL_ADVICE} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
+    const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
+    expectAboveTheGrid(undo);
+  });
+
   it('shows the shell-computed knock-limit advisory, not one it derived itself', () => {
     // Fabricated cells: no default build's `calibrationAdvice` would report a cell
     // at 999 kPa (off the LOAD axis entirely) or suggest 22° from 11°.
@@ -251,6 +300,22 @@ describe('FuelScreen', () => {
   it('mounts the shared TuningGrid with its test id intact', () => {
     mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
     expect(screen.getByTestId('tuning-grid')).toBeTruthy();
+  });
+
+  it('mounts UndoControls in the header above the grid', () => {
+    // See the matching test in the AirflowScreen block above for why this is
+    // pinned per screen rather than left to TUNE's default sub-route.
+    mount(<FuelScreen calAdvice={QUIET_CAL_ADVICE} />);
+    // `getByRole` throws when the element is absent, so `.toBeTruthy()` on its result
+    // could never fail — and the name alternation matches the populated and empty
+    // states alike, so the query cannot tell them apart either. The rule is stated at
+    // build-screens.test.jsx:305. These screens mount over a fresh store, so pin the
+    // exact empty-state accessible names as literals instead.
+    const undo = screen.getByRole('button', { name: /^(Undo|Nothing to undo)/ });
+    expect(undo.getAttribute('aria-label')).toBe('Nothing to undo');
+    expect(screen.getByRole('button', { name: /^(Redo|Nothing to redo)/ }).getAttribute('aria-label'))
+      .toBe('Nothing to redo');
+    expectAboveTheGrid(undo);
   });
 
   it('shows the shell-computed wrong-mixture advisory, not one it derived itself', () => {

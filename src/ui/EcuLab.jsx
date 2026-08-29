@@ -649,6 +649,32 @@ export function EcuLabApp() {
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
 
+  // Cmd/Ctrl+Z and Cmd+Shift+Z / Ctrl+Y. This lives here rather than in AppShell,
+  // whose header is explicit that the shell owns chrome only and never dispatches to
+  // the store — a global key handler is app behaviour, not chrome.
+  //
+  // PR 4b's arrow-key tuning will need this same seam.
+  useEffect(() => {
+    /** @param {KeyboardEvent} e */
+    const onKey = (e) => {
+      // Ctrl+Alt is AltGr on many European keyboard layouts, where AltGr+Z / AltGr+Y
+      // types a real character. Excluding altKey keeps this handler from stealing
+      // that keystroke and swallowing it with preventDefault().
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      // Never steal undo from a field the player is typing in.
+      const el = /** @type {HTMLElement|null} */ (e.target);
+      const tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+      e.preventDefault();
+      const redo = key === 'y' || e.shiftKey;
+      dispatch({ type: redo ? ACTIONS.REDO : ACTIONS.UNDO });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dispatch]);
+
   const chartData = useMemo(() => {
     if (!result) return [];
     return result.points.slice(0, running ? revealCount : result.points.length).map((p, i) => ({

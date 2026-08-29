@@ -154,3 +154,10 @@
   margin-top: 14px;
   margin-bottom: 9px;
 }
+
+.undoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  justify-content: space-between;
+}
