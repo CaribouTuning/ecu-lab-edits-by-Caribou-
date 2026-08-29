@@ -187,6 +187,7 @@ describe('ScoreScreen', () => {
   // output for the default store's engine would land on these exact figures.
   const scores = {
     pull: 4321,
+    wasBest: true,
     tuning: { score: 91, label: 'FABRICATED TUNING LABEL', deductions: ['fabricated tuning deduction'], advisories: ['fabricated advisory'] },
     engineer: { score: 12, label: 'FABRICATED ENGINEER LABEL', deductions: ['fabricated engineer deduction'] },
   };
@@ -203,10 +204,40 @@ describe('ScoreScreen', () => {
     expect(screen.getByText('fabricated advisory')).toBeTruthy();
   });
 
-  it('reads bestScore off the store, not a prop, to decide NEW BEST vs. Best: N', () => {
-    mountWithResult(<ScoreScreen scores={scores} />, { bestScore: 9999 });
+  it('reads bestScore off the store, not a prop, for the figure it reports', () => {
+    mountWithResult(<ScoreScreen scores={{ ...scores, wasBest: false }} />, { bestScore: 9999 });
     expect(screen.getByText('Best: 9999')).toBeTruthy();
     expect(screen.queryByText('NEW BEST')).toBeNull();
+  });
+
+  it('takes NEW BEST off the run that was banked, not off a live comparison', () => {
+    // The regression this pins is not cosmetic. `scores.pull >= bestScore` is
+    // evaluated AFTER banking has already folded this pull into `bestScore`, so it is
+    // true by construction on every pull, tie or not — the badge lit up every single
+    // time. `wasBest` is decided in BANK_PULL against the best as it stood BEFORE the
+    // pull landed, which is the only moment the comparison means anything.
+    //
+    // The store's `bestScore` here is deliberately HIGHER than the pull: any screen
+    // that went back to comparing the two would print `Best: 9999` and go red.
+    mountWithResult(<ScoreScreen scores={{ ...scores, pull: 10, wasBest: true }} />, { bestScore: 9999 });
+    expect(screen.getByText('NEW BEST')).toBeTruthy();
+    expect(screen.queryByText('Best: 9999')).toBeNull();
+  });
+
+  it('says nothing about staleness for a pull the build has not moved since', () => {
+    mountWithResult(<ScoreScreen scores={scores} />, { bestScore: 0 });
+    expect(screen.queryByText(/before your latest change/)).toBeNull();
+  });
+
+  it('labels the scorecard as last pull\'s once the build has changed under it', () => {
+    // The banked figures are still shown — deleting them would take away the BEFORE
+    // half of the comparison the player changed something to make — so the only thing
+    // that can tell a player these numbers are not about the car on screen is this
+    // warning. Without it, banking silently turns one lie (a re-graded score) into
+    // another (a stale one presented as current).
+    mountWithResult(<ScoreScreen scores={scores} stale />, { bestScore: 0 });
+    expect(screen.getByText(/before your latest change/)).toBeTruthy();
+    expect(screen.getByText('4321')).toBeTruthy();
   });
 });
 

@@ -28,7 +28,7 @@ import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
  * list, so a field added to a slice in a later PR is swept automatically.
  *
  * Because each sentinel is a fresh string unique to its own field, no real preset
- * value — a number, an array, a plain object, `null`, a boolean, ANY type the 21 real
+ * value — a number, an array, a plain object, `null`, a boolean, ANY type the 22 real
  * writes use — can ever equal it. That makes a single strict `!==` check exact for
  * "did the reducer touch this field", for every field type in play, with no deep-
  * equality helper needed: the starting value is never deep-equal to a real written
@@ -348,6 +348,7 @@ describe('every write produces a fresh slice reference', () => {
       type: ACTIONS.BANK_PULL,
       result: { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } },
       pullScore: 50,
+      scores: { tuning: {}, engineer: {}, signature: 'x' },
     });
     expect(after.session).not.toBe(before.session);
   });
@@ -455,10 +456,23 @@ describe('APPLY_PRESET', () => {
 
   it('clears the previous run, which measured a different engine', () => {
     const ran = { ...makeInitialState() };
-    ran.session = { ...ran.session, result: { peakHp: 400 }, prevResult: { peakHp: 380 } };
+    ran.session = {
+      ...ran.session,
+      result: { peakHp: 400 },
+      prevResult: { peakHp: 380 },
+      pullScores: {
+        pull: 400, wasBest: true, signature: 'x',
+        tuning: { score: 90, label: 'CLEAN', deductions: [] },
+        engineer: { score: 80, label: 'SOLID', deductions: [] },
+      },
+    };
     const s = reducer(ran, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.session.result).toBeNull();
     expect(s.session.prevResult).toBeNull();
+    // The scores go with the result they grade. Left behind, they would put a
+    // scorecard on screen with no dyno curve under it — and one measured on an engine
+    // the player has just replaced wholesale.
+    expect(s.session.pullScores).toBeNull();
   });
 
   it('carries the twin-turbo count a preset owns', () => {
@@ -493,11 +507,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 21-field
-  // contract this action documents: a stray write grows the changed set past 21, a
-  // dropped write shrinks it below 21, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 22-field
+  // contract this action documents: a stray write grows the changed set past 22, a
+  // dropped write shrinks it below 22, and the failure message names the field either
   // way.
-  it('changes exactly the 21 documented fields, plus the two history fields', () => {
+  it('changes exactly the 22 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -508,7 +522,7 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
       'build.presetId', 'build.presetPrompt',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
-      'session.result', 'session.prevResult',
+      'session.result', 'session.prevResult', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
       'history.past', 'history.future',
@@ -770,49 +784,101 @@ describe('BANK_PULL', () => {
   // calls where getting `setPrevResult(result)` before `setResult(r)` backwards would
   // silently corrupt prevResult.
   const result = { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } };
+  // What `doRun` computes and hands over: the two score breakdowns and the signature
+  // of the car they were measured on. `pull` and `wasBest` are the reducer's to add.
+  const scores = {
+    tuning: { score: 88, label: 'CLEAN', deductions: [] },
+    engineer: { score: 71, label: 'SOLID', deductions: [] },
+    signature: 'FABRICATED-BUILD-SIGNATURE',
+  };
+  /**
+   * @param {number} pullScore
+   * @returns {import('../../../src/ui/state/reducer.js').StoreAction}
+   */
+  const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores });
 
   it('rotates the previous result into prevResult and installs the new one', () => {
     const ran = { ...makeInitialState() };
     ran.session = { ...ran.session, result: { peakHp: 380 } };
-    const s = reducer(ran, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const s = reducer(ran, bank(50));
     expect(s.session.prevResult).toEqual({ peakHp: 380 });
     expect(s.session.result).toBe(result);
   });
 
   it('wears the engine by the pull\'s own wear figures', () => {
-    const s = reducer(makeInitialState(), { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const s = reducer(makeInitialState(), bank(50));
     expect(s.session.health).toEqual({ piston: 97, bearing: 98, valve: 99 });
   });
 
   it('does not wear health below zero', () => {
     const worn = { ...makeInitialState() };
     worn.session = { ...worn.session, health: { piston: 2, bearing: 100, valve: 100 } };
-    const s = reducer(worn, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const s = reducer(worn, bank(50));
     expect(s.session.health.piston).toBe(0);
   });
 
   it('raises bestScore only when the new pull beats it', () => {
     const withBest = { ...makeInitialState() };
     withBest.session = { ...withBest.session, bestScore: 80 };
-    const lower = reducer(withBest, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const lower = reducer(withBest, bank(50));
     expect(lower.session.bestScore).toBe(80);
-    const higher = reducer(withBest, { type: ACTIONS.BANK_PULL, result, pullScore: 95 });
+    const higher = reducer(withBest, bank(95));
     expect(higher.session.bestScore).toBe(95);
   });
 
   it('accumulates totalScore and increments pullCount', () => {
     const withHistory = { ...makeInitialState() };
     withHistory.session = { ...withHistory.session, totalScore: 100, pullCount: 2 };
-    const s = reducer(withHistory, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const s = reducer(withHistory, bank(50));
     expect(s.session.totalScore).toBe(150);
     expect(s.session.pullCount).toBe(3);
   });
 
   it('leaves build and tune untouched by reference', () => {
     const before = makeInitialState();
-    const after = reducer(before, { type: ACTIONS.BANK_PULL, result, pullScore: 50 });
+    const after = reducer(before, bank(50));
     expect(after.build).toBe(before.build);
     expect(after.tune).toBe(before.tune);
+  });
+
+  it('banks the scores the pull measured, with the build it measured them on', () => {
+    // Issue #29: these used to be recomputed at RENDER time from whatever hardware was
+    // selected then, and graded against this pull's dyno output — so a turbo fitted
+    // afterwards re-graded a finished run as though it had been made on the new build.
+    // Banking them here is what makes a score a measurement rather than a live view.
+    const s = reducer(makeInitialState(), bank(50));
+    expect(s.session.pullScores).toEqual({
+      tuning: scores.tuning,
+      engineer: scores.engineer,
+      signature: 'FABRICATED-BUILD-SIGNATURE',
+      pull: 50,
+      wasBest: true,
+    });
+  });
+
+  it('decides wasBest against the best BEFORE this pull, not the one it just set', () => {
+    // The second, independent half of the same bug. The badge used to test
+    // `scores.pull >= bestScore` after banking had already folded this pull into
+    // `bestScore` — true by construction, every pull, tie or not. Here 50 loses to a
+    // standing 80 and 95 beats it, and in the winning case `bestScore` is 95 in the
+    // very same state object: a `>=` against the POST-update figure would call both
+    // of these a new best.
+    const withBest = { ...makeInitialState() };
+    withBest.session = { ...withBest.session, bestScore: 80 };
+    expect(reducer(withBest, bank(50)).session.pullScores.wasBest).toBe(false);
+    const won = reducer(withBest, bank(95));
+    expect(won.session.pullScores.wasBest).toBe(true);
+    expect(won.session.bestScore).toBe(95);
+  });
+
+  it('does not call a tie a new best', () => {
+    // Matching the standing best is not beating it, and the strict `>` is the only
+    // thing that says so. This is the case the old `>=` comparison got wrong even
+    // before the ordering bug — running the identical build twice announced NEW BEST
+    // on the second pull.
+    const withBest = { ...makeInitialState() };
+    withBest.session = { ...withBest.session, bestScore: 80 };
+    expect(reducer(withBest, bank(80)).session.pullScores.wasBest).toBe(false);
   });
 });
 
@@ -1281,6 +1347,7 @@ describe('new work abandons the redo branch', () => {
       type: ACTIONS.BANK_PULL,
       result: { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } },
       pullScore: 50,
+      scores: { tuning: {}, engineer: {}, signature: 'x' },
     }).history.future).toHaveLength(1);
   });
 
