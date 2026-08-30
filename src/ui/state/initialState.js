@@ -62,6 +62,30 @@ import {
  */
 
 /**
+ * One pull's scores, exactly as that pull measured them.
+ *
+ * Banked by BANK_PULL and then left alone. Nothing recomputes these from the current
+ * build, which is the whole point: re-grading a finished run against hardware it was
+ * never made on reports a number the engine never produced.
+ *
+ * `wasBest` is a fact about the run — decided against the best as it stood BEFORE this
+ * pull was banked — rather than a live `pull >= bestScore` comparison. Read back off
+ * `bestScore` afterwards, that comparison is true by construction on every pull,
+ * because by then this pull IS the best.
+ *
+ * `signature` is the setup it was measured on (pullSignature.js). It is what lets the
+ * UI say "these are last pull's numbers, from before your latest change" instead of
+ * silently presenting them as current.
+ *
+ * @typedef {object} PullScores
+ * @property {{score: number, label: string, deductions: string[], advisories?: string[]}} tuning
+ * @property {{score: number, label: string, deductions: string[]}} engineer
+ * @property {number} pull the Pull Score this run banked
+ * @property {boolean} wasBest whether this run beat the standing best when it landed
+ * @property {string} signature the configuration it was measured on
+ */
+
+/**
  * Everything about the current run and career progress that is NOT hardware or
  * calibration: dyno results, scores, engine wear, the live-engine model, and
  * onboarding progress.
@@ -70,6 +94,8 @@ import {
  * @property {boolean} running true while a dyno pull is sweeping
  * @property {object|null} result the most recent dyno pull's result
  * @property {object|null} prevResult the dyno pull before that, for comparison
+ * @property {PullScores|null} pullScores the scores the last pull MEASURED, banked at
+ *   pull time and never recomputed — see the typedef, and BANK_PULL in reducer.js
  * @property {number} revealCount how much of the current result has been revealed
  * @property {number} bestScore highest engineer score achieved this career
  * @property {number} totalScore cumulative score across all pulls this career
@@ -153,6 +179,7 @@ export function makeInitialState() {
       running: false,
       result: null,
       prevResult: null,
+      pullScores: null,
       revealCount: 0,
       bestScore: 0,
       totalScore: 0,

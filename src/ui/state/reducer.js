@@ -197,7 +197,20 @@ export const ACTIONS = Object.freeze({
  * hardware objects (`turbine`, `compressor`, `dutyPreview`, `exhaustDiaError`) that
  * are `useMemo` values in the component, not raw state the reducer holds — the same
  * "caller computes, reducer applies" split as `RESET_TO_STOCK`'s `ve`.
- * @typedef {{type: 'BANK_PULL', result: object, pullScore: number}} BankPullAction
+ *
+ * `scores` arrives the same way and for the same reason, and banking it here rather
+ * than deriving it later is the second ordering hazard this action owns. The score
+ * panels used to recompute the Engineer and Pull scores from whatever hardware was
+ * selected at RENDER time, against the last pull's dyno output — so changing a turbo
+ * after a pull re-graded that finished run as though it had been made on the new
+ * build, and the Pull Score could climb past `bestScore` with nobody having run
+ * anything. Banked here, the numbers are what the pull measured, permanently.
+ *
+ * `wasBest` is decided HERE rather than by the caller because this case is where
+ * `bestScore` moves: the comparison has to happen against the value as it stands
+ * BEFORE this pull is folded in, and this is the only place that still holds it.
+ * @typedef {{type: 'BANK_PULL', result: object, pullScore: number,
+ *   scores: {tuning: object, engineer: object, signature: string}}} BankPullAction
  */
 
 /**
@@ -414,9 +427,12 @@ function baseReducer(state, action) {
         session: {
           ...state.session,
           // A factory rating from the newly loaded engine must never sit next to a
-          // pull logged on whatever was running before it.
+          // pull logged on whatever was running before it. The scores go with the
+          // result they belong to — leaving them behind would put a scorecard on
+          // screen with no dyno curve under it.
           result: null,
           prevResult: null,
+          pullScores: null,
         },
       };
     }
@@ -463,6 +479,16 @@ function baseReducer(state, action) {
             piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),
             bearing: clamp(state.session.health.bearing - action.result.wear.bearing, 0, 100),
             valve: clamp(state.session.health.valve - action.result.wear.valve, 0, 100),
+          },
+          // Banked, not derived: see the typedef above for the re-grading bug that
+          // recomputing these from current hardware caused. `wasBest` compares against
+          // `state.session.bestScore` — the best BEFORE this pull — never the
+          // `bestScore` line below, which already includes it and would say yes on
+          // every pull, tie or not.
+          pullScores: {
+            ...action.scores,
+            pull: action.pullScore,
+            wasBest: action.pullScore > state.session.bestScore,
           },
           bestScore: Math.max(state.session.bestScore, action.pullScore),
           totalScore: state.session.totalScore + action.pullScore,

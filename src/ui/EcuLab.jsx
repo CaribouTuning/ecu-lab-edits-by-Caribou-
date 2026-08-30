@@ -46,6 +46,7 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
+import { pullSignature } from './state/pullSignature.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -216,7 +217,7 @@ export function EcuLabApp() {
   const [session] = useSession();
   const {
     loadKpa, soundOn, journeyStep, throttleInput, health,
-    result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
+    result, prevResult, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
@@ -503,6 +504,16 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn });
   };
 
+  // The setup currently on screen — build, calibration and dyno load — signed. The
+  // same signature is taken at pull time and banked with the scores, then compared
+  // against this on every render: the one question banked numbers cannot answer for
+  // themselves is whether they are still about the car in front of you. See
+  // pullSignature.js for exactly what counts as an input, and what does not.
+  const buildSignature = useMemo(
+    () => pullSignature(build, tune, loadKpa),
+    [build, tune, loadKpa],
+  );
+
   // Persistence goes through the storage adapter, which picks whichever backend is
   // available (artifact host, localStorage, or in-memory) so career stats survive a
   // refresh wherever the app is deployed.
@@ -536,7 +547,13 @@ export function EcuLabApp() {
     // this line, and the `setBestScore`/`setTotalScore`/`setPullCount` trio below it,
     // were all mirroring writes this one action already makes — including the
     // prevResult-before-result rotation whose ordering it exists to own.
-    dispatch({ type: ACTIONS.BANK_PULL, result: r, pullScore: pull });
+    // `scores` rides along with the result it belongs to: BANK_PULL keeps the numbers
+    // this pull actually measured, and `buildSignature` records the setup it measured
+    // them on. Nothing recomputes them afterwards — that is the whole fix (issue #29).
+    dispatch({
+      type: ACTIONS.BANK_PULL, result: r, pullScore: pull,
+      scores: { tuning: ts, engineer: es, signature: buildSignature },
+    });
     // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
     // expressions. They are still computed here because `persistCareer` needs the new
     // values NOW: reading them back off `session` would read this render's stale ones.
@@ -689,17 +706,28 @@ export function EcuLabApp() {
   // ve) is plain store state DataScreen can read for itself.
 
   const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
-  const scores = useMemo(() => {
-    if (!result || running) return null;
-    const tuning = computeTuningScore(result);
-    const engineer = computeEngineerScore({
-      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
-      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
-    });
-    const pull = computePullScore({ peakHp: result.peakHp, peakTq: result.peakTq, tuningScore: tuning.score, engineerScore: engineer.score });
-    return { tuning, engineer, pull };
-  }, [result, running, engineConfig, turboOn, turbine, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
+  // A SCORE IS A MEASUREMENT, SO IT IS TAKEN ONCE AND KEPT.
+  //
+  // This was a memo that recomputed the Engineer and Pull scores from whatever hardware
+  // was selected RIGHT NOW, and graded them against the LAST pull's dyno output. Change
+  // a turbo after a pull and that finished run was silently re-graded as though it had
+  // been made on the new build — a number the engine never produced, from a session
+  // that never happened. The Pull Score moved with it, so it could climb past
+  // `bestScore` with nobody running anything, and the badge lit up NEW BEST for a
+  // figure that was never banked. The app's whole method is change one thing, MEASURE,
+  // revert; a score that moves without a measurement contradicts the thing it teaches.
+  //
+  // So `doRun` banks what it computed (BANK_PULL) and this only reads it back. The one
+  // thing still decided here is WHEN to show it: `result` is replaced at sweep start,
+  // so publishing the banked scores during `running` would give away the next pull's
+  // final grade before its reveal has drawn a single point.
+  const scores = running ? null : pullScores;
+
+  // True when the setup has moved since the pull those scores came from. The evidence
+  // stays on screen and is labelled, rather than being deleted: erasing the previous
+  // pull would hide the exact before/after comparison the player is in the middle of
+  // making. See ScoreScreen and StatsScreen for how each says so.
+  const scoresStale = !!scores && scores.signature !== buildSignature;
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
@@ -843,7 +871,7 @@ export function EcuLabApp() {
             />
             <StatsScreen
               active={dashSection === 'stats'} onToggle={toggleDashSection}
-              scores={scores}
+              scores={scores} scoresStale={scoresStale}
             />
             <HealthScreen
               active={dashSection === 'health'} onToggle={toggleDashSection}
@@ -1022,7 +1050,7 @@ export function EcuLabApp() {
                 )}
 
                 {!running && dynoView === 'score' && scores && (
-                  <ScoreScreen scores={scores} />
+                  <ScoreScreen scores={scores} stale={scoresStale} />
                 )}
               </>
             )}

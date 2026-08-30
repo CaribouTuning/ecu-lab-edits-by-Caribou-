@@ -3,7 +3,11 @@
  *
  * Career totals, and the headline figures from the most recent dyno pull. Nothing
  * here is computed: `scores` is the shell's, because the DYNO tab's score panel reads
- * the same object and computing it twice would be two answers to one question.
+ * the same object and computing it twice would be two answers to one question. They
+ * are what that pull MEASURED, banked at pull time and never re-graded — so when the
+ * setup moves underneath them the tiles are LABELLED and dimmed rather than updated or
+ * cleared. Deleting them would take away the before half of the comparison the player
+ * changed something to make.
  */
 
 import { Trophy } from 'lucide-react';
@@ -29,9 +33,10 @@ import styles from './StatsScreen.module.css';
  * @param {boolean} props.active whether this is HOME's open section
  * @param {(section: string) => void} props.onToggle opens or closes a HOME section
  * @param {Scores|null} props.scores null until a pull has finished
+ * @param {boolean} [props.scoresStale] the setup has changed since that pull was run
  * @returns {React.ReactElement}
  */
-export function StatsScreen({ active, onToggle, scores }) {
+export function StatsScreen({ active, onToggle, scores, scoresStale = false }) {
   const [session] = useSession();
   const { bestScore, totalScore, pullCount } = session;
   // `SessionState.result` is typed `object` — see the note on the same cast in
@@ -51,11 +56,14 @@ export function StatsScreen({ active, onToggle, scores }) {
       </div>
       {result && scores ? (
         <>
-          <div className={`${styles.row} ${styles.rowGap}`}>
+          <div className={styles.lastPull} data-stale={scoresStale ? 'true' : 'false'}>
+            {scoresStale ? 'LAST PULL · SETUP HAS CHANGED SINCE' : 'LAST PULL'}
+          </div>
+          <div className={`${styles.row} ${styles.rowGap}`} data-stale={scoresStale ? 'true' : 'false'}>
             <StatTile label="PEAK POWER" value={result.peakHp} unit="whp" tone="acc" />
             <StatTile label="PEAK TORQUE" value={result.peakTq} unit="lb-ft" tone="alt" />
           </div>
-          <div className={styles.row}>
+          <div className={styles.row} data-stale={scoresStale ? 'true' : 'false'}>
             <StatTile label="PULL SCORE" value={scores.pull} tone="acc" />
             <StatTile label="TUNING" value={scores.tuning.score} tone={statusTone(scores.tuning.score)} />
             <StatTile label="ENGINEER" value={scores.engineer.score} tone={statusTone(scores.engineer.score)} />
