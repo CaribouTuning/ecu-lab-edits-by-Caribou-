@@ -1,4 +1,10 @@
-node_modules/
+# No trailing slash, deliberately. A pattern ending in `/` matches DIRECTORIES
+# ONLY, and git treats a symlink as a file — so `node_modules/` did not ignore a
+# SYMLINK named node_modules, and one was committed by accident during a merge
+# (3fea1b9). It pointed at its own absolute path inside a contributor's home
+# directory, so every clone since laid down a dangling link and leaked that path.
+# The slashless form ignores the name whatever it is on disk.
+node_modules
 dist/
 coverage/
 
