@@ -1677,6 +1677,15 @@ describe('run log', () => {
   it('pins and unpins a run', () => {
     const pinned = reducer(makeInitialState(), { type: ACTIONS.PIN_RUN, id: '7' });
     expect(pinned.session.pinnedRunId).toBe('7');
+
+    // A second PIN_RUN overwrites the pin rather than stacking — there is only
+    // ever one, per the UNPIN_RUN typedef's "no payload" note.
+    const repinned = reducer(pinned, { type: ACTIONS.PIN_RUN, id: '9' });
+    expect(repinned.session.pinnedRunId).toBe('9');
+
+    // Pinning is bookkeeping over the log, not a write to it.
+    expect(repinned.session.runs).toBe(pinned.session.runs);
+
     expect(reducer(pinned, { type: ACTIONS.UNPIN_RUN }).session.pinnedRunId).toBe(null);
   });
 

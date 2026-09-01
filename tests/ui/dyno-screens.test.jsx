@@ -157,7 +157,12 @@ describe('ResultScreen ghost curve', () => {
     // the first pull — recharts just draws nothing for an all-undefined dataKey — so
     // the legend is what makes the difference observable.
     mount(<ResultScreen chartData={[{ rpm: 1500, hp: 111, torque: 222 }]} engineDerived={{ redline: 7000 }} ghostLabel={null} />);
-    expect(screen.queryByText(/WHP$/)).toBeTruthy();
+    // `queryByText` throws (Testing Library's "multiple elements found") under the
+    // ghost mutation, which the ghost mutation reads as a failure of THIS line —
+    // never letting the two load-bearing `toBe(null)` assertions below it run at
+    // all. `queryAllByText` never throws on multiple matches, so a real regression
+    // lands on the assertion that actually names it.
+    expect(screen.queryAllByText(/WHP$/)).toHaveLength(1);
     expect(screen.queryByText(/ WHP$/)).toBe(null);
     expect(screen.queryByText(/ TQ$/)).toBe(null);
   });
