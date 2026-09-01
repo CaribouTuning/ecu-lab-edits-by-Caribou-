@@ -212,6 +212,19 @@ extend. Its `try/catch` returning `EMPTY_CAREER` on a corrupt save stays as it i
 A `runs` array longer than `RUN_LIMIT` on load — a save written by a future build, or a
 hand-edited one — is truncated to the cap rather than trusted.
 
+**Correction, made during the final review.** The paragraph above, read together with the
+"extend `loadCareer`'s coercion pattern" sentence before it, reads as truncation happening
+inside `loadCareer` itself. That is stale and was never implemented that way, because it
+contradicts a constraint this document states elsewhere without naming the consequence:
+`storage.js` must not know `RUN_LIMIT` — that is UI-layer policy, and `storage.js`'s own
+header documents deliberately knowing nothing about it (see its `Career.runs` doc:
+"this adapter deliberately knows nothing about `RUN_LIMIT`, which is a UI-layer policy").
+`loadCareer` validates only that `runs` is an array; it does not cap it. The cap is applied
+where `RUN_LIMIT` is actually in scope: in the reducer, inside `RESTORE_CAREER`
+(`runs: [...s.runs, ...c.runs].slice(0, RUN_LIMIT)`), the same way `pushRun` caps
+`BANK_PULL`'s write. The implementation's placement is correct; this section's wording was
+not, and is corrected here rather than silently rewritten.
+
 ## The ghost curve
 
 Treatment: **dimmed series colour, dashed** — each ghost line keeps its live line's hue.

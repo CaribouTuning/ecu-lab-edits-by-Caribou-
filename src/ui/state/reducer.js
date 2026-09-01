@@ -254,6 +254,23 @@ export const ACTIONS = Object.freeze({
  * value exactly: `max(loaded, 0) === loaded`, `loaded + 0 === loaded`,
  * `[...[], ...loaded] === loaded`-shaped, `null ?? loaded === loaded`. One code path
  * handles both, with no `if (pristine)` branch to fall out of sync with the other.
+ *
+ * NOT IDEMPOTENT. `bestScore`/`totalScore`/`pullCount` SUM, and `runs` concatenates —
+ * dispatching this twice with the same `career` double-counts every one of them and
+ * duplicates every loaded run. It must be dispatched exactly once per mount. The
+ * safety net for that today is entirely in `EcuLab.jsx`: the career-restore effect's
+ * `cancelled` flag (set on cleanup) stops a second `loadCareer()` from a re-mounted
+ * effect from ever reaching `dispatch`, and `careerLoaded.current` gates the SEPARATE
+ * save effect from writing before a restore has landed. Neither guard lives in this
+ * reducer, so a future caller of this action has nothing here stopping it from
+ * breaking that invariant.
+ *
+ * One more edge alongside the `pinnedRunId` one above, and equally rare: a pull banked
+ * DURING the restore window (between mount and `loadCareer()` resolving) gets whatever
+ * `n` the session's own pull counter was on — typically a low one, since nothing has
+ * been played yet — and can sort oddly next to the restored runs' much higher `n`
+ * values once merged. Cosmetic; the run itself is correct and in the right position
+ * (newest-first, at index 0), only its ordinal can look out of sequence.
  * @typedef {{type: 'RESTORE_CAREER', career: import('../../storage.js').Career}} RestoreCareerAction
  */
 

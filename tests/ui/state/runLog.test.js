@@ -40,6 +40,16 @@ function run(id, over = {}) {
   });
 }
 
+describe('RUN_LIMIT', () => {
+  it('is 20 — every test here derives its expectations from the constant, so a change to it would otherwise pass unnoticed', () => {
+    // The user-facing promise is "twenty runs". Every cap test in this file computes
+    // its own expectations from RUN_LIMIT rather than the literal 20, which proves
+    // the cap logic is right but says nothing about what the cap actually IS —
+    // shrinking it to 5 keeps the whole suite green while shrinking the promise.
+    expect(RUN_LIMIT).toBe(20);
+  });
+});
+
 describe('makeRunRecord', () => {
   it('keeps only rpm, hp and torque from each point', () => {
     // Mutation caught: storing `result.points` whole. That is 50 fields per point

@@ -42,7 +42,10 @@ export const RUN_LIMIT = 20;
  * @property {number} peakHp
  * @property {number} peakTq
  * @property {number} knocks how many `type: 'knock'` events the pull logged.
- * @property {{tuning: number, engineer: number, pull: number}} scores
+ * @property {{tuning: number, engineer: number, pull: number}} scores banked so a
+ *   later PR can show a run's scorecard from the log without re-deriving it. Nothing
+ *   under `src/` reads this field yet — HISTORY's own row shows `peakHp`/`peakTq`, not
+ *   these — it is deliberately here ahead of its reader for PR 5b/5c, not dead weight.
  * @property {RunPoint[]} points
  * @property {{build: object, tune: object, loadKpa: number}} inputs the measured
  *   configuration, as `measuredInputs` in pullSignature.js projects it.
