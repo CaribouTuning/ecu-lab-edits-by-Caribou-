@@ -14,7 +14,7 @@
  * pullSignature.js: a new simulation input is signed and reported in one edit.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import { History, Pin } from 'lucide-react';
 
@@ -52,7 +52,36 @@ function relativeTime(at, now) {
 export function HistoryScreen() {
   const [session, dispatch] = useSession();
   const { runs, pinnedRunId } = session;
-  const now = Date.now();
+
+  // `diffMeasuredInputs` runs ~32 `JSON.stringify` calls per row and `sparklinePath`
+  // walks up to 61 points; both ran on every render, unmemoized, over up to 20 rows.
+  // The store is a single context and `LIVE_STEP` dispatches into it at 20 Hz, so
+  // with the engine running and HISTORY open that was ~640 `JSON.stringify` calls a
+  // second for numbers that had not changed. `now` is captured in here too — reading
+  // `Date.now()` in the render body made the component impure for no reason a memo
+  // keyed on the same two inputs doesn't already fix.
+  const rows = useMemo(() => {
+    const now = Date.now();
+    return runs.map((run, i) => {
+      const prev = runs[i + 1];
+      const dHp = prev ? run.peakHp - prev.peakHp : 0;
+      const tone = !prev || dHp === 0 ? 'flat' : dHp > 0 ? 'up' : 'down';
+      const changed = prev ? diffMeasuredInputs(prev.inputs, run.inputs) : [];
+      const pinned = run.id === pinnedRunId;
+      // `prev` is undefined for every row with nothing older still in the log, not
+      // only the career's actual first pull — once the log caps at RUN_LIMIT, the
+      // oldest VISIBLE row has no `prev` either, at whatever `n` it happens to be.
+      // "first pull" is keyed on `run.n === 1` so only the real first pull claims it.
+      const deltaText = prev
+        ? `${dHp > 0 ? '+' : ''}${Math.round(dHp)} whp vs Run ${prev.n}`
+        : (run.n === 1 ? 'first pull' : '');
+      return {
+        run, prev, tone, changed, pinned, deltaText,
+        when: relativeTime(run.at, now),
+        spark: sparklinePath(run.points, SPARK_W, SPARK_H),
+      };
+    });
+  }, [runs, pinnedRunId]);
 
   if (runs.length === 0) {
     return (
@@ -69,44 +98,37 @@ export function HistoryScreen() {
     <>
       <Eyebrow icon={History}>Run History</Eyebrow>
       <ul className={styles.list}>
-        {runs.map((run, i) => {
-          const prev = runs[i + 1];
-          const dHp = prev ? run.peakHp - prev.peakHp : 0;
-          const tone = !prev || dHp === 0 ? 'flat' : dHp > 0 ? 'up' : 'down';
-          const changed = prev ? diffMeasuredInputs(prev.inputs, run.inputs) : [];
-          const pinned = run.id === pinnedRunId;
-          return (
-            <li key={run.id} className={styles.row} data-pinned={pinned}>
-              <div>
-                <div className={styles.ordinal}>Run {run.n}</div>
-                <div className={styles.when}>{relativeTime(run.at, now)}</div>
-                <div className={styles.label}>{run.label}</div>
+        {rows.map(({ run, prev, tone, changed, pinned, deltaText, when, spark }) => (
+          <li key={run.id} className={styles.row} data-pinned={pinned}>
+            <div>
+              <div className={styles.ordinal}>Run {run.n}</div>
+              <div className={styles.when}>{when}</div>
+              <div className={styles.label}>{run.label}</div>
+            </div>
+            <svg className={styles.spark} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} aria-hidden="true">
+              <path className={styles.sparkLine} d={spark} />
+            </svg>
+            <div>
+              <div className={styles.peaks}>{Math.round(run.peakHp)} whp · {Math.round(run.peakTq)} lb-ft</div>
+              <div className={styles.delta} data-tone={tone}>
+                {deltaText}
+                {run.knocks > 0 && <span className={styles.knocks}> · {run.knocks} knock{run.knocks === 1 ? '' : 's'}</span>}
               </div>
-              <svg className={styles.spark} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} aria-hidden="true">
-                <path className={styles.sparkLine} d={sparklinePath(run.points, SPARK_W, SPARK_H)} />
-              </svg>
-              <div>
-                <div className={styles.peaks}>{Math.round(run.peakHp)} whp · {Math.round(run.peakTq)} lb-ft</div>
-                <div className={styles.delta} data-tone={tone}>
-                  {prev ? `${dHp > 0 ? '+' : ''}${Math.round(dHp)} whp vs Run ${prev.n}` : 'first pull'}
-                  {run.knocks > 0 && <span className={styles.knocks}> · {run.knocks} knock{run.knocks === 1 ? '' : 's'}</span>}
-                </div>
-              </div>
-              <button
-                type="button"
-                className={styles.pin}
-                data-on={pinned}
-                aria-label={pinned ? `Unpin run ${run.n}` : `Pin run ${run.n} as the comparison`}
-                onClick={() => dispatch(pinned ? { type: ACTIONS.UNPIN_RUN } : { type: ACTIONS.PIN_RUN, id: run.id })}
-              >
-                <Pin size={12} />
-              </button>
-              {changed.length > 0 && (
-                <div className={styles.changed}>Changed since Run {prev.n}: {changed.join(', ')}</div>
-              )}
-            </li>
-          );
-        })}
+            </div>
+            <button
+              type="button"
+              className={styles.pin}
+              data-on={pinned}
+              aria-label={pinned ? `Unpin run ${run.n}` : `Pin run ${run.n} as the comparison`}
+              onClick={() => dispatch(pinned ? { type: ACTIONS.UNPIN_RUN } : { type: ACTIONS.PIN_RUN, id: run.id })}
+            >
+              <Pin size={12} />
+            </button>
+            {changed.length > 0 && (
+              <div className={styles.changed}>Changed since Run {prev.n}: {changed.join(', ')}</div>
+            )}
+          </li>
+        ))}
       </ul>
     </>
   );

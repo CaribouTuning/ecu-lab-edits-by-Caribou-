@@ -161,12 +161,12 @@ export function measuredInputs(build, tune, loadKpa) {
 export function diffMeasuredInputs(a, b) {
   const changed = [];
   for (const k of MEASURED_BUILD_KEYS) {
-    if (JSON.stringify(a.build?.[k]) !== JSON.stringify(b.build?.[k])) changed.push(k);
+    if (JSON.stringify(a?.build?.[k]) !== JSON.stringify(b?.build?.[k])) changed.push(k);
   }
   for (const k of MEASURED_TUNE_KEYS) {
-    if (JSON.stringify(a.tune?.[k]) !== JSON.stringify(b.tune?.[k])) changed.push(k);
+    if (JSON.stringify(a?.tune?.[k]) !== JSON.stringify(b?.tune?.[k])) changed.push(k);
   }
-  if (a.loadKpa !== b.loadKpa) changed.push('loadKpa');
+  if (a?.loadKpa !== b?.loadKpa) changed.push('loadKpa');
   return changed.map((k) => {
     const label = INPUT_LABELS[k];
     if (!label) throw new Error(`diffMeasuredInputs: no label defined for measured input "${k}"`);

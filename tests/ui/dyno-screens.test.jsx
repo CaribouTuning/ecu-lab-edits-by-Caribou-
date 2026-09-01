@@ -423,6 +423,20 @@ describe('DYNO > HISTORY', () => {
     expect(rows[2].textContent).toContain('Run 1');
   });
 
+  it('calls the real first pull "first pull"', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_1], pinnedRunId: null });
+    expect(screen.getByText('first pull')).toBeTruthy();
+  });
+
+  it('does not call a capped-off log\'s oldest VISIBLE row "first pull" when it is not run 1', () => {
+    // Once the log caps at RUN_LIMIT, the bottom row has no `prev` either, at
+    // whatever `n` it happens to be — `prev === undefined` alone is not "this was
+    // the career's first pull".
+    const oldButNotFirst = { ...RUN_1, id: 'old', n: 137 };
+    mountWithResult(<HistoryScreen />, { runs: [oldButNotFirst], pinnedRunId: null });
+    expect(screen.queryByText('first pull')).toBeNull();
+  });
+
   it('signs a gain over the previous run as positive', () => {
     // RUN_3 is 340 whp, RUN_2 is 320: a real 20 whp gain must read "+20", not "-20".
     mountWithResult(<HistoryScreen />, { runs: [RUN_3, RUN_2], pinnedRunId: null });

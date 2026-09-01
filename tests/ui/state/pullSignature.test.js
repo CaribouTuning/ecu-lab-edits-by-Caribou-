@@ -189,6 +189,16 @@ describe('diffMeasuredInputs', () => {
       .toEqual(['turbo', 'fuel', 'dyno load']);
   });
 
+  it('does not throw when a projection is missing entirely, not just a key inside it', () => {
+    // storage.js validates that `runs` is an array but not that its elements are
+    // records, so a hand-edited save's `runs: [1, 2, 3]` can reach this function with
+    // an operand that has no `.build`/`.tune` at all — not merely a missing key
+    // inside them. `a.build?.[k]` guards the missing KEY but still throws reading
+    // `.build` off an `a` that is itself undefined.
+    expect(() => diffMeasuredInputs(undefined, project())).not.toThrow();
+    expect(() => diffMeasuredInputs(project(), undefined)).not.toThrow();
+  });
+
   it('reports the same fields the signature reports as a change', () => {
     // The two functions must never disagree about WHETHER anything moved. This is the
     // property that justifies them living in one file over one private key list.
