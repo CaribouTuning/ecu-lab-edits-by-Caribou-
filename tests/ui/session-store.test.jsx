@@ -414,20 +414,15 @@ describe('banking a pull', () => {
     // career is simply gone at the next refresh. A whole-branch break sweep found
     // the equivalent gap in the pre-Task-5 design; every earlier review confirmed the
     // call site was CORRECT without checking a regression would be caught.
+    // No settle-wait for the mount's async career-restore effect before banking: a
+    // synchronous `fireEvent` chain CAN still land `BANK_PULL` before that effect's
+    // `RESTORE_CAREER` dispatch resolves, but RESTORE_CAREER merges the loaded
+    // (empty, on this fresh a `localStorage`) career with whatever the session
+    // already banked rather than overwriting it — see reducer.js. So racing it here
+    // is no longer a hazard this test needs to dodge; it exercises the actual
+    // ordering a real fast-clicking player can produce instead of avoiding it.
     launch();
     fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
-    // Let the mount's async career-restore effect resolve before banking a pull.
-    // Racing it — as a synchronous `fireEvent` chain otherwise would — lets its
-    // pre-pull snapshot land AFTER `BANK_PULL` and overwrite the just-banked pull
-    // count with zero, in the store and (through the persistence effect) on disk.
-    // Real usage can never hit this: the load settles on the very next microtask
-    // tick, long before any human reacts to the mounted screen.
-    await waitFor(async () => expect((await loadCareer()).pulls).toBe(0));
-    // Guard the setup: nothing MEANINGFUL is saved before a pull is banked (the
-    // restore effect above re-persists the empty career it just read, which is
-    // legitimate and asserted on the line above), so if the pull below silently
-    // failed to run, the assertion afterwards would be comparing zero to zero.
-
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),

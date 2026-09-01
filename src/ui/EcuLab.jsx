@@ -47,7 +47,7 @@ import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { pullSignature, measuredInputs } from './state/pullSignature.js';
-import { RUN_LIMIT, ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
+import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -657,16 +657,21 @@ export function EcuLabApp() {
   }, [dispatch]);
 
   // Career stats persist across sessions so the high score is worth chasing.
+  //
+  // `loadCareer()` is an `await`, so a pull can bank between mount and this resolving
+  // — reachable in practice on the `artifact` storage backend, where the underlying
+  // `window.storage.get` is a real round trip. A single RESTORE_CAREER action, rather
+  // than the five separate `SET_SESSION_FIELD` dispatches this used to fire, is what
+  // keeps that race from rolling a banked pull back to the pre-pull snapshot: the
+  // reducer MERGES the loaded career with whatever the session already holds instead
+  // of overwriting it. See RESTORE_CAREER's own doc in reducer.js for the full case,
+  // including why a skip-instead-of-merge fix would only move the data loss.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const c = await loadCareer();
       if (cancelled) return;
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'bestScore', value: c.best });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'totalScore', value: c.total });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: c.pulls });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'runs', value: c.runs.slice(0, RUN_LIMIT) });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pinnedRunId', value: c.pinnedRunId });
+      dispatch({ type: ACTIONS.RESTORE_CAREER, career: c });
       careerLoaded.current = true;
     })();
     return () => { cancelled = true; };

@@ -30,7 +30,7 @@ import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, pr
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
-import { pushRun } from './runLog.js';
+import { pushRun, RUN_LIMIT } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -56,6 +56,7 @@ export const ACTIONS = Object.freeze({
   RESET_TO_STOCK: 'RESET_TO_STOCK',
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
+  RESTORE_CAREER: 'RESTORE_CAREER',
   PIN_RUN: 'PIN_RUN',
   UNPIN_RUN: 'UNPIN_RUN',
   LIVE_STEP: 'LIVE_STEP',
@@ -216,6 +217,47 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * Merges a career loaded from storage into the CURRENT session, rather than
+ * overwriting it. Replaces five `SET_SESSION_FIELD` dispatches EcuLab.jsx used to fire
+ * after `await loadCareer()` resolved — the same reasoning `BANK_PULL` and
+ * `APPLY_PRESET` already document for why a cross-field write is one action instead of
+ * a sequence: five separate dispatches have an ordering hazard a single pass does not.
+ *
+ * Here the hazard is a race, not intra-render ordering: `loadCareer()` is an `await`,
+ * so a pull can bank (`BANK_PULL`) between mount and this action landing. On the
+ * `artifact` storage backend `window.storage.get` is a real round trip a human
+ * interaction can land inside, not just a stray microtask, so this is reachable in
+ * practice, not merely in theory. Overwriting the session with the loaded snapshot in
+ * that window would roll a real, already-banked pull back to whatever was saved before
+ * it — and because career persistence is itself a reactive effect over these same
+ * fields (not the old imperative call inside `doRun`), the rollback would not stop at
+ * the screen: the persistence effect would write the rolled-back snapshot straight
+ * back to disk, destroying the banked pull permanently.
+ *
+ * The fix is a merge, not a skip. Skipping the restore when something banked first
+ * would leave the session holding ONLY this-session values — a `bestScore` from one
+ * pull, a `totalScore` from one pull — and the persistence effect would then write
+ * that truncated career over the real saved one, which is the same data loss by a
+ * different door. Merging instead means every term below combines "what was saved"
+ * with "what happened this session since mount":
+ *  - `bestScore`: the higher of the two.
+ *  - `totalScore` / `pullCount`: summed — the session started at zero, so its value
+ *    IS what happened since mount.
+ *  - `runs`: the session's own runs (newer) in front of the loaded ones, capped at
+ *    {@link RUN_LIMIT} the same way `pushRun` caps `BANK_PULL`'s write.
+ *  - `pinnedRunId`: a pin the player set this session wins over a restored one — they
+ *    cannot have pinned anything before the restore lands, so a non-null session value
+ *    here can only mean they pinned it AFTER banking, during the same race window.
+ *
+ * In the common case — nothing banked before the load resolves — the session is still
+ * at its zeroed initial values, so every one of those merges reduces to the loaded
+ * value exactly: `max(loaded, 0) === loaded`, `loaded + 0 === loaded`,
+ * `[...[], ...loaded] === loaded`-shaped, `null ?? loaded === loaded`. One code path
+ * handles both, with no `if (pristine)` branch to fall out of sync with the other.
+ * @typedef {{type: 'RESTORE_CAREER', career: import('../../storage.js').Career}} RestoreCareerAction
+ */
+
+/**
  * Pins one banked run as the ghost curve's comparison. Holds the run's `id` rather
  * than its index: eviction shifts every index, so an index-based pin would silently
  * repoint at a run the player never chose.
@@ -284,14 +326,15 @@ export const ACTIONS = Object.freeze({
 /**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the nineteen specific typedefs above become
+ * shape is assignable to `StoreAction` and the twenty specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction | PinRunAction |
- *   UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction | RedoAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction | RestoreCareerAction |
+ *   PinRunAction | UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction |
+ *   RedoAction
  * } KnownStoreAction
  */
 
@@ -513,6 +556,26 @@ function baseReducer(state, action) {
           pullCount: state.session.pullCount + 1,
         },
       };
+
+    case ACTIONS.RESTORE_CAREER: {
+      const c = action.career;
+      const s = state.session;
+      return {
+        ...state,
+        session: {
+          ...s,
+          bestScore: Math.max(c.best, s.bestScore),
+          totalScore: c.total + s.totalScore,
+          pullCount: c.pulls + s.pullCount,
+          // Anything banked this session is newer than anything loaded, so it goes in
+          // front — same newest-first convention `pushRun` keeps for BANK_PULL.
+          runs: [...s.runs, ...c.runs].slice(0, RUN_LIMIT),
+          // A pin set THIS session (impossible before the restore lands, except during
+          // the very race this action exists to survive) wins over a restored one.
+          pinnedRunId: s.pinnedRunId ?? c.pinnedRunId,
+        },
+      };
+    }
 
     case ACTIONS.PIN_RUN:
       return { ...state, session: { ...state.session, pinnedRunId: action.id } };

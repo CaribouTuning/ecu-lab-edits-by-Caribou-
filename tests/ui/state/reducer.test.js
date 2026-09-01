@@ -885,6 +885,71 @@ describe('BANK_PULL', () => {
   });
 });
 
+describe('RESTORE_CAREER', () => {
+  // `EcuLab.jsx`'s career-restore effect is `await loadCareer()` followed by a single
+  // dispatch of this action. `loadCareer()` is async, so a pull can bank
+  // (`BANK_PULL`) — and, on the `artifact` storage backend, a real round trip means a
+  // human interaction genuinely can land inside that window. Overwriting the session
+  // with the loaded snapshot in that case would roll a real, already-banked pull back
+  // to whatever was saved before it. RESTORE_CAREER exists to merge instead.
+
+  /** A loaded run, distinct from anything a pull banked this session. */
+  const loadedRun = /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+    id: 'loaded', n: 4, at: 500, label: 'VQ35DE', peakHp: 300, peakTq: 260, knocks: 0,
+    scores: { tuning: 70, engineer: 65, pull: 400 },
+    points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
+  /** BANK_PULL's minimum viable payload — mirrors the 'run log' describe block above. */
+  const bank = (id, pullScore) => ({
+    type: ACTIONS.BANK_PULL,
+    run: /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+      id, n: Number(id), at: 1000, label: 'VQ35DE', peakHp: 320, peakTq: 300, knocks: 0,
+      scores: { tuning: 90, engineer: 85, pull: pullScore },
+      points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+    }),
+    result: { peakHp: 320, peakTq: 300, points: [], events: [], wear: { piston: 1, bearing: 1, valve: 1 } },
+    pullScore,
+    scores: { tuning: { score: 90 }, engineer: { score: 85 }, signature: 'sig' },
+  });
+
+  it('into a pristine session, yields exactly the loaded values', () => {
+    const career = {
+      best: 812, total: 3405, pulls: 7, runs: [loadedRun], pinnedRunId: 'loaded',
+    };
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESTORE_CAREER, career });
+    expect(s.session.bestScore).toBe(812);
+    expect(s.session.totalScore).toBe(3405);
+    expect(s.session.pullCount).toBe(7);
+    expect(s.session.runs).toEqual([loadedRun]);
+    expect(s.session.pinnedRunId).toBe('loaded');
+  });
+
+  it('merges, rather than overwrites, a career banked between mount and load — the race', () => {
+    // Bank a pull FIRST — simulating a pull landing before loadCareer() resolves —
+    // then pin it, then restore. A restore that overwrites instead of merges fails
+    // every assertion below.
+    const banked = reducer(makeInitialState(), bank('new', 500));
+    const pinned = reducer(banked, { type: ACTIONS.PIN_RUN, id: 'new' });
+
+    const career = {
+      best: 700, total: 1000, pulls: 5, runs: [loadedRun], pinnedRunId: 'loaded',
+    };
+    const s = reducer(pinned, { type: ACTIONS.RESTORE_CAREER, career });
+
+    // bestScore: the max of the two, not the loaded value replacing the banked one.
+    expect(s.session.bestScore).toBe(700);
+    // totalScore / pullCount: summed, not replaced.
+    expect(s.session.totalScore).toBe(1500);
+    expect(s.session.pullCount).toBe(6);
+    // The banked run survives the restore AND stays at index 0 — it is newer than
+    // anything loaded from storage.
+    expect(s.session.runs.map((r) => r.id)).toEqual(['new', 'loaded']);
+    // A pin set this session survives a restore that names a different run.
+    expect(s.session.pinnedRunId).toBe('new');
+  });
+});
+
 describe('UNDO / REDO', () => {
   /** A state with one hand VE edit already applied. */
   const edited = () => reducer(
