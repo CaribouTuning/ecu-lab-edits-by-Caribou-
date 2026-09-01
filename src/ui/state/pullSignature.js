@@ -35,8 +35,11 @@
  * simulation, so none of them can change a number.
  *
  * WHY A SIGNATURE AND NOT A DEEP COMPARE
- * A string compare answers that in one operation and cannot drift out of sync with a
- * hand-written field-by-field comparison as fields are added.
+ * The only question asked of `pullSignature` itself is "has any measured input moved?",
+ * never "which one" — {@link diffMeasuredInputs} answers that separately, and over the
+ * same key lists so the two can never disagree. A string compare answers the "has it
+ * moved" question in one operation and cannot drift out of sync with a hand-written
+ * field-by-field comparison as fields are added.
  *
  * THE ERROR IT IS ALLOWED TO MAKE, AND THE ONE IT IS NOT
  * `JSON.stringify` serialises object keys in insertion order, so two `engineConfig`
