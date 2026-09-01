@@ -23,7 +23,7 @@ export const ROUTES = {
   dash: ['live', 'stats', 'health', 'learn'],
   build: ['engine', 'induction', 'fuel', 'exhaust'],
   tune: ['airflow', 'spark', 'fuel', 'injectors', 'sensors'],
-  dyno: ['result', 'data', 'log', 'score'],
+  dyno: ['result', 'data', 'log', 'score', 'history'],
 };
 
 /**

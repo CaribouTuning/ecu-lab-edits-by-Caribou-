@@ -68,6 +68,7 @@ import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
+import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
@@ -1042,7 +1043,7 @@ export function EcuLabApp() {
 
                 {!running && (
                   <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                    {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE']].map(([id, label]) => {
+                    {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']].map(([id, label]) => {
                       const on = dynoView === id;
                       const flag = id === 'log' && result.events.length > 0;
                       return (
@@ -1085,6 +1086,10 @@ export function EcuLabApp() {
 
                 {!running && dynoView === 'score' && scores && (
                   <ScoreScreen scores={scores} stale={scoresStale} />
+                )}
+
+                {!running && dynoView === 'history' && (
+                  <HistoryScreen />
                 )}
               </>
             )}

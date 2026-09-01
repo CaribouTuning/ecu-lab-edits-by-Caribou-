@@ -20,10 +20,14 @@ import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { DataScreen } from '../../src/ui/screens/dyno/DataScreen.jsx';
+import { HistoryScreen } from '../../src/ui/screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from '../../src/ui/screens/dyno/LogScreen.jsx';
 import { ResultScreen } from '../../src/ui/screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from '../../src/ui/screens/dyno/ScoreScreen.jsx';
+import { makeInitialState } from '../../src/ui/state/initialState.js';
+import { measuredInputs } from '../../src/ui/state/pullSignature.js';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { makeRunRecord } from '../../src/ui/state/runLog.js';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import EcuLab from '../../src/ui/EcuLab.jsx';
 
@@ -324,5 +328,73 @@ describe('DYNO while a pull is running', () => {
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
       { timeout: 10000 },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------
+/** Three records, oldest id last, matching the store's newest-first order. */
+const RUN_1 = makeRunRecord({
+  id: 'a', n: 1, at: 1_000, label: 'VQ35DE',
+  result: { peakHp: 300, peakTq: 280, points: [{ rpm: 1500, hp: 100, torque: 200 }], events: [] },
+  scores: { tuning: { score: 80 }, engineer: { score: 70 } }, pullScore: 640,
+  inputs: measuredInputs(makeInitialState().build, makeInitialState().tune, 100),
+});
+const RUN_2 = { ...RUN_1, id: 'b', n: 2, peakHp: 320 };
+const RUN_3 = { ...RUN_1, id: 'c', n: 3, peakHp: 340 };
+/** Identical to RUN_1 except for one measured input, so the diff has exactly one answer. */
+const RUN_BOOSTED = {
+  ...RUN_1, id: 'd', n: 2, peakHp: 400,
+  inputs: measuredInputs(
+    { ...makeInitialState().build, boostCurve: [1, 2, 3, 4, 5, 6, 7, 8] },
+    makeInitialState().tune, 100,
+  ),
+};
+
+describe('DYNO > HISTORY', () => {
+  it('shows an empty state before any pull', () => {
+    mountWithResult(<HistoryScreen />, { runs: [], pinnedRunId: null });
+    expect(screen.getByText(/no pulls yet/i)).toBeTruthy();
+  });
+
+  it('lists runs newest first', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_3, RUN_2, RUN_1], pinnedRunId: null });
+    const rows = screen.getAllByRole('listitem');
+    // Position, not presence: a screen that rendered the log reversed would pass a
+    // test that only asserted all three runs appear somewhere.
+    expect(rows[0].textContent).toContain('Run 3');
+    expect(rows[2].textContent).toContain('Run 1');
+  });
+
+  it('names what changed between a run and the one before it', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_BOOSTED, RUN_1], pinnedRunId: null });
+    expect(screen.getByText(/boost curve/)).toBeTruthy();
+  });
+
+  it('says nothing changed when nothing did', () => {
+    // The other half of the diff pair. A screen that always rendered the "changed"
+    // line would pass the test above while telling the player a clean re-run had
+    // altered their build.
+    mountWithResult(<HistoryScreen />, { runs: [{ ...RUN_1, id: 'e', n: 2 }, RUN_1], pinnedRunId: null });
+    expect(screen.queryByText(/Changed since/)).toBe(null);
+  });
+
+  it('pins a run and unpins the same run', () => {
+    // Both directions through one control, so a handler that only ever dispatched
+    // PIN_RUN would fail the second half.
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_1], pinnedRunId: null });
+    // Full literals, not substrings: "Unpin run 1" CONTAINS "Pin run 1", so a loose
+    // matcher would happily find the wrong button and still pass.
+    fireEvent.click(screen.getByRole('button', { name: 'Pin run 1 as the comparison' }));
+    expect(screen.getByRole('button', { name: 'Unpin run 1' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin run 1' }));
+    expect(screen.getByRole('button', { name: 'Pin run 1 as the comparison' })).toBeTruthy();
+  });
+
+  it('marks only the pinned row as pinned', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_1], pinnedRunId: RUN_1.id });
+    // Anchored for the same reason: /pin run/i matches "Unpin run 1" as well, and
+    // would count two where the answer is one.
+    expect(screen.getAllByRole('button', { name: /^Unpin run/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Pin run/ })).toHaveLength(1);
   });
 });
