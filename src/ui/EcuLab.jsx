@@ -47,7 +47,7 @@ import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { pullSignature, measuredInputs } from './state/pullSignature.js';
-import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
+import { RUN_LIMIT, ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -240,6 +240,9 @@ export function EcuLabApp() {
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
+  // Guards the persistence effect below: nothing may be written until the saved career
+  // has actually been read back, or a cold start overwrites it with zeroes.
+  const careerLoaded = useRef(false);
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
   // invalidation now happens inside the reducer rather than in a wrapper each new
@@ -515,11 +518,6 @@ export function EcuLabApp() {
     [build, tune, loadKpa],
   );
 
-  // Persistence goes through the storage adapter, which picks whichever backend is
-  // available (artifact host, localStorage, or in-memory) so career stats survive a
-  // refresh wherever the app is deployed.
-  const persistCareer = (best, total, pulls) => saveCareer({ best, total, pulls });
-
   const doRun = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
@@ -567,12 +565,6 @@ export function EcuLabApp() {
         inputs: measuredInputs(build, tune, loadKpa),
       }),
     });
-    // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
-    // expressions. They are still computed here because `persistCareer` needs the new
-    // values NOW: reading them back off `session` would read this render's stale ones.
-    const nextBest = Math.max(bestScore, pull);
-    const nextTotal = totalScore + pull;
-    persistCareer(nextBest, nextTotal, nextPulls);
     const total = r.points.length;
     let i = 0;
     revealTimer.current = setInterval(() => {
@@ -673,10 +665,21 @@ export function EcuLabApp() {
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'bestScore', value: c.best });
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'totalScore', value: c.total });
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: c.pulls });
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'runs', value: c.runs.slice(0, RUN_LIMIT) });
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pinnedRunId', value: c.pinnedRunId });
+      careerLoaded.current = true;
     })();
     return () => { cancelled = true; };
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
+
+  // Career state is written back whenever it moves. This replaces a save call inside
+  // `doRun`, which could not cover the pin: pinning is a dispatch like any other and
+  // has no natural "and now save" call site. An effect over the persisted fields does.
+  useEffect(() => {
+    if (!careerLoaded.current) return;
+    saveCareer({ best: bestScore, total: totalScore, pulls: pullCount, runs, pinnedRunId });
+  }, [bestScore, totalScore, pullCount, runs, pinnedRunId]);
 
   // Cmd/Ctrl+Z and Cmd+Shift+Z / Ctrl+Y. This lives here rather than in AppShell,
   // whose header is explicit that the shell owns chrome only and never dispatches to
