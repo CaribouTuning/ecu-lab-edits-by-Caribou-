@@ -1040,26 +1040,39 @@ export function EcuLabApp() {
                     </Panel>
                   );
                 })()}
+              </>
+            )}
 
-                {!running && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                    {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']].map(([id, label]) => {
-                      const on = dynoView === id;
-                      const flag = id === 'log' && result.events.length > 0;
-                      return (
-                        <button key={id} onClick={() => goSection('dyno', id)} style={{
-                          flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
-                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
-                          color: on ? T.accInk : T.ink2, position: 'relative',
-                        }}>
-                          {label}
-                          {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+            {/* HISTORY sits outside the `result` gate deliberately: its data (`runs`)
+                outlives `result` — it is restored from storage on a cold start, while
+                `result` is not persisted and is cleared by APPLY_PRESET — so it is the
+                first DYNO section for which that is true. When there is no result yet,
+                the switcher below shows ONLY the history entry, since the other four
+                lead to sections that render nothing without one. */}
+            {!running && (result || runs.length > 0) && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {(result
+                  ? [['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]
+                  : [['history', 'HISTORY']]
+                ).map(([id, label]) => {
+                  const on = dynoView === id;
+                  const flag = id === 'log' && result && result.events.length > 0;
+                  return (
+                    <button key={id} onClick={() => goSection('dyno', id)} style={{
+                      flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
+                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
+                      color: on ? T.accInk : T.ink2, position: 'relative',
+                    }}>
+                      {label}
+                      {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
+            {result && (
+              <>
                 {/* DYNO's gating is irregular ON PURPOSE, not four uniform
                     `dynoView === x` checks like TUNE's. While a pull is running the
                     switcher above is hidden and CURVES is the only view that can show
@@ -1087,11 +1100,11 @@ export function EcuLabApp() {
                 {!running && dynoView === 'score' && scores && (
                   <ScoreScreen scores={scores} stale={scoresStale} />
                 )}
-
-                {!running && dynoView === 'history' && (
-                  <HistoryScreen />
-                )}
               </>
+            )}
+
+            {!running && dynoView === 'history' && (
+              <HistoryScreen />
             )}
           </div>
         )}
