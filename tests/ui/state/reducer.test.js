@@ -20,6 +20,7 @@ import {
 } from '../../../src/ui/state/history.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
+import { RUN_LIMIT } from '../../../src/ui/state/runLog.js';
 
 /**
  * A state where EVERY field of EVERY slice holds a value no real APPLY_PRESET write
@@ -929,7 +930,7 @@ describe('RESTORE_CAREER', () => {
     // Bank a pull FIRST — simulating a pull landing before loadCareer() resolves —
     // then pin it, then restore. A restore that overwrites instead of merges fails
     // every assertion below.
-    const banked = reducer(makeInitialState(), bank('new', 500));
+    const banked = reducer(makeInitialState(), bank('new', 900));
     const pinned = reducer(banked, { type: ACTIONS.PIN_RUN, id: 'new' });
 
     const career = {
@@ -938,15 +939,49 @@ describe('RESTORE_CAREER', () => {
     const s = reducer(pinned, { type: ACTIONS.RESTORE_CAREER, career });
 
     // bestScore: the max of the two, not the loaded value replacing the banked one.
-    expect(s.session.bestScore).toBe(700);
+    expect(s.session.bestScore).toBe(900);
     // totalScore / pullCount: summed, not replaced.
-    expect(s.session.totalScore).toBe(1500);
+    expect(s.session.totalScore).toBe(1900);
     expect(s.session.pullCount).toBe(6);
     // The banked run survives the restore AND stays at index 0 — it is newer than
     // anything loaded from storage.
     expect(s.session.runs.map((r) => r.id)).toEqual(['new', 'loaded']);
     // A pin set this session survives a restore that names a different run.
     expect(s.session.pinnedRunId).toBe('new');
+  });
+
+  it('caps total runs at RUN_LIMIT during merge, evicting oldest loaded runs', () => {
+    // Session holds 1 banked run; loaded career holds RUN_LIMIT runs. The merge
+    // should cap at RUN_LIMIT total, evicting only from the LOADED side (the older
+    // runs), not from the banked side. This test proves the merge respects the cap
+    // and evicts from the correct end.
+    const banked = reducer(makeInitialState(), bank('session', 500));
+
+    // Build a career with exactly RUN_LIMIT runs (20), with IDs like 'loaded-0' through
+    // 'loaded-19', in newest-first order (most recent at index 0).
+    const loadedRuns = [];
+    for (let i = 0; i < RUN_LIMIT; i += 1) {
+      loadedRuns.push({
+        id: `loaded-${i}`, n: i + 100, at: 1000 + i, label: 'VQ35DE',
+        peakHp: 300 + i, peakTq: 260 + i, knocks: 0,
+        scores: { tuning: 70, engineer: 65, pull: 400 + i },
+        points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+      });
+    }
+
+    const career = {
+      best: 500, total: 5000, pulls: 50, runs: loadedRuns, pinnedRunId: null,
+    };
+    const s = reducer(banked, { type: ACTIONS.RESTORE_CAREER, career });
+
+    // Total runs should be capped at RUN_LIMIT (20).
+    expect(s.session.runs).toHaveLength(RUN_LIMIT);
+    // The banked run is newest and should survive, always at index 0.
+    expect(s.session.runs[0].id).toBe('session');
+    // The oldest loaded run ('loaded-19') should be evicted because it's the least recent.
+    expect(s.session.runs.map((r) => r.id)).not.toContain('loaded-19');
+    // The second-oldest loaded run ('loaded-18') should survive.
+    expect(s.session.runs.map((r) => r.id)).toContain('loaded-18');
   });
 });
 

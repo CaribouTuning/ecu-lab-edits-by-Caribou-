@@ -571,7 +571,12 @@ function baseReducer(state, action) {
           // front — same newest-first convention `pushRun` keeps for BANK_PULL.
           runs: [...s.runs, ...c.runs].slice(0, RUN_LIMIT),
           // A pin set THIS session (impossible before the restore lands, except during
-          // the very race this action exists to survive) wins over a restored one.
+          // the very race this action exists to survive) wins over a restored one. NOTE:
+          // null means both "never touched" and "deliberately cleared", so an unpin
+          // performed between BANK_PULL and RESTORE_CAREER is indistinguishable from no
+          // pin ever being set, and a stale saved pin will resurface. This edge is
+          // accepted rather than fixed with a tri-state; the restore race is rare and
+          // the workaround (clicking the pin again) is trivial.
           pinnedRunId: s.pinnedRunId ?? c.pinnedRunId,
         },
       };
