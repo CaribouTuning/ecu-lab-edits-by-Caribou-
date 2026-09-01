@@ -418,6 +418,19 @@ describe('DYNO > HISTORY', () => {
     expect(rows[2].textContent).toContain('Run 1');
   });
 
+  it('signs a gain over the previous run as positive', () => {
+    // RUN_3 is 340 whp, RUN_2 is 320: a real 20 whp gain must read "+20", not "-20".
+    mountWithResult(<HistoryScreen />, { runs: [RUN_3, RUN_2], pinnedRunId: null });
+    expect(screen.getByText(/\+20 whp vs Run 2/)).toBeTruthy();
+  });
+
+  it('signs a loss under the previous run as negative', () => {
+    // The converse ordering of the same two fixtures — RUN_2 (320) now the current
+    // run, RUN_3 (340) the one before it — so a real 20 whp loss must read "-20".
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_3], pinnedRunId: null });
+    expect(screen.getByText(/-20 whp vs Run 3/)).toBeTruthy();
+  });
+
   it('names what changed between a run and the one before it', () => {
     mountWithResult(<HistoryScreen />, { runs: [RUN_BOOSTED, RUN_1], pinnedRunId: null });
     expect(screen.getByText(/boost curve/)).toBeTruthy();
@@ -445,9 +458,19 @@ describe('DYNO > HISTORY', () => {
 
   it('marks only the pinned row as pinned', () => {
     mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_1], pinnedRunId: RUN_1.id });
+    // Names the end, not just the count: an implementation that marked runs[0]
+    // pinned whenever anything is pinned would produce the same 1/1 counts below.
+    expect(screen.getByRole('button', { name: 'Unpin run 1' })).toBeTruthy();
     // Anchored for the same reason: /pin run/i matches "Unpin run 1" as well, and
     // would count two where the answer is one.
     expect(screen.getAllByRole('button', { name: /^Unpin run/ })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /^Pin run/ })).toHaveLength(1);
+
+    // `data-pinned` is the row's only visual mark and is otherwise asserted
+    // nowhere. Rows render newest first, so index 0 is RUN_2 (unpinned) and
+    // index 1 is RUN_1 (the pinned one).
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0].getAttribute('data-pinned')).toBe('false');
+    expect(rows[1].getAttribute('data-pinned')).toBe('true');
   });
 });
