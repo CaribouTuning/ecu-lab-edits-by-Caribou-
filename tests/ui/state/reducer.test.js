@@ -983,6 +983,35 @@ describe('RESTORE_CAREER', () => {
     // The second-oldest loaded run ('loaded-18') should survive.
     expect(s.session.runs.map((r) => r.id)).toContain('loaded-18');
   });
+
+  it('caps an over-length loaded runs array at RUN_LIMIT even into a pristine session', () => {
+    // Every other cap test here has a banked session run present, so `s.runs.length`
+    // is always truthy in them. A merge written as
+    // `s.runs.length ? [...s.runs, ...c.runs].slice(0, RUN_LIMIT) : c.runs` passes
+    // all of them while letting an over-length loaded array through UNSLICED into a
+    // pristine session — and back out to disk on the next save. This restores
+    // RUN_LIMIT + 5 loaded runs into makeInitialState() (no banked pull at all) to
+    // catch exactly that.
+    const loadedRuns = [];
+    for (let i = 0; i < RUN_LIMIT + 5; i += 1) {
+      loadedRuns.push({
+        id: `loaded-${i}`, n: 100 - i, at: 2000 - i, label: 'VQ35DE',
+        peakHp: 300, peakTq: 260, knocks: 0,
+        scores: { tuning: 70, engineer: 65, pull: 400 },
+        points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+      });
+    }
+    const career = { best: 0, total: 0, pulls: 0, runs: loadedRuns, pinnedRunId: null };
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESTORE_CAREER, career });
+
+    expect(s.session.runs).toHaveLength(RUN_LIMIT);
+    // The newest RUN_LIMIT survive, in order...
+    expect(s.session.runs.map((r) => r.id)).toEqual(loadedRuns.slice(0, RUN_LIMIT).map((r) => r.id));
+    // ...and every one of the oldest 5 is gone, not some other 5.
+    for (let i = RUN_LIMIT; i < RUN_LIMIT + 5; i += 1) {
+      expect(s.session.runs.some((r) => r.id === `loaded-${i}`)).toBe(false);
+    }
+  });
 });
 
 describe('UNDO / REDO', () => {
