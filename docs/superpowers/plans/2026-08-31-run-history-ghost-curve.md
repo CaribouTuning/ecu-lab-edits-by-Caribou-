@@ -754,7 +754,9 @@ git commit -m "Teach pullSignature which input moved, not just that one did"
   - `BANK_PULL` gains a required `run: RunRecord` field
   - `ACTIONS.PIN_RUN` (`{type, id}`) and `ACTIONS.UNPIN_RUN` (`{type}`)
 
-**This task is additive.** `prevResult` stays exactly as it is; Task 4 removes it. Keeping the two apart is deliberate: "does the store record runs correctly" and "do the readers correctly switch over" are separately rejectable, and splitting them keeps Task 4's diff purely the migration.
+**This task is additive on the READ side.** `prevResult` stays exactly as it is and none of its readers move; Task 4 removes it. Keeping the two apart is deliberate: "does the store record runs correctly" and "do the readers correctly switch over" are separately rejectable, and splitting them keeps Task 4's diff purely the migration.
+
+**It is NOT additive on the write side, and that was a correction made during execution.** This task also updates the single `BANK_PULL` dispatch site in `EcuLab.jsx` to supply the new required `run` field — see Task 4's Step 3 for the exact code. The original split left that in Task 4, which cannot work: `run` is a required field of `BankPullAction`, `EcuLab.jsx` no longer carries `@ts-nocheck`, so a Task 3 that adds the requirement without satisfying it fails `tsc --noEmit`. The alternatives were a temporarily optional field, a defensive reducer guard, or a commit that does not typecheck — all worse. The line is now "Task 3 makes the write path work end to end; Task 4 switches the read path over."
 
 **A trap this codebase has already fallen into once:** `KnownStoreAction` is a union with no catch-all member, and its doc comment says "the seventeen specific typedefs above". In PR 4a the union was missed when two actions were added, and `tsc` only surfaced it much later, at the first typed dispatch site. Add both typedefs, add both to the union, **and** update that sentence to "nineteen".
 
@@ -1032,18 +1034,26 @@ pin that a missing ghost is the safe default.
 Expected: FAIL — `ResultScreen` does not accept a `ghostLabel` prop yet, so the legend
 never names a comparison.
 
-- [ ] **Step 3: Build the run record at the dispatch site**
+- [ ] **Step 3: (Already done in Task 3 — verify only)**
 
-In `src/ui/EcuLab.jsx`, add the imports:
+**This step moved to Task 3 during execution.** Making `run` a required field of
+`BankPullAction` while leaving `EcuLab.jsx`'s dispatch site without it fails
+`tsc --noEmit`, because that file no longer carries `@ts-nocheck`. The three
+alternatives — a temporarily optional field, a defensive reducer guard, or a commit
+that does not typecheck — were all worse than moving one step earlier. Task 3 is
+therefore "the write path works end to end" and Task 4 is "the read path switches over".
+
+Verify it is in place before continuing: `doRun` should already build the record via
+`makeRunRecord`, and `EcuLab.jsx` should already import `makeRunRecord` from
+`./state/runLog.js` and `measuredInputs` from `./state/pullSignature.js`.
+
+This task still adds `ghostRun` and `ghostLabel` to the `runLog.js` import:
 
 ```js
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
-import { measuredInputs, pullSignature } from './state/pullSignature.js';
 ```
 
-(`pullSignature` is already imported — extend that line rather than adding a second import from the same module.)
-
-In `doRun`, replace the `dispatch({ type: ACTIONS.BANK_PULL, ... })` call with:
+The `doRun` change below is recorded for reference; Task 3 already made it.
 
 ```js
     const nextPulls = pullCount + 1;
