@@ -46,7 +46,8 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { pullSignature } from './state/pullSignature.js';
+import { pullSignature, measuredInputs } from './state/pullSignature.js';
+import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -67,6 +68,7 @@ import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
+import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
@@ -217,7 +219,7 @@ export function EcuLabApp() {
   const [session] = useSession();
   const {
     loadKpa, soundOn, journeyStep, throttleInput, health,
-    result, prevResult, pullScores, running, revealCount, bestScore, totalScore, pullCount,
+    result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
@@ -239,6 +241,9 @@ export function EcuLabApp() {
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
+  // Guards the persistence effect below: nothing may be written until the saved career
+  // has actually been read back, or a cold start overwrites it with zeroes.
+  const careerLoaded = useRef(false);
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
   // invalidation now happens inside the reducer rather than in a wrapper each new
@@ -514,11 +519,6 @@ export function EcuLabApp() {
     [build, tune, loadKpa],
   );
 
-  // Persistence goes through the storage adapter, which picks whichever backend is
-  // available (artifact host, localStorage, or in-memory) so career stats survive a
-  // refresh wherever the app is deployed.
-  const persistCareer = (best, total, pulls) => saveCareer({ best, total, pulls });
-
   const doRun = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
@@ -540,27 +540,32 @@ export function EcuLabApp() {
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
-    // Banking the pull — prevResult rotation, wear, scores, pull count — lands in the
+    // Banking the pull — result, wear, scores, pull count, run log — lands in the
     // store in one pass. `result` and `pullScore` are precomputed here because the
     // reducer has no access to the useMemo-derived hardware `computePullScore` needs.
-    // The local `setPrevResult`/`setResult`/`setHealth` calls that used to sit above
-    // this line, and the `setBestScore`/`setTotalScore`/`setPullCount` trio below it,
-    // were all mirroring writes this one action already makes — including the
-    // prevResult-before-result rotation whose ordering it exists to own.
+    // The local `setResult`/`setHealth` calls that used to sit above this line, and the
+    // `setBestScore`/`setTotalScore`/`setPullCount` trio below it, were all mirroring
+    // writes this one action already makes.
     // `scores` rides along with the result it belongs to: BANK_PULL keeps the numbers
     // this pull actually measured, and `buildSignature` records the setup it measured
     // them on. Nothing recomputes them afterwards — that is the whole fix (issue #29).
+    const nextPulls = pullCount + 1;
+    const at = Date.now();
     dispatch({
       type: ACTIONS.BANK_PULL, result: r, pullScore: pull,
       scores: { tuning: ts, engineer: es, signature: buildSignature },
+      // `id` pairs the clock with the career ordinal so two records can never collide,
+      // and `at`/`id` are read HERE because the reducer must call no clock of its own.
+      run: makeRunRecord({
+        id: `${at}-${nextPulls}`, n: nextPulls, at,
+        // `engineDerived` carries no name — it is displacement, cylinder count and
+        // redline. The build's name is the loaded preset's, and a build with no preset
+        // is exactly what "Custom build" means everywhere else in this app.
+        label: presetById(presetId)?.name ?? 'Custom build',
+        result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
+        inputs: measuredInputs(build, tune, loadKpa),
+      }),
     });
-    // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
-    // expressions. They are still computed here because `persistCareer` needs the new
-    // values NOW: reading them back off `session` would read this render's stale ones.
-    const nextBest = Math.max(bestScore, pull);
-    const nextTotal = totalScore + pull;
-    const nextPulls = pullCount + 1;
-    persistCareer(nextBest, nextTotal, nextPulls);
     const total = r.points.length;
     let i = 0;
     revealTimer.current = setInterval(() => {
@@ -653,18 +658,34 @@ export function EcuLabApp() {
   }, [dispatch]);
 
   // Career stats persist across sessions so the high score is worth chasing.
+  //
+  // `loadCareer()` is an `await`, so a pull can bank between mount and this resolving
+  // — reachable in practice on the `artifact` storage backend, where the underlying
+  // `window.storage.get` is a real round trip. A single RESTORE_CAREER action, rather
+  // than the five separate `SET_SESSION_FIELD` dispatches this used to fire, is what
+  // keeps that race from rolling a banked pull back to the pre-pull snapshot: the
+  // reducer MERGES the loaded career with whatever the session already holds instead
+  // of overwriting it. See RESTORE_CAREER's own doc in reducer.js for the full case,
+  // including why a skip-instead-of-merge fix would only move the data loss.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const c = await loadCareer();
       if (cancelled) return;
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'bestScore', value: c.best });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'totalScore', value: c.total });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: c.pulls });
+      dispatch({ type: ACTIONS.RESTORE_CAREER, career: c });
+      careerLoaded.current = true;
     })();
     return () => { cancelled = true; };
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
+
+  // Career state is written back whenever it moves. This replaces a save call inside
+  // `doRun`, which could not cover the pin: pinning is a dispatch like any other and
+  // has no natural "and now save" call site. An effect over the persisted fields does.
+  useEffect(() => {
+    if (!careerLoaded.current) return;
+    saveCareer({ best: bestScore, total: totalScore, pulls: pullCount, runs, pinnedRunId });
+  }, [bestScore, totalScore, pullCount, runs, pinnedRunId]);
 
   // Cmd/Ctrl+Z and Cmd+Shift+Z / Ctrl+Y. This lives here rather than in AppShell,
   // whose header is explicit that the shell owns chrome only and never dispatches to
@@ -692,14 +713,24 @@ export function EcuLabApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dispatch]);
 
+  const ghost = ghostRun(runs, pinnedRunId);
+
   const chartData = useMemo(() => {
     if (!result) return [];
-    return result.points.slice(0, running ? revealCount : result.points.length).map((p, i) => ({
-      rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
-      timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
-      prevHp: prevResult?.points?.[i]?.hp, prevTorque: prevResult?.points?.[i]?.torque,
-    }));
-  }, [result, prevResult, running, revealCount]);
+    // Keyed by RPM, not by array position. Today the two are the same thing —
+    // SWEEP_START_RPM and SWEEP_STEP_RPM are constants, so points[i].rpm is always
+    // 1500 + 100i — but a PINNED run may be any length, and the join should state
+    // what it means rather than lean on an invariant two modules away.
+    const ghostByRpm = new Map((ghost?.points ?? []).map((p) => [p.rpm, p]));
+    return result.points.slice(0, running ? revealCount : result.points.length).map((p) => {
+      const g = ghostByRpm.get(p.rpm);
+      return {
+        rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
+        timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
+        prevHp: g?.hp, prevTorque: g?.torque,
+      };
+    });
+  }, [result, ghost, running, revealCount]);
 
   // `buildHistogram`/`applyHistogram` moved to DataScreen.jsx: DYNO's DATALOG
   // section was their only caller, and everything they touch (result, histogram,
@@ -991,12 +1022,12 @@ export function EcuLabApp() {
                   <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
                 </div>
 
-                {prevResult && !running && (() => {
-                  const dHp = result.peakHp - prevResult.peakHp;
-                  const dTq = result.peakTq - prevResult.peakTq;
+                {runs[1] && !running && (() => {
+                  const prev = runs[1];
+                  const dHp = result.peakHp - prev.peakHp;
+                  const dTq = result.peakTq - prev.peakTq;
                   const knockNow = result.events.filter((e) => e.type === 'knock').length;
-                  const knockPrev = prevResult.events.filter((e) => e.type === 'knock').length;
-                  const dKnock = knockNow - knockPrev;
+                  const dKnock = knockNow - prev.knocks;
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
                   return (
                     <Panel tight style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1009,26 +1040,39 @@ export function EcuLabApp() {
                     </Panel>
                   );
                 })()}
+              </>
+            )}
 
-                {!running && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                    {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE']].map(([id, label]) => {
-                      const on = dynoView === id;
-                      const flag = id === 'log' && result.events.length > 0;
-                      return (
-                        <button key={id} onClick={() => goSection('dyno', id)} style={{
-                          flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
-                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
-                          color: on ? T.accInk : T.ink2, position: 'relative',
-                        }}>
-                          {label}
-                          {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+            {/* HISTORY sits outside the `result` gate deliberately: its data (`runs`)
+                outlives `result` — it is restored from storage on a cold start, while
+                `result` is not persisted and is cleared by APPLY_PRESET — so it is the
+                first DYNO section for which that is true. When there is no result yet,
+                the switcher below shows ONLY the history entry, since the other four
+                lead to sections that render nothing without one. */}
+            {!running && (result || runs.length > 0) && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {(result
+                  ? [['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]
+                  : [['history', 'HISTORY']]
+                ).map(([id, label]) => {
+                  const on = dynoView === id;
+                  const flag = id === 'log' && result && result.events.length > 0;
+                  return (
+                    <button key={id} onClick={() => goSection('dyno', id)} style={{
+                      flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
+                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
+                      color: on ? T.accInk : T.ink2, position: 'relative',
+                    }}>
+                      {label}
+                      {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
+            {result && (
+              <>
                 {/* DYNO's gating is irregular ON PURPOSE, not four uniform
                     `dynoView === x` checks like TUNE's. While a pull is running the
                     switcher above is hidden and CURVES is the only view that can show
@@ -1038,7 +1082,11 @@ export function EcuLabApp() {
                     starts instead of falling back to the live curves. Preserve every
                     condition exactly. */}
                 {(running || dynoView === 'result') && (
-                  <ResultScreen chartData={chartData} engineDerived={engineDerived} />
+                  <ResultScreen
+                    chartData={chartData}
+                    engineDerived={engineDerived}
+                    ghostLabel={ghostLabel(ghost, pinnedRunId)}
+                  />
                 )}
 
                 {!running && dynoView === 'data' && (
@@ -1053,6 +1101,10 @@ export function EcuLabApp() {
                   <ScoreScreen scores={scores} stale={scoresStale} />
                 )}
               </>
+            )}
+
+            {!running && dynoView === 'history' && (
+              <HistoryScreen />
             )}
           </div>
         )}

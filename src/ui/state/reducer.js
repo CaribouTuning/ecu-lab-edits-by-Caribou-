@@ -30,6 +30,7 @@ import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, pr
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
+import { pushRun, RUN_LIMIT } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -55,6 +56,9 @@ export const ACTIONS = Object.freeze({
   RESET_TO_STOCK: 'RESET_TO_STOCK',
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
+  RESTORE_CAREER: 'RESTORE_CAREER',
+  PIN_RUN: 'PIN_RUN',
+  UNPIN_RUN: 'UNPIN_RUN',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
   UNDO: 'UNDO',
@@ -183,16 +187,15 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * Finalises a completed dyno pull: banks the score, wears the engine, and rotates
- * `result` into `prevResult`. Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
+ * Finalises a completed dyno pull: banks the score, wears the engine, installs the
+ * new `result`, and pushes a slim record of it to the front of `runs` (Task 4;
+ * `runLog.js`'s `ghostRun` reads that log for the comparison the old `prevResult`
+ * field used to hold directly). Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
  * NOT the whole function, which also flips `running`/`revealCount` for the reveal
  * animation before and after an interval-driven timer runs; that is time-based UI
  * state with no atomicity hazard and stays as plain `SET_SESSION_FIELD` dispatches in
- * the component (Task 4). The part that DOES have an ordering hazard, and is what this
- * action removes: `doRun` used to call `setPrevResult(result)` (the OLD result)
- * before `setResult(r)` (the new one) — reversing those two lines would silently have
- * made `prevResult` equal the new result instead of the old one. `action.result` and
- * `action.pullScore` are precomputed by the caller: `result` comes from
+ * the component. `action.result` and `action.pullScore` are precomputed by the
+ * caller: `result` comes from
  * `simulateSweep`, and `pullScore` from `computePullScore`, which needs derived
  * hardware objects (`turbine`, `compressor`, `dutyPreview`, `exhaustDiaError`) that
  * are `useMemo` values in the component, not raw state the reducer holds — the same
@@ -209,8 +212,79 @@ export const ACTIONS = Object.freeze({
  * `wasBest` is decided HERE rather than by the caller because this case is where
  * `bestScore` moves: the comparison has to happen against the value as it stands
  * BEFORE this pull is folded in, and this is the only place that still holds it.
- * @typedef {{type: 'BANK_PULL', result: object, pullScore: number,
+ * @typedef {{type: 'BANK_PULL', result: object, pullScore: number, run: import('./runLog.js').RunRecord,
  *   scores: {tuning: object, engineer: object, signature: string}}} BankPullAction
+ */
+
+/**
+ * Merges a career loaded from storage into the CURRENT session, rather than
+ * overwriting it. Replaces five `SET_SESSION_FIELD` dispatches EcuLab.jsx used to fire
+ * after `await loadCareer()` resolved — the same reasoning `BANK_PULL` and
+ * `APPLY_PRESET` already document for why a cross-field write is one action instead of
+ * a sequence: five separate dispatches have an ordering hazard a single pass does not.
+ *
+ * Here the hazard is a race, not intra-render ordering: `loadCareer()` is an `await`,
+ * so a pull can bank (`BANK_PULL`) between mount and this action landing. On the
+ * `artifact` storage backend `window.storage.get` is a real round trip a human
+ * interaction can land inside, not just a stray microtask, so this is reachable in
+ * practice, not merely in theory. Overwriting the session with the loaded snapshot in
+ * that window would roll a real, already-banked pull back to whatever was saved before
+ * it — and because career persistence is itself a reactive effect over these same
+ * fields (not the old imperative call inside `doRun`), the rollback would not stop at
+ * the screen: the persistence effect would write the rolled-back snapshot straight
+ * back to disk, destroying the banked pull permanently.
+ *
+ * The fix is a merge, not a skip. Skipping the restore when something banked first
+ * would leave the session holding ONLY this-session values — a `bestScore` from one
+ * pull, a `totalScore` from one pull — and the persistence effect would then write
+ * that truncated career over the real saved one, which is the same data loss by a
+ * different door. Merging instead means every term below combines "what was saved"
+ * with "what happened this session since mount":
+ *  - `bestScore`: the higher of the two.
+ *  - `totalScore` / `pullCount`: summed — the session started at zero, so its value
+ *    IS what happened since mount.
+ *  - `runs`: the session's own runs (newer) in front of the loaded ones, capped at
+ *    {@link RUN_LIMIT} the same way `pushRun` caps `BANK_PULL`'s write.
+ *  - `pinnedRunId`: a pin the player set this session wins over a restored one — they
+ *    cannot have pinned anything before the restore lands, so a non-null session value
+ *    here can only mean they pinned it AFTER banking, during the same race window.
+ *
+ * In the common case — nothing banked before the load resolves — the session is still
+ * at its zeroed initial values, so every one of those merges reduces to the loaded
+ * value exactly: `max(loaded, 0) === loaded`, `loaded + 0 === loaded`,
+ * `[...[], ...loaded] === loaded`-shaped, `null ?? loaded === loaded`. One code path
+ * handles both, with no `if (pristine)` branch to fall out of sync with the other.
+ *
+ * NOT IDEMPOTENT. `bestScore`/`totalScore`/`pullCount` SUM, and `runs` concatenates —
+ * dispatching this twice with the same `career` double-counts every one of them and
+ * duplicates every loaded run. It must be dispatched exactly once per mount. The
+ * safety net for that today is entirely in `EcuLab.jsx`: the career-restore effect's
+ * `cancelled` flag (set on cleanup) stops a second `loadCareer()` from a re-mounted
+ * effect from ever reaching `dispatch`, and `careerLoaded.current` gates the SEPARATE
+ * save effect from writing before a restore has landed. Neither guard lives in this
+ * reducer, so a future caller of this action has nothing here stopping it from
+ * breaking that invariant.
+ *
+ * One more edge alongside the `pinnedRunId` one above, and equally rare: a pull banked
+ * DURING the restore window (between mount and `loadCareer()` resolving) gets whatever
+ * `n` the session's own pull counter was on — typically a low one, since nothing has
+ * been played yet — and can sort oddly next to the restored runs' much higher `n`
+ * values once merged. Cosmetic; the run itself is correct and in the right position
+ * (newest-first, at index 0), only its ordinal can look out of sequence.
+ * @typedef {{type: 'RESTORE_CAREER', career: import('../../storage.js').Career}} RestoreCareerAction
+ */
+
+/**
+ * Pins one banked run as the ghost curve's comparison. Holds the run's `id` rather
+ * than its index: eviction shifts every index, so an index-based pin would silently
+ * repoint at a run the player never chose.
+ * @typedef {{type: 'PIN_RUN', id: string}} PinRunAction
+ */
+
+/**
+ * Drops the pin, returning the ghost to the previous run. No payload — there is only
+ * ever one pin.
+ * @typedef {{type: 'UNPIN_RUN'}} UnpinRunAction
  */
 
 /**
@@ -269,14 +343,15 @@ export const ACTIONS = Object.freeze({
 /**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the seventeen specific typedefs above become
+ * shape is assignable to `StoreAction` and the twenty specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
- *   LivePatchAction | UndoAction | RedoAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction | RestoreCareerAction |
+ *   PinRunAction | UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction |
+ *   RedoAction
  * } KnownStoreAction
  */
 
@@ -431,7 +506,6 @@ function baseReducer(state, action) {
           // result they belong to — leaving them behind would put a scorecard on
           // screen with no dyno curve under it.
           result: null,
-          prevResult: null,
           pullScores: null,
         },
       };
@@ -471,10 +545,14 @@ function baseReducer(state, action) {
         ...state,
         session: {
           ...state.session,
-          // The OLD result becomes prevResult BEFORE the new one overwrites `result` —
-          // reversing this order would silently make prevResult equal the new result.
-          prevResult: state.session.result,
           result: action.result,
+          // The record is built by the caller, not here: it needs `Date.now()` for its
+          // id and timestamp, and this reducer is documented as calling no clock.
+          //
+          // The banked run goes in front, so runs[0] is always the pull `result` now
+          // holds and runs[1] is the one before it — the ordering the old
+          // prevResult-before-result rotation existed to get right.
+          runs: pushRun(state.session.runs, action.run),
           health: {
             piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),
             bearing: clamp(state.session.health.bearing - action.result.wear.bearing, 0, 100),
@@ -495,6 +573,37 @@ function baseReducer(state, action) {
           pullCount: state.session.pullCount + 1,
         },
       };
+
+    case ACTIONS.RESTORE_CAREER: {
+      const c = action.career;
+      const s = state.session;
+      return {
+        ...state,
+        session: {
+          ...s,
+          bestScore: Math.max(c.best, s.bestScore),
+          totalScore: c.total + s.totalScore,
+          pullCount: c.pulls + s.pullCount,
+          // Anything banked this session is newer than anything loaded, so it goes in
+          // front — same newest-first convention `pushRun` keeps for BANK_PULL.
+          runs: [...s.runs, ...c.runs].slice(0, RUN_LIMIT),
+          // A pin set THIS session (impossible before the restore lands, except during
+          // the very race this action exists to survive) wins over a restored one. NOTE:
+          // null means both "never touched" and "deliberately cleared", so an unpin
+          // performed between BANK_PULL and RESTORE_CAREER is indistinguishable from no
+          // pin ever being set, and a stale saved pin will resurface. This edge is
+          // accepted rather than fixed with a tri-state; the restore race is rare and
+          // the workaround (clicking the pin again) is trivial.
+          pinnedRunId: s.pinnedRunId ?? c.pinnedRunId,
+        },
+      };
+    }
+
+    case ACTIONS.PIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: action.id } };
+
+    case ACTIONS.UNPIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: null } };
 
     case ACTIONS.LIVE_STEP: {
       const prev = state.session.live;

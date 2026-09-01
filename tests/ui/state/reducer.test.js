@@ -20,6 +20,7 @@ import {
 } from '../../../src/ui/state/history.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
+import { RUN_LIMIT } from '../../../src/ui/state/runLog.js';
 
 /**
  * A state where EVERY field of EVERY slice holds a value no real APPLY_PRESET write
@@ -28,7 +29,7 @@ import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
  * list, so a field added to a slice in a later PR is swept automatically.
  *
  * Because each sentinel is a fresh string unique to its own field, no real preset
- * value — a number, an array, a plain object, `null`, a boolean, ANY type the 22 real
+ * value — a number, an array, a plain object, `null`, a boolean, ANY type the 21 real
  * writes use — can ever equal it. That makes a single strict `!==` check exact for
  * "did the reducer touch this field", for every field type in play, with no deep-
  * equality helper needed: the starting value is never deep-equal to a real written
@@ -459,7 +460,6 @@ describe('APPLY_PRESET', () => {
     ran.session = {
       ...ran.session,
       result: { peakHp: 400 },
-      prevResult: { peakHp: 380 },
       pullScores: {
         pull: 400, wasBest: true, signature: 'x',
         tuning: { score: 90, label: 'CLEAN', deductions: [] },
@@ -468,7 +468,6 @@ describe('APPLY_PRESET', () => {
     };
     const s = reducer(ran, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.session.result).toBeNull();
-    expect(s.session.prevResult).toBeNull();
     // The scores go with the result they grade. Left behind, they would put a
     // scorecard on screen with no dyno curve under it — and one measured on an engine
     // the player has just replaced wholesale.
@@ -507,11 +506,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 22-field
-  // contract this action documents: a stray write grows the changed set past 22, a
-  // dropped write shrinks it below 22, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 21-field
+  // contract this action documents: a stray write grows the changed set past 21, a
+  // dropped write shrinks it below 21, and the failure message names the field either
   // way.
-  it('changes exactly the 22 documented fields, plus the two history fields', () => {
+  it('changes exactly the 21 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -522,7 +521,7 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
       'build.presetId', 'build.presetPrompt',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
-      'session.result', 'session.prevResult', 'session.pullScores',
+      'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
       'history.past', 'history.future',
@@ -779,10 +778,9 @@ describe('LIVE_STEP and LIVE_PATCH', () => {
 
 describe('BANK_PULL', () => {
   // Mirrors the tail of doRun (EcuLab.jsx:868-896): a completed dyno pull's result
-  // rotates into prevResult, the engine wears by the pull's own wear figures, and the
-  // career score/pull count advance — all in one pass instead of six ordered setState
-  // calls where getting `setPrevResult(result)` before `setResult(r)` backwards would
-  // silently corrupt prevResult.
+  // installs as the current one, the engine wears by the pull's own wear figures, and
+  // the career score/pull count advance — all in one pass instead of several ordered
+  // setState calls.
   const result = { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } };
   // What `doRun` computes and hands over: the two score breakdowns and the signature
   // of the car they were measured on. `pull` and `wasBest` are the reducer's to add.
@@ -791,17 +789,23 @@ describe('BANK_PULL', () => {
     engineer: { score: 71, label: 'SOLID', deductions: [] },
     signature: 'FABRICATED-BUILD-SIGNATURE',
   };
+  /** A minimal RunRecord — this describe block predates the run log and never asserts on it. */
+  const run = /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+    id: 'x', n: 1, at: 1000, label: 'VQ35DE', peakHp: 410, peakTq: 280, knocks: 0,
+    scores: { tuning: 88, engineer: 71, pull: 50 },
+    points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
   /**
    * @param {number} pullScore
    * @returns {import('../../../src/ui/state/reducer.js').StoreAction}
    */
-  const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores });
+  const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores, run });
 
-  it('rotates the previous result into prevResult and installs the new one', () => {
+  it('installs the new result', () => {
     const ran = { ...makeInitialState() };
     ran.session = { ...ran.session, result: { peakHp: 380 } };
     const s = reducer(ran, bank(50));
-    expect(s.session.prevResult).toEqual({ peakHp: 380 });
     expect(s.session.result).toBe(result);
   });
 
@@ -879,6 +883,134 @@ describe('BANK_PULL', () => {
     const withBest = { ...makeInitialState() };
     withBest.session = { ...withBest.session, bestScore: 80 };
     expect(reducer(withBest, bank(80)).session.pullScores.wasBest).toBe(false);
+  });
+});
+
+describe('RESTORE_CAREER', () => {
+  // `EcuLab.jsx`'s career-restore effect is `await loadCareer()` followed by a single
+  // dispatch of this action. `loadCareer()` is async, so a pull can bank
+  // (`BANK_PULL`) — and, on the `artifact` storage backend, a real round trip means a
+  // human interaction genuinely can land inside that window. Overwriting the session
+  // with the loaded snapshot in that case would roll a real, already-banked pull back
+  // to whatever was saved before it. RESTORE_CAREER exists to merge instead.
+
+  /** A loaded run, distinct from anything a pull banked this session. */
+  const loadedRun = /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+    id: 'loaded', n: 4, at: 500, label: 'VQ35DE', peakHp: 300, peakTq: 260, knocks: 0,
+    scores: { tuning: 70, engineer: 65, pull: 400 },
+    points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
+  /** BANK_PULL's minimum viable payload — mirrors the 'run log' describe block above. */
+  const bank = (id, pullScore) => ({
+    type: ACTIONS.BANK_PULL,
+    run: /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+      id, n: Number(id), at: 1000, label: 'VQ35DE', peakHp: 320, peakTq: 300, knocks: 0,
+      scores: { tuning: 90, engineer: 85, pull: pullScore },
+      points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+    }),
+    result: { peakHp: 320, peakTq: 300, points: [], events: [], wear: { piston: 1, bearing: 1, valve: 1 } },
+    pullScore,
+    scores: { tuning: { score: 90 }, engineer: { score: 85 }, signature: 'sig' },
+  });
+
+  it('into a pristine session, yields exactly the loaded values', () => {
+    const career = {
+      best: 812, total: 3405, pulls: 7, runs: [loadedRun], pinnedRunId: 'loaded',
+    };
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESTORE_CAREER, career });
+    expect(s.session.bestScore).toBe(812);
+    expect(s.session.totalScore).toBe(3405);
+    expect(s.session.pullCount).toBe(7);
+    expect(s.session.runs).toEqual([loadedRun]);
+    expect(s.session.pinnedRunId).toBe('loaded');
+  });
+
+  it('merges, rather than overwrites, a career banked between mount and load — the race', () => {
+    // Bank a pull FIRST — simulating a pull landing before loadCareer() resolves —
+    // then pin it, then restore. A restore that overwrites instead of merges fails
+    // every assertion below.
+    const banked = reducer(makeInitialState(), bank('new', 900));
+    const pinned = reducer(banked, { type: ACTIONS.PIN_RUN, id: 'new' });
+
+    const career = {
+      best: 700, total: 1000, pulls: 5, runs: [loadedRun], pinnedRunId: 'loaded',
+    };
+    const s = reducer(pinned, { type: ACTIONS.RESTORE_CAREER, career });
+
+    // bestScore: the max of the two, not the loaded value replacing the banked one.
+    expect(s.session.bestScore).toBe(900);
+    // totalScore / pullCount: summed, not replaced.
+    expect(s.session.totalScore).toBe(1900);
+    expect(s.session.pullCount).toBe(6);
+    // The banked run survives the restore AND stays at index 0 — it is newer than
+    // anything loaded from storage.
+    expect(s.session.runs.map((r) => r.id)).toEqual(['new', 'loaded']);
+    // A pin set this session survives a restore that names a different run.
+    expect(s.session.pinnedRunId).toBe('new');
+  });
+
+  it('caps total runs at RUN_LIMIT during merge, evicting oldest loaded runs', () => {
+    // Session holds 1 banked run; loaded career holds RUN_LIMIT runs. The merge
+    // should cap at RUN_LIMIT total, evicting only from the LOADED side (the older
+    // runs), not from the banked side. This test proves the merge respects the cap
+    // and evicts from the correct end.
+    const banked = reducer(makeInitialState(), bank('session', 500));
+
+    // Build a career with exactly RUN_LIMIT runs (20), with IDs like 'loaded-0' through
+    // 'loaded-19', in newest-first order (most recent at index 0).
+    const loadedRuns = [];
+    for (let i = 0; i < RUN_LIMIT; i += 1) {
+      loadedRuns.push({
+        id: `loaded-${i}`, n: i + 100, at: 1000 + i, label: 'VQ35DE',
+        peakHp: 300 + i, peakTq: 260 + i, knocks: 0,
+        scores: { tuning: 70, engineer: 65, pull: 400 + i },
+        points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+      });
+    }
+
+    const career = {
+      best: 500, total: 5000, pulls: 50, runs: loadedRuns, pinnedRunId: null,
+    };
+    const s = reducer(banked, { type: ACTIONS.RESTORE_CAREER, career });
+
+    // Total runs should be capped at RUN_LIMIT (20).
+    expect(s.session.runs).toHaveLength(RUN_LIMIT);
+    // The banked run is newest and should survive, always at index 0.
+    expect(s.session.runs[0].id).toBe('session');
+    // The oldest loaded run ('loaded-19') should be evicted because it's the least recent.
+    expect(s.session.runs.map((r) => r.id)).not.toContain('loaded-19');
+    // The second-oldest loaded run ('loaded-18') should survive.
+    expect(s.session.runs.map((r) => r.id)).toContain('loaded-18');
+  });
+
+  it('caps an over-length loaded runs array at RUN_LIMIT even into a pristine session', () => {
+    // Every other cap test here has a banked session run present, so `s.runs.length`
+    // is always truthy in them. A merge written as
+    // `s.runs.length ? [...s.runs, ...c.runs].slice(0, RUN_LIMIT) : c.runs` passes
+    // all of them while letting an over-length loaded array through UNSLICED into a
+    // pristine session — and back out to disk on the next save. This restores
+    // RUN_LIMIT + 5 loaded runs into makeInitialState() (no banked pull at all) to
+    // catch exactly that.
+    const loadedRuns = [];
+    for (let i = 0; i < RUN_LIMIT + 5; i += 1) {
+      loadedRuns.push({
+        id: `loaded-${i}`, n: 100 - i, at: 2000 - i, label: 'VQ35DE',
+        peakHp: 300, peakTq: 260, knocks: 0,
+        scores: { tuning: 70, engineer: 65, pull: 400 },
+        points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+      });
+    }
+    const career = { best: 0, total: 0, pulls: 0, runs: loadedRuns, pinnedRunId: null };
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESTORE_CAREER, career });
+
+    expect(s.session.runs).toHaveLength(RUN_LIMIT);
+    // The newest RUN_LIMIT survive, in order...
+    expect(s.session.runs.map((r) => r.id)).toEqual(loadedRuns.slice(0, RUN_LIMIT).map((r) => r.id));
+    // ...and every one of the oldest 5 is gone, not some other 5.
+    for (let i = RUN_LIMIT; i < RUN_LIMIT + 5; i += 1) {
+      expect(s.session.runs.some((r) => r.id === `loaded-${i}`)).toBe(false);
+    }
   });
 });
 
@@ -993,21 +1125,16 @@ describe('UNDO / REDO', () => {
   it('does not restore dyno results', () => {
     // A deliberate asymmetry, spec'd: undo brings back hardware and calibration, but
     // re-showing a banked score beside a build that was just reverted would state
-    // something false. Both result AND prevResult must stay cleared — a snapshot that
-    // dropped only one of the pair would leave the OTHER field's stale score sitting
-    // next to the reverted build.
+    // something false.
     const withResult = { ...makeInitialState() };
     withResult.session = {
       ...withResult.session,
       result: { peakHp: 400 },
-      prevResult: { peakHp: 350 },
     };
     const loaded = reducer(withResult, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     expect(loaded.session.result).toBeNull();
-    expect(loaded.session.prevResult).toBeNull();
     const undone = reducer(loaded, { type: ACTIONS.UNDO });
     expect(undone.session.result).toBeNull();
-    expect(undone.session.prevResult).toBeNull();
   });
 
   it('preserves the entry label when moving it between past and future', () => {
@@ -1514,5 +1641,72 @@ describe('snapshot field coverage', () => {
     expect(undone.tune.timing).toBe(beforeTiming);
     expect(undone.tune.afr).toBe(beforeAfr);
     expect(undone.tune.tablesDirty).toBe(true);
+  });
+});
+
+describe('run log', () => {
+  /** @returns {import('../../../src/ui/state/runLog.js').RunRecord} */
+  const rec = (id) => ({
+    id, n: Number(id), at: 1000 + Number(id), label: 'VQ35DE',
+    peakHp: 300, peakTq: 280, knocks: 0,
+    scores: { tuning: 80, engineer: 70, pull: 640 },
+    points: [{ rpm: 1500, hp: 100, torque: 200 }],
+    inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
+  /** BANK_PULL's minimum viable payload. */
+  const bank = (id) => ({
+    type: ACTIONS.BANK_PULL,
+    run: rec(id),
+    result: { peakHp: 300, peakTq: 280, points: [], events: [], wear: { piston: 1, bearing: 1, valve: 1 } },
+    pullScore: 640,
+    scores: { tuning: { score: 80 }, engineer: { score: 70 }, signature: 'sig' },
+  });
+
+  it('records the banked run at the front of the log', () => {
+    const s = reducer(reducer(makeInitialState(), bank('1')), bank('2'));
+    expect(s.session.runs.map((r) => r.id)).toEqual(['2', '1']);
+  });
+
+  it('starts with an empty log and no pin', () => {
+    const s = makeInitialState();
+    expect(s.session.runs).toEqual([]);
+    expect(s.session.pinnedRunId).toBe(null);
+  });
+
+  it('pins and unpins a run', () => {
+    const pinned = reducer(makeInitialState(), { type: ACTIONS.PIN_RUN, id: '7' });
+    expect(pinned.session.pinnedRunId).toBe('7');
+
+    // A second PIN_RUN overwrites the pin rather than stacking — there is only
+    // ever one, per the UNPIN_RUN typedef's "no payload" note.
+    const repinned = reducer(pinned, { type: ACTIONS.PIN_RUN, id: '9' });
+    expect(repinned.session.pinnedRunId).toBe('9');
+
+    // Pinning is bookkeeping over the log, not a write to it.
+    expect(repinned.session.runs).toBe(pinned.session.runs);
+
+    expect(reducer(pinned, { type: ACTIONS.UNPIN_RUN }).session.pinnedRunId).toBe(null);
+  });
+
+  it('leaves the run log and the pin standing when a preset is loaded', () => {
+    // BOTH halves of the pair. Asserting only that the scorecard clears would pass
+    // against an APPLY_PRESET that also wipes twenty runs of persisted history —
+    // which undo does not cover and the player cannot get back.
+    const withRun = reducer(reducer(makeInitialState(), bank('1')), { type: ACTIONS.PIN_RUN, id: '1' });
+    const after = reducer(withRun, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(after.session.result).toBe(null);
+    expect(after.session.pullScores).toBe(null);
+    expect(after.session.runs.map((r) => r.id)).toEqual(['1']);
+    expect(after.session.pinnedRunId).toBe('1');
+  });
+
+  it('leaves the whole session slice alone on RESET_TO_STOCK', () => {
+    // Pins today's behaviour so the natural-but-wrong pairing with APPLY_PRESET
+    // cannot be introduced by someone "making them consistent". RESET_TO_STOCK has
+    // never touched session, including result and pullScores.
+    const withRun = reducer(makeInitialState(), bank('1'));
+    const after = reducer(withRun, { type: ACTIONS.RESET_TO_STOCK, ve: withRun.tune.ve });
+    expect(after.session).toBe(withRun.session);
   });
 });

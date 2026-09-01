@@ -17,15 +17,19 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { DataScreen } from '../../src/ui/screens/dyno/DataScreen.jsx';
+import { HistoryScreen } from '../../src/ui/screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from '../../src/ui/screens/dyno/LogScreen.jsx';
 import { ResultScreen } from '../../src/ui/screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from '../../src/ui/screens/dyno/ScoreScreen.jsx';
+import { makeInitialState } from '../../src/ui/state/initialState.js';
+import { measuredInputs } from '../../src/ui/state/pullSignature.js';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { makeRunRecord } from '../../src/ui/state/runLog.js';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
-import EcuLab from '../../src/ui/EcuLab.jsx';
+import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (ResultScreen's two
 // charts) needs one to mount at all. Same stub as characterisation.test.jsx.
@@ -38,6 +42,22 @@ const hadResizeObserver = 'ResizeObserver' in window;
 if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
 afterAll(() => {
   if (!hadResizeObserver) delete window.ResizeObserver;
+});
+
+// jsdom does no layout, so every element's getBoundingClientRect() is all zeros —
+// which recharts' <ResponsiveContainer> (a percentage-width box) reads as "no space",
+// and passes a 0 width down to <LineChart>, whose own `validateWidthHeight` guard then
+// renders nothing at all. The ghost-curve tests below assert on Legend item NAMES,
+// which only exist once the chart actually renders, so this file needs a non-zero
+// rect where the two DYNO/DataScreen tests above it never did.
+const origGetBoundingClientRect = window.Element.prototype.getBoundingClientRect;
+beforeAll(() => {
+  window.Element.prototype.getBoundingClientRect = () => (
+    { width: 400, height: 200, top: 0, left: 0, bottom: 200, right: 400, x: 0, y: 0, toJSON() {} }
+  );
+});
+afterAll(() => {
+  window.Element.prototype.getBoundingClientRect = origGetBoundingClientRect;
 });
 
 afterEach(cleanup);
@@ -120,6 +140,31 @@ describe('ResultScreen', () => {
     // instead of trusting this one, `engineDerived` would never be undefined and
     // this render would stop throwing.
     expect(() => mount(<ResultScreen chartData={[]} engineDerived={undefined} />)).toThrow();
+  });
+});
+
+describe('ResultScreen ghost curve', () => {
+  const CHART = [{ rpm: 1500, hp: 111, torque: 222, prevHp: 100, prevTorque: 200 }];
+
+  it('draws both ghost series, named for the comparison, when there is one', () => {
+    mount(<ResultScreen chartData={CHART} engineDerived={{ redline: 7000 }} ghostLabel="Run 4" />);
+    expect(screen.getByText('Run 4 WHP')).toBeTruthy();
+    expect(screen.getByText('Run 4 TQ')).toBeTruthy();
+  });
+
+  it('draws no ghost series at all when there is no comparison', () => {
+    // The other half. Rendering the lines unconditionally would still look right on
+    // the first pull — recharts just draws nothing for an all-undefined dataKey — so
+    // the legend is what makes the difference observable.
+    mount(<ResultScreen chartData={[{ rpm: 1500, hp: 111, torque: 222 }]} engineDerived={{ redline: 7000 }} ghostLabel={null} />);
+    // `queryByText` throws (Testing Library's "multiple elements found") under the
+    // ghost mutation, which the ghost mutation reads as a failure of THIS line —
+    // never letting the two load-bearing `toBe(null)` assertions below it run at
+    // all. `queryAllByText` never throws on multiple matches, so a real regression
+    // lands on the assertion that actually names it.
+    expect(screen.queryAllByText(/WHP$/)).toHaveLength(1);
+    expect(screen.queryByText(/ WHP$/)).toBe(null);
+    expect(screen.queryByText(/ TQ$/)).toBe(null);
   });
 });
 
@@ -288,5 +333,174 @@ describe('DYNO while a pull is running', () => {
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
       { timeout: 10000 },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------
+// The other regression this task exists to pin: DYNO's body used to be wrapped
+// wholesale in `{result && (...)}`, which hid the section switcher — HISTORY
+// included — on a cold start, because `result` is never persisted while `runs`
+// is. A restored session has a populated run log and a null `result`, so this
+// mounts exactly that combination without ever running a pull.
+// ---------------------------------------------------------------------------------
+describe('DYNO body gating — HISTORY outlives result', () => {
+  it('shows HISTORY (and only HISTORY) when runs exist but no pull has landed yet', () => {
+    let dispatch;
+    render(
+      <StoreProvider>
+        <Capture onDispatch={(d) => { dispatch = d; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+
+    // Seed a restored run directly, the way RESTORE_CAREER would on a cold start —
+    // `result` stays at its initial `null`, exactly as it is after a page reload.
+    const restoredRun = makeRunRecord({
+      id: 'restored', n: 1, at: 1000, label: 'VQ35DE',
+      result: { peakHp: 300, peakTq: 280, points: [{ rpm: 1500, hp: 100, torque: 200 }], events: [] },
+      scores: { tuning: { score: 80 }, engineer: { score: 70 } }, pullScore: 640,
+      inputs: measuredInputs(makeInitialState().build, makeInitialState().tune, 100),
+    });
+    act(() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'runs', value: [restoredRun] }));
+
+    expect(screen.getByRole('button', { name: 'HISTORY' })).toBeTruthy();
+    // Only HISTORY: the other four sections lead to screens that render nothing
+    // without a result, so they must not be offered.
+    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'PULL LOG' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'DATALOG' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'SCORE' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'HISTORY' }));
+    expect(screen.getByText('Run 1')).toBeTruthy();
+  });
+
+  it('shows no DYNO nav row at all for a pristine session with no runs and no result', () => {
+    // The converse: a brand-new career has neither `runs` nor `result`, and the
+    // switcher — HISTORY included — must not appear for it to click into.
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+
+    expect(screen.queryByRole('button', { name: 'HISTORY' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------------
+/** Three records, oldest id last, matching the store's newest-first order. */
+const RUN_1 = makeRunRecord({
+  id: 'a', n: 1, at: 1_000, label: 'VQ35DE',
+  result: { peakHp: 300, peakTq: 280, points: [{ rpm: 1500, hp: 100, torque: 200 }], events: [] },
+  scores: { tuning: { score: 80 }, engineer: { score: 70 } }, pullScore: 640,
+  inputs: measuredInputs(makeInitialState().build, makeInitialState().tune, 100),
+});
+const RUN_2 = { ...RUN_1, id: 'b', n: 2, peakHp: 320 };
+const RUN_3 = { ...RUN_1, id: 'c', n: 3, peakHp: 340 };
+/** Identical to RUN_1 except for one measured input, so the diff has exactly one answer. */
+const RUN_BOOSTED = {
+  ...RUN_1, id: 'd', n: 2, peakHp: 400,
+  inputs: measuredInputs(
+    { ...makeInitialState().build, boostCurve: [1, 2, 3, 4, 5, 6, 7, 8] },
+    makeInitialState().tune, 100,
+  ),
+};
+
+describe('DYNO > HISTORY', () => {
+  it('shows an empty state before any pull', () => {
+    mountWithResult(<HistoryScreen />, { runs: [], pinnedRunId: null });
+    expect(screen.getByText(/no pulls yet/i)).toBeTruthy();
+  });
+
+  it('lists runs newest first', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_3, RUN_2, RUN_1], pinnedRunId: null });
+    const rows = screen.getAllByRole('listitem');
+    // Position, not presence: a screen that rendered the log reversed would pass a
+    // test that only asserted all three runs appear somewhere.
+    expect(rows[0].textContent).toContain('Run 3');
+    expect(rows[2].textContent).toContain('Run 1');
+  });
+
+  it('calls the real first pull "first pull"', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_1], pinnedRunId: null });
+    expect(screen.getByText('first pull')).toBeTruthy();
+  });
+
+  it('does not call a capped-off log\'s oldest VISIBLE row "first pull" when it is not run 1', () => {
+    // Once the log caps at RUN_LIMIT, the bottom row has no `prev` either, at
+    // whatever `n` it happens to be — `prev === undefined` alone is not "this was
+    // the career's first pull".
+    const oldButNotFirst = { ...RUN_1, id: 'old', n: 137 };
+    mountWithResult(<HistoryScreen />, { runs: [oldButNotFirst], pinnedRunId: null });
+    expect(screen.queryByText('first pull')).toBeNull();
+  });
+
+  it('signs a gain over the previous run as positive', () => {
+    // RUN_3 is 340 whp, RUN_2 is 320: a real 20 whp gain must read "+20", not "-20".
+    mountWithResult(<HistoryScreen />, { runs: [RUN_3, RUN_2], pinnedRunId: null });
+    expect(screen.getByText(/\+20 whp vs Run 2/)).toBeTruthy();
+  });
+
+  it('signs a loss under the previous run as negative', () => {
+    // The converse ordering of the same two fixtures — RUN_2 (320) now the current
+    // run, RUN_3 (340) the one before it — so a real 20 whp loss must read "-20".
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_3], pinnedRunId: null });
+    expect(screen.getByText(/-20 whp vs Run 3/)).toBeTruthy();
+  });
+
+  it("shows each run's engine label, so a swap does not read as an unexplained gain", () => {
+    // APPLY_PRESET clears `result` but keeps `runs`, so a pull right after an LS -> VQ
+    // swap can sit next to a run banked on the old engine. `label` is the only cue
+    // that tells the two apart.
+    const LS_RUN = { ...RUN_1, id: 'ls', n: 1, label: 'LS3', peakHp: 300 };
+    const VQ_RUN = { ...RUN_1, id: 'vq', n: 2, label: 'VQ35DE', peakHp: 420 };
+    mountWithResult(<HistoryScreen />, { runs: [VQ_RUN, LS_RUN], pinnedRunId: null });
+    expect(screen.getByText('LS3')).toBeTruthy();
+    expect(screen.getByText('VQ35DE')).toBeTruthy();
+  });
+
+  it('names what changed between a run and the one before it', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_BOOSTED, RUN_1], pinnedRunId: null });
+    expect(screen.getByText(/boost curve/)).toBeTruthy();
+  });
+
+  it('says nothing changed when nothing did', () => {
+    // The other half of the diff pair. A screen that always rendered the "changed"
+    // line would pass the test above while telling the player a clean re-run had
+    // altered their build.
+    mountWithResult(<HistoryScreen />, { runs: [{ ...RUN_1, id: 'e', n: 2 }, RUN_1], pinnedRunId: null });
+    expect(screen.queryByText(/Changed since/)).toBe(null);
+  });
+
+  it('pins a run and unpins the same run', () => {
+    // Both directions through one control, so a handler that only ever dispatched
+    // PIN_RUN would fail the second half.
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_1], pinnedRunId: null });
+    // Full literals, not substrings: "Unpin run 1" CONTAINS "Pin run 1", so a loose
+    // matcher would happily find the wrong button and still pass.
+    fireEvent.click(screen.getByRole('button', { name: 'Pin run 1 as the comparison' }));
+    expect(screen.getByRole('button', { name: 'Unpin run 1' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Unpin run 1' }));
+    expect(screen.getByRole('button', { name: 'Pin run 1 as the comparison' })).toBeTruthy();
+  });
+
+  it('marks only the pinned row as pinned', () => {
+    mountWithResult(<HistoryScreen />, { runs: [RUN_2, RUN_1], pinnedRunId: RUN_1.id });
+    // Names the end, not just the count: an implementation that marked runs[0]
+    // pinned whenever anything is pinned would produce the same 1/1 counts below.
+    expect(screen.getByRole('button', { name: 'Unpin run 1' })).toBeTruthy();
+    // Anchored for the same reason: /pin run/i matches "Unpin run 1" as well, and
+    // would count two where the answer is one.
+    expect(screen.getAllByRole('button', { name: /^Unpin run/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Pin run/ })).toHaveLength(1);
+
+    // `data-pinned` is the row's only visual mark and is otherwise asserted
+    // nowhere. Rows render newest first, so index 0 is RUN_2 (unpinned) and
+    // index 1 is RUN_1 (the pinned one).
+    const rows = screen.getAllByRole('listitem');
+    expect(rows[0].getAttribute('data-pinned')).toBe('false');
+    expect(rows[1].getAttribute('data-pinned')).toBe('true');
   });
 });

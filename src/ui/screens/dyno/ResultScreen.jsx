@@ -14,6 +14,12 @@
  * too); `dynoChartMaxRpm` itself has exactly one reader — this screen's two chart
  * axes — so it is computed here off the `engineDerived` prop rather than
  * threaded down as its own value.
+ *
+ * The ghost lines take each live series' own colour at half opacity rather than a
+ * neutral grey. `T.ink3` — what they used to use — is also the axis, tick-label and
+ * `afrCommanded` colour, so the previous pull was not too dim to see so much as
+ * indistinguishable from the chart's furniture. Hue now carries series identity and
+ * opacity carries time.
  */
 
 import React from 'react';
@@ -21,7 +27,6 @@ import React from 'react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Panel } from '../../primitives/Panel.jsx';
-import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './ResultScreen.module.css';
@@ -30,11 +35,11 @@ import styles from './ResultScreen.module.css';
  * @param {object} props
  * @param {Array<object>} props.chartData the shell's, shared with TUNE's ECU screen
  * @param {{redline: number}} props.engineDerived the shell's — see file header
+ * @param {string|null} [props.ghostLabel] what to call the comparison series in the
+ *   legend, or null/undefined to draw no ghost at all — see `ghostLabel` in runLog.js
  * @returns {React.ReactElement}
  */
-export function ResultScreen({ chartData, engineDerived }) {
-  const [session] = useSession();
-  const { prevResult } = session;
+export function ResultScreen({ chartData, engineDerived, ghostLabel }) {
   // The live tach needle and this chart's RPM axis both used to top out at a
   // hardcoded 7500 — correct only for the one preset whose redline happened to
   // match it. 1.05x redline gives the sweep's last point a little headroom
@@ -52,8 +57,8 @@ export function ResultScreen({ chartData, engineDerived }) {
             <YAxis stroke={T.ink3} fontSize={10} />
             <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            {prevResult && <Line dataKey="prevHp" name="Prev WHP" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
-            {prevResult && <Line dataKey="prevTorque" name="Prev TQ" stroke={T.ink3} strokeDasharray="4 3" dot={false} isAnimationActive={false} />}
+            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} WHP`} stroke={T.acc} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke={T.cyan} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
             <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
             <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
