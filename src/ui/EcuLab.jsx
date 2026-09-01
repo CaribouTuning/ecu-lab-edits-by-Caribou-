@@ -47,7 +47,7 @@ import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { pullSignature, measuredInputs } from './state/pullSignature.js';
-import { makeRunRecord } from './state/runLog.js';
+import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -218,7 +218,7 @@ export function EcuLabApp() {
   const [session] = useSession();
   const {
     loadKpa, soundOn, journeyStep, throttleInput, health,
-    result, prevResult, pullScores, running, revealCount, bestScore, totalScore, pullCount,
+    result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
@@ -541,13 +541,12 @@ export function EcuLabApp() {
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
-    // Banking the pull — prevResult rotation, wear, scores, pull count — lands in the
+    // Banking the pull — result, wear, scores, pull count, run log — lands in the
     // store in one pass. `result` and `pullScore` are precomputed here because the
     // reducer has no access to the useMemo-derived hardware `computePullScore` needs.
-    // The local `setPrevResult`/`setResult`/`setHealth` calls that used to sit above
-    // this line, and the `setBestScore`/`setTotalScore`/`setPullCount` trio below it,
-    // were all mirroring writes this one action already makes — including the
-    // prevResult-before-result rotation whose ordering it exists to own.
+    // The local `setResult`/`setHealth` calls that used to sit above this line, and the
+    // `setBestScore`/`setTotalScore`/`setPullCount` trio below it, were all mirroring
+    // writes this one action already makes.
     // `scores` rides along with the result it belongs to: BANK_PULL keeps the numbers
     // this pull actually measured, and `buildSignature` records the setup it measured
     // them on. Nothing recomputes them afterwards — that is the whole fix (issue #29).
@@ -705,14 +704,24 @@ export function EcuLabApp() {
     return () => window.removeEventListener('keydown', onKey);
   }, [dispatch]);
 
+  const ghost = ghostRun(runs, pinnedRunId);
+
   const chartData = useMemo(() => {
     if (!result) return [];
-    return result.points.slice(0, running ? revealCount : result.points.length).map((p, i) => ({
-      rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
-      timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
-      prevHp: prevResult?.points?.[i]?.hp, prevTorque: prevResult?.points?.[i]?.torque,
-    }));
-  }, [result, prevResult, running, revealCount]);
+    // Keyed by RPM, not by array position. Today the two are the same thing —
+    // SWEEP_START_RPM and SWEEP_STEP_RPM are constants, so points[i].rpm is always
+    // 1500 + 100i — but a PINNED run may be any length, and the join should state
+    // what it means rather than lean on an invariant two modules away.
+    const ghostByRpm = new Map((ghost?.points ?? []).map((p) => [p.rpm, p]));
+    return result.points.slice(0, running ? revealCount : result.points.length).map((p) => {
+      const g = ghostByRpm.get(p.rpm);
+      return {
+        rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
+        timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
+        prevHp: g?.hp, prevTorque: g?.torque,
+      };
+    });
+  }, [result, ghost, running, revealCount]);
 
   // `buildHistogram`/`applyHistogram` moved to DataScreen.jsx: DYNO's DATALOG
   // section was their only caller, and everything they touch (result, histogram,
@@ -1004,12 +1013,12 @@ export function EcuLabApp() {
                   <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
                 </div>
 
-                {prevResult && !running && (() => {
-                  const dHp = result.peakHp - prevResult.peakHp;
-                  const dTq = result.peakTq - prevResult.peakTq;
+                {runs[1] && !running && (() => {
+                  const prev = runs[1];
+                  const dHp = result.peakHp - prev.peakHp;
+                  const dTq = result.peakTq - prev.peakTq;
                   const knockNow = result.events.filter((e) => e.type === 'knock').length;
-                  const knockPrev = prevResult.events.filter((e) => e.type === 'knock').length;
-                  const dKnock = knockNow - knockPrev;
+                  const dKnock = knockNow - prev.knocks;
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
                   return (
                     <Panel tight style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1051,7 +1060,11 @@ export function EcuLabApp() {
                     starts instead of falling back to the live curves. Preserve every
                     condition exactly. */}
                 {(running || dynoView === 'result') && (
-                  <ResultScreen chartData={chartData} engineDerived={engineDerived} />
+                  <ResultScreen
+                    chartData={chartData}
+                    engineDerived={engineDerived}
+                    ghostLabel={ghostLabel(ghost, pinnedRunId)}
+                  />
                 )}
 
                 {!running && dynoView === 'data' && (

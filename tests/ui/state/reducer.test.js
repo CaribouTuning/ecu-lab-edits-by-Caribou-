@@ -28,7 +28,7 @@ import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
  * list, so a field added to a slice in a later PR is swept automatically.
  *
  * Because each sentinel is a fresh string unique to its own field, no real preset
- * value — a number, an array, a plain object, `null`, a boolean, ANY type the 22 real
+ * value — a number, an array, a plain object, `null`, a boolean, ANY type the 21 real
  * writes use — can ever equal it. That makes a single strict `!==` check exact for
  * "did the reducer touch this field", for every field type in play, with no deep-
  * equality helper needed: the starting value is never deep-equal to a real written
@@ -459,7 +459,6 @@ describe('APPLY_PRESET', () => {
     ran.session = {
       ...ran.session,
       result: { peakHp: 400 },
-      prevResult: { peakHp: 380 },
       pullScores: {
         pull: 400, wasBest: true, signature: 'x',
         tuning: { score: 90, label: 'CLEAN', deductions: [] },
@@ -468,7 +467,6 @@ describe('APPLY_PRESET', () => {
     };
     const s = reducer(ran, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.session.result).toBeNull();
-    expect(s.session.prevResult).toBeNull();
     // The scores go with the result they grade. Left behind, they would put a
     // scorecard on screen with no dyno curve under it — and one measured on an engine
     // the player has just replaced wholesale.
@@ -507,11 +505,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 22-field
-  // contract this action documents: a stray write grows the changed set past 22, a
-  // dropped write shrinks it below 22, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 21-field
+  // contract this action documents: a stray write grows the changed set past 21, a
+  // dropped write shrinks it below 21, and the failure message names the field either
   // way.
-  it('changes exactly the 22 documented fields, plus the two history fields', () => {
+  it('changes exactly the 21 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -522,7 +520,7 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
       'build.presetId', 'build.presetPrompt',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
-      'session.result', 'session.prevResult', 'session.pullScores',
+      'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
       'history.past', 'history.future',
@@ -779,10 +777,9 @@ describe('LIVE_STEP and LIVE_PATCH', () => {
 
 describe('BANK_PULL', () => {
   // Mirrors the tail of doRun (EcuLab.jsx:868-896): a completed dyno pull's result
-  // rotates into prevResult, the engine wears by the pull's own wear figures, and the
-  // career score/pull count advance — all in one pass instead of six ordered setState
-  // calls where getting `setPrevResult(result)` before `setResult(r)` backwards would
-  // silently corrupt prevResult.
+  // installs as the current one, the engine wears by the pull's own wear figures, and
+  // the career score/pull count advance — all in one pass instead of several ordered
+  // setState calls.
   const result = { peakHp: 410, wear: { piston: 3, bearing: 2, valve: 1 } };
   // What `doRun` computes and hands over: the two score breakdowns and the signature
   // of the car they were measured on. `pull` and `wasBest` are the reducer's to add.
@@ -804,11 +801,10 @@ describe('BANK_PULL', () => {
    */
   const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores, run });
 
-  it('rotates the previous result into prevResult and installs the new one', () => {
+  it('installs the new result', () => {
     const ran = { ...makeInitialState() };
     ran.session = { ...ran.session, result: { peakHp: 380 } };
     const s = reducer(ran, bank(50));
-    expect(s.session.prevResult).toEqual({ peakHp: 380 });
     expect(s.session.result).toBe(result);
   });
 
@@ -1000,21 +996,16 @@ describe('UNDO / REDO', () => {
   it('does not restore dyno results', () => {
     // A deliberate asymmetry, spec'd: undo brings back hardware and calibration, but
     // re-showing a banked score beside a build that was just reverted would state
-    // something false. Both result AND prevResult must stay cleared — a snapshot that
-    // dropped only one of the pair would leave the OTHER field's stale score sitting
-    // next to the reverted build.
+    // something false.
     const withResult = { ...makeInitialState() };
     withResult.session = {
       ...withResult.session,
       result: { peakHp: 400 },
-      prevResult: { peakHp: 350 },
     };
     const loaded = reducer(withResult, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     expect(loaded.session.result).toBeNull();
-    expect(loaded.session.prevResult).toBeNull();
     const undone = reducer(loaded, { type: ACTIONS.UNDO });
     expect(undone.session.result).toBeNull();
-    expect(undone.session.prevResult).toBeNull();
   });
 
   it('preserves the entry label when moving it between past and future', () => {

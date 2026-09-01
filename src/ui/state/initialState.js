@@ -93,7 +93,6 @@ import {
  * @typedef {object} SessionState
  * @property {boolean} running true while a dyno pull is sweeping
  * @property {object|null} result the most recent dyno pull's result
- * @property {object|null} prevResult the dyno pull before that, for comparison
  * @property {import('./runLog.js').RunRecord[]} runs the last RUN_LIMIT dyno pulls,
  *   newest first. Named `runs` and not "history" because `state.history` is the undo
  *   stack — see HistoryState below.
@@ -183,7 +182,6 @@ export function makeInitialState() {
     session: {
       running: false,
       result: null,
-      prevResult: null,
       runs: [],
       pinnedRunId: null,
       pullScores: null,

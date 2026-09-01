@@ -98,7 +98,7 @@ describe('pullSignature', () => {
     // the same pass the scores are banked in.
     expect(sign({
       session: {
-        result: { peakHp: 410 }, prevResult: { peakHp: 380 }, revealCount: 40,
+        result: { peakHp: 410 }, revealCount: 40,
         bestScore: 500, totalScore: 900, pullCount: 3,
         health: { piston: 90, bearing: 95, valve: 99 },
       },

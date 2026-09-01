@@ -186,16 +186,15 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * Finalises a completed dyno pull: banks the score, wears the engine, and rotates
- * `result` into `prevResult`. Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
+ * Finalises a completed dyno pull: banks the score, wears the engine, installs the
+ * new `result`, and pushes a slim record of it to the front of `runs` (Task 4;
+ * `runLog.js`'s `ghostRun` reads that log for the comparison the old `prevResult`
+ * field used to hold directly). Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
  * NOT the whole function, which also flips `running`/`revealCount` for the reveal
  * animation before and after an interval-driven timer runs; that is time-based UI
  * state with no atomicity hazard and stays as plain `SET_SESSION_FIELD` dispatches in
- * the component (Task 4). The part that DOES have an ordering hazard, and is what this
- * action removes: `doRun` used to call `setPrevResult(result)` (the OLD result)
- * before `setResult(r)` (the new one) — reversing those two lines would silently have
- * made `prevResult` equal the new result instead of the old one. `action.result` and
- * `action.pullScore` are precomputed by the caller: `result` comes from
+ * the component. `action.result` and `action.pullScore` are precomputed by the
+ * caller: `result` comes from
  * `simulateSweep`, and `pullScore` from `computePullScore`, which needs derived
  * hardware objects (`turbine`, `compressor`, `dutyPreview`, `exhaustDiaError`) that
  * are `useMemo` values in the component, not raw state the reducer holds — the same
@@ -447,7 +446,6 @@ function baseReducer(state, action) {
           // result they belong to — leaving them behind would put a scorecard on
           // screen with no dyno curve under it.
           result: null,
-          prevResult: null,
           pullScores: null,
         },
       };
@@ -487,12 +485,13 @@ function baseReducer(state, action) {
         ...state,
         session: {
           ...state.session,
-          // The OLD result becomes prevResult BEFORE the new one overwrites `result` —
-          // reversing this order would silently make prevResult equal the new result.
-          prevResult: state.session.result,
           result: action.result,
           // The record is built by the caller, not here: it needs `Date.now()` for its
           // id and timestamp, and this reducer is documented as calling no clock.
+          //
+          // The banked run goes in front, so runs[0] is always the pull `result` now
+          // holds and runs[1] is the one before it — the ordering the old
+          // prevResult-before-result rotation existed to get right.
           runs: pushRun(state.session.runs, action.run),
           health: {
             piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),

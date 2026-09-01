@@ -17,7 +17,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { DataScreen } from '../../src/ui/screens/dyno/DataScreen.jsx';
 import { LogScreen } from '../../src/ui/screens/dyno/LogScreen.jsx';
@@ -38,6 +38,22 @@ const hadResizeObserver = 'ResizeObserver' in window;
 if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
 afterAll(() => {
   if (!hadResizeObserver) delete window.ResizeObserver;
+});
+
+// jsdom does no layout, so every element's getBoundingClientRect() is all zeros —
+// which recharts' <ResponsiveContainer> (a percentage-width box) reads as "no space",
+// and passes a 0 width down to <LineChart>, whose own `validateWidthHeight` guard then
+// renders nothing at all. The ghost-curve tests below assert on Legend item NAMES,
+// which only exist once the chart actually renders, so this file needs a non-zero
+// rect where the two DYNO/DataScreen tests above it never did.
+const origGetBoundingClientRect = window.Element.prototype.getBoundingClientRect;
+beforeAll(() => {
+  window.Element.prototype.getBoundingClientRect = () => (
+    { width: 400, height: 200, top: 0, left: 0, bottom: 200, right: 400, x: 0, y: 0, toJSON() {} }
+  );
+});
+afterAll(() => {
+  window.Element.prototype.getBoundingClientRect = origGetBoundingClientRect;
 });
 
 afterEach(cleanup);
@@ -120,6 +136,26 @@ describe('ResultScreen', () => {
     // instead of trusting this one, `engineDerived` would never be undefined and
     // this render would stop throwing.
     expect(() => mount(<ResultScreen chartData={[]} engineDerived={undefined} />)).toThrow();
+  });
+});
+
+describe('ResultScreen ghost curve', () => {
+  const CHART = [{ rpm: 1500, hp: 111, torque: 222, prevHp: 100, prevTorque: 200 }];
+
+  it('draws both ghost series, named for the comparison, when there is one', () => {
+    mount(<ResultScreen chartData={CHART} engineDerived={{ redline: 7000 }} ghostLabel="Run 4" />);
+    expect(screen.getByText('Run 4 WHP')).toBeTruthy();
+    expect(screen.getByText('Run 4 TQ')).toBeTruthy();
+  });
+
+  it('draws no ghost series at all when there is no comparison', () => {
+    // The other half. Rendering the lines unconditionally would still look right on
+    // the first pull — recharts just draws nothing for an all-undefined dataKey — so
+    // the legend is what makes the difference observable.
+    mount(<ResultScreen chartData={[{ rpm: 1500, hp: 111, torque: 222 }]} engineDerived={{ redline: 7000 }} ghostLabel={null} />);
+    expect(screen.queryByText(/WHP$/)).toBeTruthy();
+    expect(screen.queryByText(/ WHP$/)).toBe(null);
+    expect(screen.queryByText(/ TQ$/)).toBe(null);
   });
 });
 
