@@ -431,6 +431,17 @@ describe('DYNO > HISTORY', () => {
     expect(screen.getByText(/-20 whp vs Run 3/)).toBeTruthy();
   });
 
+  it("shows each run's engine label, so a swap does not read as an unexplained gain", () => {
+    // APPLY_PRESET clears `result` but keeps `runs`, so a pull right after an LS -> VQ
+    // swap can sit next to a run banked on the old engine. `label` is the only cue
+    // that tells the two apart.
+    const LS_RUN = { ...RUN_1, id: 'ls', n: 1, label: 'LS3', peakHp: 300 };
+    const VQ_RUN = { ...RUN_1, id: 'vq', n: 2, label: 'VQ35DE', peakHp: 420 };
+    mountWithResult(<HistoryScreen />, { runs: [VQ_RUN, LS_RUN], pinnedRunId: null });
+    expect(screen.getByText('LS3')).toBeTruthy();
+    expect(screen.getByText('VQ35DE')).toBeTruthy();
+  });
+
   it('names what changed between a run and the one before it', () => {
     mountWithResult(<HistoryScreen />, { runs: [RUN_BOOSTED, RUN_1], pinnedRunId: null });
     expect(screen.getByText(/boost curve/)).toBeTruthy();

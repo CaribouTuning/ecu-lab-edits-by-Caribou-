@@ -44,6 +44,11 @@
   color: var(--ink3);
 }
 
+.label {
+  font-size: 10px;
+  color: var(--ink3);
+}
+
 .spark {
   width: 84px;
   height: 22px;

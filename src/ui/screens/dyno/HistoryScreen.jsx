@@ -80,6 +80,7 @@ export function HistoryScreen() {
               <div>
                 <div className={styles.ordinal}>Run {run.n}</div>
                 <div className={styles.when}>{relativeTime(run.at, now)}</div>
+                <div className={styles.label}>{run.label}</div>
               </div>
               <svg className={styles.spark} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} aria-hidden="true">
                 <path className={styles.sparkLine} d={sparklinePath(run.points, SPARK_W, SPARK_H)} />
