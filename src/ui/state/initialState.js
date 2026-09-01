@@ -94,6 +94,11 @@ import {
  * @property {boolean} running true while a dyno pull is sweeping
  * @property {object|null} result the most recent dyno pull's result
  * @property {object|null} prevResult the dyno pull before that, for comparison
+ * @property {import('./runLog.js').RunRecord[]} runs the last RUN_LIMIT dyno pulls,
+ *   newest first. Named `runs` and not "history" because `state.history` is the undo
+ *   stack — see HistoryState below.
+ * @property {string|null} pinnedRunId the run the ghost curve compares against, or
+ *   null to compare against the previous run
  * @property {PullScores|null} pullScores the scores the last pull MEASURED, banked at
  *   pull time and never recomputed — see the typedef, and BANK_PULL in reducer.js
  * @property {number} revealCount how much of the current result has been revealed
@@ -179,6 +184,8 @@ export function makeInitialState() {
       running: false,
       result: null,
       prevResult: null,
+      runs: [],
+      pinnedRunId: null,
       pullScores: null,
       revealCount: 0,
       bestScore: 0,

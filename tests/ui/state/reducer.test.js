@@ -791,11 +791,18 @@ describe('BANK_PULL', () => {
     engineer: { score: 71, label: 'SOLID', deductions: [] },
     signature: 'FABRICATED-BUILD-SIGNATURE',
   };
+  /** A minimal RunRecord — this describe block predates the run log and never asserts on it. */
+  const run = /** @type {import('../../../src/ui/state/runLog.js').RunRecord} */ ({
+    id: 'x', n: 1, at: 1000, label: 'VQ35DE', peakHp: 410, peakTq: 280, knocks: 0,
+    scores: { tuning: 88, engineer: 71, pull: 50 },
+    points: [], inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
   /**
    * @param {number} pullScore
    * @returns {import('../../../src/ui/state/reducer.js').StoreAction}
    */
-  const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores });
+  const bank = (pullScore) => ({ type: ACTIONS.BANK_PULL, result, pullScore, scores, run });
 
   it('rotates the previous result into prevResult and installs the new one', () => {
     const ran = { ...makeInitialState() };
@@ -1514,5 +1521,63 @@ describe('snapshot field coverage', () => {
     expect(undone.tune.timing).toBe(beforeTiming);
     expect(undone.tune.afr).toBe(beforeAfr);
     expect(undone.tune.tablesDirty).toBe(true);
+  });
+});
+
+describe('run log', () => {
+  /** @returns {import('../../../src/ui/state/runLog.js').RunRecord} */
+  const rec = (id) => ({
+    id, n: Number(id), at: 1000 + Number(id), label: 'VQ35DE',
+    peakHp: 300, peakTq: 280, knocks: 0,
+    scores: { tuning: 80, engineer: 70, pull: 640 },
+    points: [{ rpm: 1500, hp: 100, torque: 200 }],
+    inputs: { build: {}, tune: {}, loadKpa: 100 },
+  });
+
+  /** BANK_PULL's minimum viable payload. */
+  const bank = (id) => ({
+    type: ACTIONS.BANK_PULL,
+    run: rec(id),
+    result: { peakHp: 300, peakTq: 280, points: [], events: [], wear: { piston: 1, bearing: 1, valve: 1 } },
+    pullScore: 640,
+    scores: { tuning: { score: 80 }, engineer: { score: 70 }, signature: 'sig' },
+  });
+
+  it('records the banked run at the front of the log', () => {
+    const s = reducer(reducer(makeInitialState(), bank('1')), bank('2'));
+    expect(s.session.runs.map((r) => r.id)).toEqual(['2', '1']);
+  });
+
+  it('starts with an empty log and no pin', () => {
+    const s = makeInitialState();
+    expect(s.session.runs).toEqual([]);
+    expect(s.session.pinnedRunId).toBe(null);
+  });
+
+  it('pins and unpins a run', () => {
+    const pinned = reducer(makeInitialState(), { type: ACTIONS.PIN_RUN, id: '7' });
+    expect(pinned.session.pinnedRunId).toBe('7');
+    expect(reducer(pinned, { type: ACTIONS.UNPIN_RUN }).session.pinnedRunId).toBe(null);
+  });
+
+  it('leaves the run log and the pin standing when a preset is loaded', () => {
+    // BOTH halves of the pair. Asserting only that the scorecard clears would pass
+    // against an APPLY_PRESET that also wipes twenty runs of persisted history —
+    // which undo does not cover and the player cannot get back.
+    const withRun = reducer(reducer(makeInitialState(), bank('1')), { type: ACTIONS.PIN_RUN, id: '1' });
+    const after = reducer(withRun, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(after.session.result).toBe(null);
+    expect(after.session.pullScores).toBe(null);
+    expect(after.session.runs.map((r) => r.id)).toEqual(['1']);
+    expect(after.session.pinnedRunId).toBe('1');
+  });
+
+  it('leaves the whole session slice alone on RESET_TO_STOCK', () => {
+    // Pins today's behaviour so the natural-but-wrong pairing with APPLY_PRESET
+    // cannot be introduced by someone "making them consistent". RESET_TO_STOCK has
+    // never touched session, including result and pullScores.
+    const withRun = reducer(makeInitialState(), bank('1'));
+    const after = reducer(withRun, { type: ACTIONS.RESET_TO_STOCK, ve: withRun.tune.ve });
+    expect(after.session).toBe(withRun.session);
   });
 });

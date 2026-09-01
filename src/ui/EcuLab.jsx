@@ -46,7 +46,8 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { pullSignature } from './state/pullSignature.js';
+import { pullSignature, measuredInputs } from './state/pullSignature.js';
+import { makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
@@ -550,16 +551,28 @@ export function EcuLabApp() {
     // `scores` rides along with the result it belongs to: BANK_PULL keeps the numbers
     // this pull actually measured, and `buildSignature` records the setup it measured
     // them on. Nothing recomputes them afterwards — that is the whole fix (issue #29).
+    const nextPulls = pullCount + 1;
+    const at = Date.now();
     dispatch({
       type: ACTIONS.BANK_PULL, result: r, pullScore: pull,
       scores: { tuning: ts, engineer: es, signature: buildSignature },
+      // `id` pairs the clock with the career ordinal so two records can never collide,
+      // and `at`/`id` are read HERE because the reducer must call no clock of its own.
+      run: makeRunRecord({
+        id: `${at}-${nextPulls}`, n: nextPulls, at,
+        // `engineDerived` carries no name — it is displacement, cylinder count and
+        // redline. The build's name is the loaded preset's, and a build with no preset
+        // is exactly what "Custom build" means everywhere else in this app.
+        label: presetById(presetId)?.name ?? 'Custom build',
+        result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
+        inputs: measuredInputs(build, tune, loadKpa),
+      }),
     });
     // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
     // expressions. They are still computed here because `persistCareer` needs the new
     // values NOW: reading them back off `session` would read this render's stale ones.
     const nextBest = Math.max(bestScore, pull);
     const nextTotal = totalScore + pull;
-    const nextPulls = pullCount + 1;
     persistCareer(nextBest, nextTotal, nextPulls);
     const total = r.points.length;
     let i = 0;

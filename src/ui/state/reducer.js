@@ -30,6 +30,7 @@ import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, pr
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
+import { pushRun } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -55,6 +56,8 @@ export const ACTIONS = Object.freeze({
   RESET_TO_STOCK: 'RESET_TO_STOCK',
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
+  PIN_RUN: 'PIN_RUN',
+  UNPIN_RUN: 'UNPIN_RUN',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
   UNDO: 'UNDO',
@@ -209,8 +212,21 @@ export const ACTIONS = Object.freeze({
  * `wasBest` is decided HERE rather than by the caller because this case is where
  * `bestScore` moves: the comparison has to happen against the value as it stands
  * BEFORE this pull is folded in, and this is the only place that still holds it.
- * @typedef {{type: 'BANK_PULL', result: object, pullScore: number,
+ * @typedef {{type: 'BANK_PULL', result: object, pullScore: number, run: import('./runLog.js').RunRecord,
  *   scores: {tuning: object, engineer: object, signature: string}}} BankPullAction
+ */
+
+/**
+ * Pins one banked run as the ghost curve's comparison. Holds the run's `id` rather
+ * than its index: eviction shifts every index, so an index-based pin would silently
+ * repoint at a run the player never chose.
+ * @typedef {{type: 'PIN_RUN', id: string}} PinRunAction
+ */
+
+/**
+ * Drops the pin, returning the ghost to the previous run. No payload — there is only
+ * ever one pin.
+ * @typedef {{type: 'UNPIN_RUN'}} UnpinRunAction
  */
 
 /**
@@ -269,14 +285,14 @@ export const ACTIONS = Object.freeze({
 /**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the seventeen specific typedefs above become
+ * shape is assignable to `StoreAction` and the nineteen specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
- *   LivePatchAction | UndoAction | RedoAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction | PinRunAction |
+ *   UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction | RedoAction
  * } KnownStoreAction
  */
 
@@ -475,6 +491,9 @@ function baseReducer(state, action) {
           // reversing this order would silently make prevResult equal the new result.
           prevResult: state.session.result,
           result: action.result,
+          // The record is built by the caller, not here: it needs `Date.now()` for its
+          // id and timestamp, and this reducer is documented as calling no clock.
+          runs: pushRun(state.session.runs, action.run),
           health: {
             piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),
             bearing: clamp(state.session.health.bearing - action.result.wear.bearing, 0, 100),
@@ -495,6 +514,12 @@ function baseReducer(state, action) {
           pullCount: state.session.pullCount + 1,
         },
       };
+
+    case ACTIONS.PIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: action.id } };
+
+    case ACTIONS.UNPIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: null } };
 
     case ACTIONS.LIVE_STEP: {
       const prev = state.session.live;
