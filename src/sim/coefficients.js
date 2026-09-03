@@ -462,11 +462,14 @@ export const COEFF = {
   // BOTTOM of that band alone, and the credits below clear the top. 10.8 + 0.3 (93
   // octane) + 0.4 (intercooler) = 11.5 is how a B58 as sold comes out unpenalised.
   //
-  // TWO KNOWN SIMPLIFICATIONS, both deferred rather than hidden:
-  //   - A port-injected engine gets the same allowance as a DI one, which it has not
-  //     earned — DI evaporates fuel inside the cylinder and buys real knock margin from
-  //     it. Issue #24 tracks modelling injection type.
-  //   - The headroom does not scale with boost LEVEL; 3 psi and 24 psi are judged alike.
+  // ONE KNOWN SIMPLIFICATION, deferred rather than hidden: a port-injected engine gets
+  // the same allowance as a DI one, which it has not earned — DI evaporates fuel inside
+  // the cylinder and buys real knock margin from it. Issue #24 tracks modelling
+  // injection type.
+  //
+  // The other simplification that stood here — the headroom not scaling with boost
+  // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
+  // COMPRESSION_PER_BOOST_PSI below.
   COMPRESSION_BOOST_BASE: 10.8,
   // Compression credit per degree of octane bonus, and per intercooler.
   //
@@ -482,8 +485,6 @@ export const COEFF = {
   // belongs in its own change.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
-  // Points charged per compression point past the headroom, and the cap. The cap equals
-  // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   // How much static compression one psi of boost takes off the headroom, and the boost
   // level the base above is implicitly calibrated at.
   //
@@ -518,6 +519,8 @@ export const COEFF = {
   // margin after paying 0.30 for the 3 psi it runs past the reference.
   COMPRESSION_PER_BOOST_PSI: 0.1,
   COMPRESSION_BOOST_REF_PSI: 14,
+  // Points charged per compression point past the headroom, and the cap. The cap equals
+  // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
 

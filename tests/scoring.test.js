@@ -282,4 +282,17 @@ describe('computeEngineerScore compression headroom vs boost level', () => {
     const d = at(25, 13.0, S.OCTANE_OPTS[0]).deductions.find((x) => /static compression/.test(x));
     expect(d).toMatch(/higher octane/);
   });
+
+  it('does not offer less boost to a build the boost term is not charging', () => {
+    // The term is one-sided, so at or under the reference turning the boost down buys
+    // back exactly nothing. Offering it there is the same fault as telling an E85 build
+    // to find higher octane: a lever that moves and changes no number.
+    const under = at(10, 13.0).deductions.find((x) => /static compression/.test(x));
+    expect(under).toBeDefined();
+    expect(under).not.toMatch(/less boost/);
+    expect(under).toMatch(/less static compression/);
+    // And it IS offered once the build is past the reference and being charged for it.
+    expect(at(25, 13.0).deductions.find((x) => /static compression/.test(x)))
+      .toMatch(/less boost than 25 psi/);
+  });
 });

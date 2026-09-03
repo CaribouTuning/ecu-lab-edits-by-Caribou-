@@ -13,7 +13,17 @@
  */
 
 import { COEFF } from './coefficients.js';
+import { OCTANE_OPTS } from './hardware.js';
 import { clamp } from './math.js';
+
+/**
+ * The largest octane bonus any fuel on the shelf carries.
+ *
+ * Read off `OCTANE_OPTS` rather than written down, because its only use is deciding
+ * whether a build has any octane LEFT to buy — and a hard-coded 14 would quietly start
+ * lying the day a fuel above E85 is added.
+ */
+const MAX_OCTANE_BONUS = Math.max(...OCTANE_OPTS.map((f) => f.bonus));
 
 /**
  * The known hardware-consequence types (`cam`, `float`, `bearing`, `pressure`) — the
@@ -116,9 +126,9 @@ export function computeEngineerScore({
     // rules) still fire on it.
     //
     // Static compression is not dangerous on its own. What decides whether it survives
-    // boost is how much knock margin the rest of the build brings, and octane and charge
-    // cooling are the two levers the player actually has — so the ceiling moves with
-    // them instead of sitting at one number for every build.
+    // boost is how much knock margin the rest of the build brings, and octane, charge
+    // cooling and boost level are the levers the player actually has — so the ceiling
+    // moves with them instead of sitting at one number for every build.
     //
     // The physics already charges for compression separately: it shortens the clearance
     // volume the cycle integrates over, which raises peak pressure and shortens the
@@ -157,10 +167,16 @@ export function computeEngineerScore({
         // an intercooler that higher octane and charge cooling would buy it back is
         // advice they cannot act on — and now that the headroom moves with boost level,
         // backing the boost off is a real answer where before it did nothing.
+        //
+        // Boost is only offered ABOVE the reference, because that is the only place it
+        // buys anything: the term is one-sided, so a build already at or under the
+        // reference gets no headroom back for turning the boost down and would be
+        // reading advice that does nothing.
         const levers = [
-          fuel.bonus < 14 ? 'higher octane' : null,
+          fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
           mods.intercooler ? null : 'charge cooling',
-          `less boost than ${peakBoostPsi.toFixed(0)} psi`,
+          peakBoostPsi > COEFF.COMPRESSION_BOOST_REF_PSI
+            ? `less boost than ${peakBoostPsi.toFixed(0)} psi` : null,
           'less static compression',
         ].filter(Boolean);
         score -= d;
