@@ -19,6 +19,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { SWEEP_STEP_RPM } from '../../src/sim/index.js';
 import { DataScreen } from '../../src/ui/screens/dyno/DataScreen.jsx';
 import { HistoryScreen } from '../../src/ui/screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from '../../src/ui/screens/dyno/LogScreen.jsx';
@@ -315,6 +316,53 @@ describe('DataScreen', () => {
     );
     const egt = container.querySelector('[data-gauge="egt"]');
     expect(egt.getAttribute('data-tone')).toBe('danger');
+  });
+
+  it('spans the pull\'s own range, not the sweep constants', () => {
+    // SWEEP_START_RPM is 1500 and SWEEP_END_RPM is 7500. This pull is 4500-6500.
+    // A track built from the constants would let the player scrub 40 positions
+    // past the true range of the data.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('min')).toBe('4500');
+    expect(track.getAttribute('max')).toBe('6500');
+  });
+
+  it('steps by the sweep step, so every position is a real point', () => {
+    // Asserted as a VALUE. "has a step attribute" would pass step="1", which
+    // puts 99 of every 100 positions between two points.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('step')).toBe(String(SWEEP_STEP_RPM));
+  });
+
+  it('moves the readout when the track moves', () => {
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText('5200 RPM')).toBeTruthy();
+    fireEvent.change(screen.getByRole('slider', { name: 'Scrub the pull by RPM' }), {
+      target: { value: '4500' },
+    });
+    expect(screen.getByText('4500 RPM')).toBeTruthy();
+    expect(screen.queryByText('5200 RPM')).toBeNull();
+  });
+
+  it('moves the gauges too, not only the RPM label', () => {
+    // The readout is the point of the feature. A track wired to the heading
+    // alone would pass the test above.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('neutral');
+    fireEvent.change(screen.getByRole('slider', { name: 'Scrub the pull by RPM' }), {
+      target: { value: '6500' },
+    });
+    expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('danger');
+  });
+
+  it('announces the RPM rather than a bare number', () => {
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('aria-valuetext')).toBe('5200 RPM');
   });
 });
 

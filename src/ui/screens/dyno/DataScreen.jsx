@@ -12,7 +12,7 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
-import { clamp, LOAD, RPM } from '../../../sim/index.js';
+import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { Button } from '../../primitives/Button.jsx';
@@ -82,7 +82,12 @@ export function DataScreen() {
   const [tune] = useTune();
   const { ve } = tune;
   const { logFocusRpm } = session;
-  const scrubRpm = initialScrubRpm(result.points, logFocusRpm);
+  // Local, not session state. The store is one useReducer behind one context, so every
+  // dispatch re-renders every consumer — the reason LiveScreen is its own file. A drag
+  // gesture must not go through that path.
+  const [scrubRpm, setScrubRpm] = React.useState(
+    () => initialScrubRpm(result.points, logFocusRpm),
+  );
   const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
   const gauges = pointGauges(shown);
   const bad = shown.knock || shown.fuelLimited || shown.leanRisk || shown.richRisk || shown.pressureRisk;
@@ -93,6 +98,11 @@ export function DataScreen() {
   // nobody asked for hiding inside a refactor.
   const warn = !bad && (shown.duty > 85 || shown.egtRisk);
   const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
+
+  // From the DATA, never from SWEEP_START_RPM/SWEEP_END_RPM: a low-redline build makes
+  // a shorter pull, and a track built from the constants would scrub past its end.
+  const firstRpm = result.points[0].rpm;
+  const lastRpm = result.points[result.points.length - 1].rpm;
 
   // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
   // binned onto the same RPM x MAP grid as the VE table, so the correction can be
@@ -138,6 +148,20 @@ export function DataScreen() {
       <div className={styles.intro}>
         Every point of the pull, one at a time. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
       </div>
+
+      {/* Native range, not a hand-built drag surface: keyboard, touch, pointer and
+          screen-reader support all come with it, and #81 already tracks this
+          project's accessibility debt. `step` is the sweep step, so every position
+          lands on a real point rather than between two. */}
+      <input
+        type="range"
+        className={styles.track}
+        min={firstRpm} max={lastRpm} step={SWEEP_STEP_RPM}
+        value={scrubRpm}
+        onChange={(e) => setScrubRpm(Number(e.target.value))}
+        aria-label="Scrub the pull by RPM"
+        aria-valuetext={`${shown.rpm} RPM`}
+      />
 
       <div className={styles.card} data-tone={tone}>
         <div className={styles.cardHead}>

@@ -172,3 +172,47 @@
 }
 
 .actions { display: flex; gap: 8px; }
+
+.track {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0 0 var(--sp-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.track::-webkit-slider-runnable-track {
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+.track::-moz-range-track {
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+
+.track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 26px;
+  margin-top: -3px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+.track::-moz-range-thumb {
+  width: 10px;
+  height: 26px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+
+.track:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
