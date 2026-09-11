@@ -15,7 +15,7 @@
  * same as it would crash the real app if that shell guard were ever dropped.
  */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -288,8 +288,14 @@ describe('DataScreen', () => {
     const { container } = mountWithResult(
       <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
     );
+    // Scoped to the gauge grid itself, not the whole document: "EGT" and
+    // "PEAK P" are now also, verbatim, bold words in the "How to read a
+    // datalog" panel below (FIX 9 made those match what the gauges actually
+    // say), so an unscoped getByText would find two matches for each and
+    // throw rather than prove anything about the grid.
+    const grid = container.querySelector('[data-gauge]').parentElement;
     for (const label of ['AIRFLOW', 'MAP', 'IAT', 'LAMBDA', 'DUTY', 'INJ PW', 'EGT', 'PEAK P']) {
-      expect(screen.getByText(label)).toBeTruthy();
+      expect(within(grid).getByText(label)).toBeTruthy();
     }
     // The other half, asserted as the WHOLE SET rather than as three absent
     // strings. Querying for 'TIMING'/'MIXTURE'/'VE' could only ever catch a
@@ -322,13 +328,49 @@ describe('DataScreen', () => {
   });
 
   it('tones a gauge from the shown point\'s own flag', () => {
-    // 6000 is the point carrying egtRisk. 5200 is not. Seeding the focus there
+    // 6500 is the point carrying egtRisk. 5200 is not. Seeding the focus there
     // proves the tone follows the SHOWN point rather than the pull as a whole.
     const { container } = mountWithResult(
       <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
     );
     const egt = container.querySelector('[data-gauge="egt"]');
     expect(egt.getAttribute('data-tone')).toBe('danger');
+  });
+
+  it('shows the heat risk sentence for a point with egtRisk, and not the pressure one', () => {
+    // SCRUB_POINTS[2] (6500 RPM) carries egtRisk; pressureRisk is false there.
+    // A gauge's colour is the only trace of a fault a colour-blind or
+    // screen-reader user gets otherwise, so the sentence has to be prose.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
+    );
+    const heat = container.querySelector('[data-risk-note="heat"]');
+    expect(heat).toBeTruthy();
+    expect(heat.textContent).toBe('Exhaust running hot — retard and lean mixture are what put it there.');
+    expect(container.querySelector('[data-risk-note="pressure"]')).toBeNull();
+  });
+
+  it('shows the pressure risk sentence for a point with pressureRisk, and not the heat one', () => {
+    const PRESSURE_RISK_RESULT = {
+      points: [{ ...FAKE_POINT, pressureRisk: true }],
+      events: [], peakHp: 111, peakTq: 222,
+    };
+    const { container } = mountWithResult(
+      <DataScreen />, { result: PRESSURE_RISK_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const pressure = container.querySelector('[data-risk-note="pressure"]');
+    expect(pressure).toBeTruthy();
+    expect(pressure.textContent).toBe('Past what stock pistons and rods take — a mechanical limit, not detonation.');
+    expect(container.querySelector('[data-risk-note="heat"]')).toBeNull();
+  });
+
+  it('shows no risk line at all for a clean point', () => {
+    // FAKE_POINT clears every risk flag and sits well under the duty danger
+    // band, so nothing beneath the gauge grid should render.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: FAKE_RESULT, histogram: null, logFocusRpm: null },
+    );
+    expect(container.querySelectorAll('[data-risk-note]')).toHaveLength(0);
   });
 
   it('spans the pull\'s own range, not the sweep constants', () => {
@@ -423,6 +465,23 @@ describe('DataScreen', () => {
       <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
     );
     expect(container.querySelectorAll('[data-track-band]')).toHaveLength(0);
+  });
+
+  it('floors a single-point band to a non-zero minimum width', () => {
+    // rpmStart === rpmEnd makes the percentage width 0% by construction — real,
+    // true to the data, and literally invisible on the track. `ResultScreen`
+    // floors the same case to 3px at paint time; this asserts the CSS
+    // equivalent, and that the underlying 0% is left alone rather than fudged.
+    const SINGLE_POINT_RESULT = {
+      ...SCRUB_RESULT,
+      events: [{ type: 'knock', severity: 3, msg: 'Single-point knock', rpmStart: 5200, rpmEnd: 5200 }],
+    };
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SINGLE_POINT_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const band = /** @type {HTMLElement} */ (container.querySelector('[data-track-band]'));
+    expect(band.style.width).toBe('0%');
+    expect(band.style.minWidth).toBe('3px');
   });
 
   it('keeps the input above every band in the stacking order', () => {

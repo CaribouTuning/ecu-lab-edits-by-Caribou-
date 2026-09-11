@@ -86,5 +86,6 @@
      every file that uses it: src/ui/screens/StartScreen.module.css,
      src/ui/screens/TutorialScreen.module.css, src/ui/AppShell.module.css,
      src/ui/components/AdvisorPanel.module.css, src/ui/screens/tune/AirflowScreen.module.css,
-     src/ui/screens/tune/SparkScreen.module.css and src/ui/screens/tune/FuelScreen.module.css. */
+     src/ui/screens/tune/SparkScreen.module.css, src/ui/screens/tune/FuelScreen.module.css
+     and src/ui/screens/dyno/DataScreen.module.css. */
 }

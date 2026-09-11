@@ -1,5 +1,5 @@
 /**
- * DYNO > DATALOG (per-breakpoint asked-vs-got readout, and the fuel-trim histogram).
+ * DYNO > DATALOG (the RPM scrubber and per-point readout, and the fuel-trim histogram).
  *
  * Everything here reads the store directly rather than taking props — `result`,
  * `histogram` and `ve` are all plain state, not shell-level derivations, and
@@ -21,7 +21,7 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useSession, useTune } from '../../state/StoreProvider.jsx';
-import { deltaHeat, T } from '../../theme.js';
+import { deltaHeat, T, utilisationTone } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
 
@@ -63,8 +63,7 @@ function PairRows({ point: p }) {
           <div className={styles.rowTop}>
             <span className={styles.rowKey}>{row.k}</span>
             <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
-              <span className={styles.rowAsked} data-pair-asked={row.id}>{row.asked} → </span>
-              {row.got}
+              <span className={styles.rowAsked} data-pair-asked={row.id}>{row.asked}</span> → {row.got}
             </span>
           </div>
           <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
@@ -91,6 +90,28 @@ export function DataScreen() {
   );
   const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
   const gauges = pointGauges(shown);
+
+  // Three of the eight gauges above carry their verdict ONLY through
+  // StatTile's `.danger .value { color: var(--danger) }` — colour with no text
+  // to back it up. These sentences are the prose those rows used to carry
+  // before they became gauges, restored as ordinary visible text rather than
+  // an ARIA-only aside, so the fix serves every reader, not just assistive
+  // technology. Wording and thresholds are carried over verbatim from the old
+  // Injectors/Heat/Pressure rows (`git show 07288c2` has them).
+  const riskNotes = [
+    utilisationTone(shown.duty) === 'danger' && {
+      key: 'injectors',
+      text: `Injectors at the limit — ${shown.pw} ms of the ${(120000 / shown.rpm).toFixed(1)} ms available.`,
+    },
+    shown.egtRisk && {
+      key: 'heat',
+      text: 'Exhaust running hot — retard and lean mixture are what put it there.',
+    },
+    shown.pressureRisk && {
+      key: 'pressure',
+      text: 'Past what stock pistons and rods take — a mechanical limit, not detonation.',
+    },
+  ].filter(Boolean);
   const bad = shown.knock || shown.fuelLimited || shown.leanRisk || shown.richRisk || shown.pressureRisk;
   // `> 85` is the card's own existing threshold, carried over verbatim. It is NOT
   // utilisationTone's 75 — that governs a single gauge's colour, this governs the whole
@@ -172,7 +193,12 @@ export function DataScreen() {
             className={styles.trackBand}
             data-track-band={b.id}
             data-tone={b.tone}
-            style={{ left: b.left, width: b.width }}
+            aria-hidden="true"
+            /* A single-point event's width is 0% — real, but nothing for a mouse
+               user to see. `ResultScreen` floors the same case to 3px at paint
+               time for the same reason; this is that floor's CSS equivalent,
+               since a bare percentage width has no px minimum of its own. */
+            style={{ left: b.left, width: b.width, minWidth: '3px' }}
           />
         ))}
         <input
@@ -198,6 +224,13 @@ export function DataScreen() {
             </div>
           ))}
         </div>
+        {riskNotes.length > 0 && (
+          <div className={styles.riskNotes}>
+            {riskNotes.map((n) => (
+              <div key={n.key} className={styles.riskNote} data-risk-note={n.key}>{n.text}</div>
+            ))}
+          </div>
+        )}
         <PairRows point={shown} />
       </div>
 
@@ -205,9 +238,9 @@ export function DataScreen() {
         Diagnosis happens in the <b className={styles.em}>asked → got</b> pairs, not in the power number.
         <br /><br /><b className={styles.em}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
         <br /><br /><b className={styles.em}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-        <br /><br /><b className={styles.em}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
-        <br /><br /><b className={styles.em}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
-        <br /><br /><b className={styles.em}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
+        <br /><br /><b className={styles.em}>INJ PW / DUTY</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
+        <br /><br /><b className={styles.em}>EGT</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
+        <br /><br /><b className={styles.em}>PEAK P</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
       </ExpandableInfo>
 
       <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
