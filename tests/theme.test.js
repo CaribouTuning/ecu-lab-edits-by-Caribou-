@@ -12,7 +12,7 @@ import { URL as NodeURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
-import { T, heat, statusColor, statusTone, utilisationColor } from '../src/ui/theme.js';
+import { T, heat, statusColor, statusTone, utilisationColor, utilisationTone } from '../src/ui/theme.js';
 
 describe('T', () => {
   it('exposes every key the existing screens read', () => {
@@ -159,5 +159,25 @@ describe('pull-log event tones', () => {
     const source = readFileSync(new NodeURL('../src/ui/screens/dyno/LogScreen.jsx', import.meta.url), 'utf8');
     expect(source).toMatch(/import\s*\{[^}]*\beventTone\b[^}]*\}\s*from\s*['"].*eventBands\.js['"]/);
     expect([...source.matchAll(/e\.type\s*===\s*'[a-z]+'/g)]).toEqual([]);
+  });
+});
+
+describe('utilisationTone', () => {
+  it('names the band at both boundaries, in both directions', () => {
+    // Boundaries, not midpoints: an implementation using >= instead of > moves
+    // exactly these two values and nothing else, so midpoint-only assertions
+    // would pass it. Both directions of each boundary are pinned.
+    expect(utilisationTone(75)).toBe('ok');
+    expect(utilisationTone(75.1)).toBe('warn');
+    expect(utilisationTone(90)).toBe('warn');
+    expect(utilisationTone(90.1)).toBe('danger');
+  });
+
+  it('is the single source of the thresholds utilisationColor reports', () => {
+    // The point of the refactor: one definition, two shapes. If the colour
+    // function ever grows its own copy of the numbers, these disagree.
+    for (const v of [0, 50, 75, 75.1, 85, 90, 90.1, 100]) {
+      expect(utilisationColor(v)).toBe(T[utilisationTone(v)]);
+    }
   });
 });

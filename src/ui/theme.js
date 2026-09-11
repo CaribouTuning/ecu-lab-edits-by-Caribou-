@@ -90,7 +90,25 @@ export const statusColor = (v) => T[statusTone(v)];
  * @param {number} v 0-100
  * @returns {string} a status colour
  */
-export const utilisationColor = (v) => (v > 90 ? T.danger : v > 75 ? T.warn : T.ok);
+/**
+ * How much of a budget is spent, as a tone name. Injector duty is the caller that
+ * matters: past ~90% there is no time left in the engine cycle and the mixture goes
+ * lean regardless of what the fuel table asked for.
+ *
+ * Split from `utilisationColor` so a caller that needs the NAME can ask for it —
+ * `StatTile` takes a tone, not a colour, and the alternative was comparing a returned
+ * colour against `T.danger`. Same shape as `statusTone`/`statusColor` above.
+ *
+ * @param {number} v percent of the budget used
+ * @returns {'ok'|'warn'|'danger'}
+ */
+export const utilisationTone = (v) => (v > 90 ? 'danger' : v > 75 ? 'warn' : 'ok');
+
+/**
+ * @param {number} v percent of the budget used
+ * @returns {string} the token colour for `utilisationTone(v)`
+ */
+export const utilisationColor = (v) => T[utilisationTone(v)];
 
 /**
  * Heat-map colour for a table cell, cool (low) through warm (high).
