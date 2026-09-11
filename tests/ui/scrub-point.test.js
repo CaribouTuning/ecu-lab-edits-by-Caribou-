@@ -66,7 +66,7 @@ describe('initialScrubRpm', () => {
 /** Every field the gauges read, with every risk flag clear. */
 const CLEAN = {
   rpm: 5200, maf: 214, map: 99, iat: 41, lambda: 0.88,
-  duty: 78, pw: 9.1, egt: 835, peakPressure: 62,
+  duty: 60, pw: 9.1, egt: 835, peakPressure: 62,
   leanRisk: false, richRisk: false, egtRisk: false,
   pressureRisk: false, fuelLimited: false,
 };
@@ -83,13 +83,40 @@ describe('pointGauges', () => {
     );
   });
 
-  it('carries the point\'s own values, not recomputed ones', () => {
-    expect(byKey(CLEAN, 'maf').value).toBe(214);
-    expect(byKey(CLEAN, 'peakPressure').value).toBe(62);
+  it('carries every gauge\'s own value, label and unit — none crossed over', () => {
+    // All eight, not a spot-check of two. Every field in CLEAN is a distinct
+    // number, so an implementation that read `map` into the IAT gauge, or
+    // labelled airflow "MAP", or put g/s on the pressure reading, lands on a
+    // value this table does not contain. Spot-checking two of eight would
+    // accept six wrong ones.
+    const expected = {
+      maf: ['AIRFLOW', 214, 'g/s'],
+      map: ['MAP', 99, 'kPa'],
+      iat: ['IAT', 41, '°C'],
+      lambda: ['LAMBDA', 0.88, 'λ'],
+      duty: ['DUTY', 60, '%'],
+      pw: ['INJ PW', 9.1, 'ms'],
+      egt: ['EGT', 835, '°C'],
+      peakPressure: ['PEAK P', 62, 'bar'],
+    };
+    for (const [key, [label, value, unit]] of Object.entries(expected)) {
+      const g = byKey(CLEAN, key);
+      expect([g.label, g.value, g.unit]).toEqual([label, value, unit]);
+    }
   });
 
-  it('is neutral everywhere when no risk flag is set', () => {
-    expect(pointGauges(CLEAN).every((g) => g.tone === 'neutral' || g.key === 'duty')).toBe(true);
+  it('tones a clean point neutral everywhere except duty, which is always graded', () => {
+    // Every tone, named, in order — no escape hatch for the one gauge that is
+    // awkward. Seven readings have no opinion without a risk flag; duty is the
+    // exception because utilisationTone always grades it, and 'ok' is a verdict,
+    // not an absence of one. The earlier version of this test excused `duty`
+    // from the check entirely, which exempted the only gauge with a computed
+    // tone from the only test of tones on a clean point.
+    expect(pointGauges(CLEAN).map((g) => [g.key, g.tone])).toEqual([
+      ['maf', 'neutral'], ['map', 'neutral'], ['iat', 'neutral'],
+      ['lambda', 'neutral'], ['duty', 'ok'], ['pw', 'neutral'],
+      ['egt', 'neutral'], ['peakPressure', 'neutral'],
+    ]);
   });
 
   it('tones lambda from the mixture flags, both of them', () => {
