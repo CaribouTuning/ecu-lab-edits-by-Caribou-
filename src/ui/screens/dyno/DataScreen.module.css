@@ -202,7 +202,8 @@
   appearance: none;
   width: 10px;
   height: 26px;
-  margin-top: -3px;
+  /* (26 - 22) / 2 — centres the 26px thumb on the 22px track. */
+  margin-top: -2px;
   border: none;
   border-radius: 3px;
   background: var(--acc);

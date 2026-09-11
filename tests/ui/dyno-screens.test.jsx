@@ -352,11 +352,19 @@ describe('DataScreen', () => {
     const { container } = mountWithResult(
       <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
     );
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
     expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('neutral');
-    fireEvent.change(screen.getByRole('slider', { name: 'Scrub the pull by RPM' }), {
-      target: { value: '6500' },
-    });
+    // The announced value has to move too, and it is only ever checked at the
+    // initial render elsewhere. An implementation that computed the string once —
+    // a useMemo with an empty dependency list, say — would keep announcing the
+    // seed RPM for the rest of the session and pass every other test here, which
+    // makes it exactly the kind of accessibility regression nothing would catch.
+    expect(track.getAttribute('aria-valuetext')).toBe('5200 RPM');
+
+    fireEvent.change(track, { target: { value: '6500' } });
+
     expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('danger');
+    expect(track.getAttribute('aria-valuetext')).toBe('6500 RPM');
   });
 
   it('announces the RPM rather than a bare number', () => {
