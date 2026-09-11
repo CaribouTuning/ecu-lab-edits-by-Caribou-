@@ -617,12 +617,7 @@ Inside `DataScreen`, read the focus and derive the shown point. Add after `const
 
 ```js
   const { logFocusRpm } = session;
-  // Local, not session state. The store is one useReducer behind one context, so every
-  // dispatch re-renders every consumer — the reason LiveScreen is its own file. Task 4
-  // puts a drag gesture on this value, and a drag must not go through that path.
-  const [scrubRpm, setScrubRpm] = React.useState(
-    () => initialScrubRpm(result.points, logFocusRpm),
-  );
+  const scrubRpm = initialScrubRpm(result.points, logFocusRpm);
   const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
   const gauges = pointGauges(shown);
   const bad = shown.knock || shown.fuelLimited || shown.leanRisk || shown.richRisk || shown.pressureRisk;
@@ -637,7 +632,7 @@ Inside `DataScreen`, read the focus and derive the shown point. Add after `const
 
 `utilisationTone` is therefore **not** imported by `DataScreen.jsx` — `pointGauges` is its only caller here. Drop it from the import line shown above, leaving `import { deltaHeat, T } from '../../theme.js';`.
 
-`setScrubRpm` is unused until Task 4. Prefix nothing and add no lint suppression — Task 4 lands two steps later and ESLint's `no-unused-vars` does not flag array-destructured bindings by default. If it does flag it in this repo's config, **stop and report** rather than adding a disable comment.
+`scrubRpm` is a plain `const` in this task, not state. Nothing can move it yet, so state with an unused setter would be an unused binding that exists only because a later task needs it. Task 4 converts this one line to `useState` at the moment something can actually change it.
 
 Now replace the whole `<div className={styles.cards}>…</div>` block — the `RPM.map` card list — with:
 
@@ -793,7 +788,18 @@ Add `SWEEP_STEP_RPM` to `DataScreen.jsx`'s sim import:
 import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 ```
 
-Inside `DataScreen`, after the `tone` line from Task 3:
+Inside `DataScreen`, convert Task 3's `const scrubRpm = …` line into state, now that something can move it:
+
+```js
+  // Local, not session state. The store is one useReducer behind one context, so every
+  // dispatch re-renders every consumer — the reason LiveScreen is its own file. A drag
+  // gesture must not go through that path.
+  const [scrubRpm, setScrubRpm] = React.useState(
+    () => initialScrubRpm(result.points, logFocusRpm),
+  );
+```
+
+Then, after the `tone` line from Task 3:
 
 ```js
   // From the DATA, never from SWEEP_START_RPM/SWEEP_END_RPM: a low-redline build makes
@@ -967,15 +973,25 @@ it('draws no bands at all for a clean pull', () => {
   expect(container.querySelectorAll('[data-track-band]')).toHaveLength(0);
 });
 
-it('keeps the track usable through the bands', () => {
-  // The bands sit UNDER the input. If they intercepted the pointer the whole
-  // feature would break in a browser while every test above stayed green —
-  // exactly the CSS-only failure 5b shipped with `pointer-events`. Asserted as
-  // an attribute because Vitest applies no CSS.
+it('keeps the input above every band in the stacking order', () => {
+  // If a band sat over the input, the whole feature would break in a browser
+  // while every test above stayed green — 5b shipped exactly that failure with
+  // a `pointer-events` rule that lived only in CSS, and Vitest applies no CSS.
+  //
+  // So the guarantee is asserted as STRUCTURE, which jsdom does model: every
+  // band is a sibling that precedes the input inside the wrapper. Painting
+  // order follows document order for positioned siblings without a z-index,
+  // so the input is on top. A band moved after the input fails this.
   const { container } = mountWithResult(
     <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
   );
-  expect(container.querySelector('[data-track-band]').getAttribute('data-inert')).toBe('true');
+  const wrap = container.querySelector('[data-track-band]').parentElement;
+  const kids = [...wrap.children];
+  const input = wrap.querySelector('input[type="range"]');
+  const lastBand = kids.map((el, i) => (el.hasAttribute('data-track-band') ? i : -1))
+    .reduce((a, b) => Math.max(a, b), -1);
+  expect(lastBand).toBeGreaterThan(-1);
+  expect(kids.indexOf(input)).toBeGreaterThan(lastBand);
 });
 ```
 
@@ -1017,7 +1033,6 @@ Wrap the `<input>` from Task 4 in a positioned container, with the bands as sibl
             className={styles.trackBand}
             data-track-band={b.id}
             data-tone={b.tone}
-            data-inert="true"
             style={{ left: b.left, width: b.width }}
           />
         ))}
@@ -1045,10 +1060,11 @@ In `DataScreen.module.css`, change `.track`'s margin to `margin: 0;` and append:
   margin: 0 0 var(--sp-md);
 }
 
-/* Under the input, never over it. `pointer-events: none` is belt-and-braces —
-   the band is a sibling BEHIND the range input, so a pointer reaches the input
-   first — but Vitest applies no CSS, so the guarantee is also carried as
-   `data-inert` on the element, where a test can see it. */
+/* Under the input, never over it. The band is a sibling that PRECEDES the range
+   input with no z-index on either, so painting order puts the input on top —
+   that is the structural guarantee the test asserts, because Vitest applies no
+   CSS and a rule living only here would be invisible to the suite.
+   `pointer-events: none` is belt-and-braces on top of that. */
 .trackBand {
   position: absolute;
   top: 1px;
