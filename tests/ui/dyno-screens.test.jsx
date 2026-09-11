@@ -438,7 +438,13 @@ describe('DYNO while a pull is running', () => {
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
       { timeout: 10000 },
     );
-  });
+    // Vitest's default per-test budget is 5s, and this test waits for TWO real
+    // reveal animations to finish with a 10s allowance each. Its own allowance
+    // therefore has to exceed the sum, or the waits can never spend what they
+    // were given — the test died at 5s while its first waitFor still had 5s of
+    // patience left. It passed for months only because the machine was fast
+    // enough to finish inside the smaller of the two numbers.
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------------
