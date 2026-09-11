@@ -139,10 +139,25 @@ const FAKE_POINT = {
 const FAKE_RESULT = { points: [FAKE_POINT], events: [], peakHp: 111, peakTq: 222 };
 
 /** Three points, so "which point is shown" is a real question. Peak hp is at 5200. */
+/**
+ * Two of these three RPMs — 4500 and 6500 — are entries in the VE table's axis
+ * (`RPM` in src/sim/tables.js is [800, 1500, 2500, 3500, 4500, 5500, 6500, 7500]).
+ * That is the whole point of the fixture: the screen USED to render one card per
+ * axis entry that had a point, so the old implementation renders "4500 RPM" and
+ * "6500 RPM" for this pull and the new one renders neither.
+ *
+ * An earlier version of this fixture used 4000/5200/6000, none of which are on that
+ * axis — so the old implementation would have rendered ZERO cards for it and the
+ * "no longer renders one card per breakpoint" test passed whether the regression was
+ * fixed or not.
+ *
+ * Peak power sits at 5200: the middle element, and NOT on the axis, so it is a point
+ * only the new implementation can show.
+ */
 const SCRUB_POINTS = [
-  { ...FAKE_POINT, rpm: 4000, hp: 200, torque: 240, maf: 150, duty: 60, egt: 700 },
+  { ...FAKE_POINT, rpm: 4500, hp: 200, torque: 240, maf: 150, duty: 60, egt: 700 },
   { ...FAKE_POINT, rpm: 5200, hp: 268, torque: 271, maf: 214, duty: 78, egt: 835, knock: true, knockPull: 2.5, commandedTiming: 24, timing: 21.5 },
-  { ...FAKE_POINT, rpm: 6000, hp: 250, torque: 220, maf: 205, duty: 95, egt: 960, egtRisk: true },
+  { ...FAKE_POINT, rpm: 6500, hp: 250, torque: 220, maf: 205, duty: 95, egt: 960, egtRisk: true },
 ];
 const SCRUB_RESULT = { points: SCRUB_POINTS, events: [], peakHp: 268, peakTq: 271 };
 
@@ -225,38 +240,51 @@ describe('DataScreen', () => {
     // last-point implementation lands somewhere visibly different.
     mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
     expect(screen.getByText('5200 RPM')).toBeTruthy();
-    expect(screen.queryByText('4000 RPM')).toBeNull();
-    expect(screen.queryByText('6000 RPM')).toBeNull();
+    expect(screen.queryByText('4500 RPM')).toBeNull();
+    expect(screen.queryByText('6500 RPM')).toBeNull();
   });
 
   it('opens on the focus RPM a chart band set, rather than on peak power', () => {
     // The other branch of the seeding rule, asserted through the rendered screen
     // rather than only through the pure function.
-    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6000 });
-    expect(screen.getByText('6000 RPM')).toBeTruthy();
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 });
+    expect(screen.getByText('6500 RPM')).toBeTruthy();
     expect(screen.queryByText('5200 RPM')).toBeNull();
   });
 
   it('no longer renders one card per VE-table breakpoint', () => {
-    // The regression this task exists to remove. The old screen rendered a card
-    // for every entry in the table's RPM axis that had a point; 2500 and 3500
-    // are on that axis and are NOT in this pull, and 4000 is in this pull and is
-    // NOT on that axis.
+    // The regression this task exists to remove, asserted against RPMs the old
+    // implementation would ACTUALLY have rendered. 4500 and 6500 are both entries
+    // in the VE table's axis AND points in this pull, so the old `RPM.map` card
+    // list emits a heading for each of them; the new screen shows one point and
+    // it is neither.
+    //
+    // Checking 2500/3500 instead — axis entries this pull does not contain —
+    // would have passed against the old code too, because it renders nothing for
+    // an axis entry with no matching point. A negative assertion has to name what
+    // the bug actually produces.
     mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
-    expect(screen.queryByText('2500 RPM')).toBeNull();
-    expect(screen.queryByText('3500 RPM')).toBeNull();
+    const headings = [...document.querySelectorAll('span')]
+      .map((el) => el.textContent)
+      .filter((t) => /^\d+ RPM$/.test(t));
+    expect(headings).toEqual(['5200 RPM']);
   });
 
-  it('renders the eight gauges, and none of the three pairs as a gauge', () => {
-    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+  it('renders exactly the eight gauges, and nothing that belongs in a row', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
     for (const label of ['AIRFLOW', 'MAP', 'IAT', 'LAMBDA', 'DUTY', 'INJ PW', 'EGT', 'PEAK P']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
-    // Both halves of the split. A gauge for timing or mixture is the duplication
-    // the design exists to avoid.
-    expect(screen.queryByText('TIMING')).toBeNull();
-    expect(screen.queryByText('MIXTURE')).toBeNull();
-    expect(screen.queryByText('VE')).toBeNull();
+    // The other half, asserted as the WHOLE SET rather than as three absent
+    // strings. Querying for 'TIMING'/'MIXTURE'/'VE' could only ever catch a
+    // duplicate that happened to use the gauges' all-caps convention — a row
+    // duplicated under any other wording would slip past. Listing every gauge
+    // key that rendered catches an extra one however it is spelled.
+    const keys = [...container.querySelectorAll('[data-gauge]')]
+      .map((el) => el.getAttribute('data-gauge'));
+    expect(keys).toEqual(['maf', 'map', 'iat', 'lambda', 'duty', 'pw', 'egt', 'peakPressure']);
   });
 
   it('renders exactly the three pairs as rows, each showing asked AND got', () => {
@@ -283,7 +311,7 @@ describe('DataScreen', () => {
     // 6000 is the point carrying egtRisk. 5200 is not. Seeding the focus there
     // proves the tone follows the SHOWN point rather than the pull as a whole.
     const { container } = mountWithResult(
-      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6000 },
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
     );
     const egt = container.querySelector('[data-gauge="egt"]');
     expect(egt.getAttribute('data-tone')).toBe('danger');
