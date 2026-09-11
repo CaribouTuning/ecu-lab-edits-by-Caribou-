@@ -14,6 +14,7 @@ import { Grid3x3, Info } from 'lucide-react';
 
 import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { eventBands } from '../../components/eventBands.js';
 import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -104,6 +105,17 @@ export function DataScreen() {
   const firstRpm = result.points[0].rpm;
   const lastRpm = result.points[result.points.length - 1].rpm;
 
+  // The same function both charts call in 5b, so the tint on the track and the tint on
+  // the chart are one rule's output rather than two that drift. Whole-pull findings are
+  // dropped by `eventBands` itself — a band spanning the whole track would claim a
+  // location the finding does not have.
+  const span = Math.max(1, lastRpm - firstRpm);
+  const bands = eventBands(result.events).map((b) => ({
+    ...b,
+    left: `${((b.rpmStart - firstRpm) / span) * 100}%`,
+    width: `${((b.rpmEnd - b.rpmStart) / span) * 100}%`,
+  }));
+
   // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
   // binned onto the same RPM x MAP grid as the VE table, so the correction can be
   // applied cell-for-cell. This is what HP Tuners' scanner histogram does.
@@ -153,15 +165,26 @@ export function DataScreen() {
           screen-reader support all come with it, and #81 already tracks this
           project's accessibility debt. `step` is the sweep step, so every position
           lands on a real point rather than between two. */}
-      <input
-        type="range"
-        className={styles.track}
-        min={firstRpm} max={lastRpm} step={SWEEP_STEP_RPM}
-        value={scrubRpm}
-        onChange={(e) => setScrubRpm(Number(e.target.value))}
-        aria-label="Scrub the pull by RPM"
-        aria-valuetext={`${shown.rpm} RPM`}
-      />
+      <div className={styles.trackWrap}>
+        {bands.map((b) => (
+          <div
+            key={b.id}
+            className={styles.trackBand}
+            data-track-band={b.id}
+            data-tone={b.tone}
+            style={{ left: b.left, width: b.width }}
+          />
+        ))}
+        <input
+          type="range"
+          className={styles.track}
+          min={firstRpm} max={lastRpm} step={SWEEP_STEP_RPM}
+          value={scrubRpm}
+          onChange={(e) => setScrubRpm(Number(e.target.value))}
+          aria-label="Scrub the pull by RPM"
+          aria-valuetext={`${shown.rpm} RPM`}
+        />
+      </div>
 
       <div className={styles.card} data-tone={tone}>
         <div className={styles.cardHead}>

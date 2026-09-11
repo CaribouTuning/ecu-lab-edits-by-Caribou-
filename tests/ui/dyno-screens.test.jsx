@@ -162,6 +162,15 @@ const SCRUB_POINTS = [
 ];
 const SCRUB_RESULT = { points: SCRUB_POINTS, events: [], peakHp: 268, peakTq: 271 };
 
+/** The same pull, with one knock band across 4500-5500 and one whole-pull finding. */
+const BANDED_RESULT = {
+  ...SCRUB_RESULT,
+  events: [
+    { type: 'knock', severity: 3, msg: 'Knock across 4500-5500', rpmStart: 4500, rpmEnd: 5500 },
+    { type: 'injscale', severity: 2, msg: 'Injectors scaled wrong' },
+  ],
+};
+
 describe('ResultScreen', () => {
   it('renders the power/torque and AFR/timing panels', () => {
     mount(<ResultScreen chartData={[]} engineDerived={{ redline: 7000 }} />);
@@ -371,6 +380,65 @@ describe('DataScreen', () => {
     mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
     const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
     expect(track.getAttribute('aria-valuetext')).toBe('5200 RPM');
+  });
+
+  it('draws a band on the track for a locatable event, positioned by RPM', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const bands = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-track-band]')]);
+    expect(bands).toHaveLength(1);
+    // SCRUB_POINTS spans 4500-6500 (asserted above as the track's own min/max), so a
+    // 4500-5500 band starts exactly at the left edge and covers the first half.
+    // Position, not merely presence: a band pinned to the left edge at full width
+    // would still be "a band".
+    expect(bands[0].style.left).toBe('0%');
+    expect(bands[0].style.width).toBe('50%');
+  });
+
+  it('draws no band for a whole-pull finding', () => {
+    // The other direction. BANDED_RESULT carries an injscale event with no RPM
+    // at all, and stretching it across the track would claim a location it does
+    // not have.
+    //
+    // Asserted by naming the band that SHOULD be there, not by querying for an id
+    // the whole-pull event would never produce — a selector that cannot match
+    // whatever the bug generates proves nothing. This is the vacuous-negative
+    // shape 5b shipped and had to fix.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const ids = [...container.querySelectorAll('[data-track-band]')]
+      .map((el) => el.getAttribute('data-track-band'));
+    expect(ids).toEqual(['knock-4500-5500']);
+  });
+
+  it('draws no bands at all for a clean pull', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    expect(container.querySelectorAll('[data-track-band]')).toHaveLength(0);
+  });
+
+  it('keeps the input above every band in the stacking order', () => {
+    // If a band sat over the input, the whole feature would break in a browser
+    // while every test above stayed green — 5b shipped exactly that failure with
+    // a `pointer-events` rule that lived only in CSS, and Vitest applies no CSS.
+    //
+    // So the guarantee is asserted as STRUCTURE, which jsdom does model: every
+    // band is a sibling that precedes the input inside the wrapper. Painting
+    // order follows document order for positioned siblings without a z-index,
+    // so the input is on top. A band moved after the input fails this.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const wrap = container.querySelector('[data-track-band]').parentElement;
+    const kids = [...wrap.children];
+    const input = wrap.querySelector('input[type="range"]');
+    const lastBand = kids.map((el, i) => (el.hasAttribute('data-track-band') ? i : -1))
+      .reduce((a, b) => Math.max(a, b), -1);
+    expect(lastBand).toBeGreaterThan(-1);
+    expect(kids.indexOf(input)).toBeGreaterThan(lastBand);
   });
 });
 

@@ -173,28 +173,62 @@
 
 .actions { display: flex; gap: 8px; }
 
+.trackWrap {
+  position: relative;
+  margin: 0 0 var(--sp-md);
+}
+
+/* Under the input, never over it. The band is a sibling that PRECEDES the range
+   input with no z-index on either, so painting order puts the input on top —
+   that is the structural guarantee the test asserts, because Vitest applies no
+   CSS and a rule living only here would be invisible to the suite.
+   `pointer-events: none` is belt-and-braces on top of that. */
+.trackBand {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  pointer-events: none;
+  border-radius: 3px;
+  opacity: 0.35;
+}
+.trackBand[data-tone='danger'] { background: var(--danger); }
+.trackBand[data-tone='warn'] { background: var(--warn); }
+.trackBand[data-tone='violet'] { background: var(--violet); }
+
+.trackWrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+  pointer-events: none;
+  z-index: -1;
+}
+
 .track {
   -webkit-appearance: none;
   appearance: none;
   display: block;
   width: 100%;
   height: 22px;
-  margin: 0 0 var(--sp-md);
+  margin: 0;
   background: transparent;
   cursor: pointer;
 }
 
+/* The runnable track must not paint over the bands beneath it. */
 .track::-webkit-slider-runnable-track {
   height: 22px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel2);
+  background: transparent;
 }
 .track::-moz-range-track {
   height: 22px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel2);
+  background: transparent;
 }
 
 .track::-webkit-slider-thumb {
