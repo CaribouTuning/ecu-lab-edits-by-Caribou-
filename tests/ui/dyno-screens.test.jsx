@@ -138,6 +138,14 @@ const FAKE_POINT = {
 };
 const FAKE_RESULT = { points: [FAKE_POINT], events: [], peakHp: 111, peakTq: 222 };
 
+/** Three points, so "which point is shown" is a real question. Peak hp is at 5200. */
+const SCRUB_POINTS = [
+  { ...FAKE_POINT, rpm: 4000, hp: 200, torque: 240, maf: 150, duty: 60, egt: 700 },
+  { ...FAKE_POINT, rpm: 5200, hp: 268, torque: 271, maf: 214, duty: 78, egt: 835, knock: true, knockPull: 2.5, commandedTiming: 24, timing: 21.5 },
+  { ...FAKE_POINT, rpm: 6000, hp: 250, torque: 220, maf: 205, duty: 95, egt: 960, egtRisk: true },
+];
+const SCRUB_RESULT = { points: SCRUB_POINTS, events: [], peakHp: 268, peakTq: 271 };
+
 describe('ResultScreen', () => {
   it('renders the power/torque and AFR/timing panels', () => {
     mount(<ResultScreen chartData={[]} engineDerived={{ redline: 7000 }} />);
@@ -210,6 +218,75 @@ describe('DataScreen', () => {
     // The histogram controls put themselves away once applied.
     expect(screen.queryByRole('button', { name: 'APPLY CORRECTIONS TO VE' })).toBeNull();
     expect(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' })).toBeTruthy();
+  });
+
+  it('opens on peak power and shows that point, not the first or the last', () => {
+    // Which end. 5200 is neither end of the array, so a first-point or
+    // last-point implementation lands somewhere visibly different.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText('5200 RPM')).toBeTruthy();
+    expect(screen.queryByText('4000 RPM')).toBeNull();
+    expect(screen.queryByText('6000 RPM')).toBeNull();
+  });
+
+  it('opens on the focus RPM a chart band set, rather than on peak power', () => {
+    // The other branch of the seeding rule, asserted through the rendered screen
+    // rather than only through the pure function.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6000 });
+    expect(screen.getByText('6000 RPM')).toBeTruthy();
+    expect(screen.queryByText('5200 RPM')).toBeNull();
+  });
+
+  it('no longer renders one card per VE-table breakpoint', () => {
+    // The regression this task exists to remove. The old screen rendered a card
+    // for every entry in the table's RPM axis that had a point; 2500 and 3500
+    // are on that axis and are NOT in this pull, and 4000 is in this pull and is
+    // NOT on that axis.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.queryByText('2500 RPM')).toBeNull();
+    expect(screen.queryByText('3500 RPM')).toBeNull();
+  });
+
+  it('renders the eight gauges, and none of the three pairs as a gauge', () => {
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    for (const label of ['AIRFLOW', 'MAP', 'IAT', 'LAMBDA', 'DUTY', 'INJ PW', 'EGT', 'PEAK P']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    // Both halves of the split. A gauge for timing or mixture is the duplication
+    // the design exists to avoid.
+    expect(screen.queryByText('TIMING')).toBeNull();
+    expect(screen.queryByText('MIXTURE')).toBeNull();
+    expect(screen.queryByText('VE')).toBeNull();
+  });
+
+  it('renders exactly the three pairs as rows, each showing asked AND got', () => {
+    // Asserted as the RULE, not as a list of three names: a test that counted
+    // three rows would pass an implementation that picked the wrong three.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const asked = [...container.querySelectorAll('[data-pair-asked]')];
+    expect(asked.map((el) => el.getAttribute('data-pair-asked')).sort())
+      .toEqual(['mixture', 'timing', 've']);
+    // Every pair row shows both sides. A row that dropped its `asked` half would
+    // still be a row, and would still count.
+    for (const el of asked) expect(el.textContent.trim()).not.toBe('');
+  });
+
+  it('keeps the cylinder-filling row\'s teaching note', () => {
+    // FAKE_POINT deliberately differs: veTable 80, ve 84.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText(/table says 80% VE, engine actually flowed 84%/)).toBeTruthy();
+  });
+
+  it('tones a gauge from the shown point\'s own flag', () => {
+    // 6000 is the point carrying egtRisk. 5200 is not. Seeding the focus there
+    // proves the tone follows the SHOWN point rather than the pull as a whole.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6000 },
+    );
+    const egt = container.querySelector('[data-gauge="egt"]');
+    expect(egt.getAttribute('data-tone')).toBe('danger');
   });
 });
 

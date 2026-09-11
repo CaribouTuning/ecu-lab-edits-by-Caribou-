@@ -10,13 +10,6 @@
 /* Prose emphasis inside the ExpandableInfo panels and the datalog rows. */
 .em { color: var(--ink); }
 
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: var(--sp-xl);
-}
-
 /* 10px border-radius here is deliberately off the radius ramp (9/12 are the
    neighbours) rather than snapped onto either — same call as BUILD's
    boost-columns panel. */
@@ -25,9 +18,21 @@
   border-radius: 10px;
   background: var(--panel2);
   overflow: hidden;
+  margin-bottom: var(--sp-xl);
 }
 .card[data-tone='danger'] { border-color: var(--danger); }
 .card[data-tone='warn'] { border-color: var(--warn); }
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: var(--sp-md) 12px 0;
+}
+
+@media (max-width: 400px) {
+  .gauges { grid-template-columns: repeat(2, 1fr); }
+}
 
 .cardHead {
   display: flex;

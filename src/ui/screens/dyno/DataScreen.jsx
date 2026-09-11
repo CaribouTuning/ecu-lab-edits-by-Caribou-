@@ -14,13 +14,64 @@ import { Grid3x3, Info } from 'lucide-react';
 
 import { clamp, LOAD, RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useSession, useTune } from '../../state/StoreProvider.jsx';
-import { deltaHeat, T, utilisationColor } from '../../theme.js';
+import { deltaHeat, T } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
+
+/**
+ * The three asked-to-got pairs for one sweep point.
+ *
+ * These are rows rather than gauges because each is a PAIR: the VE table's claim against
+ * what the engine actually flowed, commanded timing against what the ECU ran, commanded
+ * mixture against what came out. A bare number cannot say that the ECU overrode you,
+ * which is the entire diagnostic idea of a datalog.
+ *
+ * `data-pair-asked` carries the pair's id on the element holding the asked half, so a
+ * test can assert the SPLIT rather than a count — three rows existing proves nothing
+ * about which three.
+ *
+ * @param {{point: object}} props
+ * @returns {React.ReactElement}
+ */
+function PairRows({ point: p }) {
+  const rows = [
+    { id: 've', k: 'Cylinder filling', asked: `${p.veTable}% VE`, got: `${p.ve}% VE`,
+      note: p.veTable !== p.ve
+        ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
+        : `${p.map} kPa manifold · table and engine agree at ${p.ve}%`,
+      ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
+    { id: 'timing', k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
+      note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
+      ok: !p.knock },
+    { id: 'mixture', k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
+      note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
+        : p.richRisk ? 'far richer than commanded — check injector scaling'
+          : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
+      ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
+  ];
+  return (
+    <div className={styles.cardBody}>
+      {rows.map((row) => (
+        <div key={row.id} className={styles.row}>
+          <div className={styles.rowTop}>
+            <span className={styles.rowKey}>{row.k}</span>
+            <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
+              <span className={styles.rowAsked} data-pair-asked={row.id}>{row.asked} → </span>
+              {row.got}
+            </span>
+          </div>
+          <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * @returns {React.ReactElement}
@@ -30,6 +81,18 @@ export function DataScreen() {
   const { result, histogram } = session;
   const [tune] = useTune();
   const { ve } = tune;
+  const { logFocusRpm } = session;
+  const scrubRpm = initialScrubRpm(result.points, logFocusRpm);
+  const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
+  const gauges = pointGauges(shown);
+  const bad = shown.knock || shown.fuelLimited || shown.leanRisk || shown.richRisk || shown.pressureRisk;
+  // `> 85` is the card's own existing threshold, carried over verbatim. It is NOT
+  // utilisationTone's 75 — that governs a single gauge's colour, this governs the whole
+  // readout's border, and they have always been different numbers. Swapping one for the
+  // other here would change when the panel goes amber, which is a behaviour change
+  // nobody asked for hiding inside a refactor.
+  const warn = !bad && (shown.duty > 85 || shown.egtRisk);
+  const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
 
   // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
   // binned onto the same RPM x MAP grid as the VE table, so the correction can be
@@ -73,73 +136,22 @@ export function DataScreen() {
     <>
       <Eyebrow icon={Info}>Datalog</Eyebrow>
       <div className={styles.intro}>
-        One card per RPM breakpoint. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
+        Every point of the pull, one at a time. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
       </div>
 
-      <div className={styles.cards}>
-        {RPM.map((r) => {
-          const p = result.points.find((pt) => pt.rpm === r);
-          if (!p) return null;
-          const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-          const warn = !bad && (p.duty > 85 || p.egtRisk);
-          const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
-
-          // Each row: label, what was asked, what happened, and a verdict.
-          const rows = [
-            { k: 'Airflow', asked: p.veTable !== p.ve ? `${p.veTable}% VE` : null, got: `${p.maf} g/s`,
-              note: p.veTable !== p.ve
-                ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
-                : `${p.map} kPa manifold · ${p.ve}% VE`,
-              ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
-            { k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
-              note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
-              ok: !p.knock },
-            { k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
-              note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
-                : p.richRisk ? 'far richer than commanded — check injector scaling'
-                : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
-              ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
-            // Same "no headroom left" cutoff as the build tab's duty preview,
-            // asked the same way: utilisationColor owns the band, and this
-            // reads its verdict rather than restating >90 twice more.
-            { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-              note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
-              ok: utilisationColor(p.duty) !== T.danger },
-            { k: 'Heat', asked: null, got: `${p.egt}°C`,
-              note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
-              ok: !p.egtRisk },
-            { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
-              note: p.pressureRisk
-                ? 'past what stock pistons and rods take — a mechanical limit, not detonation'
-                : `what ${p.map} kPa becomes at the top of the stroke, burning at ${p.timing}°`,
-              ok: !p.pressureRisk },
-          ];
-
-          return (
-            <div key={r} className={styles.card} data-tone={tone}>
-              <div className={styles.cardHead}>
-                <span className={styles.cardRpm}>{r} RPM</span>
-                <span className={styles.cardStat}>
-                  {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
-                </span>
-              </div>
-              <div className={styles.cardBody}>
-                {rows.map((row, i) => (
-                  <div key={i} className={styles.row}>
-                    <div className={styles.rowTop}>
-                      <span className={styles.rowKey}>{row.k}</span>
-                      <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
-                        {row.asked != null && <span className={styles.rowAsked}>{row.asked} → </span>}
-                        {row.got}
-                      </span>
-                    </div>
-                    <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
-                  </div>
-                ))}
-              </div>
+      <div className={styles.card} data-tone={tone}>
+        <div className={styles.cardHead}>
+          <span className={styles.cardRpm}>{shown.rpm} RPM</span>
+          <span className={styles.cardStat}>{shown.hp} whp · {shown.torque} lb-ft</span>
+        </div>
+        <div className={styles.gauges}>
+          {gauges.map((g) => (
+            <div key={g.key} data-gauge={g.key} data-tone={g.tone}>
+              <StatTile label={g.label} value={g.value} unit={g.unit} tone={g.tone} />
             </div>
-          );
-        })}
+          ))}
+        </div>
+        <PairRows point={shown} />
       </div>
 
       <ExpandableInfo title="How to read a datalog">
