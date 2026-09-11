@@ -51,9 +51,21 @@ longer rather than more explorable. The overview the list provided is preserved 
 different way — see the track below.
 
 **Gauges and asked-to-got rows, with nothing shown twice.** A gauge is the right shape for
-a value that stands alone. It is the wrong shape for timing and mixture, where the whole
-diagnostic idea is the *pair*: what you commanded against what the engine did. So the
-grid carries the eight standalone readings and the rows carry the two pairs.
+a value that stands alone. It is the wrong shape for a value whose whole diagnostic idea
+is the *pair*: what was asked against what the engine did.
+
+Today's six rows split cleanly on that test. **Three carry a pair** — cylinder filling
+(`veTable` against `ve`), timing (`commandedTiming` against `timing`) and mixture
+(`afrCommanded` against `afr`). **Three do not** — injectors, heat and pressure are
+standalone readings wearing a row.
+
+So the grid carries the eight standalone readings and the rows carry the three pairs.
+
+The first row is renamed from **Airflow** to **Cylinder filling**. It was never about
+airflow in the sensor sense: its pair is the VE table's claim against what the engine
+actually flowed, and that is the number the histogram corrects. `AIRFLOW` is now the
+gauge showing the MAF reading in g/s, so leaving the row under the same name would put
+two different quantities behind one word.
 
 **No comparison run.** Considered and declined. The ghost curve already answers "did my
 change help", and the two comparisons currently on screen do not agree with each other:
@@ -93,10 +105,10 @@ scrubber past the data.
 
 `pointGauges` returns the eight readings a single number can carry: **airflow, manifold
 pressure, intake air temperature, lambda, duty, pulse width, exhaust temperature and peak
-cylinder pressure.** Timing and mixture are deliberately absent; they belong to the rows,
-where the asked-to-got pair can be shown. Each gauge's tone comes from the point's own
-risk flags, which the sim already computes, or from `utilisationTone` for duty. It never
-re-derives a threshold the sim owns.
+cylinder pressure.** Volumetric efficiency, timing and mixture are deliberately absent;
+they belong to the rows, where the asked-to-got pair can be shown. Each gauge's tone comes
+from the point's own risk flags, which the sim already computes, or from `utilisationTone`
+for duty. It never re-derives a threshold the sim owns.
 
 ### 2. `utilisationTone` in `theme.js`
 
@@ -185,8 +197,11 @@ Required:
 - **The step is the sweep step.** Asserted as a value, not merely present.
 - **Gauge tone, at the boundary, both directions.** Just inside a limit is not danger and
   just outside is.
-- **The rows keep their pairs.** Timing and mixture still render asked and got, and
-  neither value appears in the gauge grid.
+- **The rows keep their pairs.** Cylinder filling, timing and mixture each still render
+  asked and got, and none of those six values appears in the gauge grid.
+- **The split is asserted as a rule, not as a list.** A test that only checked "three rows
+  exist" would pass an implementation that picked the wrong three. The assertion is that
+  every row renders a pair and no gauge does.
 - **`utilisationColor` is unchanged by its refactor.** Its existing callers must be
   pinned before the redefinition lands.
 
