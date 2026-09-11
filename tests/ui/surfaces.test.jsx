@@ -34,6 +34,26 @@ describe('Panel', () => {
     render(<Panel aria-label="Build summary">x</Panel>);
     expect(screen.getByLabelText('Build summary')).toBeTruthy();
   });
+
+  it('lets a caller supply the layout the panel does not own', () => {
+    // Fourteen of the fifteen call sites pass a `style` for margins and flex. They
+    // live in a file with @ts-nocheck, so a props type that rejected `style` would
+    // never have failed there — it would only have surfaced the first time a typed
+    // screen tried the same thing, which is exactly what the next PR does.
+    const { container } = render(<Panel style={{ marginBottom: 13 }}>x</Panel>);
+    expect(/** @type {HTMLElement} */ (container.firstChild).style.marginBottom).toBe('13px');
+  });
+
+  it('adds a caller-supplied className instead of replacing its own', () => {
+    // `className` is documented passthrough ("Anything not named above ... lands
+    // on the element"), but used to live in `...rest`, which spreads after the
+    // computed class list and so overwrote it outright — a caller following the
+    // docblock got an unstyled panel with no test failure.
+    render(<Panel className="callerClass">x</Panel>);
+    const el = screen.getByText('x');
+    expect(el.className).toContain(panelStyles.panel);
+    expect(el.className).toContain('callerClass');
+  });
 });
 
 describe('Eyebrow', () => {

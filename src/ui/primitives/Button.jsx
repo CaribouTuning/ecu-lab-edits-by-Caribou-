@@ -36,14 +36,18 @@ export function Button({
   size = 'md',
   block = false,
   type = 'button',
+  className,
   ...rest
 }) {
-  const className = [styles.button, styles[variant], styles[size], block && styles.block]
+  // `className` is pulled out and merged rather than left in `...rest`, so a
+  // caller-supplied class is additive instead of clobbering the button's own
+  // generated classes when `{...rest}` spreads after it.
+  const classes = [styles.button, styles[variant], styles[size], block && styles.block, className]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <button type={type} className={className} {...rest}>
+    <button type={type} className={classes} {...rest}>
       {children}
     </button>
   );

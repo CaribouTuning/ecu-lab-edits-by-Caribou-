@@ -12,7 +12,8 @@
 > behavioural fingerprint gate, the tooling and CI, and the current rework of the app.
 
 Design an engine, edit the same three calibration tables a real tuner edits, run a dyno
-pull, and read a log that explains what went right or wrong.
+pull, read a log that explains what went right or wrong, then put the engine in a car
+and run a quarter mile with it.
 
 It is a teaching tool, not a game with a horsepower slider.
 

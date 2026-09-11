@@ -50,7 +50,12 @@ const out = {
       ecuInjectorCc: patch.ecuInjectorCc,
       injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
       mods: patch.mods, mafScalar: 1, derived,
-      turbine: S.TURBINE_OPTS[patch.turbineIdx],
+      // `presetTurbine`, NOT `TURBINE_OPTS[turbineIdx]`. It applies the preset's
+      // turbineCount, so a twin-turbo engine gets both turbos. Reading the option
+      // straight out of the list drops the count and quietly under-flows the N54 by
+      // ~7% — this script disagreeing with the test it claims to mirror, which is the
+      // one thing it must never do.
+      turbine: S.presetTurbine(preset),
       compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
     });
     return {
@@ -86,14 +91,12 @@ def collect():
         shim.unlink(missing_ok=True)
 
 
-# Presets whose peak-power RPM this model cannot place, and why. Mirrors
-# NO_PEAK_BEFORE_LIMITER in tests/presets.test.js, which is the authority — if the two
-# ever disagree, the test is right and this is stale. Not a tolerance to widen when a
-# fit gets awkward: each entry names a missing term in the shared physics.
-NO_PEAK_BEFORE_LIMITER = {
-    "vq35hr": "no term in the shared physics makes NA power fall before the redline "
-              "(the real rolloff is cam profile, VVEL and intake tuning)",
-}
+# There was a NO_PEAK_BEFORE_LIMITER map here, mirroring the one in
+# tests/presets.test.js: the naturally aspirated presets whose power peak the model could
+# not place, because nothing in the shared physics made VE fall at speed. Both said the
+# entry was to be DELETED, not updated, the day the model gained the missing term. The
+# inlet Mach index (issue #15) is that term, the test-side map is gone, and so is this
+# one — every preset now goes through the ordinary rated-RPM check below.
 
 
 def rated_rpm(value):
@@ -119,31 +122,13 @@ def flat_top(curve):
     return min(tied), max(tied)
 
 
-def climbs_to_limiter(result):
-    """Whether the power curve is still climbing when it reaches this engine's own
-    redline — the shape the NO_PEAK_BEFORE_LIMITER exception exists to describe.
-
-    Shared by peak_rpm_ok (which uses it to decide the row passes) and report (which
-    uses it to decide whether the exception's note still describes reality). If this
-    ever goes false for a preset still listed in NO_PEAK_BEFORE_LIMITER, the model has
-    grown a term that makes NA power fall off, and the entry is stale.
-    """
-    curve = result["curve"]
-    lo, hi = flat_top(curve)
-    climbs = all(b["hp"] >= a["hp"] for a, b in zip(curve, curve[1:]))
-    return hi == result["redline"] and climbs
-
-
 def peak_rpm_ok(result):
     """Whether the simulated power peak lands where the manufacturer says it does.
 
-    Three cases, matching tests/presets.test.js: an engine the model admits it cannot
-    place must instead climb monotonically into its limiter; a plateau-rated engine's
-    flat top must overlap the published band; a point-rated engine's published RPM must
-    fall in or near its flat top.
+    Two cases, matching tests/presets.test.js: a plateau-rated engine's flat top must
+    overlap the published band; a point-rated engine's published RPM must fall in or
+    near its flat top.
     """
-    if result["id"] in NO_PEAK_BEFORE_LIMITER:
-        return climbs_to_limiter(result)
     curve = result["curve"]
     lo, hi = flat_top(curve)
     rated = result["factory"]["crankHpRpm"]
@@ -198,22 +183,6 @@ def report(data):
                     print(f"    knock: {msg}")
             if not dutyOk:
                 print(f"    injector duty hits {r['maxDuty']}% (wall is 90%)")
-        # A known limitation still gets printed on a passing row. The row passes
-        # because the check was replaced with one the model can honestly meet, not
-        # because the miss went away, and a silent pass would hide that. But only say
-        # "climbs to the limiter" when it actually still does — if the row failed
-        # because the engine stopped climbing, printing that sentence unconditionally
-        # would contradict the "peak hp across ..." line printed just above it.
-        if r["id"] in NO_PEAK_BEFORE_LIMITER:
-            if climbs_to_limiter(r):
-                print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
-                      f"climbs to the {r['redline']} limiter, rated "
-                      f"{rated_rpm(r['factory']['crankHpRpm'])}")
-            else:
-                print(f"    peak rpm not checked: {NO_PEAK_BEFORE_LIMITER[r['id']]}; "
-                      f"but the curve no longer climbs to the {r['redline']} limiter — "
-                      f"the limitation this entry describes appears to have been resolved; "
-                      f"delete {r['id']!r} from NO_PEAK_BEFORE_LIMITER instead of keeping this note.")
     print()
     print("all presets within tolerance" if ok else "one or more presets need work")
     return ok

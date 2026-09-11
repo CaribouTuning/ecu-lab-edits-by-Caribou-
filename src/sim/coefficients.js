@@ -62,6 +62,24 @@ export const COEFF = {
   WOSCHNI_C2: 3.24e-3,
   // Mean chamber wall temperature, K. Coolant ~370 K, metal surfaces above it.
   WALL_TEMP_K: 450,
+  // --- Exhaust port: what the EGT probe sees (see the two-stream note in cycle.js) ---
+  // How completely the piston-displaced part of the charge cools toward the port wall on
+  // its way out, as a number of transfer units at the reference flow. Fitted to the
+  // published EGT band for a naturally aspirated gasoline engine — roughly 850 C at wide
+  // open throttle, falling through about 700 at part throttle to 400-500 at light cruise
+  // — because those are the numbers a tuner reads off a gauge and the only ones worth
+  // matching. See EXHAUST_PORT_FLOW_REF for what the reference flow is.
+  EXHAUST_PORT_NTU: 1.0,
+  // Reference value of trappedMass x rpm, in the units the cycle carries them (kg and
+  // rev/min), measured at the stock V6 at wide-open throttle and 6500 RPM: 6.18e-4 kg of
+  // charge times 6500 is about 4.0. Only the RATIO to this matters, so it is a
+  // normaliser rather than a physical quantity — but it has to be the right order of
+  // magnitude or the NTU above stops meaning "at the reference flow".
+  EXHAUST_PORT_FLOW_REF: 4.0,
+  // Turbulent convection puts h at about mdot^0.8, so NTU = hA/(mdot*cp) goes as
+  // mdot^-0.2. Deliberately weak: it is weak in reality, and the blowdown mass fraction
+  // is what carries the load dependence.
+  EXHAUST_PORT_FLOW_EXP: 0.2,
   // Standard atmosphere, Pa — the unit Douaud-Eyzat is written in.
   ATM_PA: 101325,
 
@@ -347,6 +365,37 @@ export const COEFF = {
   // (~65 bar averaged), so it means "boosted-engine loading", not "you drove it".
   BEARING_EVENT_BAR: 60,
 
+  // --- Inlet Mach index: the high-speed breathing limit (see engine.js) ---
+  // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a
+  // modern four-valve head runs two intake valves at roughly 0.36 of the bore each, so
+  // the equivalent single valve is 0.36 * sqrt(2) = 0.509 of the bore, and the factor is
+  // 1 / 0.509^2 = 3.86.
+  MACH_BORE_VALVE_FACTOR: 3.86,
+  // Where choking starts to cost volumetric efficiency, and how fast it costs it.
+  //
+  // THESE TWO ARE FITTED, and it is worth being straight about to what. Taylor's own
+  // 2-valve data puts the knee near Z = 0.5-0.6; a modern 4-valve head with the geometry
+  // above never gets near that, which is precisely WHY these engines rev as far as they
+  // do. So the absolute threshold here is not Taylor's — it stands in for everything
+  // else that stops a real engine breathing at speed and that this model has no term
+  // for: cam profile running out of area, intake runner tuning falling off its resonant
+  // peak, and port velocity. Those are what actually roll a VQ35HR over at 6800.
+  //
+  // What IS carried over from the physics, and what makes this worth doing as a Mach
+  // index rather than as a curve fit against RPM, is the DEPENDENCE: rolloff scales with
+  // mean piston speed against the speed of sound, so a long-stroke engine chokes at
+  // fewer revolutions than a short-stroke one of the same displacement, and a hotter
+  // charge chokes later. Both are real, both fall out for free, and neither was in the
+  // model before.
+  //
+  // Fitted against the published peak-power RPM of the shipped naturally aspirated
+  // engines, which are the only engines here whose peak the boost curve does not already
+  // place. See the note in presets.js on what moved as a result.
+  MACH_Z_CRIT: 0.155,
+  MACH_VE_LOSS: 10,
+  // A choked engine still breathes something at the limiter.
+  MACH_VE_FLOOR: 0.55,
+
   // --- Camshaft & valvetrain ---
   CAM_PEAK_SHIFT_PER_DEG: 32,  // RPM the VE peak moves per degree of extra duration
   CAM_OVERLAP_PER_DEG: 0.55,   // overlap degrees gained per degree of duration
@@ -417,11 +466,14 @@ export const COEFF = {
   // BOTTOM of that band alone, and the credits below clear the top. 10.8 + 0.3 (93
   // octane) + 0.4 (intercooler) = 11.5 is how a B58 as sold comes out unpenalised.
   //
-  // TWO KNOWN SIMPLIFICATIONS, both deferred rather than hidden:
-  //   - A port-injected engine gets the same allowance as a DI one, which it has not
-  //     earned — DI evaporates fuel inside the cylinder and buys real knock margin from
-  //     it. Issue #24 tracks modelling injection type.
-  //   - The headroom does not scale with boost LEVEL; 3 psi and 24 psi are judged alike.
+  // ONE KNOWN SIMPLIFICATION, deferred rather than hidden: a port-injected engine gets
+  // the same allowance as a DI one, which it has not earned — DI evaporates fuel inside
+  // the cylinder and buys real knock margin from it. Issue #24 tracks modelling
+  // injection type.
+  //
+  // The other simplification that stood here — the headroom not scaling with boost
+  // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
+  // COMPRESSION_PER_BOOST_PSI below.
   COMPRESSION_BOOST_BASE: 10.8,
   // Compression credit per degree of octane bonus, and per intercooler.
   //
@@ -437,6 +489,40 @@ export const COEFF = {
   // belongs in its own change.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
+  // How much static compression one psi of boost takes off the headroom, and the boost
+  // level the base above is implicitly calibrated at.
+  //
+  // Boost level is the single largest determinant of whether high static compression
+  // survives, and until now the rule ignored it entirely: it gated on `peakBoostPsi > 0`
+  // and then responded only to octane and charge cooling — the second and third most
+  // important variables. A 5 psi build and a 25 psi build at 13.0:1 on E85 scored
+  // identically (issue #25).
+  //
+  // 0.1 points per psi is the long-standing shop rule stated as a rate: drop about one
+  // point of static compression per ten psi of intended boost. Expressed in the model's
+  // own currency it is mild — engine.js prices a compression point at 2 degrees of knock
+  // margin, so this is 0.2 degrees per psi — which is deliberate, for the same reason
+  // the octane and intercooler credits are discounted: the physics already charges for
+  // boost against compression through peak pressure and ignition delay, and the Tuning
+  // Score already deducts for the knock events that follow. This must not bill it twice.
+  //
+  // It does not double-count KNOCK_OVERBOOST_PENALTY either. That prices running a
+  // COMPRESSOR outside its efficient map, which is a property of the turbo match and
+  // fires whatever the compression ratio is. This prices boost against the SHORT BLOCK.
+  //
+  // The term is ONE-SIDED: it only ever takes headroom away, above the reference, and
+  // never hands any back below it. A two-sided swing was tried first and rejected — it
+  // made a 10 psi build MORE permissive than today (11.3:1 on 93 octane with no
+  // intercooler stopped being flagged), and this rule has no evidence for loosening
+  // anything. Widening what counts as sound engineering is not what the issue asked for.
+  //
+  // 14 psi is the median peak boost across the shipped factory engines (8.5, 13, 14, 17,
+  // 17), which is the band COMPRESSION_BOOST_BASE was fitted against — so below it a
+  // factory-normal build is judged exactly as it was before, and every shipped engine
+  // stays unpenalised: the tightest, the B58 at 11.0:1 and 17 psi, keeps 0.20 points of
+  // margin after paying 0.30 for the 3 psi it runs past the reference.
+  COMPRESSION_PER_BOOST_PSI: 0.1,
+  COMPRESSION_BOOST_REF_PSI: 14,
   // Points charged per compression point past the headroom, and the cap. The cap equals
   // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,

@@ -16,11 +16,17 @@ import React from 'react';
 import styles from './Seg.module.css';
 
 /**
+ * `id`/`value` are `string|number` rather than `string` alone: two call sites —
+ * ECU Injector Scaling and DYNO's manifold-pressure picker — key their options off
+ * the numeric value itself (cc, kPa) rather than a separate string label, and
+ * `id === value` and `onChange(id)` below never cared about the difference. Only
+ * the TS surface was narrower than what the component actually does.
+ *
  * @param {object} props
  * @param {string} props.label accessible name for the group
- * @param {Array<{id: string, label: string, icon?: React.ElementType}>} props.options
- * @param {string} props.value id of the selected option
- * @param {(id: string) => void} props.onChange
+ * @param {Array<{id: string|number, label: string, icon?: React.ElementType}>} props.options
+ * @param {string|number} props.value id of the selected option
+ * @param {(id: string|number) => void} props.onChange
  * @param {boolean} [props.equal] lay options out at equal width, wrapping as needed,
  *   instead of the default content-width row. For pickers with enough options that
  *   an inline row would crowd or wrap raggedly (e.g. injector sizes).

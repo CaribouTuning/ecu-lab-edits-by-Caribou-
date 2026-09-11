@@ -76,9 +76,15 @@
   --sp-xl: 16px;
   --sp-xxl: 24px;
 
+  /* Content column cap. See the matching comment in tokens.js for why 1100px:
+     the tuning grid (452px) is not the constraint, prose is. */
+  --content-max: 1100px;
+
   /* Breakpoint. `@media` cannot read a custom property, so this cannot be a
      token — it is recorded here instead. 560px is the project's one
      breakpoint (small-tablet-and-up); it must be kept in sync by hand across
-     every file that uses it: src/ui/screens/StartScreen.module.css and
-     src/ui/screens/TutorialScreen.module.css. */
+     every file that uses it: src/ui/screens/StartScreen.module.css,
+     src/ui/screens/TutorialScreen.module.css, src/ui/AppShell.module.css,
+     src/ui/components/AdvisorPanel.module.css, src/ui/screens/tune/AirflowScreen.module.css,
+     src/ui/screens/tune/SparkScreen.module.css and src/ui/screens/tune/FuelScreen.module.css. */
 }

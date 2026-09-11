@@ -9,7 +9,9 @@ import styles from './StatTile.module.css';
  * @param {string} props.label
  * @param {string|number} props.value
  * @param {string} [props.unit]
- * @param {'neutral'|'acc'|'ok'|'warn'|'danger'} [props.tone]
+ * @param {'neutral'|'acc'|'alt'|'ok'|'warn'|'danger'} [props.tone] `alt` marks the
+ *   second quantity in a paired readout (e.g. torque beside a power figure in `acc`)
+ *   so the two can be told apart at a glance. It is never a status.
  * @returns {React.ReactElement}
  */
 export function StatTile({ label, value, unit, tone = 'neutral' }) {

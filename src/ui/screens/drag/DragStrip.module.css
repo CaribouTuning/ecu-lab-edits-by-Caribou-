@@ -1,0 +1,189 @@
+/* DRAG > the strip scene.
+   Layout and type only. Every colour in the illustration comes from the `strip` art
+   palette in tokens.js and is applied inline by DragStrip.jsx — see that file's header
+   for why the scene is deliberately not on the semantic ramp, and why these particular
+   values cannot live here (they land in SVG gradient stops and in positions computed
+   per frame). The interface colours around the scene ARE tokens, and are here. */
+
+.panel {
+  margin-bottom: var(--sp-lg);
+  overflow: hidden;
+}
+
+/* The four distance labels above the scene. */
+.markers {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--sp-sm);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  color: var(--ink3);
+}
+
+.row {
+  display: flex;
+  gap: var(--sp-md);
+}
+
+/* ---------- The christmas tree ---------- */
+
+.tree {
+  width: 34px;
+  padding: var(--sp-sm) var(--sp-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+}
+
+.bulb {
+  margin: 3px auto;
+  border: 1px solid;
+  border-radius: 50%;
+}
+
+/* ---------- The scene ---------- */
+
+.scene {
+  position: relative;
+  flex: 1;
+  height: 150px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+/* The low sun behind the treeline. */
+.horizonGlow {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  left: 0;
+  height: 14px;
+}
+
+/* The guard wall, and the posts that scroll along it to convey speed. */
+.wall {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  left: 0;
+  height: 10px;
+  border-top: 1px solid;
+}
+
+.wallPost {
+  position: absolute;
+  top: 50px;
+  width: 2px;
+  height: 10px;
+}
+
+.surface {
+  position: absolute;
+  top: 60px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.groove {
+  position: absolute;
+  top: 92px;
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.texture {
+  position: absolute;
+  bottom: 10px;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.board {
+  position: absolute;
+  top: 34px;
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--ink3);
+}
+
+.finish {
+  position: absolute;
+  top: 58px;
+  right: 4px;
+  bottom: 6px;
+  width: 6px;
+}
+
+/* ---------- The car on it ---------- */
+
+.carLayer {
+  position: absolute;
+  bottom: 14px;
+  transition: left 0.04s linear;
+}
+
+.carAnchor { position: relative; }
+
+.sprite {
+  display: block;
+  overflow: visible;
+  /* The artwork is drawn nose-left; the car travels left to right. */
+  transform: scaleX(-1);
+}
+
+/* Motion blur past 100 mph. Cosmetic, and cheap enough to leave on. */
+.fast { filter: blur(0.5px); }
+
+.puff {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(4px);
+}
+
+/* ---------- The live readout under the scene ---------- */
+
+.readout {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--sp-md);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.speed {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.gear {
+  font-weight: 700;
+  color: var(--ink2);
+}
+
+/* Wheelspin is the one thing on the strip that IS a status: torque is being thrown
+   away, and the danger ramp is what says so everywhere else in the app. */
+.spinning {
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.revs { color: var(--ink2); }
+
+.unit {
+  font-size: var(--fs-micro);
+  color: var(--ink3);
+}
+
+/* Playback moves the car every 40ms and spawns smoke while the tyre is lit. Neither
+   is information — the time slip carries all of it — so both stop for a reader who
+   has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .carLayer { transition: none; }
+  .puff { display: none; }
+}

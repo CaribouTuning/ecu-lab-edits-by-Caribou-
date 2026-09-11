@@ -1,0 +1,8 @@
+/* HOME > Engine Health. One stacked column of meters, one per component this
+   simulation can destroy. */
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-md);
+}

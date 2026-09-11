@@ -16,6 +16,10 @@ import { camelToKebab, tokens } from '../src/ui/tokens.js';
 
 const css = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// The capped content column lived in EcuLab.jsx as an inline style until Task 8 moved
+// it (and the nav and status strip around it) into AppShell.jsx/AppShell.module.css —
+// see that file's `.content` rule. The binding this test guards moved with it.
+const appShellCss = readFileSync(new URL('../src/ui/AppShell.module.css', import.meta.url), 'utf8');
 
 /** @returns {Map<string,string>} every `--name: value` declared in tokens.css */
 function parseCss() {
@@ -53,6 +57,22 @@ describe('token contract', () => {
 
   it('is frozen so no screen can mutate the palette at runtime', () => {
     expect(Object.isFrozen(tokens)).toBe(true);
+  });
+
+  it('caps the content column so it cannot span an unbounded display', () => {
+    // The app had no max-width anywhere: the root is 100dvh tall with unconstrained
+    // width, so every container was the viewport. That is why buttons spanned the
+    // screen, and why Button's `block` prop shipped with no adopters.
+    expect(tokens.contentMax).toMatch(/^\d+px$/);
+    expect(Number.parseInt(tokens.contentMax, 10)).toBeLessThan(1600);
+  });
+
+  it('binds the scrolling content column to --content-max, not just declares the token', () => {
+    // The test above only pins the token's existence and shape — it would still pass
+    // if nothing in the app ever read --content-max. This one fails if `.content` in
+    // AppShell.module.css stops referencing the token, or hard-codes a pixel value
+    // instead.
+    expect(appShellCss).toMatch(/\.content\s*{[^}]*max-width:\s*var\(--content-max\)/);
   });
 });
 

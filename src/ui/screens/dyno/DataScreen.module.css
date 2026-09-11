@@ -1,0 +1,169 @@
+/* DYNO > DATALOG. */
+
+.intro {
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.55;
+  margin-bottom: var(--sp-md);
+}
+
+/* Prose emphasis inside the ExpandableInfo panels and the datalog rows. */
+.em { color: var(--ink); }
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--sp-xl);
+}
+
+/* 10px border-radius here is deliberately off the radius ramp (9/12 are the
+   neighbours) rather than snapped onto either — same call as BUILD's
+   boost-columns panel. */
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+  overflow: hidden;
+}
+.card[data-tone='danger'] { border-color: var(--danger); }
+.card[data-tone='warn'] { border-color: var(--warn); }
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--panel);
+}
+.card[data-tone='danger'] .cardHead { background: var(--danger-bg); }
+.card[data-tone='warn'] .cardHead { background: var(--warn-bg); }
+
+.cardRpm {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.cardStat {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ok);
+}
+.card[data-tone='danger'] .cardStat { color: var(--danger); }
+.card[data-tone='warn'] .cardStat { color: var(--warn); }
+
+.cardBody { padding: 4px 12px var(--sp-md); }
+
+.row { padding-top: var(--sp-sm); }
+
+.rowTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rowKey {
+  font-size: 11.5px;
+  color: var(--ink2);
+  font-weight: 600;
+  min-width: 62px;
+}
+
+.rowValue {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  font-weight: 700;
+  text-align: right;
+}
+.rowValue[data-ok='false'] { color: var(--danger); }
+
+.rowAsked { color: var(--ink3); font-weight: 400; }
+
+.rowNote {
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.rowNote[data-ok='false'] { color: var(--danger-ink); }
+
+.buildWrap { margin-bottom: var(--sp-xl); }
+
+.tableWrap { margin-bottom: var(--sp-xl); }
+
+/* 10px border-radius here too — see .card above. */
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.tableInner { display: inline-block; min-width: 100%; }
+
+.tableRow { display: flex; }
+
+.cornerCell { width: 44px; flex-shrink: 0; background: var(--panel); }
+
+.headerCell {
+  width: 51px;
+  height: 26px;
+  flex-shrink: 0;
+  background: var(--panel);
+  color: var(--ink2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--line);
+}
+
+.loadCell {
+  width: 44px;
+  height: 32px;
+  flex-shrink: 0;
+  background: var(--panel);
+  color: var(--ink2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--line);
+}
+
+/* `background` is the one per-cell continuous value here (deltaHeat's
+   gradient over a real number, not a fixed handful of states) — same
+   convention as the Bar primitive's fill, so it stays inline style, driven
+   from JS. The border colour was a fixed alpha regardless of cell value, so
+   it moved here as a static rule instead of staying inline. */
+.dataCell {
+  width: 51px;
+  height: 32px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  border: 1px solid rgba(var(--shadow-rgb), 0.35);
+}
+.dataCell[data-empty='true'] { color: var(--ink3); }
+
+.legend {
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+  margin-bottom: 8px;
+}
+
+.actions { display: flex; gap: 8px; }
