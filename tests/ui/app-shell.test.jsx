@@ -20,6 +20,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { ENGINE_PRESETS, applyPreset } from '../../src/sim/index.js';
 import { AppShell } from '../../src/ui/AppShell.jsx';
 import EcuLab from '../../src/ui/EcuLab.jsx';
+import { ROUTES } from '../../src/ui/routing.js';
 import { StoreProvider, useBuild, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 
@@ -71,7 +72,11 @@ describe('the section nav', () => {
     mountShell(ROUTE_DASH, () => {});
     const nav = screen.getByRole('navigation', { name: 'Sections' });
     const items = within(nav).getAllByRole('button');
-    expect(items).toHaveLength(4);
+    // Counted off ROUTES rather than written out, so the nav and the route table
+    // cannot drift: a tab added to one and not the other fails here rather than
+    // shipping as a destination with nothing behind it, or a screen with no way in.
+    const tabCount = Object.keys(ROUTES).length;
+    expect(items).toHaveLength(tabCount);
 
     // What would turn this red: SideNav comparing the wrong id, or marking every
     // item current (see the break-test below, which proves this exact assertion
@@ -80,7 +85,7 @@ describe('the section nav', () => {
     expect(home.getAttribute('aria-current')).toBe('page');
 
     const others = items.filter((b) => b !== home);
-    expect(others).toHaveLength(3);
+    expect(others).toHaveLength(tabCount - 1);
     for (const b of others) {
       // Must be ABSENT, not the string "false" — aria-current="false" is still a
       // truthy token to a screen reader. getAttribute returns null when the

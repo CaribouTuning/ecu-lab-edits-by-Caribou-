@@ -223,7 +223,7 @@
    StartScreen.module.css and TutorialScreen.module.css.
 
    This is the whole responsive story: the bottom bar becomes a side rail. A left
-   sidebar on a phone would eat a third of the width for four labels, and a bottom
+   sidebar on a phone would eat a third of the width for five labels, and a bottom
    bar on a desktop is a phone affordance on a machine with a pointer. */
 @media (min-width: 560px) {
   .shell { flex-direction: row; }

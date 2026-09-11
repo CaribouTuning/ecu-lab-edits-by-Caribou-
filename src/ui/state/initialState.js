@@ -17,8 +17,8 @@
  */
 
 import {
-  DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING,
-  EXHAUST_DIA_OPTS, clone2D, computeHardwareVE, makeLiveState,
+  DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_CAR, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
+  DEFAULT_TIMING, EXHAUST_DIA_OPTS, clone2D, computeHardwareVE, makeLiveState,
 } from '../../sim/index.js';
 
 /**
@@ -118,6 +118,23 @@ import {
  * @property {number|null} logFocusRpm the RPM a chart band was activated at, so the
  *   pull log can highlight every event whose span covers it. Null means no highlight.
  *   Cleared by BANK_PULL — see that case in reducer.js.
+ * @property {import('../../sim/index.js').DragCar} car the vehicle the engine is
+ *   dropped into on DRAG. Session state rather than build state on purpose: it is not
+ *   part of the engine, so it must not clear the preset label or flag unsaved
+ *   calibration work when it changes.
+ * @property {import('../../sim/index.js').DragResult|null} dragResult the last quarter
+ *   mile the car actually ran, solved in full before playback starts. The strip
+ *   animation reads this rather than integrating alongside it, so what is drawn can
+ *   never disagree with the time slip.
+ * @property {boolean} dragRunning true while that solved run is being played back
+ * @property {number} dragT playback clock, seconds into the run
+ * @property {number} treePhase christmas tree: 0 dark, 1 staged, 2-4 the three ambers,
+ *   5 green. The one piece of drag state with no physics behind it — the tree runs on
+ *   a real sportsman timer, and the car does not move until it goes green.
+ * @property {string|null} dragSetup the car and torque curve `dragResult` was actually
+ *   run on (`dragSignature` in DragScreen.jsx). What lets the time slip say "these are
+ *   last run's numbers, from before your change" instead of presenting a time the
+ *   current car cannot run — the same rule `pullScores.signature` follows.
  */
 
 /**
@@ -200,6 +217,14 @@ export function makeInitialState() {
       soundOn: true,
       journeyStep: 0,
       logFocusRpm: null,
+      // A fresh object graph, like every other default here: DEFAULT_CAR is not frozen
+      // and the DRAG screen writes to a copy of it on every control change.
+      car: { ...DEFAULT_CAR },
+      dragResult: null,
+      dragSetup: null,
+      dragRunning: false,
+      dragT: 0,
+      treePhase: 0,
     },
     history: { past: [], future: [] },
   };
