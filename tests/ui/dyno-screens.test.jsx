@@ -166,7 +166,11 @@ const SCRUB_RESULT = { points: SCRUB_POINTS, events: [], peakHp: 268, peakTq: 27
 const BANDED_RESULT = {
   ...SCRUB_RESULT,
   events: [
-    { type: 'knock', severity: 3, msg: 'Knock across 4500-5500', rpmStart: 4500, rpmEnd: 5500 },
+    // Deliberately starts INSIDE the track, not at its left edge. A band at 4500
+    // would sit at left: 0%, which is also where an implementation that ignored
+    // rpmStart entirely would put it — the position assertion would then pass
+    // against a bug that positions nothing.
+    { type: 'knock', severity: 3, msg: 'Knock across 5000-6000', rpmStart: 5000, rpmEnd: 6000 },
     { type: 'injscale', severity: 2, msg: 'Injectors scaled wrong' },
   ],
 };
@@ -389,10 +393,11 @@ describe('DataScreen', () => {
     const bands = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-track-band]')]);
     expect(bands).toHaveLength(1);
     // SCRUB_POINTS spans 4500-6500 (asserted above as the track's own min/max), so a
-    // 4500-5500 band starts exactly at the left edge and covers the first half.
-    // Position, not merely presence: a band pinned to the left edge at full width
-    // would still be "a band".
-    expect(bands[0].style.left).toBe('0%');
+    // 5000-6000 band starts a quarter of the way along and covers half. BOTH numbers
+    // are non-zero and different from each other, so an implementation that ignored
+    // rpmStart, ignored the span, or swapped the two lands somewhere this does not
+    // accept.
+    expect(bands[0].style.left).toBe('25%');
     expect(bands[0].style.width).toBe('50%');
   });
 
@@ -410,7 +415,7 @@ describe('DataScreen', () => {
     );
     const ids = [...container.querySelectorAll('[data-track-band]')]
       .map((el) => el.getAttribute('data-track-band'));
-    expect(ids).toEqual(['knock-4500-5500']);
+    expect(ids).toEqual(['knock-5000-6000']);
   });
 
   it('draws no bands at all for a clean pull', () => {
