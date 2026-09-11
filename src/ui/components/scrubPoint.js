@@ -45,6 +45,13 @@ export function pointAt(points, rpm) {
  * The focus is clamped into this pull's range: it is written by a different screen and
  * must not be able to park the scrubber past the data.
  *
+ * The clamped RPM is then snapped onto an actual sweep point. A clamp alone can still
+ * land off-grid — `ResultScreen` activates a band at `Math.round((rpmStart + rpmEnd) /
+ * 2)`, and a knock event's `rpmStart` is `Math.round(floatRpm)`, neither of which is
+ * guaranteed to be a multiple of the sweep step. `pointAt` then rounds DOWN to the
+ * nearest point while the track `<input>`'s own `step` rounds to the NEAREST one, so an
+ * off-grid seed would disagree with the thumb the moment it first moved.
+ *
  * @param {object[]} points the pull's sweep points, ascending by rpm
  * @param {number|null} logFocusRpm
  * @returns {number}
@@ -52,7 +59,10 @@ export function pointAt(points, rpm) {
 export function initialScrubRpm(points, logFocusRpm) {
   const first = points[0].rpm;
   const last = points[points.length - 1].rpm;
-  if (logFocusRpm != null) return Math.min(Math.max(logFocusRpm, first), last);
+  if (logFocusRpm != null) {
+    const clamped = Math.min(Math.max(logFocusRpm, first), last);
+    return pointAt(points, clamped)?.rpm ?? points[0].rpm;
+  }
   // Peak POWER's rpm, not peak power. `result.peakHp` is the value; the rpm it
   // happened at is not stored anywhere and has to come from the points.
   return points.reduce((a, b) => (b.hp > a.hp ? b : a)).rpm;

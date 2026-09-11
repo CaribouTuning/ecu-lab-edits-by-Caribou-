@@ -173,11 +173,28 @@ describe('utilisationTone', () => {
     expect(utilisationTone(90.1)).toBe('danger');
   });
 
-  it('is the single source of the thresholds utilisationColor reports', () => {
-    // The point of the refactor: one definition, two shapes. If the colour
-    // function ever grows its own copy of the numbers, these disagree.
-    for (const v of [0, 50, 75, 75.1, 85, 90, 90.1, 100]) {
-      expect(utilisationColor(v)).toBe(T[utilisationTone(v)]);
-    }
+  it('names a tone for every band, and every name is a real token', () => {
+    // This replaces a comparison of `utilisationColor(v)` against
+    // `T[utilisationTone(v)]` across a spread of values. `utilisationColor` IS
+    // `T[utilisationTone(v)]` now, so that reduced to `T[x] === T[x]` and held
+    // for any thresholds and any implementation. The property it claimed to
+    // guard — that the two cannot disagree — is true by construction, which is
+    // the point of the refactor. `statusTone` above went through this exact
+    // change for the exact same reason; this is deliberately the same test.
+    //
+    // The new way to fail is the dynamic lookup. `utilisationColor` used to name
+    // `T.ok`/`T.warn`/`T.danger` directly, so renaming a token broke at the
+    // reference. A rename now makes it return `undefined` — a colour that
+    // silently disappears rather than an error. That is what is worth pinning.
+    [0, 50, 75, 75.1, 85, 90, 90.1, 100].forEach((v) => {
+      const tone = utilisationTone(v);
+      expect(Object.keys(T)).toContain(tone);
+      expect(typeof utilisationColor(v)).toBe('string');
+      expect(utilisationColor(v)).toMatch(/^#[0-9a-f]{6}$/i);
+    });
+  });
+
+  it('returns exactly the three utilisation names', () => {
+    expect(new Set([50, 80, 95].map(utilisationTone))).toEqual(new Set(['ok', 'warn', 'danger']));
   });
 });

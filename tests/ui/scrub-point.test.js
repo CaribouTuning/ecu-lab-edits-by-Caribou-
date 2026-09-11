@@ -61,6 +61,15 @@ describe('initialScrubRpm', () => {
     expect(initialScrubRpm(POINTS, 9000)).toBe(1700);
     expect(initialScrubRpm(POINTS, 200)).toBe(1500);
   });
+
+  it('snaps an off-grid focus RPM onto an actual point, not just into range', () => {
+    // 1650 is already inside [1500, 1700] — clamping alone leaves it untouched
+    // and off-grid. It must land on a real point, at or below it, matching
+    // `pointAt`'s own fallback direction.
+    const seeded = initialScrubRpm(POINTS, 1650);
+    expect(seeded).toBe(1600);
+    expect(POINTS.map((p) => p.rpm)).toContain(seeded);
+  });
 });
 
 /** Every field the gauges read, with every risk flag clear. */
@@ -138,9 +147,14 @@ describe('pointGauges', () => {
   });
 
   it('tones duty through utilisationTone rather than its own copy of the numbers', () => {
-    expect(byKey({ ...CLEAN, duty: 70 }, 'duty').tone).toBe('ok');
-    expect(byKey({ ...CLEAN, duty: 80 }, 'duty').tone).toBe('warn');
-    expect(byKey({ ...CLEAN, duty: 95 }, 'duty').tone).toBe('danger');
+    // Boundaries, not midpoints — the same 75/90 values tests/theme.test.js pins
+    // for utilisationTone itself. A `pointGauges` carrying its own copy of the
+    // thresholds (`v > 92 ? 'danger' : v > 78 ? 'warn' : 'ok'`, say) passes a
+    // midpoint-only check like 70/80/95 but disagrees at the real edges.
+    expect(byKey({ ...CLEAN, duty: 75 }, 'duty').tone).toBe('ok');
+    expect(byKey({ ...CLEAN, duty: 75.1 }, 'duty').tone).toBe('warn');
+    expect(byKey({ ...CLEAN, duty: 90 }, 'duty').tone).toBe('warn');
+    expect(byKey({ ...CLEAN, duty: 90.1 }, 'duty').tone).toBe('danger');
   });
 
   it('tones pulse width danger when the injectors ran out of time', () => {
