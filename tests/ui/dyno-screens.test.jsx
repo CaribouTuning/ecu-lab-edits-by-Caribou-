@@ -350,6 +350,20 @@ describe('DataScreen', () => {
     expect(container.querySelector('[data-risk-note="pressure"]')).toBeNull();
   });
 
+  it('spells out the injector budget, computed from the shown point', () => {
+    // The one risk sentence carrying interpolated values rather than fixed prose.
+    // At 6500 RPM an engine cycle is 120000/6500 = 18.5 ms, and duty 95 is in
+    // utilisationTone's danger band. Asserted as the whole string: a sentence
+    // built from the wrong point, or from the pull's peak duty, gets different
+    // numbers and fails here.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
+    );
+    const inj = container.querySelector('[data-risk-note="injectors"]');
+    expect(inj).toBeTruthy();
+    expect(inj.textContent).toBe('Injectors at the limit \u2014 6.1 ms of the 18.5 ms available.');
+  });
+
   it('shows the pressure risk sentence for a point with pressureRisk, and not the heat one', () => {
     const PRESSURE_RISK_RESULT = {
       points: [{ ...FAKE_POINT, pressureRisk: true }],

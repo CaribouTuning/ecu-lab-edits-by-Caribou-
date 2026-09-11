@@ -204,8 +204,11 @@
    `pointer-events: none` is belt-and-braces on top of that. */
 .trackBand {
   position: absolute;
-  top: 1px;
-  bottom: 1px;
+  /* Flush to the wrap's padding box, which is already inside its 1px border —
+     an absolutely positioned child is laid out against the padding box, so an
+     inset here would be a second gap on top of the border. */
+  top: 0;
+  bottom: 0;
   pointer-events: none;
   border-radius: 3px;
   /* Matches ResultScreen.jsx's `fillOpacity={0.13}` on the chart bands — the
@@ -228,17 +231,16 @@
   cursor: pointer;
 }
 
-/* The runnable track must not paint over the bands beneath it. */
+/* The runnable track must not paint over the bands beneath it, and must not draw a
+   frame either — the frame is `.trackWrap`'s one border. Nothing in this project sets
+   `box-sizing: border-box`, so a border here would sit 1px inside the wrap's rather
+   than on the same pixels, and the track would read as a 2px double line. */
 .track::-webkit-slider-runnable-track {
   height: 22px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   background: transparent;
 }
 .track::-moz-range-track {
   height: 22px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   background: transparent;
 }
 
