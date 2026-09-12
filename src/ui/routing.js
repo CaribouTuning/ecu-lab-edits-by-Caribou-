@@ -24,6 +24,7 @@ export const ROUTES = {
   build: ['engine', 'induction', 'fuel', 'exhaust'],
   tune: ['airflow', 'spark', 'fuel', 'injectors', 'sensors'],
   dyno: ['result', 'data', 'log', 'score', 'history'],
+  drag: ['body', 'gearing', 'tyres'],
 };
 
 /**
