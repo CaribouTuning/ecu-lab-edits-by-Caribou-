@@ -83,14 +83,22 @@ export const statusColor = (v) => T[statusTone(v)];
  * sized so that sustained duty above ~90% has no headroom left for the next
  * enrichment the ECU asks for.
  *
- * The bands live here alone now — the injector duty preview and the tachometer's
- * redline zone in `EcuLab.jsx` both call this instead of re-testing the thresholds
- * inline. Do not let a new inline copy creep back in; change the bands here.
+ * The bands live here alone — the injector duty preview and the tachometer's redline
+ * zone in `EcuLab.jsx` both call this instead of re-testing the thresholds inline. Do
+ * not let a new inline copy creep back in; change the bands here.
  *
- * @param {number} v 0-100
- * @returns {string} a status colour
+ * Returns the NAME rather than the colour, because a caller may need either and only
+ * one of the two can be derived from the other. `StatTile` takes a tone name, and the
+ * alternative was comparing a returned colour against `T.danger` — which `DataScreen`
+ * actually did. Same shape as `statusTone`/`statusColor` above.
+ *
+ * @param {number} v 0-100, percent of the available capacity spent
+ * @returns {'ok'|'warn'|'danger'}
  */
-export const utilisationColor = (v) => (v > 90 ? T.danger : v > 75 ? T.warn : T.ok);
+export const utilisationTone = (v) => (v > 90 ? 'danger' : v > 75 ? 'warn' : 'ok');
+
+/** The same judgement as `utilisationTone`, as a colour. See it for the bands. */
+export const utilisationColor = (v) => T[utilisationTone(v)];
 
 /**
  * Heat-map colour for a table cell, cool (low) through warm (high).

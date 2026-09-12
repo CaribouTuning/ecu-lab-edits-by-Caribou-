@@ -15,10 +15,11 @@
  * same as it would crash the real app if that shell guard were ever dropped.
  */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { SWEEP_STEP_RPM } from '../../src/sim/index.js';
 import { DataScreen } from '../../src/ui/screens/dyno/DataScreen.jsx';
 import { HistoryScreen } from '../../src/ui/screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from '../../src/ui/screens/dyno/LogScreen.jsx';
@@ -138,6 +139,42 @@ const FAKE_POINT = {
 };
 const FAKE_RESULT = { points: [FAKE_POINT], events: [], peakHp: 111, peakTq: 222 };
 
+/** Three points, so "which point is shown" is a real question. Peak hp is at 5200. */
+/**
+ * Two of these three RPMs — 4500 and 6500 — are entries in the VE table's axis
+ * (`RPM` in src/sim/tables.js is [800, 1500, 2500, 3500, 4500, 5500, 6500, 7500]).
+ * That is the whole point of the fixture: the screen USED to render one card per
+ * axis entry that had a point, so the old implementation renders "4500 RPM" and
+ * "6500 RPM" for this pull and the new one renders neither.
+ *
+ * An earlier version of this fixture used 4000/5200/6000, none of which are on that
+ * axis — so the old implementation would have rendered ZERO cards for it and the
+ * "no longer renders one card per breakpoint" test passed whether the regression was
+ * fixed or not.
+ *
+ * Peak power sits at 5200: the middle element, and NOT on the axis, so it is a point
+ * only the new implementation can show.
+ */
+const SCRUB_POINTS = [
+  { ...FAKE_POINT, rpm: 4500, hp: 200, torque: 240, maf: 150, duty: 60, egt: 700 },
+  { ...FAKE_POINT, rpm: 5200, hp: 268, torque: 271, maf: 214, duty: 78, egt: 835, knock: true, knockPull: 2.5, commandedTiming: 24, timing: 21.5 },
+  { ...FAKE_POINT, rpm: 6500, hp: 250, torque: 220, maf: 205, duty: 95, egt: 960, egtRisk: true },
+];
+const SCRUB_RESULT = { points: SCRUB_POINTS, events: [], peakHp: 268, peakTq: 271 };
+
+/** The same pull, with one knock band across 4500-5500 and one whole-pull finding. */
+const BANDED_RESULT = {
+  ...SCRUB_RESULT,
+  events: [
+    // Deliberately starts INSIDE the track, not at its left edge. A band at 4500
+    // would sit at left: 0%, which is also where an implementation that ignored
+    // rpmStart entirely would put it — the position assertion would then pass
+    // against a bug that positions nothing.
+    { type: 'knock', severity: 3, msg: 'Knock across 5000-6000', rpmStart: 5000, rpmEnd: 6000 },
+    { type: 'injscale', severity: 2, msg: 'Injectors scaled wrong' },
+  ],
+};
+
 describe('ResultScreen', () => {
   it('renders the power/torque and AFR/timing panels', () => {
     mount(<ResultScreen chartData={[]} engineDerived={{ redline: 7000 }} />);
@@ -210,6 +247,276 @@ describe('DataScreen', () => {
     // The histogram controls put themselves away once applied.
     expect(screen.queryByRole('button', { name: 'APPLY CORRECTIONS TO VE' })).toBeNull();
     expect(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' })).toBeTruthy();
+  });
+
+  it('opens on peak power and shows that point, not the first or the last', () => {
+    // Which end. 5200 is neither end of the array, so a first-point or
+    // last-point implementation lands somewhere visibly different.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText('5200 RPM')).toBeTruthy();
+    expect(screen.queryByText('4500 RPM')).toBeNull();
+    expect(screen.queryByText('6500 RPM')).toBeNull();
+  });
+
+  it('opens on the focus RPM a chart band set, rather than on peak power', () => {
+    // The other branch of the seeding rule, asserted through the rendered screen
+    // rather than only through the pure function.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 });
+    expect(screen.getByText('6500 RPM')).toBeTruthy();
+    expect(screen.queryByText('5200 RPM')).toBeNull();
+  });
+
+  it('no longer renders one card per VE-table breakpoint', () => {
+    // The regression this task exists to remove, asserted against RPMs the old
+    // implementation would ACTUALLY have rendered. 4500 and 6500 are both entries
+    // in the VE table's axis AND points in this pull, so the old `RPM.map` card
+    // list emits a heading for each of them; the new screen shows one point and
+    // it is neither.
+    //
+    // Checking 2500/3500 instead — axis entries this pull does not contain —
+    // would have passed against the old code too, because it renders nothing for
+    // an axis entry with no matching point. A negative assertion has to name what
+    // the bug actually produces.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const headings = [...document.querySelectorAll('span')]
+      .map((el) => el.textContent)
+      .filter((t) => /^\d+ RPM$/.test(t));
+    expect(headings).toEqual(['5200 RPM']);
+  });
+
+  it('renders exactly the eight gauges, and nothing that belongs in a row', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    // Scoped to the gauge grid itself, not the whole document: "EGT" and
+    // "PEAK P" are now also, verbatim, bold words in the "How to read a
+    // datalog" panel below (FIX 9 made those match what the gauges actually
+    // say), so an unscoped getByText would find two matches for each and
+    // throw rather than prove anything about the grid.
+    const grid = container.querySelector('[data-gauge]').parentElement;
+    for (const label of ['AIRFLOW', 'MAP', 'IAT', 'LAMBDA', 'DUTY', 'INJ PW', 'EGT', 'PEAK P']) {
+      expect(within(grid).getByText(label)).toBeTruthy();
+    }
+    // The other half, asserted as the WHOLE SET rather than as three absent
+    // strings. Querying for 'TIMING'/'MIXTURE'/'VE' could only ever catch a
+    // duplicate that happened to use the gauges' all-caps convention — a row
+    // duplicated under any other wording would slip past. Listing every gauge
+    // key that rendered catches an extra one however it is spelled.
+    const keys = [...container.querySelectorAll('[data-gauge]')]
+      .map((el) => el.getAttribute('data-gauge'));
+    expect(keys).toEqual(['maf', 'map', 'iat', 'lambda', 'duty', 'pw', 'egt', 'peakPressure']);
+  });
+
+  it('renders exactly the three pairs as rows, each showing asked AND got', () => {
+    // Asserted as the RULE, not as a list of three names: a test that counted
+    // three rows would pass an implementation that picked the wrong three.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const asked = [...container.querySelectorAll('[data-pair-asked]')];
+    expect(asked.map((el) => el.getAttribute('data-pair-asked')).sort())
+      .toEqual(['mixture', 'timing', 've']);
+    // Every pair row shows both sides. A row that dropped its `asked` half would
+    // still be a row, and would still count.
+    for (const el of asked) expect(el.textContent.trim()).not.toBe('');
+  });
+
+  it('keeps the cylinder-filling row\'s teaching note', () => {
+    // FAKE_POINT deliberately differs: veTable 80, ve 84.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText(/table says 80% VE, engine actually flowed 84%/)).toBeTruthy();
+  });
+
+  it('tones a gauge from the shown point\'s own flag', () => {
+    // 6500 is the point carrying egtRisk. 5200 is not. Seeding the focus there
+    // proves the tone follows the SHOWN point rather than the pull as a whole.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
+    );
+    const egt = container.querySelector('[data-gauge="egt"]');
+    expect(egt.getAttribute('data-tone')).toBe('danger');
+  });
+
+  it('shows the heat risk sentence for a point with egtRisk, and not the pressure one', () => {
+    // SCRUB_POINTS[2] (6500 RPM) carries egtRisk; pressureRisk is false there.
+    // A gauge's colour is the only trace of a fault a colour-blind or
+    // screen-reader user gets otherwise, so the sentence has to be prose.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
+    );
+    const heat = container.querySelector('[data-risk-note="heat"]');
+    expect(heat).toBeTruthy();
+    expect(heat.textContent).toBe('Exhaust running hot — retard and lean mixture are what put it there.');
+    expect(container.querySelector('[data-risk-note="pressure"]')).toBeNull();
+  });
+
+  it('spells out the injector budget, computed from the shown point', () => {
+    // The one risk sentence carrying interpolated values rather than fixed prose.
+    // At 6500 RPM an engine cycle is 120000/6500 = 18.5 ms, and duty 95 is in
+    // utilisationTone's danger band. Asserted as the whole string: a sentence
+    // built from the wrong point, or from the pull's peak duty, gets different
+    // numbers and fails here.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: 6500 },
+    );
+    const inj = container.querySelector('[data-risk-note="injectors"]');
+    expect(inj).toBeTruthy();
+    expect(inj.textContent).toBe('Injectors at the limit \u2014 6.1 ms of the 18.5 ms available.');
+  });
+
+  it('shows the pressure risk sentence for a point with pressureRisk, and not the heat one', () => {
+    const PRESSURE_RISK_RESULT = {
+      points: [{ ...FAKE_POINT, pressureRisk: true }],
+      events: [], peakHp: 111, peakTq: 222,
+    };
+    const { container } = mountWithResult(
+      <DataScreen />, { result: PRESSURE_RISK_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const pressure = container.querySelector('[data-risk-note="pressure"]');
+    expect(pressure).toBeTruthy();
+    expect(pressure.textContent).toBe('Past what stock pistons and rods take — a mechanical limit, not detonation.');
+    expect(container.querySelector('[data-risk-note="heat"]')).toBeNull();
+  });
+
+  it('shows no risk line at all for a clean point', () => {
+    // FAKE_POINT clears every risk flag and sits well under the duty danger
+    // band, so nothing beneath the gauge grid should render.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: FAKE_RESULT, histogram: null, logFocusRpm: null },
+    );
+    expect(container.querySelectorAll('[data-risk-note]')).toHaveLength(0);
+  });
+
+  it('spans the pull\'s own range, not the sweep constants', () => {
+    // SWEEP_START_RPM is 1500 and SWEEP_END_RPM is 7500. This pull is 4500-6500.
+    // A track built from the constants would let the player scrub 40 positions
+    // past the true range of the data.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('min')).toBe('4500');
+    expect(track.getAttribute('max')).toBe('6500');
+  });
+
+  it('steps by the sweep step, so every position is a real point', () => {
+    // Asserted as a VALUE. "has a step attribute" would pass step="1", which
+    // puts 99 of every 100 positions between two points.
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('step')).toBe(String(SWEEP_STEP_RPM));
+  });
+
+  it('moves the readout when the track moves', () => {
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    expect(screen.getByText('5200 RPM')).toBeTruthy();
+    fireEvent.change(screen.getByRole('slider', { name: 'Scrub the pull by RPM' }), {
+      target: { value: '4500' },
+    });
+    expect(screen.getByText('4500 RPM')).toBeTruthy();
+    expect(screen.queryByText('5200 RPM')).toBeNull();
+  });
+
+  it('moves the gauges too, not only the RPM label', () => {
+    // The readout is the point of the feature. A track wired to the heading
+    // alone would pass the test above.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('neutral');
+    // The announced value has to move too, and it is only ever checked at the
+    // initial render elsewhere. An implementation that computed the string once —
+    // a useMemo with an empty dependency list, say — would keep announcing the
+    // seed RPM for the rest of the session and pass every other test here, which
+    // makes it exactly the kind of accessibility regression nothing would catch.
+    expect(track.getAttribute('aria-valuetext')).toBe('5200 RPM');
+
+    fireEvent.change(track, { target: { value: '6500' } });
+
+    expect(container.querySelector('[data-gauge="egt"]').getAttribute('data-tone')).toBe('danger');
+    expect(track.getAttribute('aria-valuetext')).toBe('6500 RPM');
+  });
+
+  it('announces the RPM rather than a bare number', () => {
+    mountWithResult(<DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null });
+    const track = screen.getByRole('slider', { name: 'Scrub the pull by RPM' });
+    expect(track.getAttribute('aria-valuetext')).toBe('5200 RPM');
+  });
+
+  it('draws a band on the track for a locatable event, positioned by RPM', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const bands = /** @type {HTMLElement[]} */ ([...container.querySelectorAll('[data-track-band]')]);
+    expect(bands).toHaveLength(1);
+    // SCRUB_POINTS spans 4500-6500 (asserted above as the track's own min/max), so a
+    // 5000-6000 band starts a quarter of the way along and covers half. BOTH numbers
+    // are non-zero and different from each other, so an implementation that ignored
+    // rpmStart, ignored the span, or swapped the two lands somewhere this does not
+    // accept.
+    expect(bands[0].style.left).toBe('25%');
+    expect(bands[0].style.width).toBe('50%');
+  });
+
+  it('draws no band for a whole-pull finding', () => {
+    // The other direction. BANDED_RESULT carries an injscale event with no RPM
+    // at all, and stretching it across the track would claim a location it does
+    // not have.
+    //
+    // Asserted by naming the band that SHOULD be there, not by querying for an id
+    // the whole-pull event would never produce — a selector that cannot match
+    // whatever the bug generates proves nothing. This is the vacuous-negative
+    // shape 5b shipped and had to fix.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const ids = [...container.querySelectorAll('[data-track-band]')]
+      .map((el) => el.getAttribute('data-track-band'));
+    expect(ids).toEqual(['knock-5000-6000']);
+  });
+
+  it('draws no bands at all for a clean pull', () => {
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SCRUB_RESULT, histogram: null, logFocusRpm: null },
+    );
+    expect(container.querySelectorAll('[data-track-band]')).toHaveLength(0);
+  });
+
+  it('floors a single-point band to a non-zero minimum width', () => {
+    // rpmStart === rpmEnd makes the percentage width 0% by construction — real,
+    // true to the data, and literally invisible on the track. `ResultScreen`
+    // floors the same case to 3px at paint time; this asserts the CSS
+    // equivalent, and that the underlying 0% is left alone rather than fudged.
+    const SINGLE_POINT_RESULT = {
+      ...SCRUB_RESULT,
+      events: [{ type: 'knock', severity: 3, msg: 'Single-point knock', rpmStart: 5200, rpmEnd: 5200 }],
+    };
+    const { container } = mountWithResult(
+      <DataScreen />, { result: SINGLE_POINT_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const band = /** @type {HTMLElement} */ (container.querySelector('[data-track-band]'));
+    expect(band.style.width).toBe('0%');
+    expect(band.style.minWidth).toBe('3px');
+  });
+
+  it('keeps the input above every band in the stacking order', () => {
+    // If a band sat over the input, the whole feature would break in a browser
+    // while every test above stayed green — 5b shipped exactly that failure with
+    // a `pointer-events` rule that lived only in CSS, and Vitest applies no CSS.
+    //
+    // So the guarantee is asserted as STRUCTURE, which jsdom does model: every
+    // band is a sibling that precedes the input inside the wrapper. Painting
+    // order follows document order for positioned siblings without a z-index,
+    // so the input is on top. A band moved after the input fails this.
+    const { container } = mountWithResult(
+      <DataScreen />, { result: BANDED_RESULT, histogram: null, logFocusRpm: null },
+    );
+    const wrap = container.querySelector('[data-track-band]').parentElement;
+    const kids = [...wrap.children];
+    const input = wrap.querySelector('input[type="range"]');
+    const lastBand = kids.map((el, i) => (el.hasAttribute('data-track-band') ? i : -1))
+      .reduce((a, b) => Math.max(a, b), -1);
+    expect(lastBand).toBeGreaterThan(-1);
+    expect(kids.indexOf(input)).toBeGreaterThan(lastBand);
   });
 });
 
@@ -438,7 +745,13 @@ describe('DYNO while a pull is running', () => {
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
       { timeout: 10000 },
     );
-  });
+    // Vitest's default per-test budget is 5s, and this test waits for TWO real
+    // reveal animations to finish with a 10s allowance each. Its own allowance
+    // therefore has to exceed the sum, or the waits can never spend what they
+    // were given — the test died at 5s while its first waitFor still had 5s of
+    // patience left. It passed for months only because the machine was fast
+    // enough to finish inside the smaller of the two numbers.
+  }, 30000);
 });
 
 // ---------------------------------------------------------------------------------

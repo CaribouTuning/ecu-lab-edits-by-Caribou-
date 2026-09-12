@@ -1,5 +1,5 @@
 /**
- * DYNO > DATALOG (per-breakpoint asked-vs-got readout, and the fuel-trim histogram).
+ * DYNO > DATALOG (the RPM scrubber and per-point readout, and the fuel-trim histogram).
  *
  * Everything here reads the store directly rather than taking props — `result`,
  * `histogram` and `ve` are all plain state, not shell-level derivations, and
@@ -12,15 +12,66 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
-import { clamp, LOAD, RPM } from '../../../sim/index.js';
+import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { eventBands } from '../../components/eventBands.js';
+import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useSession, useTune } from '../../state/StoreProvider.jsx';
-import { deltaHeat, T, utilisationColor } from '../../theme.js';
+import { deltaHeat, T, utilisationTone } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
+
+/**
+ * The three asked-to-got pairs for one sweep point.
+ *
+ * These are rows rather than gauges because each is a PAIR: the VE table's claim against
+ * what the engine actually flowed, commanded timing against what the ECU ran, commanded
+ * mixture against what came out. A bare number cannot say that the ECU overrode you,
+ * which is the entire diagnostic idea of a datalog.
+ *
+ * `data-pair-asked` carries the pair's id on the element holding the asked half, so a
+ * test can assert the SPLIT rather than a count — three rows existing proves nothing
+ * about which three.
+ *
+ * @param {{point: object}} props
+ * @returns {React.ReactElement}
+ */
+function PairRows({ point: p }) {
+  const rows = [
+    { id: 've', k: 'Cylinder filling', asked: `${p.veTable}% VE`, got: `${p.ve}% VE`,
+      note: p.veTable !== p.ve
+        ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
+        : `${p.map} kPa manifold · table and engine agree at ${p.ve}%`,
+      ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
+    { id: 'timing', k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
+      note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
+      ok: !p.knock },
+    { id: 'mixture', k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
+      note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
+        : p.richRisk ? 'far richer than commanded — check injector scaling'
+          : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
+      ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
+  ];
+  return (
+    <div className={styles.cardBody}>
+      {rows.map((row) => (
+        <div key={row.id} className={styles.row}>
+          <div className={styles.rowTop}>
+            <span className={styles.rowKey}>{row.k}</span>
+            <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
+              <span className={styles.rowAsked} data-pair-asked={row.id}>{row.asked}</span> → {row.got}
+            </span>
+          </div>
+          <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /**
  * @returns {React.ReactElement}
@@ -30,6 +81,61 @@ export function DataScreen() {
   const { result, histogram } = session;
   const [tune] = useTune();
   const { ve } = tune;
+  const { logFocusRpm } = session;
+  // Local, not session state. The store is one useReducer behind one context, so every
+  // dispatch re-renders every consumer — the reason LiveScreen is its own file. A drag
+  // gesture must not go through that path.
+  const [scrubRpm, setScrubRpm] = React.useState(
+    () => initialScrubRpm(result.points, logFocusRpm),
+  );
+  const shown = pointAt(result.points, scrubRpm) ?? result.points[0];
+  const gauges = pointGauges(shown);
+
+  // Three of the eight gauges above carry their verdict ONLY through
+  // StatTile's `.danger .value { color: var(--danger) }` — colour with no text
+  // to back it up. These sentences are the prose those rows used to carry
+  // before they became gauges, restored as ordinary visible text rather than
+  // an ARIA-only aside, so the fix serves every reader, not just assistive
+  // technology. Wording and thresholds are carried over verbatim from the old
+  // Injectors/Heat/Pressure rows (`git show 07288c2` has them).
+  const riskNotes = [
+    utilisationTone(shown.duty) === 'danger' && {
+      key: 'injectors',
+      text: `Injectors at the limit — ${shown.pw} ms of the ${(120000 / shown.rpm).toFixed(1)} ms available.`,
+    },
+    shown.egtRisk && {
+      key: 'heat',
+      text: 'Exhaust running hot — retard and lean mixture are what put it there.',
+    },
+    shown.pressureRisk && {
+      key: 'pressure',
+      text: 'Past what stock pistons and rods take — a mechanical limit, not detonation.',
+    },
+  ].filter(Boolean);
+  const bad = shown.knock || shown.fuelLimited || shown.leanRisk || shown.richRisk || shown.pressureRisk;
+  // `> 85` is the card's own existing threshold, carried over verbatim. It is NOT
+  // utilisationTone's 75 — that governs a single gauge's colour, this governs the whole
+  // readout's border, and they have always been different numbers. Swapping one for the
+  // other here would change when the panel goes amber, which is a behaviour change
+  // nobody asked for hiding inside a refactor.
+  const warn = !bad && (shown.duty > 85 || shown.egtRisk);
+  const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
+
+  // From the DATA, never from SWEEP_START_RPM/SWEEP_END_RPM: a low-redline build makes
+  // a shorter pull, and a track built from the constants would scrub past its end.
+  const firstRpm = result.points[0].rpm;
+  const lastRpm = result.points[result.points.length - 1].rpm;
+
+  // The same function both charts call in 5b, so the tint on the track and the tint on
+  // the chart are one rule's output rather than two that drift. Whole-pull findings are
+  // dropped by `eventBands` itself — a band spanning the whole track would claim a
+  // location the finding does not have.
+  const span = Math.max(1, lastRpm - firstRpm);
+  const bands = eventBands(result.events).map((b) => ({
+    ...b,
+    left: `${((b.rpmStart - firstRpm) / span) * 100}%`,
+    width: `${((b.rpmEnd - b.rpmStart) / span) * 100}%`,
+  }));
 
   // HISTOGRAM — the core real-world tuning workflow. A pull's lambda error is
   // binned onto the same RPM x MAP grid as the VE table, so the correction can be
@@ -73,82 +179,68 @@ export function DataScreen() {
     <>
       <Eyebrow icon={Info}>Datalog</Eyebrow>
       <div className={styles.intro}>
-        One card per RPM breakpoint. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
+        Every point of the pull, one at a time. Each line pairs <b className={styles.em}>what you asked for</b> with <b className={styles.em}>what the engine actually did</b> — a mismatch is the ECU telling you something.
       </div>
 
-      <div className={styles.cards}>
-        {RPM.map((r) => {
-          const p = result.points.find((pt) => pt.rpm === r);
-          if (!p) return null;
-          const bad = p.knock || p.fuelLimited || p.leanRisk || p.richRisk || p.pressureRisk;
-          const warn = !bad && (p.duty > 85 || p.egtRisk);
-          const tone = bad ? 'danger' : warn ? 'warn' : 'ok';
+      {/* Native range, not a hand-built drag surface: keyboard, touch, pointer and
+          screen-reader support all come with it, and #81 already tracks this
+          project's accessibility debt. `step` is the sweep step, so every position
+          lands on a real point rather than between two. */}
+      <div className={styles.trackWrap}>
+        {bands.map((b) => (
+          <div
+            key={b.id}
+            className={styles.trackBand}
+            data-track-band={b.id}
+            data-tone={b.tone}
+            aria-hidden="true"
+            /* A single-point event's width is 0% — real, but nothing for a mouse
+               user to see. `ResultScreen` floors the same case to 3px at paint
+               time for the same reason; this is that floor's CSS equivalent,
+               since a bare percentage width has no px minimum of its own. */
+            style={{ left: b.left, width: b.width, minWidth: '3px' }}
+          />
+        ))}
+        <input
+          type="range"
+          className={styles.track}
+          min={firstRpm} max={lastRpm} step={SWEEP_STEP_RPM}
+          value={scrubRpm}
+          onChange={(e) => setScrubRpm(Number(e.target.value))}
+          aria-label="Scrub the pull by RPM"
+          aria-valuetext={`${shown.rpm} RPM`}
+        />
+      </div>
 
-          // Each row: label, what was asked, what happened, and a verdict.
-          const rows = [
-            { k: 'Airflow', asked: p.veTable !== p.ve ? `${p.veTable}% VE` : null, got: `${p.maf} g/s`,
-              note: p.veTable !== p.ve
-                ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
-                : `${p.map} kPa manifold · ${p.ve}% VE`,
-              ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
-            { k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
-              note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
-              ok: !p.knock },
-            { k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
-              note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
-                : p.richRisk ? 'far richer than commanded — check injector scaling'
-                : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
-              ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
-            // Same "no headroom left" cutoff as the build tab's duty preview,
-            // asked the same way: utilisationColor owns the band, and this
-            // reads its verdict rather than restating >90 twice more.
-            { k: 'Injectors', asked: null, got: `${p.duty}% duty`,
-              note: `${p.pw} ms of the ${(120000 / p.rpm).toFixed(1)} ms available${utilisationColor(p.duty) === T.danger ? ' — at the limit' : ''}`,
-              ok: utilisationColor(p.duty) !== T.danger },
-            { k: 'Heat', asked: null, got: `${p.egt}°C`,
-              note: `intake charge ${p.iat}°C${p.egtRisk ? ' · exhaust running hot — retard and lean mixture are what put it there' : ''}`,
-              ok: !p.egtRisk },
-            { k: 'Pressure', asked: null, got: `${p.peakPressure} bar`,
-              note: p.pressureRisk
-                ? 'past what stock pistons and rods take — a mechanical limit, not detonation'
-                : `what ${p.map} kPa becomes at the top of the stroke, burning at ${p.timing}°`,
-              ok: !p.pressureRisk },
-          ];
-
-          return (
-            <div key={r} className={styles.card} data-tone={tone}>
-              <div className={styles.cardHead}>
-                <span className={styles.cardRpm}>{r} RPM</span>
-                <span className={styles.cardStat}>
-                  {p.hp} whp · {p.torque} lb-ft{bad ? '  ⚠' : warn ? '  !' : '  ✓'}
-                </span>
-              </div>
-              <div className={styles.cardBody}>
-                {rows.map((row, i) => (
-                  <div key={i} className={styles.row}>
-                    <div className={styles.rowTop}>
-                      <span className={styles.rowKey}>{row.k}</span>
-                      <span className={styles.rowValue} data-ok={row.ok ? 'true' : 'false'}>
-                        {row.asked != null && <span className={styles.rowAsked}>{row.asked} → </span>}
-                        {row.got}
-                      </span>
-                    </div>
-                    <div className={styles.rowNote} data-ok={row.ok ? 'true' : 'false'}>{row.note}</div>
-                  </div>
-                ))}
-              </div>
+      <div className={styles.card} data-tone={tone}>
+        <div className={styles.cardHead}>
+          <span className={styles.cardRpm}>{shown.rpm} RPM</span>
+          <span className={styles.cardStat}>{shown.hp} whp · {shown.torque} lb-ft</span>
+        </div>
+        <div className={styles.gauges}>
+          {gauges.map((g) => (
+            <div key={g.key} data-gauge={g.key} data-tone={g.tone}>
+              <StatTile label={g.label} value={g.value} unit={g.unit} tone={g.tone} />
             </div>
-          );
-        })}
+          ))}
+        </div>
+        {riskNotes.length > 0 && (
+          <div className={styles.riskNotes}>
+            {riskNotes.map((n) => (
+              <div key={n.key} className={styles.riskNote} data-risk-note={n.key}>{n.text}</div>
+            ))}
+          </div>
+        )}
+        <PairRows point={shown} />
       </div>
 
       <ExpandableInfo title="How to read a datalog">
         Diagnosis happens in the <b className={styles.em}>asked → got</b> pairs, not in the power number.
         <br /><br /><b className={styles.em}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was. Tuners treat anything sustained above ~2° as damaging.
         <br /><br /><b className={styles.em}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or an ECU injector size that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-        <br /><br /><b className={styles.em}>Injectors</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
-        <br /><br /><b className={styles.em}>Heat</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
-        <br /><br /><b className={styles.em}>Pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
+        <br /><br /><b className={styles.em}>INJ PW / DUTY</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
+        <br /><br /><b className={styles.em}>EGT</b>: exhaust temperature rises with retarded timing and lean mixtures. Sustained above ~950°C cooks turbines and valves.
+        <br /><br /><b className={styles.em}>PEAK P</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. A naturally aspirated engine peaks near 50 bar; a factory turbo engine near 90-110. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
       </ExpandableInfo>
 
       <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
