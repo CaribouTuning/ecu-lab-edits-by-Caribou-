@@ -451,7 +451,6 @@ export function updateEngineAudio(a, frame) {
     // hears is what the pipes do with them.
     p.get('rpm').setTargetAtTime(Math.max(0, frame.rpm), t, 0.05);
     p.get('evoPa').setTargetAtTime(Math.max(0, drive.evoKpa) * 1000, t, 0.06);
-    p.get('manifoldPa').setTargetAtTime(Math.max(5, drive.empKpa) * 1000, t, 0.1);
     p.get('overlapDeg').setTargetAtTime(drive.overlapDeg, t, 0.2);
     // Turbulence at the valve seat rises with how hard the gas is being pushed through
     // it, and a retarded engine sends more energy out of the port, so it rasps.

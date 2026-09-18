@@ -118,6 +118,14 @@ const JET_PER_VEL = 0.020;
  * Everything quieter than that is quieter for a physical reason and needs no curve.
  */
 const PA_TO_UNIT = 13;
+/**
+ * Output level below which the model is not run at all.
+ *
+ * At this level the output is 80 dB down and multiplied into nothing anyone can hear, so
+ * running a dozen delay lines to produce it is pure cost. It is where a silenced or
+ * volume-zero engine settles, and where the fallback path's smoothed parameters land.
+ */
+const QUIET_LEVEL = 1e-4;
 
 /** A bidirectional delay line standing in for one length of pipe. */
 class Tube {
@@ -199,8 +207,13 @@ class Tube {
    * @returns {number} the wave arriving at the far end of that direction
    */
   read(buf, fwd) {
-    const base = this.i + this.n - this.d;
-    const raw = buf[base % this.n];
+    const n = this.n;
+    // `i < n` and `1 <= d <= n - 2`, so `base` lies in [2, 2n) and one conditional
+    // subtraction wraps it. The same holds for the read position below, which sits at
+    // most one warp (well under n) ahead of it. `%` on every read, twice per tube per
+    // sample, was a measurable share of the whole model.
+    const base = this.i + n - this.d;
+    const raw = buf[base >= n ? base - n : base];
     // ONLY A COMPRESSION STEEPENS. The crest of a finite-amplitude wave catches up with
     // the trough ahead of it, so the leading compression sharpens and the rarefaction
     // behind it stretches out — a shock forms on the front of an exhaust pulse and never
@@ -209,7 +222,8 @@ class Tube {
     // was 0.3 where it should be 1, and the model was manufacturing its own hiss out of
     // its own quiet.
     const drive = raw > 0 ? raw : 0;
-    const target = this.maxWarp * Math.tanh((this.steepen * drive) / this.maxWarp);
+    // A rarefaction does not steepen, and tanh(0) is 0, so most reads skip the tanh.
+    const target = drive === 0 ? 0 : this.maxWarp * Math.tanh((this.steepen * drive) / this.maxWarp);
     let w = fwd ? this.warpF : this.warpB;
     const dw = target - w;
     w += dw > WARP_SLEW ? WARP_SLEW : dw < -WARP_SLEW ? -WARP_SLEW : dw;
@@ -217,8 +231,11 @@ class Tube {
     const pos = base + w;
     const j = Math.floor(pos);
     const frac = pos - j;
-    const a = buf[((j % this.n) + this.n) % this.n];
-    const b = buf[(((j + 1) % this.n) + this.n) % this.n];
+    let ja = j;
+    while (ja >= n) ja -= n;
+    const jb = ja + 1 >= n ? ja + 1 - n : ja + 1;
+    const a = buf[ja];
+    const b = buf[jb];
     return a + (b - a) * frac;
   }
 
@@ -294,7 +311,6 @@ export class ExhaustProcessor extends WorkletBase {
     return [
       { name: 'rpm', defaultValue: 0, minValue: 0, maxValue: 12000, automationRate: 'a-rate' },
       { name: 'evoPa', defaultValue: P_ATM, minValue: 0, maxValue: 6e6, automationRate: 'a-rate' },
-      { name: 'manifoldPa', defaultValue: P_ATM, minValue: 1000, maxValue: 5e5, automationRate: 'k-rate' },
       { name: 'level', defaultValue: 0, minValue: 0, maxValue: 4, automationRate: 'k-rate' },
       { name: 'overlapDeg', defaultValue: 0, minValue: 0, maxValue: 120, automationRate: 'k-rate' },
       { name: 'jet', defaultValue: 1, minValue: 0, maxValue: 4, automationRate: 'k-rate' },
@@ -350,6 +366,14 @@ export class ExhaustProcessor extends WorkletBase {
     this.camShape = 0.7;
     this.cylK = 1100;
     this.gamma = 1.235;
+    this.setGasConstants();
+    // Per-bank sums for the collector junction, reused every sample rather than
+    // allocated three times per sample on the audio thread.
+    this.collectorIn = new Float64Array(2);
+    this.collectorY = new Float64Array(2);
+    this.collectorFlow = new Float64Array(2);
+    // Set once the output has gone quiet and the network has been emptied; see `process`.
+    this.idle = false;
 
     this.port.onmessage = (e) => this.configure(e.data);
   }
@@ -413,12 +437,26 @@ export class ExhaustProcessor extends WorkletBase {
     this.camShape = g.camShape;
     this.cylK = g.cylinderK;
     this.gamma = g.gamma;
+    this.setGasConstants();
     // ka = 1 for the tailpipe's own radius: where the mouth stops behaving like a piston
     // and starts behaving like a point source.
     const mouthRadius = Math.sqrt(g.tailArea / Math.PI);
     const kaHz = g.cTail / (2 * Math.PI * mouthRadius);
     this.mouthLpK = Math.exp((-2 * Math.PI * kaHz) / sr);
     this.radK = Math.exp((-2 * Math.PI * kaHz) / sr);
+  }
+
+  /** Empties every pipe and returns every cylinder to ambient. */
+  reset() {
+    for (const t of [...this.primaries, ...this.tailA, ...this.cat, ...this.chamber, ...this.tailB]) {
+      t.clear();
+    }
+    for (const cy of this.cyl) {
+      cy.p = P_ATM; cy.armed = true; cy.lastQ = 0; cy.wander = 0; cy.strength = 1;
+    }
+    this.mouthLp[0] = 0; this.mouthLp[1] = 0;
+    this.prevRad[0] = 0; this.prevRad[1] = 0;
+    this.prevOut[0] = 0; this.prevOut[1] = 0;
   }
 
   /**
@@ -473,20 +511,43 @@ export class ExhaustProcessor extends WorkletBase {
    */
   orifice(pUp, pDown, area, tempK) {
     if (area <= 0) return 0;
-    const g = this.gamma;
     let hi = pUp;
     let lo = pDown;
     let sign = 1;
     if (lo > hi) { hi = pDown; lo = pUp; sign = -1; }
     if (hi <= 0) return 0;
-    const crit = Math.pow((g + 1) / 2, g / (g - 1));
     const base = (area * hi) / Math.sqrt(R_GAS * tempK);
-    if (hi / Math.max(1, lo) >= crit) {
-      return sign * base * Math.sqrt(g) * Math.pow(2 / (g + 1), (g + 1) / (2 * (g - 1)));
-    }
+    if (hi / Math.max(1, lo) >= this.critRatio) return sign * base * this.chokedFlow;
+    // pr^(2/g) - pr^((g+1)/g) is x^2 - pr*x with x = pr^(1/g): one power, not two.
     const pr = lo / hi;
-    const t = Math.pow(pr, 2 / g) - Math.pow(pr, (g + 1) / g);
-    return sign * base * Math.sqrt(Math.max(0, ((2 * g) / (g - 1)) * t));
+    const x = Math.pow(pr, this.invGamma);
+    const t = x * x - pr * x;
+    return sign * base * Math.sqrt(Math.max(0, this.subsonicK * t));
+  }
+
+  /**
+   * Whether flow from `pUp` into `pDown` is choked. Choked flow depends on the upstream
+   * pressure alone, which is what lets the valve junction skip its slope evaluation.
+   *
+   * @param {number} pUp upstream pressure, Pa
+   * @param {number} pDown downstream pressure, Pa
+   * @returns {boolean}
+   */
+  choked(pUp, pDown) {
+    return pUp > pDown && pUp / Math.max(1, pDown) >= this.critRatio;
+  }
+
+  /**
+   * The orifice's constants for the current gamma. Every one of them is a power of gamma,
+   * and gamma only changes when the geometry does, so they are worked out here once
+   * rather than on every call — which was twice per open cylinder per sample.
+   */
+  setGasConstants() {
+    const g = this.gamma;
+    this.critRatio = Math.pow((g + 1) / 2, g / (g - 1));
+    this.chokedFlow = Math.sqrt(g) * Math.pow(2 / (g + 1), (g + 1) / (2 * (g - 1)));
+    this.invGamma = 1 / g;
+    this.subsonicK = (2 * g) / (g - 1);
   }
 
   /**
@@ -501,10 +562,22 @@ export class ExhaustProcessor extends WorkletBase {
     const n = outL.length;
     if (!this.geom || this.nCyl === 0) { outL.fill(0); if (outR !== outL) outR.fill(0); return true; }
 
+    const level = params.level[0];
+    // NOTHING TO HEAR, NOTHING TO COMPUTE. A silenced engine is multiplied by zero on the
+    // way out, so everything upstream of that is wasted work — and on the main-thread
+    // fallback it is wasted UI time. The network is emptied once on the way in, so that
+    // when the level comes back the pipes start from rest rather than from whatever was
+    // ringing in them when it stopped.
+    if (level < QUIET_LEVEL) {
+      if (!this.idle) { this.reset(); this.idle = true; }
+      outL.fill(0);
+      if (outR !== outL) outR.fill(0);
+      return true;
+    }
+    this.idle = false;
+
     const rpmA = params.rpm;
     const evoA = params.evoPa;
-    const manifold = params.manifoldPa[0];
-    const level = params.level[0];
     const overlap = params.overlapDeg[0];
     const jetGain = params.jet[0] * JET_PER_VEL;
     const flowGain = params.jet[0] * FLOW_NOISE;
@@ -513,8 +586,11 @@ export class ExhaustProcessor extends WorkletBase {
     const sr = this.sr;
     const g = this.gamma;
 
-    // Gas density in the primaries, for turning mass flow into a wave amplitude.
+    // Gas density in the primaries, for turning mass flow into a wave amplitude, and the
+    // gas state in the tailpipe. All three are fixed until the geometry is next sent.
     const rhoPrimary = P_ATM / (R_GAS * this.geom.portK);
+    const rhoTail = P_ATM / (R_GAS * this.geom.tailK);
+    const cT = this.geom.cTail;
     // The exhaust valve always shuts AFTER top dead centre, even on a cam quoted at zero
     // overlap — an exhaust lobe closing exactly at TDC would trap the last of the charge
     // and squeeze it through a shutting orifice, which no engine does and which the model
@@ -529,9 +605,12 @@ export class ExhaustProcessor extends WorkletBase {
       // ---- Cylinders and primaries -------------------------------------------------
       // Each cylinder vents into its own tube. Nothing here knows the firing ORDER; it
       // knows each cylinder's crank offset, and the order falls out of that.
-      const collectorIn = [0, 0];
-      const collectorY = [0, 0];
-      const collectorFlow = [0, 0];
+      const collectorIn = this.collectorIn;
+      const collectorY = this.collectorY;
+      const collectorFlow = this.collectorFlow;
+      collectorIn[0] = 0; collectorIn[1] = 0;
+      collectorY[0] = 0; collectorY[1] = 0;
+      collectorFlow[0] = 0; collectorFlow[1] = 0;
       for (let i = 0; i < this.nCyl; i++) {
         const cy = this.cyl[i];
         const tube = this.primaries[i];
@@ -611,8 +690,10 @@ export class ExhaustProcessor extends WorkletBase {
           const pOpen = P_ATM + bwd + fwd;
           const zByRho = this.geom.cPrimary / tube.area;
           const explicit = this.orifice(cy.p, pOpen, area, this.cylK);
-          const slope = (this.orifice(cy.p, pOpen + JUNCTION_DP, area, this.cylK) - explicit)
-            / JUNCTION_DP;
+          // Choked at both pressures, the flow is set by the cylinder alone and the slope
+          // is exactly zero — which is most of every blowdown, so it is not evaluated.
+          const slope = this.choked(cy.p, pOpen + JUNCTION_DP) ? 0
+            : (this.orifice(cy.p, pOpen + JUNCTION_DP, area, this.cylK) - explicit) / JUNCTION_DP;
           let mdot = explicit / (1 - Math.min(0, slope) * zByRho);
           const pPipe = pOpen + zByRho * mdot;
 
@@ -647,7 +728,6 @@ export class ExhaustProcessor extends WorkletBase {
           }
           cy.p += dpFlow;
           if (cy.p < 1000) cy.p = 1000;
-          void manifold;
 
           // The wave the flow launches down the primary. A volume flow Q injected at the
           // closed end of a duct raises the pressure there by rho*c*Q/A.
@@ -686,8 +766,6 @@ export class ExhaustProcessor extends WorkletBase {
         const tA = this.tailA[b];
         const ch = this.chamber[b];
         const tB = this.tailB[b];
-        const rhoTail = P_ATM / (R_GAS * this.geom.tailK);
-        const cT = this.geom.cTail;
         const yA = tA.area / (rhoTail * cT);
         const yC = ch.area / (rhoTail * cT);
         const yB = tB.area / (rhoTail * cT);

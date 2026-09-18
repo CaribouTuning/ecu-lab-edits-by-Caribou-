@@ -66,12 +66,7 @@ function run(opts = {}) {
   }) * 1000;
   const par = (v) => Float32Array.of(v);
   const params = {
-    // The EXHAUST manifold, which is what the parameter means and what `engineAudio`
-    // sends. This was passing the intake MAP, which is a different number entirely below
-    // wide-open throttle: at a closed throttle it told the model the cylinder was venting
-    // into a third of an atmosphere, and every light-load measurement taken through this
-    // harness came out louder and harder than the model actually is.
-    rpm: par(rpm), evoPa: par(evoPa), manifoldPa: par(point.emp * 1000), level: par(1),
+    rpm: par(rpm), evoPa: par(evoPa), level: par(1),
     overlapDeg: par(derived.overlapDeg || 0), jet: par(jet), lope: par(0),
     covPersistence: par(0.55),
   };
@@ -176,6 +171,48 @@ function levels(x) {
 }
 
 describe('the exhaust waveguide', () => {
+  it('does no work and makes no sound while its level is zero, and restarts from rest', () => {
+    // A silenced engine is multiplied by zero on the way out, so running a dozen delay
+    // lines to produce that zero is pure cost — on the main-thread fallback, UI cost.
+    const derived = deriveEngine(DEFAULT_ENGINE_CONFIG);
+    const geo = exhaustGeometry({
+      displacementL: derived.displacementL, cyl: derived.cyl, bore: DEFAULT_ENGINE_CONFIG.bore,
+      compression: DEFAULT_ENGINE_CONFIG.compression,
+      configuration: DEFAULT_ENGINE_CONFIG.configuration, pipeDiaIn: 3, gasTempK: 1100,
+    });
+    const p = new Processor();
+    p.port.onmessage({ data: { ...geo, muffled: false } });
+    const par = (v) => Float32Array.of(v);
+    const params = {
+      rpm: par(4000), evoPa: par(400e3), level: par(1), overlapDeg: par(0), jet: par(0.3),
+      lope: par(0), covPersistence: par(0.55),
+    };
+    const l = new Float32Array(128);
+    const r = new Float32Array(128);
+    const peakOver = (blocks) => {
+      let peak = 0;
+      for (let i = 0; i < blocks; i++) {
+        p.process([], [[l, r]], params);
+        for (const v of l) peak = Math.max(peak, Math.abs(v));
+      }
+      return peak;
+    };
+    expect(peakOver(200)).toBeGreaterThan(0.01);
+
+    let orificeCalls = 0;
+    const orifice = p.orifice.bind(p);
+    p.orifice = (...args) => { orificeCalls += 1; return orifice(...args); };
+    params.level = par(0);
+    expect(peakOver(50)).toBe(0);
+    expect(orificeCalls).toBe(0);
+    // Emptied on the way in, so nothing left ringing from before is replayed later.
+    expect(p.primaries.every((t) => t.f.every((v) => v === 0) && t.b.every((v) => v === 0))).toBe(true);
+
+    params.level = par(1);
+    expect(peakOver(200)).toBeGreaterThan(0.01);
+    expect(orificeCalls).toBeGreaterThan(0);
+  });
+
   it('is stable and finite everywhere it can be driven', () => {
     for (const rpm of [700, 3000, 7000]) {
       for (const load of [0.08, 1]) {
