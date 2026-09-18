@@ -35,7 +35,7 @@ function frameFor(overrides = {}) {
     derived, compressor: COMPRESSOR_OPTS[1], turbine: TURBINE_OPTS[1],
   });
   return {
-    drive: acousticDrive({ rpm, derived, point: pt, configuration, pipeDiaIn: 2.5 }),
+    drive: acousticDrive({ rpm, derived, point: pt }),
     rpm, configuration, load: 1, audible: true, cut: false, cranking: false,
     geometry: exhaustGeometry({
       displacementL: derived.displacementL, cyl: derived.cyl, bore: DEFAULT_ENGINE_CONFIG.bore,

@@ -37,26 +37,12 @@ function point(overrides = {}) {
 function drive(overrides = {}) {
   const cfg = overrides.cfg ?? STOCK;
   const rpm = overrides.rpm ?? 5500;
-  const pipeDiaIn = overrides.pipeDiaIn ?? 2.5;
   const turboOn = overrides.turboOn ?? false;
   const { derived, pt } = point({ ...overrides, cfg, rpm });
   return S.acousticDrive({
-    rpm, derived, point: pt, configuration: cfg.configuration, pipeDiaIn, turboOn,
-    compressor: S.COMPRESSOR_OPTS[1],
+    rpm, derived, point: pt, turboOn, compressor: S.COMPRESSOR_OPTS[1],
   });
 }
-
-describe('firing frequency', () => {
-  it('is half what the cylinder count suggests, because a four-stroke fires every other revolution', () => {
-    expect(S.firingFrequencyHz(6000, 8)).toBeCloseTo(400, 6);
-    expect(S.firingFrequencyHz(6000, 4)).toBeCloseTo(200, 6);
-  });
-
-  it('is zero at rest and never negative', () => {
-    expect(S.firingFrequencyHz(0, 6)).toBe(0);
-    expect(S.firingFrequencyHz(-500, 6)).toBe(0);
-  });
-});
 
 describe('firing geometry', () => {
   it('gives every layout one event per cylinder, in ascending crank order', () => {
@@ -126,24 +112,15 @@ describe('firing geometry', () => {
   });
 });
 
-describe('exhaust resonance', () => {
-  it('rings higher when the gas in it is hotter, because sound travels faster', () => {
-    const cold = S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 600 });
-    const hot = S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 1100 });
-    expect(hot).toBeGreaterThan(cold);
+describe('the exhaust system', () => {
+  it('carries sound faster when the gas in it is hotter', () => {
+    expect(S.soundSpeedMs(1100, S.COEFF.GAMMA_BURNED))
+      .toBeGreaterThan(S.soundSpeedMs(600, S.COEFF.GAMMA_BURNED));
   });
 
-  it('rings lower on a bigger engine, which carries a longer system', () => {
-    const small = S.exhaustResonanceHz({ displacementL: 2.0, pipeDiaIn: 2.5, gasTempK: 900 });
-    const big = S.exhaustResonanceHz({ displacementL: 6.2, pipeDiaIn: 2.5, gasTempK: 900 });
-    expect(big).toBeLessThan(small);
-  });
-
-  it('follows c / 2L exactly for the length it reports', () => {
-    const lengthM = S.exhaustLengthM({ displacementL: 3.5, pipeDiaIn: 2.5 });
-    const c = S.soundSpeedMs(900, S.COEFF.GAMMA_BURNED);
-    expect(S.exhaustResonanceHz({ displacementL: 3.5, pipeDiaIn: 2.5, gasTempK: 900 }))
-      .toBeCloseTo(c / (2 * lengthM), 6);
+  it('is longer on a bigger engine, which goes in a bigger car', () => {
+    expect(S.exhaustLengthM({ displacementL: 6.2, pipeDiaIn: 2.5 }))
+      .toBeGreaterThan(S.exhaustLengthM({ displacementL: 2.0, pipeDiaIn: 2.5 }));
   });
 
   it('adds an end correction, so a wider pipe measures acoustically longer', () => {
@@ -152,77 +129,38 @@ describe('exhaust resonance', () => {
   });
 });
 
-describe('blowdown', () => {
-  it('is choked at wide-open throttle — which is why a hard-run engine cracks', () => {
-    const d = drive({ rpm: 5500, mapKpa: S.BARO_KPA });
-    expect(d.blowdownRatio).toBeGreaterThan(S.CRITICAL_PRESSURE_RATIO);
-    expect(d.sharpness).toBe(1);
+describe('cylinder pressure at valve opening', () => {
+  // The waveguide's whole excitation: the valve opens between this and the pipe, and an
+  // orifice decides what flows.
+  const CRITICAL = Math.pow(
+    (S.COEFF.GAMMA_BURNED + 1) / 2, S.COEFF.GAMMA_BURNED / (S.COEFF.GAMMA_BURNED - 1),
+  );
+
+  it('is past the choked ratio at wide-open throttle — which is why a hard-run engine cracks', () => {
+    const { pt } = point({ rpm: 5500, mapKpa: S.BARO_KPA });
+    expect(drive({ rpm: 5500, mapKpa: S.BARO_KPA }).evoKpa / pt.emp).toBeGreaterThan(CRITICAL);
   });
 
-  it('does not happen at all at a throttled idle, so idle is a soft chuff', () => {
-    const d = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
-    expect(d.blowdownRatio).toBeLessThan(1);
-    expect(d.sharpness).toBe(0);
-  });
-
-  it('gets louder with boost, because there is more pressure to let go of', () => {
+  it('is higher with boost, because there is more charge to burn', () => {
     const na = drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal: 26 });
     const boosted = drive({
       rpm: 4500, mapKpa: 184, boostPsi: 12, timingVal: 18, afrCommanded: 12.2,
       mods: { ...S.DEFAULT_MODS, turboFitted: true },
     });
-    expect(boosted.pulseLevel).toBeGreaterThan(na.pulseLevel);
+    expect(boosted.evoKpa).toBeGreaterThan(na.evoKpa);
   });
 
-  it('still makes some noise with no blowdown, because the piston pushes the charge out', () => {
-    const d = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
-    expect(d.pulseLevel).toBeGreaterThan(0);
+  it('is motored pressure on a fuel cut, whatever the point says', () => {
+    const { derived, pt } = point({ rpm: 7000, mapKpa: S.BARO_KPA });
+    const cut = S.acousticDrive({ rpm: 7000, derived, point: pt, fuelCut: true });
+    expect(cut.evoKpa).toBe(S.ACOUSTIC.MOTORED_EVO_KPA);
   });
 
-  it('spans roughly 30 dB between idle and wide-open throttle', () => {
-    const idle = drive({ rpm: 800, mapKpa: 35, timingVal: 14, afrCommanded: 13.5 });
-    const wot = drive({ rpm: 5500, mapKpa: S.BARO_KPA });
-    const dB = 20 * Math.log10(wot.pulseLevel / idle.pulseLevel);
-    expect(dB).toBeGreaterThan(20);
-    expect(dB).toBeLessThan(45);
-  });
-});
-
-describe('pulse shape', () => {
-  it('lasts longer on a longer stroke, and is indifferent to bore', () => {
-    const at = (bore, stroke) => {
-      const derived = S.deriveEngine({ ...STOCK, bore, stroke });
-      return S.blowdownDurationS({
-        displacementL: derived.displacementL, cyl: derived.cyl, bore,
-        compression: STOCK.compression, gasTempK: 1100,
-      });
-    };
-    // Volume scales with bore^2 x stroke and valve area with bore^2, so bore cancels.
-    expect(at(88, 105)).toBeGreaterThan(at(88, 81));
-    expect(at(105, 88)).toBeCloseTo(at(88, 88), 4);
-  });
-
-  it('vents faster when the gas is hotter, because sound travels faster in it', () => {
-    const at = (gasTempK) => S.blowdownDurationS({
-      displacementL: 3.5, cyl: 6, bore: 95.5, compression: 10.3, gasTempK,
-    });
-    expect(at(1200)).toBeLessThan(at(600));
-  });
-
-  it('lands in the millisecond range a real blowdown occupies', () => {
-    for (const gasTempK of [600, 900, 1200]) {
-      const ms = S.blowdownDurationS({
-        displacementL: 3.5, cyl: 6, bore: 95.5, compression: 10.3, gasTempK,
-      }) * 1000;
-      expect(ms).toBeGreaterThan(0.5);
-      expect(ms).toBeLessThan(4);
-    }
-  });
-
-  it('renders the reference engine at about unit rate', () => {
-    const d = drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal: 26 });
-    expect(d.pulseRate).toBeGreaterThan(0.85);
-    expect(d.pulseRate).toBeLessThan(1.2);
+  it('scales a borrowed wide-open point with throttle, and never drops below motored', () => {
+    const { derived, pt } = point({ rpm: 3000, mapKpa: S.BARO_KPA });
+    const at = (throttle) => S.acousticDrive({ rpm: 3000, derived, point: pt, throttle }).evoKpa;
+    expect(at(0.5)).toBeLessThan(at(1));
+    expect(at(0)).toBe(S.ACOUSTIC.MOTORED_EVO_KPA);
   });
 });
 
@@ -240,9 +178,11 @@ describe('exhaust enthalpy flux', () => {
   it('rises when spark is retarded, at unchanged airflow', () => {
     // Burning later leaves more of the heat in the exhaust instead of on the piston.
     // This is the path by which a spark change reaches the sound at all.
-    const at = (timingVal) => drive({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal });
-    const mbt = at(30), retarded = at(12);
-    expect(retarded.exhaustPowerW).toBeGreaterThan(mbt.exhaustPowerW);
+    const at = (timingVal) => {
+      const { pt } = point({ rpm: 4500, mapKpa: S.BARO_KPA, timingVal });
+      return S.exhaustPowerW({ mafGps: pt.maf, egtC: pt.egt });
+    };
+    expect(at(12)).toBeGreaterThan(at(30));
   });
 
   it('spans idle to redline over most of its range', () => {
@@ -254,23 +194,15 @@ describe('exhaust enthalpy flux', () => {
 });
 
 describe('cycle-to-cycle variation', () => {
-  it('sits at the floor when the charge is clean', () => {
-    expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).cov).toBe(S.ACOUSTIC.COV_FLOOR);
-    expect(S.cyclicVariation({ residualFrac: 0.05, rpm: 5000 }).misfireRate).toBe(0);
-  });
-
   it('is FLAT ZERO on a stock cam — a smooth idle must render smooth', () => {
     const stock = S.cyclicVariation({ rpm: 850, overlapDeg: 0 });
     expect(stock.severity).toBe(0);
-    expect(stock.misfireRate).toBe(0);
-    expect(stock.cov).toBe(S.ACOUSTIC.COV_FLOOR);
   });
 
   it('rises with valve overlap, which is what opens the window for dilution', () => {
     const mild = S.cyclicVariation({ rpm: 850, overlapDeg: 11 });
     const wild = S.cyclicVariation({ rpm: 850, overlapDeg: 44 });
     expect(wild.severity).toBeGreaterThan(mild.severity);
-    expect(wild.misfireRate).toBeGreaterThan(mild.misfireRate);
   });
 
   it('washes out as revs rise, because there is no time left to wander', () => {
@@ -344,7 +276,6 @@ describe('the drive handed to the renderer', () => {
           const cfg = { ...STOCK, configuration };
           const d = drive({ cfg, rpm, mapKpa, timingVal: 18, afrCommanded: 13 });
           for (const [key, value] of Object.entries(d)) {
-            if (key === 'events') continue;
             expect(Number.isFinite(value), `${configuration} ${rpm}/${mapKpa} ${key}`).toBe(true);
           }
         }
@@ -355,10 +286,9 @@ describe('the drive handed to the renderer', () => {
   it('says nothing is happening when the engine is not running', () => {
     const d = S.acousticDrive({
       rpm: 0, derived: S.deriveEngine(STOCK), point: null,
-      configuration: STOCK.configuration, pipeDiaIn: 2.5,
     });
-    expect(d.firingHz).toBe(0);
-    expect(d.sharpness).toBe(0);
+    expect(d.evoKpa).toBe(S.BARO_KPA);
+    expect(d.exhaustDrive).toBe(0);
     expect(d.whistleHz).toBe(0);
   });
 });

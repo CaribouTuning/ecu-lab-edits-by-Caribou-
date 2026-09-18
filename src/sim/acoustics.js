@@ -14,31 +14,26 @@
  * WHAT AN EXHAUST NOTE ACTUALLY IS
  *
  * When the exhaust valve cracks open, the cylinder is still at several bar while the
- * manifold is near atmospheric. Gas leaves as a single sharp pressure pulse — BLOWDOWN —
- * long before the piston starts pushing. That pulse train, one per cylinder per two
- * revolutions, is the exhaust note. Everything that makes engines sound different from
- * each other is a property of that train:
+ * manifold is near atmospheric. Gas leaves as a sharp pressure pulse — BLOWDOWN — long
+ * before the piston starts pushing, and that pulse runs down a system of pipes that
+ * reflect, delay and filter it. The note is what comes out of the tailpipe.
  *
- *   PITCH        how often the pulses arrive: `firingFrequencyHz`.
- *   RHYTHM       how EVENLY they arrive, which is set by crank and bank geometry and is
- *                the whole of the cross-plane V8 rumble: `firingEvents`.
- *   HARDNESS     how violent each pulse is, which is the pressure ratio across the valve
- *                at the moment it opens: `blowdownPressureRatio`, `pulseSharpness`.
- *   RESONANCE    the pipe the pulses travel down, which rings at c/2L — and c depends on
- *                the gas TEMPERATURE, so the note sharpens as the engine heats:
- *                `exhaustResonanceHz`.
- *   UNEVENNESS   cycle-to-cycle combustion variation, which is what a lopey idle is, and
- *                which comes from residual gas rather than from a "lope" knob:
+ * So this module describes the engine and the pipes, and `src/ui/audio/exhaustProcessor.js`
+ * runs a one-dimensional wave model of them at audio rate:
+ *
+ *   RHYTHM       which crank angle each cylinder fires at and which collector it fires
+ *                into — the whole of the cross-plane V8 rumble: `firingEvents`.
+ *   EXCITATION   the cylinder pressure at the moment the valve opens, from the cycle's
+ *                own peak pressure: `evoPressureKpa`, via `acousticDrive`.
+ *   THE PIPES    every length, area and gas temperature the wave model is built from:
+ *                `exhaustGeometry`. The speed of sound in them follows EGT, so the whole
+ *                system retunes as the engine heats.
+ *   UNEVENNESS   cycle-to-cycle combustion variation, which is what a lopey idle is:
  *                `cyclicVariation`.
  *
  * The turbocharger is treated the same way: shaft speed comes from the compressor work
  * needed for the boost being made, and the whistle is that shaft speed — not a number
  * that ramps with RPM because ramping sounded about right.
- *
- * SCOPE. This is a lumped acoustic model, not a duct-acoustics solver. There is no
- * wave-action solution in the runners, no reflection at each junction, no radiation
- * impedance beyond an end correction. What it does guarantee is that every number the
- * synthesiser is handed traces back to the engine's own state.
  */
 
 import { COEFF } from './coefficients.js';
@@ -72,9 +67,6 @@ export const ACOUSTIC = {
   // and you have a sub-bass thud with no bark, whatever else the model does correctly.
   RUNNER_LENGTH_BASE_M: 0.34,
   RUNNER_LENGTH_PER_LITRE_M: 0.035,
-  // Bounds on the runner fundamental, Hz.
-  RUNNER_HZ_MIN: 180,
-  RUNNER_HZ_MAX: 620,
   // Tailpipe distance from the head. Production systems run roughly 2.5-4.5 m; the
   // displacement term stands in for the fact that bigger engines go in bigger cars.
   EXHAUST_LENGTH_BASE_M: 2.55,
@@ -82,9 +74,6 @@ export const ACOUSTIC = {
   // Rayleigh end correction: an open pipe behaves as if it were 0.6 radii longer than it
   // measures, because the gas just outside the mouth moves with the column.
   PIPE_END_CORRECTION: 0.6,
-  // Bounds on the fundamental, so a nonsense build cannot ask for an inaudible pipe.
-  PIPE_HZ_MIN: 45,
-  PIPE_HZ_MAX: 180,
 
   // --- Waveguide geometry ---
   // The exhaust is modelled as what it is: tubes carrying pressure waves that reflect off
@@ -166,35 +155,11 @@ export const ACOUSTIC = {
   // blowdown.
   CAM_RAMP_SHAPE: 0.7,
 
-  // --- Pulse shape ---
+  // --- Exhaust valve ---
   // Effective exhaust flow area as a fraction of bore area. A valve head runs about
   // 0.36 of the bore and its curtain area at full lift is roughly 0.8 of its own disc,
-  // which lands here. It is what turns cylinder volume into a blowdown TIME.
+  // which lands here.
   EXHAUST_FLOW_AREA_FRAC: 0.13,
-  // Blowdown duration that renders at unit playback rate — the stock 3.5 L V6 at load.
-  // Everything else is pitched relative to it, so a longer-stroke engine vents a longer,
-  // lower pulse and a hot engine a shorter, sharper one, without either being asserted.
-  PULSE_REF_DURATION_S: 1.01e-3,
-  // Bounds on that rate, so a strange build cannot ask for an unrecognisable pulse.
-  PULSE_RATE_MIN: 0.55,
-  PULSE_RATE_MAX: 1.6,
-
-  // --- Blowdown ---
-  // Reference overpressure across the exhaust valve at valve opening, kPa. A stock
-  // naturally aspirated engine at wide-open throttle sits near this, so `pulseLevel`
-  // reads about 1 there and a boosted engine reads above it.
-  BLOWDOWN_REF_KPA: 330,
-  // Below this the cylinder is at or under manifold pressure at valve opening — a
-  // throttled engine at idle genuinely is — so there is no blowdown pulse, just the
-  // piston pushing gas out. That is why idle is a soft chuff and not a crack.
-  BLOWDOWN_MIN_RATIO: 1.0,
-  // What the exhaust STROKE contributes when there is no blowdown left to hear: the
-  // piston still has to push a cylinder of gas through a port, and that takes a small
-  // pressure. It is what an idling engine actually sounds like. Small on purpose — the
-  // ratio between this and BLOWDOWN_REF_KPA sets the model's dynamic range at about
-  // 30 dB, which is roughly the measured spread between idle and wide-open throttle at
-  // the tailpipe.
-  EXHAUST_STROKE_KPA: 9,
   // Cylinder pressure at exhaust valve opening with no combustion at all: the floor the
   // waveguide's valve sees on a closed throttle. A motored cylinder starting from about
   // 20 kPa at intake valve close comes back down to roughly half an atmosphere by the time
@@ -215,12 +180,6 @@ export const ACOUSTIC = {
   // Where lope is measured from, and how fast it washes out with engine speed.
   LOPE_IDLE_RPM: 800,
   LOPE_FADE_RPM: 2000,
-  // Coefficient of variation of indicated work with no overlap at all. 2% is a healthy
-  // production engine and is what a stock build should sit at.
-  COV_FLOOR: 0.02,
-  // Fraction of cycles that fail to light, per unit of severity. A misfire is the audible
-  // gap in a lopey idle, not just a quieter pulse.
-  MISFIRE_PER_SEVERITY: 0.30,
   // How much of one cycle's weakness carries into the next.
   //
   // This is the PRIOR-CYCLE EFFECT and it is why a lopey idle loafs instead of buzzing. A
@@ -261,21 +220,6 @@ export const ACOUSTIC = {
   // reminder of how much of the fuel never reaches the crank.
   EXHAUST_POWER_REF_W: 260000,
 };
-
-/**
- * How often cylinders fire, Hz.
- *
- * A four-stroke fires every cylinder once per TWO revolutions, so the exhaust
- * fundamental is half what the cylinder count would suggest: a V8 at 6000 RPM fires
- * 400 times a second, not 800.
- *
- * @param {number} rpm engine speed
- * @param {number} cyl cylinder count
- * @returns {number} firing frequency, Hz
- */
-export function firingFrequencyHz(rpm, cyl) {
-  return (Math.max(0, rpm) / 60) * (cyl / 2);
-}
 
 /**
  * Which exhaust collector each cylinder fires into, in firing order.
@@ -396,22 +340,6 @@ export function exhaustLengthM({ displacementL, pipeDiaIn }) {
 }
 
 /**
- * Fundamental resonance of the exhaust system, Hz.
- *
- * A pipe open at both ends — which a header-to-tailpipe run effectively is, once the
- * valve is open — resonates at c / 2L and at its harmonics. This is the frequency the
- * whole note is built on top of, and it moves with EGT because c does.
- *
- * @param {{displacementL: number, pipeDiaIn: number, gasTempK: number}} sys
- * @returns {number} fundamental, Hz
- */
-export function exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }) {
-  const c = soundSpeedMs(gasTempK, COEFF.GAMMA_BURNED);
-  const hz = c / (2 * exhaustLengthM({ displacementL, pipeDiaIn }));
-  return clamp(hz, ACOUSTIC.PIPE_HZ_MIN, ACOUSTIC.PIPE_HZ_MAX);
-}
-
-/**
  * Length of one primary runner, head to collector, m.
  *
  * @param {number} displacementL total displacement
@@ -419,25 +347,6 @@ export function exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }) {
  */
 export function runnerLengthM(displacementL) {
   return ACOUSTIC.RUNNER_LENGTH_BASE_M + displacementL * ACOUSTIC.RUNNER_LENGTH_PER_LITRE_M;
-}
-
-/**
- * Ringing frequency of one primary runner, Hz.
- *
- * A primary is closed at the valve and open into the collector, which makes it a QUARTER
- * wave resonator: it rings at c/4L, not c/2L like the tailpipe. Every blowdown pulse
- * excites it, and what comes back out is the sharp mid-band edge the ear reads as an
- * exhaust note rather than a thump. It rises with gas temperature for the same reason
- * everything else here does.
- *
- * @param {{displacementL: number, gasTempK: number}} sys
- * @returns {number} runner fundamental, Hz
- */
-export function runnerResonanceHz({ displacementL, gasTempK }) {
-  const c = soundSpeedMs(gasTempK, COEFF.GAMMA_BURNED);
-  return clamp(
-    c / (4 * runnerLengthM(displacementL)), ACOUSTIC.RUNNER_HZ_MIN, ACOUSTIC.RUNNER_HZ_MAX,
-  );
 }
 
 /**
@@ -463,50 +372,7 @@ export function evoPressureKpa({ peakPressureBar, peakPressureDeg, compression, 
 }
 
 /**
- * Pressure ratio across the exhaust valve at the moment it opens.
- *
- * The number that decides how hard the engine sounds. Above the critical ratio the
- * escaping gas reaches Mach 1 in the valve seat and leaves as a shock — the crack of a
- * hard-run engine. Below 1 there is nothing to blow down at all and the piston simply
- * pushes the charge out, which is why a throttled engine at idle is soft no matter how
- * big it is.
- *
- * @param {{peakPressureBar: number, peakPressureDeg: number, compression: number,
- *          displacementL: number, cyl: number, empKpa: number}} state the same cylinder
- *   state {@link evoPressureKpa} takes, plus the manifold it blows down into
- * @returns {number} p_cylinder / p_manifold at valve opening
- */
-export function blowdownPressureRatio(state) {
-  return evoPressureKpa(state) / Math.max(1, state.empKpa);
-}
-
-/**
- * Critical pressure ratio for choked flow through the exhaust valve.
- *
- * ((gamma+1)/2)^(gamma/(gamma-1)) for the burned gas — about 1.81. Past it the valve
- * seat is sonic and no further pressure ratio speeds the gas up; it just makes the shock
- * stronger.
- */
-export const CRITICAL_PRESSURE_RATIO = Math.pow(
-  (COEFF.GAMMA_BURNED + 1) / 2,
-  COEFF.GAMMA_BURNED / (COEFF.GAMMA_BURNED - 1),
-);
-
-/**
- * How sharp each exhaust pulse is, 0 (a soft chuff) to 1 (a choked crack).
- *
- * @param {number} ratio from {@link blowdownPressureRatio}
- * @returns {number} 0..1
- */
-export function pulseSharpness(ratio) {
-  return clamp(
-    (ratio - ACOUSTIC.BLOWDOWN_MIN_RATIO) / (CRITICAL_PRESSURE_RATIO - ACOUSTIC.BLOWDOWN_MIN_RATIO),
-    0, 1,
-  );
-}
-
-/**
- * Cycle-to-cycle combustion variation, as a coefficient of variation of indicated work.
+ * How hard cycle-to-cycle combustion variation makes the engine loaf.
  *
  * This is what a lopey idle IS. Valve overlap at low speed lets exhaust back into the
  * cylinder, so the next charge is diluted by its own residual; past roughly a fifth
@@ -518,9 +384,8 @@ export function pulseSharpness(ratio) {
  * model already computes residual, and driving the sound from the consequence rather
  * than the cause means a build that dilutes its charge some other way lopes too.
  *
- * @param {{residualFrac?: number, rpm: number, overlapDeg?: number}} state
- * @returns {{cov: number, severity: number, misfireRate: number}} variation, how hard it
- *   loafs, and the fraction of cycles that fail to light
+ * @param {{rpm: number, overlapDeg?: number}} state
+ * @returns {{severity: number}} 0 on a stock cam, rising with overlap and fading with speed
  */
 export function cyclicVariation({ rpm, overlapDeg = 0 }) {
   // VALVE OVERLAP, NOT RESIDUAL FRACTION, AND THAT IS A COMPROMISE WORTH READING.
@@ -535,8 +400,7 @@ export function cyclicVariation({ rpm, overlapDeg = 0 }) {
   //
   // Overlap separates them cleanly (0 degrees against 44) because overlap is the actual
   // mechanism: it is the window where exhaust can push back into the intake. Until the
-  // residual model resolves light-load dilution properly, this is the honest lever, and
-  // the residual model resolves light-load dilution properly, this is the honest lever.
+  // residual model resolves light-load dilution properly, this is the honest lever.
   const severity = overlapDeg > ACOUSTIC.LOPE_OVERLAP_MIN_DEG
     ? Math.min(ACOUSTIC.LOPE_MAX, overlapDeg * ACOUSTIC.LOPE_PER_OVERLAP_DEG)
     : 0;
@@ -546,12 +410,7 @@ export function cyclicVariation({ rpm, overlapDeg = 0 }) {
   const speedFade = clamp(
     1 - (Math.max(0, rpm) - ACOUSTIC.LOPE_IDLE_RPM) / ACOUSTIC.LOPE_FADE_RPM, 0.12, 1,
   );
-  const cov = ACOUSTIC.COV_FLOOR + severity * speedFade;
-  return {
-    cov,
-    severity: severity * speedFade,
-    misfireRate: severity * speedFade * ACOUSTIC.MISFIRE_PER_SEVERITY,
-  };
+  return { severity: severity * speedFade };
 }
 
 /**
@@ -563,31 +422,6 @@ export function cyclicVariation({ rpm, overlapDeg = 0 }) {
 export function exhaustFlowAreaM2(boreMm) {
   const boreM = boreMm / 1000;
   return ACOUSTIC.EXHAUST_FLOW_AREA_FRAC * (Math.PI / 4) * boreM * boreM;
-}
-
-/**
- * How long one blowdown pulse lasts, seconds.
- *
- * The cylinder empties through the valve at roughly the speed of sound, so the time it
- * takes is volume divided by (area x sonic velocity). Two things fall out of that, and
- * both are audible:
- *
- *   - Volume scales with bore^2 x stroke and valve area with bore^2, so the pulse
- *     LENGTH tracks STROKE, not displacement. A long-stroke engine genuinely vents a
- *     longer, lower-pitched pulse than a short-stroke one of the same capacity.
- *   - Sonic velocity rises with gas temperature, so a hot engine vents FASTER. The note
- *     sharpens as it comes on song, for the same reason the pipe resonance does.
- *
- * @param {{displacementL: number, cyl: number, bore: number, compression: number,
- *          gasTempK: number}} state
- * @returns {number} pulse duration, seconds
- */
-export function blowdownDurationS({ displacementL, cyl, bore, compression, gasTempK }) {
-  const sweptM3 = (displacementL / cyl) / 1000;
-  const clearanceM3 = sweptM3 / Math.max(1.5, compression - 1);
-  const vEvo = cylinderVolumeM3(EVO_ATDC, clearanceM3, sweptM3, COEFF.ROD_RATIO);
-  const areaM2 = exhaustFlowAreaM2(bore);
-  return vEvo / (areaM2 * soundSpeedMs(gasTempK, COEFF.GAMMA_BURNED));
 }
 
 /**
@@ -667,32 +501,16 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
 
 /**
  * @typedef {object} AcousticDrive
- * @property {number} firingHz firing frequency, Hz
- * @property {FiringEvent[]} events one engine cycle of firing events
- * @property {number} pipeHz exhaust fundamental, Hz
- * @property {number} runnerHz primary runner ring, Hz — the note's hard edge
- * @property {number} blowdownRatio pressure ratio across the exhaust valve at EVO
- * @property {number} evoKpa absolute cylinder pressure at exhaust valve opening, kPa
- * @property {number} empKpa exhaust manifold pressure the cylinder blows down into, kPa
+ * @property {number} evoKpa absolute cylinder pressure at exhaust valve opening, kPa —
+ *   the excitation the waveguide's valve opens against
  * @property {number} gasTempK exhaust gas temperature at the port, K
- * @property {number} sharpness 0 (soft chuff) to 1 (choked crack)
- * @property {number} pulseLevel pulse pressure amplitude, 1 being a stock naturally
- *   aspirated engine at wide-open throttle. Linear in PRESSURE, so the renderer is the
- *   thing that maps it to loudness — a factor of ten here is 20 dB, not ten times louder
- * @property {number} pulseRate how fast one blowdown pulse plays out, relative to the
- *   reference engine — under 1 is a longer, lower pulse
- * @property {number} cov cycle-to-cycle variation of indicated work
  * @property {number} lopeSeverity 0..1, how hard the idle loafs — 0 on a stock cam
  * @property {number} covPersistence how much of one cycle's variation carries to the next
- * @property {number} misfireRate fraction of cycles that fail to light
- * @property {number} exhaustPowerW enthalpy leaving through the pipe, W
- * @property {number} exhaustDrive that flux against a reference, 0..1 — how hard the
- *   exhaust system is being driven acoustically
+ * @property {number} exhaustDrive exhaust enthalpy flux against a reference, 0..1 — how
+ *   hard the exhaust system is being driven acoustically
  * @property {number} inductionLevel intake noise, 0..1 against a reference airflow
  * @property {number} knockLevel 0..1, how hard the engine is detonating
  * @property {number} retardDeg degrees the ECU pulled out of the commanded spark
- * @property {number} lambda delivered mixture, 1.0 being stoichiometric
- * @property {number} compression static compression ratio
  * @property {number} displacementL total displacement, litres
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} shaftRpm turbo shaft speed, RPM (0 when not boosted)
@@ -729,9 +547,9 @@ export function circleAreaM2(d) {
 /**
  * The exhaust system as a set of tubes, for the waveguide renderer.
  *
- * WHY THIS EXISTS AS GEOMETRY RATHER THAN AS FREQUENCIES. `exhaustResonanceHz` and
- * `runnerResonanceHz` above give the fundamentals, and a renderer can tune a filter to
- * them — but a filter is not a pipe. A pipe carries a wave down its length, reflects part
+ * WHY THIS EXISTS AS GEOMETRY RATHER THAN AS FREQUENCIES. A pipe's fundamentals — c/2L
+ * for the whole run, c/4L for a primary — are easy to compute and a renderer can tune a
+ * filter to them, but a filter is not a pipe. A pipe carries a wave down its length, reflects part
  * of it off every change of area, and sends it back to interfere with what is still
  * arriving. That is what produces an exhaust note rather than a filtered buzz, and it
  * cannot be faked with resonators, for three reasons the ear notices:
@@ -828,91 +646,66 @@ export function exhaustGeometry({
 }
 
 /**
- * Everything the synthesiser needs, derived from one operating point.
+ * The engine's operating state, as the audio renderer needs it.
  *
  * The single seam between physics and presentation: `src/ui` reads these fields and
- * chooses oscillators and filters, and it does no engineering maths of its own.
+ * does no engineering maths of its own. The pipes themselves come from
+ * {@link exhaustGeometry}; this is what is happening inside them right now.
  *
  * @param {object} input
  * @param {number} input.rpm engine speed
  * @param {object} input.derived from `deriveEngine`
  * @param {object|null} input.point an `evaluatePoint` result, or null when not running
- * @param {string} input.configuration one of `CONFIG_OPTS`
- * @param {number} input.pipeDiaIn exhaust pipe diameter, inches
  * @param {boolean} [input.turboOn] whether a turbo is fitted
  * @param {object} [input.compressor] the fitted compressor, from `COMPRESSOR_OPTS`
  * @param {number} [input.throttle] throttle position, 0..1, for callers that know it but
  *   have no MEASURED point at it. A dyno sweep only ever evaluates wide-open points, so
- *   the idle and overrun either side of a pull have to borrow the nearest one; scaling
- *   the blowdown by throttle is a fair approximation, because pressure at valve opening
- *   tracks trapped charge and trapped charge tracks manifold pressure. It scales nothing
- *   else — the gas is still as hot as it measured, and the exhaust stroke still pushes.
- *   Defaults to 1, which leaves a measured point exactly as it is.
+ *   the idle and overrun either side of a pull — and a drag pass — have to borrow one;
+ *   scaling the cylinder pressure by throttle is a fair approximation, because pressure
+ *   at valve opening tracks trapped charge and trapped charge tracks manifold pressure.
+ *   It scales nothing else — the gas is still as hot as it measured. Defaults to 1, which
+ *   leaves a measured point exactly as it is.
  * @param {boolean} [input.fuelCut] whether the injectors are off — the rev limiter, or a
  *   closed throttle on the overrun. No combustion means the cylinder reaches valve opening
  *   at motored pressure, and nothing else about the note changes.
  * @returns {AcousticDrive}
  */
 export function acousticDrive({
-  rpm, derived, point, configuration, pipeDiaIn, turboOn, compressor, throttle = 1,
-  fuelCut = false,
+  rpm, derived, point, turboOn, compressor, throttle = 1, fuelCut = false,
 }) {
   const { cyl, displacementL, compression } = derived;
   const gasTempK = (point ? point.egt : 0) + KELVIN_OFFSET;
-  const empKpa = point ? point.emp : BARO_KPA;
 
-  const ratio = point
-    ? blowdownPressureRatio({
-      peakPressureBar: point.peakPressure, peakPressureDeg: point.peakPressureDeg,
-      compression, displacementL, cyl, empKpa,
-    })
-    : 0;
-  // Blowdown when there is any, plus what the exhaust stroke pushes out regardless.
-  const overpressureKpa = Math.max(0, empKpa * (ratio - 1)) * clamp(throttle, 0, 1)
-    + ACOUSTIC.EXHAUST_STROKE_KPA;
-  const variation = cyclicVariation({ rpm, overlapDeg: derived.overlapDeg || 0 });
-
-  // WHAT THE WAVEGUIDE'S VALVE NEEDS IS THE REAL CYLINDER PRESSURE, not the manifold plus
-  // an allowance for the exhaust stroke.
-  //
-  // `overpressureKpa` above is a LEVEL — it says how hard this cycle hits, and it feeds
-  // `pulseLevel`. Handing the same number to the waveguide as an absolute pressure was a
-  // leftover from before the waveguide existed, and it double-counted: the waveguide runs
-  // its own piston through its own valve, so the exhaust stroke is already in there, and
-  // adding EXHAUST_STROKE_KPA on top put the cylinder ABOVE the manifold at every
-  // operating point in the map.
+  // THE REAL CYLINDER PRESSURE AT VALVE OPENING, absolute. The waveguide runs its own
+  // piston through its own valve, so the exhaust stroke is already in there: handing it
+  // manifold pressure plus an allowance for the stroke double-counted it, and put the
+  // cylinder ABOVE the manifold at every operating point in the map.
   //
   // That inverted the overrun. A closed throttle at 5000 rpm leaves the cylinder at
   // roughly half an atmosphere when the valve cracks, so the pipe is HIGHER than the
   // cylinder and gas rushes in before the piston pushes it back out. Told instead that the
   // cylinder was 9 kPa above the pipe, the model blew down on every event and the overrun
-  // came out 6 dB LOUDER than wide-open throttle — measured through the running UI, it was
-  // the loudest thing in the program, which is not what lifting off a throttle sounds like.
+  // came out 6 dB LOUDER than wide-open throttle.
   const evoTrueKpa = point
     ? evoPressureKpa({
       peakPressureBar: point.peakPressure, peakPressureDeg: point.peakPressureDeg,
       compression, displacementL, cyl,
     })
     : BARO_KPA;
-  // A dyno sweep only ever measures wide-open points, so the idle and overrun either side
-  // of a pull borrow the nearest one. Pressure at valve opening tracks trapped charge and
-  // trapped charge tracks manifold pressure, so throttle scales it; the floor is what a
-  // cylinder reaches with no fuel in it at all, which is where a real overrun sits.
+  // A borrowed wide-open point is scaled by throttle (see `throttle` above); the floor is
+  // what a cylinder reaches with no fuel in it at all, which is where a real overrun sits.
   //
   // A FUEL CUT IS THE SAME STATEMENT. On the rev limiter and on the overrun the injectors
   // are off, so there is no combustion and the cylinder reaches the valve at the motored
   // pressure and nothing more. That is the whole of what a cut does to the exhaust note,
   // and it is not a mute: the engine is still turning at seven and a half thousand and
   // still pumping a cylinder of air out of every port, which is exactly why a limiter
-  // bangs. The renderer used to express this by scaling the OUTPUT LEVEL to 0.18, which
-  // made the loudest part of the rev range the quietest thing in the program.
+  // bangs.
   const evoAtValveKpa = fuelCut
     ? ACOUSTIC.MOTORED_EVO_KPA
     : Math.max(ACOUSTIC.MOTORED_EVO_KPA, evoTrueKpa * clamp(throttle, 0, 1));
 
-  const durationS = blowdownDurationS({
-    displacementL, cyl, bore: derived.bore, compression, gasTempK,
-  });
+  const variation = cyclicVariation({ rpm, overlapDeg: derived.overlapDeg || 0 });
   const powerW = point ? exhaustPowerW({ mafGps: point.maf, egtC: point.egt }) : 0;
 
   const turbo = turboOn && compressor && point && point.boostPsi > 0
@@ -920,38 +713,15 @@ export function acousticDrive({
     : { shaftRpm: 0, whistleHz: 0, bladePassHz: 0 };
 
   return {
-    firingHz: firingFrequencyHz(rpm, cyl),
-    events: firingEvents(configuration),
-    pipeHz: exhaustResonanceHz({ displacementL, pipeDiaIn, gasTempK }),
-    runnerHz: runnerResonanceHz({ displacementL, gasTempK }),
-    blowdownRatio: ratio,
-    // Cylinder pressure at valve opening, and the manifold it blows down into. The
-    // waveguide renderer needs both as absolute pressures: it opens a real valve between
-    // them and lets an orifice decide the flow, rather than being handed a pulse shape.
     evoKpa: evoAtValveKpa,
-    empKpa,
     gasTempK,
-    sharpness: pulseSharpness(ratio),
-    pulseLevel: clamp(overpressureKpa / ACOUSTIC.BLOWDOWN_REF_KPA, 0, 2),
-    pulseRate: clamp(
-      ACOUSTIC.PULSE_REF_DURATION_S / Math.max(1e-6, durationS),
-      ACOUSTIC.PULSE_RATE_MIN, ACOUSTIC.PULSE_RATE_MAX,
-    ),
-    cov: variation.cov,
     lopeSeverity: variation.severity,
     covPersistence: ACOUSTIC.COV_PERSISTENCE,
-    misfireRate: variation.misfireRate,
-    exhaustPowerW: powerW,
     exhaustDrive: clamp(powerW / ACOUSTIC.EXHAUST_POWER_REF_W, 0, 1),
     inductionLevel: clamp((point ? point.maf : 0) / ACOUSTIC.INDUCTION_REF_GPS, 0, 1.5),
     knockLevel: point && point.knock ? clamp(point.knockPull / COEFF.MAX_KNOCK_RETARD, 0, 1) : 0,
-    // Measurements the renderer voices from directly. They are reported, not derived —
-    // the acoustic consequence of a retarded burn or a rich mixture is a question about
-    // how an exhaust note is SHAPED, which is a rendering decision, not a physics one.
-    // Putting them in the drive keeps the renderer from having to reach into the point.
+    // Reported, not derived: how a retarded burn shapes the note is a rendering decision.
     retardDeg: point ? Math.max(0, point.commandedTiming - point.timing) : 0,
-    lambda: point ? point.lambda : 1,
-    compression,
     displacementL,
     overlapDeg: derived.overlapDeg || 0,
     ...turbo,

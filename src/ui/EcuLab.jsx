@@ -734,8 +734,7 @@ export function EcuLabApp() {
     const cut = onLive ? live.fuelCut : Boolean(onDyno && dynoPhase === 'spooldown');
 
     const drive = acousticDrive({
-      rpm, derived: engineDerived, point, configuration: engineConfig.configuration,
-      pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, turboOn,
+      rpm, derived: engineDerived, point, turboOn,
       compressor: COMPRESSOR_OPTS[compressorIdx],
       // The sweep only ever measures wide-open points, so the idle and overrun either
       // side of it have to borrow the nearest one and scale it by throttle.
