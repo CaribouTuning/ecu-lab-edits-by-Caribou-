@@ -25,7 +25,12 @@
  * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, liveStep, presetById } from '../../sim/index.js';
+
+import {
+  HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
+} from './history.js';
+import { pushRun, RUN_LIMIT } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -51,8 +56,13 @@ export const ACTIONS = Object.freeze({
   RESET_TO_STOCK: 'RESET_TO_STOCK',
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
+  RESTORE_CAREER: 'RESTORE_CAREER',
+  PIN_RUN: 'PIN_RUN',
+  UNPIN_RUN: 'UNPIN_RUN',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
+  UNDO: 'UNDO',
+  REDO: 'REDO',
 });
 
 /**
@@ -177,21 +187,104 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * Finalises a completed dyno pull: banks the score, wears the engine, and rotates
- * `result` into `prevResult`. Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
+ * Finalises a completed dyno pull: banks the score, wears the engine, installs the
+ * new `result`, and pushes a slim record of it to the front of `runs` (Task 4;
+ * `runLog.js`'s `ghostRun` reads that log for the comparison the old `prevResult`
+ * field used to hold directly). Mirrors the tail of `doRun` (`EcuLab.jsx:868-896`) —
  * NOT the whole function, which also flips `running`/`revealCount` for the reveal
  * animation before and after an interval-driven timer runs; that is time-based UI
  * state with no atomicity hazard and stays as plain `SET_SESSION_FIELD` dispatches in
- * the component (Task 4). The part that DOES have an ordering hazard, and is what this
- * action removes: `doRun` used to call `setPrevResult(result)` (the OLD result)
- * before `setResult(r)` (the new one) — reversing those two lines would silently have
- * made `prevResult` equal the new result instead of the old one. `action.result` and
- * `action.pullScore` are precomputed by the caller: `result` comes from
+ * the component. `action.result` and `action.pullScore` are precomputed by the
+ * caller: `result` comes from
  * `simulateSweep`, and `pullScore` from `computePullScore`, which needs derived
  * hardware objects (`turbine`, `compressor`, `dutyPreview`, `exhaustDiaError`) that
  * are `useMemo` values in the component, not raw state the reducer holds — the same
  * "caller computes, reducer applies" split as `RESET_TO_STOCK`'s `ve`.
- * @typedef {{type: 'BANK_PULL', result: object, pullScore: number}} BankPullAction
+ *
+ * `scores` arrives the same way and for the same reason, and banking it here rather
+ * than deriving it later is the second ordering hazard this action owns. The score
+ * panels used to recompute the Engineer and Pull scores from whatever hardware was
+ * selected at RENDER time, against the last pull's dyno output — so changing a turbo
+ * after a pull re-graded that finished run as though it had been made on the new
+ * build, and the Pull Score could climb past `bestScore` with nobody having run
+ * anything. Banked here, the numbers are what the pull measured, permanently.
+ *
+ * `wasBest` is decided HERE rather than by the caller because this case is where
+ * `bestScore` moves: the comparison has to happen against the value as it stands
+ * BEFORE this pull is folded in, and this is the only place that still holds it.
+ * @typedef {{type: 'BANK_PULL', result: object, pullScore: number, run: import('./runLog.js').RunRecord,
+ *   scores: {tuning: object, engineer: object, signature: string}}} BankPullAction
+ */
+
+/**
+ * Merges a career loaded from storage into the CURRENT session, rather than
+ * overwriting it. Replaces five `SET_SESSION_FIELD` dispatches EcuLab.jsx used to fire
+ * after `await loadCareer()` resolved — the same reasoning `BANK_PULL` and
+ * `APPLY_PRESET` already document for why a cross-field write is one action instead of
+ * a sequence: five separate dispatches have an ordering hazard a single pass does not.
+ *
+ * Here the hazard is a race, not intra-render ordering: `loadCareer()` is an `await`,
+ * so a pull can bank (`BANK_PULL`) between mount and this action landing. On the
+ * `artifact` storage backend `window.storage.get` is a real round trip a human
+ * interaction can land inside, not just a stray microtask, so this is reachable in
+ * practice, not merely in theory. Overwriting the session with the loaded snapshot in
+ * that window would roll a real, already-banked pull back to whatever was saved before
+ * it — and because career persistence is itself a reactive effect over these same
+ * fields (not the old imperative call inside `doRun`), the rollback would not stop at
+ * the screen: the persistence effect would write the rolled-back snapshot straight
+ * back to disk, destroying the banked pull permanently.
+ *
+ * The fix is a merge, not a skip. Skipping the restore when something banked first
+ * would leave the session holding ONLY this-session values — a `bestScore` from one
+ * pull, a `totalScore` from one pull — and the persistence effect would then write
+ * that truncated career over the real saved one, which is the same data loss by a
+ * different door. Merging instead means every term below combines "what was saved"
+ * with "what happened this session since mount":
+ *  - `bestScore`: the higher of the two.
+ *  - `totalScore` / `pullCount`: summed — the session started at zero, so its value
+ *    IS what happened since mount.
+ *  - `runs`: the session's own runs (newer) in front of the loaded ones, capped at
+ *    {@link RUN_LIMIT} the same way `pushRun` caps `BANK_PULL`'s write.
+ *  - `pinnedRunId`: a pin the player set this session wins over a restored one — they
+ *    cannot have pinned anything before the restore lands, so a non-null session value
+ *    here can only mean they pinned it AFTER banking, during the same race window.
+ *
+ * In the common case — nothing banked before the load resolves — the session is still
+ * at its zeroed initial values, so every one of those merges reduces to the loaded
+ * value exactly: `max(loaded, 0) === loaded`, `loaded + 0 === loaded`,
+ * `[...[], ...loaded] === loaded`-shaped, `null ?? loaded === loaded`. One code path
+ * handles both, with no `if (pristine)` branch to fall out of sync with the other.
+ *
+ * NOT IDEMPOTENT. `bestScore`/`totalScore`/`pullCount` SUM, and `runs` concatenates —
+ * dispatching this twice with the same `career` double-counts every one of them and
+ * duplicates every loaded run. It must be dispatched exactly once per mount. The
+ * safety net for that today is entirely in `EcuLab.jsx`: the career-restore effect's
+ * `cancelled` flag (set on cleanup) stops a second `loadCareer()` from a re-mounted
+ * effect from ever reaching `dispatch`, and `careerLoaded.current` gates the SEPARATE
+ * save effect from writing before a restore has landed. Neither guard lives in this
+ * reducer, so a future caller of this action has nothing here stopping it from
+ * breaking that invariant.
+ *
+ * One more edge alongside the `pinnedRunId` one above, and equally rare: a pull banked
+ * DURING the restore window (between mount and `loadCareer()` resolving) gets whatever
+ * `n` the session's own pull counter was on — typically a low one, since nothing has
+ * been played yet — and can sort oddly next to the restored runs' much higher `n`
+ * values once merged. Cosmetic; the run itself is correct and in the right position
+ * (newest-first, at index 0), only its ordinal can look out of sequence.
+ * @typedef {{type: 'RESTORE_CAREER', career: import('../../storage.js').Career}} RestoreCareerAction
+ */
+
+/**
+ * Pins one banked run as the ghost curve's comparison. Holds the run's `id` rather
+ * than its index: eviction shifts every index, so an index-based pin would silently
+ * repoint at a run the player never chose.
+ * @typedef {{type: 'PIN_RUN', id: string}} PinRunAction
+ */
+
+/**
+ * Drops the pin, returning the ghost to the previous run. No payload — there is only
+ * ever one pin.
+ * @typedef {{type: 'UNPIN_RUN'}} UnpinRunAction
  */
 
 /**
@@ -235,16 +328,30 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * Steps the undo stack back one entry, restoring the snapshot `past[past.length - 1]`
+ * carries and pushing the pre-undo state onto `future`. No payload: the reducer reads
+ * everything it needs off `state.history` itself.
+ * @typedef {{type: 'UNDO'}} UndoAction
+ */
+
+/**
+ * Steps the redo stack forward one entry, replaying the snapshot `future[0]` carries.
+ * The mirror of `UndoAction` — see there for why no payload travels on the action.
+ * @typedef {{type: 'REDO'}} RedoAction
+ */
+
+/**
  * The union of every action shape the reducer actually understands. Deliberately has
  * NO catch-all `{type: string, [key: string]: *}` member: with one, every object
- * shape is assignable to `StoreAction` and the eleven specific typedefs above become
+ * shape is assignable to `StoreAction` and the twenty specific typedefs above become
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | RepairEngineAction | BankPullAction | LiveStepAction |
- *   LivePatchAction
+ *   ResetToStockAction | RepairEngineAction | BankPullAction | RestoreCareerAction |
+ *   PinRunAction | UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction |
+ *   RedoAction
  * } KnownStoreAction
  */
 
@@ -256,8 +363,12 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * The root reducer. No `Date.now()`, no mutation of `state` or any of its slices —
- * every case that changes a slice returns a NEW object for that slice only, and every
+ * Every case except UNDO/REDO. Wrapped by `reducer` below, which adds the undo stack
+ * on top and is what callers actually use — see that function's own doc for what the
+ * wrapper does and why it stays pure too.
+ *
+ * No `Date.now()`, no mutation of `state` or any of its slices — every case that
+ * changes a slice returns a NEW object for that slice only, and every
  * slice it does not touch keeps its existing reference (so `React.memo`/`useMemo`
  * consumers downstream can bail out on an unrelated dispatch).
  *
@@ -289,7 +400,7 @@ export const ACTIONS = Object.freeze({
  * @param {StoreAction} action
  * @returns {StoreState}
  */
-export function reducer(state, action) {
+function baseReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_BUILD_FIELD:
       return {
@@ -391,9 +502,11 @@ export function reducer(state, action) {
         session: {
           ...state.session,
           // A factory rating from the newly loaded engine must never sit next to a
-          // pull logged on whatever was running before it.
+          // pull logged on whatever was running before it. The scores go with the
+          // result they belong to — leaving them behind would put a scorecard on
+          // screen with no dyno curve under it.
           result: null,
-          prevResult: null,
+          pullScores: null,
         },
       };
     }
@@ -432,20 +545,68 @@ export function reducer(state, action) {
         ...state,
         session: {
           ...state.session,
-          // The OLD result becomes prevResult BEFORE the new one overwrites `result` —
-          // reversing this order would silently make prevResult equal the new result.
-          prevResult: state.session.result,
           result: action.result,
+          // The record is built by the caller, not here: it needs `Date.now()` for its
+          // id and timestamp, and this reducer is documented as calling no clock.
+          //
+          // The banked run goes in front, so runs[0] is always the pull `result` now
+          // holds and runs[1] is the one before it — the ordering the old
+          // prevResult-before-result rotation existed to get right.
+          runs: pushRun(state.session.runs, action.run),
           health: {
             piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),
             bearing: clamp(state.session.health.bearing - action.result.wear.bearing, 0, 100),
             valve: clamp(state.session.health.valve - action.result.wear.valve, 0, 100),
           },
+          // Banked, not derived: see the typedef above for the re-grading bug that
+          // recomputing these from current hardware caused. `wasBest` compares against
+          // `state.session.bestScore` — the best BEFORE this pull — never the
+          // `bestScore` line below, which already includes it and would say yes on
+          // every pull, tie or not.
+          pullScores: {
+            ...action.scores,
+            pull: action.pullScore,
+            wasBest: action.pullScore > state.session.bestScore,
+          },
           bestScore: Math.max(state.session.bestScore, action.pullScore),
           totalScore: state.session.totalScore + action.pullScore,
           pullCount: state.session.pullCount + 1,
+          // The focus belongs to the log of the pull it was clicked on. Carried into
+          // this new pull it would highlight whichever events happen to span that RPM.
+          logFocusRpm: null,
         },
       };
+
+    case ACTIONS.RESTORE_CAREER: {
+      const c = action.career;
+      const s = state.session;
+      return {
+        ...state,
+        session: {
+          ...s,
+          bestScore: Math.max(c.best, s.bestScore),
+          totalScore: c.total + s.totalScore,
+          pullCount: c.pulls + s.pullCount,
+          // Anything banked this session is newer than anything loaded, so it goes in
+          // front — same newest-first convention `pushRun` keeps for BANK_PULL.
+          runs: [...s.runs, ...c.runs].slice(0, RUN_LIMIT),
+          // A pin set THIS session (impossible before the restore lands, except during
+          // the very race this action exists to survive) wins over a restored one. NOTE:
+          // null means both "never touched" and "deliberately cleared", so an unpin
+          // performed between BANK_PULL and RESTORE_CAREER is indistinguishable from no
+          // pin ever being set, and a stale saved pin will resurface. This edge is
+          // accepted rather than fixed with a tri-state; the restore race is rare and
+          // the workaround (clicking the pin again) is trivial.
+          pinnedRunId: s.pinnedRunId ?? c.pinnedRunId,
+        },
+      };
+    }
+
+    case ACTIONS.PIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: action.id } };
+
+    case ACTIONS.UNPIN_RUN:
+      return { ...state, session: { ...state.session, pinnedRunId: null } };
 
     case ACTIONS.LIVE_STEP: {
       const prev = state.session.live;
@@ -482,4 +643,193 @@ export function reducer(state, action) {
       // bails out of the re-render instead of scheduling one for a no-op.
       return state;
   }
+}
+
+/**
+ * The three actions that destroy calibration the player cannot otherwise get back,
+ * each mapped to HOW MUCH of its snapshot an undo puts back (history.js).
+ *
+ * Hardware writes are deliberately absent: every hardware control already displays its
+ * own current value, so it is self-reversing, and undo must not become a time machine
+ * over banked career progress.
+ *
+ * The scope is per-action because the snapshot is not: `snapshot()` captures the union
+ * of every field ANY of these three can write, so replaying an entry in full would put
+ * back fields the recorded action never touched. `SET_TABLE`'s entire build-side write
+ * is `presetId`, so RESTORE_CALIBRATION is exactly its write surface; the other two
+ * replace the whole build, so RESTORE_ALL is exactly theirs.
+ *
+ * A map rather than a Set plus a lookup elsewhere: `UNDOABLE` is derived from its keys
+ * below, so a fourth undoable action cannot be added to the membership list without
+ * also declaring what its undo restores.
+ */
+const UNDO_SCOPE = Object.freeze({
+  [ACTIONS.SET_TABLE]: RESTORE_CALIBRATION,
+  [ACTIONS.APPLY_PRESET]: RESTORE_ALL,
+  [ACTIONS.RESET_TO_STOCK]: RESTORE_ALL,
+});
+
+const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
+
+/**
+ * Every action that counts as NEW WORK, and therefore abandons the redo branch.
+ *
+ * The membership rule is: does this case write a field the snapshot carries — the
+ * hardware and calibration in BUILD_KEYS/TUNE_KEYS? Those are precisely the fields a
+ * later REDO would overwrite, so leaving `future` alive across one of them lets redo
+ * throw away work the player did after the undo, labelled only with what the redone
+ * action was. That was reachable: APPLY_PRESET -> UNDO -> fit a turbo, build a boost
+ * curve, pick a fuel -> REDO, and the octane goes back to the preset's under the
+ * label "Redo Preset · Nissan VQ35HR".
+ *
+ * Excluded, and why each one has to be:
+ *  - LIVE_STEP / LIVE_PATCH write `session.live`. LIVE_STEP alone fires at 20 Hz, so
+ *    including it would destroy the redo branch within one tick of the engine
+ *    running — undo would be unusable on any tab while the engine idles.
+ *  - SET_SESSION_FIELD, BANK_PULL, REPAIR_ENGINE write `session` only, which no
+ *    snapshot carries and no restore touches.
+ *  - SET_BOOST_SEL, SET_PRESET_PROMPT, SET_TUNE_FIELD are cursors and UI state:
+ *    `boostSel`, `presetPrompt` and `selection` are all deliberately outside the
+ *    snapshot (see history.js). SET_TUNE_FIELD is the generic tune setter, but its
+ *    only callers pass `selection` — and one of them is the tab switch, so counting
+ *    it as new work would mean walking from TUNE to BUILD silently killed the redo
+ *    a player crossed tabs to reach.
+ *  - UNDO/REDO manage `future` themselves.
+ *
+ * The three UNDOABLE actions are listed here too, for one list that answers "is this
+ * new work?" — they reach `future: []` through the recording branch below rather than
+ * through this Set, and listing them keeps the two from disagreeing on paper.
+ */
+/**
+ * Does this action write a field some snapshot carries, and therefore abandon a live
+ * redo branch?
+ *
+ * `SET_TUNE_FIELD` needs the extra question because it is the one action whose write
+ * surface depends on its payload rather than its type. Its five production callers all
+ * pass `field: 'selection'` — a cursor, outside the snapshot, and written by `changeTab`
+ * on every tab switch, so treating it as new work would mean walking from TUNE to BUILD
+ * killed the redo the player crossed tabs to reach. But nothing in the type stops a
+ * caller passing `'ve'`, and that write WOULD be overwritten by a redo. Asking the
+ * snapshot's own key list makes the exclusion structural instead of an observation about
+ * today's callers.
+ * @param {any} action
+ * @returns {boolean}
+ */
+function clearsRedo(action) {
+  if (action.type === ACTIONS.SET_TUNE_FIELD) return snapshotsTuneField(action.field);
+  return CLEARS_REDO.has(action.type);
+}
+
+const CLEARS_REDO = new Set([
+  ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,
+  ACTIONS.SET_ENGINE_CONFIG_PATCH, ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET,
+  ACTIONS.RESET_TO_STOCK,
+]);
+
+/**
+ * Names what an undoable action did, for the undo button's `aria-label` and BUILD's
+ * post-load offer. Lives here rather than in history.js because it needs `ACTIONS` and
+ * the preset catalogue, and history.js must not import this module.
+ * @param {any} action
+ * @returns {string}
+ */
+function labelFor(action) {
+  switch (action.type) {
+    case ACTIONS.SET_TABLE: {
+      const label = { ve: 'VE edit', timing: 'Spark edit', afr: 'Fuel edit' }[action.table];
+      // Same reasoning as the `default` branch below, and it needs stating twice
+      // because the failure this one prevents is worse. An unrecognised table used to
+      // return `undefined`, which was pushed onto the stack as the entry's label; the
+      // crash then happened in EngineScreen.jsx, on BUILD, at `top.label.startsWith(...)`
+      // — a TypeError on a different screen, at a stack naming neither the dispatch nor
+      // the table. Throwing here names both.
+      if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
+      return label;
+    }
+    case ACTIONS.APPLY_PRESET: {
+      const preset = presetById(action.preset.presetId);
+      return `Preset · ${preset ? preset.name : 'factory calibration'}`;
+    }
+    case ACTIONS.RESET_TO_STOCK:
+      return 'Reset to stock';
+    default:
+      // UNDOABLE lists exactly three action types, and `reducer` below only ever
+      // calls `labelFor` for an action already confirmed to be in that set — so this
+      // branch is unreachable BY CONSTRUCTION today. It throws instead of quietly
+      // returning 'Reset to stock' so that if a fourth action is ever added to
+      // UNDOABLE without a matching case here, it fails loudly at the call site
+      // instead of mislabelling every undo button for that action "Reset to stock".
+      throw new Error(`labelFor: no label defined for undoable action type "${action.type}"`);
+  }
+}
+
+/**
+ * The store's reducer: `baseReducer` plus the undo stack.
+ *
+ * Recording is a WRAPPER rather than a line inside each undoable case, so the three
+ * existing cases stay exactly as they were and a fourth undoable action is one entry in
+ * `UNDOABLE` rather than a fourth place to remember. It stays a pure function of
+ * `(state, action)` — no clock, no coalescing keys, no merge logic. The dock's slider
+ * commits once on release instead (see SelectionDock.jsx), which is what keeps a drag
+ * from becoming eighteen undo steps without any of that machinery.
+ *
+ * @param {StoreState} state
+ * @param {any} action
+ * @returns {StoreState}
+ */
+export function reducer(state, action) {
+  if (action.type === ACTIONS.UNDO) {
+    const { past, future } = state.history;
+    if (past.length === 0) return state;
+    const entry = past[past.length - 1];
+    return {
+      ...restore(state, entry.before, entry.scope),
+      history: {
+        past: past.slice(0, -1),
+        // The scope rides along with the entry in both directions, so a redo puts
+        // back exactly as much as the undo took away.
+        future: [{ label: entry.label, before: snapshot(state), scope: entry.scope }, ...future],
+      },
+    };
+  }
+
+  if (action.type === ACTIONS.REDO) {
+    const { past, future } = state.history;
+    if (future.length === 0) return state;
+    const entry = future[0];
+    return {
+      ...restore(state, entry.before, entry.scope),
+      history: {
+        past: [...past, { label: entry.label, before: snapshot(state), scope: entry.scope }]
+          .slice(-HISTORY_LIMIT),
+        future: future.slice(1),
+      },
+    };
+  }
+
+  const next = baseReducer(state, action);
+  if (UNDOABLE.has(action.type)) {
+    return {
+      ...next,
+      history: {
+        past: [...state.history.past, {
+          label: labelFor(action),
+          before: snapshot(state),
+          scope: UNDO_SCOPE[action.type],
+        }].slice(-HISTORY_LIMIT),
+        // A new edit abandons the redo branch: keeping it would let redo jump the
+        // player onto a timeline they had already left.
+        future: [],
+      },
+    };
+  }
+
+  // Not recordable, but still new work: a hardware write is not undoable (the control
+  // shows its own value) yet it changes fields a redo would overwrite, so it abandons
+  // the redo branch just the same. See CLEARS_REDO for what counts and what must not.
+  if (!clearsRedo(action) || state.history.future.length === 0) return next;
+  return {
+    ...next,
+    history: { past: state.history.past, future: [] },
+  };
 }

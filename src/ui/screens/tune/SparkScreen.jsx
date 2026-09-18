@@ -17,6 +17,7 @@ import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -51,7 +52,10 @@ export function SparkScreen({ calAdvice }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
+          <div className={styles.gridHead}>
+            <Eyebrow icon={Zap}>Ignition Timing</Eyebrow>
+            <UndoControls />
+          </div>
           <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
           <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} />
 

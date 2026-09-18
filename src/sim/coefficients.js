@@ -427,6 +427,10 @@ export const COEFF = {
   IDLE_SPARK_GAIN: 0.022,      // spark gives instant torque authority; air is slow
   IDLE_SPARK_LIMIT: 14,
   IDLE_BLEED_RATE: 0.06,       // how fast the idle valve returns to base off-idle
+  // A rev limiter is a hysteresis loop, not a ceiling: fuel is cut at the limit, revs
+  // fall, and fuel is restored this far below it. That cut-restore cycle IS the bounce
+  // you hear off a limiter, and the band is what sets how fast it stutters.
+  LIMITER_RESTORE_BAND_RPM: 320,
 
   // --- Volumetric efficiency modifiers ---
   VE_PER_COMPRESSION_POINT: 0.005, // less clearance volume = less residual dilution
@@ -469,11 +473,14 @@ export const COEFF = {
   // BOTTOM of that band alone, and the credits below clear the top. 10.8 + 0.3 (93
   // octane) + 0.4 (intercooler) = 11.5 is how a B58 as sold comes out unpenalised.
   //
-  // TWO KNOWN SIMPLIFICATIONS, both deferred rather than hidden:
-  //   - A port-injected engine gets the same allowance as a DI one, which it has not
-  //     earned — DI evaporates fuel inside the cylinder and buys real knock margin from
-  //     it. Issue #24 tracks modelling injection type.
-  //   - The headroom does not scale with boost LEVEL; 3 psi and 24 psi are judged alike.
+  // ONE KNOWN SIMPLIFICATION, deferred rather than hidden: a port-injected engine gets
+  // the same allowance as a DI one, which it has not earned — DI evaporates fuel inside
+  // the cylinder and buys real knock margin from it. Issue #24 tracks modelling
+  // injection type.
+  //
+  // The other simplification that stood here — the headroom not scaling with boost
+  // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
+  // COMPRESSION_PER_BOOST_PSI below.
   COMPRESSION_BOOST_BASE: 10.8,
   // Compression credit per degree of octane bonus, and per intercooler.
   //
@@ -489,10 +496,78 @@ export const COEFF = {
   // belongs in its own change.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
+  // How much static compression one psi of boost takes off the headroom, and the boost
+  // level the base above is implicitly calibrated at.
+  //
+  // Boost level is the single largest determinant of whether high static compression
+  // survives, and until now the rule ignored it entirely: it gated on `peakBoostPsi > 0`
+  // and then responded only to octane and charge cooling — the second and third most
+  // important variables. A 5 psi build and a 25 psi build at 13.0:1 on E85 scored
+  // identically (issue #25).
+  //
+  // 0.1 points per psi is the long-standing shop rule stated as a rate: drop about one
+  // point of static compression per ten psi of intended boost. Expressed in the model's
+  // own currency it is mild — engine.js prices a compression point at 2 degrees of knock
+  // margin, so this is 0.2 degrees per psi — which is deliberate, for the same reason
+  // the octane and intercooler credits are discounted: the physics already charges for
+  // boost against compression through peak pressure and ignition delay, and the Tuning
+  // Score already deducts for the knock events that follow. This must not bill it twice.
+  //
+  // It does not double-count KNOCK_OVERBOOST_PENALTY either. That prices running a
+  // COMPRESSOR outside its efficient map, which is a property of the turbo match and
+  // fires whatever the compression ratio is. This prices boost against the SHORT BLOCK.
+  //
+  // The term is ONE-SIDED: it only ever takes headroom away, above the reference, and
+  // never hands any back below it. A two-sided swing was tried first and rejected — it
+  // made a 10 psi build MORE permissive than today (11.3:1 on 93 octane with no
+  // intercooler stopped being flagged), and this rule has no evidence for loosening
+  // anything. Widening what counts as sound engineering is not what the issue asked for.
+  //
+  // 14 psi is the median peak boost across the shipped factory engines (8.5, 13, 14, 17,
+  // 17), which is the band COMPRESSION_BOOST_BASE was fitted against — so below it a
+  // factory-normal build is judged exactly as it was before, and every shipped engine
+  // stays unpenalised: the tightest, the B58 at 11.0:1 and 17 psi, keeps 0.20 points of
+  // margin after paying 0.30 for the 3 psi it runs past the reference.
+  COMPRESSION_PER_BOOST_PSI: 0.1,
+  COMPRESSION_BOOST_REF_PSI: 14,
   // Points charged per compression point past the headroom, and the cap. The cap equals
   // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
+
+  // --- Drivetrain & drag strip (see drivetrain.js) ---
+  // Fraction of peak grip a tyre still transmits once it has broken loose. Sliding
+  // friction is always below static, which is exactly why a spinning tyre is slower
+  // than one held at the limit — and why the driver model below lifts rather than
+  // staying flat.
+  TIRE_SLIDING_FRACTION: 0.92,
+  // Mass of one wheel and tyre assembly, kg, and the fraction of `m·r²` its rotational
+  // inertia actually comes to. A wheel is not a thin ring — the rim's mass sits well
+  // inboard of the tread — so a radius of gyration around 0.74·r is representative,
+  // giving I ≈ 0.55·m·r². Because I/r² is then just a mass, the wheels contribute a
+  // fixed effective mass regardless of tyre size, which is the correct behaviour: a
+  // taller tyre is harder to spin up but also gears the car taller by the same factor.
+  WHEEL_ASSEMBLY_MASS_KG: 22,
+  WHEEL_RING_FRACTION: 0.55,
+  // Manifold pressure assumed while the throttle is shut mid-shift, kPa. Feeds the
+  // existing pumping-loss model so revs fall against real engine braking rather than
+  // at an invented rate.
+  SHIFT_MANIFOLD_KPA: 30,
+  // How far below the limiter's cut speed the driver takes the next gear. Shifting
+  // exactly at the cut wastes the last few hundred RPM bouncing off it.
+  UPSHIFT_MARGIN_RPM: 60,
+
+  // --- Driver model ---
+  // A real driver does not hold the throttle flat while the tyre is spinning: first
+  // gear runs past 40 mph, so that would be a burnout halfway down the strip. After a
+  // reaction delay they feather it to keep the tyre just at the limit, which is both
+  // what happens and what is fastest. Backing off is quick and getting back in is
+  // deliberate, so the loop settles instead of oscillating.
+  DRIVER_REACTION_S: 0.45,
+  DRIVER_LIFT_RATE: 3.2,        // throttle fraction shed per second while spinning
+  DRIVER_REAPPLY_RATE: 1.1,     // throttle fraction restored per second once hooked
+  DRIVER_MIN_THROTTLE: 0.30,    // how far the driver will lift before riding it out
+  DRIVER_REAPPLY_MARGIN: 0.94,  // fraction of the grip limit they wait to fall under
 
   // --- Retired, kept here so "didn't this used to have a term for X?" has one answer ---
   //

@@ -14,7 +14,7 @@
  * create, and the one a later extraction is most likely to erode.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,7 +22,8 @@ import { HealthScreen } from '../../src/ui/screens/dash/HealthScreen.jsx';
 import { LearnScreen } from '../../src/ui/screens/dash/LearnScreen.jsx';
 import { LiveScreen } from '../../src/ui/screens/dash/LiveScreen.jsx';
 import { StatsScreen } from '../../src/ui/screens/dash/StatsScreen.jsx';
-import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
+import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
 
@@ -37,6 +38,31 @@ function mount(node) {
 }
 
 const noop = () => {};
+
+/**
+ * Mounts a screen inside a store that already holds a dyno result — StatsScreen's
+ * last-pull tiles are gated on `session.result`, which no prop can stand in for.
+ * Same probe-then-rerender shape as `mountWithResult` in dyno-screens.test.jsx.
+ * @param {React.ReactElement} node
+ * @returns {ReturnType<typeof render>}
+ */
+function mountWithResult(node) {
+  /** @type {Function} */
+  let dispatch;
+  const Capture = () => {
+    const [, d] = useSession();
+    dispatch = d;
+    return null;
+  };
+  const utils = render(<StoreProvider><Capture /></StoreProvider>);
+  act(() => dispatch({
+    type: ACTIONS.SET_SESSION_FIELD,
+    field: 'result',
+    value: { points: [], events: [], peakHp: 111, peakTq: 222 },
+  }));
+  utils.rerender(<StoreProvider><Capture />{node}</StoreProvider>);
+  return utils;
+}
 
 describe('LiveScreen', () => {
   it('reads the live engine off the store rather than off a prop', () => {
@@ -96,6 +122,26 @@ describe('StatsScreen', () => {
     mount(<StatsScreen active={false} onToggle={onToggle} scores={null} />);
     fireEvent.click(screen.getByText('Career & Last Pull'));
     expect(onToggle).toHaveBeenCalledWith('stats');
+  });
+
+  // Fabricated figures, as in dyno-screens.test.jsx: no real scoring output for the
+  // default engine lands on these.
+  const scores = { pull: 4321, wasBest: true, tuning: { score: 91 }, engineer: { score: 12 } };
+
+  it('heads the last-pull tiles plainly while they are still about the car on screen', () => {
+    mountWithResult(<StatsScreen active onToggle={noop} scores={scores} />);
+    expect(screen.getByText('LAST PULL')).toBeTruthy();
+    expect(screen.queryByText(/HAS CHANGED/)).toBeNull();
+  });
+
+  it('says the build has changed rather than dropping the tiles or re-grading them', () => {
+    // HOME has no room for a paragraph, so the heading IS the disclosure here. The
+    // figures stay: they are the previous pull, which is the thing the player is
+    // comparing against. What must never happen is showing them under a bare "LAST
+    // PULL" as though they described the build now selected.
+    mountWithResult(<StatsScreen active onToggle={noop} scores={scores} scoresStale />);
+    expect(screen.getByText('LAST PULL · SETUP HAS CHANGED SINCE')).toBeTruthy();
+    expect(screen.getByText('4321')).toBeTruthy();
   });
 });
 

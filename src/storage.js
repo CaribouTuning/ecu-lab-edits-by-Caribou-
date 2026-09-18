@@ -35,10 +35,14 @@ export function storageBackend() {
  * @property {number} best highest single Pull Score
  * @property {number} total sum of every Pull Score
  * @property {number} pulls how many pulls have been logged
+ * @property {import('./ui/state/runLog.js').RunRecord[]} runs the banked run log,
+ *   newest first. Validated as an array here and capped by its writer — this adapter
+ *   deliberately knows nothing about RUN_LIMIT, which is a UI-layer policy.
+ * @property {string|null} pinnedRunId the run pinned as the ghost comparison
  */
 
 /** @type {Career} */
-const EMPTY_CAREER = { best: 0, total: 0, pulls: 0 };
+const EMPTY_CAREER = { best: 0, total: 0, pulls: 0, runs: [], pinnedRunId: null };
 
 /**
  * Reads saved career stats.
@@ -59,6 +63,10 @@ export async function loadCareer() {
       best: Number(parsed.best) || 0,
       total: Number(parsed.total) || 0,
       pulls: Number(parsed.pulls) || 0,
+      // A save written before run history existed has neither key. Both coerce to the
+      // empty case rather than to `undefined`, which the UI would call .find() on.
+      runs: Array.isArray(parsed.runs) ? parsed.runs : [],
+      pinnedRunId: typeof parsed.pinnedRunId === 'string' ? parsed.pinnedRunId : null,
     };
   } catch {
     // A corrupt or unreadable save should never stop the app from starting.
@@ -77,6 +85,8 @@ export async function saveCareer(career) {
     best: career.best ?? 0,
     total: career.total ?? 0,
     pulls: career.pulls ?? 0,
+    runs: Array.isArray(career.runs) ? career.runs : [],
+    pinnedRunId: typeof career.pinnedRunId === 'string' ? career.pinnedRunId : null,
   });
   try {
     switch (storageBackend()) {

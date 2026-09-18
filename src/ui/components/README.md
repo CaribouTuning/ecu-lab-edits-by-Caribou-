@@ -42,3 +42,9 @@ the body; `report.state` (from `sparkReport`/`fuelReport`/`veReport` in
 supplies the numbers. It is pure — no store access, no computation — so the screens stay
 the only thing in TUNE that talks to the store, and `advisorReports.js` stays the only
 thing that decides what a cell's category means.
+
+`UndoControls` is the ordinary shared-component reason again: AIRFLOW, SPARK and FUEL
+each mount one above their grid. It takes no props and reads `history` from the store
+itself, because the stacks are global — undoing a spark edit from the FUEL screen is
+correct behaviour, not a bug. What is undoable lives in `src/ui/state/reducer.js`
+(`UNDOABLE`); what a snapshot carries lives in `src/ui/state/history.js`.

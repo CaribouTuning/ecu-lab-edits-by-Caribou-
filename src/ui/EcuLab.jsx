@@ -28,17 +28,18 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS,
-  DEFAULT_MODS, EXHAUST_DIA_OPTS,
+  DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, presetById,
-  simulateSweep, turbineWithCount, veRecommendations
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, isLocatable, presetById,
+  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
+  veRecommendations
 } from '../sim/index.js';
 import {
-  beepEngineAudio, createEngineAudio, setEngineAudioActive, silenceEngineAudio,
-  updateEngineAudio, wakeEngineAudio,
+  beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
+  shiftEngineAudio, silenceEngineAudio, updateEngineAudio, wakeEngineAudio,
 } from './audio/engineAudio.js';
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -50,16 +51,20 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
+import { pullSignature, measuredInputs } from './state/pullSignature.js';
+import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { DialMark } from './components/DialMark.jsx';
+import { eventBands } from './components/eventBands.js';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
+import { DragScreen, dragSignature } from './screens/drag/DragScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
@@ -70,6 +75,7 @@ import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
 import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
+import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
@@ -89,6 +95,9 @@ const JOURNEY = [
     cta: 'Sounds good — put it on the dyno', next: 'dyno' },
   { tab: 'dyno', title: 'Step 4 · Measure it',
     body: 'Run a pull. Then read the Pull Log before you look at the power number — it explains anything that went wrong and what to change. From here the loop is: adjust, pull again, compare.',
+    cta: 'Measured — now race it', next: 'drag' },
+  { tab: 'drag', title: 'Step 5 · Race it',
+    body: 'Put that torque curve in a car and run a quarter mile. Body, gearing, tyres and driven wheels all change the time without touching the engine — because a torque curve is only half of acceleration. Read the 60-foot time for traction and the trap speed for power.',
     cta: 'Finish — let me explore freely', next: null },
 ];
 
@@ -170,7 +179,66 @@ const TUTORIAL_STEPS = [
     body: 'Knock, mixture and MAF errors are calibration faults — tables fix them completely. Injectors out of duty cycle, valve float, a compressor past its range: those are physical limits, and the log will tell you so. Recognising which kind you are looking at is most of the skill.' },
   { title: 'Chase the score',
     body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
+  { title: 'Then put it in a car',
+    body: 'On DRAG the engine goes into a car and runs a quarter mile. Gearing multiplies torque and divides speed by the same factor. Grip sets a ceiling no amount of power passes. Drag rises with the square of speed. That is why trap speed measures power while sixty-foot time measures traction, and why the fastest engine does not always win.' },
 ];
+
+/**
+ * How long the christmas tree takes to go green, ms.
+ *
+ * A real sportsman tree is staged, then three ambers half a second apart, then green.
+ * The car does not move until it does — the tree is the one thing on DRAG with no
+ * physics behind it, and it is honest about that.
+ */
+const TREE_GREEN_MS = 1900;
+
+/** Playback frame interval, ms — 25 fps, matching the strip's own CSS transition. */
+const DRAG_FRAME_MS = 40;
+
+/** How long the finished run stays on screen before the strip resets, seconds. */
+const DRAG_HOLD_S = 1.2;
+
+/**
+ * Ceiling on how long playback may take in WALL-CLOCK seconds.
+ *
+ * Almost every pass is under this and plays back in real time. A slow one does not:
+ * `simulateDragRun` gives up at DRAG_TIMEOUT_S, so a 48 whp engine in a tall-geared
+ * truck solves to a 40-second run that never reaches the stripe — and watching all
+ * forty of them, with the RUN button disabled throughout, is not a thing to do to
+ * somebody. Runs longer than this are played back fast-forwarded rather than
+ * truncated, so the replay still shows the whole solved pass and the readouts still
+ * carry the real speed, gear and RPM at each point in it.
+ */
+const DRAG_PLAYBACK_MAX_S = 15;
+
+/**
+ * How many run-seconds one wall-clock second of playback covers.
+ *
+ * Exported so the ceiling above is testable without watching fifteen real seconds of
+ * a truck crawling: this is the whole of that rule.
+ *
+ * @param {number} etSeconds the solved run's elapsed time
+ * @returns {number} 1 for a normal pass, more for one that has to be fast-forwarded
+ */
+export function dragPlaybackRate(etSeconds) {
+  return Math.max(1, etSeconds / DRAG_PLAYBACK_MAX_S);
+}
+
+/**
+ * The measured sweep point closest in engine speed to `rpm`.
+ *
+ * @template {{rpm: number}} P
+ * @param {P[]} points a sweep, in ascending RPM
+ * @param {number} rpm engine speed wanted
+ * @returns {P} the nearest point
+ */
+function nearestPoint(points, rpm) {
+  let best = points[0];
+  for (const p of points) {
+    if (Math.abs(p.rpm - rpm) < Math.abs(best.rpm - rpm)) best = p;
+  }
+  return best;
+}
 
 // ============================================================
 /**
@@ -251,8 +319,8 @@ export function EcuLabApp() {
   const [session] = useSession();
   const {
     loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
-    result, prevResult, running, revealCount, bestScore, totalScore, pullCount,
-    live,
+    result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
+    live, car, dragResult, dragRunning, dragT, treePhase,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
   // keeps reading the name it always read — and so a later task can move a tab's markup
@@ -268,12 +336,25 @@ export function EcuLabApp() {
   const tuneView = tab === 'tune' ? route.section : null;
   const dynoView = tab === 'dyno' ? route.section : null;
   const dashSection = tab === 'dash' ? route.section : null;
+  const dragSection = tab === 'drag' ? route.section : null;
   const revealTimer = useRef(null);
+  // The drag run's playback clock, and the christmas tree's four timers. Refs for the
+  // same reason `revealTimer` is one: both are cleared from a handler and from an
+  // unmount cleanup, neither is ever read during render.
+  const dragTimer = useRef(null);
+  const treeTimers = useRef(/** @type {ReturnType<typeof setTimeout>[]} */ ([]));
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
+  // The drag pass's last gear, so a shift is heard once when it happens; and whether the
+  // converter whine was last left on, so it is switched off once rather than every frame.
+  const dragGearRef = useRef(0);
+  const converterOnRef = useRef(false);
   const setSession = (field, value) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field, value });
+  // Guards the persistence effect below: nothing may be written until the saved career
+  // has actually been read back, or a cold start overwrites it with zeroes.
+  const careerLoaded = useRef(false);
 
   // `withPresetField` is gone: SET_BUILD_FIELD clears `presetId` itself, so the
   // invalidation now happens inside the reducer rather than in a wrapper each new
@@ -421,6 +502,7 @@ export function EcuLabApp() {
   }, [navigate]);
   const toggleDashSection = makeToggleSection('dash');
   const toggleBuildSection = makeToggleSection('build');
+  const toggleDragSection = makeToggleSection('drag');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   // `AppShell`'s `SideNav` is `React.memo`'d and reads no store, so at 20 Hz it only
   // stays skipped if `onNavigate` is referentially stable — see AppShell.jsx's header.
@@ -497,10 +579,15 @@ export function EcuLabApp() {
       .then(() => setSession('audioStatus', a.ctx.state === 'running' ? 'ok' : 'blocked'));
   };
 
-  // Persistence goes through the storage adapter, which picks whichever backend is
-  // available (artifact host, localStorage, or in-memory) so career stats survive a
-  // refresh wherever the app is deployed.
-  const persistCareer = (best, total, pulls) => saveCareer({ best, total, pulls });
+  // The setup currently on screen — build, calibration and dyno load — signed. The
+  // same signature is taken at pull time and banked with the scores, then compared
+  // against this on every render: the one question banked numbers cannot answer for
+  // themselves is whether they are still about the car in front of you. See
+  // pullSignature.js for exactly what counts as an input, and what does not.
+  const buildSignature = useMemo(
+    () => pullSignature(build, tune, loadKpa),
+    [build, tune, loadKpa],
+  );
 
   const doRun = () => {
     const a = ensureAudio();
@@ -523,21 +610,32 @@ export function EcuLabApp() {
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
-    // Banking the pull — prevResult rotation, wear, scores, pull count — lands in the
+    // Banking the pull — result, wear, scores, pull count, run log — lands in the
     // store in one pass. `result` and `pullScore` are precomputed here because the
     // reducer has no access to the useMemo-derived hardware `computePullScore` needs.
-    // The local `setPrevResult`/`setResult`/`setHealth` calls that used to sit above
-    // this line, and the `setBestScore`/`setTotalScore`/`setPullCount` trio below it,
-    // were all mirroring writes this one action already makes — including the
-    // prevResult-before-result rotation whose ordering it exists to own.
-    dispatch({ type: ACTIONS.BANK_PULL, result: r, pullScore: pull });
-    // BANK_PULL writes bestScore/totalScore/pullCount itself, from the same three
-    // expressions. They are still computed here because `persistCareer` needs the new
-    // values NOW: reading them back off `session` would read this render's stale ones.
-    const nextBest = Math.max(bestScore, pull);
-    const nextTotal = totalScore + pull;
+    // The local `setResult`/`setHealth` calls that used to sit above this line, and the
+    // `setBestScore`/`setTotalScore`/`setPullCount` trio below it, were all mirroring
+    // writes this one action already makes.
+    // `scores` rides along with the result it belongs to: BANK_PULL keeps the numbers
+    // this pull actually measured, and `buildSignature` records the setup it measured
+    // them on. Nothing recomputes them afterwards — that is the whole fix (issue #29).
     const nextPulls = pullCount + 1;
-    persistCareer(nextBest, nextTotal, nextPulls);
+    const at = Date.now();
+    dispatch({
+      type: ACTIONS.BANK_PULL, result: r, pullScore: pull,
+      scores: { tuning: ts, engineer: es, signature: buildSignature },
+      // `id` pairs the clock with the career ordinal so two records can never collide,
+      // and `at`/`id` are read HERE because the reducer must call no clock of its own.
+      run: makeRunRecord({
+        id: `${at}-${nextPulls}`, n: nextPulls, at,
+        // `engineDerived` carries no name — it is displacement, cylinder count and
+        // redline. The build's name is the loaded preset's, and a build with no preset
+        // is exactly what "Custom build" means everywhere else in this app.
+        label: presetById(presetId)?.name ?? 'Custom build',
+        result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
+        inputs: measuredInputs(build, tune, loadKpa),
+      }),
+    });
     const total = r.points.length;
     // The idle and overrun either side of the sweep exist to be HEARD, so they only play
     // when something can hear them.
@@ -584,6 +682,101 @@ export function EcuLabApp() {
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
+
+  // ---- The quarter mile ---------------------------------------------------
+  // The crank-torque lookup the drag run is driven by. Derived from the LAST PULL and
+  // nothing else, which is the whole prerequisite: until the engine has been measured
+  // there is no torque curve to drive with, and DRAG says so rather than inventing one.
+  const torqueCurveNm = useMemo(() => (result ? torqueCurveFromSweep(result) : null), [result]);
+
+  /**
+   * A short tone, used for the tree's ambers and its green.
+   *
+   * Built and discarded per beep rather than added to the engine synth's graph: this
+   * is a timing light, not part of the engine's note, and it must sound while the car
+   * is still stationary and silent.
+   *
+   * @param {number} freq Hz
+   * @param {number} dur seconds
+   * @param {number} vol peak gain
+   */
+  const beep = (freq, dur, vol) => {
+    const au = audioRef.current;
+    if (!au || !soundOn) return;
+    // The tree lights before the car moves, while the engine audio may be asleep.
+    wakeEngineAudio(au, dur);
+    const t0 = au.ctx.currentTime;
+    const o = au.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+    const g = au.ctx.createGain(); g.gain.value = 0;
+    o.connect(g); g.connect(au.ctx.destination);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  };
+
+  /**
+   * Run the quarter mile: solve it in full, then start the tree and play it back.
+   *
+   * Solving first is the point. The strip animation scrubs a finished run rather than
+   * integrating alongside it, so what the player watches and what the time slip says
+   * cannot come apart. It also means an eight-second pass costs one solve, not eight
+   * seconds of physics running against a repaint.
+   */
+  const runDrag = () => {
+    if (!torqueCurveNm || dragRunning) return;
+    const a = ensureAudio();
+    if (a && a.ctx.state === 'suspended') a.ctx.resume();
+
+    const res = simulateDragRun({
+      car,
+      torqueCurveNm,
+      redline: engineDerived.redline,
+      displacementL: engineDerived.displacementL,
+      peakHp: result.peakHp,
+    });
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragResult', value: res });
+    // Recorded WITH the run, never re-derived afterwards: this is what lets the time
+    // slip say the car has changed underneath it. Same rule as `pullScores.signature`.
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result) });
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: 0 });
+
+    // A sportsman tree: staged, then three ambers half a second apart, then green.
+    // Clearing first matters — pressing RUN again during the countdown must replace
+    // the sequence, not race a second one against it.
+    treeTimers.current.forEach(clearTimeout);
+    clearInterval(dragTimer.current);
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 1 });
+    treeTimers.current = [
+      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 2 }); beep(660, 0.18, 0.08); }, 400),
+      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 3 }); beep(660, 0.18, 0.08); }, 900),
+      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 4 }); beep(660, 0.18, 0.08); }, 1400),
+      setTimeout(() => {
+        dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 5 });
+        beep(990, 0.35, 0.10);
+        dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragRunning', value: true });
+        const t0 = Date.now();
+        // 1 for anything that fits in the ceiling, which is very nearly everything.
+        const rate = dragPlaybackRate(res.et);
+        dragTimer.current = setInterval(() => {
+          const el = ((Date.now() - t0) / 1000) * rate;
+          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: el });
+          // Hold on the finish for a moment so the time slip is readable.
+          if (el > res.et + DRAG_HOLD_S * rate) {
+            clearInterval(dragTimer.current);
+            dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragRunning', value: false });
+            dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 0 });
+          }
+        }, DRAG_FRAME_MS);
+      }, TREE_GREEN_MS),
+    ];
+  };
+  // Both the tree and the playback clock outlive a single render, so both have to be
+  // torn down on unmount or a run continues against a component that is gone.
+  useEffect(() => () => {
+    clearInterval(dragTimer.current);
+    treeTimers.current.forEach(clearTimeout);
+  }, []);
 
   // Keep the live-engine config in a ref so the loop always uses current tuning
   // without needing to restart the interval every time a table changes.
@@ -665,46 +858,129 @@ export function EcuLabApp() {
   }, [dispatch]);
 
   // Career stats persist across sessions so the high score is worth chasing.
+  //
+  // `loadCareer()` is an `await`, so a pull can bank between mount and this resolving
+  // — reachable in practice on the `artifact` storage backend, where the underlying
+  // `window.storage.get` is a real round trip. A single RESTORE_CAREER action, rather
+  // than the five separate `SET_SESSION_FIELD` dispatches this used to fire, is what
+  // keeps that race from rolling a banked pull back to the pre-pull snapshot: the
+  // reducer MERGES the loaded career with whatever the session already holds instead
+  // of overwriting it. See RESTORE_CAREER's own doc in reducer.js for the full case,
+  // including why a skip-instead-of-merge fix would only move the data loss.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const c = await loadCareer();
       if (cancelled) return;
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'bestScore', value: c.best });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'totalScore', value: c.total });
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'pullCount', value: c.pulls });
+      dispatch({ type: ACTIONS.RESTORE_CAREER, career: c });
+      careerLoaded.current = true;
     })();
     return () => { cancelled = true; };
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
 
+  // Career state is written back whenever it moves. This replaces a save call inside
+  // `doRun`, which could not cover the pin: pinning is a dispatch like any other and
+  // has no natural "and now save" call site. An effect over the persisted fields does.
+  useEffect(() => {
+    if (!careerLoaded.current) return;
+    saveCareer({ best: bestScore, total: totalScore, pulls: pullCount, runs, pinnedRunId });
+  }, [bestScore, totalScore, pullCount, runs, pinnedRunId]);
+
+  // Cmd/Ctrl+Z and Cmd+Shift+Z / Ctrl+Y. This lives here rather than in AppShell,
+  // whose header is explicit that the shell owns chrome only and never dispatches to
+  // the store — a global key handler is app behaviour, not chrome.
+  //
+  // PR 4b's arrow-key tuning will need this same seam.
+  useEffect(() => {
+    /** @param {KeyboardEvent} e */
+    const onKey = (e) => {
+      // Ctrl+Alt is AltGr on many European keyboard layouts, where AltGr+Z / AltGr+Y
+      // types a real character. Excluding altKey keeps this handler from stealing
+      // that keystroke and swallowing it with preventDefault().
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      const key = e.key.toLowerCase();
+      if (key !== 'z' && key !== 'y') return;
+      // Never steal undo from a field the player is typing in.
+      const el = /** @type {HTMLElement|null} */ (e.target);
+      const tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+      e.preventDefault();
+      const redo = key === 'y' || e.shiftKey;
+      dispatch({ type: redo ? ACTIONS.REDO : ACTIONS.UNDO });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dispatch]);
+
+  const ghost = ghostRun(runs, pinnedRunId);
+
   const chartData = useMemo(() => {
     if (!result) return [];
-    return result.points.slice(0, running ? revealCount : result.points.length).map((p, i) => ({
-      rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
-      timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
-      prevHp: prevResult?.points?.[i]?.hp, prevTorque: prevResult?.points?.[i]?.torque,
-    }));
-  }, [result, prevResult, running, revealCount]);
+    // Keyed by RPM, not by array position. Today the two are the same thing —
+    // SWEEP_START_RPM and SWEEP_STEP_RPM are constants, so points[i].rpm is always
+    // 1500 + 100i — but a PINNED run may be any length, and the join should state
+    // what it means rather than lean on an invariant two modules away.
+    const ghostByRpm = new Map((ghost?.points ?? []).map((p) => [p.rpm, p]));
+    return result.points.slice(0, running ? revealCount : result.points.length).map((p) => {
+      const g = ghostByRpm.get(p.rpm);
+      return {
+        rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
+        timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
+        prevHp: g?.hp, prevTorque: g?.torque,
+      };
+    });
+  }, [result, ghost, running, revealCount]);
+
+  // The shell computes these for the same reason it computes `chartData`: the screen
+  // is handed a model rather than deriving one.
+  const bands = useMemo(() => (result ? eventBands(result.events) : []), [result]);
+  const wholePullCount = useMemo(
+    () => (result ? result.events.filter((e) => !isLocatable(e)).length : 0),
+    [result],
+  );
+
+  /**
+   * Opens the pull log focused on `rpm`, or on nothing when null. Both the bands and
+   * the whole-pull note go through here.
+   * @param {number|null} rpm
+   */
+  const selectLogRpm = (rpm) => {
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'logFocusRpm', value: rpm });
+    goSection('dyno', 'log');
+  };
 
   // `buildHistogram`/`applyHistogram` moved to DataScreen.jsx: DYNO's DATALOG
   // section was their only caller, and everything they touch (result, histogram,
   // ve) is plain store state DataScreen can read for itself.
 
+  // During a pull the tach follows the pull's own clock, which includes the idle and the
+  // overrun either side of the sweep; otherwise it reads the last point drawn.
   const currentRpm = running
     ? dynoRpm
     : (result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500);
-  const scores = useMemo(() => {
-    if (!result || running) return null;
-    const tuning = computeTuningScore(result);
-    const engineer = computeEngineerScore({
-      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
-      exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
-    });
-    const pull = computePullScore({ peakHp: result.peakHp, peakTq: result.peakTq, tuningScore: tuning.score, engineerScore: engineer.score });
-    return { tuning, engineer, pull };
-  }, [result, running, engineConfig, turboOn, turbine, compressorIdx, exhaustDiaError, dutyPreview, engineDerived, fuel, mods, boostCurve]);
+  // A SCORE IS A MEASUREMENT, SO IT IS TAKEN ONCE AND KEPT.
+  //
+  // This was a memo that recomputed the Engineer and Pull scores from whatever hardware
+  // was selected RIGHT NOW, and graded them against the LAST pull's dyno output. Change
+  // a turbo after a pull and that finished run was silently re-graded as though it had
+  // been made on the new build — a number the engine never produced, from a session
+  // that never happened. The Pull Score moved with it, so it could climb past
+  // `bestScore` with nobody running anything, and the badge lit up NEW BEST for a
+  // figure that was never banked. The app's whole method is change one thing, MEASURE,
+  // revert; a score that moves without a measurement contradicts the thing it teaches.
+  //
+  // So `doRun` banks what it computed (BANK_PULL) and this only reads it back. The one
+  // thing still decided here is WHEN to show it: `result` is replaced at sweep start,
+  // so publishing the banked scores during `running` would give away the next pull's
+  // final grade before its reveal has drawn a single point.
+  const scores = running ? null : pullScores;
+
+  // True when the setup has moved since the pull those scores came from. The evidence
+  // stays on screen and is labelled, rather than being deleted: erasing the previous
+  // pull would hide the exact before/after comparison the player is in the middle of
+  // making. See ScoreScreen and StatsScreen for how each says so.
+  const scoresStale = !!scores && scores.signature !== buildSignature;
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
@@ -719,26 +995,44 @@ export function EcuLabApp() {
     const onDyno = tab === 'dyno' && running && result;
     // Which screen the running engine is heard on.
     const onLive = tab === 'dash' && (live.running || live.cranking);
-    // And whether it is heard at all: one of those two has to be on screen.
-    const audible = Boolean((onDyno || onLive) && soundOn);
+    // The drag run drives the same engine: revs sweep within each gear and drop on every
+    // shift, so the whole pass is audible. The trace is the same one the strip is
+    // drawing, so what is heard and what is seen are one run.
+    const onDrag = tab === 'drag' && dragRunning && dragResult && result;
+    const dragPt = onDrag
+      ? (dragResult.trace.find((pt) => pt.t >= dragT) ?? dragResult.trace[dragResult.trace.length - 1])
+      : null;
+    // And whether it is heard at all: one of those has to be on screen.
+    const audible = Boolean((onDyno || onLive || onDrag) && soundOn);
 
-    const rpm = onDyno ? currentRpm : live.rpm;
+    const rpm = onDrag ? (dragPt?.rpm ?? 0) : onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
-    const point = onDyno ? dynoPt : (live.running ? live.live : null);
-    // Throttle position through a pull. The sweep is wide open; the bookends are not, and
-    // the overrun is a closed throttle — which is what makes the blow-off fire when the
-    // pull ends, exactly where you would hear it on a real dyno.
+    // The operating point the note is rendered from. The drag trace carries no cylinder
+    // pressure or gas temperature of its own, but its torque curve IS the last pull's, so
+    // it borrows that pull's measured point nearest the engine speed it is at — the same
+    // engine, measured at the same revs.
+    const point = onDyno ? dynoPt
+      : onDrag ? nearestPoint(result.points, rpm)
+        : (live.running ? live.live : null);
+    // Throttle position. A dyno sweep is wide open; the bookends are not, and the overrun
+    // is a closed throttle — which is what makes the blow-off fire when the pull ends,
+    // exactly where you would hear it on a real dyno. On the strip it is the DRIVER'S
+    // throttle, which is why a car being feathered off a spinning tyre sounds different
+    // from one that hooked.
     const load = onDyno
       ? (dynoPhase === 'sweep' ? 1 : dynoPhase === 'spooldown' ? 0.04 : 0.10)
-      : clamp((live.effThrottle ?? 0) / 100, 0, 1);
-    const cut = onLive ? live.fuelCut : Boolean(onDyno && dynoPhase === 'spooldown');
+      : onDrag ? (dragPt?.throttle ?? 1)
+        : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+    const cut = onLive ? live.fuelCut
+      : onDrag ? Boolean(dragPt?.limiter)
+        : Boolean(onDyno && dynoPhase === 'spooldown');
 
     const drive = acousticDrive({
       rpm, derived: engineDerived, point, turboOn,
       compressor: COMPRESSOR_OPTS[compressorIdx],
       // The sweep only ever measures wide-open points, so the idle and overrun either
-      // side of it have to borrow the nearest one and scale it by throttle.
-      throttle: onDyno ? load : 1,
+      // side of it — and every point of a drag pass — borrow one and scale it by throttle.
+      throttle: onDyno || onDrag ? load : 1,
       // No injectors, no combustion, so the cylinder reaches the exhaust valve at motored
       // pressure. The renderer does not need to know what a rev limiter is.
       fuelCut: cut,
@@ -766,26 +1060,47 @@ export function EcuLabApp() {
       openExhaust: Boolean(mods.exhaust || mods.headers),
       intakeFitted: Boolean(mods.intake),
       // Boost only counts while the throttle is open; dropping it on the overrun is what
-      // the renderer watches for to vent.
-      boostPsi: onDyno && dynoPhase !== 'sweep' ? 0 : (point?.boostPsi ?? 0),
+      // the renderer watches for to vent. The drag model carries no boost trace of its
+      // own, so the whistle and the blow-off sit out the pass rather than being given a
+      // number nothing measured at that throttle.
+      boostPsi: (onDyno && dynoPhase !== 'sweep') || onDrag ? 0 : (point?.boostPsi ?? 0),
       volume,
     };
 
     // One call. The crank now turns inside the audio worklet at sample resolution, so
     // nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
+
+    // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
+    // trace steps up; an automatic's converter whines while it slips off the line and
+    // fades as road speed couples it up — both straight from the solved pass.
+    const box = GEARBOX_OPTS[car.boxIdx] ?? GEARBOX_OPTS[0];
+    const automatic = box.box === 'auto';
+    const gear = onDrag ? (dragPt?.gear ?? 0) : 0;
+    if (audible && gear > dragGearRef.current && dragGearRef.current > 0) {
+      shiftEngineAudio(a, { automatic });
+    }
+    dragGearRef.current = gear;
+    const slip = onDrag && automatic && box.couplingSpeedMs > 0
+      ? 1 - clamp((dragPt?.v ?? 0) / box.couplingSpeedMs, 0, 1)
+      : 0;
+    if (slip > 0 || converterOnRef.current) {
+      converterEngineAudio(a, { rpm, slip, audible });
+      converterOnRef.current = slip > 0;
+    }
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressorIdx,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
-      running, currentRpm, revealCount, result, tab]);
+      running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT, car.boxIdx]);
 
   // Whether anything should be making a sound right now. When nothing should, the graph
   // is silenced at once and the audio context suspended a moment later, so a stopped
   // engine costs no DSP at all — see `setEngineAudioActive`.
   const sounding = soundOn && (
     (tab === 'dash' && (live.running || live.cranking))
-    || (tab === 'dyno' && running));
+    || (tab === 'dyno' && running)
+    || (tab === 'drag' && (dragRunning || treePhase > 0)));
   useEffect(() => {
     const a = audioRef.current;
     if (a) setEngineAudioActive(a, sounding);
@@ -861,7 +1176,7 @@ export function EcuLabApp() {
             />
             <StatsScreen
               active={dashSection === 'stats'} onToggle={toggleDashSection}
-              scores={scores}
+              scores={scores} scoresStale={scoresStale}
             />
             <HealthScreen
               active={dashSection === 'health'} onToggle={toggleDashSection}
@@ -948,7 +1263,7 @@ export function EcuLabApp() {
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
+            {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 4 }); changeTab('drag'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Activity}>Dyno Cell</Eyebrow>
             <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
             <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
@@ -989,12 +1304,12 @@ export function EcuLabApp() {
                   <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
                 </div>
 
-                {prevResult && !running && (() => {
-                  const dHp = result.peakHp - prevResult.peakHp;
-                  const dTq = result.peakTq - prevResult.peakTq;
+                {runs[1] && !running && (() => {
+                  const prev = runs[1];
+                  const dHp = result.peakHp - prev.peakHp;
+                  const dTq = result.peakTq - prev.peakTq;
                   const knockNow = result.events.filter((e) => e.type === 'knock').length;
-                  const knockPrev = prevResult.events.filter((e) => e.type === 'knock').length;
-                  const dKnock = knockNow - knockPrev;
+                  const dKnock = knockNow - prev.knocks;
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
                   return (
                     <Panel tight style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1007,26 +1322,39 @@ export function EcuLabApp() {
                     </Panel>
                   );
                 })()}
+              </>
+            )}
 
-                {!running && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                    {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE']].map(([id, label]) => {
-                      const on = dynoView === id;
-                      const flag = id === 'log' && result.events.length > 0;
-                      return (
-                        <button key={id} onClick={() => goSection('dyno', id)} style={{
-                          flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
-                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
-                          color: on ? T.accInk : T.ink2, position: 'relative',
-                        }}>
-                          {label}
-                          {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+            {/* HISTORY sits outside the `result` gate deliberately: its data (`runs`)
+                outlives `result` — it is restored from storage on a cold start, while
+                `result` is not persisted and is cleared by APPLY_PRESET — so it is the
+                first DYNO section for which that is true. When there is no result yet,
+                the switcher below shows ONLY the history entry, since the other four
+                lead to sections that render nothing without one. */}
+            {!running && (result || runs.length > 0) && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+                {(result
+                  ? [['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]
+                  : [['history', 'HISTORY']]
+                ).map(([id, label]) => {
+                  const on = dynoView === id;
+                  const flag = id === 'log' && result && result.events.length > 0;
+                  return (
+                    <button key={id} onClick={() => goSection('dyno', id)} style={{
+                      flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
+                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
+                      color: on ? T.accInk : T.ink2, position: 'relative',
+                    }}>
+                      {label}
+                      {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
+            {result && (
+              <>
                 {/* DYNO's gating is irregular ON PURPOSE, not four uniform
                     `dynoView === x` checks like TUNE's. While a pull is running the
                     switcher above is hidden and CURVES is the only view that can show
@@ -1036,7 +1364,21 @@ export function EcuLabApp() {
                     starts instead of falling back to the live curves. Preserve every
                     condition exactly. */}
                 {(running || dynoView === 'result') && (
-                  <ResultScreen chartData={chartData} engineDerived={engineDerived} />
+                  <ResultScreen
+                    chartData={chartData}
+                    engineDerived={engineDerived}
+                    ghostLabel={ghostLabel(ghost, pinnedRunId)}
+                    // `bands` is memoised on `result`, which is banked at sweep START —
+                    // same hazard `scores` guards a few lines up, with the same fix:
+                    // hide it for the duration of `running` rather than let it leak the
+                    // next pull's full knock/lean tint onto a chart that has not drawn a
+                    // trace yet. A band clicked mid-reveal would also dispatch and
+                    // navigate to a log gated on `!running`, doing nothing for seconds
+                    // and then jerking the view once the pull finishes.
+                    bands={running ? [] : bands}
+                    wholePullCount={running ? 0 : wholePullCount}
+                    onSelectRpm={selectLogRpm}
+                  />
                 )}
 
                 {!running && dynoView === 'data' && (
@@ -1048,10 +1390,29 @@ export function EcuLabApp() {
                 )}
 
                 {!running && dynoView === 'score' && scores && (
-                  <ScoreScreen scores={scores} />
+                  <ScoreScreen scores={scores} stale={scoresStale} />
                 )}
               </>
             )}
+
+            {!running && dynoView === 'history' && (
+              <HistoryScreen />
+            )}
+          </div>
+        )}
+
+        {/* ---------- DRAG: put the engine in a car and run the quarter ---------- */}
+        {/* `torqueCurveNm`, `runDrag` and the playback clock are the shell's, for the
+            same reason the dyno reveal is: the run needs the audio context and a timer
+            that outlives a render. The screen reads the solved run back out of the
+            store and draws it. */}
+        {tab === 'drag' && (
+          <div style={{ padding: 16 }}>
+            {journeyStep === 4 && <JourneyBanner step={4} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
+            <DragScreen
+              section={dragSection} onToggle={toggleDragSection}
+              result={result} engineDerived={engineDerived} onRun={runDrag}
+            />
           </div>
         )}
       </AppShell>

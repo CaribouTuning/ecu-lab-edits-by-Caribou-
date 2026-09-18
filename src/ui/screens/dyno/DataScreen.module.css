@@ -10,13 +10,6 @@
 /* Prose emphasis inside the ExpandableInfo panels and the datalog rows. */
 .em { color: var(--ink); }
 
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: var(--sp-xl);
-}
-
 /* 10px border-radius here is deliberately off the radius ramp (9/12 are the
    neighbours) rather than snapped onto either — same call as BUILD's
    boost-columns panel. */
@@ -25,9 +18,26 @@
   border-radius: 10px;
   background: var(--panel2);
   overflow: hidden;
+  margin-bottom: var(--sp-xl);
 }
 .card[data-tone='danger'] { border-color: var(--danger); }
 .card[data-tone='warn'] { border-color: var(--warn); }
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: var(--sp-md) 12px 0;
+}
+
+/* 560px is the project's one breakpoint — see the note in tokens.css. Below it,
+   four StatTiles (74px content-box floor + 20px padding + 2px border = 96px
+   each, plus three 6px gaps) need 402px, which does not fit inside a phone
+   viewport once the DYNO body padding, card border and grid side padding are
+   subtracted. Two-up needs only 198px, so it is the base above. */
+@media (min-width: 560px) {
+  .gauges { grid-template-columns: repeat(4, 1fr); }
+}
 
 .cardHead {
   display: flex;
@@ -54,6 +64,17 @@
 }
 .card[data-tone='danger'] .cardStat { color: var(--danger); }
 .card[data-tone='warn'] .cardStat { color: var(--warn); }
+
+/* Beneath the gauge grid — a gauge's only verdict is StatTile's colour, and
+   colour alone reaches a sighted user with full-colour vision. These sentences
+   carry the same verdict in prose, so everyone gets it. */
+.riskNotes { padding: var(--sp-sm) 12px 0; }
+.riskNote {
+  font-size: var(--fs-xs);
+  color: var(--danger-ink);
+  line-height: 1.4;
+}
+.riskNote + .riskNote { margin-top: 2px; }
 
 .cardBody { padding: 4px 12px var(--sp-md); }
 
@@ -167,3 +188,79 @@
 }
 
 .actions { display: flex; gap: 8px; }
+
+.trackWrap {
+  position: relative;
+  margin: 0 0 var(--sp-md);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+
+/* Under the input, never over it. The band is a sibling that PRECEDES the range
+   input with no z-index on either, so painting order puts the input on top —
+   that is the structural guarantee the test asserts, because Vitest applies no
+   CSS and a rule living only here would be invisible to the suite.
+   `pointer-events: none` is belt-and-braces on top of that. */
+.trackBand {
+  position: absolute;
+  /* Flush to the wrap's padding box, which is already inside its 1px border —
+     an absolutely positioned child is laid out against the padding box, so an
+     inset here would be a second gap on top of the border. */
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: 3px;
+  /* Matches ResultScreen.jsx's `fillOpacity={0.13}` on the chart bands — the
+     same event, drawn twice, has to read the same weight both places. Change
+     one, change the other. */
+  opacity: 0.13;
+}
+.trackBand[data-tone='danger'] { background: var(--danger); }
+.trackBand[data-tone='warn'] { background: var(--warn); }
+.trackBand[data-tone='violet'] { background: var(--violet); }
+
+.track {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* The runnable track must not paint over the bands beneath it, and must not draw a
+   frame either — the frame is `.trackWrap`'s one border. Nothing in this project sets
+   `box-sizing: border-box`, so a border here would sit 1px inside the wrap's rather
+   than on the same pixels, and the track would read as a 2px double line. */
+.track::-webkit-slider-runnable-track {
+  height: 22px;
+  background: transparent;
+}
+.track::-moz-range-track {
+  height: 22px;
+  background: transparent;
+}
+
+.track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 26px;
+  /* (26 - 22) / 2 — centres the 26px thumb on the 22px track. */
+  margin-top: -2px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+.track::-moz-range-thumb {
+  width: 10px;
+  height: 26px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+
+.track:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }

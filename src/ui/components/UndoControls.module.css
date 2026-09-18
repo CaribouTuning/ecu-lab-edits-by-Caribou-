@@ -1,0 +1,39 @@
+.row {
+  display: flex;
+  /* 4px is not on the spacing scale: this pair reads as one two-part control,
+     not two separate buttons with page rhythm between them. --sp-xs (3px)
+     read as touching; --sp-sm (7px) split them visibly. Left raw. */
+  gap: 4px;
+  margin-left: auto;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  border: 1px solid var(--line);
+  /* 7px is not on the radius scale: --r-sm's 6px looked flush against this
+     button's 1px border at 30x26px, --r-md's 9px looked closer to a pill
+     than a square icon button. Left raw. */
+  border-radius: 7px;
+  background: var(--panel2);
+  color: var(--ink2);
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--line-hi);
+  color: var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}

@@ -474,6 +474,134 @@ describe('dyno sweep', () => {
     expect(overloaded.events.some((e) => e.type === 'pressure')).toBe(true);
     expect(overloaded.wear.piston).toBeGreaterThan(sane.wear.piston);
   });
+
+  it('gives every locatable event the RPM span it actually covered', () => {
+    // A deliberately awful build, so that several range events fire at once.
+    const r = stockPull({
+      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
+      turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
+      injectorCc: 400, ecuInjectorCc: 315,
+    });
+    const located = r.events.filter(S.isLocatable);
+    expect(located.length).toBeGreaterThan(0);
+    for (const e of located) {
+      expect(e.rpmEnd, `${e.type} ends before it starts`).toBeGreaterThanOrEqual(e.rpmStart);
+      expect(e.rpmStart, `${e.type} starts below the sweep`).toBeGreaterThanOrEqual(S.SWEEP_START_RPM);
+      expect(e.rpmEnd, `${e.type} ends above the sweep`).toBeLessThanOrEqual(r.points[r.points.length - 1].rpm);
+    }
+  });
+
+  // The span must be the RUN's own first and last point, not the whole sweep, for
+  // every one of the eight `groupRuns`-detected range types — not just knock. Each
+  // predicate below is the exact one `sweep.js` groups points by (see the
+  // `groupRuns(points, (p) => ...)` calls there), and each row's overrides are its own
+  // fixture, tailored to make that one type fire — a single shared fixture cannot
+  // produce all eight, since some (lean vs. rich, lean-off-boost vs. valve-on-boost)
+  // are mutually exclusive.
+  //
+  // Mutation caught (originally, on knock alone): rpmStart: SWEEP_START_RPM /
+  // rpmEnd: endRpm, which satisfies every bound-only check but tells the chart the
+  // event covered the whole sweep. Generalising this to a table keeps that same
+  // mutation catchable per type, by name — a mutation isolated to, say, `rich` would
+  // not have been caught by the old knock-only version at all.
+  const leanAfrAt = (row) => {
+    const afr = S.clone2D(S.DEFAULT_AFR);
+    afr[row] = afr[row].map(() => 15.5);
+    return afr;
+  };
+  /**
+   * The first contiguous run of points matching `matches` — mirrors `groupRuns`'
+   * first emitted run, so it lines up with `events.find`'s first event of a type even
+   * when the predicate turns on, off, and on again across the sweep (as `compressor`
+   * does under the wastegate-limited boost curve the fixture below uses: two separate
+   * over-range stretches, not one). A plain `.filter` would span both.
+   */
+  function firstRun(points, matches) {
+    const start = points.findIndex(matches);
+    if (start === -1) return [];
+    let end = start;
+    while (end + 1 < points.length && matches(points[end + 1])) end += 1;
+    return points.slice(start, end + 1);
+  }
+  it.each([
+    ['knock', (p) => p.knock, {
+      turboOn: true, boostCurve: [0, 2, 8, 12, 14, 14, 14, 14],
+    }],
+    ['pressure', (p) => p.pressureRisk, {
+      cfg: { ...STOCK, compression: 12.5 },
+      turboOn: true, boostCurve: [0, 4, 12, 18, 20, 20, 20, 20],
+      injectorCc: 850, ecuInjectorCc: 850,
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
+      sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
+    }],
+    ['fuel', (p) => p.fuelLimited, {
+      turboOn: true, boostCurve: [0, 4, 12, 18, 20, 20, 20, 20],
+      injectorCc: 315, ecuInjectorCc: 315,
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
+    }],
+    ['lean', (p) => p.leanRisk && !p.valveRisk, {
+      sweep: { afr: leanAfrAt(2) }, // row 2 = 100 kPa, naturally-aspirated WOT
+    }],
+    ['valve', (p) => p.valveRisk, {
+      turboOn: true, boostCurve: [0, 2, 8, 12, 14, 14, 14, 14],
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
+      sweep: { afr: leanAfrAt(0) }, // row 0 = 200 kPa, boosted
+    }],
+    ['rich', (p) => p.richRisk, {
+      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
+      turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
+      injectorCc: 400, ecuInjectorCc: 315,
+    }],
+    ['maf', (p) => p.mafFlag, {
+      mods: { ...S.DEFAULT_MODS, intake: true },
+    }],
+    ['compressor', (p) => p.compressorOver, {
+      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
+      turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
+      injectorCc: 400, ecuInjectorCc: 315,
+    }],
+  ])("takes the '%s' event's span from the points it was detected on", (type, matchesPoint, overrides) => {
+    const r = stockPull(overrides);
+    const e = r.events.find((ev) => ev.type === type);
+    // A type that stops firing in its own fixture must fail loudly here, not be
+    // silently skipped — that fixture no longer covering it IS the regression.
+    expect(e, `${type} did not fire in its fixture`).toBeTruthy();
+    const run = firstRun(r.points, matchesPoint);
+    expect(run.length, `${type}'s own predicate matched no points`).toBeGreaterThan(0);
+    expect(e.rpmStart).toBe(run[0].rpm);
+    expect(e.rpmEnd).toBe(run[run.length - 1].rpm);
+  });
+
+  it('leaves the three whole-pull findings unlocated', () => {
+    // The other half of the pair. injscale, cam and bearing are true everywhere, so
+    // a band for them would be a lie about where they apply.
+    const r = stockPull({
+      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
+      turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
+      injectorCc: 400, ecuInjectorCc: 315,
+    });
+    for (const type of ['injscale', 'cam', 'bearing']) {
+      const e = r.events.find((ev) => ev.type === type);
+      expect(e, `${type} did not fire in this fixture`).toBeTruthy();
+      expect(S.isLocatable(e), `${type} must not carry an RPM span`).toBe(false);
+      expect(e.rpmStart).toBeUndefined();
+    }
+  });
+
+  it('locates valve float from the float RPM, not from a points run', () => {
+    const cfg = { ...STOCK, camDuration: 290, springRate: 20 };
+    const r = stockPull({ cfg });
+    const float = r.events.find((e) => e.type === 'float');
+    expect(float).toBeTruthy();
+    expect(S.isLocatable(float)).toBe(true);
+    // The assertion this test's name actually promises: `rpmStart` is the float RPM
+    // itself, not an untouched `SWEEP_START_RPM` left over from a copy-pasted range
+    // event. `deriveEngine` exposes `floatRpm` directly — it does not need to be
+    // rederived here, `stockPull` already computes it as `derived` internally.
+    expect(float.rpmStart).toBe(Math.round(S.deriveEngine(cfg).floatRpm));
+    expect(float.rpmEnd).toBe(r.points[r.points.length - 1].rpm);
+    expect(float.rpmStart).toBeLessThan(float.rpmEnd);
+  });
 });
 
 describe('scoring', () => {
@@ -953,8 +1081,9 @@ describe('the spark advisor', () => {
     const over = ids(a.overAdvanced), past = ids(a.pastMbt);
     for (const id of over) expect(past.has(id)).toBe(false);
     // And every cell the advisor says has too much advance lands in exactly one of
-    // them, so nothing over a ceiling can go unreported.
-    const tooMuch = a.spark.filter((c) => c.delta < -1.0);
+    // them, so nothing over a ceiling can go unreported. Bracket rows are excluded:
+    // they are advised but never classified, because the engine cannot reach them.
+    const tooMuch = a.spark.filter((c) => !c.bracketOnly && c.delta < -1.0);
     expect(over.size + past.size).toBe(tooMuch.length);
   });
 
@@ -1024,11 +1153,22 @@ describe('the spark advisor', () => {
     // A turbo build never sees 200 kPa at 800 RPM. Those cells sit at the spark table's
     // 5 degree floor and their knock ceiling at idle speed is near zero, so judging them
     // reported the factory table as detonating at an impossible operating point.
+    //
+    // "Judging" means CLASSIFYING. A row immediately above the highest pressure the
+    // engine reaches is now advised, because `interp2` blends into it and the number in
+    // it is therefore genuinely in force (#43) — but it is marked `bracketOnly` and
+    // deliberately kept out of every fault list, which is what this test is protecting.
     const golfR = S.ENGINE_PRESETS.find((p) => p.id === 'ea888-r');
     const p = S.applyPreset(golfR);
-    const idleAtFullBoost = factoryAdvice(golfR).spark
-      .filter((c) => c.rpm === 800 && c.map > S.BARO_KPA + Math.min(...p.boostCurve) * S.PSI_TO_KPA);
-    expect(idleAtFullBoost).toHaveLength(0);
+    const unreachable = (c) => c.rpm === 800
+      && c.map > S.BARO_KPA + Math.min(...p.boostCurve) * S.PSI_TO_KPA;
+    const a = factoryAdvice(golfR);
+    expect(a.overAdvanced.filter(unreachable)).toHaveLength(0);
+    expect(a.pastMbt.filter(unreachable)).toHaveLength(0);
+    expect(a.underAdvanced.filter(unreachable)).toHaveLength(0);
+    expect(a.wrongMix.filter(unreachable)).toHaveLength(0);
+    // Anything that IS reported at those cells is advice-only, by construction.
+    expect(a.spark.filter(unreachable).every((c) => c.bracketOnly)).toBe(true);
   });
 
   it('still catches a fuel table that is genuinely off, and by the right amount', () => {
@@ -1060,6 +1200,111 @@ describe('the spark advisor', () => {
     expect(after.overAdvanced).toHaveLength(0);
     expect(after.pastMbt).toHaveLength(0);
     expect(after.underAdvanced).toHaveLength(0);
+  });
+});
+
+/**
+ * THE ADVICE HAS TO SURVIVE BEING READ BY INTERPOLATION.
+ *
+ * Issue #43. The advisor grades each cell at its row pressure, but the sweep reads the
+ * table at whatever manifold pressure the boost curve actually produced, and gets a blend
+ * of two rows. A player could follow every suggestion exactly and still meet knock at
+ * pressures no row sits on.
+ *
+ * The property asserted here is the one that matters and is worth stating plainly: TAKE
+ * THE ADVICE, GET NO KNOCK. It is checked across the two regimes that broke separately —
+ * boost that lands between rows, and boost that runs past the top row, where the table is
+ * clamped rather than interpolated and one cell is in force over 50 kPa of pressure.
+ */
+describe('spark advice survives interpolation', () => {
+  /** Builds a boosted build, takes every spark suggestion, and sweeps it. */
+  function followAdviceAndSweep({ psi, octIdx, intercooler, loadKpa }) {
+    const derived = S.deriveEngine(STOCK);
+    const mods = { ...S.DEFAULT_MODS, intercooler };
+    const turboOn = psi > 0;
+    const boostCurve = S.RPM.map(() => psi);
+    const fuel = S.OCTANE_OPTS[octIdx];
+    const turbine = S.TURBINE_OPTS[1], compressor = S.COMPRESSOR_OPTS[1];
+    const ve = S.computeHardwareVE(STOCK, mods, { turboOn, turbine, exhaustDia: 3.0, fuel });
+    const afr = S.clone2D(S.DEFAULT_AFR);
+    const common = {
+      ve, veTruth: ve, afr, derived, fuel, mods, turboOn, boostCurve, compressor, turbine,
+      injectorCc: 850, ecuInjectorCc: 850,
+      mafScalar: 1, mafErrorBase: S.mafErrorFactor(mods, turboOn),
+    };
+    const advised = S.clone2D(S.DEFAULT_TIMING);
+    S.calibrationAdvice({ ...common, timing: S.clone2D(S.DEFAULT_TIMING) })
+      .spark.forEach((c) => { advised[c.ri][c.ci] = c.suggested; });
+    return S.simulateSweep({
+      loadKpa, ve, veTruth: ve, timing: advised, afr, turboOn, boostCurve,
+      octaneBonus: fuel.bonus, octaneLabel: fuel.label, fuel,
+      injectorCc: 850, ecuInjectorCc: 850, injectorLabel: '850cc',
+      mods, mafScalar: 1, derived, turbine, compressor,
+    });
+  }
+
+  it('leaves no knock anywhere once the advice is taken', () => {
+    for (const psi of [0, 8, 14, 22]) {
+      for (const octIdx of [0, 3]) {
+        for (const intercooler of [false, true]) {
+          for (const loadKpa of [S.BARO_KPA, 70, 40]) {
+            const r = followAdviceAndSweep({ psi, octIdx, intercooler, loadKpa });
+            const knocking = r.points.filter((p) => p.knock);
+            expect(
+              knocking.length,
+              `following the spark advice still knocked at ${psi} psi on `
+              + `${S.OCTANE_OPTS[octIdx].label}, intercooler=${intercooler}, `
+              + `${Math.round(loadKpa)} kPa`,
+            ).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  // 14 psi peaks the manifold at 197.9 kPa, just under the 200 kPa row. That row is
+  // therefore never reached — but interpolation gives it 96% of the answer, and under the
+  // old reachability test it went ungraded entirely and kept whatever was already in it.
+  it('advises the row the sweep interpolates into but never reaches', () => {
+    const derived = S.deriveEngine(STOCK);
+    const mods = { ...S.DEFAULT_MODS };
+    const boostCurve = S.RPM.map(() => 14);
+    const fuel = S.OCTANE_OPTS[0];
+    const ve = S.computeHardwareVE(STOCK, mods, {
+      turboOn: true, turbine: S.TURBINE_OPTS[1], exhaustDia: 3.0, fuel,
+    });
+    const a = S.calibrationAdvice({
+      ve, veTruth: ve, timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      derived, fuel, mods, turboOn: true, boostCurve,
+      compressor: S.COMPRESSOR_OPTS[1], turbine: S.TURBINE_OPTS[1],
+      injectorCc: 850, ecuInjectorCc: 850,
+      mafScalar: 1, mafErrorBase: S.mafErrorFactor(mods, true),
+    });
+    const topRow = a.spark.filter((c) => c.ri === 0);
+    expect(topRow.length).toBeGreaterThan(0);
+    // Advised, but not accused: the engine cannot reach 200 kPa, so the player's number
+    // there is not wrong — it is merely in force somewhere it was never written for.
+    expect(topRow.every((c) => c.bracketOnly)).toBe(true);
+    expect(a.overAdvanced.some((c) => c.ri === 0)).toBe(false);
+  });
+
+  it('still says nothing is wrong with the factory calibrations', () => {
+    // The counterweight to everything above. Advice may be stricter than judgement;
+    // judgement may never cry wolf about a calibration the app itself generated.
+    for (const preset of S.ENGINE_PRESETS) {
+      const p = S.applyPreset(preset);
+      const a = S.calibrationAdvice({
+        ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+        mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+        compressor: S.COMPRESSOR_OPTS[p.compressorIdx], turbine: S.presetTurbine(preset),
+        injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+        mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+      });
+      expect(a.overAdvanced, `${preset.id} overAdvanced`).toHaveLength(0);
+      expect(a.pastMbt, `${preset.id} pastMbt`).toHaveLength(0);
+      expect(a.wrongMix, `${preset.id} wrongMix`).toHaveLength(0);
+    }
   });
 });
 

@@ -1,0 +1,98 @@
+/* DRAG — the car, the gearing, the tyres, and the time slip.
+   The strip scene has its own stylesheet (DragStrip.module.css); this one is the
+   interface around it, and every colour here is a token. */
+
+.intro {
+  margin: 0 0 var(--sp-lg);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+.run { margin-bottom: var(--sp-xl); }
+
+/* ---------- The time slip ---------- */
+
+.slip { margin-bottom: var(--sp-xl); }
+
+.slipTitle {
+  margin-bottom: var(--sp-md);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--ink2);
+}
+
+/* One row of readouts. Wraps rather than shrinking, so three tiles stay legible on a
+   narrow phone instead of squeezing to two characters each. */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-md);
+  margin-top: var(--sp-md);
+}
+
+.slipRead {
+  margin: var(--sp-md) 0 0;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+/* ---------- The three configuration sections ---------- */
+
+/* A control's own label, above it. */
+.label {
+  margin: var(--sp-lg) 0 var(--sp-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+/* The explanatory line under a control. */
+.note {
+  margin-top: var(--sp-xs);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--ink3);
+}
+
+.slider { width: 100%; accent-color: var(--acc); }
+
+/* Tyre diameter is geometry rather than a ratio the player is choosing between, so it
+   takes the chart's secondary hue — the same distinction EngineScreen draws with the
+   valve-spring slider. */
+.tyreSlider { width: 100%; accent-color: var(--cyan); }
+
+/* ---------- What the chosen gearing actually does ---------- */
+
+.gearing {
+  margin-top: var(--sp-lg);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: 1.8;
+  color: var(--ink2);
+}
+
+.gearingTitle {
+  margin-bottom: var(--sp-sm);
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--ink3);
+}
+
+/* A computed quantity inside a sentence. Cyan because it is a number being shown, not
+   a status — same rule as the formulas in the Learn guide. */
+.figure { color: var(--cyan); }
+
+.formula {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cyan);
+}
+
+/* Prose emphasis: lifts a phrase to full --ink out of the surrounding body text. A
+   reading aid, never a status. */
+.em { color: var(--ink); }

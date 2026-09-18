@@ -12,7 +12,7 @@ import { URL as NodeURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { tokens } from '../src/ui/tokens.js';
-import { T, heat, statusColor, statusTone, utilisationColor } from '../src/ui/theme.js';
+import { T, heat, statusColor, statusTone, utilisationColor, utilisationTone } from '../src/ui/theme.js';
 
 describe('T', () => {
   it('exposes every key the existing screens read', () => {
@@ -132,22 +132,69 @@ describe('pull-log event tones', () => {
     // it was.
     //
     // This classification moved from EcuLab.jsx to LogScreen.jsx (DYNO's screen
-    // split, PR 3) — re-pointed here rather than relaxed, same as
-    // button-call-sites.test.jsx re-points at the screens/ glob after each tab moves.
+    // split, PR 3), then from LogScreen.jsx to eventBands.js (Task 2, PR 5b) —
+    // re-pointed here rather than relaxed, same as button-call-sites.test.jsx
+    // re-points at the screens/ glob after each tab moves.
+    const source = readFileSync(new NodeURL('../src/ui/components/eventBands.js', import.meta.url), 'utf8');
+
+    // The derivation itself: severity >= 3 is danger, and it is the only threshold
+    // this file is allowed to hardcode a number against.
+    const hasSeverityCheck = /event\.severity\s*>=\s*3/.test(source);
+    expect(hasSeverityCheck).toBe(true);
+
+    // `maf` is the one genuine special case (a calibration observation, not damage —
+    // see `eventTone`'s own doc comment). Any OTHER type-name check here is exactly
+    // the hand-kept list this rule replaced, one entry at a time.
+    const typeChecks = [...source.matchAll(/event\.type\s*===\s*'([a-z]+)'/g)].map((m) => m[1]);
+    expect(typeChecks).toEqual(['maf']);
+  });
+
+  it('reads the same derivation in LogScreen, rather than a second inline copy', () => {
+    // This is the risk the block above names directly: `eventBands.js` reading clean
+    // proves nothing about `LogScreen.jsx` if a second, un-migrated tone rule sits
+    // there instead — this file only ever reads `eventBands.js`, so that regression
+    // would leave the test above green. `bearing` fell through a hand-kept list once
+    // already (see above); the fix was consolidating to one rule, and this pins that
+    // LogScreen actually imports it rather than keeping its own.
     const source = readFileSync(new NodeURL('../src/ui/screens/dyno/LogScreen.jsx', import.meta.url), 'utf8');
-    const classification = source
-      .split('\n')
-      .filter((l) => /const is(Danger|Warn|Violet) =/.test(l));
+    expect(source).toMatch(/import\s*\{[^}]*\beventTone\b[^}]*\}\s*from\s*['"].*eventBands\.js['"]/);
+    expect([...source.matchAll(/e\.type\s*===\s*'[a-z]+'/g)]).toEqual([]);
+  });
+});
 
-    expect(classification.length).toBe(3);
+describe('utilisationTone', () => {
+  it('names the band at both boundaries, in both directions', () => {
+    // Boundaries, not midpoints: an implementation using >= instead of > moves
+    // exactly these two values and nothing else, so midpoint-only assertions
+    // would pass it. Both directions of each boundary are pinned.
+    expect(utilisationTone(75)).toBe('ok');
+    expect(utilisationTone(75.1)).toBe('warn');
+    expect(utilisationTone(90)).toBe('warn');
+    expect(utilisationTone(90.1)).toBe('danger');
+  });
 
-    const derivesFromSeverity = classification.some((l) => /e\.severity/.test(l));
-    expect(derivesFromSeverity).toBe(true);
+  it('names a tone for every band, and every name is a real token', () => {
+    // This replaces a comparison of `utilisationColor(v)` against
+    // `T[utilisationTone(v)]` across a spread of values. `utilisationColor` IS
+    // `T[utilisationTone(v)]` now, so that reduced to `T[x] === T[x]` and held
+    // for any thresholds and any implementation. The property it claimed to
+    // guard — that the two cannot disagree — is true by construction, which is
+    // the point of the refactor. `statusTone` above went through this exact
+    // change for the exact same reason; this is deliberately the same test.
+    //
+    // The new way to fail is the dynamic lookup. `utilisationColor` used to name
+    // `T.ok`/`T.warn`/`T.danger` directly, so renaming a token broke at the
+    // reference. A rename now makes it return `undefined` — a colour that
+    // silently disappears rather than an error. That is what is worth pinning.
+    [0, 50, 75, 75.1, 85, 90, 90.1, 100].forEach((v) => {
+      const tone = utilisationTone(v);
+      expect(Object.keys(T)).toContain(tone);
+      expect(typeof utilisationColor(v)).toBe('string');
+      expect(utilisationColor(v)).toMatch(/^#[0-9a-f]{6}$/i);
+    });
+  });
 
-    // `maf` is the one legitimate name check: it is a calibration observation rather
-    // than damage, so it takes violet on identity, not on severity. Any OTHER type name
-    // appearing here means the lists are back.
-    const named = classification.flatMap((l) => [...l.matchAll(/e\.type === '([a-z]+)'/g)].map((m) => m[1]));
-    expect(named).toEqual(['maf']);
+  it('returns exactly the three utilisation names', () => {
+    expect(new Set([50, 80, 95].map(utilisationTone))).toEqual(new Set(['ok', 'warn', 'danger']));
   });
 });

@@ -24,7 +24,7 @@ import { Panel } from '../../primitives/Panel.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { Select } from '../../primitives/Select.jsx';
 import { ACTIONS } from '../../state/reducer.js';
-import { useBuild, useSession, useTune } from '../../state/StoreProvider.jsx';
+import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './EngineScreen.module.css';
 
@@ -63,6 +63,15 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
   const { tablesDirty } = tune;
   const [session] = useSession();
   const { result } = session;
+  // `dispatch` above is the store's one dispatch function — useHistory() would hand
+  // back the identical reference, so only `history` is taken from it here.
+  const [history] = useHistory();
+  // Only the two acts that replace the whole calibration get an offer here. A table
+  // edit is undoable too, but its undo lives above the grid on TUNE, where the edit
+  // happened — an offer on BUILD for something the player did on another tab would be
+  // a control with no visible cause.
+  const top = history.past[history.past.length - 1];
+  const undoable = top && (top.label.startsWith('Preset · ') || top.label === 'Reset to stock');
 
   const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
   const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
@@ -158,8 +167,12 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
           </div>
           <div className={styles.calloutRow}>
             {/* The one `danger` in the app. This prompt is raised ONLY when
-                `hasTuningWork()` is true, so confirming it always destroys
-                hand-edited VE/spark/fuel tables that nothing can restore. */}
+                `hasTuningWork()` is true, so confirming it always overwrites
+                hand-edited VE/spark/fuel tables. It is no longer irreversible —
+                APPLY_PRESET is undoable, and the offer to undo it renders a few
+                lines below — but it is still a whole calibration replaced in one
+                click, and the undo stack is 50 deep and lives only for the session,
+                so the warning stays. */}
             {/* Button has the same rest-spread-after-className shape as Panel and
                 Select, so `style`, not `className`, is what actually reaches it
                 without discarding its variant class. */}
@@ -171,6 +184,20 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
             </Button>
           </div>
         </div>
+      )}
+      {undoable && (
+        <Note tone="warn">
+          <span className={styles.undoRow}>
+            <span>{top.label} replaced your tune. Undo restores the tables and hardware as they were before it.</span>
+            <Button
+              variant="quiet" size="sm"
+              aria-label={`Undo ${top.label}`}
+              onClick={() => dispatch({ type: ACTIONS.UNDO })}
+            >
+              UNDO
+            </Button>
+          </span>
+        </Note>
       )}
       <Panel tight style={{ marginBottom: 13 }}>
         <div className={styles.displacementRow}><span>DISPLACEMENT</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>

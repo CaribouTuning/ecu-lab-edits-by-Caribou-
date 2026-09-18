@@ -44,7 +44,7 @@
  */
 
 import {
-  Activity, Gauge, Grid3x3, Info, Settings, Wrench,
+  Activity, Flag, Gauge, Grid3x3, Info, Settings, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
@@ -61,13 +61,17 @@ import styles from './AppShell.module.css';
 /** @typedef {import('./routing.js').Route} Route */
 
 /**
- * Four top-level destinations instead of seven. The three tuning tables and the
+ * Five top-level destinations instead of seven. The three tuning tables and the
  * fuel/ECU controls live under TUNE as sub-views — same depth, far less to scan, and
  * much bigger touch targets.
  *
- * These are the tabs that exist today, so there are four of them. #83 re-sections
- * TUNE and BUILD into more pages; a fifth item added before that lands would be a
- * destination with nothing behind it.
+ * These are the tabs that exist today, and every one of them has a screen behind it:
+ * DRAG is the fifth, added with the strip itself rather than ahead of it. Keep that
+ * rule — an item here with nothing behind it is a destination that goes nowhere.
+ *
+ * The order is the order the guided first run walks: design it, calibrate it, hear
+ * it, measure it, then race it. DRAG last is not decoration — it is the only tab that
+ * requires a completed dyno pull, so it reads as the end of the loop.
  *
  * @type {Array<{id: string, label: string, icon: React.ElementType}>}
  */
@@ -76,6 +80,7 @@ const NAV_ITEMS = [
   { id: 'build', label: 'BUILD', icon: Settings },
   { id: 'tune', label: 'TUNE', icon: Grid3x3 },
   { id: 'dyno', label: 'DYNO', icon: Activity },
+  { id: 'drag', label: 'DRAG', icon: Flag },
 ];
 
 /**

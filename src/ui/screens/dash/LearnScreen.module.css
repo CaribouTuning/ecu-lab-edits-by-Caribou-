@@ -8,8 +8,8 @@
   color: var(--ink3);
 }
 
-/* The three PART headings that break the sixteen articles into fundamentals, what
-   the ECU calculates, and the tuning process. */
+/* The four PART headings that break the twenty-one articles into fundamentals, what
+   the ECU calculates, the tuning process, and getting it to the ground. */
 .part {
   margin: 14px 0 8px;
   font-size: 11px;

@@ -1,13 +1,13 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: sixteen collapsible articles, in reading order, from
- * "an engine is an air pump" to what tuning cannot fix.
+ * The plain-language guide: twenty-one collapsible articles, in reading order, from
+ * "an engine is an air pump" to how to read a time slip.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all sixteen articles twenty
+ * engine panel, and without the memo React would walk all twenty-one articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -153,6 +153,52 @@ function LearnScreenInner({ active, onToggle }) {
       <ExpandableInfo title="16. Habits that keep engines alive">
         Target zero knock, not "acceptable" knock. Stay on the rich side of best power until you have confirmed margin. Never chase a number you have not measured. When something looks wrong, find the cause rather than compensating for it downstream — a MAF error corrected by bending the AFR table will be wrong again the moment load changes.
         <br /><br />And watch engine health on HOME. Damage here accumulates the way it does in reality: a few destructive pulls, not one dramatic failure.
+      </ExpandableInfo>
+
+      <div className={styles.part}>PART 4 · GETTING IT TO THE GROUND</div>
+
+      <ExpandableInfo title="17. A torque curve is only half of acceleration">
+        Everything up to here has been about making torque. The DRAG page is about what happens to it next, and it runs on four equations:
+        <br /><br /><span className={styles.formula}>wheelTorque = engineTorque × gearRatio × finalDrive</span><br />
+        <span className={styles.formula}>F_max = μ × N</span><br />
+        <span className={styles.formula}>ΔN = m × a × h ÷ L</span><br />
+        <span className={styles.formula}>F_aero = ½ × ρ × Cd × A × v²</span>
+        <br /><br />Gearing multiplies torque and divides speed by exactly the same factor. Grip sets a hard ceiling no amount of power can pass. Weight transfer raises that ceiling as you accelerate. Aerodynamic drag rises with the square of speed, so it is nothing at the line and everything at the trap.
+        <br /><br />This is why two engines with the same peak horsepower can run very different times, and why the <i>shape</i> of a powerband — how much area is under the curve, and where — matters more than its highest point.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="18. Gearing — torque multiplication, and what it costs">
+        A 3.79 first gear with a 3.54 final drive multiplies engine torque by <b className={styles.em}>13.4×</b> before it reaches the tyre. Nothing about the engine changed; that multiplication is why first gear lights the tyres and sixth cannot.
+        <br /><br />The trade is exact. The same ratio divides road speed by 13.4, so you run out of revs almost immediately. Gearing never creates energy — it trades force against speed:
+        <br /><br /><span className={styles.formula}>v = RPM × 2π × tyreRadius ÷ (60 × gearRatio × finalDrive)</span>
+        <br /><br />There is a second cost people forget. The engine, gearbox and wheels have to be spun up as well as pushed along, so they act as extra mass — and referred to the road that inertia scales with the <b className={styles.em}>square</b> of the ratio. A very short first gear can add twenty per cent to a car's effective weight while it is engaged, and by top gear that penalty has almost vanished. It is also why lighter wheels help more than the same weight taken out of the boot: wheel inertia is geared to the road at 1:1 in every gear.
+        <br /><br />Choosing ratios is really choosing where in the rev range you spend your time. Keep the engine near peak torque as much as possible and you will beat a car with more peak power that falls out of its band on every shift.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="19. Grip — the ceiling nothing gets past">
+        Torque you cannot transmit is just smoke:
+        <br /><br /><span className={styles.formula}>F_max = μ × N</span>
+        <br /><br />Measured values: street tyres <b className={styles.em}>0.8–0.9</b>, good summer tyres near <b className={styles.em}>1.0</b>, racing slicks <b className={styles.em}>1.7–1.9</b>, prepared drag surfaces higher again. Since F = ma, μ is directly a ceiling on acceleration in g — and on a rear-drive car only about 47% of the weight sits over the driven axle at rest, so the real launch limit is far below even that.
+        <br /><br /><b className={styles.em}>Weight transfer is what rescues it.</b> Accelerating shifts load rearward by ΔN = m·a·h ÷ L, so grip grows with the very acceleration it enables. That is why a rear-drive car out-launches its static weight distribution, why a taller centre of gravity genuinely helps at the strip even though it hurts everywhere else, and why all-wheel drive wins anyway — it starts with every kilogram already over a driven wheel.
+        <br /><br /><b className={styles.em}>One result surprises people.</b> When the tyre is the limit, every term carries the mass and it cancels:
+        <br /><br /><span className={styles.formula}>a = μ·g·f ÷ (1 − μ·h/L)</span>
+        <br /><br />Adding weight to a car that is already spinning its tyres does not slow the launch at all. It slows everything after it, once grip stops being what is holding the car back. You can watch this on the DRAG page: put a huge engine on street tyres, then change the body, and the 60-foot time barely moves while the ET does.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="20. What actually slows the car down">
+        Three forces oppose you, and they dominate at different points on the strip.
+        <br /><br /><span className={styles.formula}>F_aero = ½ × ρ × Cd × A × v²</span>
+        <br /><br />Aerodynamic drag rises with the <b className={styles.em}>square</b> of speed — double the speed, quadruple the force. It is almost nothing at launch and enormous at the trap, which is exactly why trap speed is a far better measure of power than elapsed time, and why elapsed time is dominated by traction and gearing instead. The ρ here is the same air density the engine model uses, from the same gas law.
+        <br /><br /><span className={styles.formula}>F_roll = Crr × m × g</span>
+        <br /><br />Rolling resistance is roughly constant, typically 1–1.5% of weight, and matters most where drag does not.
+        <br /><br />And whatever is left over is acceleration: <span className={styles.formula}>a = (F_tractive − F_aero − F_roll) ÷ m_effective</span>
+      </ExpandableInfo>
+
+      <ExpandableInfo title="21. Reading a time slip">
+        A time slip is a datalog, and it is read the same way — in pairs, looking for which number disagrees with which.
+        <br /><br /><b className={styles.em}>Sixty-foot time</b> is the launch: traction, gearing, and how well the car left the line. It is the single biggest lever on elapsed time for most street cars, and it has almost nothing to do with peak power.
+        <br /><br /><b className={styles.em}>Trap speed</b> is power to weight, because at the far end drag dominates and only sustained power holds speed against it. Two cars can share an elapsed time with very different trap speeds — the one trapping faster has more power and launched worse.
+        <br /><br /><b className={styles.em}>Elapsed time</b> is the combination, so improving it means working out which half is costing you. High trap but poor ET means grip and gearing, not more boost. Low trap means you actually need power. That is the same diagnostic habit as reading a pull log: find the cause, do not compensate for it downstream.
       </ExpandableInfo>
     </BuildSection>
   );

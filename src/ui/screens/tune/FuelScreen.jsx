@@ -15,6 +15,7 @@ import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useTune } from '../../state/StoreProvider.jsx';
@@ -42,7 +43,10 @@ export function FuelScreen({ calAdvice }) {
     <>
       <div className={styles.wrap}>
         <div className={styles.main}>
-          <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
+          <div className={styles.gridHead}>
+            <Eyebrow icon={Droplets}>Air-Fuel Ratio Target</Eyebrow>
+            <UndoControls />
+          </div>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
           <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} />
 

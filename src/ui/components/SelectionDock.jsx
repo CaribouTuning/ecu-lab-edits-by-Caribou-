@@ -61,6 +61,17 @@ function cellReference(kind, row, col, value) {
 }
 
 /**
+ * Every key a range input responds to by changing its own value — the complete set
+ * per the HTML spec's slider behaviour. A key release only commits the draft if it is
+ * one of these, so Task 3's keyboard-usable slider still works while no other release
+ * (a modifier's own keyup above all) can commit anything.
+ */
+const COMMIT_KEYS = new Set([
+  'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'Home', 'End', 'PageUp', 'PageDown',
+]);
+
+/**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against LOAD/RPM
  * @param {(next: number[][]) => void} props.setData
@@ -74,6 +85,41 @@ function cellReference(kind, row, col, value) {
  * @returns {React.ReactElement|null}
  */
 export function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind }) {
+  // The slider's in-flight value. React maps onChange on a range input to the `input`
+  // event, so a drag fires it continuously; committing each one would turn a single
+  // drag into eighteen undo steps. The draft holds the value while the finger is down
+  // and commits exactly once on release.
+  const [draft, setDraft] = React.useState(/** @type {number|null} */ (null));
+
+  // A new selection is a new cell: drop any draft left over from the last one, or the
+  // slider would open showing the previous cell's in-flight value.
+  const selKey = selection
+    ? `${selection.type}:${selection.row ?? ''}:${selection.col ?? ''}`
+    : '';
+  // Adjusting state when a prop changes, done during render rather than in a
+  // useEffect: an effect only runs after the browser has already painted this
+  // render, so for one frame `shown` would show the PREVIOUS cell's draft against
+  // the NEW cell's `current`. Comparing against the last-seen key here and
+  // resetting before this render is returned avoids that frame entirely.
+  const [prevSelKey, setPrevSelKey] = React.useState(selKey);
+  // ...and the same treatment for the TABLE moving under a still-selected cell. An
+  // undo (or any other external write) replaces `data` without touching `selection`,
+  // and an abandoned draft used to survive that: the grid went back to 10 while the
+  // dock's readout and slider still showed 42, and a late `pointerup` then wrote 42
+  // back over the undo and destroyed the redo branch with it. `apply()` already
+  // abandons the draft for exactly this reason when the write comes from a stepper;
+  // this is the same reasoning applied to a write from outside.
+  //
+  // Safe against a live drag: a drag commits nothing, so `data` keeps the same
+  // reference from the first `change` to the `pointerup` that ends it. The reference,
+  // not a deep compare — every write path here goes through `clone2D`.
+  const [prevData, setPrevData] = React.useState(data);
+  if (selKey !== prevSelKey || data !== prevData) {
+    setPrevSelKey(selKey);
+    setPrevData(data);
+    setDraft(null);
+  }
+
   if (!selection) return null;
   let current;
   if (selection.type === 'cell') current = data[selection.row][selection.col];
@@ -81,6 +127,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   else current = data.reduce((a, r) => a + r[selection.col], 0) / data.length;
 
   const apply = (delta) => {
+    // A stepper click is a new intent on this cell: any draft left over from a drag
+    // that never released is abandoned, not pending. Without this it survives and the
+    // NEXT release overwrites the value this click just committed.
+    setDraft(null);
     const next = clone2D(data);
     if (selection.type === 'cell') next[selection.row][selection.col] = Number(clamp(next[selection.row][selection.col] + delta, min, max).toFixed(2));
     else if (selection.type === 'row') next[selection.row] = next[selection.row].map((v) => Number(clamp(v + delta, min, max).toFixed(2)));
@@ -94,6 +144,33 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     else next.forEach((r) => { r[selection.col] = clamp(v, min, max); });
     setData(next);
   };
+  // What the slider and the big readout show: the finger's position while dragging,
+  // the table's committed value otherwise.
+  const shown = draft === null ? current : draft;
+  const commitDraft = () => {
+    if (draft === null) return;
+    // A drag that ends where it began is not an edit. Committing it would burn an
+    // undo slot AND, via SET_TABLE, clear build.presetId and set tablesDirty —
+    // disowning a factory calibration the player never actually changed.
+    //
+    // Cells only: for a row or column `current` is the MEAN, so landing on it is a
+    // real edit that flattens every cell to that value, not a no-op.
+    if (selection.type === 'cell' && draft === current) { setDraft(null); return; }
+    setAbs(draft);
+    setDraft(null);
+  };
+  // Only a key that actually moved the slider may commit. A WHITELIST, not a
+  // modifier blacklist: the browser's real sequence for undo is keydown Meta ->
+  // keydown z -> keyup z -> keyup META, and on that last event `metaKey` is already
+  // false (modifier flags on a keyup report the state AFTER it), so a
+  // `if (e.metaKey || e.ctrlKey) return;` guard lets it through and commits the
+  // pending draft — turning "press undo" into "commit an edit and burn an undo slot",
+  // the exact bug the guard was added for. Naming the keys that CAN change a range
+  // input's value leaves nothing to enumerate on the other side.
+  const onSliderKeyUp = (e) => {
+    if (!COMMIT_KEYS.has(e.key)) return;
+    commitDraft();
+  };
   const smallStep = decimals ? 0.1 : 1;
   const bigStep = decimals ? 1 : 5;
   let sel = 'Cell';
@@ -106,8 +183,8 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
-            {decimals ? current.toFixed(decimals) : Math.round(current)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
+          <div data-testid="dock-readout" style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
+            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
@@ -124,7 +201,13 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
           </Panel>
         );
       })()}
-      <input type="range" min={min} max={max} step={smallStep} value={current} onChange={(e) => setAbs(Number(e.target.value))} style={{ width: '100%', accentColor: T.acc }} />
+      <input
+        type="range" min={min} max={max} step={smallStep} value={shown}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={commitDraft}
+        onKeyUp={onSliderKeyUp}
+        style={{ width: '100%', accentColor: T.acc }}
+      />
       <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
         {/* One colour for all four: the +/- is already in the label. Painting the
             positive steps with the status green said "raising this cell is good", which
