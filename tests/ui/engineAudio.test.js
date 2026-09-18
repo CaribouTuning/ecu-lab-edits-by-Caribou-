@@ -1,80 +1,24 @@
 /**
- * Engine synthesiser tests, against a stub AudioContext.
+ * Engine audio graph tests, against a stub AudioContext.
  *
- * The point is not to check that it sounds good — nothing automated can. It is to check
- * that the renderer stays HONEST to the physics it is handed: that the pipe delay really
- * is 1 / 2f for the resonance the model reported, that the pulse train really does land
- * on the crank angles the layout fires at, and that "stop" really does stop.
+ * The point is not to check that it sounds good — nothing automated can, and the exhaust
+ * model's own acoustics are measured in tests/exhaustWaveguide.test.js. It is to check
+ * that the graph stays HONEST to what it is handed: that the tube network is rebuilt when
+ * and only when the build changes, that it adds no level curve of its own, and that
+ * "stop" really does stop.
  *
  * The last one is the reason this file exists at all. A parked gain from a scheduled
  * ramp is silent in every unit test and screaming in the browser.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { acousticDrive, deriveEngine, exhaustGeometry, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
   BARO_KPA, COMPRESSOR_OPTS, TURBINE_OPTS, OCTANE_OPTS, DEFAULT_VE, interp2,
   evaluatePoint } from '../../src/sim/index.js';
-import { createEngineAudio, silenceEngineAudio, updateEngineAudio }
-  from '../../src/ui/audio/engineAudio.js';
-
-/** A minimal AudioParam that records what was written to it. */
-function param(value = 0) {
-  return {
-    value,
-    targets: [], values: [],
-    setTargetAtTime(v) { this.targets.push(v); this.value = v; },
-    setValueAtTime(v) { this.values.push(v); this.value = v; },
-    cancelScheduledValues() {},
-    exponentialRampToValueAtTime() {},
-    linearRampToValueAtTime() {},
-  };
-}
-
-/**
- * A stub AudioContext, enough of one for the graph to build and be driven.
- *
- * Typed loosely on purpose: it implements the handful of factory methods the graph
- * calls and none of the other thirty on the real interface, so pinning it to
- * `AudioContext` would only mean stubbing methods nothing exercises.
- *
- * @returns {any}
- */
-function stubContext() {
-  const started = [];
-  const node = (extra = {}) => ({
-    connect() {}, disconnect() {}, start(when) { started.push(when ?? 0); }, ...extra,
-  });
-  return {
-    started,
-    sampleRate: 44100,
-    currentTime: 0,
-    destination: node(),
-    createGain: () => node({ gain: param(1) }),
-    createOscillator: () => node({ frequency: param(440), detune: param(0), type: 'sine', setPeriodicWave() {} }),
-    createBiquadFilter: () => node({ frequency: param(1000), Q: param(1), gain: param(0), type: 'lowpass' }),
-    createDelay: () => node({ delayTime: param(0.01) }),
-    createDynamicsCompressor: () => node({
-      threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25),
-    }),
-    createPeriodicWave: () => ({}),
-    createWaveShaper: () => node({ curve: null, oversample: 'none' }),
-    createBuffer: (_ch, len) => {
-      const data = new Float32Array(len);
-      return { length: len, getChannelData: () => data };
-    },
-    createBufferSource: () => node({ buffer: null, loop: false, playbackRate: param(1), onended: null }),
-    createStereoPanner: () => node({ pan: param(0) }),
-    // The exhaust falls back to this wherever an AudioWorklet module cannot be loaded,
-    // which is every strict-CSP page the app is served from — so the stub has no
-    // `audioWorklet` and these tests run the path that most players actually get.
-    createScriptProcessor: (len, _in, out) => node({
-      onaudioprocess: null,
-      bufferSize: len,
-      outputBuffer: { getChannelData: () => new Float32Array(len), numberOfChannels: out },
-    }),
-  };
-}
+import { createEngineAudio, geometryKey, setEngineAudioActive, shiftEngineAudio,
+  silenceEngineAudio, updateEngineAudio, wakeEngineAudio } from '../../src/ui/audio/engineAudio.js';
+import { stubContext } from './audioStub.js';
 
 const DERIVED = deriveEngine(DEFAULT_ENGINE_CONFIG);
 
@@ -98,7 +42,7 @@ function frameFor(overrides = {}) {
       compression: DEFAULT_ENGINE_CONFIG.compression, configuration,
       pipeDiaIn: 2.5, gasTempK: pt.egt + 273.15,
     }),
-    pipeDiaIn: 2.5, openExhaust: false, intakeFitted: false, boostPsi: 0,
+    openExhaust: false, intakeFitted: false, boostPsi: 0,
     ...overrides,
   };
 }
@@ -190,5 +134,85 @@ describe('what makes it sound real', () => {
     // And there is still a brickwall after the make-up gain to catch what the slow attack
     // lets through.
     expect(a.softClip.curve).not.toBeNull();
+  });
+});
+
+describe('when the tube network is rebuilt', () => {
+  const V6 = {
+    displacementL: 3.5, cyl: 6, bore: 95.5, compression: 10.3, configuration: 'V6',
+    pipeDiaIn: 2.5, gasTempK: 1050,
+  };
+  const key = (overrides) => geometryKey(exhaustGeometry({ ...V6, ...overrides }), false);
+
+  it('rebuilds when a turbine is fitted, because the converter section absorbs more', () => {
+    // A hand-picked key of lengths and areas missed this: a turbine moves no length and
+    // no area, so fitting one never reached the audio thread.
+    expect(key({ turboFitted: true })).not.toBe(key({}));
+  });
+
+  it('rebuilds when the compression ratio changes, because the clearance volume does', () => {
+    expect(key({ compression: 12.5 })).not.toBe(key({}));
+  });
+
+  it('does not rebuild for exhaust temperature wandering inside one step', () => {
+    expect(key({ gasTempK: 1060 })).toBe(key({ gasTempK: 1050 }));
+    expect(key({ gasTempK: 1150 })).not.toBe(key({ gasTempK: 1050 }));
+  });
+});
+
+describe('a gearchange', () => {
+  it('owns the master gain until it has finished, so a frame cannot fill in its gap', () => {
+    const ctx = stubContext();
+    const graph = createEngineAudio(ctx);
+    ctx.currentTime = 1;
+    updateEngineAudio(graph, frameFor());
+    const written = graph.master.gain.targets.length;
+
+    shiftEngineAudio(graph, { automatic: false });
+    ctx.currentTime = 1.1;
+    updateEngineAudio(graph, frameFor());
+    expect(graph.master.gain.targets.length).toBe(written);
+
+    ctx.currentTime = 1.4;
+    updateEngineAudio(graph, frameFor());
+    expect(graph.master.gain.targets.length).toBe(written + 1);
+  });
+});
+
+describe('sleeping', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('suspends the context shortly after nothing is sounding, and silences it at once', () => {
+    const ctx = stubContext();
+    const graph = createEngineAudio(ctx);
+    ctx.currentTime = 0.5;
+    updateEngineAudio(graph, frameFor());
+
+    setEngineAudioActive(graph, false);
+    expect(graph.master.gain.value).toBe(0);
+    expect(ctx.state).toBe('running');
+    vi.advanceTimersByTime(1000);
+    expect(ctx.state).toBe('suspended');
+  });
+
+  it('does not suspend if something starts sounding inside the grace period', () => {
+    const ctx = stubContext();
+    const graph = createEngineAudio(ctx);
+    setEngineAudioActive(graph, false);
+    setEngineAudioActive(graph, true);
+    vi.advanceTimersByTime(1000);
+    expect(ctx.suspends).toBe(0);
+  });
+
+  it('wakes for a one-off sound and goes back to sleep after it', async () => {
+    const ctx = stubContext({ state: 'suspended' });
+    const graph = createEngineAudio(ctx);
+    const woke = wakeEngineAudio(graph, 0.45);
+    vi.advanceTimersByTime(1);
+    await woke;
+    expect(ctx.state).toBe('running');
+    vi.advanceTimersByTime(2000);
+    expect(ctx.state).toBe('suspended');
   });
 });

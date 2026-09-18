@@ -37,8 +37,8 @@ import {
   simulateSweep, turbineWithCount, veRecommendations
 } from '../sim/index.js';
 import {
-  beepEngineAudio, createEngineAudio, silenceEngineAudio,
-  updateEngineAudio,
+  beepEngineAudio, createEngineAudio, setEngineAudioActive, silenceEngineAudio,
+  updateEngineAudio, wakeEngineAudio,
 } from './audio/engineAudio.js';
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -191,11 +191,13 @@ const TUTORIAL_STEPS = [
  *
  * The bookends are not decoration. A pull that teleports from nothing to redline and
  * stops gives the ear no reference for what changed, and never lets you hear the overrun
- * — which is where a boosted engine vents.
+ * — which is where a boosted engine vents. But they are only for the EAR: with sound off,
+ * or no audio in the browser at all, a pull is the sweep alone and nobody waits four and
+ * a half seconds for an idle they cannot hear.
  *
- * Exported because a pull now outlasts a test runner's default timeout, and a test that
- * waits for one should say WHY it waits that long by naming this rather than by carrying
- * a number that has to be remembered if the sequence is ever retimed.
+ * Exported because the full sequence outlasts a test runner's default timeout, and a test
+ * that waits for one should say WHY it waits that long by naming this rather than by
+ * carrying a number that has to be remembered if the sequence is ever retimed.
  */
 export const DYNO_PULL = Object.freeze({
   SETTLE_MS: 1400,
@@ -206,7 +208,7 @@ export const DYNO_PULL = Object.freeze({
   IDLE_RPM: 820,
 });
 
-/** How long a whole pull takes, milliseconds. */
+/** How long a whole pull takes with its audible bookends, milliseconds — the longest one can. */
 export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
@@ -486,9 +488,13 @@ export function EcuLabApp() {
   const testSound = () => {
     const a = ensureAudio();
     if (!a) { setSession('audioStatus', 'unavailable'); return; }
-    a.ctx.resume();
     beepEngineAudio(a, { hz: 220, seconds: 0.45, gain: 0.35 });
-    setSession('audioStatus', a.ctx.state === 'running' ? 'ok' : 'blocked');
+    // `resume()` is asynchronous: read straight after the call, the state is still
+    // 'suspended' on exactly the tap that unlocks audio, and the first TEST reported
+    // "blocked" while the beep played. So the verdict waits for the resume to settle.
+    wakeEngineAudio(a, 0.45)
+      .catch(() => {})
+      .then(() => setSession('audioStatus', a.ctx.state === 'running' ? 'ok' : 'blocked'));
   };
 
   // Persistence goes through the storage adapter, which picks whichever backend is
@@ -533,11 +539,17 @@ export function EcuLabApp() {
     const nextPulls = pullCount + 1;
     persistCareer(nextBest, nextTotal, nextPulls);
     const total = r.points.length;
-    const { SETTLE_MS, SWEEP_MS, DOWN_MS, REST_MS, IDLE_RPM: idleRpm } = DYNO_PULL;
+    // The idle and overrun either side of the sweep exist to be HEARD, so they only play
+    // when something can hear them.
+    const bookends = Boolean(a && soundOn);
+    const { SWEEP_MS, IDLE_RPM: idleRpm } = DYNO_PULL;
+    const SETTLE_MS = bookends ? DYNO_PULL.SETTLE_MS : 0;
+    const DOWN_MS = bookends ? DYNO_PULL.DOWN_MS : 0;
+    const REST_MS = bookends ? DYNO_PULL.REST_MS : 0;
     const topRpm = r.points[total - 1].rpm;
     const t0 = Date.now();
-    setSession('dynoPhase', 'settle');
-    setSession('dynoRpm', idleRpm);
+    setSession('dynoPhase', bookends ? 'settle' : 'sweep');
+    setSession('dynoRpm', bookends ? idleRpm : r.points[0].rpm);
     setSession('revealCount', 0);
 
     // Every value below is derived from the interval's OWN clock, never from a read of
@@ -752,7 +764,6 @@ export function EcuLabApp() {
       audible,
       cut,
       cranking: Boolean(onLive && live.cranking),
-      pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
       openExhaust: Boolean(mods.exhaust || mods.headers),
       intakeFitted: Boolean(mods.intake),
       // Boost only counts while the throttle is open; dropping it on the overrun is what
@@ -770,16 +781,16 @@ export function EcuLabApp() {
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
       running, currentRpm, revealCount, result, tab]);
 
-  // HARD SILENCE. Scheduled ramps (a blow-off, a flutter burst) can leave a gain parked
-  // open if a run ends mid-ramp, so stopping is its own operation rather than something
-  // the smoothed targets above eventually get around to.
+  // Whether anything should be making a sound right now. When nothing should, the graph
+  // is silenced at once and the audio context suspended a moment later, so a stopped
+  // engine costs no DSP at all — see `setEngineAudioActive`.
+  const sounding = soundOn && (
+    (tab === 'dash' && (live.running || live.cranking))
+    || (tab === 'dyno' && running));
   useEffect(() => {
     const a = audioRef.current;
-    if (!a) return;
-    const sounding = (tab === 'dash' && (live.running || live.cranking)) || (tab === 'dyno' && running);
-    if (sounding && soundOn) return;
-    silenceEngineAudio(a);
-  }, [tab, live.running, live.cranking, running, soundOn]);
+    if (a) setEngineAudioActive(a, sounding);
+  }, [sounding]);
 
   // Hard-stop audio on unmount or when the tab changes away from a sounding page.
   useEffect(() => {

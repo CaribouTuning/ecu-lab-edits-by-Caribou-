@@ -124,11 +124,10 @@ async function sweep() {
   collect();
   // `disabled={running}` is the entire mechanism behind the disabled-state
   // contrast fix, and losing it also lets a second pull fire mid-sweep. The label
-  // names the PHASE while running, and a pull opens by holding idle, so the first
-  // label after the click is IDLING… rather than SWEEPING….
-  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'IDLING…' })).disabled).toBe(true);
-  // A pull now runs settle -> sweep -> spooldown -> rest, so the wait is named from the
-  // sequence rather than carrying a number that has to be remembered if it is retimed.
+  // names the PHASE while running; jsdom has no audio, so the pull is the sweep alone.
+  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'SWEEPING…' })).disabled).toBe(true);
+  // Named from the pull sequence rather than carrying a number that has to be
+  // remembered if it is retimed.
   await waitFor(() => expect(screen.getByRole('button', { name: 'DATALOG' })).toBeTruthy(),
     { timeout: DYNO_PULL_MS + 2000 });
   clickButton('DATALOG');

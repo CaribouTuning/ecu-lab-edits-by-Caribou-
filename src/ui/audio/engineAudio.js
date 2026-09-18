@@ -1,66 +1,45 @@
 /**
- * The engine synthesiser.
+ * The engine's audio graph.
  *
  * Presentation only. Every number that describes the ENGINE arrives in an
- * `AcousticDrive` from `src/sim/acoustics.js`; nothing here works out what the engine is
- * doing. What lives here is how to turn those numbers into Web Audio nodes — which is a
- * rendering problem, not a physics one, and is why this file sits in `src/ui/`.
+ * `AcousticDrive` and an `exhaustGeometry` from `src/sim/acoustics.js`; nothing here
+ * works out what the engine is doing. What lives here is how to turn those numbers into
+ * Web Audio nodes — a rendering problem, not a physics one, which is why this file sits
+ * in `src/ui/`.
  *
  * HOW THE SOUND IS BUILT
  *
- * The note is a train of discrete exhaust pulses, not a waveform. That is the single
- * decision the whole file turns on. An oscillator sweeping in pitch sounds like a
- * synthesiser because it is one; a burst of individually scheduled pressure pulses,
- * arriving at the crank angles the engine actually fires at, sounds like an engine
- * because the ear resolves the pulses and hears their rhythm.
+ * The note itself is not built here at all. It comes out of `exhaustProcessor.js`, a
+ * one-dimensional acoustic model of the exhaust — cylinders, valves, primaries, collector,
+ * converter, muffler and an open mouth — run at audio rate in an AudioWorklet (or, where
+ * one cannot be loaded, on the main thread; see `createExhaustNode`). This file sends it
+ * the system's geometry when the build changes and the engine's state a few times a
+ * second, and the model decides what that sounds like.
  *
- * EVERY FIRING EVENT IS SCHEDULED, at every engine speed, right up to redline. There used
- * to be a looped buffer above the point where the ear stops resolving individual pulses,
- * on the reasoning that one node per event costs more than it is worth up there. It costs
- * about twenty milliseconds of main thread per second at 7000 rpm, which is two per cent
- * of a core — and the loop it replaced was doing real damage: a loop is pitched by playback
- * rate, so every resonance baked into it rises with engine speed like a tape running fast,
- * and its bandwidth is whatever it was rendered at. Measured, handing over to it at 5500
- * rpm cost 26 dB of content above 4 kHz and collapsed the harmonic comb from 30 dB to 11.
- * One mechanism at every speed is both cheaper to reason about and the only correct one.
+ * Around it sit the things a pipe model cannot make: induction noise, the turbo's
+ * whistle and rush, the blow-off and compressor flutter, the starter and knock, and the
+ * gearchange and converter noises the drag strip uses. Each is a filtered noise band or a
+ * tone whose level comes from the drive.
  *
- * Underneath the train sits a faint pulse-wave and sub oscillator that only fill in body.
- * If that layer is ever loud enough to notice on its own, the result stops sounding like
- * an engine.
+ * WHY THERE IS A LEVELLER. Exhaust pulses are sharp transients, so raw gain clips long
+ * before it sounds loud. A slow compressor lifts the running level while the pulses pass
+ * through it, and a soft brickwall after the make-up gain catches what gets past.
  *
- * Everything then passes through an exhaust model: two resonant bodies, a lowpass, and
- * a delay line with feedback standing in for the pipe itself. A pipe is a resonant tube
- * — a pulse travels down it, reflects off the open end, and comes back — and a short
- * feedback delay reproduces that directly. It is the largest single difference between
- * "filtered buzz" and something that sounds like it came out of a car.
- *
- * WHY THERE IS A LIMITER. Exhaust pulses are sharp transients, so raw gain clips long
- * before it sounds loud. Compressing the output lets the average level come up a long
- * way while the peaks stay clean, which is the same reason engine recordings are
- * compressed before anyone hears them.
+ * WHY IT SLEEPS. The exhaust model is real DSP — a V8 costs a noticeable share of a core
+ * — and it would otherwise run for the life of the page once sound had been used once.
+ * `setEngineAudioActive` suspends the whole context shortly after nothing is sounding and
+ * resumes it when something is.
  */
-
 
 import { ExhaustProcessor, PROCESSOR_NAME } from './exhaustProcessor.js';
 import EXHAUST_PROCESSOR_SOURCE from './exhaustProcessor.js?raw';
 
 /**
- * How each layout is voiced.
+ * Output trim per layout, applied after the exhaust model.
  *
- * A NOTE ON `oscGain` AND `subGain`. They are a steady tonal bed at the firing order and
- * at half of it, and they are deliberately small. A real engine's tone is not a drone with
- * pulses laid over it — the tone IS the pulse train, heard fast enough that the ear fuses
- * it. Anything held steady underneath is the most static thing in the mix by definition,
- * and static is what a listener identifies as synthetic: measured, running these an octave
- * louder buries a third of the spectrum above 2 kHz and flattens the peak-to-average ratio
- * that makes the note read as mechanical. They are here to fill the very bottom, not to
- * carry the note.
- *
- * These are mixing decisions, not physics — the physics of why a V8 rumbles is the
- * firing geometry in `acoustics.js`, and it arrives here as the event list. What is
- * here is how each layout's exhaust system is shaped: a V8's collectors are large and
- * loose and blur its uneven pulses into a rumble, an inline four's are small and tight
- * so its widely spaced pulses stay individually audible.
+ * A mixing decision, not physics: the model's own level already differs by layout for
+ * physical reasons (pulse spacing, primaries per collector), and this only evens out how
+ * loud each layout sits against the effects bed around it.
  */
 const VOICING = {
   I4: { exhaustGain: 1.20 },
@@ -104,6 +83,44 @@ const PARAM_HZ = 14;
 const EFFECT_TRIM = 0.45;
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** Gas-temperature step, K, below which the tube network is not rebuilt. */
+const GEOMETRY_TEMP_STEP_K = 25;
+
+/**
+ * Fields of an `exhaustGeometry` that follow from gas temperature alone. They are left
+ * out of {@link geometryKey} and stood in for by one quantised temperature, because a
+ * normally-fluctuating EGT would otherwise rebuild the delay lines on every frame.
+ * Twenty-five kelvin moves the speed of sound by about one per cent, which is below what
+ * anyone hears as a retune.
+ */
+const TEMPERATURE_FIELDS = new Set(['portK', 'tailK', 'cylinderK', 'cPrimary', 'cTail']);
+
+/**
+ * Signature of the geometry the waveguide was last built from.
+ *
+ * EVERY OTHER FIELD IS IN IT, and that is the point. A hand-picked list of "the ones
+ * that matter" missed the turbine and the compression ratio: fitting a turbo changes how
+ * much the converter section absorbs and a compression change moves the clearance volume,
+ * but neither moved a length or an area, so neither reached the audio thread until the
+ * exhaust temperature happened to cross a step — which, with the engine stopped, it never
+ * does. Enumerating the object means a field added to `exhaustGeometry` later is covered
+ * without anyone having to remember this function.
+ *
+ * @param {Record<string, any>} geometry an `exhaustGeometry`
+ * @param {boolean} openExhaust whether the muffler is replaced by straight pipe
+ * @returns {string} equal for two geometries exactly when the model would be built the same
+ */
+export function geometryKey(geometry, openExhaust) {
+  const parts = [openExhaust ? 'open' : 'muffled',
+    Math.round(geometry.portK / GEOMETRY_TEMP_STEP_K)];
+  for (const k of Object.keys(geometry).sort()) {
+    if (TEMPERATURE_FIELDS.has(k)) continue;
+    const v = geometry[k];
+    parts.push(`${k}=${typeof v === 'number' ? v.toPrecision(6) : JSON.stringify(v)}`);
+  }
+  return parts.join('|');
+}
 
 /**
  * Block size for the main-thread fallback below.
@@ -198,17 +215,14 @@ function createExhaustNode(ctx, ready) {
 /**
  * Builds the whole audio graph. Call once; it stays alive for the session.
  *
- * The graph holds no opinion about engine geometry at all: the firing order arrives per
- * frame on `drive.events` and is placed by the scheduler, so nothing here has to be built
- * per layout.
+ * The graph holds no opinion about engine geometry at all: the layout arrives with the
+ * exhaust geometry and is built into the waveguide's tube network, so nothing here has to
+ * be built per layout.
  *
  * @param {AudioContext} ctx
  * @returns {object} the node graph, or null if the context cannot be built
  */
 export function createEngineAudio(ctx) {
-  // A SAFETY NET, NOT A SOUND. It is set to catch the top few decibels of the loudest
-  // pulses and nothing else — see MASTER_TRIM for why it used to be doing far more than
-  // that, and why an engine cannot survive it.
   // A LEVELLER, NOT A LIMITER, and the distinction is the whole reason it is safe.
   //
   // The exhaust model's own dynamic range from idle to redline is about 20 dB, which is
@@ -371,6 +385,12 @@ export function createEngineAudio(ctx) {
     geomKey: '',
     // Far enough in the past that the first frame is never throttled away.
     paramsAt: -1e9,
+    // Until this context time a gearchange owns the master gain; see `shiftEngineAudio`.
+    shiftUntil: 0,
+    // Whether anything should be sounding, and the pending suspend when nothing is.
+    // See `setEngineAudioActive`.
+    active: false,
+    sleepTimer: null,
   });
 }
 
@@ -386,7 +406,6 @@ export function createEngineAudio(ctx) {
  * @property {boolean} audible whether this engine should be heard at all right now
  * @property {boolean} cut whether fuel is cut (limiter, overrun)
  * @property {boolean} cranking whether the starter is turning it
- * @property {number} pipeDiaIn exhaust pipe diameter, inches
  * @property {boolean} openExhaust whether a cat-back or headers are fitted
  * @property {boolean} intakeFitted whether an intake is fitted
  * @property {number} boostPsi current boost, for detecting a lift
@@ -431,13 +450,7 @@ export function updateEngineAudio(a, frame) {
   // the note. It says how long the tubes are and how hard the cylinder is pushing, and
   // the model works out what that sounds like.
   if (geometry) {
-    // Gas temperature is quantised into 25 K steps so a normally-fluctuating EGT does not
-    // rebuild the delay lines on every frame. Twenty-five kelvin moves the speed of sound
-    // by about one per cent, which is below what anyone hears as a retune.
-    const key = `${configuration}|${geometry.primaryLength.toFixed(3)}`
-      + `|${geometry.primaryArea.toFixed(6)}|${geometry.tailArea.toFixed(6)}`
-      + `|${geometry.tailLength.toFixed(3)}|${Math.round(geometry.portK / 25)}`
-      + `|${openExhaust ? 'open' : 'muffled'}`;
+    const key = geometryKey(geometry, openExhaust);
     if (key !== a.geomKey) {
       a.geomKey = key;
       a.pendingGeometry = { ...geometry, muffled: !openExhaust };
@@ -528,8 +541,7 @@ export function updateEngineAudio(a, frame) {
   // It used to carry a blanket `0.03 + load*0.045 + contMix*0.11` — constant white noise
   // rising to 0.185 at high load, where the mix is thinnest. Measured, it was the single
   // loudest thing above 2 kHz: muting it at 5500 rpm moved comb contrast in that band from
-  // 4.7 dB to 14.3 dB. A running engine is periodic
-  // (see CYL_DETUNE), and a steady hiss laid across it is the most synthetic-sounding
+  // 4.7 dB to 14.3 dB. A running engine is periodic, and a steady hiss laid across it is the most synthetic-sounding
   // thing it is possible to add, because it is the one component with no engine in it.
   //
   // Combustion roughness is real, but it is per-event — it belongs to the blowdown, where
@@ -545,7 +557,10 @@ export function updateEngineAudio(a, frame) {
   // throttle is loud because it reaches four bar. Measured end to end that spread is about
   // 17 dB, which is a real engine's, and none of it is asserted anywhere.
   a.outGain.gain.setTargetAtTime(MAKEUP_GAIN, t, 0.08);
-  a.master.gain.setTargetAtTime(audible ? 1 : 0, t, cut ? 0.015 : 0.06);
+  // A gearchange schedules its own dip and swell on this gain. A target written on top
+  // of it would be inserted INTO that schedule and pull the level straight back up
+  // through the gap, so while one is playing it is left alone.
+  if (t >= a.shiftUntil) a.master.gain.setTargetAtTime(audible ? 1 : 0, t, cut ? 0.015 : 0.06);
 }
 
 /**
@@ -567,6 +582,8 @@ export function shiftEngineAudio(a, { automatic }) {
   a.master.gain.setValueAtTime(a.master.gain.value, t);
   a.clunkG.gain.cancelScheduledValues(t);
   a.clunkFilt.frequency.cancelScheduledValues(t);
+
+  a.shiftUntil = t + (automatic ? 0.26 : 0.30);
 
   if (automatic) {
     a.master.gain.linearRampToValueAtTime(back * 0.62, t + 0.05);   // slips, never releases
@@ -653,4 +670,71 @@ export function silenceEngineAudio(a) {
     } catch { /* noop */ }
   }
   a.prevBoostPsi = 0;
+}
+
+/**
+ * How long the context keeps running after the last sound stops, seconds. Long enough
+ * for a silenced gain to settle and a blow-off tail to finish; short enough that a
+ * stopped engine costs nothing to speak of.
+ */
+const SLEEP_AFTER_S = 0.5;
+
+/**
+ * Suspends the context after `seconds`, unless something becomes active first.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {number} seconds grace period
+ */
+function scheduleSleep(a, seconds) {
+  clearTimeout(a.sleepTimer);
+  a.sleepTimer = setTimeout(() => {
+    a.sleepTimer = null;
+    if (!a.active && a.ctx.state === 'running') a.ctx.suspend?.();
+  }, seconds * 1000);
+}
+
+/**
+ * Says whether anything should be sounding, and puts the whole graph to sleep when not.
+ *
+ * THE EXHAUST MODEL IS NOT FREE. It is sample-rate JavaScript — a V8 is on the order of
+ * a fifth of a desktop core, several times that on a phone — and an AudioContext that is
+ * never suspended runs it, and every noise source around it, for the life of the page
+ * once sound has been used once: stopped engine, sound switched off, player on another
+ * tab. Where the worklet cannot load it runs on the MAIN thread, so that cost lands
+ * directly on the UI.
+ *
+ * So going inactive silences every layer at once (a scheduled ramp can otherwise leave a
+ * gain parked open) and suspends the context a moment later; going active resumes it.
+ * Every path that starts a sound — START, RUN, the sound toggle — already resumes the
+ * context from inside the user's tap, which is what unlocks audio in the first place, so
+ * resuming here is only ever undoing this function's own suspend.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {boolean} active whether an engine (or the drag tree) should be audible now
+ */
+export function setEngineAudioActive(a, active) {
+  if (active) {
+    a.active = true;
+    clearTimeout(a.sleepTimer);
+    a.sleepTimer = null;
+    if (a.ctx.state === 'suspended') a.ctx.resume?.();
+    return;
+  }
+  a.active = false;
+  silenceEngineAudio(a);
+  scheduleSleep(a, SLEEP_AFTER_S);
+}
+
+/**
+ * Wakes the context for a one-off sound — the TEST beep, a tree light — and lets it
+ * sleep again afterwards if nothing else is sounding by then.
+ *
+ * @param {object} a the graph from {@link createEngineAudio}
+ * @param {number} holdSeconds how long the one-off sound needs
+ * @returns {Promise<void>} settles once the context has resumed (or failed to)
+ */
+export function wakeEngineAudio(a, holdSeconds) {
+  const resumed = Promise.resolve(a.ctx.state === 'suspended' ? a.ctx.resume?.() : undefined);
+  if (!a.active) scheduleSleep(a, holdSeconds + SLEEP_AFTER_S);
+  return resumed;
 }
