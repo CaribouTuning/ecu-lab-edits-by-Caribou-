@@ -27,9 +27,10 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadCareer, saveCareer } from '../../src/storage.js';
-import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
+import EcuLab, { DYNO_PULL_MS, EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { installStubAudio } from './audioStub.js';
 
 // Records every saveCareer call (arguments, not return value) while keeping the real
 // implementation, so the guard test below can assert on what was WRITTEN and not just
@@ -246,7 +247,7 @@ describe('the live engine', () => {
 });
 
 describe('running a dyno pull', () => {
-  it('flips the button to SWEEPING… and sweeps the tach to the top of the run', async () => {
+  it('flips the button through the pull and sweeps the tach to the top of the run', async () => {
     // Two session writes nothing else pins. `running` is only legible as the RUN
     // button's label while the sweep is live — characterisation.test.jsx waits for the
     // idle label to come BACK, which a permanently-idle button satisfies immediately.
@@ -258,7 +259,10 @@ describe('running a dyno pull', () => {
     expect(tachReading()).toBe(1500);
 
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    // jsdom has no Web Audio, so there is nothing to hear the idle either side of the
+    // sweep with — and a pull that cannot be heard goes straight to the sweep.
     expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'IDLING…' })).toBeNull();
 
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -267,6 +271,74 @@ describe('running a dyno pull', () => {
     // The reveal ran to the end of the sweep, so the needle is up at the last logged
     // point rather than still on the first one.
     expect(tachReading()).toBeGreaterThan(1500);
+  });
+
+  describe('with audio available', () => {
+    /** @type {ReturnType<typeof installStubAudio>} */
+    let audio;
+    beforeEach(() => { audio = installStubAudio(); });
+    afterEach(() => { audio.restore(); });
+
+    it('holds idle before the sweep and comes back down after it, because it can be heard', async () => {
+      launch();
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      // A pull opens by holding idle before it loads, so this is the first phase label.
+      expect(screen.getByRole('button', { name: 'IDLING…' })).toBeTruthy();
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy(),
+        { timeout: DYNO_PULL_MS },
+      );
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'COMING BACK DOWN…' })).toBeTruthy(),
+        { timeout: DYNO_PULL_MS },
+      );
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: DYNO_PULL_MS },
+      );
+      // The whole sequence outlasts the runner's default per-test timeout — hence the
+      // explicit budget, named from the sequence itself so retiming it cannot silently
+      // break this.
+    }, DYNO_PULL_MS + 4000);
+
+    it('skips the bookends when sound is switched off, because nobody can hear them', async () => {
+      launchOnHome();
+      fireEvent.click(screen.getByTitle('Engine sound'));
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: 10000 },
+      );
+    });
+
+    it('reports a working TEST once the context has actually resumed, not before', async () => {
+      // `resume()` settles later. Reading the state straight after calling it saw
+      // 'suspended' on exactly the tap that unlocks audio, and the first TEST told the
+      // player the browser was blocking a beep they had just heard.
+      launchOnHome();
+      fireEvent.click(screen.getByRole('button', { name: 'TEST' }));
+      expect(await screen.findByText(/Audio is running/)).toBeTruthy();
+      expect(screen.queryByText(/still blocking audio/)).toBeNull();
+    });
+
+    it('suspends the audio context once nothing is sounding', async () => {
+      // The exhaust model is sample-rate JavaScript. Left running, a stopped engine
+      // costs a noticeable share of a core for the life of the page.
+      launch();
+      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      const [ctx] = audio.contexts;
+      expect(ctx).toBeTruthy();
+      await waitFor(() => expect(ctx.state).toBe('running'));
+      await waitFor(
+        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        { timeout: DYNO_PULL_MS + 2000 },
+      );
+      await waitFor(() => expect(ctx.state).toBe('suspended'), { timeout: 2000 });
+    }, DYNO_PULL_MS + 6000);
   });
 
   it('puts the histogram controls away once the correction is applied', async () => {
@@ -290,7 +362,7 @@ describe('running a dyno pull', () => {
 
     expect(screen.queryByRole('button', { name: 'APPLY CORRECTIONS TO VE' })).toBeNull();
     expect(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' })).toBeTruthy();
-  });
+  }, DYNO_PULL_MS + 4000);
 
   it('resets the tach to the start of the sweep when a second pull begins', async () => {
     // `doRun` (EcuLab.jsx:846) dispatches `revealCount: 0` before the reveal interval
@@ -325,7 +397,7 @@ describe('running a dyno pull', () => {
     // frame of the second pull — waiting for anything would let the 55 ms interval
     // catch up and paper over exactly the flash a player would see.
     expect(tachReading()).toBeLessThan(afterFirstPull);
-  });
+  }, DYNO_PULL_MS + 4000);
 });
 
 /**
@@ -435,7 +507,7 @@ describe('banking a pull', () => {
     expect(saved.pulls).toBe(1);
     expect(saved.total).toBeGreaterThan(0);
     expect(saved.best).toBe(saved.total);
-  });
+  }, DYNO_PULL_MS + 4000);
 
   // -----------------------------------------------------------------------------
   // Issue #29. The scorecard used to recompute the Engineer and Pull scores from the

@@ -28,15 +28,19 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS,
-  DEFAULT_MODS, EXHAUST_DIA_OPTS,
+  DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
   PSI_TO_KPA,
-  R_AIR, RPM, TURBINE_OPTS, calibrationAdvice, chargeTempK, clamp,
+  R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, idealExhaustDiameter, interp2, isLocatable, presetById,
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, isLocatable, presetById,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations
 } from '../sim/index.js';
+import {
+  beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
+  shiftEngineAudio, silenceEngineAudio, updateEngineAudio, wakeEngineAudio,
+} from './audio/engineAudio.js';
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, saveCareer } from '../storage.js';
@@ -220,6 +224,22 @@ export function dragPlaybackRate(etSeconds) {
   return Math.max(1, etSeconds / DRAG_PLAYBACK_MAX_S);
 }
 
+/**
+ * The measured sweep point closest in engine speed to `rpm`.
+ *
+ * @template {{rpm: number}} P
+ * @param {P[]} points a sweep, in ascending RPM
+ * @param {number} rpm engine speed wanted
+ * @returns {P} the nearest point
+ */
+function nearestPoint(points, rpm) {
+  let best = points[0];
+  for (const p of points) {
+    if (Math.abs(p.rpm - rpm) < Math.abs(best.rpm - rpm)) best = p;
+  }
+  return best;
+}
+
 // ============================================================
 /**
  * The application body. Exported so a caller can mount it inside its OWN
@@ -229,6 +249,37 @@ export function dragPlaybackRate(etSeconds) {
  * with a provider already around it, and is what the app and most tests use.
  * @returns {React.ReactElement}
  */
+/**
+ * A dyno pull is a SEQUENCE, not just a sweep, and these are its parts in milliseconds.
+ *
+ *   settle     hold idle, so you hear it running before it is loaded
+ *   sweep      load it and take it to redline, drawing the graph as it goes
+ *   spooldown  throttle shut; revs fall on the engine's own friction and pumping
+ *   rest       settle at idle again, and the pull is over
+ *
+ * The bookends are not decoration. A pull that teleports from nothing to redline and
+ * stops gives the ear no reference for what changed, and never lets you hear the overrun
+ * — which is where a boosted engine vents. But they are only for the EAR: with sound off,
+ * or no audio in the browser at all, a pull is the sweep alone and nobody waits four and
+ * a half seconds for an idle they cannot hear.
+ *
+ * Exported because the full sequence outlasts a test runner's default timeout, and a test
+ * that waits for one should say WHY it waits that long by naming this rather than by
+ * carrying a number that has to be remembered if the sequence is ever retimed.
+ */
+export const DYNO_PULL = Object.freeze({
+  SETTLE_MS: 1400,
+  SWEEP_MS: 1900,
+  DOWN_MS: 2100,
+  REST_MS: 900,
+  /** Idle the pull settles at either side of the sweep, RPM. */
+  IDLE_RPM: 820,
+});
+
+/** How long a whole pull takes with its audible bookends, milliseconds — the longest one can. */
+export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
+  + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
+
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
   // hooks that used to sit here are all one `route` now — see src/ui/routing.js.
@@ -267,9 +318,9 @@ export function EcuLabApp() {
   // and `route.section`, narrowed per tab, just below.
   const [session] = useSession();
   const {
-    loadKpa, soundOn, journeyStep, throttleInput, health,
+    loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
     result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
-    live, car, dragResult, dragRunning, dragT,
+    live, car, dragResult, dragRunning, dragT, treePhase,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
   // keeps reading the name it always read — and so a later task can move a tab's markup
@@ -296,6 +347,11 @@ export function EcuLabApp() {
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
+  // The drag pass's last gear, so a shift is heard once when it happens; and whether the
+  // converter whine was last left on, so it is switched off once rather than every frame.
+  const dragGearRef = useRef(0);
+  const converterOnRef = useRef(false);
+  const setSession = (field, value) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field, value });
   // Guards the persistence effect below: nothing may be written until the saved career
   // has actually been read back, or a cold start overwrites it with zeroes.
   const careerLoaded = useRef(false);
@@ -458,6 +514,12 @@ export function EcuLabApp() {
   // for the component's life, the same guarantee `makeToggleSection` gives its
   // per-tab closures above.
   const changeTab = useCallback((t) => {
+    // Browsers only let audio start from inside a user gesture, so take every tap on the
+    // nav as another chance to unlock it. Without this a player who never presses START
+    // first can navigate the whole app and hear nothing. `audioRef` is a ref, so reading
+    // it here costs this closure none of the stability the note above depends on.
+    const a = audioRef.current;
+    if (a && a.ctx.state === 'suspended') a.ctx.resume();
     navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   }, [navigate, dispatch]);
@@ -487,71 +549,7 @@ export function EcuLabApp() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     try {
-      const ctx = new Ctx();
-      const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
-
-      // An exhaust note is a PULSE TRAIN, not a smooth wave — each cylinder fires a
-      // sharp pressure spike. Building a periodic wave with many harmonics falling
-      // off ~1/n gives that pulse character, which sounds far more like an engine
-      // than a raw sawtooth does.
-      const N = 24;
-      const re = new Float32Array(N), im = new Float32Array(N);
-      for (let n = 1; n < N; n++) { re[n] = 0; im[n] = (1 / n) * Math.exp(-n / 14); }
-      const pulseWave = ctx.createPeriodicWave(re, im, { disableNormalization: false });
-
-      // Two slightly detuned pulse oscillators — real engines never hold a perfectly
-      // pure pitch, and the beating between them is what stops it sounding synthetic.
-      const oscA = ctx.createOscillator(); oscA.setPeriodicWave(pulseWave); oscA.frequency.value = 40;
-      const oscB = ctx.createOscillator(); oscB.setPeriodicWave(pulseWave); oscB.frequency.value = 40; oscB.detune.value = 9;
-      const oscG = ctx.createGain(); oscG.gain.value = 0.5;
-      const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 20;
-      const subG = ctx.createGain(); subG.gain.value = 0.35;
-
-      // Exhaust system: a resonant body plus an overall lowpass.
-      const body = ctx.createBiquadFilter(); body.type = 'bandpass'; body.frequency.value = 320; body.Q.value = 0.9;
-      const bodyG = ctx.createGain(); bodyG.gain.value = 0.8;
-      const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 900; filter.Q.value = 2;
-      filter.connect(master); body.connect(bodyG); bodyG.connect(master);
-      oscA.connect(oscG); oscB.connect(oscG); oscG.connect(filter); oscG.connect(body);
-      sub.connect(subG); subG.connect(filter);
-
-      const bufLen = 2 * ctx.sampleRate;
-      const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
-      const dch = buf.getChannelData(0);
-      for (let i = 0; i < bufLen; i++) dch[i] = (Math.random() * 2 - 1) * 0.35;
-
-      // Combustion roughness, amplitude-modulated at the firing rate so the noise
-      // arrives in pulses rather than as constant hiss.
-      const noise = ctx.createBufferSource(); noise.buffer = buf; noise.loop = true;
-      const ng = ctx.createGain(); ng.gain.value = 0.04;
-      const pulseLfo = ctx.createOscillator(); pulseLfo.type = 'sawtooth'; pulseLfo.frequency.value = 40;
-      const pulseDepth = ctx.createGain(); pulseDepth.gain.value = 0.03;
-      pulseLfo.connect(pulseDepth); pulseDepth.connect(ng.gain);
-      noise.connect(ng); ng.connect(filter);
-
-      // LOPE: valve overlap makes combustion inconsistent cylinder-to-cylinder at
-      // idle, so output surges and dips at a slow sub-multiple of the firing rate.
-      // That uneven pulsing is the classic cammed idle.
-      const lopeLfo = ctx.createOscillator(); lopeLfo.type = 'triangle'; lopeLfo.frequency.value = 6;
-      const lopeDepth = ctx.createGain(); lopeDepth.gain.value = 0;
-      lopeLfo.connect(lopeDepth); lopeDepth.connect(master.gain);
-      lopeLfo.start();
-
-      const indG = ctx.createGain(); indG.gain.value = 0;
-      const indFilt = ctx.createBiquadFilter(); indFilt.type = 'bandpass'; indFilt.frequency.value = 1800; indFilt.Q.value = 1.2;
-      const noise2 = ctx.createBufferSource(); noise2.buffer = buf; noise2.loop = true;
-      noise2.connect(indFilt); indFilt.connect(indG); indG.connect(master);
-
-      const whistle = ctx.createOscillator(); whistle.type = 'sine'; whistle.frequency.value = 3000;
-      const whistleG = ctx.createGain(); whistleG.gain.value = 0;
-      whistle.connect(whistleG); whistleG.connect(master);
-      const bovFilt = ctx.createBiquadFilter(); bovFilt.type = 'bandpass'; bovFilt.frequency.value = 2600; bovFilt.Q.value = 0.8;
-      const bovG = ctx.createGain(); bovG.gain.value = 0;
-      const noise3 = ctx.createBufferSource(); noise3.buffer = buf; noise3.loop = true;
-      noise3.connect(bovFilt); bovFilt.connect(bovG); bovG.connect(master);
-
-      oscA.start(); oscB.start(); sub.start(); noise.start(); noise2.start(); noise3.start(); pulseLfo.start();
-      audioRef.current = { ctx, oscA, oscB, oscG, sub, subG, master, filter, body, bodyG, ng, pulseLfo, lopeLfo, lopeDepth, indG, whistle, whistleG, bovG };
+      audioRef.current = createEngineAudio(new Ctx());
       return audioRef.current;
     } catch { return null; }
   };
@@ -563,6 +561,22 @@ export function EcuLabApp() {
   const toggleSound = () => {
     if (!soundOn) ensureAudio()?.ctx.resume();
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'soundOn', value: !soundOn });
+  };
+
+  // A deliberately obvious beep, for the same reason and from the same place: if this is
+  // silent the problem is the device or the browser — on an iPhone the physical
+  // ring/silent switch mutes web audio even at full volume — and not the engine model.
+  // Worth being able to prove.
+  const testSound = () => {
+    const a = ensureAudio();
+    if (!a) { setSession('audioStatus', 'unavailable'); return; }
+    beepEngineAudio(a, { hz: 220, seconds: 0.45, gain: 0.35 });
+    // `resume()` is asynchronous: read straight after the call, the state is still
+    // 'suspended' on exactly the tap that unlocks audio, and the first TEST reported
+    // "blocked" while the beep played. So the verdict waits for the resume to settle.
+    wakeEngineAudio(a, 0.45)
+      .catch(() => {})
+      .then(() => setSession('audioStatus', a.ctx.state === 'running' ? 'ok' : 'blocked'));
   };
 
   // The setup currently on screen — build, calibration and dyno load — signed. The
@@ -623,13 +637,48 @@ export function EcuLabApp() {
       }),
     });
     const total = r.points.length;
-    let i = 0;
+    // The idle and overrun either side of the sweep exist to be HEARD, so they only play
+    // when something can hear them.
+    const bookends = Boolean(a && soundOn);
+    const { SWEEP_MS, IDLE_RPM: idleRpm } = DYNO_PULL;
+    const SETTLE_MS = bookends ? DYNO_PULL.SETTLE_MS : 0;
+    const DOWN_MS = bookends ? DYNO_PULL.DOWN_MS : 0;
+    const REST_MS = bookends ? DYNO_PULL.REST_MS : 0;
+    const topRpm = r.points[total - 1].rpm;
+    const t0 = Date.now();
+    setSession('dynoPhase', bookends ? 'settle' : 'sweep');
+    setSession('dynoRpm', bookends ? idleRpm : r.points[0].rpm);
+    setSession('revealCount', 0);
+
+    // Every value below is derived from the interval's OWN clock, never from a read of
+    // `revealCount` or `dynoRpm`, so there is no stale-closure hazard in carrying them
+    // on the actions.
     revealTimer.current = setInterval(() => {
-      i += Math.ceil(total / 30);
-      // `i` is the interval's own counter, not a read of `revealCount`, so there is no
-      // stale-closure hazard in carrying the value on the action.
-      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: Math.min(i, total) });
-      if (i >= total) { clearInterval(revealTimer.current); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: false }); }
+      const el = Date.now() - t0;
+      if (el < SETTLE_MS) {
+        setSession('dynoPhase', 'settle');
+        setSession('dynoRpm', idleRpm + Math.sin(el / 90) * 14);
+      } else if (el < SETTLE_MS + SWEEP_MS) {
+        const f = (el - SETTLE_MS) / SWEEP_MS;
+        const idx = Math.min(total, Math.round(f * total));
+        setSession('dynoPhase', 'sweep');
+        setSession('revealCount', idx);
+        setSession('dynoRpm', r.points[Math.min(total - 1, Math.max(0, idx - 1))].rpm);
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS) {
+        // Engine braking: fast at first, easing as friction and pumping fall away with
+        // engine speed.
+        const f = (el - SETTLE_MS - SWEEP_MS) / DOWN_MS;
+        setSession('dynoPhase', 'spooldown');
+        setSession('revealCount', total);
+        setSession('dynoRpm', idleRpm + (topRpm - idleRpm) * Math.pow(1 - f, 2.2));
+      } else if (el < SETTLE_MS + SWEEP_MS + DOWN_MS + REST_MS) {
+        setSession('dynoPhase', 'rest');
+        setSession('dynoRpm', idleRpm + Math.sin(el / 90) * 12);
+      } else {
+        clearInterval(revealTimer.current);
+        setSession('dynoPhase', null);
+        setSession('running', false);
+      }
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
@@ -654,6 +703,8 @@ export function EcuLabApp() {
   const beep = (freq, dur, vol) => {
     const au = audioRef.current;
     if (!au || !soundOn) return;
+    // The tree lights before the car moves, while the engine audio may be asleep.
+    wakeEngineAudio(au, dur);
     const t0 = au.ctx.currentTime;
     const o = au.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
     const g = au.ctx.createGain(); g.gain.value = 0;
@@ -773,10 +824,10 @@ export function EcuLabApp() {
   };
 
   // ---- Engine audio -------------------------------------------------------
-  // Synthesised from the firing frequency: a 4-stroke fires cyl/2 times per
-  // crank revolution, so pitch tracks RPM and cylinder count exactly. A lowpass
-  // that opens with throttle gives the "load" character — closed throttle is
-  // muffled, wide open is bright and raspy.
+  // Nothing about the note is decided here. `acousticDrive` turns the operating point
+  // into the physical properties of the exhaust — firing geometry, blowdown pressure
+  // ratio, gas temperature — and the waveguide in `audio/engineAudio.js` renders them.
+  // These two functions only start and stop the engine.
   const startEngine = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
@@ -903,7 +954,11 @@ export function EcuLabApp() {
   // section was their only caller, and everything they touch (result, histogram,
   // ve) is plain store state DataScreen can read for itself.
 
-  const currentRpm = result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500;
+  // During a pull the tach follows the pull's own clock, which includes the idle and the
+  // overrun either side of the sweep; otherwise it reads the last point drawn.
+  const currentRpm = running
+    ? dynoRpm
+    : (result ? (result.points[Math.min(revealCount, result.points.length - 1)]?.rpm ?? 1500) : 1500);
   // A SCORE IS A MEASUREMENT, SO IT IS TAKEN ONCE AND KEPT.
   //
   // This was a memo that recomputed the Engineer and Pull scores from whatever hardware
@@ -929,94 +984,133 @@ export function EcuLabApp() {
 
   // Drive the audio from whichever engine is actually turning — and only while the
   // relevant page is open, so sound stops the moment you navigate away.
-  const prevBoostRef = useRef(0);
+  //
+  // Nothing here decides what the engine sounds like. `acousticDrive` turns the operating
+  // point into the physical properties of the exhaust note, and `updateEngineAudio`
+  // renders them; this effect only says which engine is running and how hard.
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    const t = a.ctx.currentTime;
 
     const onDyno = tab === 'dyno' && running && result;
+    // Which screen the running engine is heard on.
     const onLive = tab === 'dash' && (live.running || live.cranking);
-    // The drag run drives the same engine synth: revs sweep within each gear and drop
-    // on every shift, so the whole pass is audible. The trace is the same one the
-    // strip is drawing, so what is heard and what is seen are one run.
-    const onDrag = tab === 'drag' && dragRunning && dragResult;
+    // The drag run drives the same engine: revs sweep within each gear and drop on every
+    // shift, so the whole pass is audible. The trace is the same one the strip is
+    // drawing, so what is heard and what is seen are one run.
+    const onDrag = tab === 'drag' && dragRunning && dragResult && result;
     const dragPt = onDrag
       ? (dragResult.trace.find((pt) => pt.t >= dragT) ?? dragResult.trace[dragResult.trace.length - 1])
       : null;
-    const audible = onDyno || onLive || onDrag;
+    // And whether it is heard at all: one of those has to be on screen.
+    const audible = Boolean((onDyno || onLive || onDrag) && soundOn);
 
     const rpm = onDrag ? (dragPt?.rpm ?? 0) : onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
-    // The DRIVER'S actual throttle position is what shapes the note, which is why a car
-    // being feathered off a spinning tyre sounds different from one that hooked.
-    const load = onDrag ? (dragPt?.throttle ?? 1) : onDyno ? 1 : clamp((live.effThrottle ?? 0) / 100, 0, 1);
-    // The drag model carries no boost trace of its own, so the whistle and the blow-off
-    // valve sit out the run rather than being given a number nothing measured.
-    const boostNow = onDyno ? (dynoPt?.boostPsi ?? 0) : onDrag ? 0 : (live.live?.boostPsi ?? 0);
-    const cut = onLive ? live.fuelCut : onDrag ? !!dragPt?.limiter : false;
+    // The operating point the note is rendered from. The drag trace carries no cylinder
+    // pressure or gas temperature of its own, but its torque curve IS the last pull's, so
+    // it borrows that pull's measured point nearest the engine speed it is at — the same
+    // engine, measured at the same revs.
+    const point = onDyno ? dynoPt
+      : onDrag ? nearestPoint(result.points, rpm)
+        : (live.running ? live.live : null);
+    // Throttle position. A dyno sweep is wide open; the bookends are not, and the overrun
+    // is a closed throttle — which is what makes the blow-off fire when the pull ends,
+    // exactly where you would hear it on a real dyno. On the strip it is the DRIVER'S
+    // throttle, which is why a car being feathered off a spinning tyre sounds different
+    // from one that hooked.
+    const load = onDyno
+      ? (dynoPhase === 'sweep' ? 1 : dynoPhase === 'spooldown' ? 0.04 : 0.10)
+      : onDrag ? (dragPt?.throttle ?? 1)
+        : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+    const cut = onLive ? live.fuelCut
+      : onDrag ? Boolean(dragPt?.limiter)
+        : Boolean(onDyno && dynoPhase === 'spooldown');
 
-    const cyl = engineDerived.cyl;
-    const fire = Math.max(6, (rpm / 60) * (cyl / 2));
-    a.oscA.frequency.setTargetAtTime(fire, t, 0.02);
-    a.oscB.frequency.setTargetAtTime(fire, t, 0.02);
-    a.sub.frequency.setTargetAtTime(fire / 2, t, 0.02);
-    a.pulseLfo.frequency.setTargetAtTime(fire, t, 0.02);
+    const drive = acousticDrive({
+      rpm, derived: engineDerived, point, turboOn,
+      compressor: COMPRESSOR_OPTS[compressorIdx],
+      // The sweep only ever measures wide-open points, so the idle and overrun either
+      // side of it — and every point of a drag pass — borrow one and scale it by throttle.
+      throttle: onDyno || onDrag ? load : 1,
+      // No injectors, no combustion, so the cylinder reaches the exhaust valve at motored
+      // pressure. The renderer does not need to know what a rev limiter is.
+      fuelCut: cut,
+    });
+    const frame = {
+      drive,
+      // The exhaust system as tubes, for the waveguide. Everything the player can change
+      // about the hardware arrives here: cylinder count and layout set the firing order
+      // and how many primaries meet at each collector, displacement sets their length and
+      // bore, the pipe menu sets the tailpipe, and the gas temperature the cycle computed
+      // sets the speed of sound that every one of those lengths is divided by.
+      geometry: exhaustGeometry({
+        displacementL: engineDerived.displacementL, cyl: engineDerived.cyl,
+        bore: engineConfig.bore, compression: engineConfig.compression,
+        configuration: engineConfig.configuration,
+        pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, gasTempK: drive.gasTempK,
+        headers: Boolean(mods.headers), turboFitted: Boolean(turboOn),
+      }),
+      rpm,
+      configuration: engineConfig.configuration,
+      load,
+      audible,
+      cut,
+      cranking: Boolean(onLive && live.cranking),
+      openExhaust: Boolean(mods.exhaust || mods.headers),
+      intakeFitted: Boolean(mods.intake),
+      // Boost only counts while the throttle is open; dropping it on the overrun is what
+      // the renderer watches for to vent. The drag model carries no boost trace of its
+      // own, so the whistle and the blow-off sit out the pass rather than being given a
+      // number nothing measured at that throttle.
+      boostPsi: (onDyno && dynoPhase !== 'sweep') || onDrag ? 0 : (point?.boostPsi ?? 0),
+      volume,
+    };
 
-    // Layout character. A four is rough and buzzy (wider detune, more upper content);
-    // a V8 leans on its low-order rumble; a six sits between.
-    const isFour = cyl === 4, isEight = cyl === 8;
-    a.oscB.detune.setTargetAtTime(isFour ? 16 : isEight ? 6 : 9, t, 0.2);
-    a.oscG.gain.setTargetAtTime(isFour ? 0.55 : isEight ? 0.42 : 0.50, t, 0.1);
-    a.subG.gain.setTargetAtTime(isFour ? 0.20 : isEight ? 0.58 : 0.35, t, 0.1);
-    a.body.frequency.setTargetAtTime(isEight ? 240 : isFour ? 420 : 320, t, 0.15);
+    // One call. The crank now turns inside the audio worklet at sample resolution, so
+    // nothing about the exhaust's timing depends on how often React gets around to this.
+    updateEngineAudio(a, frame);
 
-    // Exhaust diameter: a bigger pipe is louder, deeper and less restricted.
-    const dia = EXHAUST_DIA_OPTS[exhaustDiaIdx].dia;
-    const diaOpen = 0.72 + (dia - 2.5) * 0.20;
-    const catBack = mods.exhaust || mods.headers;
-    a.filter.frequency.setTargetAtTime((300 + fire * 7 + load * 2400) * diaOpen, t, 0.05);
-    a.filter.Q.setTargetAtTime(isFour ? 3.2 : isEight ? 1.8 : 2.4, t, 0.1);
-    a.bodyG.gain.setTargetAtTime(0.5 + (dia - 2.5) * 0.22, t, 0.15);
-
-    a.indG.gain.setTargetAtTime(mods.intake && audible ? load * 0.055 * (rpm / 7500 + 0.3) : 0, t, 0.06);
-
-    if (turboOn) {
-      a.whistle.frequency.setTargetAtTime(1400 + (rpm / 7500) * 5200, t, 0.08);
-      a.whistleG.gain.setTargetAtTime(audible ? Math.min(0.05, boostNow * 0.006) * load : 0, t, 0.08);
-      if (prevBoostRef.current > 3 && load < 0.15 && audible) {
-        a.bovG.gain.cancelScheduledValues(t);
-        a.bovG.gain.setValueAtTime(0.09, t);
-        a.bovG.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
-      }
-      prevBoostRef.current = boostNow;
-    } else {
-      a.whistleG.gain.setTargetAtTime(0, t, 0.1);
-      prevBoostRef.current = 0;
+    // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
+    // trace steps up; an automatic's converter whines while it slips off the line and
+    // fades as road speed couples it up — both straight from the solved pass.
+    const box = GEARBOX_OPTS[car.boxIdx] ?? GEARBOX_OPTS[0];
+    const automatic = box.box === 'auto';
+    const gear = onDrag ? (dragPt?.gear ?? 0) : 0;
+    if (audible && gear > dragGearRef.current && dragGearRef.current > 0) {
+      shiftEngineAudio(a, { automatic });
     }
-
-    // Lope is loudest at idle and washes out as revs rise and combustion evens up.
-    const overlap = engineDerived.overlapDeg || 0;
-    const lopeRate = clamp(fire / 6, 2.5, 14);
-    a.lopeLfo.frequency.setTargetAtTime(lopeRate, t, 0.15);
-    const lopeStrength = audible && overlap > 2 && rpm < 2200
-      ? Math.min(0.085, overlap * 0.0022) * clamp(1 - (rpm - 800) / 1600, 0.15, 1)
+    dragGearRef.current = gear;
+    const slip = onDrag && automatic && box.couplingSpeedMs > 0
+      ? 1 - clamp((dragPt?.v ?? 0) / box.couplingSpeedMs, 0, 1)
       : 0;
-    a.lopeDepth.gain.setTargetAtTime(lopeStrength, t, 0.12);
-
-    a.ng.gain.setTargetAtTime(live.cranking && onLive ? 0.12 : 0.03 + load * 0.045, t, 0.05);
-    const vol = cut ? 0.012 : 0.05 + load * 0.11;
-    a.master.gain.setTargetAtTime(audible && soundOn ? vol * (catBack ? 1.18 : 1) : 0, t, cut ? 0.015 : 0.06);
+    if (slip > 0 || converterOnRef.current) {
+      converterEngineAudio(a, { rpm, slip, audible });
+      converterOnRef.current = slip > 0;
+    }
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
-      engineDerived.cyl, exhaustDiaIdx, mods.intake, mods.exhaust, mods.headers, turboOn,
-      running, currentRpm, revealCount, result, tab, engineDerived.overlapDeg,
-      dragRunning, dragResult, dragT]);
+      engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
+      exhaustDiaIdx, compressorIdx,
+      mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
+      running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT, car.boxIdx]);
+
+  // Whether anything should be making a sound right now. When nothing should, the graph
+  // is silenced at once and the audio context suspended a moment later, so a stopped
+  // engine costs no DSP at all — see `setEngineAudioActive`.
+  const sounding = soundOn && (
+    (tab === 'dash' && (live.running || live.cranking))
+    || (tab === 'dyno' && running)
+    || (tab === 'drag' && (dragRunning || treePhase > 0)));
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a) setEngineAudioActive(a, sounding);
+  }, [sounding]);
 
   // Hard-stop audio on unmount or when the tab changes away from a sounding page.
   useEffect(() => {
     return () => {
       const a = audioRef.current;
-      if (a) { try { a.master.gain.setTargetAtTime(0, a.ctx.currentTime, 0.02); } catch { /* noop */ } }
+      if (a) { try { silenceEngineAudio(a); } catch { /* noop */ } }
     };
   }, [tab]);
 
@@ -1078,6 +1172,7 @@ export function EcuLabApp() {
               tachFullScaleRpm={tachFullScaleRpm}
               onStart={startEngine} onStop={stopEngine}
               onToggleSound={toggleSound} onThrottle={setThrottleInput}
+              onTestSound={testSound}
             />
             <StatsScreen
               active={dashSection === 'stats'} onToggle={toggleDashSection}
@@ -1186,11 +1281,19 @@ export function EcuLabApp() {
                 Deliberately NOT `block`. This sits in the main content column, which
                 on a desktop window is the window; the hand-rolled width:100% here is
                 the literal button that spanned the screen. `lg` gives it its weight
-                instead. */}
+                instead.
+
+                The label names the PHASE, because the pull is now a sequence rather
+                than a single sweep and the button is the only thing on screen that
+                says which part of it you are listening to. */}
             <div style={{ marginBottom: 16 }}>
               <Button size="lg" onClick={doRun} disabled={running}>
                 <Play size={16} aria-hidden="true" />
-                {running ? 'SWEEPING…' : 'RUN DYNO PULL'}
+                {!running ? 'RUN DYNO PULL'
+                  : dynoPhase === 'settle' ? 'IDLING…'
+                    : dynoPhase === 'sweep' ? 'SWEEPING…'
+                      : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
+                        : 'SETTLING…'}
               </Button>
             </div>
 
