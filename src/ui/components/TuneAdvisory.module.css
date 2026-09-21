@@ -1,0 +1,117 @@
+/* TuneAdvisory: prose bodies for the advisor panel's per-state reports.
+   No border, no background, no radius here — AdvisorPanel.module.css already
+   renders and colours that surface from `data-tone`; nesting a second bordered
+   box inside it would double up the chrome the old per-screen banners used to
+   own on their own. */
+
+.bannerBody {
+  margin-bottom: 8px;
+}
+
+.bannerCell {
+  margin-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+/* FUEL's two mixture directions, coloured differently — carried over from
+   FuelScreen.module.css's `.cell[data-richen='true']`. Richen (this cell is
+   lean) is the dangerous direction; lean-out is an ordinary cyan readout, so
+   only 'true' gets a rule. Scoped to .bannerCell so it only ever applies to
+   the AFR cell lines that carry the attribute — SPARK's cell lines never set
+   data-richen at all. */
+.bannerCell[data-richen='true'] { color: var(--danger-ink); }
+
+.bannerMore {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+}
+
+.bannerFooter {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink3);
+}
+
+/* AdvisorPanel's own .body already sets the base font-size/colour/line-height
+   every state here inherits; this class only carries the vertical rhythm
+   between states, matching the old .advisoryPanel's margin. */
+.prose {
+  margin: 0;
+}
+
+.em { color: var(--acc-ink); }
+
+/* A second emphasis token, not a duplicate of `.em`: SPARK's moved banners
+   used var(--acc-ink) for emphasis, but FuelScreen.module.css's own `.em`
+   (used by the mixture banner's <b>delivered</b>) was var(--ink) — a
+   different colour. Reusing `.em` here would have silently recoloured that
+   emphasis on the move; this class preserves the token it actually carried. */
+.emInk { color: var(--ink); }
+
+/* All-clear tint, layered onto `.prose` (never replacing it — margin still
+   comes from there). `table-clean` restores the green the old `.okBanner`
+   carried before this state moved into the panel and lost its colour by
+   inheriting `.body`'s neutral `--ink2` instead.
+   `cell-ok` and `group-clean` are new states this PR introduced with no prior
+   styling to restore — but they are also all-clear tone='ok' states, and it
+   would read as a bug for a player to see a green all-clear on the whole
+   table yet a gray one on the single cell or row/column they just selected.
+   So all three share this class rather than only the one with history. Do not
+   split them back apart without re-litigating that. */
+.ok { color: var(--ok); }
+
+.cellStats {
+  margin: 6px 0 8px;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: var(--sp-sm);
+  row-gap: 2px;
+  font-size: var(--fs-sm);
+}
+
+.cellStats dt { color: var(--ink3); }
+.cellStats dd { margin: 0; color: var(--ink); font-family: var(--mono); }
+
+/* AIRFLOW's stale-VE recommendations, carried over unchanged from
+   AirflowScreen.module.css's own .staleBody/.rec/.recTitle/.recText/
+   .recCells/.acceptNote. None of these collide with an existing class here —
+   unlike .body/.em, which needed the .bannerBody/.emInk split in Tasks 4/5 —
+   so the names moved across verbatim. */
+.staleBody {
+  margin-bottom: 9px;
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.55;
+}
+
+.rec { margin-bottom: 9px; }
+
+.recTitle {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.recText {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--ink2);
+  line-height: 1.5;
+}
+
+.recCells {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--cyan);
+}
+
+.acceptNote {
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+  text-align: center;
+}

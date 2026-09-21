@@ -1,0 +1,17 @@
+.note {
+  display: flex;
+  gap: 9px;
+  margin: 10px 0;
+  padding: var(--sp-md) var(--sp-lg);
+  border: 1px solid;
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+.icon { flex-shrink: 0; margin-top: 1px; }
+
+.info { background: var(--panel2); border-color: var(--line); color: var(--ink-soft); }
+.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
+.danger { background: var(--danger-bg); border-color: var(--danger-line); color: var(--danger-ink); }

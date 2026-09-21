@@ -1,0 +1,67 @@
+/* TUNE > Injectors (ECU-side fuel calibration: injector scaling, duty cycle). */
+
+.wrap { padding: var(--sp-xl); }
+
+.label {
+  margin: 12px 0 6px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
+}
+
+.subLabel {
+  font-weight: 400;
+  color: var(--ink3);
+}
+
+/* Prose emphasis inside the ExpandableInfo panels. */
+.em { color: var(--ink); }
+
+.mismatchBanner {
+  margin: 8px 0;
+  padding: 11px 13px;
+  border: 1px solid var(--danger-line);
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.mismatchAction { margin-top: 9px; }
+
+.matchNote {
+  margin: 6px 0 4px;
+  font-size: 11px;
+  color: var(--ok);
+}
+
+.dutyPanel { margin-top: 6px; margin-bottom: 16px; }
+
+.dutyHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dutyHeadLabel {
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+
+.dutyFuelNote {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--acc-ink);
+}
+
+.dutyBarWrap { margin-top: 8px; }
+
+.dutyWarning {
+  margin-top: 7px;
+  font-size: var(--fs-sm);
+  color: var(--danger-ink);
+}

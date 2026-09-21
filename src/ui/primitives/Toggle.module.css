@@ -1,0 +1,54 @@
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: var(--sp-md) var(--sp-lg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  color: inherit;
+  font-family: var(--sans);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.14s ease;
+}
+
+.row:hover { border-color: var(--line-hi); }
+.row:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.row[aria-checked='true'] { border-color: var(--acc); }
+
+.label { font-size: var(--fs-base); font-weight: 700; color: var(--ink); }
+.sub { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--ink2); }
+
+.track {
+  flex-shrink: 0;
+  width: 38px;
+  height: 22px;
+  /* 2px is not on the spacing scale: the knob is a fixed 18px and the track a
+     fixed 22px tall, so this inset must stay exactly (22 - 18) / 2 or the knob
+     overflows the track. Left raw. */
+  padding: 2px;
+  /* 11px is not on the radius scale: it is exactly half the track's own 22px
+     height, which is what makes the track read as a pill. A scale step here
+     would either square off the ends or clip the knob. Left raw. */
+  border-radius: 11px;
+  background: var(--panel3);
+  transition: background-color 0.16s ease;
+}
+
+.row[aria-checked='true'] .track { background: var(--acc); }
+
+.knob {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink2);
+  transition: transform 0.16s ease, background-color 0.16s ease;
+}
+
+.row[aria-checked='true'] .knob {
+  transform: translateX(16px);
+  background: var(--acc-on);
+}

@@ -10,6 +10,8 @@
 
 import { BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
+import { clamp } from './math.js';
+import { turbineBackPressureKpa } from './turbo.js';
 
 /**
  * Rubbing (mechanical) friction as a mean effective pressure.
@@ -31,16 +33,51 @@ export function rubbingFmepPa(rpm, springPa = 0, arch = {}) {
 }
 
 /**
- * Pumping loss: the work spent dragging air past a partly closed throttle.
+ * Exhaust manifold pressure — what the piston has to push against.
  *
- * This is the vacuum the engine is fighting, and it dominates engine braking on
- * overrun.
+ * Naturally aspirated this is barometric plus system backpressure, which grows with
+ * flow. With a turbine in the stream it is set by the turbine treated as a nozzle: see
+ * `turbineBackPressureKpa` in turbo.js. It scales with FLOW, not with boost, which is
+ * the correction that makes housing size a real trade — a small housing needs more
+ * pressure upstream to pass the same exhaust, so it spools early and costs pumping work
+ * at high flow.
+ *
+ * @param {object} input
+ * @param {boolean} input.turboOn whether a turbine is in the stream
+ * @param {number} input.exhaustFlowKgS mass flow leaving the cylinder
+ * @param {number} input.exhaustK turbine inlet temperature
+ * @param {{effectiveAreaM2: number}|null} [input.turbine]
+ * @param {number} [input.wastegateRelief] fraction of turbine backpressure the gate bleeds
+ * @returns {number} exhaust manifold pressure, kPa
+ */
+export function exhaustManifoldKpa({
+  turboOn, exhaustFlowKgS, exhaustK, turbine = null, wastegateRelief = 0,
+}) {
+  const systemKpa = COEFF.EXHAUST_SYSTEM_KPA_PER_KGS * Math.max(0, exhaustFlowKgS);
+  if (!turboOn || !turbine) return BARO_KPA + systemKpa;
+  const turbineKpa = turbineBackPressureKpa(exhaustFlowKgS, exhaustK, turbine.effectiveAreaM2)
+    - BARO_KPA;
+  return BARO_KPA + systemKpa + turbineKpa * (1 - clamp(wastegateRelief, 0, 1));
+}
+
+/**
+ * Pumping mean effective pressure — the gas-exchange loop, with its real sign.
+ *
+ * PMEP is exhaust manifold pressure minus intake manifold pressure. Throttled, that is
+ * a loss and it dominates engine braking on overrun. Under boost with a well-matched
+ * turbine it can go NEGATIVE, meaning the gas exchange loop does net positive work on
+ * the piston — a real effect and one of the reasons a good turbo match is worth power
+ * beyond what the extra airflow alone explains.
+ *
+ * The previous version clamped this at zero, so a boosted engine paid nothing for its
+ * own backpressure and gained nothing from a well-sized turbine.
  *
  * @param {number} mapKpa manifold absolute pressure, kPa
- * @returns {number} pumping FMEP, Pa
+ * @param {number} [empKpa] exhaust manifold pressure, kPa; defaults to barometric
+ * @returns {number} pumping MEP, Pa — positive is a loss
  */
-export function pumpingFmepPa(mapKpa) {
-  return Math.max(0, (BARO_KPA - mapKpa) * 1000);
+export function pumpingFmepPa(mapKpa, empKpa = BARO_KPA) {
+  return (empKpa - mapKpa) * 1000;
 }
 
 /**

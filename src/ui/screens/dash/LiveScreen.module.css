@@ -1,0 +1,247 @@
+/* HOME > Live Engine.
+ *
+ * Values that are genuinely per-render stay inline in the JSX: the throttle fill's
+ * width, and the hue a gauge or a trim is currently reading in. Everything else,
+ * including the two-state styling of the sound button and the throttle pad, is here
+ * and switched with a data attribute. */
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* --- tach --------------------------------------------------------------- */
+
+.dial { position: relative; flex-shrink: 0; }
+
+/* 58%, not 50%: the needle's hub sits at the dial's centre, so the readout is
+   nudged below it to clear the pivot. */
+.dialReadout {
+  position: absolute;
+  top: 58%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.dialRpm {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* 7px is below the font-size ramp's smallest step and deliberately so — it is a
+   caption inside a 104px dial face, not a text role that repeats anywhere. */
+.dialCaption {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--ink3);
+}
+
+/* --- ECU state and the two controls beside the dial ---------------------- */
+
+.column { flex: 1; }
+
+.status {
+  margin-bottom: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink2);
+}
+
+.actions { display: flex; gap: 7px; }
+
+.sound {
+  width: 46px;
+  padding: 11px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel2);
+  color: var(--ink3);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sound[data-on='true'] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-ink);
+}
+
+/* --- volume and the audio self-test ------------------------------------- */
+
+.volume {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.volumeLabel {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--ink2);
+}
+
+.volumeSlider {
+  flex: 1;
+  accent-color: var(--acc);
+}
+
+/* Fixed width and right-aligned so the track does not jump as the figure goes from
+   two digits to three. */
+.volumeValue {
+  width: 34px;
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  text-align: right;
+}
+
+/* A verdict, so it takes a status colour: `ok` is the only good outcome, and both
+   failures are things the player can act on rather than errors. */
+.audioStatus {
+  margin-top: 8px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--warn);
+}
+
+.audioStatus[data-ok='true'] { color: var(--ok); }
+
+/* --- throttle pad ------------------------------------------------------- */
+
+.pad {
+  position: relative;
+  overflow: hidden;
+  margin-top: 12px;
+  padding: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel2);
+  color: var(--ink2);
+  font-size: var(--fs-base);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-align: center;
+  /* The pad is held down, often hard, on a touchscreen. Without these a press
+     selects the label, raises the callout menu, or scrolls the page instead of
+     opening the throttle. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  opacity: 0.4;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+/* Held. */
+.pad[data-open='true'] {
+  border-color: var(--acc);
+  background: var(--acc-bg);
+  color: var(--acc-ink);
+}
+
+/* Dimmed until there is an engine to rev. */
+.pad[data-running='true'] { opacity: 1; }
+
+/* Fills left to right with the throttle the ENGINE actually sees, which lags the
+   input through the throttle body's own response. */
+.padFill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(var(--acc-rgb), 0.16);
+  transition: width 0.12s;
+}
+
+.padLabel { position: relative; }
+
+/* --- sensor gauges ------------------------------------------------------ */
+
+.gaugeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* The first row clears the throttle pad rather than its sibling row. */
+.gaugeRowFirst { margin-top: 10px; }
+
+.gauge {
+  flex: 1;
+  min-width: 68px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+
+.gauge[data-warn='true'] { border-color: var(--danger); }
+
+.gaugeLabel {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--ink2);
+}
+
+.gaugeValue {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.gaugeUnit {
+  margin-left: 2px;
+  font-size: var(--fs-micro);
+  color: var(--ink3);
+}
+
+/* --- fuel trims --------------------------------------------------------- */
+
+.trims { margin-top: 12px; }
+
+.trim { margin-bottom: 7px; }
+
+.trimHead {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+
+.trimValue { font-family: var(--mono); }
+
+.trimTrack {
+  position: relative;
+  height: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--panel);
+}
+
+/* Zero. A trim is signed, so the track's midpoint is the reading of no correction
+   at all, and the fill grows away from it in whichever direction. */
+.trimCentre {
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--line-hi);
+}
+
+.trimFill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+}

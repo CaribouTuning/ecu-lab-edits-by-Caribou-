@@ -16,16 +16,20 @@
  * coefficient change can never leave a stale calibration behind.
  */
 
-import { COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS } from './hardware.js';
+import {
+  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
+} from './hardware.js';
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
-import { knockThreshold, mbtTiming } from './knock.js';
+import { chargeIndexOf } from './knock.js';
+import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
+import { exhaustManifoldKpa } from './friction.js';
 import { bestPowerAfr } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
-import { chargeTempK } from './thermo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
 import { deriveEngine } from './engine.js';
 import { clamp } from './math.js';
-import { LOAD, RPM } from './tables.js';
+import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
 
 /**
  * How far below the knock limit a factory calibration sits, in degrees.
@@ -61,6 +65,56 @@ const OPEN_LOOP_KPA = 85;
 /** @type {Preset[]} */
 export const ENGINE_PRESETS = [
   {
+    id: 'vq35de-revup',
+    name: 'Nissan VQ35DE Rev-Up',
+    manufacturer: 'Nissan',
+    years: '2005-2006',
+    blurb: 'The high-revving 350Z engine this simulator was originally calibrated around. Its naturally aspirated V6 is the cleanest starting point for learning what the stock tables and hardware are doing.',
+    factory: {
+      crankHp: 300, crankHpRpm: 6400,   // 300 hp @ 6400 rpm
+      crankTq: 260, crankTqRpm: 4800,   // 260 lb-ft @ 4800 rpm
+      displacementL: 3.50,
+    },
+    engine: {
+      configuration: 'V6',
+      // Nissan's 2006 350Z specifications publish 95.5 x 81.4 mm and 10.3:1.
+      // These are also the geometry and compression the simulator's generic default
+      // was calibrated around. The factory 7000 RPM limit replaces that default's
+      // deliberately generic 7500 RPM ceiling here.
+      bore: 95.5, stroke: 81.4,
+      compression: 10.3,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      // Bore, stroke, compression and redline above are published; `camDuration` and
+      // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
+      // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
+      //
+      // REFITTED for the two-zone cycle. #38 landed 220 degrees against the model of the
+      // day; on this one that reads +8.6% on power, outside the +/-5% floor. 202 centres
+      // the fit instead: 0.0% on power and +2.3% on torque, the best simultaneous fit in
+      // the range. The band is event-free from 198 to 226, so the fit is bounded by the
+      // power tolerance rather than by any advisory.
+      //
+      // Do NOT read 210 here as a published number if you see it in the history — that
+      // was the generic custom-build default left in place, which #38 correctly called
+      // out as a coin toss rather than a fit.
+      //
+      // `springRate` 60 does not change power; it sets where the valvetrain gives up.
+      // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline, mid-pack
+      // against the rest of the set. No pull should ever show a `float` event here — if
+      // one appears that is a bug, not "the character".
+      //
+      // REFITTED from 202 for the inlet Mach index (#15). That term takes volumetric
+      // efficiency out of the top end, so duration comes back up to pay for it: power
+      // lands on the published figure (0.0%), and peak power now falls across 6500-6600
+      // against a published 6400 instead of climbing into the 7000 limiter.
+      camDuration: 210, springRate: 60,
+      redline: 7000,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
     id: 'vq35hr',
     name: 'Nissan VQ35HR',
     manufacturer: 'Nissan',
@@ -78,35 +132,26 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
       // Bore, stroke, compression and redline above are published figures and do not
       // move. `camDuration` and `springRate` are not published, so they are where this
-      // preset is fitted — 228° is simply the duration that best fits power and torque
-      // at the same time (+2.2% and -3.9% against the published ratings at the wheels).
-      // Torque is not what caps this fit — in the fitted range it bottoms out near
-      // 220° (213.65 wlb-ft) and RISES in both directions: 216.2 at 224°, 217.4 at
-      // 226°, 218.8 at 228°. Bigger cams gain power and torque both. What actually
-      // bounds the fit is the ±5% power ceiling and the cam-overlap advisory, which
-      // starts firing at 229° (11.00° overlap, vs. 9.90° at 228° — the last duration
-      // with an empty event log).
-      // `springRate` 68 is set well above the 50 baseline purely to carry that cam:
-      // `valveFloatRpm` lands at ~8740, about 1240 RPM clear of the 7500 redline —
-      // comparable to (not the same as) the margin the other three presets carry:
-      // 1330 / 1682 / 1382 RPM. No pull should ever show a `float` event on this
-      // engine — if one appears, that is a bug, not "the character".
+      // preset is fitted.
       //
-      // WHAT THIS PRESET DOES NOT REPRODUCE: the real engine makes peak power at 6800
-      // and falls away after it. Simulated power does not fall at all — it climbs
-      // monotonically into the 7500 limiter, so peak power reads 7500, 700 RPM high,
-      // and peak torque sits at 5500 against a published 4800. That is a limit of the
-      // shared physics, not of this data: the real rolloff comes from cam profile,
-      // VVEL variable lift and intake-tract tuning, and the model has no term for any
-      // of them, so at every duration that reaches this engine's rating VE is still
-      // rising at the redline. The three boosted presets roll over only because their
-      // factory boost curves taper; nothing tapers on a naturally aspirated engine
-      // here. Shaping the top end with valve float instead (a 42 spring rate, which is
-      // what this preset shipped with) did place the peak, at the cost of modelling a
-      // healthy valvetrain as a failing one — that is not coming back.
-      // `tests/presets.test.js` asserts the climb-to-limiter rather than a peak
-      // location, and says the same thing there.
-      camDuration: 228, springRate: 68,
+      // REFITTED TWICE. It was 228 degrees against the old algebraic combustion model,
+      // then 214 when work started being integrated from a pressure trace. 218 is the
+      // refit for the inlet Mach index (#15): that term takes real volumetric efficiency
+      // out of the top end, so a little more duration comes back to pay for it. Power
+      // lands on the published figure (-0.0%) and torque +1.8%.
+      //
+      // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
+      // the 7500 redline, and at 4.4 degrees of overlap this cam never trips the cam
+      // advisory.
+      //
+      // THE ROLLOFF NOW EXISTS. This preset used to climb monotonically into its limiter
+      // and read peak power at 7500, 700 RPM above the published 6800, because nothing in
+      // the shared physics made VE fall at speed. The Mach index is that term, and the
+      // simulated flat top now runs 6500-6900, bracketing the published 6800 rather than
+      // sitting 700 RPM above it. What remains missing is still worth naming: the real
+      // engine's rolloff is cam profile, VVEL variable lift and intake-tract tuning, and
+      // the Mach term stands in for all three at once rather than reproducing any of them.
+      camDuration: 218, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -134,6 +179,11 @@ export const ENGINE_PRESETS = [
     },
     induction: {
       turboOn: true, turbineIdx: 0, compressorIdx: 1,
+      // TWO of them. Now that backpressure is solved from turbine flow area rather than
+      // assumed proportional to boost, the count is load-bearing: a pair of small
+      // housings passes twice the exhaust of one before it starts choking, which is the
+      // whole reason a manufacturer fits two small turbos instead of one big one.
+      turbineCount: 2,
       // Twin small turbos spool early (0.6 bar / 8.5 psi target by 3500), but the
       // factory ECU tapers boost above that as exhaust backpressure and heat climb
       // toward redline — the well-documented N54 "boost taper" that trades away
@@ -142,6 +192,143 @@ export const ENGINE_PRESETS = [
         : r < 5500 ? 7.2 : r < 6500 ? 6.2 : 5.2)),
     },
     parts: { injectorIdx: 3, exhaustDiaIdx: 2, octaneIdx: 1 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  },
+  {
+    id: 'b58-m0',
+    name: 'BMW B58B30M0',
+    manufacturer: 'BMW',
+    years: '2016-2018',
+    blurb: 'One twin-scroll turbo where the N54 ran two, and 11.0:1 compression no 2006 turbo engine could have run — two BMW turbo-six generations apart. Load it next to the N54 to see what a decade of combustion development actually bought.',
+    factory: {
+      crankHp: 320, crankHpRpm: [5500, 6500],  // plateau-rated
+      crankTq: 330, crankTqRpm: 1380,          // 330 lb-ft, flat 1380-5000
+      displacementL: 3.00,
+    },
+    engine: {
+      configuration: 'I6',
+      bore: 82.0, stroke: 94.6,          // 82 x 94.6 mm
+      compression: 11.0,                 // 11.0:1 — higher than the N54, two generations back
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      // Bore, stroke, compression and redline are published and do not move.
+      // `camDuration` and `springRate` are not published in terms comparable to this
+      // model, so they are free to be fitted — see the VQ35HR comment above for the
+      // same arrangement and why it is not a fudge factor. In the event neither had to
+      // move: this engine's peak torque is set almost entirely by manifold pressure.
+      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque
+      // 297 wlb-ft at camDuration 214): swapping duration 212->214->216 moves it only
+      // 298->297->296, about 1 wlb-ft per 2°, while +1 psi of boost at the 3500 node,
+      // the 4500 node, or added across the whole curve each move it 297->306/308/308
+      // — 9-11 wlb-ft per psi. So the boost curve
+      // below is what was actually fitted. 214° sits just below the N54's 216° and
+      // carries 2.20° of overlap, well inside the advisory.
+      // `springRate` 60 puts `valveFloatRpm` at ~8474, 1474 RPM clear of the 7000
+      // limiter — the same order of margin the other presets carry (1242-1682). No
+      // pull on a healthy engine should ever log a `float` event.
+      camDuration: 214, springRate: 60,
+      redline: 7000,
+    },
+    induction: {
+      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      // One twin-scroll turbo rather than the N54's pair. A twin-scroll housing keeps
+      // the exhaust pulses of the two cylinder groups separated right up to the
+      // turbine, so a single larger turbo spools nearly as early as two small ones —
+      // which is why peak boost is commanded from just above idle and the torque
+      // plateau is rated from 1380. It then tapers toward redline for the same reasons
+      // the N54's does: backpressure and heat.
+      //
+      // PEAK is the published figure — 13 psi, ~0.9 bar — and does not move. The SHAPE
+      // across RPM is not published, and it is the only thing fitted here: 13 psi held
+      // to 2500, then a taper down to about 6.75 psi at the 7000 limiter (the curve's
+      // last node, 6.5, sits at 7500 and is never reached — redline cuts the pull
+      // first). That taper is steeper than the
+      // real engine's, and deliberately so. This model was calibrated on a naturally
+      // aspirated V6, and it reports more torque per unit of manifold pressure than a
+      // real high-compression boosted six makes — hold 13 psi flat to 4500 here and the
+      // pull returns 344 wlb-ft against a 281 target. Everything above the torque peak
+      // is where that error can be absorbed without contradicting a published number,
+      // so that is where it is absorbed.
+      //
+      // WHAT THIS PRESET DOES NOT REPRODUCE: the rated torque plateau. BMW publishes
+      // 330 lb-ft flat from 1380 RPM; this preset reaches 44% of its 281 wlb-ft target
+      // at 1500 and only 96% by 3000 (123 / 170 / 224 / 268 wlb-ft at 1500 / 2000 /
+      // 2500 / 3000). The line above about boost "commanded from just above idle"
+      // describes the curve this preset ASKS for, not torque it delivers down there.
+      // The N54 above has the same gap and no test asserts torque-peak placement, so
+      // this is a shared limit of the model rather than a fault in this data — the
+      // same absent term tracked as issue #31, which costs nothing for stacking
+      // compression on boost and shows up here in the torque channel.
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 13 : r < 4500 ? 11
+        : r < 5500 ? 9 : r < 6500 ? 8 : r < 7500 ? 7 : 6.5)),
+    },
+    parts: { injectorIdx: 3, exhaustDiaIdx: 2, octaneIdx: 1 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  },
+  {
+    id: 'b58-m1',
+    name: 'BMW B58B30M1',
+    manufacturer: 'BMW',
+    years: '2019-present',
+    blurb: 'The same three litres with more boost and a far sharper calibration — 382 hp from an identical short block. What the Golf R is to the GTI, one engine family later.',
+    factory: {
+      crankHp: 382, crankHpRpm: 5800,   // 382 hp @ 5800 rpm
+      crankTq: 369, crankTqRpm: 1800,   // 369 lb-ft, flat 1800-5000
+      displacementL: 3.00,
+    },
+    engine: {
+      configuration: 'I6',
+      bore: 82.0, stroke: 94.6,
+      compression: 11.0,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      // Same short block, so bore, stroke and compression are the M0's. The revised
+      // engine's sharper calibration is carried by a slightly longer duration and the
+      // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
+      camDuration: 218, springRate: 62,
+      redline: 7000,
+    },
+    induction: {
+      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      // The revised engine runs meaningfully more boost than the M0 through the same
+      // architecture — roughly 1.2 bar against 0.9. Nothing about the short block
+      // changed, which is the entire lesson of shipping both.
+      //
+      // Peak is the published 17 psi and does not move; as on the M0, only the taper is
+      // fitted, and it absorbs the same model error the M0's does (see that comment
+      // above) — this physics reports more torque per unit of manifold pressure than
+      // an 11.0:1 boosted six really makes, and the taper is where the excess is
+      // absorbed without contradicting a published number. It is a far gentler taper
+      // than the M0's: 17 psi held to 2500 — as on the M0, the last node carrying peak
+      // is 2500, not 3500, so the plateau is already falling by 3000 (15.5 psi) — then
+      // tapering to about 10.75 psi at the 7000 limiter (the curve's last node, 10.5,
+      // sits at 7500 and is never reached), against the M0's 13 held to the same 2500
+      // and tapering to about 6.75 at its own 7000 limiter. The two engines differ in
+      // the DEPTH of the taper, not in where it starts — but that depth is still NOT
+      // the same relationship the Golf R has to the GTI
+      // below. Each retained-boost figure is that engine's boost curve linearly
+      // interpolated at its own redline (the same way the sim samples it), divided by
+      // its peak boost — not the value written last in each curve's ternary, which
+      // sits at the 7500 breakpoint, past every one of these four engines' redlines,
+      // and so is never itself sampled: the Golf R interpolates to 15.2 psi at its
+      // 6800 limiter, 15.2/17 = 89% of peak; the GTI's 6500 limiter lands exactly on
+      // an RPM breakpoint at 8.5 psi, 8.5/14 = 61% (coincidentally the same number as
+      // that curve's final ternary clause); and the M1 interpolates to 10.75 psi at
+      // its 7000 limiter, 10.75/17 = 63% — still on the GTI's side of that split, not
+      // the Golf R's. The real reason the M1 needs a gentler taper is a fitting
+      // constraint, not a wastegate schedule: its power target is 19% above the
+      // M0's while its torque target is only 12% above, so less of the M0's curve can be
+      // cut before power falls out of tolerance. Together the two published targets
+      // give a 62 hp gap (382-320); the two simulated curves give 47 whp (324-277) —
+      // the model doesn't reproduce the full published gap, but the direction and most
+      // of the magnitude are there.
+      //
+      // WHAT THIS PRESET DOES NOT REPRODUCE: the rated torque plateau, exactly as on
+      // the M0. Published 369 lb-ft flat from 1800 RPM; this preset reaches 38% of its
+      // 314 wlb-ft target at 1500 and 94% by 3000 (120 / 177 / 242 / 295 wlb-ft at
+      // 1500 / 2000 / 2500 / 3000). Same shared limit, same issue #31.
+      boost: RPM.map((r) => (r < 1500 ? 0 : r < 3500 ? 17 : r < 4500 ? 14
+        : r < 6500 ? 12 : r < 7500 ? 11 : 10.5)),
+    },
+    parts: { injectorIdx: 4, exhaustDiaIdx: 2, octaneIdx: 1 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: true },
   },
   {
@@ -210,6 +397,18 @@ export const ENGINE_PRESETS = [
   },
 ];
 
+/**
+ * The turbine as fitted, with its flow area scaled by how many of them there are.
+ *
+ * @param {Preset} preset
+ * @returns {object|null}
+ */
+export function presetTurbine(preset) {
+  const { turboOn, turbineIdx, turbineCount = 1 } = preset.induction;
+  if (!turboOn) return null;
+  return turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount);
+}
+
 /** The induction hardware bundle `computeHardwareVE` expects. */
 function hardwareFor(preset) {
   const { turboOn, turbineIdx, boost } = preset.induction;
@@ -234,7 +433,6 @@ function hardwareFor(preset) {
 export function factoryCalibration(preset) {
   const derived = deriveEngine(preset.engine);
   const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
-  const compressor = COMPRESSOR_OPTS[preset.induction.compressorIdx];
   const hw = hardwareFor(preset);
   const ve = computeHardwareVE(preset.engine, preset.mods, hw);
 
@@ -270,17 +468,50 @@ export function factoryCalibration(preset) {
   // evaluated against the mixture the engine will ACTUALLY see (best-power AFR, since
   // the fuel table above is what puts it there) rather than the richer commanded
   // number, which is only an artifact of pre-compensating the MAF.
+  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+  const turbine = presetTurbine(preset);
+
   const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
     const boostPsi = boostAt(rpm, loadKpa);
     const trueBestAfr = bestPowerAfr(boostPsi);
-    const threshold = knockThreshold({
-      rpm, mapKpa: loadKpa, veActual: ve[ri][ci],
-      chargeC: chargeTempK(boostPsi, preset.mods.intercooler) - 273.15,
-      actualAfr: trueBestAfr, bestAfr: trueBestAfr, boostPsi,
-      octaneBonus: fuel.bonus, mods: preset.mods, derived, compressor,
+    const lambda = trueBestAfr / 14.7;
+    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
+    const veActual = ve[ri][ci];
+    const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
+    const lambdaCell = lambda;
+    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambdaCell))
+      * derived.cyl * (rpm / 2) / 60;
+    const empKpa = exhaustManifoldKpa({
+      turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
+      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda: lambdaCell }),
     });
-    const safe = threshold - FACTORY_KNOCK_MARGIN_DEG;
-    return Number(clamp(Math.min(mbtTiming(rpm, loadKpa), safe), 5, 50).toFixed(1));
+    // The generator asks the physics the same question the running ECU asks — how much
+    // spark will this cylinder take — by solving the same cycle. A second, simpler
+    // knock estimate here would drift from the one the player then drives against.
+    // KNOWN DEFECT, deliberately left in place — see issue #46.
+    //
+    // This releases the energy of DELIVERED fuel, not burnable fuel. At a rich best-power
+    // target the surplus has no oxygen, so heat comes out ~20% high (Golf R, 200 kPa) and
+    // the generated spark lands ~5 deg below what the same cycle allows in `point.js` —
+    // the two are supposed to ask one question and get one answer.
+    //
+    // The one-line fix is `burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich)`
+    // with `fuelMassG: deliveredFuelG` alongside it, exactly as point.js splits them. It is
+    // NOT applied here because the boosted presets were fitted around this over-retard:
+    // correcting it alone puts four of them outside the published-figure tolerances
+    // (N54 torque +11.3%, Golf R +7.2%, B58B30M0 +5.5%, GTI +5.3%), and no single fitted
+    // knob recovers them — cam duration saturates (N54 torque bottoms at +10.1% at every
+    // duration, because that plateau is boost-limited), compressor choice moves it not at
+    // all, and the only KNOCK_TAU_SCALE window that passes all seven (~1.4) makes the stock
+    // engine knock on its own shipped calibration. Closing it needs the knock model to bind
+    // on boosted factory tables, which it currently never does.
+    const cyc = cycleInputsFor({
+      rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
+      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      lambda, fuel, derived,
+    });
+    const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
+    return Number(clamp(Math.min(mbtFromBurn(cyc.burnDeg), safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
   }));
 
   return { ve, timing, afr };
@@ -303,6 +534,7 @@ export function applyPreset(preset) {
     turboOn: preset.induction.turboOn,
     boostCurve: [...preset.induction.boost],
     turbineIdx: preset.induction.turbineIdx,
+    turbineCount: preset.induction.turbineCount ?? 1,
     compressorIdx: preset.induction.compressorIdx,
     injIdx: preset.parts.injectorIdx,
     ecuInjectorCc: INJECTOR_OPTS[preset.parts.injectorIdx].cc,
@@ -318,3 +550,24 @@ export function applyPreset(preset) {
  * @returns {Preset|undefined}
  */
 export const presetById = (id) => ENGINE_PRESETS.find((p) => p.id === id);
+
+/**
+ * Presets grouped by manufacturer, in first-appearance order.
+ *
+ * The picker needs headings once the list outgrows a flat stack of buttons. Deriving
+ * the grouping here rather than in the component keeps it assertable in plain Node —
+ * the same reason `applyPreset` returns a patch instead of applying one — and means
+ * the JSX renders a shape rather than computing one.
+ *
+ * Order comes from {@link ENGINE_PRESETS} itself, never from a second list kept
+ * alongside it. A separate ordering table would be free to drift out of agreement
+ * with the presets it claims to order; this cannot.
+ *
+ * @type {{manufacturer: string, presets: Preset[]}[]}
+ */
+export const PRESET_GROUPS = ENGINE_PRESETS.reduce((groups, preset) => {
+  const group = groups.find((g) => g.manufacturer === preset.manufacturer);
+  if (group) group.presets.push(preset);
+  else groups.push({ manufacturer: preset.manufacturer, presets: [preset] });
+  return groups;
+}, /** @type {{manufacturer: string, presets: Preset[]}[]} */ ([]));

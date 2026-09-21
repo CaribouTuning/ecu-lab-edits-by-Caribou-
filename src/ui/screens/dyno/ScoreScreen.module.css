@@ -1,0 +1,85 @@
+/* DYNO > SCORE. */
+
+.pullPanel {
+  margin-bottom: var(--sp-md);
+  background: var(--acc-bg);
+  border: 1px solid var(--acc);
+  text-align: center;
+}
+
+.pullLabel {
+  font-size: 10px;
+  color: var(--acc-ink);
+  letter-spacing: 1.5px;
+  font-weight: 800;
+}
+
+.pullValue {
+  font-size: 40px;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--acc-ink);
+  line-height: 1.1;
+}
+
+.pullBest {
+  font-size: 11.5px;
+  color: var(--ink2);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.pullBest[data-best='true'] { color: var(--ok); }
+
+.cardsRow {
+  display: flex;
+  gap: var(--sp-md);
+  margin-bottom: var(--sp-md);
+}
+
+.scoreCard { flex: 1; }
+
+.scoreLabel {
+  font-size: 9.5px;
+  color: var(--ink2);
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+/* `color` is the one continuous value here — statusColor(s.score) walks a
+   gradient over the raw score, not a fixed handful of states — so it stays
+   inline style, same convention as the Bar primitive's fill. */
+.scoreValue {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+
+.scoreTag {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.deductions {
+  margin-bottom: var(--sp-xl);
+  font-size: 11.5px;
+  color: var(--ink2);
+  font-family: var(--mono);
+  line-height: 1.8;
+}
+
+.advisoriesWrap { margin-top: 8px; }
+
+.advisoriesLabel {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--ink3);
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.advisory {
+  font-size: 11.5px;
+  color: var(--ink2);
+  line-height: 1.5;
+}

@@ -1,0 +1,32 @@
+/* HOME > Career & Last Pull. Three rows of tiles, each row sharing its width
+   equally between however many tiles it holds. */
+
+.row {
+  display: flex;
+  gap: var(--sp-md);
+}
+
+/* Every row but the last is followed by another. */
+.rowGap { margin-bottom: var(--sp-md); }
+
+/* The career row sits above a rule of white space, not just the next row. */
+.rowGapWide { margin-bottom: 12px; }
+
+/* The last-pull tiles carry their own heading, because when the setup has moved
+   underneath them they are evidence about a car that is no longer on screen — and a
+   dimmed row with no caption reads as "disabled", not "measured earlier". The warn
+   tone and the dimming are one signal, not two: the heading says what happened, the
+   opacity says these figures are not about what you are looking at now. Anything
+   stronger would mean deleting the previous pull, which throws away the before half
+   of the comparison the player changed something to make. */
+.lastPull {
+  font-size: var(--fs-xs);
+  letter-spacing: 1px;
+  font-weight: 800;
+  color: var(--ink3);
+  margin-bottom: 6px;
+}
+
+.lastPull[data-stale='true'] { color: var(--warn-ink); }
+
+.row[data-stale='true'] { opacity: 0.6; }

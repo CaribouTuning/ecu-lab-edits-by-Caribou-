@@ -28,6 +28,25 @@ export const DEFAULT_VE = [
   [29, 34, 42, 48, 52, 50, 46, 40],
 ];
 
+/**
+ * The range a spark table cell can hold, degrees BTDC.
+ *
+ * Defined here, next to the table itself, because THREE places need to agree on it and
+ * two of them used to be wrong. The editable grid in the UI has always allowed −5 to 50;
+ * `factoryCalibration` clamped what it generated to 5 as a floor, and the spark advisor
+ * refused to suggest below 5 for the same reason. That disagreement was not cosmetic.
+ *
+ * A production boosted calibration genuinely commands retarded, even after-TDC, timing in
+ * the low-speed high-load corner — it is the most knock-limited place any turbo engine
+ * operates, which is why manufacturers taper torque below about 1800 RPM and enrich hard
+ * there. Flooring the generator at 5 meant it wrote spark the engine could not take: the
+ * B58B30M1 at 11:1 and 16.6 psi came out detonating on its own factory table from 1700 to
+ * 2600 RPM, not because the tune was wrong but because the generator was not allowed to
+ * write the number the physics asked for.
+ */
+export const SPARK_MIN_DEG = -5;
+export const SPARK_MAX_DEG = 50;
+
 /** Stock ignition timing table, degrees BTDC. */
 export const DEFAULT_TIMING = [
   [10, 14, 20, 26, 30, 32, 33, 34],
@@ -57,7 +76,15 @@ export const DEFAULT_AFR = [
 export const DEFAULT_BOOST = RPM.map(() => 0);
 
 /**
- * Stock short-block design. Nothing here names a real production engine.
+ * Stock short-block design, calibrated around the Nissan VQ35DE Rev-Up baseline.
+ *
+ * The geometry, compression and materials below are that engine's published figures, and
+ * the `vq35de-revup` preset carries the same ones. The three values that differ are the
+ * three this default does NOT take from Nissan: `camDuration` and `springRate` are round
+ * generic starting points for a custom build, where the preset fits them to the published
+ * power, and `redline` is a deliberately generic 7500 ceiling, where the preset carries
+ * the production 7000 limit. Retuning any of the three here is a custom-build decision and
+ * should not move the preset — see `presets.js`.
  *
  * Frozen: this object is handed straight to React state, and a caller doing
  * `Object.assign(cfg, patch)` — exactly what preset code reaches for — would
@@ -78,11 +105,3 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
 
 /** No bolt-ons fitted. Frozen for the same reason as the engine config above. */
 export const DEFAULT_MODS = Object.freeze({ intake: false, exhaust: false, headers: false, intercooler: false });
-
-/**
- * Base knock-limited timing envelope at WOT, 91 octane, naturally aspirated.
- *
- * Calibrated against a ~3.5 L, ~10.3:1, aluminium-head V6 baseline. The architecture
- * the player builds then adjusts this up or down from there.
- */
-export const BASE_KNOCK_LIMIT_91 = [20, 22, 26, 30, 33, 35, 37, 39];

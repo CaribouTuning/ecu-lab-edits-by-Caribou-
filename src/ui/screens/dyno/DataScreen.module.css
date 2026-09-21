@@ -1,0 +1,266 @@
+/* DYNO > DATALOG. */
+
+.intro {
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  line-height: 1.55;
+  margin-bottom: var(--sp-md);
+}
+
+/* Prose emphasis inside the ExpandableInfo panels and the datalog rows. */
+.em { color: var(--ink); }
+
+/* 10px border-radius here is deliberately off the radius ramp (9/12 are the
+   neighbours) rather than snapped onto either — same call as BUILD's
+   boost-columns panel. */
+.card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+  overflow: hidden;
+  margin-bottom: var(--sp-xl);
+}
+.card[data-tone='danger'] { border-color: var(--danger); }
+.card[data-tone='warn'] { border-color: var(--warn); }
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: var(--sp-md) 12px 0;
+}
+
+/* 560px is the project's one breakpoint — see the note in tokens.css. Below it,
+   four StatTiles (74px content-box floor + 20px padding + 2px border = 96px
+   each, plus three 6px gaps) need 402px, which does not fit inside a phone
+   viewport once the DYNO body padding, card border and grid side padding are
+   subtracted. Two-up needs only 198px, so it is the base above. */
+@media (min-width: 560px) {
+  .gauges { grid-template-columns: repeat(4, 1fr); }
+}
+
+.cardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: var(--panel);
+}
+.card[data-tone='danger'] .cardHead { background: var(--danger-bg); }
+.card[data-tone='warn'] .cardHead { background: var(--warn-bg); }
+
+.cardRpm {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.cardStat {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ok);
+}
+.card[data-tone='danger'] .cardStat { color: var(--danger); }
+.card[data-tone='warn'] .cardStat { color: var(--warn); }
+
+/* Beneath the gauge grid — a gauge's only verdict is StatTile's colour, and
+   colour alone reaches a sighted user with full-colour vision. These sentences
+   carry the same verdict in prose, so everyone gets it. */
+.riskNotes { padding: var(--sp-sm) 12px 0; }
+.riskNote {
+  font-size: var(--fs-xs);
+  color: var(--danger-ink);
+  line-height: 1.4;
+}
+.riskNote + .riskNote { margin-top: 2px; }
+
+.cardBody { padding: 4px 12px var(--sp-md); }
+
+.row { padding-top: var(--sp-sm); }
+
+.rowTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rowKey {
+  font-size: 11.5px;
+  color: var(--ink2);
+  font-weight: 600;
+  min-width: 62px;
+}
+
+.rowValue {
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  font-weight: 700;
+  text-align: right;
+}
+.rowValue[data-ok='false'] { color: var(--danger); }
+
+.rowAsked { color: var(--ink3); font-weight: 400; }
+
+.rowNote {
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.rowNote[data-ok='false'] { color: var(--danger-ink); }
+
+.buildWrap { margin-bottom: var(--sp-xl); }
+
+.tableWrap { margin-bottom: var(--sp-xl); }
+
+/* 10px border-radius here too — see .card above. */
+.tableScroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.tableInner { display: inline-block; min-width: 100%; }
+
+.tableRow { display: flex; }
+
+.cornerCell { width: 44px; flex-shrink: 0; background: var(--panel); }
+
+.headerCell {
+  width: 51px;
+  height: 26px;
+  flex-shrink: 0;
+  background: var(--panel);
+  color: var(--ink2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--line);
+}
+
+.loadCell {
+  width: 44px;
+  height: 32px;
+  flex-shrink: 0;
+  background: var(--panel);
+  color: var(--ink2);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--line);
+}
+
+/* `background` is the one per-cell continuous value here (deltaHeat's
+   gradient over a real number, not a fixed handful of states) — same
+   convention as the Bar primitive's fill, so it stays inline style, driven
+   from JS. The border colour was a fixed alpha regardless of cell value, so
+   it moved here as a static rule instead of staying inline. */
+.dataCell {
+  width: 51px;
+  height: 32px;
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  border: 1px solid rgba(var(--shadow-rgb), 0.35);
+}
+.dataCell[data-empty='true'] { color: var(--ink3); }
+
+.legend {
+  font-size: var(--fs-xs);
+  color: var(--ink3);
+  margin-bottom: 8px;
+}
+
+.actions { display: flex; gap: 8px; }
+
+.trackWrap {
+  position: relative;
+  margin: 0 0 var(--sp-md);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+
+/* Under the input, never over it. The band is a sibling that PRECEDES the range
+   input with no z-index on either, so painting order puts the input on top —
+   that is the structural guarantee the test asserts, because Vitest applies no
+   CSS and a rule living only here would be invisible to the suite.
+   `pointer-events: none` is belt-and-braces on top of that. */
+.trackBand {
+  position: absolute;
+  /* Flush to the wrap's padding box, which is already inside its 1px border —
+     an absolutely positioned child is laid out against the padding box, so an
+     inset here would be a second gap on top of the border. */
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  border-radius: 3px;
+  /* Matches ResultScreen.jsx's `fillOpacity={0.13}` on the chart bands — the
+     same event, drawn twice, has to read the same weight both places. Change
+     one, change the other. */
+  opacity: 0.13;
+}
+.trackBand[data-tone='danger'] { background: var(--danger); }
+.trackBand[data-tone='warn'] { background: var(--warn); }
+.trackBand[data-tone='violet'] { background: var(--violet); }
+
+.track {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* The runnable track must not paint over the bands beneath it, and must not draw a
+   frame either — the frame is `.trackWrap`'s one border. Nothing in this project sets
+   `box-sizing: border-box`, so a border here would sit 1px inside the wrap's rather
+   than on the same pixels, and the track would read as a 2px double line. */
+.track::-webkit-slider-runnable-track {
+  height: 22px;
+  background: transparent;
+}
+.track::-moz-range-track {
+  height: 22px;
+  background: transparent;
+}
+
+.track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 26px;
+  /* (26 - 22) / 2 — centres the 26px thumb on the 22px track. */
+  margin-top: -2px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+.track::-moz-range-thumb {
+  width: 10px;
+  height: 26px;
+  border: none;
+  border-radius: 3px;
+  background: var(--acc);
+}
+
+.track:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }

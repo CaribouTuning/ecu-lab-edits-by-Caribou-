@@ -1,0 +1,140 @@
+name: Weekly release
+
+# Prepares a release every Thursday night, so it is ready to open on Friday morning.
+#
+# It bumps the version on a branch, pushes it, and files an issue with the notes and a
+# one-click link to open the pull request. It deliberately does NOT open the PR itself.
+#
+# WHY NOT. `gh pr create` needs the repository setting "Allow GitHub Actions to create
+# and approve pull requests", which is off. Turning it on grants every workflow here the
+# right to APPROVE pull requests too — the same toggle covers both — which would quietly
+# undercut the review requirement on main. A fine-grained PAT would dodge that, but it
+# expires within a year and fails silently when it does, putting a scheduled outage
+# inside the machinery meant to reduce toil.
+#
+# Opening the PR yourself also costs nothing and gains something: a PR you open raises a
+# normal `pull_request` event, so CI attaches by itself with no dispatch workaround.
+#
+# 02:00 UTC Friday is 22:00 Thursday US Eastern during daylight saving, 21:00 outside
+# it. GitHub cron has no timezone support, so the winter hour drifts by one; that is
+# accepted rather than worked around with a second schedule.
+on:
+  schedule:
+    - cron: '0 2 * * 5'
+  # Cut a release off-cadence, or re-run after a failure.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: minor
+        type: choice
+        options: [patch, minor, major]
+
+# Only what it actually does: push a branch, and file an issue. Notably NOT
+# `pull-requests: write` — see the note above.
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      # Nothing to release is the normal case on a quiet week, and an empty release is
+      # worse than none: it burns a version number and an approval on no change.
+      - name: Check for unreleased commits
+        id: unreleased
+        run: |
+          LAST=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo '')
+          if [ -z "$LAST" ]; then
+            echo "No tag found; treating everything as unreleased."
+            echo "count=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "count=$(git rev-list --count "$LAST"..HEAD)" >> "$GITHUB_OUTPUT"
+            echo "last=$LAST" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if there is nothing to release
+        if: steps.unreleased.outputs.count == '0'
+        run: echo "::notice::No commits since ${{ steps.unreleased.outputs.last }} — nothing to prepare this week."
+
+      - name: Bump the version on a branch
+        if: steps.unreleased.outputs.count != '0'
+        id: bump
+        run: |
+          npm version "${{ inputs.bump || 'minor' }}" --no-git-tag-version
+          VERSION="v$(node -p "require('./package.json').version")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=release/$VERSION" >> "$GITHUB_OUTPUT"
+
+      # `npm version` fires the `version` lifecycle script, which rewrites src/version.js
+      # from package.json. If that ever silently stops happening, the published build
+      # misreports itself in its own header and every bug report from it is suspect.
+      - name: Verify the build version was synced
+        if: steps.unreleased.outputs.count != '0'
+        run: |
+          EXPECTED="${{ steps.bump.outputs.version }}"
+          grep -q "BUILD_VERSION = '$EXPECTED'" src/version.js \
+            || { echo "src/version.js was not synced to $EXPECTED"; exit 1; }
+
+      - name: Commit and push
+        if: steps.unreleased.outputs.count != '0'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "${{ steps.bump.outputs.branch }}"
+          git commit -am "Release ${{ steps.bump.outputs.version }}"
+          git push origin "${{ steps.bump.outputs.branch }}"
+
+      - name: Assemble the release notes
+        if: steps.unreleased.outputs.count != '0'
+        id: notes
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          BRANCH: ${{ steps.bump.outputs.branch }}
+          LAST: ${{ steps.unreleased.outputs.last }}
+          COUNT: ${{ steps.unreleased.outputs.count }}
+        run: |
+          COMPARE="${{ github.server_url }}/${{ github.repository }}/compare/main...${BRANCH}?expand=1"
+          echo "compare=$COMPARE" >> "$GITHUB_OUTPUT"
+          {
+            echo "\`$BRANCH\` is pushed and ready. **$COUNT commits** since \`${LAST:-the beginning}\`."
+            echo
+            echo "**[Open the release pull request]($COMPARE)**"
+            echo
+            echo "Then approve, merge, and tag the merge commit — the tag is what deploys:"
+            echo
+            echo '```bash'
+            echo "git checkout main && git pull"
+            echo "git tag $VERSION && git push origin $VERSION"
+            echo '```'
+            echo
+            echo "Merging the PR publishes nothing on its own."
+            echo
+            echo "## What is in it"
+            echo
+            git log --no-merges --pretty='- %s' "${LAST:+$LAST..}HEAD"
+          } > notes.md
+          cat notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The run summary alone is easy to miss on a quiet Friday. An issue lands in the
+      # normal notification stream, and filing one needs no permission beyond the
+      # `issues: write` above — unlike opening a pull request.
+      - name: File the release issue
+        if: steps.unreleased.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Release ${{ steps.bump.outputs.version }} is ready to open" \
+            --body-file notes.md

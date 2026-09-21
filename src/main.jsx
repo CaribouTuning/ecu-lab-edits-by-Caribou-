@@ -7,6 +7,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
+import './ui/tokens.css';
+
 import EcuLab from './ui/EcuLab.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
 

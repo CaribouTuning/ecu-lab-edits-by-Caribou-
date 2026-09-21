@@ -6,7 +6,7 @@
  * player-editable and feed real physics downstream.
  */
 
-import { CHAR_SCALE, OTTO_REALIZATION } from './constants.js';
+import { AMBIENT_K, CHAR_SCALE, GAMMA_AIR, R_AIR, SONIC_AMBIENT_MS } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { BASELINE_MAIN_BEARINGS, CYL_COUNT, MAIN_BEARINGS, hasBalanceShafts } from './hardware.js';
 
@@ -72,6 +72,69 @@ export function springFrictionPa(springRate) {
 }
 
 /**
+ * Mean piston speed, m/s.
+ *
+ * The speed that actually limits an engine, more than RPM does. A long-stroke engine
+ * reaches a given piston speed at fewer revolutions, which is why it cannot rev as far.
+ *
+ * @param {number} strokeMm stroke, mm
+ * @param {number} rpm engine speed
+ * @returns {number} mean piston speed, m/s
+ */
+export function meanPistonSpeedMs(strokeMm, rpm) {
+  return 2 * (strokeMm / 1000) * (rpm / 60);
+}
+
+/**
+ * Inlet Mach index — how close the charge is to choking on its way past the valve.
+ *
+ * Taylor's index: the gas velocity through the inlet valve, as a fraction of the speed
+ * of sound. Velocity through the valve is the piston speed scaled by how much smaller
+ * the valve is than the bore, so
+ *
+ *     Z = (bore / D_valve)^2 * meanPistonSpeed / sonicVelocity
+ *
+ * Past a critical value the flow chokes, the cylinder stops filling, and VE falls away
+ * however hard the engine is turning. This is the term the model was missing: without it
+ * VE kept climbing at the limiter and no naturally aspirated engine had a power peak
+ * before its redline (issue #15).
+ *
+ * The bore-to-valve factor is lumped into a coefficient because the model has no valve
+ * geometry — see COEFF.MACH_BORE_VALVE_FACTOR for what it is worth on a real head, and
+ * for the honest note on which parts of this are derived and which are fitted.
+ *
+ * @param {number} boreMm bore, mm — unused directly; kept for the geometry it represents
+ * @param {number} strokeMm stroke, mm
+ * @param {number} rpm engine speed
+ * @param {number} [sonicMs] speed of sound in the intake charge, m/s
+ * @returns {number} Mach index, dimensionless
+ */
+export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS) {
+  return COEFF.MACH_BORE_VALVE_FACTOR * meanPistonSpeedMs(strokeMm, rpm) / sonicMs;
+}
+
+/**
+ * How much volumetric efficiency the inlet Mach index costs at this speed.
+ *
+ * Flat until the flow starts to choke, then falling quadratically — the shape of
+ * Taylor's measured VE-against-Z curves. Floored, because a real engine still breathes
+ * something at the limiter.
+ *
+ * @param {number} boreMm bore, mm
+ * @param {number} strokeMm stroke, mm
+ * @param {number} rpm engine speed
+ * @returns {number} multiplier on VE, 0..1
+ */
+export function machVeMultiplier(boreMm, strokeMm, rpm, chargeK = AMBIENT_K) {
+  // Sonic velocity in the charge as it actually is, not as ambient. A boosted engine
+  // runs a hotter intake, sound travels faster in it, and it therefore chokes LATER —
+  // a real effect, and one of the reasons forced induction tolerates more piston speed.
+  const sonicMs = Math.sqrt(GAMMA_AIR * R_AIR * chargeK);
+  const over = Math.max(0, inletMachIndex(boreMm, strokeMm, rpm, sonicMs) - COEFF.MACH_Z_CRIT);
+  return Math.max(COEFF.MACH_VE_FLOOR, 1 - COEFF.MACH_VE_LOSS * over * over);
+}
+
+/**
  * Bore/stroke ratio bias — oversquare engines favour high RPM, undersquare favour low.
  *
  * @param {number} rpm engine speed
@@ -102,11 +165,10 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} displacementL total displacement, litres
  * @property {number} ratio bore ÷ stroke
  * @property {number} compression static compression ratio, carried through unchanged
- * @property {number} configKnockBonus knock margin from cylinder size, degrees
- * @property {number} materialKnockBonus knock margin from head material, degrees
- * @property {number} compressionKnockAdj knock margin from compression ratio, degrees
- * @property {number} thermalEff indicated thermal efficiency
- * @property {number} ottoIdeal ideal Otto-cycle efficiency
+ * @property {number} bore cylinder bore, mm
+ * @property {number} stroke stroke, mm
+ * @property {number} boreFlameFactor flame-travel scaling from bore, 1 at the reference
+ * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
  * @property {number} bearingWearMult block material wear multiplier
  * @property {string} character human-readable bore/stroke description
@@ -134,15 +196,20 @@ export function deriveEngine(cfg) {
   const displacementL = (Math.PI / 4 * boreCm * boreCm * strokeCm * cyl) / 1000;
   const ratio = cfg.bore / cfg.stroke;
   const perCylL = displacementL / cyl;
-  const configKnockBonus = perCylL < 0.5 ? 1 : perCylL > 0.7 ? -1 : 0;
-  const materialKnockBonus = cfg.headMaterial === 'Cast Iron' ? -1.5 : 0;
-  const compressionKnockAdj = (10.3 - cfg.compression) * 2.0;
-  // Thermal efficiency comes from the ideal Otto cycle for this compression ratio,
-  // scaled by what real engines actually realize.
-  const ottoIdeal = 1 - 1 / Math.pow(cfg.compression, 0.35);
-  // INDICATED efficiency — work done on the piston, before friction and pumping are
-  // paid for. Brake (usable) output is computed later as IMEP minus FMEP.
-  const thermalEff = ottoIdeal * OTTO_REALIZATION;
+  // What the ARCHITECTURE contributes to combustion, expressed as the two physical
+  // quantities the cycle model reads rather than as bonuses in degrees. Compression
+  // needs no term at all any more: it changes the clearance volume, and the cycle
+  // integrates what follows.
+  //
+  // Flame travel scales with bore, so a big cylinder burns slower.
+  const boreFlameFactor = cfg.bore / COEFF.BORE_FLAME_REF_MM;
+  // An iron head runs a hotter chamber, so the charge in it starts compression hotter.
+  const chamberOffsetK = cfg.headMaterial === 'Cast Iron' ? COEFF.IRON_HEAD_CHAMBER_K : 0;
+  // No thermal-efficiency term any more. Indicated efficiency used to be an ideal
+  // Otto-cycle number scaled by a realisation factor, multiplied into fuel energy to get
+  // work. The cycle model produces it instead: compression changes the clearance volume,
+  // which changes the expansion the integration runs over, and efficiency is whatever
+  // comes out. Two fitted constants became a consequence of the geometry.
   const torqueScale = displacementL / 3.5;
   const bearingWearMult = cfg.blockMaterial === 'Cast Iron' ? 0.85 : 1.0;
   // Architecture friction. Zeroed at the V6 baseline so existing builds do not move:
@@ -162,14 +229,15 @@ export function deriveEngine(cfg) {
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
   // Compression is passed through rather than only being folded into the two terms
-  // derived from it above. `peakPressureBar` needs the ratio itself — a knock-margin
-  // delta cannot be un-mixed back into one — and every call site already hands
+  // derived from it above. The cycle model needs the ratio itself, to size the clearance
+  // volume it integrates over, and every call site already hands
   // `evaluatePoint` a `derived`, so carrying it here keeps the config object out of
   // the per-point signature.
   return {
     cyl, displacementL, ratio, compression: cfg.compression,
-    configKnockBonus, materialKnockBonus, compressionKnockAdj,
-    thermalEff, ottoIdeal, torqueScale, bearingWearMult, character, perCylL,
+    bore: cfg.bore, stroke: cfg.stroke,
+    boreFlameFactor, chamberOffsetK,
+    torqueScale, bearingWearMult, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,
   };

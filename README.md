@@ -1,17 +1,19 @@
 # ECU Lab
 
-### An engine management and tuning simulator, created by **CaribouTuning**.
+### An engine management and tuning simulator.
 
-> **CaribouTuning** Designed it, and wrote the engine
-> model — the physics, the calibration tables, the pull log, the teaching material,
-> the whole thing. Every number this simulator produces comes from his work.
+> **CaribouTuning** and **Turtle.GTI** build ECU Lab together.
 >
-> **Turtle.GTI** is hosting the repository and handling the engineering, scaffolding,
-> and scaling around it: packaging it as a project, adding the test suite, and setting up
-> CI, so the app has somewhere to live and grow.
+> CaribouTuning created it. The concept, the engine model, the calibration tables, the
+> pull log and the teaching material started with him, the domain knowledge behind them
+> is his, and he still works on the physics.
+>
+> Turtle.GTI develops and maintains it: the physics added since, the test suite and its
+> behavioural fingerprint gate, the tooling and CI, and the current rework of the app.
 
 Design an engine, edit the same three calibration tables a real tuner edits, run a dyno
-pull, and read a log that explains what went right or wrong.
+pull, read a log that explains what went right or wrong, then put the engine in a car
+and run a quarter mile with it.
 
 It is a teaching tool, not a game with a horsepower slider.
 
@@ -22,8 +24,8 @@ delivery, and power is whatever falls out of the physics. If you contribute a fe
 add it as a physical mechanism — never as a bonus multiplier.
 
 That rule is why the numbers mean something. A stock 3.5 L V6 on 91 octane makes about
-237 whp here because the ideal gas law, the Otto cycle and the friction model say so,
-not because someone typed 237.
+250 whp here because the ideal gas law, an integrated pressure trace and the friction
+model say so, not because someone typed 250.
 
 ## What it actually models
 
@@ -32,14 +34,24 @@ not because someone typed 237.
   heating value — which is why E85 needs ~1.5× the injector volume for the same lambda
 - **Injector pulse width** against the real time available per engine cycle, so duty
   cycle is a physical wall rather than a capacity index
-- **Knock** driven by trapped charge mass, charge temperature, octane, compression and
-  mixture — not by boost alone
-- **Torque** as `IMEP − FMEP → BMEP → T = BMEP × Vd / 4π`, with rubbing friction, valve
-  spring load and pumping losses all paid for separately
+- **The closed cycle**, integrated two crank degrees at a time from intake valve close
+  to exhaust valve open — Wiebe heat release, slider-crank volume, and indicated work as
+  `∮ p dV`. Peak cylinder pressure, the angle it occurs at, and MBT all come off that
+  trace rather than from a correlation
+- **Knock** as an autoignition integral over the unburned end gas, so octane,
+  compression, charge temperature, residual dilution and mixture all reach it through
+  the pressure history instead of through separate corrections
+- **Torque** as `IMEP − friction − PMEP → BMEP → T = BMEP × Vd / 4π`. Pumping work is
+  exhaust manifold pressure minus intake, with its real sign, so a turbine's
+  backpressure is a cost and a well-matched one can hand work back
 - **A live engine** integrating real crankshaft dynamics at 20 Hz: it idles, revs,
   stalls, hits a rev limiter with hysteresis, and cuts fuel on overrun
 - **Cam and valvetrain** — duration shifts the VE peak, overlap costs idle vacuum, and
   springs set the speed at which the valves stop following the lobe
+- **A quarter mile** — the measured torque curve goes into a car and runs the strip:
+  `F = μN` grip, `ΔN = m·a·h/L` weight transfer, `F_aero = ½ρCdAv²` drag, gearing that
+  multiplies torque and divides speed by the same factor, and rotating inertia that
+  behaves as extra mass in proportion to the square of the ratio
 
 Units are real throughout: kPa, K, grams, ms, J, Nm, Pa, g/s, W.
 
@@ -72,6 +84,7 @@ src/
     point.js         evaluatePoint — the heart of it
     sweep.js         a full dyno pull + the event log
     live.js          real-time crank dynamics + ECU control loop
+    drivetrain.js    the car: gearing, grip, weight transfer, the quarter mile
     advisors.js      what the hardware wants vs. what your tables say
     scoring.js       tuning / engineer / pull scores
   ui/            presentation only — no physics below this line
@@ -90,9 +103,10 @@ has.
 
 Two layers, doing different jobs:
 
-- **`tests/physics.test.js`** asserts on direction and relationship — "a longer cam
-  gives away bottom end and gains top end", "lean under load costs knock margin but
-  lean at cruise does not". Readable failures that say what broke.
+- **`tests/physics.test.js`** and **`tests/drivetrain.test.js`** assert on direction and
+  relationship — "a longer cam gives away bottom end and gains top end", "a
+  traction-limited launch is independent of mass". Readable failures that say what
+  broke.
 - **`tests/fingerprint.test.js`** hashes the entire simulation across 6,480 operating
   points, 432 full sweeps and 144 VE tables. It catches the coupled changes you did not
   think to check.
@@ -116,24 +130,30 @@ UI is still one large component pending decomposition, and accessibility needs w
 
 ## Credits
 
-**ECU Lab was created by [CaribouTuning](#credits).**
+**ECU Lab is built by CaribouTuning and Turtle.GTI, as partners.**
 
-The simulator is his. The engine model, the calibration tables, the knock envelope, the
-pull log, the scoring, the tutorial and the design — all of it originated with him, and
-the domain knowledge behind it is his too. Anything this app teaches, it teaches because
-he knew it first.
+It began as CaribouTuning's. The engine model, the calibration tables, the knock
+envelope, the pull log, the scoring, the tutorial and the original design all originated
+with him, and so did the domain knowledge behind them. Anything this app teaches at its
+core, it teaches because he knew it first — and he is still working on the physics.
+
+Turtle.GTI develops and maintains it: the physics added since, the behavioural
+fingerprint that pins the model against drift, the intent test suite, CI, the release
+pipeline, and the current rebuild of the interface.
+
+Decisions that touch the physics or the teaching material are made between them.
 
 | | |
 |---|---|
-| **CaribouTuning** | Creator and author. Engine model, physics, calibration design, UI, teaching material. |
-| **Turtle.GTI** | Repository, build tooling, test suite, CI, packaging. |
+| **CaribouTuning** | Created it. Engine model, calibration design, pull log, scoring, teaching material, ongoing physics. |
+| **Turtle.GTI** | Develops and maintains it. Physics, test suite and fingerprint gate, tooling, CI, and the UI rework. |
 
 Contributions from anyone else are very welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-[MIT](LICENSE) — copyright Caribou Tuning.
+[MIT](LICENSE) — copyright Caribou Tuning and Turtle.GTI.
 
 ## A note on real engines
 

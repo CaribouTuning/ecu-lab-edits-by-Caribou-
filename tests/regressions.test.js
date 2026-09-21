@@ -70,7 +70,12 @@ describe('#1/#2 fuel-trim histogram converges on the true VE table', () => {
     // A miscalibrated table does not change cylinder filling, but it does change how
     // much fuel goes in, and mixture genuinely affects the knock limit. So the
     // threshold must move, and it must move for the right reason.
-    const lean = point({ veVal: 70, veActualVal: 100 });
+    // A 15% under-reading table, which lands the mixture just lean of stoichiometric —
+    // where flame temperature peaks and knock margin is genuinely worst. (Push it much
+    // further lean and margin comes back, because a very lean charge releases less heat
+    // and burns cooler. That is real, and it is why this test picks a realistic
+    // miscalibration rather than an extreme one.)
+    const lean = point({ veVal: 85, veActualVal: 100 });
     const onTarget = point({ veVal: 100, veActualVal: 100 });
 
     expect(lean.chargeIndex).toBe(onTarget.chargeIndex);   // same air...
@@ -354,7 +359,9 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
       ecuInjectorCc: patch.ecuInjectorCc,
       injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
       mods: patch.mods, mafScalar: 1, derived: S.deriveEngine(patch.engineConfig),
-      turbine: S.TURBINE_OPTS[patch.turbineIdx],
+      // The N54 is twin-turbo, and backpressure now depends on total turbine flow
+      // area, so the count has to come along or this models a choked engine.
+      turbine: S.presetTurbine(preset),
       compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
     });
   }
@@ -374,9 +381,17 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
   it('charges the same knock-free build more bearing life for more compression', () => {
     const low = tunedPull(9.5, E85);
     const high = tunedPull(12.5, E85);
-    // Not a magnitude assertion: what matters is that the two are no longer equal, and
-    // that the difference is big enough for a player to see it in the health bars.
-    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing * 1.5);
+    // Direction, not magnitude — which is the rule in this repo, and here it is also the
+    // honest limit of what can be claimed. The gap is real but modest, because the
+    // factory calibration this test generates RETARDS as compression rises (about 23
+    // degrees average at 9.5:1 against 17 at 12.5:1), and retard pulls peak pressure
+    // back down. A knock-limited tune is a partial defence against its own compression.
+    //
+    // The earlier version of this test demanded a 1.5x gap, which the empirical
+    // peak-pressure estimate of the time produced because it had no way to let the tune
+    // back off. The crank-angle cycle does, so the effect is smaller and better founded.
+    expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
+    expect(high.peakHp).toBeGreaterThan(low.peakHp);
   });
 
   it('leaves the Tuning Score alone — the calibration is not what is wrong', () => {

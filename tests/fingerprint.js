@@ -22,11 +22,87 @@
  * that it forces a physics change to be a deliberate, reviewed act.
  */
 
-/** Rounds to 6 decimal places so float noise across platforms cannot flap the hash. */
-const r6 = (v) => (typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(6)) : v);
+/**
+ * Significant figures the hash commits to.
+ *
+ * WHY SIGNIFICANT FIGURES AND NOT DECIMAL PLACES. This used to round to six decimal
+ * places, which sounds tolerant and is not: it is an ABSOLUTE tolerance applied to
+ * values spanning seven orders of magnitude. On a BSFC of 6,501,693.873 it commits to
+ * thirteen significant digits — more precision than a double survives through an
+ * iterative solve — while on a wear figure of 0.000004 it commits to barely one. The
+ * gate was therefore far too strict at the top of the range and far too loose at the
+ * bottom, and the strict end is what broke: the hash did not reproduce on Node 26, so
+ * the documented cure (regenerate the baseline) walked contributors into revalidating
+ * regressions against their own toolchain. That is issue #48.
+ *
+ * WHY SEVEN. Measured, not guessed, and re-measured against the physics as it stands.
+ * Perturbing every Math.pow, Math.exp and Math.log result by one ULP — a fair model of
+ * what a new V8 does — moves 34 of the 349,195 committed fields, by at most 1.5e-9
+ * relative; at a deliberately unfair sixteen ULP it moves 44 of them by at most 1.5e-8.
+ * Seven significant figures is a 1e-7 grid, so it absorbs even the sixteen-ULP case with
+ * an order to spare. Counting how many survive each candidate quantiser is what picks
+ * the seven:
+ *
+ *   quantiser          1 ULP    4 ULP   16 ULP     (fields still differing)
+ *   6 decimals (old)       1        1        1
+ *   9 sig figs             1        1        1
+ *   8 sig figs             0        0        1
+ *   7 sig figs             0        0        0
+ *
+ * Eight is not enough; seven is. And seven stays absurdly tight against anything
+ * physical: a change of one part in ten million in a torque figure is not a physics
+ * change anyone could mean. `is immune to floating-point noise` in fingerprint.test.js
+ * holds this property down permanently.
+ *
+ * The single field that survives the old quantiser is worth naming, because it says what
+ * the real hazard is:
+ * `bsfc` at 800 RPM and 40 kPa on mis-scaled injectors, where the engine makes almost
+ * no power and BSFC is fuel divided by a denominator approaching zero. A ratio near a
+ * singularity has no stable relative precision at any tolerance. Quantising is what
+ * keeps it out of the hash; it is not a claim that the value itself is meaningful.
+ */
+const SIG_FIGS = 7;
+
+/**
+ * Quantises to {@link SIG_FIGS} significant figures so numerical noise cannot flap the
+ * hash. Non-finite values pass through untouched, so a genuine blow-up still shows up
+ * as NaN or Infinity for the guard in fingerprint.test.js to catch.
+ *
+ * @param {*} v
+ * @returns {*}
+ */
+export const quantise = (v) => (
+  typeof v === 'number' && Number.isFinite(v) && v !== 0
+    ? Number(v.toPrecision(SIG_FIGS))
+    : v
+);
+
+/**
+ * The short name every call site in this file uses.
+ *
+ * KEEP THIS ALIAS. It looks like clutter and is not: this file gains a new section every
+ * time someone adds a subsystem to the matrix, and those sections are written on separate
+ * branches. Renaming the call sites instead of aliasing means any branch in flight that
+ * calls `r6` merges CLEANLY — different region of the file — and then throws
+ * `r6 is not defined` at runtime. That happened once already while this change was being
+ * prepared. One rename here is not worth a landmine there.
+ */
+const r6 = quantise;
+
 
 const roundAll = (obj) => Object.fromEntries(
-  Object.entries(obj).map(([k, v]) => [k, typeof v === 'number' ? r6(v) : v]),
+  Object.entries(obj).map(([k, v]) => {
+    if (typeof v === 'number') return [k, r6(v)];
+    // A legitimate absent reading (e.g. bsfc when the engine makes no power) is a
+    // literal null, and typeof null is "object", not "number" — so it never reaches
+    // the quantiser above. NaN and Infinity, by contrast, are still typeof "number",
+    // so a real blow-up still flows through it, stays non-finite, and still serialises to
+    // JSON's `null`. Remapping only the literal-null case here keeps the two
+    // distinguishable, which is what lets the ": null" guard in
+    // fingerprint.test.js still mean "physics blew up" and nothing else.
+    if (v === null) return [k, 'n/a'];
+    return [k, v];
+  }),
 );
 
 /** Engine configurations spanning the whole design space, including failure modes. */
@@ -195,10 +271,127 @@ export function buildFingerprint(S) {
   for (const preset of S.ENGINE_PRESETS) {
     const { ve, timing, afr } = S.factoryCalibration(preset);
     out.factoryCalibration[preset.id] = {
-      ve: ve.map((row) => row.map(r6)),
-      timing: timing.map((row) => row.map(r6)),
-      afr: afr.map((row) => row.map(r6)),
+      ve: ve.map((row) => row.map(quantise)),
+      timing: timing.map((row) => row.map(quantise)),
+      afr: afr.map((row) => row.map(quantise)),
     };
+  }
+
+  // ---- calibrationAdvice: what the spark and fuel advisors SAY about every shipped
+  // preset's own factory calibration. The advisors are what the player actually reads
+  // in TUNE, and until now nothing in this matrix called them at all — so the whole
+  // advisory layer could change what it tells people with no hash movement and no
+  // review. Gating the advice itself, rather than the constants behind it, means a
+  // future ceiling or tolerance added to advisors.js is covered without a matching
+  // addition here.
+  //
+  // Wired exactly as src/ui/EcuLab.jsx wires it, MAF error included. That matters:
+  // passing mafErrorBase 1 makes a turbo build's delivered mixture richer than the
+  // factory table intends, which lifts the knock threshold and hides real cells. The
+  // app never does that, so neither does this.
+  out.calibrationAdvice = {};
+  for (const preset of S.ENGINE_PRESETS) {
+    const p = S.applyPreset(preset);
+    const fuel = S.OCTANE_OPTS[p.octaneIdx];
+    const advice = S.calibrationAdvice({
+      ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+      derived: S.deriveEngine(p.engineConfig), fuel,
+      mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
+      compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      turbine: S.presetTurbine(preset),
+      injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+      mafScalar: 1.0, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+    });
+    out.calibrationAdvice[preset.id] = {
+      overAdvanced: advice.overAdvanced.length,
+      pastMbt: advice.pastMbt.length,
+      underAdvanced: advice.underAdvanced.length,
+      wrongMix: advice.wrongMix.length,
+      knocking: advice.spark.filter((c) => c.knocking).length,
+      spark: advice.spark.map((c) => ({
+        ri: c.ri, ci: c.ci,
+        current: r6(c.current), suggested: r6(c.suggested),
+        mbt: r6(c.mbt), knockCeiling: r6(c.knockCeiling),
+        knockLimited: c.knockLimited, knocking: c.knocking,
+      })),
+      // The fuel side used to be recorded only as `wrongMix.length` — a count that an
+      // edit to the `map >= 85` gate or the 0.45 tolerance could move without changing.
+      // Record every cell in the same detail as spark, so a change to either constant
+      // is caught here even when it does not flip which cells cross the threshold.
+      fuelAdv: advice.fuelAdv.map((c) => ({
+        ri: c.ri, ci: c.ci, suggested: r6(c.suggested), delta: r6(c.delta),
+      })),
+    };
+  }
+
+  // ---- drag runs: the vehicle model, driven by real measured torque curves ----
+  // Fed from an actual sweep rather than a synthetic curve, so this gates the whole
+  // chain — engine to torque curve to elapsed time. The matrix spans the two regimes
+  // that behave differently (traction-limited and power-limited) and every catalogue
+  // the vehicle model reads, because a change to any of them moves a real number a
+  // player sees on the time slip.
+  out.simulateDragRun = {};
+  {
+    const dragCases = [
+      ['stockV6', 'na', 'none'],
+      ['bigV8', 'na', 'all'],
+      ['turboI6', 'heavy', 'all'],
+    ];
+    for (const [cname, bname, mname] of dragCases) {
+      const cfg = FINGERPRINT_CONFIGS[cname];
+      const boostCurve = BOOSTS[bname];
+      const mods = MODSETS[mname];
+      const turboOn = bname !== 'na';
+      const derived = S.deriveEngine(cfg);
+      const ve = S.computeHardwareVE(cfg, mods, {
+        turboOn,
+        turbine: turboOn ? S.TURBINE_OPTS[1] : null,
+        exhaustDia: SWEEP_EXHAUST_DIA,
+        fuel: S.OCTANE_OPTS[0],
+      });
+      const sweep = S.simulateSweep({
+        loadKpa: 100, ve,
+        timing: S.clone2D(S.DEFAULT_TIMING),
+        afr: S.clone2D(S.DEFAULT_AFR),
+        turboOn, boostCurve,
+        octaneBonus: S.OCTANE_OPTS[0].bonus,
+        octaneLabel: S.OCTANE_OPTS[0].label,
+        fuel: S.OCTANE_OPTS[0],
+        injectorCc: 850, ecuInjectorCc: 850, injectorLabel: '850cc',
+        mods, mafScalar: 1.0, derived,
+        turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+      });
+      const torqueCurveNm = S.torqueCurveFromSweep(sweep);
+      for (const bodyIdx of [0, 1, 4]) {
+        for (const gripIdx of [0, 2]) {
+          for (const driveIdx of [0, 1]) {
+            for (const boxIdx of [0, 1]) {
+              const car = {
+                ...S.DEFAULT_CAR, bodyIdx, ...S.CAR_BODIES[bodyIdx],
+                gripIdx, driveIdx, boxIdx,
+              };
+              const d = S.simulateDragRun({
+                car, torqueCurveNm, redline: derived.redline,
+                displacementL: derived.displacementL, peakHp: sweep.peakHp,
+              });
+              const key = `${cname}|${bname}|${mname}|${S.CAR_BODIES[bodyIdx].body}`
+                + `|${S.TIRE_GRIP[gripIdx].grade}|${S.DRIVETRAIN_OPTS[driveIdx].drive}`
+                + `|${S.GEARBOX_OPTS[boxIdx].box}`;
+              out.simulateDragRun[key] = {
+                et: r6(d.et), trapMph: r6(d.trapMph),
+                sixtyFootT: r6(d.sixtyFootT), zeroToSixty: r6(d.zeroToSixty),
+                eighthET: r6(d.eighthET), eighthMph: r6(d.eighthMph),
+                topGearUsed: d.topGearUsed, wheelspun: d.wheelspun, finished: d.finished,
+                nTrace: d.trace.length,
+                // Sampled rather than dumped whole: enough to catch the shape of the
+                // run moving without burying the diff in ten thousand rows.
+                samples: [0, 50, 150, 300].map((i) => d.trace[i] && roundAll(d.trace[i])),
+              };
+            }
+          }
+        }
+      }
+    }
   }
 
   // ---- helpers ----
@@ -207,8 +400,13 @@ export function buildFingerprint(S) {
     interp2: [[800, 20], [2500, 70], [4500, 101.325], [6500, 150], [7500, 200]].map(([rpm, l]) => r6(S.interp2(S.DEFAULT_VE, rpm, l))),
     chargeTempK: [0, 5, 10, 20, 30].flatMap((psi) => [true, false].map((ic) => r6(S.chargeTempK(psi, ic)))),
     idealExhaustDiameter: [2.0, 3.5, 5.0].flatMap((d) => [0, 5, 10, 20].map((b) => r6(S.idealExhaustDiameter(d, b)))),
-    computeManifold: [1500, 3500, 5500, 7500].flatMap((rpm) => [40, 100].map((load) =>
-      roundAll(S.computeManifold(rpm, load, true, 12, S.TURBINE_OPTS[1], S.COMPRESSOR_OPTS[1])))),
+    solveInduction: [1500, 3500, 5500, 7500].flatMap((rpm) => [40, 100].map((load) =>
+      roundAll(S.solveInduction({
+        rpm, loadKpa: load, turboOn: true, boostTargetPsi: 12,
+        turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+        veAt: () => 95, derived: S.deriveEngine(FINGERPRINT_CONFIGS.stockV6),
+        intakeKAt: (psi) => S.chargeTempK(psi, true), lambda: 1, exhaustK: 1100,
+      })))),
     clamp: [[-5, 0, 10], [5, 0, 10], [15, 0, 10]].map(([v, lo, hi]) => S.clamp(v, lo, hi)),
   };
 
@@ -220,6 +418,9 @@ export function buildFingerprint(S) {
     OCTANE_OPTS: S.OCTANE_OPTS, INJECTOR_OPTS: S.INJECTOR_OPTS,
     TURBINE_OPTS: S.TURBINE_OPTS, COMPRESSOR_OPTS: S.COMPRESSOR_OPTS,
     EXHAUST_DIA_OPTS: S.EXHAUST_DIA_OPTS,
+    TIRE_GRIP: S.TIRE_GRIP, CAR_BODIES: S.CAR_BODIES,
+    DRIVETRAIN_OPTS: S.DRIVETRAIN_OPTS, GEARBOX_OPTS: S.GEARBOX_OPTS,
+    DEFAULT_CAR: S.DEFAULT_CAR,
   };
 
   return out;

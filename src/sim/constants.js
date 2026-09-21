@@ -17,8 +17,39 @@ export const R_AIR = 287;
 /** Sea-level ambient pressure, kPa. */
 export const BARO_KPA = 101.325;
 
-/** Ambient air temperature, K (25 °C). */
+/** Kelvin to Celsius offset. */
+export const KELVIN_OFFSET = 273.15;
+
+/** Ambient air temperature, K. */
 export const AMBIENT_K = 298;
+
+/**
+ * Ratio of specific heats for air, cold-air-standard.
+ *
+ * Named because two places need it and a bare 1.4 in an expression is unreadable.
+ * DISTINCT from `GAMMA_EXP` below, which is (gamma-1)/gamma for the same gas, and from
+ * `COEFF.GAMMA_BURNED`, which is the much lower value the COMBUSTION PRODUCTS have at
+ * cycle temperature. Do not substitute one for another.
+ */
+export const GAMMA_AIR = 1.4;
+
+/**
+ * Speed of sound in ambient intake air, m/s.
+ *
+ * sqrt(gamma * R * T) — 346 m/s at 25 C. The reference the inlet Mach index is taken
+ * against; see `inletMachIndex` in engine.js.
+ */
+export const SONIC_AMBIENT_MS = Math.sqrt(GAMMA_AIR * R_AIR * AMBIENT_K);
+
+/**
+ * The same ambient temperature in Celsius, 24.85 °C.
+ *
+ * Derived rather than written out, because two places used to state ambient
+ * independently — `AMBIENT_K` here and a bare `25` in the knock model's IAT penalty —
+ * and they did not agree. Everything that needs ambient in Celsius must come through
+ * this, so the model cannot hold two ambients at once.
+ */
+export const AMBIENT_C = AMBIENT_K - KELVIN_OFFSET;
 
 /** Pounds per square inch to kilopascals. */
 export const PSI_TO_KPA = 6.895;
@@ -35,8 +66,6 @@ export const COMP_ISEN_EFF = 0.70;
 /** Fraction of the compression temperature rise an intercooler removes. */
 export const IC_EFFECTIVENESS = 0.70;
 
-/** Fraction of the ideal Otto cycle realised as INDICATED work. */
-export const OTTO_REALIZATION = 0.685;
 
 /** Crank → wheel transmission efficiency. */
 export const DRIVETRAIN_EFF = 0.85;
@@ -46,3 +75,43 @@ export const INJ_DEADTIME_MS = 1.0;
 
 /** How strongly bore:stroke ratio biases the powerband. */
 export const CHAR_SCALE = 0.3;
+
+// --- Vehicle dynamics ---
+// The drag strip works in SI throughout: metres, seconds, kilograms, newtons.
+// Everything below is either a defined unit conversion or a measured physical
+// constant, so none of it is adjustable. The knobs live in `coefficients.js`.
+
+/** Standard gravitational acceleration, m/s². */
+export const G = 9.80665;
+
+/** Metres per international inch, exactly. */
+export const M_PER_INCH = 0.0254;
+
+/** Metres per international mile, exactly. */
+export const MILE_M = 1609.344;
+
+/** A quarter mile, metres — the distance the strip measures. */
+export const QUARTER_MILE_M = MILE_M / 4;
+
+/** An eighth mile, metres — the interval most strips also time. */
+export const EIGHTH_MILE_M = MILE_M / 8;
+
+/** Sixty feet, metres — the launch metric drag racers actually judge a run by. */
+export const SIXTY_FEET_M = 60 * 12 * M_PER_INCH;
+
+/** Miles per hour per metre per second. */
+export const MPH_PER_MS = 3600 / MILE_M;
+
+/** 60 mph in m/s, the 0-60 trigger. */
+export const SIXTY_MPH_MS = 60 / MPH_PER_MS;
+
+/**
+ * Ambient air density, kg/m³.
+ *
+ * Not a separate measured figure: it is the ideal gas law the engine model already
+ * uses, evaluated at the same sea-level pressure and 25 °C ambient. That resolves to
+ * 1.185 kg/m³ against a published 1.184, and it means the air the car pushes through
+ * is the same air the engine breathes — change the ambient conditions once and both
+ * move together.
+ */
+export const RHO_AIR = (BARO_KPA * 1000) / (R_AIR * AMBIENT_K);

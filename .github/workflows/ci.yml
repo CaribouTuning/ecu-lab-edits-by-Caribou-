@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Run the checks by hand from the Actions tab, against any ref. Useful for a branch
+  # pushed by automation before anyone has opened a pull request for it.
+  #
+  # This was originally added so the release workflow could dispatch CI onto a branch
+  # whose PR it had opened itself — a PR opened by GITHUB_TOKEN raises no
+  # `pull_request` event, so the required checks never reported. That workflow no
+  # longer opens the PR, so the workaround is not needed; the trigger stays because
+  # being able to run CI on demand is worth having on its own.
+  workflow_dispatch:
 
 jobs:
   check:

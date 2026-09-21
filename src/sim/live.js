@@ -10,11 +10,12 @@
  * sensor noise. Tests that need determinism should stub `Math.random`.
  */
 
-import { BARO_KPA, DRIVETRAIN_EFF } from './constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
 import { clamp, interp1, interp2 } from './math.js';
-import { computeManifold } from './manifold.js';
+import { solveInduction } from './turbo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
@@ -31,6 +32,22 @@ export const STALL_RPM = 380;
 export const REDLINE_CUT = 7600;
 /** How far past the redline the limiter cuts fuel. */
 export const LIMITER_OVERSHOOT_RPM = 100;
+/**
+ * Below this crank speed a crank sensor produces no usable signal, so the ECU reports
+ * zero rather than a small number, RPM.
+ *
+ * A variable-reluctance pickup's output voltage is proportional to how fast a tooth goes
+ * past it; with nothing turning there are no teeth and no signal, and reading noise off a
+ * stationary crank is not a measurement. Without this the tachometer sat at about 28 RPM
+ * for ever after the engine was switched off, which is what a stopped engine looked like:
+ * still running.
+ *
+ * Here rather than in COEFF deliberately. The fingerprint hashes COEFF whole, so a
+ * coefficient added there moves the fixture even when — as here — it cannot move a single
+ * dyno figure. This is a property of the tachometer, it sits with the rest of the live
+ * model's own constants above, and the gate stays meaningful.
+ */
+export const CRANK_SENSOR_MIN_RPM = 30;
 
 /**
  * A simulated sensor: real ones are noisy and lag behind the true value.
@@ -52,7 +69,7 @@ export function sensorRead(prev, trueVal, lagFactor, noiseAmp) {
  */
 export function makeLiveState() {
   return {
-    running: false, cranking: false, rpm: 0, omega: 0,
+    running: false, cranking: false, rpm: 0, omega: 0, boostPsi: 0,
     idleTrim: 5, stft: 0, ltft: 0,
     coolantC: 20, oilC: 20, knockCount: 0, fuelCut: false, dfco: false, limiterCut: false,
     sensedRpm: 0, sensedMaf: 0, sensedMap: 101, sensedIat: 25,
@@ -73,7 +90,7 @@ export function liveStep(st, dt, input, cfg) {
   const s = { ...st };
   const {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-    mafErrorBase, turboOn, boostCurve, octaneBonus, turbine, compressor,
+    mafErrorBase, turboOn, boostCurve, turbine, compressor,
   } = cfg;
   if (turboOn) assertBoostCurve(boostCurve);
   const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
@@ -117,7 +134,7 @@ export function liveStep(st, dt, input, cfg) {
   // into the cut. That rapid cut-restore cycle IS the bounce you hear.
   if (s.running) {
     if (s.rpm >= limiterCutRpm) s.limiterCut = true;
-    else if (s.rpm < limiterCutRpm - 320) s.limiterCut = false;
+    else if (s.rpm < limiterCutRpm - COEFF.LIMITER_RESTORE_BAND_RPM) s.limiterCut = false;
   } else s.limiterCut = false;
   s.fuelCut = (s.running && s.limiterCut) || overrun;
 
@@ -143,7 +160,35 @@ export function liveStep(st, dt, input, cfg) {
       0.12, 1,
     );
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
-    const man = computeManifold(rpmClamped, loadKpa, turboOn, boostTarget, turbine, compressor);
+    const steady = solveInduction({
+      rpm: rpmClamped, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
+      veAt: (mapKpa) => interp2(veTruth ?? ve, rpmClamped, mapKpa),
+      derived,
+      intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
+      lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+    });
+    // --- SHAFT INERTIA, i.e. turbo lag. The balance says where the turbo ENDS UP; a real
+    // one has to spin a wheel up to get there. Spool-UP is energy-limited, so it is slow
+    // at low exhaust flow and fast at high; spool-DOWN is quicker, since a shut throttle
+    // leaves the compressor pumping with nothing driving it.
+    //
+    // Only the live engine sees this — a dyno sweep holds each point until it settles,
+    // which is what makes it a steady-state measurement.
+    const spooling = steady.boostPsi > s.boostPsi;
+    const flowFrac = clamp(rpmClamped / Math.max(1, derived.redline) * aFrac, 0.02, 1);
+    const tau = spooling
+      ? COEFF.TURBO_SPOOL_TAU_S / Math.max(0.05, flowFrac) * turbine.inertiaScale
+      : COEFF.TURBO_DECAY_TAU_S;
+    const boostPsi = turboOn
+      ? s.boostPsi + (steady.boostPsi - s.boostPsi) * clamp(dt / Math.max(dt, tau), 0, 1)
+      : 0;
+    s.boostPsi = boostPsi;
+    const man = {
+      ...steady,
+      boostPsi,
+      mapKpa: Math.min(loadKpa, BARO_KPA) + boostPsi * PSI_TO_KPA,
+      boostShortfallPsi: Math.max(0, boostTarget - boostPsi),
+    };
     const veVal = interp2(ve, rpmClamped, man.mapKpa);
     const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
     // Spark-based idle stabilisation: the air path is slow (throttle -> manifold ->
@@ -158,10 +203,11 @@ export function liveStep(st, dt, input, cfg) {
     const afrCmd = interp2(afr, rpmClamped, man.mapKpa) / coldEnrich;
     pt = evaluatePoint({
       rpm: rpmClamped, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
-      veVal, veActualVal, timingVal, afrCommanded: afrCmd, octaneBonus, fuel,
+      veVal, veActualVal, timingVal, afrCommanded: afrCmd, fuel,
       mods: { ...mods, turboFitted: turboOn },
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
+      turbine: turboOn ? turbine : null, empKpa: man.empKpa,
     });
     // evaluatePoint already returns BRAKE torque — friction and pumping are subtracted
     // inside it — so we must not deduct them again here.
@@ -216,7 +262,14 @@ export function liveStep(st, dt, input, cfg) {
   const lag = clamp(dt / 0.09, 0, 1);
   const lopeAmp = s.running && s.rpm < 1500 ? (derived.overlapDeg || 0) * 0.9 : 0;
   s.lope = lopeAmp;
-  s.sensedRpm = sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
+  // A CRANK SENSOR THAT IS NOT TURNING READS ZERO, and reads it exactly. Everything else
+  // here is a real transducer with lag and noise, but a stationary crank presents no teeth
+  // to the pickup, so there is no signal to be noisy — the ECU sees no pulses and reports
+  // no speed. Left as a noisy reading it never settled, and a switched-off engine showed a
+  // tachometer wandering around 28 RPM for as long as you cared to watch it.
+  s.sensedRpm = s.rpm < CRANK_SENSOR_MIN_RPM
+    ? 0
+    : sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
   s.sensedMaf = sensorRead(s.sensedMaf, pt ? pt.maf : 0, lag * 0.8, 1.4);
   s.sensedMap = sensorRead(s.sensedMap, pt ? pt.map : BARO_KPA, lag, 0.7);
   s.sensedIat = sensorRead(s.sensedIat, pt ? pt.iat : 25, 0.05, 0.3);
