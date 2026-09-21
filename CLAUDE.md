@@ -41,24 +41,72 @@ The workflow that works:
 
 1. Cut the branch from `upstream/main` (above), develop, commit, and push to this fork
    (`git push -u origin <branch>`).
-2. Run the preflight before handing anything over. It lives on `main`, so pipe it in
+2. Keep the branch a **fast-forward** on `upstream/main` for its whole life. When
+   upstream moves, `git rebase upstream/main` — never `git merge upstream/main` into
+   the branch. See "Why past PRs needed rebuilding" below; this is the single biggest
+   cause of Turtle having to take a branch over.
+3. Run the preflight before handing anything over. It lives on `main`, so pipe it in
    rather than checking it out onto the PR branch — the script is itself fork-local:
    ```bash
-   git show main:scripts/pr-preflight.sh | bash          # structure only
-   git show main:scripts/pr-preflight.sh | bash -s -- --gates   # + lint/typecheck/test/build
+   git show main:scripts/pr-preflight.sh | bash                # full gate
+   git show main:scripts/pr-preflight.sh | bash -s -- --quick  # structure only, no CI
    ```
-   It trial-merges against `upstream/main`, prints the exact commits and files the PR
-   would carry, fails on any fork-local file that leaked in, and prints the compare
-   link on success. Exit 0 means it is safe to hand to Turtle.GTI.
-3. Give the user a prefilled compare link — the fork is named differently from the
+   Exit 0 with no warnings means: fast-forward, linear, no stray files, and green on
+   every Node version CI uses. That is the bar for "Turtle presses Merge and that is
+   it". Anything less and he does work you were supposed to do.
+4. Give the user a prefilled compare link — the fork is named differently from the
    upstream, so the `owner:repo:branch` form is required:
    ```
    https://github.com/DNiev/ecu-lab/compare/main...CaribouTuning:ecu-lab-edits-by-Caribou-:<branch>?expand=1
    ```
-4. Supply the PR title and body as a pasteable file rather than only in chat.
+5. Supply the PR title and body as a pasteable file rather than only in chat.
 
 A PR merged into this fork's `main` is **not** the same as landing upstream. Check
 which one actually happened before saying the work is done.
+
+## Why past PRs needed rebuilding
+
+Turtle has had to open his own PR to land work from this fork. The causes are on the
+record, and all of them are preventable here:
+
+**#41 → his #45 `integrate/crank-angle-cycle`**, titled "Integrate #41's crank-angle
+cycle with main, and fix its blocking defects". Three separate problems:
+
+- The branch had gone stale and conflicted with main. His merge commit had to settle
+  which advisor survived and treat `tests/fingerprint.js` as a *union* rather than an
+  overwrite — a judgement call the PR forced onto him.
+- Three blocking review findings in the physics (fuel-mass energy released from
+  delivered rather than burnable mass; an uncapped blowdown expansion; unwired
+  `turbineCount`).
+- **The fingerprint was generated on the wrong Node.** His note: the untouched PR head
+  `f4fdaff` "passes on 20.18.1 and fails on 26.0.0, same commit, same machine". The
+  hash is float-sensitive, so a green run proves nothing unless it is green on the
+  versions CI actually uses.
+
+**#90 `claude/restore-missing-content`** never landed at all. The branch carried two
+`Merge upstream main: ...` commits and conflicts in seven files. Re-run the preflight
+against it today and it still reports both — it was unmergeable when it was handed over.
+
+The lesson in one line: **rebase, never merge, and prove the fingerprint on every Node
+in the CI matrix.**
+
+### The fingerprint and Node versions
+
+`.github/workflows/ci.yml` runs the suite on a matrix of Node **20 and 22**, on purpose
+— the comment in it says running the float-sensitive hash on more than one version
+"proves the physics is reproducible across V8 releases". `package.json` declares
+`engines: node >=20 <23` and `.nvmrc` pins 22.
+
+So a fingerprint regenerated on a single version is not evidence. Before regenerating
+one, make both versions available and confirm the hash holds on each:
+
+```bash
+nvm install 20 && nvm install 22
+git show main:scripts/pr-preflight.sh | bash    # runs every gate on both
+```
+
+Work outside that range at all — Node 23+ — and the hash it produces is one CI cannot
+reproduce. That is precisely what cost #41.
 
 ## Before you push
 
