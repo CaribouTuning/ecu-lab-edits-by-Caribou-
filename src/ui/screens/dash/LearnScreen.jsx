@@ -1,13 +1,14 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: twenty-one collapsible articles, in reading order, from
- * "an engine is an air pump" to how to read a time slip.
+ * The plain-language guide: twenty-six collapsible articles, in reading order, from
+ * "an engine is an air pump" through reading a time slip to the published correlations
+ * the engine model implements.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-one articles twenty
+ * engine panel, and without the memo React would walk all twenty-six articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -56,15 +57,17 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <ExpandableInfo title="4. Why timing makes torque, and where it stops">
-        Fuel does not explode instantly — it burns over a few milliseconds. So the spark fires <i>before</i> top dead center, timed so peak cylinder pressure arrives around 16° after TDC, where the crank has the best leverage.
-        <br /><br />Too retarded and you are still burning while the piston runs away: wasted energy, hot exhaust. Too advanced and pressure peaks while the piston is still rising, fighting the crank and building the heat and pressure that cause knock. The best point is <b className={styles.em}>MBT</b> — minimum spark for best torque. Past MBT you gain almost nothing and risk everything.
-        <br /><br />MBT moves: higher RPM needs more advance because there is less time for the burn; higher load needs less because the denser charge burns faster.
+        Fuel does not explode instantly — it burns over a span of crank rotation. So the spark fires <i>before</i> top dead center, early enough that the burn is half finished just after the piston turns the corner.
+        <br /><br />The number that matters is <b className={styles.em}>MFB50</b> — the crank angle where 50% of the fuel mass has burned. Put it about 8–10° after TDC and the pressure rise lands where the crank has leverage. This app targets 8.5°. <b className={styles.em}>MBT</b> — minimum spark for best torque — is not a number looked up in a table: it is simply whatever advance puts MFB50 there for the burn you actually have.
+        <br /><br />Too advanced and pressure peaks while the piston is still rising, fighting the crank and cooking the end gas. Too retarded and you are still burning while the piston runs away: wasted energy, hot exhaust. Past MBT you gain almost nothing and risk everything.
+        <br /><br />What moves MBT is <b className={styles.em}>burn duration</b>, and the surprise is what does not move it. Burn duration in crank degrees is roughly constant with engine speed — turbulence scales with piston speed, so the flame speeds up about as fast as the crank does. The two things a tuner genuinely moves it with are <b className={styles.em}>mixture</b> (fastest a little rich of stoichiometric, and falling away much faster on the lean side) and <b className={styles.em}>residual dilution</b> — leftover burned gas from the previous cycle, which slows the flame and demands more advance.
       </ExpandableInfo>
 
       <ExpandableInfo title="5. Knock — what actually destroys engines">
-        Knock is the end gas — the mixture farthest from the spark plug — igniting on its own from heat and pressure before the flame front reaches it. Two flame fronts collide and the pressure spike hammers the piston and ring lands.
-        <br /><br />It is driven by <b className={styles.em}>trapped charge mass</b>, not just boost: more air in the cylinder means higher peak pressure. That is why a big cam that breathes better also needs a little less timing, and why the same tune that is safe at part throttle knocks at wide open.
-        <br /><br />What makes it worse: more timing, more boost, more compression, hotter intake air, leaner mixture, lower octane. What buys margin: higher octane, richer mixture, cooler charge (intercooler), aluminium head, less compression.
+        Knock is the end gas — the mixture farthest from the spark plug — igniting on its own before the flame front reaches it. Two flame fronts collide and the pressure spike hammers the piston and ring lands.
+        <br /><br />The part most explanations leave out is that knock is a <b className={styles.em}>race against time</b>, not a pressure threshold. At any pressure and temperature the end gas survives for a certain time before lighting itself. Every instant of the cycle uses up a slice of that time, and when the slices add up to one whole survival time, it goes. That is what this app runs: an ignition-delay correlation evaluated every crank angle, accumulated until it reaches 1.
+        <br /><br />Two things fall straight out. <b className={styles.em}>Engine speed matters twice</b> — at higher RPM the same crank degrees are fewer milliseconds, so the end gas has less real time to autoignite at identical pressure. And <b className={styles.em}>retard is not purely protective</b>: it lowers peak pressure but drags the burn later, leaving the end gas hot for longer. Usually the pressure drop wins. Not always.
+        <br /><br />What buys margin: higher octane, richer mixture, cooler charge, less compression, less boost. But these are not independent knobs being added up — a hot charge at high boost is far worse than "hot" plus "boosted", because both push the same exponential.
         <br /><br /><b className={styles.em}>How much is too much?</b> Tuners treat anything sustained above about 2° of retard as damaging, not as an operating point. Zero is the target.
       </ExpandableInfo>
 
@@ -199,6 +202,45 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Sixty-foot time</b> is the launch: traction, gearing, and how well the car left the line. It is the single biggest lever on elapsed time for most street cars, and it has almost nothing to do with peak power.
         <br /><br /><b className={styles.em}>Trap speed</b> is power to weight, because at the far end drag dominates and only sustained power holds speed against it. Two cars can share an elapsed time with very different trap speeds — the one trapping faster has more power and launched worse.
         <br /><br /><b className={styles.em}>Elapsed time</b> is the combination, so improving it means working out which half is costing you. High trap but poor ET means grip and gearing, not more boost. Low trap means you actually need power. That is the same diagnostic habit as reading a pull log: find the cause, do not compensate for it downstream.
+      </ExpandableInfo>
+
+      <div className={styles.part}>PART 5 · WHAT THE SIMULATOR IS DOING</div>
+
+      <ExpandableInfo title="22. The turbo is a machine, not a boost knob">
+        A compressor is not a pump that delivers whatever number you type. It is a wheel with a <b className={styles.em}>map</b>: for a given pressure ratio it can only pass so much air, and it is only efficient in the middle of that map.
+        <br /><br />Off the left edge is <b className={styles.em}>surge</b> — too little flow for the pressure being asked, and the air stalls off the blades and reverses. Off the right edge is <b className={styles.em}>choke</b>, and this one is a hard wall rather than a penalty: once the inducer reaches the speed of sound, no more air goes through it at any shaft speed. Asking for more boost past that point does nothing at all.
+        <br /><br />What actually sets boost is an <b className={styles.em}>energy balance</b>. The turbine takes power out of the exhaust; the compressor spends it on the intake. Boost is wherever those two settle. That is why exhaust temperature and turbine size change boost without you touching the target, and why a wastegate lowers backpressure the moment it cracks open.
+        <br /><br />So when the app refuses you boost, it is not a rule — it is the hardware. Change the turbine, the compressor, or how much exhaust energy you are making.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="23. What boost costs: pumping work and backpressure">
+        Boost is usually taught as free power. It is not, and the bill arrives in two places.
+        <br /><br />First, <b className={styles.em}>pumping work</b>. Every cycle the engine has to push the exhaust out against whatever pressure is in the manifold and draw the next charge in. The cost is the difference between exhaust pressure and intake pressure. With a small or nearly choked turbine, exhaust manifold pressure can run well above boost pressure — so the engine is pushing out harder than it is being fed, and that is a straight torque loss before the crank sees anything.
+        <br /><br />Second, <b className={styles.em}>residuals</b>. High exhaust pressure relative to intake pressure means more burned gas stays behind, or backflows during overlap. That hot, inert leftover does two things: it slows the flame (so MBT moves, see article 4) and it raises the starting temperature of the next charge — which feeds straight into the knock clock from article 5.
+        <br /><br />This is the real reason turbine sizing matters, and why two setups making identical boost can be nothing alike to drive.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="24. Where the heat actually goes">
+        Burning fuel does not hand all its energy to the piston. A large share goes through the chamber walls to the coolant, and the rate depends on how fast the gas is moving and how hot it is — not on a fixed percentage.
+        <br /><br />This app uses the standard correlation for that (Woschni), against a wall at roughly 450 K and an area that grows as the piston uncovers the bore. Heat loss is therefore worst where gas velocity and temperature are highest: right around peak pressure.
+        <br /><br />The other thing most simple models get wrong is that burned and unburned gas are not the same substance. Hot burned products have a lower ratio of specific heats than cool unburned charge. Treating the whole cylinder as unburned air overstates peak pressure by roughly 15%. This app carries <b className={styles.em}>two zones</b> and blends between them by how much has burned so far, with dissociation — high-temperature products soaking up energy — folded in as a ceiling on how far the temperature can run.
+        <br /><br />That is why the exhaust gas temperature in the datalog responds to timing the way it does: retard leaves more heat release happening late, and the gas leaves before it has given it up.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="25. Why the textbook Otto cycle is not your engine">
+        Physics classes teach the <b className={styles.em}>air-standard Otto cycle</b>, and its efficiency is a famously tidy formula: it depends on compression ratio alone. Interactive versions of it are genuinely worth playing with — see the sources in article 26 — because they build the right intuition about compression and about why heat has to be thrown away.
+        <br /><br />But that formula assumes things your engine does not do. It assumes combustion is instantaneous at TDC (yours takes 40-odd crank degrees), that no heat crosses the walls (article 24), that the working fluid is air with fixed properties and never changes composition, that the cylinder empties and fills perfectly with no leftovers (article 23), and that spark timing is free of consequences (article 5).
+        <br /><br />Every one of those assumptions is a place a real engine loses efficiency — and, more to the point, every one is a place a <b className={styles.em}>tuner has leverage</b>. If the ideal cycle were accurate there would be nothing to tune but compression ratio.
+        <br /><br />This app does not use the ideal-cycle formula. It integrates pressure through the cycle and takes the work that comes out. An earlier version did carry a fitted "realization factor" to bridge ideal efficiency to real output; it was deleted once the cycle was solved properly, because a measured answer does not need a fudge factor.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="26. Where this physics comes from">
+        The engine model is not invented for this app. It implements published correlations, so the numbers can be checked against the literature rather than taken on trust.
+        <br /><br /><b className={styles.em}>Combustion.</b> Wiebe (Vibe) function for mass-burned fraction. Heywood, <i>Internal Combustion Engine Fundamentals</i> (McGraw-Hill, 2nd ed. 2018) for the two-zone treatment and the 8–10° ATDC MFB50 optimum in article 4.
+        <br /><br /><b className={styles.em}>Knock.</b> Douaud &amp; Eyzat, "Four-Octane-Number Method for Predicting the Anti-Knock Behavior of Fuels and Engines", SAE 780080 (1978) — the ignition-delay correlation. Livengood &amp; Wu, 5th Symposium on Combustion (1955) — the integral that accumulates it to autoignition. Together these are article 5.
+        <br /><br /><b className={styles.em}>Heat transfer.</b> Woschni, "A Universally Applicable Equation for the Instantaneous Heat Transfer Coefficient in the Internal Combustion Engine", SAE 670931 (1967). Article 24.
+        <br /><br /><b className={styles.em}>Control and calibration.</b> Guzzella &amp; Onder, <i>Introduction to Modeling and Control of Internal Combustion Engine Systems</i> (Springer, 2nd ed. 2010). Eriksson &amp; Nielsen, <i>Modeling and Control of Engine and Drivetrain Systems</i> (Wiley, 2014). Blair, <i>Design and Simulation of Four-Stroke Engines</i> (SAE, 1999) for gas exchange.
+        <br /><br /><b className={styles.em}>The textbook cycle first.</b> PhysSandbox has interactive P–V comparisons of the Otto, Diesel, Carnot and Stirling cycles; New3JCN publishes 350+ browser physics simulations under CC BY 4.0. Both teach the idealisation article 25 contrasts against, and both are better starting points if the ideal cycle is new to you.
       </ExpandableInfo>
     </BuildSection>
   );
