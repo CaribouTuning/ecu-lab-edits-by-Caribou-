@@ -9,11 +9,14 @@
 import { BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { CYL_COUNT, MOD_BONUS, idealExhaustDiameter } from './hardware.js';
+import { trappedAirGrams } from './cycle.js';
 import {
-  CAM_BASE_DURATION, camPeakShiftRpm, charMultiplier, machVeMultiplier, valveFloatRpm,
+  CAM_BASE_DURATION, camOverlapDeg, camPeakShiftRpm, charMultiplier, machVeMultiplier,
+  valveFloatRpm,
 } from './engine.js';
 import { clamp, interp1 } from './math.js';
-import { chargeTempK } from './thermo.js';
+import { chargeTempK, exhaustTempK } from './thermo.js';
+import { turbineBackPressureKpa } from './turbo.js';
 import { DEFAULT_VE, LOAD, RPM } from './tables.js';
 
 /**
@@ -77,6 +80,11 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
   // at the top end and that is where the boost curve is highest — so a boosted engine is
   // judged on the hot charge it actually breathes there, not on ambient air.
   const machChargeK = chargeTempK(turboOn ? peakBoostPsi : 0, !!mods.intercooler);
+  const sweptM3 = (displacementL / cyl) / 1000;
+  // Overlap is when backpressure gets to act on cylinder filling: with both valves open
+  // a manifold sitting above the intake pushes burnt gas the wrong way through the
+  // intake valve. More overlap, more of it.
+  const overlapFactor = camOverlapDeg(camDuration) / COEFF.VE_BACKPRESSURE_OVERLAP_REF;
 
   return DEFAULT_VE.map((row, ri) => row.map((v, ci) => {
     const rpm = RPM[ci];
@@ -118,7 +126,45 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
     // end; large ones flow better up high but hurt low-RPM scavenging.
     if (turboOn && turbine) {
       val *= 1 + turbine.topEndMult * Math.max(0, norm);
+      // Intake side: intercooler core and charge piping, fixed hardware, flat cost.
       val *= COEFF.VE_TURBINE_BACKPRESSURE;
+
+      // EXHAUST BACKPRESSURE. A turbine is a flow restriction, not a flat tax. The
+      // pressure it holds upstream climbs with the exhaust it has to pass, and once the
+      // manifold sits ABOVE the intake, overlap stops scavenging and starts pushing
+      // burnt gas back through the intake valve. That is what makes a small turbine
+      // breathe fine low down and run out of air at the top, and it is the reason two
+      // builds making identical boost are not the same engine.
+      //
+      // Solved with the same `turbineBackPressureKpa` the cycle uses, against this
+      // cell's own flow, so the VE table and the running engine cannot disagree about
+      // what the turbine costs. One pass, not iterated: the flow estimate uses the VE
+      // computed up to this point, and the second-order correction is far below the
+      // 0.1% the table is rounded to.
+      // ONLY WHERE THE ENGINE IS ACTUALLY BOOSTED. Below atmospheric the manifold is
+      // also above the intake — that is why a turbo engine pumps badly at part throttle
+      // — but that cost is already carried twice over, by `pumpingFmepPa` against real
+      // EMP and by `residualFraction`'s EMP/MAP term. Charging it here as well would
+      // bill the same pressure three times, and at 40 kPa the ratio is about 2.5, which
+      // drives this straight into its floor. What is missing from the model, and what
+      // this term is for, is the turbine CHOKING under boost.
+      const mapKpa = LOAD[ri];
+      if (mapKpa <= BARO_KPA) return Number(clamp(val, 10, 130).toFixed(1));
+      const airG = trappedAirGrams({ veActual: val, mapKpa, chargeK: machChargeK, sweptM3 });
+      const flowKgS = (airG / 1000) * (1 + 1 / ((fuel?.stoich ?? 14.7) * COEFF.VE_BACKPRESSURE_LAMBDA_REF))
+        * cyl * (rpm / 2) / 60;
+      const exhaustK = exhaustTempK({
+        chargeIndex: (val / 100) * (mapKpa / BARO_KPA),
+        lambda: COEFF.VE_BACKPRESSURE_LAMBDA_REF,
+      });
+      const empKpa = turbineBackPressureKpa(flowKgS, exhaustK, turbine.effectiveAreaM2);
+      // Below 1 the manifold is lower than the intake and overlap scavenges — a real
+      // gain, but a small one, so it is not credited here; only the loss is charged.
+      const pressureRatio = empKpa / Math.max(1, mapKpa);
+      val *= clamp(
+        1 - COEFF.VE_BACKPRESSURE_PER_PR * Math.max(0, pressureRatio - 1) * overlapFactor,
+        COEFF.VE_BACKPRESSURE_FLOOR, 1,
+      );
     }
 
     return Number(clamp(val, 10, 130).toFixed(1));

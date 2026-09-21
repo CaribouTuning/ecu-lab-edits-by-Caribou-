@@ -474,7 +474,13 @@ export function factoryCalibration(preset) {
   const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
     const boostPsi = boostAt(rpm, loadKpa);
     const trueBestAfr = bestPowerAfr(boostPsi);
-    const lambda = trueBestAfr / 14.7;
+    // The mixture THIS cell will actually burn, which is what its spark has to survive.
+    // Below the open-loop threshold the fuel table above commands 14.7 and the O2 sensor
+    // holds it there, so the cylinder sees stoichiometric — not the best-power
+    // enrichment. Grading every cell at best-power lambda wrote spark for a rich charge
+    // the engine never receives at part throttle, and a stoichiometric charge burns
+    // hotter and knocks sooner than a rich one.
+    const lambda = loadKpa < OPEN_LOOP_KPA ? 1 : trueBestAfr / 14.7;
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const veActual = ve[ri][ci];
     const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
@@ -505,9 +511,15 @@ export function factoryCalibration(preset) {
     // all, and the only KNOCK_TAU_SCALE window that passes all seven (~1.4) makes the stock
     // engine knock on its own shipped calibration. Closing it needs the knock model to bind
     // on boosted factory tables, which it currently never does.
+    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
     const cyc = cycleInputsFor({
       rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
-      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      airChargeG,
+      // Burnable mass releases the heat; delivered mass evaporates and cools the charge.
+      // Split exactly as point.js splits it, so the generator and the running ECU answer
+      // the same question with the same number.
+      burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich),
+      fuelMassG: deliveredFuelG,
       lambda, fuel, derived,
     });
     const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;

@@ -438,7 +438,29 @@ export const COEFF = {
   VE_E85_CHARGE_COOLING: 1.03,     // high latent heat of vaporisation densifies charge
   VE_EXHAUST_UNDERSIZE: 0.08,      // top-end VE lost per inch undersized
   VE_EXHAUST_OVERSIZE: 0.05,       // low-end VE lost per inch oversized (scavenging)
-  VE_TURBINE_BACKPRESSURE: 0.97,   // baseline cost of having a turbine in the stream
+  // Baseline cost of the induction system a turbo engine carries and an NA one does
+  // not: the intercooler core and the charge piping between compressor and throttle,
+  // both of which drop pressure whether or not the turbine is restricting anything.
+  // This is the INTAKE side. It is flat because that plumbing is fixed hardware.
+  VE_TURBINE_BACKPRESSURE: 0.97,
+
+  // --- Exhaust backpressure against cylinder filling ---
+  // The EXHAUST side, which the flat number above used to stand in for as well — and
+  // could not, because it charged a small turbine at 6500 RPM exactly what it charged
+  // the same turbine at idle. The turbine is a flow restriction, so what it costs the
+  // engine is set by the pressure it holds upstream, which climbs with flow.
+  //
+  // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
+  // reference overlap. Fitted against the five boosted presets' published figures.
+  VE_BACKPRESSURE_PER_PR: 0.40,
+  // Overlap this is fitted at, crank degrees — the stock V6's. An engine with more
+  // overlap has more of the cycle in which backpressure can push the wrong way.
+  VE_BACKPRESSURE_OVERLAP_REF: 24,
+  // Best-power lambda the exhaust flow and temperature estimate assume. The VE table is
+  // hardware, not a tune, so it is built at the mixture the engine is meant to run.
+  VE_BACKPRESSURE_LAMBDA_REF: 0.88,
+  // However choked the turbine, the engine still breathes something.
+  VE_BACKPRESSURE_FLOOR: 0.70,
 
   // --- Fuel trims ---
   STFT_GAIN: 42,
