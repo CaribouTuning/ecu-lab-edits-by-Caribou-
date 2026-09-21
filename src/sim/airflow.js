@@ -31,7 +31,9 @@ import { DEFAULT_VE, LOAD, RPM } from './tables.js';
  * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons
  * @param {object} [hw] induction hardware
  * @param {boolean} [hw.turboOn]
- * @param {{topEndMult: number}|null} [hw.turbine]
+ * @param {{topEndMult: number, effectiveAreaM2: number}|null} [hw.turbine] the housing:
+ *   `topEndMult` biases the breathing curve, `effectiveAreaM2` is what the backpressure
+ *   solve needs — the same field `turbo.js` passes to `turbineBackPressureKpa`.
  * @param {number|null} [hw.exhaustDia] exhaust diameter, inches
  * @param {{stoich: number}|null} [hw.fuel]
  * @param {number} [hw.peakBoostPsi] peak boost target, psi — raises the ideal exhaust
