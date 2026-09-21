@@ -5,9 +5,15 @@ the upstream repository.
 
 ## Opening a pull request
 
-**Do not include this file in a branch destined for an upstream PR.** It is fork-local
-housekeeping and has no business in the upstream diff. `git rm CLAUDE.md` on the PR
-branch before handing over the compare link (it stays on `main` regardless).
+**Cut every PR branch from `upstream/main`, never from this fork's `main`.** The fork's
+`main` carries files upstream does not have — this file and `docs/audit/` — so a branch
+taken from it puts fork-local housekeeping into the upstream diff. Branching from
+`upstream/main` avoids the problem at the source, rather than deleting files afterwards:
+
+```bash
+git fetch upstream main
+git checkout -b <branch> upstream/main
+```
 
 Claude Code sessions in this repository are scoped to the fork only. Two things are
 therefore already known to fail — do not spend calls rediscovering them, and do not
@@ -15,26 +21,35 @@ report the PR as impossible on their account:
 
 - `create_pull_request` against `DNiev/ecu-lab` →
   `Access denied: repository "dniev/ecu-lab" is not configured for this session.`
-- `add_repo` with `access: "push"` for `DNiev/ecu-lab` → requires an approval that the
-  session cannot grant itself. Worth one attempt if the user wants to authorise it;
-  if it is refused at the org level, a repo admin has to enable the repository in the
-  Claude GitHub settings first.
+- `add_repo` with `access: "push"` for `DNiev/ecu-lab` → in a session that already holds
+  a `cariboutuning/*` repo it fails before any permission check:
+  `cross-tier adds are not supported in v1`. A fresh session sourced at `DNiev/ecu-lab`
+  gets past that, but not past the next wall: the connected identity is `CaribouTuning`,
+  and GitHub reports its permissions on the upstream as
+  `pull: true, push: false, admin: false`. Read-only. No session configuration changes
+  that — only Turtle.GTI adding CaribouTuning as a Write collaborator, plus the Claude
+  GitHub App being installed on `DNiev/ecu-lab`.
+- The fork-sync API (`POST /repos/:owner/:repo/merge-upstream`, the "Sync fork" button)
+  is blocked by the session proxy: `403 Write access to this GitHub API path is not
+  permitted`. Sync with git instead:
+  `git fetch upstream main && git merge upstream/main && git push origin main`.
 
 Anonymous **git reads** of the upstream DO work (clone, fetch), so the branch state can
 always be verified against it even when the API is closed.
 
 The workflow that works:
 
-1. Develop and commit on the designated branch, push to this fork
+1. Cut the branch from `upstream/main` (above), develop, commit, and push to this fork
    (`git push -u origin <branch>`).
-2. Verify the branch is a clean fast-forward on upstream before handing it over:
+2. Run the preflight before handing anything over. It lives on `main`, so pipe it in
+   rather than checking it out onto the PR branch — the script is itself fork-local:
    ```bash
-   git remote add upstream https://github.com/DNiev/ecu-lab
-   git fetch upstream main
-   git merge-base --is-ancestor upstream/main HEAD   # exit 0 = clean
-   git log --oneline upstream/main..HEAD             # exactly your commits
-   git remote remove upstream
+   git show main:scripts/pr-preflight.sh | bash          # structure only
+   git show main:scripts/pr-preflight.sh | bash -s -- --gates   # + lint/typecheck/test/build
    ```
+   It trial-merges against `upstream/main`, prints the exact commits and files the PR
+   would carry, fails on any fork-local file that leaked in, and prints the compare
+   link on success. Exit 0 means it is safe to hand to Turtle.GTI.
 3. Give the user a prefilled compare link — the fork is named differently from the
    upstream, so the `owner:repo:branch` form is required:
    ```
