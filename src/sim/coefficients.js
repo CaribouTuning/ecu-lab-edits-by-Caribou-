@@ -452,10 +452,9 @@ export const COEFF = {
   //
   // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
   // reference overlap. Fitted against the five boosted presets' published figures.
-  VE_BACKPRESSURE_PER_PR: 0.40,
-  // Overlap this is fitted at, crank degrees — the stock V6's. An engine with more
-  // overlap has more of the cycle in which backpressure can push the wrong way.
+  // Overlap this is fitted at, crank degrees — the stock V6's.
   VE_BACKPRESSURE_OVERLAP_REF: 24,
+  VE_BACKPRESSURE_PER_PR: 0.50,
   // Best-power lambda the exhaust flow and temperature estimate assume. The VE table is
   // hardware, not a tune, so it is built at the mixture the engine is meant to run.
   VE_BACKPRESSURE_LAMBDA_REF: 0.88,

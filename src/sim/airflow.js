@@ -6,7 +6,7 @@
  * `point.js`) — never as a bonus multiplier on power.
  */
 
-import { BARO_KPA } from './constants.js';
+import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { CYL_COUNT, MOD_BONUS, idealExhaustDiameter } from './hardware.js';
 import { trappedAirGrams } from './cycle.js';
@@ -81,9 +81,11 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
   // judged on the hot charge it actually breathes there, not on ambient air.
   const machChargeK = chargeTempK(turboOn ? peakBoostPsi : 0, !!mods.intercooler);
   const sweptM3 = (displacementL / cyl) / 1000;
-  // Overlap is when backpressure gets to act on cylinder filling: with both valves open
-  // a manifold sitting above the intake pushes burnt gas the wrong way through the
-  // intake valve. More overlap, more of it.
+  // Overlap decides how much of the cycle backpressure gets to push the wrong way: with
+  // both valves open, a manifold above the intake drives burnt gas back through the
+  // intake valve. A short factory cam is genuinely less exposed than a long one, and
+  // that ordering is load-bearing — flattening it over-charges every production engine
+  // in the app by more than 20% of peak power.
   const overlapFactor = camOverlapDeg(camDuration) / COEFF.VE_BACKPRESSURE_OVERLAP_REF;
 
   return DEFAULT_VE.map((row, ri) => row.map((v, ci) => {
@@ -150,7 +152,14 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
       // this term is for, is the turbine CHOKING under boost.
       const mapKpa = LOAD[ri];
       if (mapKpa <= BARO_KPA) return Number(clamp(val, 10, 130).toFixed(1));
-      const airG = trappedAirGrams({ veActual: val, mapKpa, chargeK: machChargeK, sweptM3 });
+      // THIS CELL'S charge temperature, not `machChargeK`. That one is deliberately the
+      // peak-boost figure because choking binds at the top end, and it is also derived
+      // from a caller-supplied `peakBoostPsi` hint that not every call site passes. Using
+      // it here made the flow estimate depend on a hint rather than on the cell, and at
+      // the default of zero it read the charge as ambient — denser than it is, so more
+      // flow, more backpressure, and a VE penalty the cell had not earned.
+      const cellChargeK = chargeTempK((mapKpa - BARO_KPA) / PSI_TO_KPA, !!mods.intercooler);
+      const airG = trappedAirGrams({ veActual: val, mapKpa, chargeK: cellChargeK, sweptM3 });
       const flowKgS = (airG / 1000) * (1 + 1 / ((fuel?.stoich ?? 14.7) * COEFF.VE_BACKPRESSURE_LAMBDA_REF))
         * cyl * (rpm / 2) / 60;
       const exhaustK = exhaustTempK({

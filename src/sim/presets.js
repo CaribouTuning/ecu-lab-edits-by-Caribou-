@@ -28,8 +28,10 @@ import { bestPowerAfr } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { deriveEngine } from './engine.js';
-import { clamp } from './math.js';
-import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
+import { clamp, interp2 } from './math.js';
+import {
+  interpolationRoomDeg, LOAD, REACHABLE_SLACK_KPA, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG,
+} from './tables.js';
 
 /**
  * How far below the knock limit a factory calibration sits, in degrees.
@@ -471,18 +473,29 @@ export function factoryCalibration(preset) {
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
   const turbine = presetTurbine(preset);
 
-  const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
+  /**
+   * MBT and the knock ceiling at ANY manifold pressure, not just a row's.
+   *
+   * Pulled out of the row loop so the interpolation pass below can ask the same
+   * question at the pressures BETWEEN rows, which is where the ECU actually runs.
+   */
+  const cellAt = (rpm, loadKpa, veActual) => {
     const boostPsi = boostAt(rpm, loadKpa);
-    const trueBestAfr = bestPowerAfr(boostPsi);
-    // The mixture THIS cell will actually burn, which is what its spark has to survive.
-    // Below the open-loop threshold the fuel table above commands 14.7 and the O2 sensor
-    // holds it there, so the cylinder sees stoichiometric — not the best-power
-    // enrichment. Grading every cell at best-power lambda wrote spark for a rich charge
-    // the engine never receives at part throttle, and a stoichiometric charge burns
-    // hotter and knocks sooner than a rich one.
-    const lambda = loadKpa < OPEN_LOOP_KPA ? 1 : trueBestAfr / 14.7;
+    // THE MIXTURE THIS CELL WILL ACTUALLY BURN, read the way the running engine reads
+    // it: off the fuel table this function just wrote, interpolated to whatever pressure
+    // is being asked about, and then un-corrected for the MAF error the table was
+    // pre-compensated with. That is `evaluatePoint`'s own arithmetic, so the generator
+    // and the advisor now agree about the mixture at every pressure — including the ones
+    // between rows, which is where they used to part company.
+    //
+    // The old form graded every cell at best-power lambda, including the closed-loop
+    // cells where this table commands 14.7 and the O2 sensor holds it there. A
+    // stoichiometric charge burns hotter and knocks sooner than a rich one, so those
+    // cells were written for a mixture the engine never receives.
+    const afrCommanded = interp2(afr, rpm, loadKpa);
+    const effFactor = 1 + (mafFactor - 1) * (loadKpa >= OPEN_LOOP_KPA ? 1 : 0.25);
+    const lambda = (afrCommanded / 14.7) / effFactor;
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
-    const veActual = ve[ri][ci];
     const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
     const lambdaCell = lambda;
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambdaCell))
@@ -522,9 +535,53 @@ export function factoryCalibration(preset) {
       fuelMassG: deliveredFuelG,
       lambda, fuel, derived,
     });
-    const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
-    return Number(clamp(Math.min(mbtFromBurn(cyc.burnDeg), safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+    return {
+      safe: knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG,
+      mbt: mbtFromBurn(cyc.burnDeg),
+    };
+  };
+
+  const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
+    const { safe, mbt } = cellAt(rpm, loadKpa, ve[ri][ci]);
+    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
   }));
+
+  // THE TABLE HAS TO BE SAFE BETWEEN ITS ROWS, NOT ONLY ON THEM.
+  //
+  // Every cell above is optimal at its own pressure. The ECU does not run there: it
+  // reads the table with `interp2`, so between two rows the cylinder gets a blend at a
+  // pressure no row sits on, and the knock ceiling falls faster than the blend does.
+  // A table written row-by-row therefore detonates in the gaps — which is exactly what
+  // `calibrationAdvice` reports about it (#43), and why the app's own factory tables
+  // read as dangerous to the app's own advisor once the over-retard that had been
+  // masking it was removed (#46).
+  //
+  // Same constraint, same definition, same direction of walk as the advisor: from the
+  // most boosted row downward, so the tighter row above is already pinned and the
+  // excess comes out of the cell reaching up into pressure it does not have to carry.
+  const reachKpa = BARO_KPA + REACHABLE_SLACK_KPA
+    + (preset.induction.turboOn ? Math.max(0, ...preset.induction.boost) * PSI_TO_KPA : 0);
+  RPM.forEach((rpm, ci) => {
+    for (let ri = 1; ri < LOAD.length; ri += 1) {
+      const span = LOAD[ri - 1] - LOAD[ri];
+      const entered = clamp((reachKpa - LOAD[ri]) / span, 0, 1);
+      if (entered <= 0) continue;
+      const room = interpolationRoomDeg({
+        // VE read the way the sweep reads it — interpolated to the same pressure — so
+        // this is the ceiling that genuinely applies between the two rows.
+        ceilingAtFrac: (f) => cellAt(
+          rpm, LOAD[ri] + f * span, interp2(ve, rpm, LOAD[ri] + f * span),
+        ).safe,
+        aboveDeg: timing[ri - 1][ci],
+        entered,
+      });
+      if (room < timing[ri][ci]) {
+        timing[ri][ci] = Number(
+          clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1),
+        );
+      }
+    }
+  });
 
   return { ve, timing, afr };
 }

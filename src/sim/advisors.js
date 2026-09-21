@@ -15,7 +15,9 @@ import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { clamp, interp1, interp2 } from './math.js';
 import { evaluatePoint } from './point.js';
-import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
+import {
+  LOAD, REACHABLE_SLACK_KPA, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+} from './tables.js';
 
 /** The ~100 kPa row — wide-open throttle, naturally aspirated. */
 const WOT_ROW = 2;
@@ -35,8 +37,6 @@ const KNOCK_SAFETY_DEG = 1.5;
  * middle. The endpoints are excluded: at f = 0 and f = 1 the blend is one row's own
  * value, which its own grading already covers.
  */
-const INTERP_SAMPLE_FRACTIONS = [0.25, 0.5, 0.75];
-
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
 
@@ -57,7 +57,6 @@ export const OPEN_LOOP_KPA = 85;
  * Slack above the boost target when deciding whether a row is reachable, kPa. Enough to
  * cover interpolation and the barometric rounding, not enough to admit a whole row.
  */
-const REACHABLE_SLACK_KPA = 2;
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and
@@ -334,24 +333,38 @@ export function calibrationAdvice({
       const span = LOAD[ri - 1] - LOAD[ri];
       const entered = clamp((reachableKpa(rpm) - LOAD[ri]) / span, 0, 1);
       if (entered <= 0) continue;
-      let room = Infinity;
-      for (const frac of INTERP_SAMPLE_FRACTIONS) {
-        const f = frac * entered;
-        const ceiling = ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG;
-        room = Math.min(room, (ceiling - f * above.suggested) / (1 - f));
-      }
+      const room = interpolationRoomDeg({
+        ceilingAtFrac: (f) => ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG,
+        aboveDeg: above.suggested,
+        entered,
+      });
       if (room < here.suggested) {
         here.suggested = clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
         here.delta = Number((here.suggested - here.current).toFixed(1));
         here.interpolationLimited = true;
       }
+      // ADVICE AND JUDGEMENT NEED DIFFERENT BASELINES, and sharing one was quietly
+      // wrong. `room` above is what this cell may carry once the row ABOVE has taken
+      // the advice — correct for a suggestion, because that is the table the player
+      // would end up with. It is not what the CURRENT table does: the ECU blends the
+      // numbers actually in the table, so judging this cell against a neighbour's
+      // suggested value condemns it for advance it never meets.
+      //
+      // Judged against the table as it stands, therefore. When the two agree the
+      // result is identical; where they differ, this is the one that answers "is the
+      // table in front of me dangerous".
+      const judged = interpolationRoomDeg({
+        ceilingAtFrac: (f) => ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG,
+        aboveDeg: above.current,
+        entered,
+      });
       // A cell the interpolated path binds is DANGEROUS, not merely sub-optimal: the
       // sweep really does detonate at that pressure. So the ceiling this cell is judged
       // against comes down with the advice, and the existing classification below reports
       // it in the same breath as any other cell past the knock limit. Reporting the
       // suggestion without the warning would leave the player with a number to type and
       // no reason for it.
-      here.knockCeiling = Math.min(here.knockCeiling, Number(room.toFixed(1)));
+      here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
     }
   });
 
