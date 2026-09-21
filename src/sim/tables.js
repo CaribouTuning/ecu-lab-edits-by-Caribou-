@@ -105,3 +105,51 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
 
 /** No bolt-ons fitted. Frozen for the same reason as the engine config above. */
 export const DEFAULT_MODS = Object.freeze({ intake: false, exhaust: false, headers: false, intercooler: false });
+
+/**
+ * Fractions across a row gap at which the interpolated surface is checked.
+ *
+ * Three points, not one: the knock ceiling is not linear in pressure, so the binding
+ * point is not reliably halfway.
+ */
+export const INTERP_SAMPLE_FRACTIONS = [0.25, 0.5, 0.75];
+
+/**
+ * Slack above barometric counted as reachable, kPa. A manifold never sits exactly at
+ * ambient, and a row a hair above it is still a row the engine runs on.
+ */
+export const REACHABLE_SLACK_KPA = 2;
+
+/**
+ * The most advance a row may carry so that the value the ECU actually hands back
+ * BETWEEN this row and the one above it still clears the knock ceiling.
+ *
+ * An ECU does not run on breakpoints. It reads the table with `interp2`, so at a
+ * fraction f of the way from this row up to the next the cylinder sees
+ * `(1 - f) * T_here + f * T_above` at a pressure no row sits on — and the ceiling there
+ * can be lower than at either end. Solving that inequality for T_here:
+ *
+ *     (1 - f) * T_here + f * T_above  <=  ceiling(p_f)
+ *     T_here <= (ceiling(p_f) - f * T_above) / (1 - f)
+ *
+ * THE ONE DEFINITION OF THIS CONSTRAINT. `calibrationAdvice` uses it to keep its advice
+ * honest on the dyno (#43), and `factoryCalibration` uses it so the tables the app ships
+ * are safe at the pressures the app itself runs them at. When those two disagreed about
+ * what a cell means, the generator's own spark table read as dangerous to its own
+ * advisor — which is the failure this shared definition exists to prevent.
+ *
+ * @param {object} input
+ * @param {(f: number) => number} input.ceilingAtFrac knock ceiling a fraction f into the
+ *   gap, safety margin already subtracted
+ * @param {number} input.aboveDeg advance the row above carries
+ * @param {number} input.entered how much of the gap the engine actually reaches, 0..1
+ * @returns {number} advance ceiling for this row, degrees
+ */
+export function interpolationRoomDeg({ ceilingAtFrac, aboveDeg, entered }) {
+  let room = Infinity;
+  for (const frac of INTERP_SAMPLE_FRACTIONS) {
+    const f = frac * entered;
+    room = Math.min(room, (ceilingAtFrac(f) - f * aboveDeg) / (1 - f));
+  }
+  return room;
+}
