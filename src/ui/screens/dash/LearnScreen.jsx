@@ -1,14 +1,14 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: twenty-six collapsible articles, in reading order, from
- * "an engine is an air pump" through reading a time slip to the published correlations
- * the engine model implements.
+ * The plain-language guide: twenty-eight collapsible articles, in reading order, from
+ * "an engine is an air pump" through reading a time slip to the published
+ * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-six articles twenty
+ * engine panel, and without the memo React would walk all twenty-eight articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -228,19 +228,32 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <ExpandableInfo title="25. Why the textbook Otto cycle is not your engine">
-        Physics classes teach the <b className={styles.em}>air-standard Otto cycle</b>, and its efficiency is a famously tidy formula: it depends on compression ratio alone. Interactive versions of it are genuinely worth playing with — see the sources in article 26 — because they build the right intuition about compression and about why heat has to be thrown away.
-        <br /><br />But that formula assumes things your engine does not do. It assumes combustion is instantaneous at TDC (yours takes 40-odd crank degrees), that no heat crosses the walls (article 24), that the working fluid is air with fixed properties and never changes composition, that the cylinder empties and fills perfectly with no leftovers (article 23), and that spark timing is free of consequences (article 5).
-        <br /><br />Every one of those assumptions is a place a real engine loses efficiency — and, more to the point, every one is a place a <b className={styles.em}>tuner has leverage</b>. If the ideal cycle were accurate there would be nothing to tune but compression ratio.
-        <br /><br />This app does not use the ideal-cycle formula. It integrates pressure through the cycle and takes the work that comes out. An earlier version did carry a fitted "realization factor" to bridge ideal efficiency to real output; it was deleted once the cycle was solved properly, because a measured answer does not need a fudge factor.
+        Physics classes teach the <b className={styles.em}>air-standard Otto cycle</b>, whose efficiency is a famously tidy formula depending on compression ratio alone. Interactive versions are worth playing with — see article 27 — because they build the right intuition about compression and about why heat must be thrown away.
+        <br /><br />But NASA's own primer states the assumptions plainly: no heat crossing the walls, no friction, and "instantaneous burning occurring at constant volume". Your engine does none of those. Combustion takes 40-odd crank degrees, heat leaves through the walls the whole time (article 24), the working fluid changes composition as it burns, the cylinder never empties cleanly (article 23), and spark timing has consequences (article 5).
+        <br /><br />Every one of those is a place a real engine loses efficiency — and every one is a place a <b className={styles.em}>tuner has leverage</b>. If the ideal cycle were accurate there would be nothing to tune but compression ratio.
+        <br /><br />NASA adds that real losses "are normally accounted for by efficiency factors which multiply and modify the ideal result". That multiply-by-a-factor approach is exactly what this app used to do and no longer does: it integrates pressure through the cycle and takes the work out. The fitted realization factor was deleted once the cycle was solved properly.
       </ExpandableInfo>
 
-      <ExpandableInfo title="26. Where this physics comes from">
-        The engine model is not invented for this app. It implements published correlations, so the numbers can be checked against the literature rather than taken on trust.
+      <ExpandableInfo title="26. Where the engine model comes from">
+        The physics is not invented for this app. It implements published correlations, so the numbers can be checked against the literature rather than taken on trust.
         <br /><br /><b className={styles.em}>Combustion.</b> Wiebe (Vibe) function for mass-burned fraction. Heywood, <i>Internal Combustion Engine Fundamentals</i> (McGraw-Hill, 2nd ed. 2018) for the two-zone treatment and the 8–10° ATDC MFB50 optimum in article 4.
-        <br /><br /><b className={styles.em}>Knock.</b> Douaud &amp; Eyzat, "Four-Octane-Number Method for Predicting the Anti-Knock Behavior of Fuels and Engines", SAE 780080 (1978) — the ignition-delay correlation. Livengood &amp; Wu, 5th Symposium on Combustion (1955) — the integral that accumulates it to autoignition. Together these are article 5.
-        <br /><br /><b className={styles.em}>Heat transfer.</b> Woschni, "A Universally Applicable Equation for the Instantaneous Heat Transfer Coefficient in the Internal Combustion Engine", SAE 670931 (1967). Article 24.
-        <br /><br /><b className={styles.em}>Control and calibration.</b> Guzzella &amp; Onder, <i>Introduction to Modeling and Control of Internal Combustion Engine Systems</i> (Springer, 2nd ed. 2010). Eriksson &amp; Nielsen, <i>Modeling and Control of Engine and Drivetrain Systems</i> (Wiley, 2014). Blair, <i>Design and Simulation of Four-Stroke Engines</i> (SAE, 1999) for gas exchange.
-        <br /><br /><b className={styles.em}>The textbook cycle first.</b> PhysSandbox has interactive P–V comparisons of the Otto, Diesel, Carnot and Stirling cycles; New3JCN publishes 350+ browser physics simulations under CC BY 4.0. Both teach the idealisation article 25 contrasts against, and both are better starting points if the ideal cycle is new to you.
+        <br /><br /><b className={styles.em}>Knock.</b> Douaud &amp; Eyzat, "Four-Octane-Number Method for Predicting the Anti-Knock Behavior of Fuels and Engines", SAE 780080 (1978) — the ignition-delay correlation. Livengood &amp; Wu, 5th Symposium on Combustion (1955) — the integral that accumulates it. Together these are article 5.
+        <br /><br /><b className={styles.em}>Heat transfer.</b> Woschni, SAE 670931 (1967). Article 24.
+        <br /><br /><b className={styles.em}>Control and gas exchange.</b> Guzzella &amp; Onder, <i>Introduction to Modeling and Control of Internal Combustion Engine Systems</i> (Springer, 2nd ed. 2010). Eriksson &amp; Nielsen, <i>Modeling and Control of Engine and Drivetrain Systems</i> (Wiley, 2014). Blair, <i>Design and Simulation of Four-Stroke Engines</i> (SAE, 1999).
+      </ExpandableInfo>
+
+      <ExpandableInfo title="27. Further reading, if you want the fundamentals first">
+        This app starts partway up. If the ideal cycle or the chemistry is new to you, these are better first stops.
+        <br /><br /><b className={styles.em}>The ideal cycle.</b> NASA Glenn's Beginner's Guide sets out the Otto cycle and names its assumptions. PhysSandbox has interactive P–V comparisons of the Otto, Diesel, Carnot and Stirling cycles. New3JCN publishes 350+ browser physics simulations under CC BY 4.0, including gas laws and P–V diagrams.
+        <br /><br /><b className={styles.em}>Combustion chemistry.</b> Argonne National Laboratory's combustion programme, for how detailed reaction kinetics and fuel autoignition are actually modelled — the research-grade version of what article 5 approximates.
+        <br /><br /><b className={styles.em}>Engines and emissions generally.</b> The US Department of Energy's internal combustion engine overview, and the Royal Society of Chemistry's material on the chemistry of car engines, for combustion products and aftertreatment — the subject article 28 explains this app leaves out.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="28. What this model does not do">
+        An accurate simulator is worth more if it is honest about its edges. Three matter.
+        <br /><br /><b className={styles.em}>Autoignition is a correlation, not chemistry.</b> Article 5's survival time comes from a published empirical fit — the standard engineering approach, good across normal running. But real autoignition is a branching chain reaction through hundreds of intermediate species, and it does something the fit cannot: over one band of temperature gasoline gets <i>harder</i> to ignite as it gets hotter, and can light in two stages. Laboratories model this with detailed kinetic mechanisms and large computers. A browser cannot.
+        <br /><br /><b className={styles.em}>There is no emissions chemistry.</b> Nothing here computes NOx, carbon monoxide or unburned hydrocarbons. So the app can say what lambda does to power and to knock, but never what it does to what leaves the pipe. Worth knowing: the narrow band around lambda 1.00 exists mainly because a three-way catalyst only converts all three pollutants at once inside it. Closed loop is an emissions strategy first.
+        <br /><br /><b className={styles.em}>Fuel is a few properties, not a mixture.</b> Pump gasoline blends hundreds of hydrocarbons. Here each fuel carries a stoichiometric ratio, density, heating value, latent heat and antiknock index — enough for a tuner's decisions, not enough to say anything about distillation or seasonal blending.
       </ExpandableInfo>
     </BuildSection>
   );
