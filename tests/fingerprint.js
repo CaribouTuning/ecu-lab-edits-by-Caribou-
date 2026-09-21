@@ -138,6 +138,22 @@ const BOOSTS = {
 const SWEEP_EXHAUST_DIA = 3.0;
 
 /**
+ * Fuel indices the matrix runs, shared by all three loops that sweep fuel.
+ *
+ * Named once because it used to be written out three times, and #28 found the hazard
+ * that invites: the list read `[0, 3]` in every one of them, so the matrix hashed only
+ * the ends of the shelf and nobody noticed that the three sites had to agree.
+ *
+ * 100 octane is in here because its `bonus` of 8 is not a scaled copy of any other
+ * entry — it is the only fuel with `stoich: 14.6` and `density: 0.750`, and it is the
+ * one whose compression headroom the Engineer Score can produce and no other fuel can.
+ * Indices rather than labels, because the loops index OCTANE_OPTS directly; the KEYS
+ * built below embed the label, which is what keeps a catalogue edit from renumbering
+ * existing cells.
+ */
+const SWEEP_FUEL_INDICES = [0, 2, 3];
+
+/**
  * Builds the full fingerprint from a simulation module.
  *
  * @param {object} S the `src/sim` public API
@@ -158,7 +174,7 @@ export function buildFingerprint(S) {
     for (const [mname, mods] of Object.entries(MODSETS)) {
       for (const turboOn of [false, true]) {
         for (const dia of [2.5, 3.5]) {
-          for (const fi of [0, 3]) {
+          for (const fi of SWEEP_FUEL_INDICES) {
             const key = `${cname}|${mname}|turbo=${turboOn}|dia=${dia}|fuel=${S.OCTANE_OPTS[fi].label}`;
             out.computeHardwareVE[key] = S.computeHardwareVE(cfg, mods, {
               turboOn,
@@ -180,7 +196,7 @@ export function buildFingerprint(S) {
       for (const veVal of [45, 90, 120]) {
         for (const timingVal of [8, 24, 40]) {
           for (const afrCommanded of [11.5, 12.6, 14.7, 16.0]) {
-            for (const fi of [0, 3]) {
+            for (const fi of SWEEP_FUEL_INDICES) {
               for (const [injectorCc, ecuInjectorCc] of [[315, 315], [850, 315], [315, 650]]) {
                 const boostPsi = Math.max(0, (mapKpa - S.BARO_KPA) / S.PSI_TO_KPA);
                 const key = `${rpm}|${mapKpa}|${veVal}|${timingVal}|${afrCommanded}|${S.OCTANE_OPTS[fi].label}|${injectorCc}/${ecuInjectorCc}`;
@@ -207,7 +223,7 @@ export function buildFingerprint(S) {
   for (const [cname, cfg] of Object.entries(FINGERPRINT_CONFIGS)) {
     for (const [bname, boostCurve] of Object.entries(BOOSTS)) {
       for (const [mname, mods] of Object.entries(MODSETS)) {
-        for (const fi of [0, 3]) {
+        for (const fi of SWEEP_FUEL_INDICES) {
           for (const [injectorCc, ecuInjectorCc] of [[315, 315], [850, 315]]) {
             for (const loadKpa of [40, 100]) {
               const turboOn = bname !== 'na';

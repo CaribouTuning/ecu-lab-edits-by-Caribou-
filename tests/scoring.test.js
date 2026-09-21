@@ -112,7 +112,24 @@ describe('computeEngineerScore turbo sizing', () => {
 });
 
 describe('computeEngineerScore static compression under boost', () => {
-  const [P91, P93, , E85] = S.OCTANE_OPTS;
+  /**
+   * Looked up by label, never by position. The old positional destructure
+   * (`const [P91, P93, , E85] = ...`) stepped over index 2 with a hole, so inserting a
+   * fuel into OCTANE_OPTS silently rebound `E85` to its neighbour and every test here
+   * kept passing while grading the wrong fuel. This is the same hazard the exhaust
+   * diameter note in tests/fingerprint.js warns about — pin the physical quantity, not
+   * its index — and it throws rather than yielding `undefined` so a renamed fuel fails
+   * loudly instead of as a confusing property access later.
+   */
+  const fuelByLabel = (label) => {
+    const fuel = S.OCTANE_OPTS.find((o) => o.label === label);
+    if (!fuel) throw new Error(`no fuel labelled "${label}" in OCTANE_OPTS`);
+    return fuel;
+  };
+  const P91 = fuelByLabel('91');
+  const P93 = fuelByLabel('93');
+  const P100 = fuelByLabel('100');
+  const E85 = fuelByLabel('E85');
   const NO_COOLER = { ...S.DEFAULT_MODS, intercooler: false };
   const COOLED = { ...S.DEFAULT_MODS, intercooler: true };
 
@@ -202,6 +219,49 @@ describe('computeEngineerScore static compression under boost', () => {
   // to push `over` positive.
   it('keeps a build exactly at the 93-plus-intercooler boundary clear of the deduction', () => {
     expect(hit(at(11.5, { fuel: P93, mods: COOLED }))).toBeUndefined();
+  });
+
+  // Issue #28: 100 octane sat between 93 and E85 in OCTANE_OPTS and was exercised by
+  // neither layer — the destructure above skipped it and the fingerprint matrix ran
+  // only [0, 3]. Its bonus of 8 is not a scaled copy of any other entry, so nothing
+  // else constrained the two headroom values it produces.
+  it('gives 100 octane its own headroom, clean at it and deducted one step past it', () => {
+    expect(hit(at(11.6, { fuel: P100, mods: NO_COOLER }))).toBeUndefined();
+    expect(hit(at(11.7, { fuel: P100, mods: NO_COOLER }))).toBeDefined();
+    expect(hit(at(12.0, { fuel: P100, mods: COOLED }))).toBeUndefined();
+    expect(hit(at(12.1, { fuel: P100, mods: COOLED }))).toBeDefined();
+  });
+
+  // Written as a sweep over OCTANE_OPTS rather than four hand-named fuels, so that a
+  // fuel added to the catalogue is graded by this test the day it lands instead of
+  // slipping through the gap #28 documents.
+  it('orders every fuel on the headroom ladder by its octane bonus', () => {
+    const onset = (fuel) => {
+      for (let tenths = 85; tenths <= 130; tenths += 1) {
+        if (hit(at(tenths / 10, { fuel, mods: NO_COOLER }))) return tenths / 10;
+      }
+      return Infinity;
+    };
+    const ladder = [...S.OCTANE_OPTS].sort((a, b) => a.bonus - b.bonus);
+    const onsets = ladder.map(onset);
+    expect(onsets.every(Number.isFinite), `a fuel never trips the rule: ${onsets}`).toBe(true);
+    for (let i = 1; i < onsets.length; i += 1) {
+      expect(
+        onsets[i],
+        `${ladder[i].label} (bonus ${ladder[i].bonus}) must buy at least as much `
+        + `headroom as ${ladder[i - 1].label} (bonus ${ladder[i - 1].bonus})`,
+      ).toBeGreaterThan(onsets[i - 1]);
+    }
+  });
+
+  // The cap is reachable on 91 and not on 100 with charge cooling: it would take 13.5:1
+  // and the slider stops at 13.0. Worth pinning in both directions, because a rule that
+  // silently saturated for every fuel would lose the gradient the `scales the deduction`
+  // test above exists to protect.
+  it('leaves the penalty cap out of reach on 100 octane with an intercooler', () => {
+    expect(hit(at(13.0, { fuel: P100, mods: COOLED }))).toBeDefined();
+    expect(cost(at(13.0, { fuel: P100, mods: COOLED }))).toBeLessThan(15);
+    expect(cost(at(13.0, { fuel: P91, mods: COOLED }))).toBe(15);
   });
 });
 
