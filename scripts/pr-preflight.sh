@@ -35,6 +35,7 @@ fail=0
 warn=0
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
+REPO="$PWD"
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 if [ "$BRANCH" = "main" ]; then
@@ -134,35 +135,65 @@ fi
 echo
 
 # ---------------------------------------------------------------- 6. CI gates
+GATES=("npm ci" "npm test" "npm run lint" "npm run typecheck" "npm run build")
+
+# nvm is a shell function, not a binary, and its location varies by machine
+# (/opt/nvm here, ~/.nvm on a typical laptop). Probe for the script itself.
+NVM_SH=""
+for cand in "${NVM_DIR:-}/nvm.sh" /opt/nvm/nvm.sh "$HOME/.nvm/nvm.sh" /etc/profile.d/nvm.sh; do
+  case "$cand" in /nvm.sh) continue;; esac
+  [ -s "$cand" ] && { NVM_SH="$cand"; break; }
+done
+
+run_gate() {   # run_gate <node-version|""> <command>
+  local v="$1" cmd="$2"
+  if [ -n "$v" ]; then
+    ( . "$NVM_SH" >/dev/null 2>&1 || exit 127
+      nvm use "$v" >/dev/null 2>&1 || exit 127
+      cd "$REPO" && eval "$cmd" )
+  else
+    ( cd "$REPO" && eval "$cmd" )
+  fi
+}
+
 if [ "$QUICK" = "1" ]; then
   yellow "6. CI gates skipped (--quick). Turtle's CI runs Node ${CI_NODE_VERSIONS[*]}."
   warn=1
   echo
 else
   bold "6. CI gates on every Node version CI uses"
-  if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ] || command -v nvm >/dev/null 2>&1; then
+  if [ -n "$NVM_SH" ]; then
     for v in "${CI_NODE_VERSIONS[@]}"; do
-      echo "   ── Node ${v} ──"
-      if ! bash -lc "nvm use ${v}" >/dev/null 2>&1; then
-        yellow "     ! Node ${v} not installed (nvm install ${v}). UNVERIFIED on this version."
-        warn=1; continue
+      if ! ( . "$NVM_SH" >/dev/null 2>&1; nvm use "$v" >/dev/null 2>&1 ); then
+        yellow "   ── Node ${v}: not installed. Run: nvm install ${v}"
+        echo "      UNVERIFIED on this version — the fingerprint hash may differ here."
+        warn=1
+        continue
       fi
-      for gate in "npm ci" "npm test" "npm run lint" "npm run typecheck" "npm run build"; do
+      actual=$( . "$NVM_SH" >/dev/null 2>&1; nvm use "$v" >/dev/null 2>&1; node --version )
+      echo "   ── Node ${v} (${actual}) ──"
+      for gate in "${GATES[@]}"; do
         printf '     %-18s' "$gate"
-        if bash -lc "nvm use ${v} >/dev/null 2>&1; cd '$PWD' && ${gate}" >"/tmp/preflight-n${v}.log" 2>&1; then
+        if run_gate "$v" "$gate" >"/tmp/preflight-n${v}.log" 2>&1; then
           green "✓"
         else
-          red "✗   (/tmp/preflight-n${v}.log)"
+          red "✗   (tail -30 /tmp/preflight-n${v}.log)"
           fail=1
         fi
       done
     done
   else
-    yellow "   ! nvm not found — gates can only run on $(node --version)."
-    echo "     CI runs Node ${CI_NODE_VERSIONS[*]}; a float-sensitive fingerprint can pass one and fail another."
-    for gate in "npm test" "npm run lint" "npm run typecheck" "npm run build"; do
+    yellow "   ! nvm not found — can only verify on $(node --version)."
+    echo "     CI runs Node ${CI_NODE_VERSIONS[*]}. A float-sensitive fingerprint can pass"
+    echo "     one and fail another, which is what happened to #41."
+    for gate in "${GATES[@]}"; do
       printf '     %-18s' "$gate"
-      if $gate >/tmp/preflight-gate.log 2>&1; then green "✓"; else red "✗   (/tmp/preflight-gate.log)"; fail=1; fi
+      if run_gate "" "$gate" >/tmp/preflight-gate.log 2>&1; then
+        green "✓"
+      else
+        red "✗   (tail -30 /tmp/preflight-gate.log)"
+        fail=1
+      fi
     done
     warn=1
   fi
