@@ -186,8 +186,33 @@ export function computeEngineerScore({
       }
     }
   }
-  if (!turboOn && engineConfig.compression < 9.0) {
-    score -= 10; deductions.push('-10 Low compression leaves naturally-aspirated efficiency on the table');
+  if (!turboOn) {
+    // The naturally-aspirated branch used to fire only BELOW 9.0:1, so a turbo build at
+    // 10.9:1 on 91 was charged a point while an NA build at 13.0:1 on the same fuel —
+    // reachable on the same slider — was charged nothing (issue #27). Both ends of the
+    // slider are now judged, against the same headroom idea as the boosted branch.
+    if (engineConfig.compression < 9.0) {
+      score -= 10; deductions.push('-10 Low compression leaves naturally-aspirated efficiency on the table');
+    } else {
+      // No boost term and no intercooler: on an NA engine neither exists, so octane is
+      // the whole of it.
+      const headroom = COEFF.COMPRESSION_NA_BASE + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG;
+      const over = engineConfig.compression - headroom;
+      if (over > 0) {
+        const d = Math.round(Math.min(
+          over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
+        ));
+        if (d > 0) {
+          const levers = [
+            fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
+            'less static compression',
+          ].filter(Boolean);
+          score -= d;
+          deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
+            + `outruns what ${fuel.label} supports without boost — ${levers.join(', ')} would buy it back`);
+        }
+      }
+    }
   }
   const highHeat = engineConfig.compression > 11.5 || (turboOn && compressor.boostCeiling > 20);
   if (highHeat && engineConfig.headMaterial === 'Cast Iron') {

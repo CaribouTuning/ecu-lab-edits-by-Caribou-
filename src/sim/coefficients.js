@@ -496,6 +496,18 @@ export const COEFF = {
   // belongs in its own change.
   COMPRESSION_PER_OCTANE_DEG: 0.1,
   COMPRESSION_INTERCOOLER_GAIN: 0.4,
+  // The same headroom, without boost stacked on top (issue #27). An NA engine pays no
+  // boost term and has no intercooler to credit, so octane is the only lever, and the
+  // ceiling sits higher than the boosted base.
+  //
+  // Fitted against the cycle, not guessed. On the stock V6 at wide-open throttle on 91
+  // octane the knock integral starts costing a degree at 9.55:1 at 2500 RPM, 10.50 at
+  // 3000 and 11.40 at 3500 — knock binds hardest low, where each crank degree is the
+  // most milliseconds. 11.5 sits just above the 3000 RPM figure, which keeps this rule
+  // the same kind of pre-flight warning the boosted branch is: gentler than the physics,
+  // so a build is not billed twice for one decision, but no longer silent about the
+  // 13.0:1 pump-gas NA engine the slider will happily build.
+  COMPRESSION_NA_BASE: 11.5,
   // How much static compression one psi of boost takes off the headroom, and the boost
   // level the base above is implicitly calibrated at.
   //
