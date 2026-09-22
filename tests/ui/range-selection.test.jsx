@@ -246,6 +246,21 @@ describe('keyboard tuning', () => {
     ]);
   });
 
+  it('falls back to the character when the key has no physical code', () => {
+    // On-screen keyboards and remote-input tools can send `code: ''`. Found in the real
+    // browser: without the fallback, + and - did nothing at all there.
+    mountAir();
+    const v0 = store.tune.ve[1][1];
+    select({ type: 'cell', row: 1, col: 1 });
+    fireEvent.keyDown(grid(), { key: '=', code: '' });
+    fireEvent.keyDown(grid(), { key: '-', code: '' });
+    fireEvent.keyDown(grid(), { key: '+', code: '' });
+    expect(store.history.past.map((e) => e.label)).toEqual([
+      'VE edit · +1 · 1 cell', 'VE edit · -1 · 1 cell', 'VE edit · +1 · 1 cell',
+    ]);
+    expect(store.tune.ve[1][1]).toBe(Number((v0 + 1).toFixed(2)));
+  });
+
   it('Esc clears the selection', () => {
     mountAir();
     select({ type: 'cell', row: 1, col: 1 });

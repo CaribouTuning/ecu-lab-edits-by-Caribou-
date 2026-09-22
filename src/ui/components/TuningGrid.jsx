@@ -30,10 +30,16 @@ import { anchorOf, inRect, opLabel, rectOf, signed, spanSelection, stepsFor } fr
 /** Arrow key -> [row step, column step]. */
 const ARROWS = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
 /**
- * Physical key -> nudge direction. By `code`, not `key`: `+` already needs Shift on most
+ * Physical key -> nudge direction. By `code` first: `+` already needs Shift on most
  * layouts, so `key` could not tell "+" from "coarse +".
  */
 const NUDGE = { Equal: 1, NumpadAdd: 1, Minus: -1, NumpadSubtract: -1 };
+/**
+ * ...and by character when there is no physical key to go on. On-screen keyboards and
+ * remote-input tools can send an empty `code`; without this, + and - did nothing at all
+ * there. Shift still means coarse, so a Shift+= that arrives as "+" is the coarse step.
+ */
+const NUDGE_BY_KEY = { '=': 1, '+': 1, '-': -1, _: -1 };
 const clampR = (r) => Math.min(Math.max(r, 0), LOAD.length - 1);
 const clampC = (c) => Math.min(Math.max(c, 0), RPM.length - 1);
 
@@ -142,7 +148,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
       }
       return;
     }
-    const sign = NUDGE[e.code];
+    const sign = NUDGE[e.code] ?? NUDGE_BY_KEY[e.key];
     if (sign && selection && setData) {
       e.preventDefault();
       const { small, big } = stepsFor(decimals);
