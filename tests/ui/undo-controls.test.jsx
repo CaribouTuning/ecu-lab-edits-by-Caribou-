@@ -236,7 +236,7 @@ describe('UndoControls', () => {
   it('puts the preset label back when a table edit is undone', () => {
     // The whole point of a snapshot spanning both slices, driven through the real app.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
 
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));
@@ -797,7 +797,7 @@ describe('keyboard shortcuts', () => {
   // keeps the same launch path every other test in this block already exercises.
   function launchWithEdit() {
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button')
@@ -979,7 +979,7 @@ describe('keyboard shortcuts', () => {
     const removeSpy = vi.spyOn(window, 'removeEventListener');
 
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
 
     const keydownAdds = addSpy.mock.calls.filter((call) => call[0] === 'keydown');
     expect(keydownAdds.length).toBe(1);
