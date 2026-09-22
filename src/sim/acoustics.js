@@ -18,8 +18,9 @@
  * before the piston starts pushing, and that pulse runs down a system of pipes that
  * reflect, delay and filter it. The note is what comes out of the tailpipe.
  *
- * So this module describes the engine and the pipes, and `src/ui/audio/exhaustProcessor.js`
- * runs a one-dimensional wave model of them at audio rate:
+ * So this module describes the engine and the pipes, and `src/ui/audio/pulseExhaust.js`
+ * turns that description into sound — one scheduled pulse per firing event, through a
+ * pipe tuned to the lengths below:
  *
  *   RHYTHM       which crank angle each cylinder fires at and which collector it fires
  *                into — the whole of the cross-plane V8 rumble: `firingEvents`.
