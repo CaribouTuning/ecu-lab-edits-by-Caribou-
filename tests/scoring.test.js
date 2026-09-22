@@ -198,8 +198,34 @@ describe('computeEngineerScore static compression under boost', () => {
     expect(cost(at(13.0))).toBeLessThanOrEqual(15);
   });
 
-  it('says nothing about static compression on a naturally-aspirated build', () => {
-    expect(hit(at(13.0, { turboOn: false }))).toBeUndefined();
+  // Issue #27. This used to assert the asymmetry: a turbo build at 10.9:1 on 91 was
+  // charged a point while an NA build at 13.0:1 on the same fuel was charged nothing,
+  // even though the cycle pulls ~9 degrees out of that engine at 2000 RPM. Both ends of
+  // the slider are judged now.
+  it('judges static compression on a naturally-aspirated build too', () => {
+    expect(hit(at(13.0, { turboOn: false, peakBoostPsi: 0 }))).toBeDefined();
+  });
+
+  it('leaves a normal naturally-aspirated compression ratio alone', () => {
+    expect(hit(at(11.0, { turboOn: false, peakBoostPsi: 0 }))).toBeUndefined();
+  });
+
+  // The NA ceiling sits above the boosted one: there is no boost pressure stacked on
+  // top of the static ratio, so the same build tolerates more without a turbo.
+  it('allows more static compression without boost than with it', () => {
+    expect(cost(at(12.5, { turboOn: false, peakBoostPsi: 0 })))
+      .toBeLessThan(cost(at(12.5, { turboOn: true, peakBoostPsi: 10 })));
+  });
+
+  // Octane is the only lever an NA engine has here — no intercooler, no boost to back off.
+  it('credits octane on the naturally-aspirated side', () => {
+    expect(cost(at(13.0, { turboOn: false, peakBoostPsi: 0, fuel: P93 })))
+      .toBeLessThan(cost(at(13.0, { turboOn: false, peakBoostPsi: 0 })));
+  });
+
+  it('still calls out compression that is too LOW for a naturally-aspirated build', () => {
+    const r = at(8.5, { turboOn: false, peakBoostPsi: 0 });
+    expect(r.deductions.find((d) => /Low compression/.test(d))).toBeDefined();
   });
 
   // `chargeTempK` does nothing at zero boost, and a turbo kit with the boost curve

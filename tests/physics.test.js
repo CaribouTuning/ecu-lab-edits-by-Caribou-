@@ -372,10 +372,11 @@ describe('dyno sweep', () => {
     const derived = S.deriveEngine(cfg);
     const mods = overrides.mods ?? S.DEFAULT_MODS;
     const turboOn = overrides.turboOn ?? false;
+    const turbine = overrides.turbine ?? S.TURBINE_OPTS[1];
     return S.simulateSweep({
       loadKpa: 100,
       ve: S.computeHardwareVE(cfg, mods, {
-        turboOn, turbine: turboOn ? S.TURBINE_OPTS[1] : null, exhaustDia: 3.0, fuel: S.OCTANE_OPTS[0],
+        turboOn, turbine: turboOn ? turbine : null, exhaustDia: 3.0, fuel: S.OCTANE_OPTS[0],
       }),
       timing: S.clone2D(S.DEFAULT_TIMING),
       afr: S.clone2D(S.DEFAULT_AFR),
@@ -385,7 +386,7 @@ describe('dyno sweep', () => {
       injectorCc: overrides.injectorCc ?? 315,
       ecuInjectorCc: overrides.ecuInjectorCc ?? 315,
       injectorLabel: '315cc', mods, mafScalar: 1.0, derived,
-      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+      turbine, compressor: S.COMPRESSOR_OPTS[1],
       ...overrides.sweep,
     });
   }
@@ -578,6 +579,13 @@ describe('dyno sweep', () => {
     const r = stockPull({
       cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
       turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
+      // A LARGE turbine, because this fixture has to make bearing-threatening cylinder
+      // pressure and a medium housing no longer does at 25 psi. Now that the VE model
+      // charges exhaust backpressure against cylinder filling instead of taking a flat
+      // 3%, a small housing asked for 25 psi chokes and the pressure never arrives —
+      // which is the correct answer and the reason anyone fits a bigger turbine to run
+      // that boost. The fixture matches what the build would actually be.
+      turbine: S.TURBINE_OPTS[2],
       injectorCc: 400, ecuInjectorCc: 315,
     });
     for (const type of ['injscale', 'cam', 'bearing']) {

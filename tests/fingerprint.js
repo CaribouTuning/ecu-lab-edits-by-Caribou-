@@ -278,7 +278,7 @@ export function buildFingerprint(S) {
 
   // ---- factoryCalibration: the generated VE/timing/AFR surface for every shipped
   // preset. This is what actually exercises tuned constants that live in
-  // src/sim/presets.js itself (FACTORY_KNOCK_MARGIN_DEG, OPEN_LOOP_KPA) — numbers that
+  // src/sim/presets.js and tables.js (FACTORY_KNOCK_MARGIN_DEG, OPEN_LOOP_KPA) — numbers that
   // move the dyno figures but sit outside COEFF and outside any other section of this
   // matrix, so nothing above catches them moving. Gating the whole generated surface
   // rather than the constants individually means a future constant added to the
