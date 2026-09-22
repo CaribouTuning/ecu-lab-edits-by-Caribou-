@@ -23,14 +23,14 @@ const hadResizeObserver = 'ResizeObserver' in window;
 if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
 // jsdom 25 has no PointerEvent, and without one `pointerType`, `shiftKey` and `buttons`
 // never reach React. MouseEvent carries the last two; this adds the first.
-class PointerEventStub extends MouseEvent {
+class PointerEventStub extends window.MouseEvent {
   constructor(type, init = {}) { super(type, init); this.pointerType = init.pointerType ?? ''; }
 }
 const hadPointerEvent = 'PointerEvent' in window;
-if (!hadPointerEvent) window.PointerEvent = PointerEventStub;
+if (!hadPointerEvent) /** @type {any} */ (window).PointerEvent = PointerEventStub;
 afterAll(() => {
   if (!hadResizeObserver) delete window.ResizeObserver;
-  if (!hadPointerEvent) delete window.PointerEvent;
+  if (!hadPointerEvent) delete /** @type {any} */ (window).PointerEvent;
 });
 afterEach(cleanup);
 
