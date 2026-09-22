@@ -43,7 +43,7 @@ real tuning software does, without losing a single step of undo.
 
 `cell`, `row` and `col` stay exactly as they are. A UI helper `rectOf(selection)` in
 `src/ui/components/selection.js` normalises any of the four types to an ordered rectangle
-`{r1, c1, r2, c2}` (with `r1 <= r2`, `c1 <= c2`) plus `cellsIn(rect)` and a cell count.
+`{r1, c1, r2, c2}` (with `r1 <= r2`, `c1 <= c2`), plus `inRect(rect, ri, ci)` and a cell count.
 Everything that edits works on the rectangle; only the grid, dock title and advisor care
 about `type`.
 
@@ -152,7 +152,7 @@ and `veReport` are unchanged, since a range is never `type: 'cell'`.
   single cell vs. range, cells outside the rectangle unchanged, input table not mutated,
   unordered corners. Interpolate: corners preserved, 1-D reduces to linear, bilinear
   centre value. Smooth: edge clipping, reads from the original table.
-- **`rectOf` / `cellsIn`** for all four selection types.
+- **`rectOf` / `inRect` / `cellCount`** for all four selection types.
 - **UI:** mouse drag and shift-click build the right range; touch taps do not drag;
   two-tap SELECT RANGE and ALL; `rangeMode` shared across AIR/SPARK/FUEL; keyboard move,
   extend, adjust (with and without Shift) and Esc; Ctrl/Cmd+Z still undoes while the
