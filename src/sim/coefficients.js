@@ -450,10 +450,10 @@ export const COEFF = {
   // the same turbine at idle. The turbine is a flow restriction, so what it costs the
   // engine is set by the pressure it holds upstream, which climbs with flow.
   //
-  // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
-  // reference overlap. Fitted against the five boosted presets' published figures.
   // Overlap this is fitted at, crank degrees — the stock V6's.
   VE_BACKPRESSURE_OVERLAP_REF: 24,
+  // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
+  // reference overlap. Fitted against the five boosted presets' published figures.
   VE_BACKPRESSURE_PER_PR: 0.50,
   // Best-power lambda the exhaust flow and temperature estimate assume. The VE table is
   // hardware, not a tune, so it is built at the mixture the engine is meant to run.

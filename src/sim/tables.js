@@ -121,6 +121,28 @@ export const INTERP_SAMPLE_FRACTIONS = [0.25, 0.5, 0.75];
 export const REACHABLE_SLACK_KPA = 2;
 
 /**
+ * MAP above which the ECU leaves closed loop and enriches for power, kPa. Below it the
+ * target is stoichiometric and the trims own the mixture, which is also why mixture
+ * advice is limited to the rows above it.
+ */
+export const OPEN_LOOP_KPA = 85;
+
+/**
+ * How much of the MAF error survives into the mixture the cylinder actually gets.
+ *
+ * Open loop, all of it: nothing is watching. Closed loop, a quarter: the O2 sensor and
+ * the trims pull most of it back. `evaluatePoint` runs the engine with this and
+ * `factoryCalibration` writes the tables with it, so they have to share it.
+ *
+ * @param {number} netFactor MAF error times the player's MAF scalar
+ * @param {number} mapKpa
+ * @returns {number} factor the commanded lambda is divided by
+ */
+export function effectiveMafFactor(netFactor, mapKpa) {
+  return 1 + (netFactor - 1) * (mapKpa >= OPEN_LOOP_KPA ? 1 : 0.25);
+}
+
+/**
  * The most advance a row may carry so that the value the ECU actually hands back
  * BETWEEN this row and the one above it still clears the knock ceiling.
  *

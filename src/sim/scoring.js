@@ -76,6 +76,33 @@ export function computeTuningScore(result) {
 }
 
 /**
+ * Whole points to deduct for static compression past a headroom, or 0.
+ *
+ * Shared by the boosted and naturally-aspirated branches of `computeEngineerScore`, so
+ * the two stay one rule with two ceilings rather than two rules that drift apart.
+ *
+ * @param {number} compression static compression ratio
+ * @param {number} headroom the most this build supports
+ * @returns {number} deduction, whole points
+ */
+function compressionDeduction(compression, headroom) {
+  const over = compression - headroom;
+  if (over <= 0) return 0;
+  // No input currently reachable from the UI rounds a positive `over` down to zero:
+  // across the full reachable space (the 8.5-13.0 slider in its 0.1 steps, crossed with
+  // every OCTANE_OPTS bonus and intercooler on/off, plus every preset compression) no
+  // combination lands `over > 0` with a zero deduction. The callers' `d > 0` check is
+  // a backstop against a finer slider step or a new fuel option someday producing a
+  // build that clears the headroom by a sliver too small to round to a whole point, so
+  // it is what keeps a `-0 ...` entry from ever reaching the deduction list. It is not
+  // what keeps the 11.5:1/93-octane/intercooler boundary build clean — that build
+  // computes `over` as -1.776e-15 and is rejected by the check above.
+  return Math.round(Math.min(
+    over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
+  ));
+}
+
+/**
  * Grades how coherent the hardware choices are with each other, independent of how
  * well the engine is tuned.
  *
@@ -146,44 +173,29 @@ export function computeEngineerScore({
       + (mods.intercooler ? COEFF.COMPRESSION_INTERCOOLER_GAIN : 0)
       - Math.max(0, peakBoostPsi - COEFF.COMPRESSION_BOOST_REF_PSI)
         * COEFF.COMPRESSION_PER_BOOST_PSI;
-    const over = engineConfig.compression - headroom;
-    if (over > 0) {
-      const d = Math.round(Math.min(
-        over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
-      ));
-      // No input currently reachable from the UI drives `d` to zero here: across the
-      // full reachable space (the 8.5-13.0 slider in its 0.1 steps, crossed with every
-      // OCTANE_OPTS bonus and intercooler on/off, plus every preset compression) no
-      // combination lands `over > 0` with `d <= 0`. That is not what this guard is for,
-      // though — it is a backstop against a finer slider step or a new fuel option
-      // someday producing a build that clears `over > 0` by a sliver too small to round
-      // to a whole point, so this is what keeps a `-0 ...` entry from ever reaching the
-      // deduction list. It is not what keeps the 11.5:1/93-octane/intercooler boundary
-      // build clean — that build computes `over` as -1.776e-15 and is rejected by the
-      // `over > 0` check above, never reaching this line.
-      if (d > 0) {
-        const cooling = mods.intercooler ? 'an intercooler' : 'no charge cooling';
-        // Name the levers this build has NOT already pulled. Telling someone on E85 with
-        // an intercooler that higher octane and charge cooling would buy it back is
-        // advice they cannot act on — and now that the headroom moves with boost level,
-        // backing the boost off is a real answer where before it did nothing.
-        //
-        // Boost is only offered ABOVE the reference, because that is the only place it
-        // buys anything: the term is one-sided, so a build already at or under the
-        // reference gets no headroom back for turning the boost down and would be
-        // reading advice that does nothing.
-        const levers = [
-          fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
-          mods.intercooler ? null : 'charge cooling',
-          peakBoostPsi > COEFF.COMPRESSION_BOOST_REF_PSI
-            ? `less boost than ${peakBoostPsi.toFixed(0)} psi` : null,
-          'less static compression',
-        ].filter(Boolean);
-        score -= d;
-        deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
-          + `outruns the knock margin this build supports at ${peakBoostPsi.toFixed(0)} psi `
-          + `on ${fuel.label} with ${cooling} — ${levers.join(', ')} would buy it back`);
-      }
+    const d = compressionDeduction(engineConfig.compression, headroom);
+    if (d > 0) {
+      const cooling = mods.intercooler ? 'an intercooler' : 'no charge cooling';
+      // Name the levers this build has NOT already pulled. Telling someone on E85 with
+      // an intercooler that higher octane and charge cooling would buy it back is
+      // advice they cannot act on — and now that the headroom moves with boost level,
+      // backing the boost off is a real answer where before it did nothing.
+      //
+      // Boost is only offered ABOVE the reference, because that is the only place it
+      // buys anything: the term is one-sided, so a build already at or under the
+      // reference gets no headroom back for turning the boost down and would be
+      // reading advice that does nothing.
+      const levers = [
+        fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
+        mods.intercooler ? null : 'charge cooling',
+        peakBoostPsi > COEFF.COMPRESSION_BOOST_REF_PSI
+          ? `less boost than ${peakBoostPsi.toFixed(0)} psi` : null,
+        'less static compression',
+      ].filter(Boolean);
+      score -= d;
+      deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
+        + `outruns the knock margin this build supports at ${peakBoostPsi.toFixed(0)} psi `
+        + `on ${fuel.label} with ${cooling} — ${levers.join(', ')} would buy it back`);
     }
   }
   if (!turboOn) {
@@ -197,20 +209,15 @@ export function computeEngineerScore({
       // No boost term and no intercooler: on an NA engine neither exists, so octane is
       // the whole of it.
       const headroom = COEFF.COMPRESSION_NA_BASE + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG;
-      const over = engineConfig.compression - headroom;
-      if (over > 0) {
-        const d = Math.round(Math.min(
-          over * COEFF.COMPRESSION_PENALTY_PER_POINT, COEFF.COMPRESSION_PENALTY_CAP,
-        ));
-        if (d > 0) {
-          const levers = [
-            fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
-            'less static compression',
-          ].filter(Boolean);
-          score -= d;
-          deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
-            + `outruns what ${fuel.label} supports without boost — ${levers.join(', ')} would buy it back`);
-        }
+      const d = compressionDeduction(engineConfig.compression, headroom);
+      if (d > 0) {
+        const levers = [
+          fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
+          'less static compression',
+        ].filter(Boolean);
+        score -= d;
+        deductions.push(`-${d} ${engineConfig.compression.toFixed(1)}:1 static compression `
+          + `outruns what ${fuel.label} supports without boost — ${levers.join(', ')} would buy it back`);
       }
     }
   }
