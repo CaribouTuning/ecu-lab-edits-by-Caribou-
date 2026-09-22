@@ -9,12 +9,10 @@
  *
  * HOW THE SOUND IS BUILT
  *
- * The note itself is not built here at all. It comes out of `exhaustProcessor.js`, a
- * one-dimensional acoustic model of the exhaust — cylinders, valves, primaries, collector,
- * converter, muffler and an open mouth — run at audio rate in an AudioWorklet (or, where
- * one cannot be loaded, on the main thread; see `createExhaustNode`). This file sends it
- * the system's geometry when the build changes and the engine's state a few times a
- * second, and the model decides what that sounds like.
+ * The note itself is not built here at all. It comes out of `pulseExhaust.js`, which
+ * schedules one combustion pulse per firing event and lets a damped delay line stand in
+ * for the pipe. This file sends it the system's geometry when the build changes and the
+ * engine's state a few times a second, and it decides what that sounds like.
  *
  * Around it sit the things a pipe model cannot make: induction noise, the turbo's
  * whistle and rush, the blow-off and compressor flutter, the starter and knock, and the
@@ -31,8 +29,10 @@
  * resumes it when something is.
  */
 
-import { ExhaustProcessor, PROCESSOR_NAME } from './exhaustProcessor.js';
-import EXHAUST_PROCESSOR_SOURCE from './exhaustProcessor.js?raw';
+import {
+  createPulseExhaust, setPulseExhaustGeometry, schedulePulseExhaust,
+  tonePulseExhaust, silencePulseExhaust, wakePulseExhaust,
+} from './pulseExhaust.js';
 
 /**
  * Output trim per layout, applied after the exhaust model.
@@ -57,18 +57,6 @@ const VOICING = {
  * catches whatever the slow attack lets through.
  */
 const MAKEUP_GAIN = 3.0;
-
-/**
- * How much turbulence the model injects at the valve seat, as a multiplier on the flow
- * velocity through it.
- *
- * This is the one knob that decides how PITCHED the note is against how RASPY. At zero the
- * waveguide is perfectly periodic and reads as a buzzer; wound up it fills the gaps between
- * the harmonics with noise and reads as hiss. Measured as harmonic comb contrast — level at
- * multiples of the engine cycle rate against level between them — this lands it at roughly
- * 20 dB in the mid band and 13 dB at the top, which is where real recordings sit.
- */
-const EXHAUST_JET = 0.30;
 
 /** Parameter updates per second. Pulse scheduling is unthrottled; this is not. */
 const PARAM_HZ = 14;
@@ -122,95 +110,6 @@ export function geometryKey(geometry, openExhaust) {
   return parts.join('|');
 }
 
-/**
- * Block size for the main-thread fallback below.
- *
- * 1024 samples is 23 ms, which is short enough that a throttle blip does not feel late and
- * long enough to survive an ordinary React render without the buffer running dry.
- */
-const FALLBACK_BLOCK = 1024;
-
-/**
- * Creates the node the exhaust model runs in, whichever way this browser allows.
- *
- * AN AUDIOWORKLET IS THE RIGHT PLACE FOR THIS and it is tried first: the audio thread, at
- * sample resolution, immune to whatever the UI is doing. But a worklet module has to be
- * fetched from a URL, and this app also ships as a single inlined HTML page served under a
- * strict content-security policy. Measured there, `addModule` rejects with AbortError for
- * a `blob:` URL AND for a `data:` one — so the exhaust never loaded and the app was
- * completely silent, while the same build served from a dev server was fine. That is a bad
- * failure to have: silent, browser-dependent, and invisible to every test that runs the
- * DSP directly.
- *
- * So there is a second path. The processor is a plain class, so on failure it is
- * instantiated on the main thread and driven from a ScriptProcessorNode, which needs no
- * module loading and is refused by nothing. Same code, same coefficients, same output; it
- * costs main-thread time and can glitch under heavy layout, which is the price of working
- * everywhere. The shim below gives it the two things it expects from Web Audio — a port to
- * receive geometry on, and parameters that smooth — so nothing above this line knows or
- * cares which one it got.
- *
- * @param {AudioContext} ctx
- * @param {(node: any) => void} ready called with the node once it exists
- */
-function createExhaustNode(ctx, ready) {
-  const fallback = () => {
-    let processor;
-    try {
-      processor = new ExhaustProcessor({ processorOptions: { sampleRate: ctx.sampleRate } });
-    } catch { return; }
-    const node = ctx.createScriptProcessor(FALLBACK_BLOCK, 0, 2);
-    /** One audio parameter, smoothed the way `setTargetAtTime` smooths. */
-    const param = (value) => {
-      const p = {
-        value,
-        target: value,
-        coeff: 0,
-        setTargetAtTime(v, _t, tau) {
-          p.target = v;
-          p.coeff = Math.exp(-FALLBACK_BLOCK / (ctx.sampleRate * Math.max(1e-3, tau)));
-        },
-        setValueAtTime(v) { p.target = v; p.value = v; p.coeff = 0; },
-        cancelScheduledValues() { p.target = p.value; p.coeff = 0; },
-        step() { p.value = p.target + (p.value - p.target) * p.coeff; return p.value; },
-      };
-      return p;
-    };
-    /** @type {Record<string, any>} */
-    const params = {};
-    for (const d of ExhaustProcessor.parameterDescriptors) params[d.name] = param(d.defaultValue);
-    /** @type {Record<string, Float32Array>} */
-    const view = {};
-    for (const name of Object.keys(params)) view[name] = new Float32Array(1);
-    node.onaudioprocess = (e) => {
-      for (const name of Object.keys(params)) view[name][0] = params[name].step();
-      processor.process([], [[e.outputBuffer.getChannelData(0), e.outputBuffer.getChannelData(1)]], view);
-    };
-    // A ScriptProcessorNode only runs while it is connected to something, so it is wired
-    // up here and the caller connects it onward.
-    ready({
-      port: { postMessage: (data) => processor.port.onmessage?.({ data }) },
-      parameters: { get: (name) => params[name] },
-      connect: (dest) => node.connect(dest),
-      disconnect: () => node.disconnect(),
-    });
-  };
-
-  if (!ctx.audioWorklet) { fallback(); return; }
-  let url;
-  try {
-    url = URL.createObjectURL(new Blob([EXHAUST_PROCESSOR_SOURCE], { type: 'text/javascript' }));
-  } catch { fallback(); return; }
-  ctx.audioWorklet.addModule(url).then(() => {
-    URL.revokeObjectURL(url);
-    ready(new AudioWorkletNode(ctx, PROCESSOR_NAME, {
-      numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2],
-    }));
-  }).catch(() => {
-    URL.revokeObjectURL(url);
-    fallback();
-  });
-}
 
 /**
  * Builds the whole audio graph. Call once; it stays alive for the session.
@@ -358,21 +257,15 @@ export function createEngineAudio(ctx) {
 
   // THE EXHAUST ITSELF, which is the whole note and is not built out of any of the above.
   //
-  // It runs a one-dimensional acoustic model of a real exhaust system at audio rate — see
-  // `exhaustProcessor.js`. A scattering junction cannot be built out of Web Audio nodes:
-  // any cycle through the graph costs a whole render block, and a collector is nothing but
-  // a cycle. So the model runs as sample-rate code, either in an AudioWorklet or, where
-  // one cannot be loaded, on the main thread. See `createExhaustNode`.
+  // A train of scheduled combustion pulses through a resonant pipe — see
+  // `pulseExhaust.js`. It needs no AudioWorklet and no sample-rate code, so there is no
+  // module-loading path to fail and no main-thread fallback to be slower than.
   const graph = {};
-  graph.exhaust = null;
+  graph.exhaust = createPulseExhaust(ctx);
   graph.exhaustGain = ctx.createGain();
   graph.exhaustGain.gain.value = 1;
   graph.exhaustGain.connect(master);
-  createExhaustNode(ctx, (node) => {
-    node.connect(graph.exhaustGain);
-    graph.exhaust = node;
-    if (graph.pendingGeometry) node.port.postMessage(graph.pendingGeometry);
-  });
+  graph.exhaust.out.connect(graph.exhaustGain);
 
   return Object.assign(graph, {
     ctx, limiter, outGain, softClip, master,
@@ -445,44 +338,42 @@ export function updateEngineAudio(a, frame) {
   const rasp = clamp01(drive.retardDeg / 12);
 
   // --- THE EXHAUST -------------------------------------------------------------------
-  // Two things go to the waveguide: the system's GEOMETRY, which changes only when the
-  // build does, and the engine's STATE, which changes continuously. Nothing here shapes
-  // the note. It says how long the tubes are and how hard the cylinder is pushing, and
-  // the model works out what that sounds like.
+  // Two things go to the exhaust: the system's GEOMETRY, which changes only when the build
+  // does and decides where the pulses fall and how the pipe rings, and the engine's STATE,
+  // which changes continuously. Nothing here draws a waveform. It says how long the tubes
+  // are, how fast the cylinders are firing and how hard, and the pulse train does the rest.
   if (geometry) {
     const key = geometryKey(geometry, openExhaust);
     if (key !== a.geomKey) {
       a.geomKey = key;
-      a.pendingGeometry = { ...geometry, muffled: !openExhaust };
-      if (a.exhaust) a.exhaust.port.postMessage(a.pendingGeometry);
+      setPulseExhaustGeometry(a.exhaust, a.ctx, geometry, key);
     }
   }
   if (a.exhaust) {
-    const p = a.exhaust.parameters;
-    // Engine speed, and the pressure the cylinder has reached by the time its valve
-    // cracks. Those two numbers are the entire excitation: everything else the listener
-    // hears is what the pipes do with them.
-    p.get('rpm').setTargetAtTime(Math.max(0, frame.rpm), t, 0.05);
-    p.get('evoPa').setTargetAtTime(Math.max(0, drive.evoKpa) * 1000, t, 0.06);
-    p.get('overlapDeg').setTargetAtTime(drive.overlapDeg, t, 0.2);
-    // Turbulence at the valve seat rises with how hard the gas is being pushed through
-    // it, and a retarded engine sends more energy out of the port, so it rasps.
-    p.get('jet').setTargetAtTime(
-      EXHAUST_JET * (0.7 + 0.6 * clamp01(drive.exhaustDrive)) * (1 + rasp * 0.4), t, 0.1);
-    p.get('lope').setTargetAtTime(drive.lopeSeverity, t, 0.15);
-    p.get('covPersistence').setValueAtTime(drive.covPersistence, t);
-    // A stopped engine is silent, and the waveguide keeps ringing for a few milliseconds
-    // after it stops, which is correct — the gas in the pipe does not know the ignition has
-    // been switched off.
-    //
-    // A CUT ENGINE IS NOT QUIET, and this used to say it was: a fuel cut scaled the level
-    // to 0.18, so the rev limiter — the loudest, angriest thing a road engine does — came
-    // out fifteen decibels below the rest of the rev range and the overrun after it was
-    // louder than wide-open throttle. Nothing needs saying here at all. A cut is an absent
-    // combustion, `acousticDrive` reports it as motored cylinder pressure at valve opening,
-    // and the waveguide renders a cylinder of air being pumped out of a port at 7500 rpm,
-    // which is what it is.
-    p.get('level').setTargetAtTime(audible ? (frame.volume ?? 1) : 0, t, 0.05);
+    // A CUT ENGINE IS NOT QUIET. A fuel cut is an absent combustion, not an absent engine:
+    // the cylinder still pumps and the port still vents, which is exactly what the rev
+    // limiter and the overrun sound like. `acousticDrive` reports that as a weaker
+    // excitation, so the level does not need special-casing here.
+    const level = audible ? (frame.volume ?? 1) : 0;
+    schedulePulseExhaust(a.exhaust, a.ctx, {
+      rpm: Math.max(0, frame.rpm),
+      level,
+      // The excitation itself: how much pressure is behind the valve when it cracks, and
+      // how hot the gas leaving is. Those two decide the pulse's height and its shape.
+      evoKpa: drive.evoKpa,
+      gasTempK: drive.gasTempK,
+      overlapDeg: drive.overlapDeg,
+      lopeSeverity: drive.lopeSeverity,
+    });
+    // Tone is a separate decision from timing: how open the system is, how much gas is
+    // moving through it, and how much of the burn is still going on as the valve opens.
+    // A retarded engine dumps energy into the exhaust, which is why it rasps.
+    tonePulseExhaust(a.exhaust, a.ctx, {
+      load,
+      rasp,
+      // Gas temperature retunes every tube, so a retarded engine hardens by itself.
+      gasTempK: drive.gasTempK,
+    });
   }
   a.exhaustGain.gain.setTargetAtTime(audible ? voice.exhaustGain : 0, t, 0.08);
 
@@ -548,7 +439,10 @@ export function updateEngineAudio(a, frame) {
   // the jet noise now carries it, arriving in pulses and repeating every cycle. What is
   // left here is the starter, which is genuinely a random scrape, and knock, which is
   // genuinely stochastic detonation and has to sound like it.
-  a.ng.gain.setTargetAtTime(cranking ? 0.12 : drive.knockLevel * 0.06, t, 0.05);
+  // A starter is not louder than the engine it is starting. At 0.12 it sat above idle, so
+  // the engine caught and appeared to die — the one moment where relative level carries a
+  // meaning the player reads immediately. Here the catch is about 7 dB up on the crank.
+  a.ng.gain.setTargetAtTime(cranking ? 0.02 : drive.knockLevel * 0.06, t, 0.05);
 
   // THERE IS NO LEVEL CURVE ANY MORE, and that is the point. How loud an engine is at a
   // given moment used to be a power law applied to a pressure amplitude; now it is simply
@@ -659,16 +553,10 @@ export function silenceEngineAudio(a) {
   kill(a.master); kill(a.exhaustGain); kill(a.indG);
   kill(a.whistleG); kill(a.bladeG); kill(a.rushG); kill(a.bovG); kill(a.flutEnv);
   kill(a.clunkG); kill(a.convG); kill(a.ng);
-  // The waveguide keeps its own state, so silencing it means stopping the engine turning
-  // as well as closing the gain — otherwise it carries on venting into a muted pipe.
-  if (a.exhaust) {
-    try {
-      a.exhaust.parameters.get('level').cancelScheduledValues(t);
-      a.exhaust.parameters.get('level').setValueAtTime(0, t);
-      a.exhaust.parameters.get('rpm').cancelScheduledValues(t);
-      a.exhaust.parameters.get('rpm').setValueAtTime(0, t);
-    } catch { /* noop */ }
-  }
+  // Pulses already handed to the clock cannot be unscheduled, so the exhaust needs telling
+  // to stop rather than just being turned down — otherwise a stopped engine keeps firing
+  // for the length of the scheduling horizon.
+  if (a.exhaust) silencePulseExhaust(a.exhaust, a.ctx);
   a.prevBoostPsi = 0;
 }
 
@@ -735,6 +623,10 @@ export function setEngineAudioActive(a, active) {
  */
 export function wakeEngineAudio(a, holdSeconds) {
   const resumed = Promise.resolve(a.ctx.state === 'suspended' ? a.ctx.resume?.() : undefined);
+  // `silenceEngineAudio` pins the pulse bus to zero, and a gain pinned to zero stays there
+  // however many pulses are scheduled into it. Waking has to lift it again or the engine
+  // comes back silent.
+  if (a.exhaust) wakePulseExhaust(a.exhaust, a.ctx);
   if (!a.active) scheduleSleep(a, holdSeconds + SLEEP_AFTER_S);
   return resumed;
 }

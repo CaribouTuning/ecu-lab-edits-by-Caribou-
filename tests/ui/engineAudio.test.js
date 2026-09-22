@@ -2,7 +2,7 @@
  * Engine audio graph tests, against a stub AudioContext.
  *
  * The point is not to check that it sounds good — nothing automated can, and the exhaust
- * model's own acoustics are measured in tests/exhaustWaveguide.test.js. It is to check
+ * model's own acoustics are measured in tests/pulseExhaust.test.js. It is to check
  * that the graph stays HONEST to what it is handed: that the tube network is rebuilt when
  * and only when the build changes, that it adds no level curve of its own, and that
  * "stop" really does stop.
