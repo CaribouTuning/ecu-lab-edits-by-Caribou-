@@ -255,6 +255,28 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>There is no emissions chemistry.</b> Nothing here computes NOx, carbon monoxide or unburned hydrocarbons. So the app can say what lambda does to power and to knock, but never what it does to what leaves the pipe. Worth knowing: the narrow band around lambda 1.00 exists mainly because a three-way catalyst only converts all three pollutants at once inside it. Closed loop is an emissions strategy first.
         <br /><br /><b className={styles.em}>Fuel is a few properties, not a mixture.</b> Pump gasoline blends hundreds of hydrocarbons. Here each fuel carries a stoichiometric ratio, density, heating value, latent heat and antiknock index — enough for a tuner's decisions, not enough to say anything about distillation or seasonal blending.
       </ExpandableInfo>
+
+      <ExpandableInfo title="29. Why the engine sounds the way it does">
+        The sound here is not a recording. It is built live from what the engine is doing, so the things you change are the things you hear.
+        <br /><br /><b className={styles.em}>An exhaust note is a train of pulses.</b> Every time a cylinder's exhaust valve opens, a slug of hot, high-pressure gas bangs into the pipe. That pulse — a thump with a crack of turbulence on the front of it — is the basic unit of the sound. How often they come is set by engine speed and cylinder count:
+        <br /><span className={styles.formula}>firing Hz = RPM ÷ 60 × cylinders ÷ 2</span>
+        <br /><b className={styles.em}>Where the pulses fall is the layout.</b> Each pulse is placed at the crank angle that cylinder actually fires at. A cross-plane V8's banks are offset, so within one bank the gaps alternate long and short — and that unevenness <i>is</i> the rumble. Even-fire the same engine and it stops sounding like a V8. A 60/120° V6 fires evenly and rings hard and hornlike. A four fires twice a revolution, far enough apart to hear separately, which is the hollow four-cylinder sound.
+        <br /><br /><b className={styles.em}>No two pulses are the same.</b> Real combustion varies from one cycle to the next, and a perfectly repeated pulse is the fastest way to make an engine sound synthetic. Each pulse here is drawn from several shapes — soft and dull at light load, sharp and cracking under it — with its size and pitch nudged at random. Above about 200 pulses a second the ear stops hearing them separately, so a pre-built cycle of the same pulses, in the same firing order, takes over and is pitched with the revs.
+        <br /><br /><b className={styles.em}>The pipe makes it ring.</b> A pulse runs down the exhaust, reflects off the open end and comes back, so the system resonates like any tube:
+        <br /><span className={styles.formula}>f = c / 2L</span>
+        <br />A bigger engine with a bigger pipe is a longer, larger system, so its note sits lower. How hard it rings depends on how much gas is moving — damped at idle, ringing under load, which is the engine "coming on song". A cat-back or headers reflect less at the outlet, which is why a straight-through system sounds opened up rather than boomy.
+        <br /><br /><b className={styles.em}>What else you can hear.</b> Retarded timing leaves the burn still going as the valve opens, so more energy goes down the pipe and the note rasps. Higher compression sharpens the crack. A rich mixture burns softer. Knock adds a hard rattle. A big cam's overlap makes some cycles burn weakly at low speed, and that uneven firing is lope. Opening the throttle makes every pulse hit harder; a fuel cut on the limiter or the overrun drops it right back without going silent, because the cylinders are still pumping air.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="30. Further reading on engine sound">
+        The ideas above are standard acoustics. These explain them properly.
+        <br /><br /><b className={styles.em}>Burns Stainless, "Exhaust Header Theory".</b> How pressure waves travel through a header and reflect at an open end — as a negative pressure wave, which is what header tuning uses to scavenge the cylinder — and why collector design changes the wave that comes back.
+        <br /><br /><b className={styles.em}>Flatirons, "Resonance and Reverberation".</b> The plain-language version: resonance when tube length matches the wavelength, interference setting tone, and larger diameter giving a louder, more open note.
+        <br /><br /><b className={styles.em}>HowStuffWorks, "How Mufflers Work".</b> Why a muffler is not simply a restriction: chambers tuned to cancel particular frequencies, and packing that absorbs broadband energy.
+        <br /><br /><b className={styles.em}>Car and Driver, "Why Various Engine Types Sound So Different".</b> Firing intervals and crank arrangement as the origin of layout character — the cross-plane V8 rumble in particular.
+        <br /><br /><b className={styles.em}>PhET, "Sound Waves"</b> (University of Colorado Boulder), and <b className={styles.em}>Britannica, "Sound (physics)"</b>. The fundamentals underneath all of it: pressure waves, wavelength and frequency, interference, standing waves and resonance. Start here if the rest assumed too much.
+        <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
+      </ExpandableInfo>
     </BuildSection>
   );
 }
