@@ -24,12 +24,15 @@ import { computeHardwareVE } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { bestPowerAfr } from './manifold.js';
+import { bestPowerAfr, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { deriveEngine } from './engine.js';
-import { clamp } from './math.js';
-import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
+import { clamp, interp2 } from './math.js';
+import {
+  effectiveMafFactor, interpolationRoomDeg, LOAD, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  SPARK_MIN_DEG,
+} from './tables.js';
 
 /**
  * How far below the knock limit a factory calibration sits, in degrees.
@@ -44,9 +47,6 @@ import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
  * table"), not leftover surface.
  */
 export const FACTORY_KNOCK_MARGIN_DEG = 2;
-
-/** MAP above which an OEM calibration leaves closed loop and enriches for power. */
-const OPEN_LOOP_KPA = 85;
 
 /**
  * @typedef {object} Preset
@@ -465,54 +465,112 @@ export function factoryCalibration(preset) {
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
   // margin where there is not. That is what a production calibration is. Knock is
-  // evaluated against the mixture the engine will ACTUALLY see (best-power AFR, since
-  // the fuel table above is what puts it there) rather than the richer commanded
-  // number, which is only an artifact of pre-compensating the MAF.
+  // evaluated against the mixture the engine will ACTUALLY see — see `cellAt` below —
+  // rather than the commanded number, which is pre-compensated for the MAF error.
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
   const turbine = presetTurbine(preset);
 
-  const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
+  /**
+   * MBT and the knock ceiling at ANY manifold pressure, not just a row's.
+   *
+   * Pulled out of the row loop so the interpolation pass below can ask the same
+   * question at the pressures BETWEEN rows, which is where the ECU actually runs.
+   */
+  const cellAt = (rpm, loadKpa, veActual) => {
     const boostPsi = boostAt(rpm, loadKpa);
-    const trueBestAfr = bestPowerAfr(boostPsi);
-    const lambda = trueBestAfr / 14.7;
+    // THE MIXTURE THIS CELL WILL ACTUALLY BURN, read the way the running engine reads
+    // it: off the fuel table this function just wrote, interpolated to whatever pressure
+    // is being asked about, and then un-corrected for the MAF error the table was
+    // pre-compensated with. That is `evaluatePoint`'s own arithmetic, so the generator
+    // and the advisor now agree about the mixture at every pressure — including the ones
+    // between rows, which is where they used to part company.
+    //
+    // The old form graded every cell at best-power lambda, including the closed-loop
+    // cells where this table commands 14.7 and the O2 sensor holds it there. A
+    // stoichiometric charge burns hotter and knocks sooner than a rich one, so those
+    // cells were written for a mixture the engine never receives.
+    const afrCommanded = interp2(afr, rpm, loadKpa);
+    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafFactor, loadKpa);
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
-    const veActual = ve[ri][ci];
     const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
-    const lambdaCell = lambda;
-    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambdaCell))
+    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda))
       * derived.cyl * (rpm / 2) / 60;
     const empKpa = exhaustManifoldKpa({
       turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
-      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda: lambdaCell }),
+      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda }),
     });
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. A second, simpler
     // knock estimate here would drift from the one the player then drives against.
-    // KNOWN DEFECT, deliberately left in place — see issue #46.
-    //
-    // This releases the energy of DELIVERED fuel, not burnable fuel. At a rich best-power
-    // target the surplus has no oxygen, so heat comes out ~20% high (Golf R, 200 kPa) and
-    // the generated spark lands ~5 deg below what the same cycle allows in `point.js` —
-    // the two are supposed to ask one question and get one answer.
-    //
-    // The one-line fix is `burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich)`
-    // with `fuelMassG: deliveredFuelG` alongside it, exactly as point.js splits them. It is
-    // NOT applied here because the boosted presets were fitted around this over-retard:
-    // correcting it alone puts four of them outside the published-figure tolerances
-    // (N54 torque +11.3%, Golf R +7.2%, B58B30M0 +5.5%, GTI +5.3%), and no single fitted
-    // knob recovers them — cam duration saturates (N54 torque bottoms at +10.1% at every
-    // duration, because that plateau is boost-limited), compressor choice moves it not at
-    // all, and the only KNOCK_TAU_SCALE window that passes all seven (~1.4) makes the stock
-    // engine knock on its own shipped calibration. Closing it needs the knock model to bind
-    // on boosted factory tables, which it currently never does.
+    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
     const cyc = cycleInputsFor({
       rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
-      airChargeG, burnedFuelG: airChargeG / (fuel.stoich * lambda),
+      airChargeG,
+      // Burnable mass releases the heat; delivered mass evaporates and cools the charge.
+      // Split exactly as point.js splits it, so the generator and the running ECU answer
+      // the same question with the same number.
+      burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich),
+      fuelMassG: deliveredFuelG,
       lambda, fuel, derived,
     });
-    const safe = knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG;
-    return Number(clamp(Math.min(mbtFromBurn(cyc.burnDeg), safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+    return {
+      safe: knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG,
+      mbt: mbtFromBurn(cyc.burnDeg),
+    };
+  };
+
+  const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
+    const { safe, mbt } = cellAt(rpm, loadKpa, ve[ri][ci]);
+    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
   }));
+
+  // THE TABLE HAS TO BE SAFE BETWEEN ITS ROWS, NOT ONLY ON THEM.
+  //
+  // Every cell above is optimal at its own pressure. The ECU does not run there: it
+  // reads the table with `interp2`, so between two rows the cylinder gets a blend at a
+  // pressure no row sits on, and the knock ceiling falls faster than the blend does.
+  // A table written row-by-row therefore detonates in the gaps — which is exactly what
+  // `calibrationAdvice` reports about it (#43), and why the app's own factory tables
+  // read as dangerous to the app's own advisor once the over-retard that had been
+  // masking it was removed (#46).
+  //
+  // Same constraint, same reachability helper, same direction of walk as the advisor:
+  // from the most boosted row downward, so the tighter row above is already pinned and
+  // the excess comes out of the cell reaching up into pressure it does not have to carry.
+  //
+  // ONE DELIBERATE DIFFERENCE IN WHAT IT IS ASKED. The advisor reads reachability off
+  // the player's boost curve at each RPM, because it is judging one build. The generator
+  // asks at the preset's PEAK boost for every RPM, for the reason `boostAt` reads boost
+  // off the MAP axis: a factory table has to be a valid surface at every pressure, not
+  // only the ones this curve happens to reach at this speed. That is the stricter of the
+  // two, so a generated table can never fail the advisor on it. Asking per RPM instead
+  // was measured: it moves the N54's torque peak from 3700 back to 4200 RPM against a
+  // published 3000.
+  const peakBoostCurve = RPM.map(() => Math.max(0, ...preset.induction.boost));
+  RPM.forEach((rpm, ci) => {
+    const reachKpa = reachableKpa({
+      turboOn: preset.induction.turboOn, boostCurve: peakBoostCurve, rpm,
+    });
+    for (let ri = 1; ri < LOAD.length; ri += 1) {
+      const span = LOAD[ri - 1] - LOAD[ri];
+      const entered = clamp((reachKpa - LOAD[ri]) / span, 0, 1);
+      if (entered <= 0) continue;
+      const room = interpolationRoomDeg({
+        // VE read the way the sweep reads it — interpolated to the same pressure — so
+        // this is the ceiling that genuinely applies between the two rows.
+        ceilingAtFrac: (f) => cellAt(
+          rpm, LOAD[ri] + f * span, interp2(ve, rpm, LOAD[ri] + f * span),
+        ).safe,
+        aboveDeg: timing[ri - 1][ci],
+        entered,
+      });
+      if (room < timing[ri][ci]) {
+        timing[ri][ci] = Number(
+          clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1),
+        );
+      }
+    }
+  });
 
   return { ve, timing, afr };
 }

@@ -13,9 +13,12 @@ import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
-import { clamp, interp1, interp2 } from './math.js';
+import { clamp, interp2 } from './math.js';
 import { evaluatePoint } from './point.js';
-import { LOAD, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG } from './tables.js';
+import { reachableKpa } from './manifold.js';
+import {
+  LOAD, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+} from './tables.js';
 
 /** The ~100 kPa row — wide-open throttle, naturally aspirated. */
 const WOT_ROW = 2;
@@ -26,17 +29,6 @@ export const VE_NOTABLE_PCT = 2.5;
 /** Safety left under the calculated knock limit when advising, degrees. */
 const KNOCK_SAFETY_DEG = 1.5;
 
-/**
- * Where between two rows the interpolated spark advice is checked.
- *
- * The sweep reads the table at whatever pressure the boost curve produced, so advice has
- * to hold everywhere between rows and not just on them. Three interior samples, because
- * the knock ceiling is not linear in pressure and the binding point is not always the
- * middle. The endpoints are excluded: at f = 0 and f = 1 the blend is one row's own
- * value, which its own grading already covers.
- */
-const INTERP_SAMPLE_FRACTIONS = [0.25, 0.5, 0.75];
-
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
 
@@ -45,19 +37,6 @@ const UNDER_ADVANCED_DEG = 3.0;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 const MIX_NOTABLE_AFR = 0.45;
-
-/**
- * Manifold pressure above which the ECU runs open loop, kPa. Mixture advice is limited
- * to these rows: below it the target is stoichiometric and the trims own it, so
- * best-power advice would be actively wrong.
- */
-export const OPEN_LOOP_KPA = 85;
-
-/**
- * Slack above the boost target when deciding whether a row is reachable, kPa. Enough to
- * cover interpolation and the barometric rounding, not enough to admit a whole row.
- */
-const REACHABLE_SLACK_KPA = 2;
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and
@@ -126,12 +105,14 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
     sweptM3: (derived.displacementL / derived.cyl) / 1000,
   });
   const lambda = afrCell / 14.7;
-  // Delivered fuel, used here as the burned mass. Same known defect as the one documented
-  // in `factoryCalibration` — the two are fixed together or not at all, because a spark
-  // advisor that disagrees with the generator is the false alarm #34 removed.
-  const burnedFuelG = airG / (fuel.stoich * lambda);
+  // Burnable mass releases the heat; delivered mass evaporates. Fixed together with
+  // `factoryCalibration` — a spark advisor that disagrees with the generator is the
+  // false alarm #34 removed.
+  const deliveredFuelG = airG / (fuel.stoich * lambda);
+  const burnedFuelG = Math.min(deliveredFuelG, airG / fuel.stoich);
   return mbtForCell({
-    rpm, mapKpa, intakeK: chargeK, airChargeG: airG, burnedFuelG, lambda, fuel, derived,
+    rpm, mapKpa, intakeK: chargeK, airChargeG: airG, burnedFuelG,
+    fuelMassG: deliveredFuelG, lambda, fuel, derived,
     empKpa: exhaustManifoldKpa({
       turboOn, turbine: turboOn ? turbine : null,
       exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
@@ -176,8 +157,7 @@ export function calibrationAdvice({
 }) {
   const spark = [], fuelAdv = [];
   /** Highest manifold pressure the boost controller is even asking for at this speed. */
-  const reachableKpa = (rpm) => BARO_KPA + REACHABLE_SLACK_KPA
-    + (turboOn ? Math.max(0, interp1(RPM, boostCurve, rpm)) * PSI_TO_KPA : 0);
+  const reachAt = (rpm) => reachableKpa({ turboOn, boostCurve, rpm });
 
   /**
    * The knock threshold at any manifold pressure, not just a row's.
@@ -211,7 +191,7 @@ export function calibrationAdvice({
    * own row pressure, because the engine never gets there.
    */
   const gradingKpa = (ri, rpm) => {
-    const reach = reachableKpa(rpm);
+    const reach = reachAt(rpm);
     // The TOP row is clamped, not interpolated: `interp2` hands back its value for every
     // pressure above it. Ask for 22 psi and the manifold reaches 254 kPa while the table
     // stops at 200, so that one row is in force across 54 kPa of pressure it was never
@@ -330,26 +310,40 @@ export function calibrationAdvice({
       // the manifold peaks at 197.9 kPa, so the 150-200 gap is entered 96% of the way;
       // at no boost it is not entered at all and the pair is left alone.
       const span = LOAD[ri - 1] - LOAD[ri];
-      const entered = clamp((reachableKpa(rpm) - LOAD[ri]) / span, 0, 1);
+      const entered = clamp((reachAt(rpm) - LOAD[ri]) / span, 0, 1);
       if (entered <= 0) continue;
-      let room = Infinity;
-      for (const frac of INTERP_SAMPLE_FRACTIONS) {
-        const f = frac * entered;
-        const ceiling = ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG;
-        room = Math.min(room, (ceiling - f * above.suggested) / (1 - f));
-      }
+      const room = interpolationRoomDeg({
+        ceilingAtFrac: (f) => ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG,
+        aboveDeg: above.suggested,
+        entered,
+      });
       if (room < here.suggested) {
         here.suggested = clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
         here.delta = Number((here.suggested - here.current).toFixed(1));
         here.interpolationLimited = true;
       }
+      // ADVICE AND JUDGEMENT NEED DIFFERENT BASELINES, and sharing one was quietly
+      // wrong. `room` above is what this cell may carry once the row ABOVE has taken
+      // the advice — correct for a suggestion, because that is the table the player
+      // would end up with. It is not what the CURRENT table does: the ECU blends the
+      // numbers actually in the table, so judging this cell against a neighbour's
+      // suggested value condemns it for advance it never meets.
+      //
+      // Judged against the table as it stands, therefore. When the two agree the
+      // result is identical; where they differ, this is the one that answers "is the
+      // table in front of me dangerous".
+      const judged = interpolationRoomDeg({
+        ceilingAtFrac: (f) => ceilingAt(ci, LOAD[ri] + f * span) - KNOCK_SAFETY_DEG,
+        aboveDeg: above.current,
+        entered,
+      });
       // A cell the interpolated path binds is DANGEROUS, not merely sub-optimal: the
       // sweep really does detonate at that pressure. So the ceiling this cell is judged
       // against comes down with the advice, and the existing classification below reports
       // it in the same breath as any other cell past the knock limit. Reporting the
       // suggestion without the warning would leave the player with a number to type and
       // no reason for it.
-      here.knockCeiling = Math.min(here.knockCeiling, Number(room.toFixed(1)));
+      here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
     }
   });
 

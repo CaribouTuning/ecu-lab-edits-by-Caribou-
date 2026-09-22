@@ -19,6 +19,7 @@ import { exhaustManifoldKpa, rubbingFmepPa, pumpingFmepPa } from './friction.js'
 import { chargeIndexOf } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
+import { OPEN_LOOP_KPA, effectiveMafFactor } from './tables.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
@@ -87,10 +88,10 @@ export function evaluatePoint({
   // The MAF reading reports real airflow — a sensor cannot read a table.
   const mafGps = (airChargeG * derived.cyl * (rpm / 2)) / 60;
 
-  // --- MAF error / fuel trim. Open loop above ~85 kPa (near WOT).
+  // --- MAF error / fuel trim. Open loop above OPEN_LOOP_KPA (near WOT).
   const netFactor = mafErrorBase * mafScalar;
-  const openLoop = mapKpa >= 85;
-  const effFactor = 1 + (netFactor - 1) * (openLoop ? 1 : 0.25);
+  const openLoop = mapKpa >= OPEN_LOOP_KPA;
+  const effFactor = effectiveMafFactor(netFactor, mapKpa);
   const trimPct = (effFactor - 1) * 100;
 
   // --- FUEL MASS from lambda and the fuel's own stoichiometric ratio. Computed from

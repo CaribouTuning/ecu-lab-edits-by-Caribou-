@@ -6,8 +6,10 @@
  * indexes off MAP, exactly as a speed-density ECU does.
  */
 
+import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { clamp } from './math.js';
+import { clamp, interp1 } from './math.js';
+import { REACHABLE_SLACK_KPA, RPM } from './tables.js';
 
 /**
  * WHAT USED TO BE HERE
@@ -31,4 +33,23 @@ import { clamp } from './math.js';
  */
 export function bestPowerAfr(boostPsi) {
   return COEFF.BEST_AFR_NA - clamp(boostPsi * COEFF.BEST_AFR_BOOST_SHIFT, 0, COEFF.BEST_AFR_BOOST_CAP);
+}
+
+/**
+ * Highest manifold pressure the boost controller is even asking for at this speed, kPa.
+ *
+ * THE ONE DEFINITION OF REACHABLE. `calibrationAdvice` and `factoryCalibration` both
+ * decide which row gaps an engine really runs through with it. The advisor passes the
+ * player's curve; the generator passes the preset's peak boost at every RPM, which is
+ * stricter — see the interpolation pass in `factoryCalibration` for why.
+ *
+ * @param {object} input
+ * @param {boolean} input.turboOn
+ * @param {number[]} input.boostCurve boost target per `RPM` breakpoint, psi
+ * @param {number} input.rpm
+ * @returns {number} kPa absolute
+ */
+export function reachableKpa({ turboOn, boostCurve, rpm }) {
+  return BARO_KPA + REACHABLE_SLACK_KPA
+    + (turboOn ? Math.max(0, interp1(RPM, boostCurve, rpm)) * PSI_TO_KPA : 0);
 }
