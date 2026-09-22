@@ -62,7 +62,7 @@ export function FuelScreen({ calAdvice }) {
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={afr} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value })} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
+      <SelectionDock data={afr} setData={(value, label) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value, label })} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
     </>
   );
 }
