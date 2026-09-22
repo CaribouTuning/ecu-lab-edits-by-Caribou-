@@ -120,3 +120,84 @@ describe('SelectionDock on a range', () => {
     expect(within(dock()).getByRole('button', { name: 'ADD' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
+
+const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: `${rpm} RPM, ${kpa} kPa` });
+const mouse = { pointerType: 'mouse', button: 0, buttons: 1 };
+
+describe('selecting a range on the grid', () => {
+  it('a mouse drag selects the rectangle it covers', () => {
+    mountAir();
+    fireEvent.pointerDown(cell(1500, 150), mouse);
+    fireEvent.pointerEnter(cell(3500, 70), mouse);
+    fireEvent.pointerUp(window, mouse);
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 3, c2: 3 });
+    // the click that follows a mouse press must not collapse it back to one cell
+    fireEvent.click(cell(3500, 70), { detail: 1 });
+    expect(store.tune.selection.type).toBe('range');
+  });
+
+  it('moving after release does not keep dragging', () => {
+    mountAir();
+    fireEvent.pointerDown(cell(1500, 150), mouse);
+    fireEvent.pointerUp(window, mouse);
+    fireEvent.pointerEnter(cell(3500, 70), { pointerType: 'mouse', buttons: 0 });
+    expect(store.tune.selection).toEqual({ type: 'cell', row: 1, col: 1 });
+  });
+
+  it('shift-click extends from the anchor', () => {
+    mountAir();
+    fireEvent.pointerDown(cell(2500, 100), mouse);
+    fireEvent.pointerUp(window, mouse);
+    fireEvent.pointerDown(cell(5500, 40), { ...mouse, shiftKey: true });
+    fireEvent.pointerUp(window, mouse);
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 2, c1: 2, r2: 4, c2: 5 });
+  });
+
+  it('a touch press does not start a drag', () => {
+    mountAir();
+    fireEvent.pointerDown(cell(1500, 150), { pointerType: 'touch', buttons: 1 });
+    fireEvent.pointerEnter(cell(3500, 70), { pointerType: 'touch', buttons: 1 });
+    expect(store.tune.selection).toBeNull();
+  });
+
+  it('highlights every cell in the range', () => {
+    mountAir();
+    select({ type: 'range', r1: 0, c1: 0, r2: 1, c2: 1 });
+    expect(cell(1500, 150).getAttribute('aria-pressed')).toBe('true');
+    expect(cell(2500, 150).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('SELECT RANGE takes two taps, and a third starts over', () => {
+    mountAir();
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    fireEvent.click(cell(1500, 150));
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 1, c2: 1 });
+    fireEvent.click(cell(3500, 70));
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 3, c2: 3 });
+    fireEvent.click(cell(800, 20));
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 5, c1: 0, r2: 5, c2: 0 });
+  });
+
+  it('ALL selects the whole table, and switching mode clears', () => {
+    mountAir();
+    fireEvent.click(screen.getByRole('button', { name: 'ALL' }));
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 0, c1: 0, r2: 5, c2: 7 });
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    expect(store.tune.selection).toBeNull();
+  });
+
+  it('range mode is one flag, shared across the grids', () => {
+    const calAdvice = { spark: [], overAdvanced: [], underAdvanced: [], pastMbt: [], fuelAdv: [], wrongMix: [] };
+    render(
+      <StoreProvider>
+        <Spy />
+        <SparkScreen calAdvice={calAdvice} />
+        <FuelScreen calAdvice={calAdvice} />
+      </StoreProvider>,
+    );
+    const [sparkRange, fuelRange] = screen.getAllByRole('button', { name: 'SELECT RANGE' });
+    fireEvent.click(sparkRange);
+    expect(store.tune.rangeMode).toBe(true);
+    expect(fuelRange.getAttribute('aria-pressed')).toBe('true');
+  });
+});

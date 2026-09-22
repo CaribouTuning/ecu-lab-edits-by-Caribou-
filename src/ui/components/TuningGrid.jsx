@@ -1,14 +1,18 @@
 /**
  * The RPM x MAP calibration grid: one cell per (load, RPM) pair, coloured by a
- * heat scale and clickable by cell, row or column to build a `Selection` for
- * `SelectionDock` to edit.
+ * heat scale, building a `Selection` for `SelectionDock` to edit.
+ *
+ * A cell selects on click. A mouse also drags out a range or shift-clicks one from the
+ * anchor; a finger cannot drag (that scrolls the grid), so in SELECT RANGE mode
+ * (`SelectModeBar`) two taps make the two corners. Row and column headers select the
+ * whole row or column.
  *
  * Shared by TUNE's AIR, SPARK and FUEL screens — the ECU screen uses neither this
  * nor `SelectionDock`, which is why both live here rather than beside any one
  * screen. See this folder's README for what that distinction means.
  *
- * Relocated from EcuLab.jsx by the screen split, markup unchanged — still inline
- * styles, same as this folder's other shared components.
+ * Relocated from EcuLab.jsx by the screen split — still inline styles, same as this
+ * folder's other shared components.
  */
 
 import React from 'react';
@@ -16,7 +20,9 @@ import React from 'react';
 import { LOAD, RPM } from '../../sim/index.js';
 import { T, heat, shadowAlpha } from '../theme.js';
 
-/** @typedef {{type: 'cell'|'row'|'col', row?: number, col?: number}} Selection */
+import { anchorOf, inRect, rectOf, spanSelection } from './selection.js';
+
+/** @typedef {import('./selection.js').Selection} Selection */
 
 /**
  * @param {object} props
@@ -24,22 +30,81 @@ import { T, heat, shadowAlpha } from '../theme.js';
  * @param {number} props.min lower bound of the heat scale
  * @param {number} props.max upper bound of the heat scale
  * @param {number} props.decimals how many decimal places to render each cell at
- * @param {Selection|null} props.selection the current cell/row/col selection, or none
- * @param {(next: Selection) => void} props.setSelection
+ * @param {Selection|null} props.selection the current selection, or none
+ * @param {(next: Selection|null) => void} props.setSelection
+ * @param {boolean} [props.rangeMode] whether a tap starts or completes a range (the
+ *   touch path) rather than selecting one cell
  * @returns {React.ReactElement}
  */
-export function TuningGrid({ data, min, max, decimals, selection, setSelection }) {
+export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false }) {
   const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
-  const selectCell = (row, col) => setSelection({ type: 'cell', row, col });
+  const rect = selection ? rectOf(selection) : null;
+  const anchor = selection ? anchorOf(selection) : null;
+  // The anchor of a mouse drag in progress, or null. A ref, not state: it changes on
+  // every press and release and nothing renders from it.
+  const dragFrom = React.useRef(/** @type {{r: number, c: number}|null} */ (null));
+  // Which kind of pointer pressed last. A mouse press has already selected by the time
+  // its click arrives, so that click must not select again — it would collapse a drag
+  // back to one cell. A keyboard click carries `detail === 0` and always goes through.
+  const lastPointer = React.useRef('');
+
+  // A drag ends wherever the button comes up, which need not be over the grid.
+  React.useEffect(() => {
+    const end = () => { dragFrom.current = null; };
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
+
+  /**
+   * A tap or plain press on a cell. In SELECT RANGE mode the first tap is a one-cell
+   * range (the anchor) and the second completes it; any tap after that starts over.
+   * @param {number} ri
+   * @param {number} ci
+   * @returns {{r: number, c: number}} the anchor the new selection extends from
+   */
+  const tap = (ri, ci) => {
+    const here = { r: ri, c: ci };
+    if (rangeMode && selection?.type === 'range' && selection.r1 === selection.r2 && selection.c1 === selection.c2) {
+      const from = { r: selection.r1, c: selection.c1 };
+      setSelection(spanSelection(from, here, true));
+      return from;
+    }
+    setSelection(rangeMode ? spanSelection(here, here, true) : { type: 'cell', row: ri, col: ci });
+    return here;
+  };
+
+  const onCellPointerDown = (e, ri, ci) => {
+    lastPointer.current = e.pointerType;
+    // Touch and pen keep scrolling the grid; they select on click, below.
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (e.shiftKey && anchor) {
+      setSelection(spanSelection(anchor, { r: ri, c: ci }, rangeMode));
+      dragFrom.current = anchor;
+      return;
+    }
+    dragFrom.current = tap(ri, ci);
+  };
+  const onCellPointerEnter = (e, ri, ci) => {
+    // `buttons` as well as the ref: a release outside the window never reaches the
+    // listener above, and without this the next hover would still be dragging.
+    if (!dragFrom.current || !(e.buttons & 1)) return;
+    setSelection(spanSelection(dragFrom.current, { r: ri, c: ci }, rangeMode));
+  };
+  const onCellClick = (e, ri, ci) => {
+    if (e.detail > 0 && lastPointer.current === 'mouse') return;
+    tap(ri, ci);
+  };
   const selectRow = (row) => setSelection({ type: 'row', row });
   const selectCol = (col) => setSelection({ type: 'col', col });
-  const isSelected = (row, col) => {
-    if (!selection) return false;
-    if (selection.type === 'cell') return selection.row === row && selection.col === col;
-    if (selection.type === 'row') return selection.row === row;
-    if (selection.type === 'col') return selection.col === col;
-    return false;
-  };
+  const isSelected = (ri, ci) => Boolean(rect && inRect(rect, ri, ci));
+  // Only a range marks its anchor: it is the corner a shift-click extends from, so it
+  // has to be findable. A lone cell is its own anchor and needs no second mark.
+  const isAnchor = (ri, ci) => selection?.type === 'range' && anchor.r === ri && anchor.c === ci;
+
   return (
     <div data-testid="tuning-grid">
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
@@ -67,12 +132,22 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection }
               fontFamily: T.mono, fontSize: 10, fontWeight: 700,
             }}>{load}</button>
             {data[ri].map((val, ci) => (
-              <button key={ci} onClick={() => selectCell(ri, ci)} style={{
-                width: 51, height: 37, flexShrink: 0,
-                border: isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid ${shadowAlpha(0.35)}`,
-                background: heat(val, min, max), color: T.ink,
-                fontFamily: T.mono, fontSize: 12, fontWeight: 700,
-              }}>{fmt(val)}</button>
+              <button
+                key={ci}
+                aria-label={`${RPM[ci]} RPM, ${load} kPa`}
+                aria-pressed={isSelected(ri, ci)}
+                onPointerDown={(e) => onCellPointerDown(e, ri, ci)}
+                onPointerEnter={(e) => onCellPointerEnter(e, ri, ci)}
+                onClick={(e) => onCellClick(e, ri, ci)}
+                style={{
+                  width: 51, height: 37, flexShrink: 0,
+                  border: isAnchor(ri, ci) ? `2px solid ${T.acc}` : isSelected(ri, ci) ? `2px solid ${T.ink}` : `1px solid ${shadowAlpha(0.35)}`,
+                  background: heat(val, min, max), color: T.ink,
+                  fontFamily: T.mono, fontSize: 12, fontWeight: 700,
+                  // A mouse drag across cells must not start a text selection.
+                  userSelect: 'none',
+                }}
+              >{fmt(val)}</button>
             ))}
           </div>
         ))}
