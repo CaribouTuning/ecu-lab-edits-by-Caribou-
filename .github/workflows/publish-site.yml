@@ -1,0 +1,84 @@
+name: Publish site
+
+# Publishes a live build of DNiev/ecu-lab `main` to this fork's GitHub Pages site.
+#
+# WHY THIS EXISTS. Upstream's own Deploy workflow only fires on a `v*` tag, so the
+# published site tracks releases, not `main`. Tagging is a manual step that can sit
+# undone for weeks, which leaves finished, merged work invisible to anyone holding a
+# link. This workflow publishes `main` itself, on a schedule, so there is always a
+# current link that does not wait on a release being cut.
+#
+# It is deliberately a MIRROR, not a fork of the code: it checks out upstream and
+# builds that, so nothing here can drift from what upstream `main` actually contains.
+# This repository's own commits are never published by it.
+#
+# SCHEDULED RUNS IN A FORK. GitHub disables `schedule` triggers in forked repositories
+# until Actions are enabled, and suspends them again after 60 days with no activity in
+# the repository. `workflow_dispatch` is kept as the reliable path: run it by hand from
+# the Actions tab whenever the site needs to be current right now.
+
+on:
+  schedule:
+    # Every six hours. Upstream merges land in bursts, and six hours keeps the site
+    # fresh without running a full test suite on every push to someone else's repo.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two publishes race, and never cancel one half-done — a cancelled deploy
+# can leave the site serving a partial build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # The source of truth is upstream, not this fork. Checking upstream out directly
+      # is what makes this a mirror: there is no sync step to fall behind.
+      - name: Check out upstream main
+        uses: actions/checkout@v5
+        with:
+          repository: DNiev/ecu-lab
+          ref: main
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      # `main` is not a released ref, so nothing has necessarily vetted this commit for
+      # publication. Run the suite here rather than serve a build that fails it.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # `enablement: true` switches Pages on through the API the first time this runs,
+      # so publishing does not depend on anyone having visited the repository settings.
+      # It is a no-op once Pages exists.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
