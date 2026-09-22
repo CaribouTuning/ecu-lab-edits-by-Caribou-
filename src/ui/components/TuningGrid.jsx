@@ -7,6 +7,9 @@
  * (`SelectModeBar`) two taps make the two corners. Row and column headers select the
  * whole row or column.
  *
+ * Focused, it also takes the keyboard: arrows move, Shift+arrows grow a range from the
+ * anchor, `+`/`-` nudge the selection (Shift for the coarse step), Esc clears.
+ *
  * Shared by TUNE's AIR, SPARK and FUEL screens — the ECU screen uses neither this
  * nor `SelectionDock`, which is why both live here rather than beside any one
  * screen. See this folder's README for what that distinction means.
@@ -17,12 +20,22 @@
 
 import React from 'react';
 
-import { LOAD, RPM } from '../../sim/index.js';
+import { LOAD, RPM, addRect } from '../../sim/index.js';
 import { T, heat, shadowAlpha } from '../theme.js';
 
-import { anchorOf, inRect, rectOf, spanSelection } from './selection.js';
+import { anchorOf, inRect, opLabel, rectOf, signed, spanSelection, stepsFor } from './selection.js';
 
 /** @typedef {import('./selection.js').Selection} Selection */
+
+/** Arrow key -> [row step, column step]. */
+const ARROWS = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+/**
+ * Physical key -> nudge direction. By `code`, not `key`: `+` already needs Shift on most
+ * layouts, so `key` could not tell "+" from "coarse +".
+ */
+const NUDGE = { Equal: 1, NumpadAdd: 1, Minus: -1, NumpadSubtract: -1 };
+const clampR = (r) => Math.min(Math.max(r, 0), LOAD.length - 1);
+const clampC = (c) => Math.min(Math.max(c, 0), RPM.length - 1);
 
 /**
  * @param {object} props
@@ -34,9 +47,11 @@ import { anchorOf, inRect, rectOf, spanSelection } from './selection.js';
  * @param {(next: Selection|null) => void} props.setSelection
  * @param {boolean} [props.rangeMode] whether a tap starts or completes a range (the
  *   touch path) rather than selecting one cell
+ * @param {(next: number[][], label: string) => void} [props.setData] one table write,
+ *   one undo step — what `+`/`-` call. Without it the keys only move the selection.
  * @returns {React.ReactElement}
  */
-export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false }) {
+export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData }) {
   const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
   const rect = selection ? rectOf(selection) : null;
   const anchor = selection ? anchorOf(selection) : null;
@@ -105,8 +120,44 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // has to be findable. A lone cell is its own anchor and needs no second mark.
   const isAnchor = (ri, ci) => selection?.type === 'range' && anchor.r === ri && anchor.c === ci;
 
+  const onKeyDown = (e) => {
+    // Ctrl/Cmd/Alt belong to EcuLab's global undo handler and to the browser.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === 'Escape') {
+      if (selection) { e.preventDefault(); setSelection(null); }
+      return;
+    }
+    const move = ARROWS[e.key];
+    if (move) {
+      e.preventDefault();
+      if (!selection) { setSelection({ type: 'cell', row: 0, col: 0 }); return; }
+      if (e.shiftKey) {
+        // The corner that moves is whichever one is not the anchor.
+        const far = selection.type === 'range'
+          ? { r: selection.r2, c: selection.c2 }
+          : { r: rect.r1 === anchor.r ? rect.r2 : rect.r1, c: rect.c1 === anchor.c ? rect.c2 : rect.c1 };
+        setSelection(spanSelection(anchor, { r: clampR(far.r + move[0]), c: clampC(far.c + move[1]) }));
+      } else {
+        setSelection({ type: 'cell', row: clampR(anchor.r + move[0]), col: clampC(anchor.c + move[1]) });
+      }
+      return;
+    }
+    const sign = NUDGE[e.code];
+    if (sign && selection && setData) {
+      e.preventDefault();
+      const { small, big } = stepsFor(decimals);
+      const delta = sign * (e.shiftKey ? big : small);
+      setData(addRect(data, rect, delta, { min, max }), opLabel(signed(delta), rect));
+    }
+  };
+
   return (
-    <div data-testid="tuning-grid">
+    <div
+      data-testid="tuning-grid"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      aria-label="Calibration table: arrows move, Shift+arrows select a range, plus and minus adjust"
+    >
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink3, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
       <span>MAP kPa &darr;</span><span>RPM &rarr;</span>
     </div>

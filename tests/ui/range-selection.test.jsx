@@ -201,3 +201,69 @@ describe('selecting a range on the grid', () => {
     expect(fuelRange.getAttribute('aria-pressed')).toBe('true');
   });
 });
+
+const grid = () => screen.getByTestId('tuning-grid');
+
+describe('keyboard tuning', () => {
+  it('arrows move a single cell, clamped to the table', () => {
+    mountAir();
+    select({ type: 'cell', row: 0, col: 0 });
+    fireEvent.keyDown(grid(), { key: 'ArrowRight' });
+    fireEvent.keyDown(grid(), { key: 'ArrowDown' });
+    expect(store.tune.selection).toEqual({ type: 'cell', row: 1, col: 1 });
+    select({ type: 'cell', row: 0, col: 0 });
+    fireEvent.keyDown(grid(), { key: 'ArrowUp' });
+    expect(store.tune.selection).toEqual({ type: 'cell', row: 0, col: 0 });
+  });
+
+  it('an arrow with nothing selected selects the first cell', () => {
+    mountAir();
+    fireEvent.keyDown(grid(), { key: 'ArrowDown' });
+    expect(store.tune.selection).toEqual({ type: 'cell', row: 0, col: 0 });
+  });
+
+  it('shift+arrows grow and shrink a range from the anchor', () => {
+    mountAir();
+    select({ type: 'cell', row: 1, col: 1 });
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', shiftKey: true });
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', shiftKey: true });
+    fireEvent.keyDown(grid(), { key: 'ArrowDown', shiftKey: true });
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 2, c2: 3 });
+    fireEvent.keyDown(grid(), { key: 'ArrowLeft', shiftKey: true });
+    expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 2, c2: 2 });
+  });
+
+  it('+ and - nudge the selection, Shift for the big step, one undo step each', () => {
+    mountAir();
+    const v0 = store.tune.ve[1][1];
+    select({ type: 'cell', row: 1, col: 1 });
+    fireEvent.keyDown(grid(), { key: '=', code: 'Equal' });
+    fireEvent.keyDown(grid(), { key: '+', code: 'Equal', shiftKey: true });
+    fireEvent.keyDown(grid(), { key: '-', code: 'NumpadSubtract' });
+    expect(store.tune.ve[1][1]).toBe(Number((v0 + 1 + 5 - 1).toFixed(2)));
+    expect(store.history.past.map((e) => e.label)).toEqual([
+      'VE edit · +1 · 1 cell', 'VE edit · +5 · 1 cell', 'VE edit · -1 · 1 cell',
+    ]);
+  });
+
+  it('Esc clears the selection', () => {
+    mountAir();
+    select({ type: 'cell', row: 1, col: 1 });
+    fireEvent.keyDown(grid(), { key: 'Escape' });
+    expect(store.tune.selection).toBeNull();
+  });
+
+  it('ignores Ctrl/Cmd combinations, so undo is left to the global handler', () => {
+    mountAir();
+    select({ type: 'cell', row: 1, col: 1 });
+    fireEvent.keyDown(grid(), { key: '=', code: 'Equal', metaKey: true });
+    fireEvent.keyDown(grid(), { key: 'ArrowRight', ctrlKey: true });
+    expect(store.history.past).toHaveLength(0);
+    expect(store.tune.selection).toEqual({ type: 'cell', row: 1, col: 1 });
+  });
+
+  it('the grid is focusable', () => {
+    mountAir();
+    expect(grid().getAttribute('tabindex')).toBe('0');
+  });
+});
