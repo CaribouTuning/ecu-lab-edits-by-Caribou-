@@ -323,6 +323,7 @@ export function updateEngineAudio(a, frame) {
       load,
       audible,
       cranking,
+      cut,
       evoKpa: drive.evoKpa,
       portKpa: drive.portKpa,
       lopeSeverity: drive.lopeSeverity,

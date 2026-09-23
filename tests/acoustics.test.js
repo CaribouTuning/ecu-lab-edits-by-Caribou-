@@ -428,6 +428,43 @@ describe('the exhaust system\'s response', () => {
     const wide = ir({ pipeDiaIn: 3.5 });
     expect(Array.from(narrow)).not.toEqual(Array.from(wide));
   });
+
+  it('stops ringing when the exhaust flows hard, and rings as before at idle', () => {
+    // What is left 20 ms after the pulse, against the whole.
+    const ringing = (x) => {
+      const after = Math.round(0.02 * 44100);
+      const total = x.reduce((t, v) => t + v * v, 0);
+      return x.slice(after).reduce((t, v) => t + v * v, 0) / total;
+    };
+    const still = ir();
+    const idle = ir({}, { flowMach: 0.01 });
+    const full = ir({}, { flowMach: 0.2 });
+    expect(Array.from(ir({}, { flowMach: 0 }))).toEqual(Array.from(still));
+    expect(ringing(full)).toBeLessThan(ringing(still) / 2);
+    expect(brightness(full)).toBeLessThan(brightness(still));
+    expect(Math.abs(ringing(idle) - ringing(still)) / ringing(still)).toBeLessThan(0.1);
+  });
+});
+
+describe('the flow down the tailpipe', () => {
+  const geom = (pipeDiaIn) => S.exhaustGeometry({
+    configuration: 'V8', cyl: 8, displacementL: 5.0, bore: 95, compression: 10.5,
+    pipeDiaIn, gasTempK: 1100,
+  });
+  const g = geom(2.5);
+
+  it('runs near Mach 0.2 at full power and barely moves at idle', () => {
+    // One bank of a 5 litre V8: about 0.2 kg/s near the redline, under 0.01 at idle.
+    const full = S.tailpipeMach(g, 0.2, 130);
+    expect(full).toBeGreaterThan(0.1);
+    expect(full).toBeLessThan(0.35);
+    expect(S.tailpipeMach(g, 0.008, 103)).toBeLessThan(0.02);
+    expect(S.tailpipeMach(g, 0)).toBe(0);
+  });
+
+  it('runs faster down a narrower pipe', () => {
+    expect(S.tailpipeMach(geom(2.0), 0.2, 130)).toBeGreaterThan(S.tailpipeMach(g, 0.2, 130));
+  });
 });
 
 describe('the primaries', () => {
@@ -477,6 +514,14 @@ describe('a pulse running down the pipe', () => {
     const change = (x) => riseSamples(S.steepenPulse(x, g, 44100)) / riseSamples(x);
     expect(change(idle)).toBeGreaterThan(0.9);
     expect(change(idle)).toBeGreaterThan(change(event(450, 5000)));
+  });
+
+  it('sharpens it in the primary far more than in the wider collector', () => {
+    // The same pulse down a collector no wider than the primary would sharpen much further.
+    const loaded = event(450, 5000);
+    const narrow = { ...g, collectorArea: g.primaryArea };
+    expect(riseSamples(S.steepenPulse(loaded, g, 44100)))
+      .toBeGreaterThan(riseSamples(S.steepenPulse(loaded, narrow, 44100)));
   });
 
   it('moves the gas rather than making or losing any', () => {

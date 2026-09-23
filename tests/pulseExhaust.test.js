@@ -192,6 +192,17 @@ describe('the pipes', () => {
     expect(m.a.banks[0].key).not.toBe(stock);
   });
 
+  it('damps the pipes as the exhaust flows harder, and leaves them ringing at idle', () => {
+    const idle = model(geom(), 'idle');
+    run(idle, { rpm: 800, evoKpa: 150, load: 0.1, portKpa: 103 }, 1);
+    expect(idle.a.stream.flowStep[0]).toBe(0);
+    const full = model(geom(), 'full');
+    run(full, { rpm: 6000, evoKpa: 600, load: 1, portKpa: 130 }, 1);
+    expect(full.a.stream.flowStep[0]).toBeGreaterThan(3);
+    expect(full.a.stream.flowStep[1]).toBeGreaterThan(3);
+    expect(full.a.banks[0].key).toMatch(new RegExp(`\\|${full.a.stream.flowStep[0]}$`));
+  });
+
   it('staggers a cast manifold\'s cylinders and lines tuned headers up', () => {
     const cast = model(geom({ headers: false }), 'c');
     const tuned = model(geom({ headers: true }), 't');
@@ -232,6 +243,13 @@ describe('what the engine is doing', () => {
     run(m, { rpm: 5000, evoKpa: 48, load: 0 }, 1);
     expect(energy(m)).toBeLessThan(before / 4);
     expect(energy(m)).toBeGreaterThan(0);
+  });
+
+  it('burns nothing on a fuel cut, so nothing scatters and nothing misfires', () => {
+    const events = run(model(), { rpm: 4000, evoKpa: 48, load: 0, cut: true, lopeSeverity: 0.5 }, 1);
+    const byCylinder = new Map();
+    for (const e of events) byCylinder.set(e.cylinder, [...(byCylinder.get(e.cylinder) ?? []), e.evoKpa]);
+    for (const evos of byCylinder.values()) expect(sd(evos)).toBeLessThan(1e-9);
   });
 
   it('scatters more at light load than wide open', () => {

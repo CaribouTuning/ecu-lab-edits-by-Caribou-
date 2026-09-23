@@ -268,6 +268,25 @@ export const ACOUSTIC = {
   // of the mean primary. Tuned headers are equal length to within a few percent.
   MANIFOLD_LENGTH_SPREAD: 0.22,
   HEADER_LENGTH_SPREAD: 0.03,
+  // FLOW DAMPS THE PIPES. Everything above is for still gas, which is close to true at
+  // idle, where the exhaust's mean flow barely reaches Mach 0.01. At full power it runs at
+  // Mach 0.2 down the tailpipe, and a pipe carrying turbulent flow damps a wave far
+  // harder than a still one:
+  //   - the turbulent wall layer takes energy out of every pass at a rate that scales
+  //     with the flow's Mach number and the tube's length over its diameter, the way the
+  //     pressure drop does (FRICTION is that scale, near a steel pipe's friction factor);
+  //   - the flow grazing a muffler's perforated core and a converter's channels raises
+  //     their resistance in proportion to its speed, so they absorb further down the
+  //     band (CORNER is how fast each section's lowpass corner falls per unit of Mach).
+  // So an idling engine rings in its pipes, and one at full noise does not. Its note is
+  // then carried by the firing pulses themselves rather than by the pipes' own
+  // resonances, which is why a revving engine sounds like a rising note and not a
+  // buzzing box.
+  FLOW_FRICTION: 0.03,
+  FLOW_CORNER: 5,
+  // How finely the renderer steps the mean flow's Mach number when it recomputes the
+  // response. Fine enough that a step is inaudible under the crossfade.
+  FLOW_MACH_STEP: 0.02,
   // Where the response stops being worth computing: this far below its peak, or this long.
   IR_FLOOR_DB: -60,
   IR_MAX_SECONDS: 0.45,
@@ -642,18 +661,22 @@ export function steepenPulse(flow, geometry, sampleRate, portKpa = BARO_KPA + AC
   const n = flow.length;
   const out = new Float32Array(n);
   const rho = (Math.max(1, portKpa) * 1000) / (R_AIR * Math.max(300, geometry.portK));
-  const area = geometry.primaryArea;
   const c = geometry.cPrimary;
   const beta = (geometry.gamma + 1) / 2;
-  const run = geometry.primaryLength + geometry.collectorLength;
-  const base = run / c;
+  // The run in its two sections. The same flow through the collector's larger area moves
+  // slower, so the collector sharpens the pulse much less than the primary does.
+  const sections = [[geometry.primaryLength, geometry.primaryArea],
+    [geometry.collectorLength, geometry.collectorArea]];
   // Where each input sample arrives, in output samples.
   const at = new Float64Array(n);
   let last = -Infinity;
   for (let i = 0; i < n; i++) {
-    const u = flow[i] / (rho * area);
-    const speed = Math.max(c * 0.2, c + beta * u);
-    const pos = i - (base - run / speed) * sampleRate;
+    let early = 0;
+    for (const [length, area] of sections) {
+      const u = flow[i] / (rho * area);
+      early += length / c - length / Math.max(c * 0.2, c + beta * u);
+    }
+    const pos = i - early * sampleRate;
     at[i] = Math.max(pos, last + ACOUSTIC.SHOCK_MIN_STEP);
     last = at[i];
   }
@@ -937,6 +960,20 @@ export function primaryLengthsM(geometry) {
 }
 
 /**
+ * The Mach number of the mean flow down one bank's tailpipe.
+ *
+ * @param {object} geometry an {@link exhaustGeometry}
+ * @param {number} massFlowKgS mean mass flow through that bank, kg/s
+ * @param {number} [portKpa] absolute pressure in the pipe, kPa
+ * @returns {number} Mach number, 0 and up
+ */
+export function tailpipeMach(geometry, massFlowKgS, portKpa = BARO_KPA) {
+  const rho = (Math.max(1, portKpa) * 1000) / (R_AIR * Math.max(250, geometry.tailK));
+  const u = Math.max(0, massFlowKgS) / (rho * geometry.tailArea);
+  return u / Math.max(1, geometry.cTail);
+}
+
+/**
  * The exhaust system's impulse response: the sound at the tailpipe, per unit of flow
  * pulse entering one bank's primaries.
  *
@@ -958,11 +995,14 @@ export function primaryLengthsM(geometry) {
  *
  * @param {object} geometry an {@link exhaustGeometry}
  * @param {number} sampleRate samples per second
- * @param {{bank?: number, catBack?: boolean}} [opts] which bank's pipework, and whether a
- *   straight-through cat-back is fitted
+ * @param {{bank?: number, catBack?: boolean, flowMach?: number}} [opts] which bank's
+ *   pipework, whether a straight-through cat-back is fitted, and the Mach number of the
+ *   mean flow down the tailpipe ({@link tailpipeMach}), which damps every section
  * @returns {Float32Array} the response, peak-normalised so the loudest sample is 1 in size
  */
-export function exhaustImpulseResponse(geometry, sampleRate, { bank = 0, catBack = false } = {}) {
+export function exhaustImpulseResponse(geometry, sampleRate, {
+  bank = 0, catBack = false, flowMach = 0,
+} = {}) {
   const g = geometry.gamma;
   const cOf = (k) => Math.sqrt(g * R_AIR * Math.max(250, k));
   const stretch = bank === 1 ? 1 + ACOUSTIC.BANK_LENGTH_SPLIT : 1;
@@ -971,9 +1011,11 @@ export function exhaustImpulseResponse(geometry, sampleRate, { bank = 0, catBack
   const tailRadius = Math.sqrt(geometry.tailArea / Math.PI);
   const mufflerArea = geometry.tailArea * ACOUSTIC.CATBACK_MUFFLER_AREA_RATIO;
   const absorbHz = geometry.mufflerAbsorbHz * (catBack ? ACOUSTIC.CATBACK_ABSORB_MULT : 1);
-  // [length m, area m^2, gas K, extra keep per pass, extra lowpass corner Hz per pass]
+  // [length m, area m^2, gas K, extra keep per pass, extra lowpass corner Hz per pass,
+  //  how many such tubes side by side share the bank's flow]
   const tubes = [
-    [geometry.primaryLength, geometry.primaryArea, geometry.portK, 1, Infinity],
+    [geometry.primaryLength, geometry.primaryArea, geometry.portK, 1, Infinity,
+      Math.max(1, geometry.perBank)],
     [geometry.collectorLength, geometry.collectorArea, geometry.portK, 1, Infinity],
     [geometry.catLength, geometry.collectorArea * ACOUSTIC.CAT_AREA_RATIO, geometry.portK,
       geometry.catKeep, geometry.catHzM / geometry.catLength],
@@ -992,15 +1034,24 @@ export function exhaustImpulseResponse(geometry, sampleRate, { bank = 0, catBack
     // The open end behaves as if the pipe were a little longer than it measures.
     [tailLength + ACOUSTIC.PIPE_END_CORRECTION * tailRadius, geometry.tailArea, geometry.tailK,
       1, Infinity],
-  ].map(([length, area, k, keep, extraHz]) => {
+  ].map(([length, area, k, keep, extraHz, share = 1]) => {
     const c = cOf(k);
     const delay = Math.max(1, Math.round((length / c) * sampleRate));
+    // The mean flow's Mach number in this section. The same mass flow moves faster through
+    // a narrower pipe and through hotter gas, and a primary carries its share of one bank.
+    const mach = flowMach * (geometry.tailArea / (area * share))
+      * Math.sqrt(Math.max(250, k) / Math.max(250, geometry.tailK));
+    const diameter = Math.sqrt((4 * area) / Math.PI);
     // Wall loss over the length travelled, and the boundary-layer corner for it, combined
-    // with whatever the section itself absorbs.
-    const cornerHz = Math.min(geometry.wallLossHzM / Math.max(0.05, length), extraHz);
+    // with whatever the section itself absorbs, all damped further by the flow through it.
+    // A muffler's packing sees the flow grazing its core at the pipe's own speed.
+    const grazing = Number.isFinite(extraHz) ? Math.max(mach, flowMach) : mach;
+    const cornerHz = Math.min(geometry.wallLossHzM / Math.max(0.05, length), extraHz)
+      / (1 + ACOUSTIC.FLOW_CORNER * grazing);
     return {
       delay,
-      keep: keep * Math.pow(1 - geometry.wallLossPerM, length),
+      keep: keep * Math.pow(1 - geometry.wallLossPerM, length)
+        * Math.exp(-ACOUSTIC.FLOW_FRICTION * mach * (length / diameter)),
       pole: Math.exp((-2 * Math.PI * Math.min(cornerHz, sampleRate * 0.45)) / sampleRate),
       // Characteristic impedance, rho c / A: rho c goes as 1 / sqrt(T) at fixed pressure.
       z: 1 / (area * Math.sqrt(Math.max(250, k))),

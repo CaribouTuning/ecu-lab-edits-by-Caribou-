@@ -68,7 +68,7 @@
 
 import {
   ACOUSTIC, combustionScatter, exhaustEvent, exhaustImpulseResponse, primaryLengthsM,
-  steepenPulse,
+  steepenPulse, tailpipeMach,
 } from '../../sim/acoustics.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -114,7 +114,7 @@ const SOURCE_GAIN = 6;
  * full depth everywhere, which is why its idles hiss.
  */
 const RUSH_DEPTH = 0.45;
-const JET_DEPTH = 0.42;
+const JET_DEPTH = 0.1;
 
 /**
  * Where the source stops, Hz. engine-sim runs its whole input through a Butterworth
@@ -184,6 +184,29 @@ const STARTER = {
 
 /** How long a change of exhaust system takes to crossfade, seconds. */
 const SWAP_SECONDS = 0.12;
+
+/**
+ * How the mean exhaust flow is averaged before it damps the pipes, seconds: about a
+ * tenth of a second, so it follows a blip of the throttle but not each firing.
+ */
+const FLOW_SECONDS = 0.1;
+
+/**
+ * The most a flowing exhaust's response is brought back up by, against the same pipes with
+ * still gas. The flow's damping is there to change the note — to take the pipes' ringing
+ * out of it — not to turn it down, which is the level follower's business. Held to a
+ * ceiling so a heavily damped system cannot be pulled up into noise.
+ */
+const FLOW_MAKEUP_MAX = 2.5;
+
+/**
+ * How far past the loaded step, in steps, the flow must move before the response follows.
+ * Past halfway, so a flow sitting on an edge stays put.
+ */
+const FLOW_HYSTERESIS = 0.8;
+
+/** How many flow-damped responses are kept per build, so a rev reuses its own. */
+const RESPONSE_CACHE = 48;
 
 /**
  * A small fast random source, so a stream can own its own and tests can seed it.
@@ -420,6 +443,13 @@ export function createPulseExhaust(ctx) {
       /** The level-follower's envelope and the gain it last applied. */
       envelope: 0,
       gain: 1,
+      /** Each bank's gas this buffer, kg, and its mean flow, kg/s. */
+      massKg: [0, 0],
+      massFlow: [0, 0],
+      /** Each bank's mean flow as a step of `ACOUSTIC.FLOW_MACH_STEP`, as last loaded. */
+      flowStep: [0, 0],
+      /** How long each bank's response has been held since it last changed, seconds. */
+      flowHeld: [0, 0],
       /** The starter: how engaged, its phase, and the crank speed it last saw. */
       starter: 0, starterPhase: 0, commutatorPhase: 0, starterRpm: 0,
       rnd: random((Math.random() * 4294967296) >>> 0),
@@ -434,6 +464,10 @@ export function createPulseExhaust(ctx) {
     log: [],
     geomKey: '',
     trimKey: '',
+    /** @type {Map<string, AudioBuffer>} responses already computed for this build */
+    responses: new Map(),
+    /** @type {Map<string, number>} each bank's still-gas response level, for `flowingResponse` */
+    stillLevels: new Map(),
   };
 }
 
@@ -454,16 +488,68 @@ function refreshResponse(a, ctx) {
       path.live = -1; path.key = '';
       return;
     }
-    const key = `${a.geomKey}|${a.catBack}|${b}`;
+    const step = a.stream.flowStep[b] ?? 0;
+    const key = `${a.geomKey}|${a.catBack}|${b}|${step}`;
     if (key === path.key) return;
     path.key = key;
     const next = path.live === 0 ? 1 : 0;
-    const ir = exhaustImpulseResponse(g, ctx.sampleRate, { bank: b, catBack: a.catBack });
-    path.slots[next].conv.buffer = responseBuffer(ctx, ir);
+    let buffer = a.responses.get(key);
+    if (!buffer) {
+      buffer = responseBuffer(ctx, flowingResponse(a, ctx.sampleRate, b, step));
+      if (a.responses.size >= RESPONSE_CACHE) a.responses.delete(a.responses.keys().next().value);
+      a.responses.set(key, buffer);
+    }
+    path.slots[next].conv.buffer = buffer;
     path.slots[next].gain.gain.setTargetAtTime(1, t, SWAP_SECONDS / 3);
     if (path.live >= 0) path.slots[path.live].gain.gain.setTargetAtTime(0, t, SWAP_SECONDS / 3);
     path.live = next;
   });
+}
+
+/**
+ * One bank's response with the exhaust flowing at a step of Mach number, at the level of
+ * the same pipes with the gas still, measured in the band a listener hears.
+ *
+ * @param {Record<string, any>} a
+ * @param {number} sampleRate
+ * @param {number} bank
+ * @param {number} step the mean flow, in steps of `ACOUSTIC.FLOW_MACH_STEP`
+ * @returns {Float32Array}
+ */
+function flowingResponse(a, sampleRate, bank, step) {
+  const opts = { bank, catBack: a.catBack };
+  const ir = exhaustImpulseResponse(a.geometry, sampleRate,
+    { ...opts, flowMach: step * ACOUSTIC.FLOW_MACH_STEP });
+  const stillKey = `${a.geomKey}|${a.catBack}|${bank}`;
+  if (step <= 0) {
+    a.stillLevels.set(stillKey, bandLevel(ir, sampleRate));
+    return ir;
+  }
+  let still = a.stillLevels.get(stillKey);
+  if (still === undefined) {
+    still = bandLevel(exhaustImpulseResponse(a.geometry, sampleRate, opts), sampleRate);
+    a.stillLevels.set(stillKey, still);
+  }
+  const flowing = bandLevel(ir, sampleRate);
+  const makeup = flowing > 0 ? clamp(still / flowing, 1, FLOW_MAKEUP_MAX) : 1;
+  for (let i = 0; i < ir.length; i++) ir[i] *= makeup;
+  return ir;
+}
+
+/**
+ * A response's level in the band a listener hears the engine in.
+ *
+ * @param {Float32Array} ir
+ * @param {number} sampleRate
+ * @returns {number}
+ */
+function bandLevel(ir, sampleRate) {
+  const x = Float64Array.from(ir);
+  biquad(x, butterworth('highpass', LEVEL.bandHz[0], sampleRate), [0, 0, 0, 0]);
+  biquad(x, butterworth('lowpass', LEVEL.bandHz[1], sampleRate), [0, 0, 0, 0]);
+  let sq = 0;
+  for (const v of x) sq += v * v;
+  return Math.sqrt(sq);
 }
 
 /**
@@ -478,6 +564,8 @@ export function setPulseExhaustGeometry(a, ctx, geometry, key) {
   if (key === a.geomKey) return;
   a.geomKey = key;
   a.geometry = geometry;
+  a.responses.clear();
+  a.stillLevels.clear();
   if (geometry.events && geometry.events.length) a.events = geometry.events;
   a.cyl = Math.max(1, geometry.cyl || a.cyl);
   const swept = geometry.sweptM3 ?? 5e-4;
@@ -523,12 +611,14 @@ function addEvent(a, sampleRate, at, f) {
   const next = a.events[(k + 1) % n];
 
   // This cycle's combustion, carrying some of the last one's. A cranking engine is not
-  // burning, so there is nothing to scatter.
+  // burning, and nor is one on a fuel cut — the overrun and the limiter — so there is
+  // nothing to scatter: a motored cylinder pumps the same charge out every cycle.
   const rho = f.persistence;
   s.walk = rho * s.walk + Math.sqrt(1 - rho * rho) * gauss(s.rnd);
-  const cov = f.cranking ? 0 : combustionScatter(f.load, f.lope);
+  const burning = !f.cranking && !f.cut;
+  const cov = burning ? combustionScatter(f.load, f.lope) : 0;
   let evo = f.evoKpa * (a.trims[k] ?? 1) * (1 + cov * s.walk);
-  if (f.lope > 0 && s.rnd() < f.lope * MISFIRE_PER_SEVERITY) evo *= MISFIRE_EVO;
+  if (burning && f.lope > 0 && s.rnd() < f.lope * MISFIRE_PER_SEVERITY) evo *= MISFIRE_EVO;
   evo = Math.max(20, evo);
 
   const event = exhaustEvent({
@@ -547,6 +637,9 @@ function addEvent(a, sampleRate, at, f) {
   biquad(noise, butterworth('lowpass', RUSH_HZ, sampleRate), s.rushZ);
   const rushNorm = Math.sqrt(3) / Math.sqrt((2 * RUSH_HZ) / sampleRate);
   const start = Math.round(at) + (a.primaryDelays[k] ?? 0);
+  let mass = 0;
+  for (let i = 0; i < event.flow.length; i++) mass += event.flow[i];
+  s.massKg[bank] += mass / sampleRate;
   for (let i = 0; i < flow.length; i++) {
     const m = jet[i];
     const rush = noise[i] * rushNorm * (RUSH_DEPTH * m + JET_DEPTH * m * m);
@@ -689,9 +782,8 @@ function sourceLevel(a, sampleRate) {
  * @param {Record<string, any>} a
  * @param {Float32Array[]} data one buffer per bank
  * @param {number} sampleRate
- * @param {boolean} cut whether the throttle is shut or the fuel cut
  */
-function level(a, data, sampleRate, cut) {
+function level(a, data, sampleRate) {
   const s = a.stream;
   // The note's level: the source above the lowest of the band a listener hears it in —
   // what a phone speaker can play — against the same measure at the reference.
@@ -710,10 +802,9 @@ function level(a, data, sampleRate, cut) {
   const follow = s.envelope > 0
     ? clamp(Math.pow(1 / s.envelope, LEVEL.amount), LEVEL.minGain, LEVEL.maxGain)
     : LEVEL.maxGain;
-  // On a lift or a fuel cut the follower may only turn down: what a lift sounds like is
-  // the note falling away, and bringing it back up would undo the one thing a lift does.
-  let want = a.norm * follow;
-  if (cut) want = Math.min(want, s.gain);
+  // A lift or a fuel cut still falls away: the follower only goes part of the way, and
+  // the engine's master level drops on a cut by itself.
+  const want = a.norm * follow;
   // Glide across the buffer so the gain never steps.
   const from = s.gain;
   for (const d of data) {
@@ -752,6 +843,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     // to: nothing that starts an engine should have to know the bus was pinned.
     if (a.silenced) wakePulseExhaust(a, ctx);
     for (const r of s.rings) r.fill(0);
+    s.massKg.fill(0);
     s.head = now + Math.ceil(0.02 * sr);
     s.next = s.head;
   }
@@ -778,6 +870,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
       s.next = end;
     }
     addStarter(a, sr, s.head, f);
+    updateFlow(a, ctx, bankCount, f.portKpa);
     const data = [];
     for (let b = 0; b < 3; b++) {
       const d = new Float32Array(CHUNK);
@@ -792,7 +885,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     for (let b = 0; b < bankCount; b++) {
       biquad(data[b], butterworth('lowpass', SOURCE_HZ, sr), s.sourceZ[b]);
     }
-    level(a, data.slice(0, bankCount), sr, f.cut);
+    level(a, data.slice(0, bankCount), sr);
     for (let b = 0; b < 3; b++) {
       if (b === 1 && bankCount < 2) continue;
       if (b === 2 && !f.cranking && s.starter < 1e-4) continue;
@@ -806,6 +899,38 @@ export function schedulePulseExhaust(a, ctx, frame) {
     }
     s.head = end;
   }
+}
+
+/**
+ * Follow each bank's mean exhaust flow over one buffer, and when it has moved by a step of
+ * Mach number, load the pipes' response for it.
+ *
+ * @param {Record<string, any>} a
+ * @param {BaseAudioContext} ctx
+ * @param {number} bankCount
+ * @param {number} portKpa
+ */
+function updateFlow(a, ctx, bankCount, portKpa) {
+  const s = a.stream;
+  const seconds = CHUNK / ctx.sampleRate;
+  const follow = 1 - Math.exp(-seconds / FLOW_SECONDS);
+  let moved = false;
+  for (let b = 0; b < bankCount; b++) {
+    s.massFlow[b] += follow * (s.massKg[b] / seconds - s.massFlow[b]);
+    s.massKg[b] = 0;
+    // A step is taken only once the flow is well past its edge and the last change has
+    // finished fading, so a flow sitting on an edge does not flick between two responses.
+    const at = tailpipeMach(a.geometry, s.massFlow[b], portKpa) / ACOUSTIC.FLOW_MACH_STEP;
+    s.flowHeld[b] += seconds;
+    // One bank per buffer, so a V's two new responses are never computed back to back.
+    if (!moved && Number.isFinite(at) && Math.abs(at - s.flowStep[b]) > FLOW_HYSTERESIS
+      && s.flowHeld[b] >= SWAP_SECONDS * 2) {
+      s.flowStep[b] = Math.round(at);
+      s.flowHeld[b] = 0;
+      moved = true;
+    }
+  }
+  if (moved) refreshResponse(a, ctx);
 }
 
 /**
