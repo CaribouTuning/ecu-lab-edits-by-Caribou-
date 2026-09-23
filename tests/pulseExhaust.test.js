@@ -267,12 +267,11 @@ describe('what the engine is doing', () => {
   it('lets a lift fall away rather than pulling it straight back up', () => {
     const m = model();
     run(m, { rpm: 6000, evoKpa: 600, load: 1, portKpa: 130 }, 1);
-    const flatOut = m.a.stream.gain;
     run(m, { rpm: 5000, evoKpa: 110, load: 0.05, portKpa: 104 }, 1);
-    expect(m.a.stream.gain).toBeLessThanOrEqual(flatOut * 2 + 1e-9);
+    expect(m.a.stream.gain).toBeLessThanOrEqual(m.a.norm * 3 + 1e-9);
     // At idle it is brought up as usual.
     run(m, { rpm: 850, evoKpa: 110, load: 0.05, portKpa: 104 }, 1.5);
-    expect(m.a.stream.gain).toBeGreaterThan(flatOut * 2);
+    expect(m.a.stream.gain).toBeGreaterThan(m.a.norm * 3);
   });
 
   it('scatters more at light load than wide open', () => {

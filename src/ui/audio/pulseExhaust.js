@@ -168,12 +168,11 @@ const LEVEL = {
    * COASTING: the throttle shut (`load` below `coastLoad`) above `coastRpm`, where the
    * engine is being driven by its own inertia rather than idling — or the fuel cut, on the
    * overrun or the limiter. A lift falls away on a real engine and a cylinder that is not
-   * firing is quiet — that is what a lift and a limiter sound like — so the follower may
-   * bring the note up by at most `coastLift` over the gain it had when the engine began
-   * coasting, instead of all the way back to the target. At idle it works as everywhere
-   * else.
+   * firing is quiet — that is what a lift and a limiter sound like — so coasting, the
+   * follower may bring the note up by at most `coastLift` rather than `maxGain`. At idle
+   * it works as everywhere else.
    */
-  coastLoad: 0.15, coastRpm: 1500, coastLift: 2,
+  coastLoad: 0.15, coastRpm: 1500, coastLift: 3,
 };
 
 /**
@@ -457,8 +456,6 @@ export function createPulseExhaust(ctx) {
       /** The level-follower's envelope and the gain it last applied. */
       envelope: 0,
       gain: 1,
-      /** The follower's gain when the engine last started coasting; null when it is not. */
-      coastGain: null,
       /** Each bank's gas this buffer, kg, and its mean flow, kg/s. */
       massKg: [0, 0],
       massFlow: [0, 0],
@@ -817,19 +814,13 @@ function level(a, data, sampleRate, coasting) {
   const seconds = CHUNK / sampleRate;
   const coeff = Math.exp(-seconds / (rms > s.envelope ? LEVEL.attack : LEVEL.release));
   s.envelope = rms + coeff * (s.envelope - rms);
-  const follow = s.envelope > 0
-    ? clamp(Math.pow(1 / s.envelope, LEVEL.amount), LEVEL.minGain, LEVEL.maxGain)
-    : LEVEL.maxGain;
   // A lift or a fuel cut still falls away: the follower only goes part of the way, and
-  // the engine's master level drops on a cut by itself. Coasting, it holds close to where
-  // the throttle closed (see `LEVEL.coastLift`).
-  let want = a.norm * follow;
-  if (coasting) {
-    if (s.coastGain === null) s.coastGain = s.gain;
-    want = Math.min(want, s.coastGain * LEVEL.coastLift);
-  } else {
-    s.coastGain = null;
-  }
+  // coasting it may lift the note far less (see `LEVEL.coastLift`).
+  const most = coasting ? LEVEL.coastLift : LEVEL.maxGain;
+  const follow = s.envelope > 0
+    ? clamp(Math.pow(1 / s.envelope, LEVEL.amount), LEVEL.minGain, most)
+    : most;
+  const want = a.norm * follow;
   // Glide across the buffer so the gain never steps.
   const from = s.gain;
   for (const d of data) {
