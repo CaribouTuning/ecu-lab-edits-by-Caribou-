@@ -95,9 +95,10 @@ const CHUNK = 1024;
  * answers the throttle at once. The stream is computed on the page's main thread, and on a
  * slow phone the page's own work — a dyno chart redrawing, the simulation stepping — can
  * hold that thread for longer than `min`. The audio already queued then runs out, and the
- * note stutters: a rough, scraping stop-start. So whenever the stream finds itself run
- * out, or nearly, it queues further ahead, up to `max`, and eases back by `decay` seconds
- * per second of smooth running. A fast device never leaves `min`.
+ * note stutters: a rough, scraping stop-start. So when the stream finds it has run out it
+ * queues `max` ahead, when it has nearly run out it queues `grow` times further, and it
+ * eases back by `decay` seconds per second of smooth running. A fast device never leaves
+ * `min`.
  */
 const LOOKAHEAD = { min: 0.15, max: 0.6, grow: 1.5, nearly: 0.3, decay: 0.02 };
 
@@ -902,7 +903,9 @@ export function schedulePulseExhaust(a, ctx, frame) {
   // How the last call left the queue: run out, nearly, or comfortably ahead.
   if (s.head >= 0 && s.lastCall >= 0) {
     const ahead = (s.head - now) / sr;
-    if (ahead < LOOKAHEAD.nearly * s.lookahead) {
+    if (ahead < 0) {
+      s.lookahead = LOOKAHEAD.max;
+    } else if (ahead < LOOKAHEAD.nearly * s.lookahead) {
       s.lookahead = Math.min(LOOKAHEAD.max, s.lookahead * LOOKAHEAD.grow);
     } else {
       const elapsed = Math.max(0, (now - s.lastCall) / sr);
