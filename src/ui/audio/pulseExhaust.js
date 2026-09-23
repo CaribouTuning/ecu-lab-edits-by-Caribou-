@@ -219,8 +219,11 @@ const FLOW_MAKEUP_MAX = 2.5;
  */
 const FLOW_HYSTERESIS = 0.8;
 
-/** How many flow-damped responses are kept per build, so a rev reuses its own. */
-const RESPONSE_CACHE = 48;
+/**
+ * How many responses are kept, so a rev, and the gas heating and cooling through it, reuse
+ * the ones already worked out.
+ */
+const RESPONSE_CACHE = 96;
 
 /**
  * A small fast random source, so a stream can own its own and tests can seed it.
@@ -464,6 +467,8 @@ export function createPulseExhaust(ctx) {
       flowStep: [0, 0],
       /** How long each bank's response has been held since it last changed, seconds. */
       flowHeld: [0, 0],
+      /** Whether a bank's flow has moved a step and its response is still to be loaded. */
+      refreshPending: false,
       /** The starter: how engaged, its phase, and the crank speed it last saw. */
       starter: 0, starterPhase: 0, commutatorPhase: 0, starterRpm: 0,
       rnd: random((Math.random() * 4294967296) >>> 0),
@@ -510,14 +515,26 @@ function refreshResponse(a, ctx) {
     let buffer = a.responses.get(key);
     if (!buffer) {
       buffer = responseBuffer(ctx, flowingResponse(a, ctx.sampleRate, b, step));
-      if (a.responses.size >= RESPONSE_CACHE) a.responses.delete(a.responses.keys().next().value);
-      a.responses.set(key, buffer);
+      remember(a.responses, key, buffer);
     }
     path.slots[next].conv.buffer = buffer;
     path.slots[next].gain.gain.setTargetAtTime(1, t, SWAP_SECONDS / 3);
     if (path.live >= 0) path.slots[path.live].gain.gain.setTargetAtTime(0, t, SWAP_SECONDS / 3);
     path.live = next;
   });
+}
+
+/**
+ * Keep a computed value, dropping the oldest once `RESPONSE_CACHE` are held.
+ *
+ * @template T
+ * @param {Map<string, T>} cache
+ * @param {string} key
+ * @param {T} value
+ */
+function remember(cache, key, value) {
+  if (cache.size >= RESPONSE_CACHE) cache.delete(cache.keys().next().value);
+  cache.set(key, value);
 }
 
 /**
@@ -536,13 +553,13 @@ function flowingResponse(a, sampleRate, bank, step) {
     { ...opts, flowMach: step * ACOUSTIC.FLOW_MACH_STEP });
   const stillKey = `${a.geomKey}|${a.catBack}|${bank}`;
   if (step <= 0) {
-    a.stillLevels.set(stillKey, bandLevel(ir, sampleRate));
+    remember(a.stillLevels, stillKey, bandLevel(ir, sampleRate));
     return ir;
   }
   let still = a.stillLevels.get(stillKey);
   if (still === undefined) {
     still = bandLevel(exhaustImpulseResponse(a.geometry, sampleRate, opts), sampleRate);
-    a.stillLevels.set(stillKey, still);
+    remember(a.stillLevels, stillKey, still);
   }
   const flowing = bandLevel(ir, sampleRate);
   const makeup = flowing > 0 ? clamp(still / flowing, 1, FLOW_MAKEUP_MAX) : 1;
@@ -578,8 +595,6 @@ export function setPulseExhaustGeometry(a, ctx, geometry, key) {
   if (key === a.geomKey) return;
   a.geomKey = key;
   a.geometry = geometry;
-  a.responses.clear();
-  a.stillLevels.clear();
   if (geometry.events && geometry.events.length) a.events = geometry.events;
   a.cyl = Math.max(1, geometry.cyl || a.cyl);
   const swept = geometry.sweptM3 ?? 5e-4;
@@ -929,6 +944,12 @@ export function schedulePulseExhaust(a, ctx, frame) {
     }
     s.head = end;
   }
+  // A new response is worked out only once the stream is queued up ahead of the clock, so
+  // the time it takes can never make the audio already due late.
+  if (s.refreshPending) {
+    s.refreshPending = false;
+    refreshResponse(a, ctx);
+  }
 }
 
 /**
@@ -960,7 +981,7 @@ function updateFlow(a, ctx, bankCount, portKpa) {
       moved = true;
     }
   }
-  if (moved) refreshResponse(a, ctx);
+  if (moved) s.refreshPending = true;
 }
 
 /**

@@ -594,9 +594,17 @@ export function exhaustEvent({
 
   const critical = Math.pow(2 / (g + 1), g / (g - 1));
   const choked = Math.sqrt(g) * Math.pow(2 / (g + 1), (g + 1) / (2 * (g - 1)));
-  const subsonic = (r) => Math.sqrt(Math.max(0,
-    ((2 * g) / (g - 1)) * (Math.pow(r, 2 / g) - Math.pow(r, (g + 1) / g))));
+  // Subsonic orifice flow and the jet's Mach number both come from r^(1/gamma): with
+  // b = r^(1/gamma), r^(2/gamma) is b^2, r^((gamma+1)/gamma) is b r and (1/r)^((gamma-1)/
+  // gamma) is b / r. One power per sample instead of four, the same numbers.
+  const flowCoeff = (2 * g) / (g - 1);
+  const machCoeff = 2 / (g - 1);
+  const subsonic = (r, b) => Math.sqrt(Math.max(0, flowCoeff * (b * b - b * r)));
+  const invG = 1 / g;
   const dt = 1 / sampleRate;
+  // How dense the charge is once it is down to the port's pressure, which sets the most
+  // that can leave by each step.
+  const levelDensity = Math.pow(pb / isentrope, invG);
 
   for (let i = 0; i < n; i++) {
     const into = theta - openDeg;
@@ -604,7 +612,7 @@ export function exhaustEvent({
     // eases into full lift — a harmonic rise, not a corner. Opening it along a curve with
     // a vertical start would put a click on the front of every event that no valve makes.
     const ramp = clamp(Math.min(into, span - into) / geometry.camRampDeg, 0, 1);
-    const lift = Math.pow((1 - Math.cos(Math.PI * ramp)) / 2, geometry.camShape);
+    const lift = ramp >= 1 ? 1 : Math.pow((1 - Math.cos(Math.PI * ramp)) / 2, geometry.camShape);
     const area = geometry.valveArea * geometry.valveCd * lift;
     // Move the piston first and read the pressure it leaves the trapped gas at. Driving the
     // orifice from that, rather than from the pressure before the step, is what lets the
@@ -617,15 +625,22 @@ export function exhaustEvent({
     let mach = 0;
     if (p1 >= pb) {
       const r = pb / p1;
-      mdot = (area * p1 * (r <= critical ? choked : subsonic(r))) / Math.sqrt(R_AIR * t1);
-      mach = r <= critical ? 1 : Math.sqrt((2 / (g - 1)) * (Math.pow(1 / r, (g - 1) / g) - 1));
+      if (r <= critical) {
+        mdot = (area * p1 * choked) / Math.sqrt(R_AIR * t1);
+        mach = 1;
+      } else {
+        const b = Math.pow(r, invG);
+        mdot = (area * p1 * subsonic(r, b)) / Math.sqrt(R_AIR * t1);
+        mach = Math.sqrt(machCoeff * Math.max(0, b / r - 1));
+      }
     } else {
       const r = p1 / pb;
-      mdot = -(area * pb * (r <= critical ? choked : subsonic(r))) / Math.sqrt(R_AIR * tb);
+      const through = r <= critical ? choked : subsonic(r, Math.pow(r, invG));
+      mdot = -(area * pb * through) / Math.sqrt(R_AIR * tb);
     }
     // The mass that would leave the cylinder level with the port. The flow may not carry
     // it past that point.
-    const mLevel = vNext * Math.pow(pb / isentrope, 1 / g);
+    const mLevel = vNext * levelDensity;
     const most = (m - mLevel) / dt;
     mdot = mdot >= 0 ? Math.min(mdot, Math.max(0, most)) : Math.max(mdot, Math.min(0, most));
     flow[i] = mdot;
@@ -1071,7 +1086,23 @@ export function exhaustImpulseResponse(geometry, sampleRate, {
   let openLp = 0;
   let lastFlow = 0;
   let step = 0;
+  // Once nothing left in any tube could put a sample above the trim floor, the rest would
+  // be trimmed off anyway; stop there rather than running out the full window.
+  const floorOf = Math.pow(10, ACOUSTIC.IR_FLOOR_DB / 20);
+  let peakSoFar = 0;
+  let length = maxLength;
   for (let t = 0; t < maxLength; t++) {
+    if (t > 0 && (t & 127) === 0 && peakSoFar > 0) {
+      let left = Math.abs(openLp) + Math.abs(lastFlow);
+      for (const tube of tubes) {
+        left = Math.max(left, Math.abs(tube.lpRight), Math.abs(tube.lpLeft));
+        for (let j = 0; j < tube.delay; j++) {
+          left = Math.max(left, Math.abs(tube.right[j]), Math.abs(tube.left[j]));
+        }
+      }
+      // A radiated sample is a difference of two flows, each at most twice what is left.
+      if (4 * left < peakSoFar * floorOf) { length = t; break; }
+    }
     // What reaches each end of each tube this sample, after the losses along it.
     for (let i = 0; i < n; i++) {
       const tube = tubes[i];
@@ -1098,15 +1129,16 @@ export function exhaustImpulseResponse(geometry, sampleRate, {
     last.left[step % last.delay] = -openLp;
     const flow = incident + openLp;
     out[t] = flow - lastFlow;
+    peakSoFar = Math.max(peakSoFar, Math.abs(out[t]));
     lastFlow = flow;
     step++;
   }
 
   // Trim to where it has died away, and normalise.
   let peak = 0;
-  for (const v of out) peak = Math.max(peak, Math.abs(v));
+  for (let t = 0; t < length; t++) peak = Math.max(peak, Math.abs(out[t]));
   const floor = peak * Math.pow(10, ACOUSTIC.IR_FLOOR_DB / 20);
-  let end = out.length;
+  let end = length;
   while (end > 1 && Math.abs(out[end - 1]) < floor) end--;
   const ir = out.slice(0, Math.max(2, end));
   if (peak > 0) for (let i = 0; i < ir.length; i++) ir[i] /= peak;
