@@ -428,7 +428,7 @@ export function createPulseExhaust(ctx) {
   const noise = ctx.createBufferSource(); noise.buffer = noiseBuffer; noise.loop = true;
   const noiseGain = ctx.createGain(); noiseGain.gain.value = 0;
   const gateLfo = ctx.createOscillator(); gateLfo.type = 'sawtooth'; gateLfo.frequency.value = 40;
-  const gateDepth = ctx.createGain(); gateDepth.gain.value = 0.03;
+  const gateDepth = ctx.createGain(); gateDepth.gain.value = 0;
   gateLfo.connect(gateDepth); gateDepth.connect(noiseGain.gain);
   const noiseTone = ctx.createBiquadFilter();
   noiseTone.type = 'bandpass'; noiseTone.frequency.value = 5500; noiseTone.Q.value = 1.2;
@@ -440,7 +440,7 @@ export function createPulseExhaust(ctx) {
 
   return {
     out, sum, dcBlock, bus, banks, mech, space, spaceGain,
-    noiseGain, gateLfo,
+    noiseGain, gateLfo, gateDepth,
     /** @type {Record<string, any>|null} the `exhaustGeometry` the events are computed in */
     geometry: null,
     /** @type {{angleDeg: number, bank?: number}[]} */
@@ -1049,8 +1049,11 @@ export function tonePulseExhaust(a, ctx, frame) {
   a.gateLfo.frequency.setTargetAtTime(Math.max(6, (rpm / 60) * (a.cyl / 2)), t, 0.02);
   // Knock is a shock wave ringing the cylinder at its own acoustic modes — 5-8 kHz for a
   // road engine's bore — and it rattles through the block, not down the pipe.
-  a.noiseGain.gain.setTargetAtTime(
-    frame.audible && !frame.cranking ? Math.max(0, richness) * 0.02 + knock * 0.08 : 0, t, 0.05);
+  // Gated at the firing rate: the gate swings the gain between nothing and twice the level,
+  // so with no knock and no richness there is nothing at all.
+  const rattle = frame.audible && !frame.cranking ? Math.max(0, richness) * 0.02 + knock * 0.08 : 0;
+  a.noiseGain.gain.setTargetAtTime(rattle, t, 0.05);
+  a.gateDepth.gain.setTargetAtTime(rattle, t, 0.05);
 }
 
 /**
