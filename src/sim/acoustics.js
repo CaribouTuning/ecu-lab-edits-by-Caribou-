@@ -283,7 +283,7 @@ export const ACOUSTIC = {
   // resonances, which is why a revving engine sounds like a rising note and not a
   // buzzing box.
   FLOW_FRICTION: 0.03,
-  FLOW_CORNER: 5,
+  FLOW_CORNER: 2.5,
   // How finely the renderer steps the mean flow's Mach number when it recomputes the
   // response. Fine enough that a step is inaudible under the crossfade.
   FLOW_MACH_STEP: 0.02,

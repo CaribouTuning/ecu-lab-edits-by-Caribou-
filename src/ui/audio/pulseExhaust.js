@@ -29,8 +29,8 @@
  * the note does. Now:
  *
  *   1. The source is the FLOW, the way engine-sim feeds its convolver, and its turbulence
- *      rides on the flow (it cannot exist without it), grows with the jet's speed and is
- *      band-limited to what a pipe carries, about 2 kHz. The pipes decide what reaches the
+ *      rides on the flow (it cannot exist without it) at a jet's own turbulence intensity
+ *      and is band-limited to what a pipe carries, about 2 kHz. The pipes decide what reaches the
  *      treble, as they do.
  *   1a. At load each pulse STEEPENS on its way down the primary (`steepenPulse`): a big
  *      pulse's crest outruns its base, and the front sharpens towards a shock. That is
@@ -102,6 +102,9 @@ const CHUNK = 1024;
  */
 const LOOKAHEAD = { min: 0.15, max: 0.6, grow: 1.5, nearly: 0.3, decay: 0.02 };
 
+/** How far ahead of the clock a stream starts, seconds: time for its first buffers. */
+const START_AHEAD = 0.05;
+
 /** Samples faded in at the start of a stream, so starting — or restarting — never clicks. */
 const FADE_IN = 256;
 
@@ -119,14 +122,14 @@ const BUS_GAIN = 1;
 const SOURCE_GAIN = 6;
 
 /**
- * How deeply turbulence modulates the flow. A turbulent jet's pressure fluctuations go as
- * rho U^2, so against the flow itself (rho U) they grow with the jet's speed — its Mach
- * number through the valve seat — and faster still as it nears sonic. A slow idle jet
- * barely rushes; a choked blowdown at full load roars. engine-sim runs its equivalent at
- * full depth everywhere, which is why its idles hiss.
+ * How deeply turbulence modulates the flow while gas is leaving through the valve: its
+ * turbulence intensity, the fluctuating velocity over the mean. A jet's shear layer runs
+ * at 10-20% whatever the jet's speed, so this is one number, and at idle it is what the
+ * note has always had. Scaling it with the jet's Mach number as well, as this once did,
+ * put half the flow into noise at full load: the pulses broke up into fragments, heard as
+ * a rough scraping under load.
  */
-const RUSH_DEPTH = 0.45;
-const JET_DEPTH = 0.1;
+const TURBULENCE = 0.15;
 
 /**
  * Where the source stops, Hz. engine-sim runs its whole input through a Butterworth
@@ -688,8 +691,7 @@ function addEvent(a, sampleRate, at, f) {
   for (let i = 0; i < event.flow.length; i++) mass += event.flow[i];
   s.massKg[bank] += mass / sampleRate;
   for (let i = 0; i < flow.length; i++) {
-    const m = jet[i];
-    const rush = noise[i] * rushNorm * (RUSH_DEPTH * m + JET_DEPTH * m * m);
+    const rush = jet[i] > 0 ? noise[i] * rushNorm * TURBULENCE : 0;
     ring[(start + i) & RING_MASK] += gain * flow[i] * (1 + rush);
   }
 
@@ -920,7 +922,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     if (a.silenced) wakePulseExhaust(a, ctx);
     for (const r of s.rings) r.fill(0);
     s.massKg.fill(0);
-    s.head = now + Math.ceil(0.02 * sr);
+    s.head = now + Math.ceil(START_AHEAD * sr);
     s.next = s.head;
     s.fadeIn = true;
   }
