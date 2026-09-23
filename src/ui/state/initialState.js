@@ -58,7 +58,11 @@ import {
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
  * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
- *   the currently selected calibration-grid cell, row or column, or null
+ *   the currently selected calibration-grid cell, row, column or range, or null
+ * @property {boolean} rangeMode whether a tap on the grid starts or extends a RECTANGLE
+ *   rather than selecting one cell. Beside `selection` because it is the mode that
+ *   selection is taken in, and one flag rather than three: AIR, SPARK and FUEL all
+ *   render the same grid and a tuner switching between them means the same thing by it.
  */
 
 /**
@@ -150,6 +154,17 @@ import {
  *   run on (`dragSignature` in DragScreen.jsx). What lets the time slip say "these are
  *   last run's numbers, from before your change" instead of presenting a time the
  *   current car cannot run — the same rule `pullScores.signature` follows.
+ * @property {'sandbox'|'career'} mode which door the player came in by. CAREER is a
+ *   run of customer cars, so HOME leads with the jobs board; SANDBOX is free play with
+ *   no objectives, so it has no jobs board at all — the split the reference build (v4.8)
+ *   made at its start screen.
+ * @property {number|null} activeJob index into CAREER_JOBS of the customer car being
+ *   worked on, or null in free play. Career progress, which is what this slice holds:
+ *   taking a job resets the build and applies that job's fault, and it has to survive
+ *   every screen the player visits while diagnosing it.
+ * @property {number[]} completedJobs indices of the jobs already passed
+ * @property {'pass'|'fail'|null} jobResult how the last pull graded against the active
+ *   job's target, or null before one has been run against it
  */
 
 /**
@@ -213,6 +228,7 @@ export function makeInitialState() {
       afr: clone2D(DEFAULT_AFR),
       tablesDirty: false,
       selection: null,
+      rangeMode: false,
     },
     session: {
       running: false,
@@ -244,6 +260,10 @@ export function makeInitialState() {
       dragRunning: false,
       dragT: 0,
       treePhase: 0,
+      mode: 'sandbox',
+      activeJob: null,
+      completedJobs: [],
+      jobResult: null,
     },
     history: { past: [], future: [] },
   };
