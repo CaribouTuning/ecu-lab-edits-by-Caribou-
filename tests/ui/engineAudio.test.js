@@ -208,6 +208,19 @@ describe('sleeping', () => {
     expect(ctx.suspends).toBe(0);
   });
 
+  it('brings the exhaust back when an engine starts again after a stop', () => {
+    // Stopping pins the exhaust's bus to zero. Switching engines always stops the one
+    // running, and without lifting the bus on the way back every engine after the first
+    // came back near-silent — the V6 included.
+    const ctx = stubContext();
+    const graph = createEngineAudio(ctx);
+    setEngineAudioActive(graph, true);
+    setEngineAudioActive(graph, false);
+    expect(graph.exhaust.bus.gain.value).toBe(0);
+    setEngineAudioActive(graph, true);
+    expect(graph.exhaust.bus.gain.value).toBeGreaterThan(0);
+  });
+
   it('wakes for a one-off sound and goes back to sleep after it', async () => {
     const ctx = stubContext({ state: 'suspended' });
     const graph = createEngineAudio(ctx);

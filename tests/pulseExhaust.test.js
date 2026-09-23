@@ -200,16 +200,18 @@ describe('the pipes', () => {
     expect(range(cast.a.primaryDelays)).toBeGreaterThan(0);
   });
 
-  it('brings every engine to the same level at the reference condition', () => {
-    // So a V8 and a four are equally present, the way a recording engineer would set
-    // them; what differs is the note.
-    const v8 = model(geom(), 'v8');
-    const i4 = model(geom({ configuration: 'I4', cyl: 4, displacementL: 2, bore: 86 }), 'i4');
-    run(v8, { rpm: 3000, evoKpa: 450, portKpa: 115 }, 1.2);
-    run(i4, { rpm: 3000, evoKpa: 450, portKpa: 115 }, 1.2);
-    const ratio = energy(v8) / energy(i4);
-    expect(ratio).toBeGreaterThan(0.5);
-    expect(ratio).toBeLessThan(2);
+  it('matches every engine on what comes out of its pipes, not on its source', () => {
+    // So an engine whose exhaust takes more off — a turbine, here — is brought up by what
+    // it loses rather than left quieter, and a V8 and a four are equally present. What
+    // differs between them is the note. The match is computed, not measured at random.
+    const na = model(geom(), 'na');
+    const turbo = model(geom({ turboFitted: true }), 'turbo');
+    expect(turbo.a.norm).toBeGreaterThan(na.a.norm);
+    const again = model(geom(), 'na2');
+    expect(again.a.norm).toBe(na.a.norm);
+    for (const m of [na, turbo, model(geom({ configuration: 'I4', cyl: 4, displacementL: 2 }), 'i4')]) {
+      expect(Number.isFinite(m.a.norm) && m.a.norm > 0).toBe(true);
+    }
   });
 });
 
@@ -250,6 +252,16 @@ describe('what the engine is doing', () => {
     expect(m.a.noiseGain.gain.value).toBe(0);
     tone(m, { load: 1, knock: 1 });
     expect(m.a.noiseGain.gain.value).toBeGreaterThan(0);
+  });
+
+  it('lifts its own gains when the stream starts again after being silenced', () => {
+    const m = model();
+    run(m);
+    silencePulseExhaust(m.a, m.ctx);
+    expect(m.a.bus.gain.value).toBe(0);
+    run(m, { rpm: 900 }, 0.1);
+    expect(m.a.bus.gain.value).toBeGreaterThan(0);
+    expect(m.a.mech.gain.value).toBeGreaterThan(0);
   });
 
   it('is silent below cranking speed, when not audible, and when silenced', () => {

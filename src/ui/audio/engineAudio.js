@@ -41,11 +41,11 @@ import {
 /**
  * How hard the limiter's output drives the saturation stage. The reference's make-up gain
  * was 2.4, which with the browser's own make-up on top pinned every layout at the ceiling
- * (a crest factor of 0.5-6 dB). Recordings of real engines run 10-15 dB of crest: each
- * event is a sharp peak over a quieter rush, and squashing those peaks flat is heard as a
- * drone. At 1 the saturation only rounds the very tops, and the note keeps 8-17 dB.
+ * (a crest factor of 0.5-6 dB). At 1.4 the note sits as loud as the reference build did
+ * — which, set side by side, is most of what a listener hears as "better" — while the
+ * saturation only rounds the tops of the loudest pulses and nothing reaches the ceiling.
  */
-const MAKEUP_GAIN = 1.0;
+const MAKEUP_GAIN = 1.4;
 
 /** Input span of the saturation curve: tanh reaches 0.9999 by here. */
 const SAT_RANGE = 5;
@@ -541,6 +541,10 @@ export function setEngineAudioActive(a, active) {
     clearTimeout(a.sleepTimer);
     a.sleepTimer = null;
     if (a.ctx.state === 'suspended') a.ctx.resume?.();
+    // Going inactive pinned the exhaust's bus to zero, and a pinned gain stays pinned.
+    // Without lifting it here, every engine after the first stop came back near-silent —
+    // and switching engines always stops the one running.
+    if (a.exhaust) wakePulseExhaust(a.exhaust, a.ctx);
     return;
   }
   a.active = false;

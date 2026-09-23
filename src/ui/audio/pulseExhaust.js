@@ -159,7 +159,7 @@ const LEVEL = {
   /** Where the follower starts listening, Hz: the bottom of a phone speaker's range. */
   followHz: 300,
   /** Output level at the reference, in the units `referenceLevel` measures. */
-  loudness: 0.21,
+  loudness: 0.3,
 };
 
 /**
@@ -398,6 +398,8 @@ export function createPulseExhaust(ctx) {
     displacementL: 3.0,
     compression: 10.3,
     catBack: false,
+    /** Whether `silencePulseExhaust` has pinned the bus, and nothing has lifted it since. */
+    silenced: false,
     /** This engine's source gain at the reference condition, from `referenceLevel`. */
     norm: 1,
     /** The follower's reference: the source's own level at the reference condition. */
@@ -746,6 +748,9 @@ export function schedulePulseExhaust(a, ctx, frame) {
   const now = Math.ceil(ctx.currentTime * sr);
   if (s.head < 0 || s.head < now) {
     // Starting, or so late that the clock has passed the stream: begin again just ahead.
+    // A stream starting after a `silencePulseExhaust` lifts its own gains, whoever forgot
+    // to: nothing that starts an engine should have to know the bus was pinned.
+    if (a.silenced) wakePulseExhaust(a, ctx);
     for (const r of s.rings) r.fill(0);
     s.head = now + Math.ceil(0.02 * sr);
     s.next = s.head;
@@ -849,6 +854,7 @@ export function silencePulseExhaust(a, ctx) {
   kill(a.noiseGain.gain);
   a.stream.head = -1;
   a.stream.starter = 0;
+  a.silenced = true;
 }
 
 /**
@@ -858,6 +864,7 @@ export function silencePulseExhaust(a, ctx) {
  * @param {AudioContext} ctx
  */
 export function wakePulseExhaust(a, ctx) {
+  a.silenced = false;
   try {
     a.bus.gain.setTargetAtTime(BUS_GAIN, ctx.currentTime, 0.02);
     a.mech.gain.setTargetAtTime(1, ctx.currentTime, 0.02);
