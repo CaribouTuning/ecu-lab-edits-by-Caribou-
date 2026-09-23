@@ -1,7 +1,7 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: twenty-eight collapsible articles, in reading order, from
+ * The plain-language guide: thirty numbered articles, in reading order, from
  * "an engine is an air pump" through reading a time slip to the published
  * correlations the engine model implements and the limits it does not cross.
  *
@@ -254,6 +254,40 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Autoignition is a correlation, not chemistry.</b> Article 5's survival time comes from a published empirical fit — the standard engineering approach, good across normal running. But real autoignition is a branching chain reaction through hundreds of intermediate species, and it does something the fit cannot: over one band of temperature gasoline gets <i>harder</i> to ignite as it gets hotter, and can light in two stages. Laboratories model this with detailed kinetic mechanisms and large computers. A browser cannot.
         <br /><br /><b className={styles.em}>There is no emissions chemistry.</b> Nothing here computes NOx, carbon monoxide or unburned hydrocarbons. So the app can say what lambda does to power and to knock, but never what it does to what leaves the pipe. Worth knowing: the narrow band around lambda 1.00 exists mainly because a three-way catalyst only converts all three pollutants at once inside it. Closed loop is an emissions strategy first.
         <br /><br /><b className={styles.em}>Fuel is a few properties, not a mixture.</b> Pump gasoline blends hundreds of hydrocarbons. Here each fuel carries a stoichiometric ratio, density, heating value, latent heat and antiknock index — enough for a tuner's decisions, not enough to say anything about distillation or seasonal blending.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="29. Why the engine sounds the way it does">
+        The sound here is not a recording. It is built live from what the engine is doing, so the things you change are the things you hear.
+        <br /><br /><b className={styles.em}>An exhaust note is a train of pulses.</b> Every time a cylinder's exhaust valve opens, a slug of hot, high-pressure gas bangs into the pipe. That pulse — a thump with a crack of turbulence on the front of it — is the basic unit of the sound. How often they come is set by engine speed and cylinder count:
+        <br /><span className={styles.formula}>firing Hz = RPM ÷ 60 × cylinders ÷ 2</span>
+        <br /><b className={styles.em}>Where the pulses fall is the layout.</b> Each pulse is placed at the crank angle that cylinder actually fires at. A cross-plane V8's banks are offset, so at 3000 RPM its pulses arrive 3.6, 5.0 and 6.4 ms apart instead of an even 5.0 — and that unevenness <i>is</i> the rumble. Even-fire the same engine and it stops sounding like a V8. A 60/120° V6 fires evenly and rings hard and hornlike. A four fires twice a revolution, far enough apart to hear separately, which is the hollow four-cylinder sound.
+        <br /><br /><b className={styles.em}>No two pulses are the same.</b> Real combustion varies from one cycle to the next, and a perfectly repeated pulse is the fastest way to make an engine sound synthetic. Each pulse here is drawn from several shapes — soft and dull at light load, sharp and cracking under it — with its size and pitch nudged at random. Above about 200 pulses a second the ear stops hearing them separately, so a pre-built cycle of the same pulses, in the same firing order, takes over and is pitched with the revs.
+        <br /><br /><b className={styles.em}>The pipe makes it ring.</b> A pulse runs down the exhaust, reflects off the open end and comes back, so the system resonates like any tube:
+        <br /><span className={styles.formula}>f = c / 2L</span>
+        <br />A bigger engine with a bigger pipe is a longer, larger system, so its note sits lower. How hard it rings depends on how much gas is moving — damped at idle, ringing under load, which is the engine "coming on song". A cat-back or headers reflect less at the outlet, which is why a straight-through system sounds opened up rather than boomy.
+        <br /><br /><b className={styles.em}>What each change does:</b>
+        <br /><b className={styles.em}>Cylinder count</b> — pulse rate and spacing pattern. The biggest single factor.
+        <br /><b className={styles.em}>Displacement</b> — bigger cylinders vent longer pulses into a longer system, so the note sits lower and deeper.
+        <br /><b className={styles.em}>Cam duration</b> — overlap makes some cycles burn weakly at idle, so the note surges and dips. That is lope.
+        <br /><b className={styles.em}>Exhaust</b> — a bigger pipe restricts less and rings lower; a cat-back or headers reflect less at the outlet, which is why a straight-through system sounds opened up rather than boomy.
+        <br /><b className={styles.em}>Intake</b> — induction noise rising with airflow.
+        <br /><b className={styles.em}>Turbo</b> — the whistle is the compressor's blade-pass tone tracking shaft speed; the rush is air actually being moved. On a small engine that induction noise dominates, which is why a turbo four whooshes rather than barks.
+        <br /><b className={styles.em}>Ignition timing</b> — retarded means the burn is still going as the valve opens, dumping energy down the pipe: a harder, raspier note, and a hotter exhaust.
+        <br /><b className={styles.em}>Mixture</b> — rich burns slower and softer; lean is sharp and thin.
+        <br /><b className={styles.em}>Compression</b> — a faster pressure rise gives a harder crack on each pulse.
+        <br /><b className={styles.em}>Knock</b> — a rattly edge, because that is literally what knock is: a shockwave ringing the cylinder.
+        <br /><b className={styles.em}>Throttle</b> — every pulse hits harder. A fuel cut on the limiter or the overrun drops it right back without going silent, because the cylinders are still pumping air.
+        <br /><br />This matters beyond the game. Tuners diagnose by ear constantly — a lumpy idle, a lean rasp, a knock rattle. The sound is data.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="30. Further reading on engine sound">
+        The ideas above are standard acoustics. These explain them properly.
+        <br /><br /><b className={styles.em}>Burns Stainless, "Exhaust Header Theory".</b> How pressure waves travel through a header and reflect at an open end — as a negative pressure wave, which is what header tuning uses to scavenge the cylinder — and why collector design changes the wave that comes back.
+        <br /><br /><b className={styles.em}>Flatirons, "Resonance and Reverberation".</b> The plain-language version: resonance when tube length matches the wavelength, interference setting tone, and larger diameter giving a louder, more open note.
+        <br /><br /><b className={styles.em}>HowStuffWorks, "How Mufflers Work".</b> Why a muffler is not simply a restriction: chambers tuned to cancel particular frequencies, and packing that absorbs broadband energy.
+        <br /><br /><b className={styles.em}>Car and Driver, "Why Various Engine Types Sound So Different".</b> Firing intervals and crank arrangement as the origin of layout character — the cross-plane V8 rumble in particular.
+        <br /><br /><b className={styles.em}>PhET, "Sound Waves"</b> (University of Colorado Boulder), and <b className={styles.em}>Britannica, "Sound (physics)"</b>. The fundamentals underneath all of it: pressure waves, wavelength and frequency, interference, standing waves and resonance. Start here if the rest assumed too much.
+        <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
       </ExpandableInfo>
     </BuildSection>
   );

@@ -18,8 +18,9 @@
  * before the piston starts pushing, and that pulse runs down a system of pipes that
  * reflect, delay and filter it. The note is what comes out of the tailpipe.
  *
- * So this module describes the engine and the pipes, and `src/ui/audio/exhaustProcessor.js`
- * runs a one-dimensional wave model of them at audio rate:
+ * So this module describes the engine and the pipes, and `src/ui/audio/pulseExhaust.js`
+ * turns that description into sound — one scheduled pulse per firing event, at the crank
+ * angles below, through a resonant pipe voiced from the build:
  *
  *   RHYTHM       which crank angle each cylinder fires at and which collector it fires
  *                into — the whole of the cross-plane V8 rumble: `firingEvents`.
@@ -511,6 +512,7 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} inductionLevel intake noise, 0..1 against a reference airflow
  * @property {number} knockLevel 0..1, how hard the engine is detonating
  * @property {number} retardDeg degrees the ECU pulled out of the commanded spark
+ * @property {number} lambda measured lambda at the operating point, 1 when not running
  * @property {number} displacementL total displacement, litres
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} shaftRpm turbo shaft speed, RPM (0 when not boosted)
@@ -722,6 +724,8 @@ export function acousticDrive({
     knockLevel: point && point.knock ? clamp(point.knockPull / COEFF.MAX_KNOCK_RETARD, 0, 1) : 0,
     // Reported, not derived: how a retarded burn shapes the note is a rendering decision.
     retardDeg: point ? Math.max(0, point.commandedTiming - point.timing) : 0,
+    // Reported for the same reason: a rich burn is slower and softer, a lean one sharper.
+    lambda: point && Number.isFinite(point.lambda) ? point.lambda : 1,
     displacementL,
     overlapDeg: derived.overlapDeg || 0,
     ...turbo,
