@@ -90,8 +90,19 @@ const safe = (v, lo, hi) => (Number.isFinite(v) ? clamp(v, lo, hi) : lo);
 /** Samples in each scheduled buffer. */
 const CHUNK = 1024;
 
-/** How far ahead of the clock the stream is computed, seconds. */
-const LOOKAHEAD = 0.15;
+/**
+ * How far ahead of the clock the stream is computed, seconds: `min` normally, so the note
+ * answers the throttle at once. The stream is computed on the page's main thread, and on a
+ * slow phone the page's own work — a dyno chart redrawing, the simulation stepping — can
+ * hold that thread for longer than `min`. The audio already queued then runs out, and the
+ * note stutters: a rough, scraping stop-start. So whenever the stream finds itself run
+ * out, or nearly, it queues further ahead, up to `max`, and eases back by `decay` seconds
+ * per second of smooth running. A fast device never leaves `min`.
+ */
+const LOOKAHEAD = { min: 0.15, max: 0.6, grow: 1.5, nearly: 0.3, decay: 0.02 };
+
+/** Samples faded in at the start of a stream, so starting — or restarting — never clicks. */
+const FADE_IN = 256;
 
 /** Rings of pending samples; a power of two, and longer than the slowest event. */
 const RING = 1 << 16;
@@ -469,6 +480,12 @@ export function createPulseExhaust(ctx) {
       flowHeld: [0, 0],
       /** Whether a bank's flow has moved a step and its response is still to be loaded. */
       refreshPending: false,
+      /** How far ahead the stream is being computed, seconds (see `LOOKAHEAD`). */
+      lookahead: LOOKAHEAD.min,
+      /** The clock, in samples, at the last call; -1 before the first. */
+      lastCall: -1,
+      /** Whether the next buffer starts the stream and fades in. */
+      fadeIn: false,
       /** The starter: how engaged, its phase, and the crank speed it last saw. */
       starter: 0, starterPhase: 0, commutatorPhase: 0, starterRpm: 0,
       rnd: random((Math.random() * 4294967296) >>> 0),
@@ -882,6 +899,17 @@ export function schedulePulseExhaust(a, ctx, frame) {
     return;
   }
   const now = Math.ceil(ctx.currentTime * sr);
+  // How the last call left the queue: run out, nearly, or comfortably ahead.
+  if (s.head >= 0 && s.lastCall >= 0) {
+    const ahead = (s.head - now) / sr;
+    if (ahead < LOOKAHEAD.nearly * s.lookahead) {
+      s.lookahead = Math.min(LOOKAHEAD.max, s.lookahead * LOOKAHEAD.grow);
+    } else {
+      const elapsed = Math.max(0, (now - s.lastCall) / sr);
+      s.lookahead = Math.max(LOOKAHEAD.min, s.lookahead - LOOKAHEAD.decay * elapsed);
+    }
+  }
+  s.lastCall = now;
   if (s.head < 0 || s.head < now) {
     // Starting, or so late that the clock has passed the stream: begin again just ahead.
     // A stream starting after a `silencePulseExhaust` lifts its own gains, whoever forgot
@@ -891,6 +919,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     s.massKg.fill(0);
     s.head = now + Math.ceil(0.02 * sr);
     s.next = s.head;
+    s.fadeIn = true;
   }
   const f = {
     rpm: Math.max(rpm, 60),
@@ -905,7 +934,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
   };
   const firing = rpm >= 200 && lvl > 0.001;
   const bankCount = Math.max(1, Math.min(2, a.geometry.banks || 1));
-  const until = now + Math.ceil(LOOKAHEAD * sr);
+  const until = now + Math.ceil(s.lookahead * sr);
   let guard = 0;
   while (s.head < until && guard++ < 64) {
     const end = s.head + CHUNK;
@@ -931,6 +960,10 @@ export function schedulePulseExhaust(a, ctx, frame) {
       biquad(data[b], butterworth('lowpass', SOURCE_HZ, sr), s.sourceZ[b]);
     }
     level(a, data.slice(0, bankCount), sr, followCeiling(f));
+    if (s.fadeIn) {
+      s.fadeIn = false;
+      for (const d of data) for (let i = 0; i < FADE_IN; i++) d[i] *= i / FADE_IN;
+    }
     for (let b = 0; b < 3; b++) {
       if (b === 1 && bankCount < 2) continue;
       if (b === 2 && !f.cranking && s.starter < 1e-4) continue;
