@@ -252,6 +252,29 @@ describe('what the engine is doing', () => {
     for (const evos of byCylinder.values()) expect(sd(evos)).toBeLessThan(1e-9);
   });
 
+  it('keeps time at speed: a strong cycle barely moves a fast crank', () => {
+    // The flywheel carries energy as the square of engine speed, so the same scatter that
+    // makes an idle stumble leaves a fast engine's rhythm almost exact.
+    const inline = geom({ configuration: 'I6', cyl: 6, displacementL: 3.0 });
+    const jitter = (rpm) => {
+      const g = run(model(inline, `i6-${rpm}`), { rpm, load: 0.1, evoKpa: 200 }, 1.5)
+        .map((e) => e.gapSeconds);
+      return sd(g) / mean(g);
+    };
+    expect(jitter(4000)).toBeLessThan(jitter(800) / 5);
+  });
+
+  it('lets a lift fall away rather than pulling it straight back up', () => {
+    const m = model();
+    run(m, { rpm: 6000, evoKpa: 600, load: 1, portKpa: 130 }, 1);
+    const flatOut = m.a.stream.gain;
+    run(m, { rpm: 5000, evoKpa: 110, load: 0.05, portKpa: 104 }, 1);
+    expect(m.a.stream.gain).toBeLessThanOrEqual(flatOut * 2 + 1e-9);
+    // At idle it is brought up as usual.
+    run(m, { rpm: 850, evoKpa: 110, load: 0.05, portKpa: 104 }, 1.5);
+    expect(m.a.stream.gain).toBeGreaterThan(flatOut * 2);
+  });
+
   it('scatters more at light load than wide open', () => {
     const idle = run(model(), { rpm: 900, load: 0.1 }, 1.5).map((e) => e.evoKpa);
     const wot = run(model(), { rpm: 900, load: 1 }, 1.5).map((e) => e.evoKpa);

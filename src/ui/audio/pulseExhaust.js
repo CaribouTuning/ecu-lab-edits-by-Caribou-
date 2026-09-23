@@ -126,10 +126,14 @@ const SOURCE_HZ = 5000;
 const RUSH_HZ = 2000;
 
 /**
- * How far a cycle's scatter moves the crank's arrival at the next event, per unit of it.
- * A cycle 10% strong speeds the crank by about 1% over the gap that follows.
+ * How far a cycle's scatter moves the crank's arrival at the next event, per unit of it,
+ * at `WOBBLE_RPM`: a cycle 10% strong speeds the crank by about 1% over the gap that
+ * follows. That is an idle. The crank's speed changes by the cycle's extra work over the
+ * energy the flywheel carries, and that energy goes as the square of engine speed, so
+ * at 4000 RPM the same cycle moves it 25 times less — a fast engine keeps time.
  */
 const CRANK_WOBBLE = 0.1;
+const WOBBLE_RPM = 800;
 
 /** Chance per unit of lope severity that a cycle barely burns at all. */
 const MISFIRE_PER_SEVERITY = 0.3;
@@ -658,7 +662,8 @@ function addEvent(a, sampleRate, at, f) {
 
   let gapDeg = next.angleDeg - here.angleDeg;
   if (gapDeg <= 0) gapDeg += 720;
-  const gap = (gapDeg / (6 * f.rpm)) * (1 - CRANK_WOBBLE * cov * s.walk);
+  const wobble = CRANK_WOBBLE * Math.min(1, (WOBBLE_RPM / f.rpm) ** 2);
+  const gap = (gapDeg / (6 * f.rpm)) * (1 - wobble * cov * s.walk);
   a.log.push({ at: start / sampleRate, cylinder: k, evoKpa: evo, gapSeconds: gap });
   if (a.log.length > 256) a.log.splice(0, a.log.length - 256);
   s.index++;
