@@ -268,10 +268,10 @@ describe('what the engine is doing', () => {
     const m = model();
     run(m, { rpm: 6000, evoKpa: 600, load: 1, portKpa: 130 }, 1);
     run(m, { rpm: 5000, evoKpa: 110, load: 0.05, portKpa: 104 }, 1);
-    expect(m.a.stream.gain).toBeLessThanOrEqual(m.a.norm * 3 + 1e-9);
+    expect(m.a.stream.gain).toBeLessThanOrEqual(m.a.norm + 1e-9);
     // At idle it is brought up as usual.
     run(m, { rpm: 850, evoKpa: 110, load: 0.05, portKpa: 104 }, 1.5);
-    expect(m.a.stream.gain).toBeGreaterThan(m.a.norm * 3);
+    expect(m.a.stream.gain).toBeGreaterThan(m.a.norm * 2);
   });
 
   it('scatters more at light load than wide open', () => {

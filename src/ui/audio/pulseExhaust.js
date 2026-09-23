@@ -169,10 +169,11 @@ const LEVEL = {
    * engine is being driven by its own inertia rather than idling — or the fuel cut, on the
    * overrun or the limiter. A lift falls away on a real engine and a cylinder that is not
    * firing is quiet — that is what a lift and a limiter sound like — so coasting, the
-   * follower may bring the note up by at most `coastLift` rather than `maxGain`. At idle
-   * it works as everywhere else.
+   * follower may bring the note up by at most `coastLift` rather than `maxGain`. That
+   * eases back to `maxGain` as the engine comes down through the last `coastRpm` above
+   * it, so a lift settles into the idle rather than dipping under it and swelling back.
    */
-  coastLoad: 0.15, coastRpm: 1500, coastLift: 3,
+  coastLoad: 0.15, coastRpm: 1500, coastLift: 1,
 };
 
 /**
@@ -790,15 +791,29 @@ function sourceLevel(a, sampleRate) {
 }
 
 /**
+ * The most the level follower may bring the note up by: `LEVEL.maxGain`, or while the
+ * engine is coasting (see `LEVEL.coastLoad`) `LEVEL.coastLift`, easing back to `maxGain`
+ * over the last `coastRpm` above it.
+ *
+ * @param {{rpm: number, load: number, cut: boolean}} f the frame
+ * @returns {number}
+ */
+function followCeiling(f) {
+  if (!f.cut && f.load >= LEVEL.coastLoad) return LEVEL.maxGain;
+  const x = clamp((f.rpm - LEVEL.coastRpm) / LEVEL.coastRpm, 0, 1);
+  return Math.pow(LEVEL.maxGain, 1 - x) * Math.pow(LEVEL.coastLift, x);
+}
+
+/**
  * Bring a buffer of exhaust to this engine's level, and part of the way towards the
  * target from wherever the engine is running.
  *
  * @param {Record<string, any>} a
  * @param {Float32Array[]} data one buffer per bank
  * @param {number} sampleRate
- * @param {boolean} coasting whether the throttle is shut above idle or the fuel is cut
+ * @param {number} most the most the follower may bring the note up by, from `followCeiling`
  */
-function level(a, data, sampleRate, coasting) {
+function level(a, data, sampleRate, most) {
   const s = a.stream;
   // The note's level: the source above the lowest of the band a listener hears it in —
   // what a phone speaker can play — against the same measure at the reference.
@@ -815,8 +830,7 @@ function level(a, data, sampleRate, coasting) {
   const coeff = Math.exp(-seconds / (rms > s.envelope ? LEVEL.attack : LEVEL.release));
   s.envelope = rms + coeff * (s.envelope - rms);
   // A lift or a fuel cut still falls away: the follower only goes part of the way, and
-  // coasting it may lift the note far less (see `LEVEL.coastLift`).
-  const most = coasting ? LEVEL.coastLift : LEVEL.maxGain;
+  // coasting it may lift the note far less (see `followCeiling`).
   const follow = s.envelope > 0
     ? clamp(Math.pow(1 / s.envelope, LEVEL.amount), LEVEL.minGain, most)
     : most;
@@ -901,8 +915,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     for (let b = 0; b < bankCount; b++) {
       biquad(data[b], butterworth('lowpass', SOURCE_HZ, sr), s.sourceZ[b]);
     }
-    level(a, data.slice(0, bankCount), sr,
-      f.cut || (f.load < LEVEL.coastLoad && f.rpm > LEVEL.coastRpm));
+    level(a, data.slice(0, bankCount), sr, followCeiling(f));
     for (let b = 0; b < 3; b++) {
       if (b === 1 && bankCount < 2) continue;
       if (b === 2 && !f.cranking && s.starter < 1e-4) continue;
