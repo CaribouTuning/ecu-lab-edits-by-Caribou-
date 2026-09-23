@@ -18,18 +18,21 @@
  * before the piston starts pushing, and that pulse runs down a system of pipes that
  * reflect, delay and filter it. The note is what comes out of the tailpipe.
  *
- * So this module describes the engine and the pipes, and `src/ui/audio/exhaustProcessor.js`
- * runs a one-dimensional wave model of them at audio rate:
+ * So this module describes the engine and the pipes, and `src/ui/audio/pulseExhaust.js`
+ * turns that description into sound — every firing event computed here, at the crank
+ * angles below, played through a resonant pipe voiced from the build:
  *
  *   RHYTHM       which crank angle each cylinder fires at and which collector it fires
  *                into — the whole of the cross-plane V8 rumble: `firingEvents`.
  *   EXCITATION   the cylinder pressure at the moment the valve opens, from the cycle's
  *                own peak pressure: `evoPressureKpa`, via `acousticDrive`.
+ *   EACH EVENT   the gas leaving through the valve, sample by sample — blowdown, then the
+ *                piston's push: `exhaustEvent`.
  *   THE PIPES    every length, area and gas temperature the wave model is built from:
  *                `exhaustGeometry`. The speed of sound in them follows EGT, so the whole
  *                system retunes as the engine heats.
- *   UNEVENNESS   cycle-to-cycle combustion variation, which is what a lopey idle is:
- *                `cyclicVariation`.
+ *   UNEVENNESS   cycle-to-cycle combustion variation, which every engine has a little of
+ *                (`combustionScatter`) and a lopey idle has a lot of (`cyclicVariation`).
  *
  * The turbocharger is treated the same way: shaft speed comes from the compressor work
  * needed for the boost being made, and the whistle is that shaft speed — not a number
@@ -188,6 +191,32 @@ export const ACOUSTIC = {
   // 0.3-0.6. The renderer needs this, not the sim: the same amount of variation without
   // memory produces a fizz.
   COV_PERSISTENCE: 0.55,
+  // How much the cylinder pressure at valve opening scatters from one cycle to the next on
+  // an engine that idles smoothly, as a coefficient of variation: a floor that is there at
+  // any load, plus what light load adds. Combustion is never identical twice — the
+  // turbulence the charge is burning in is different every cycle. Published CoV of IMEP
+  // runs 1-2% at wide-open throttle and 4-8% at a light idle, and the pressure late in
+  // the stroke scatters two to three times as much as the work does, because a burn that
+  // runs slow leaves its heat in the gas rather than on the piston. This scatter is most of
+  // why a real engine never repeats itself, and a synthesiser without it does.
+  COV_FLOOR: 0.05,
+  COV_LIGHT_LOAD: 0.125,
+  // Cylinder-to-cylinder spread in charge, as a fraction. Runners are different lengths,
+  // injectors flow a percent or two apart, and the cylinder at the end of the plenum
+  // breathes differently from the one in the middle. It is fixed for an engine, so it
+  // repeats every cycle — which is what puts the half-order lines between the firing
+  // harmonics, the "character" two engines of the same layout do not share.
+  CYLINDER_SPREAD: 0.035,
+
+  // --- Exhaust event ---
+  // Where the exhaust valve closes, crank degrees after TDC firing: past exhaust TDC (360)
+  // by half the overlap and a little more, because the lobe is centred there.
+  EVC_ATDC_BASE: 368,
+  // Mean pressure in the exhaust port above the barometer, kPa: what the cylinder blows
+  // down against. It rises with how hard the system is being driven — a stock system at
+  // full power carries tens of kPa of back pressure.
+  PORT_BACK_KPA: 4,
+  PORT_BACK_PER_DRIVE_KPA: 30,
 
   // --- Turbocharger ---
   // Radial compressor slip factor: the fraction of tip speed the gas actually leaves
@@ -414,6 +443,124 @@ export function cyclicVariation({ rpm, overlapDeg = 0 }) {
 }
 
 /**
+ * How much the cylinder pressure at valve opening scatters from cycle to cycle, as a
+ * coefficient of variation.
+ *
+ * Every engine has some — combustion never runs the same twice — and a light load has more
+ * than a heavy one, because a thin, slow-burning charge is at the mercy of the turbulence
+ * it lights in. A lumpy cam's dilution sits on top (`cyclicVariation`), and there the
+ * scatter is the whole character of the idle.
+ *
+ * @param {number} load 0 (closed throttle) to 1 (wide open)
+ * @param {number} severity from `cyclicVariation`
+ * @returns {number} coefficient of variation, 0..1
+ */
+export function combustionScatter(load, severity = 0) {
+  return clamp(ACOUSTIC.COV_FLOOR + ACOUSTIC.COV_LIGHT_LOAD * (1 - clamp(load, 0, 1))
+    + Math.max(0, severity), 0, 1);
+}
+
+/**
+ * One cylinder's exhaust event: the mass flow out through its valve, sample by sample,
+ * from the valve cracking open to it closing.
+ *
+ * This is the SOURCE of the exhaust note, computed rather than drawn. A tailpipe radiates
+ * the rate of change of the flow leaving it, so what a listener hears from each event is
+ * the shape of this curve — and every part of that shape is the build:
+ *
+ *   - The valve opens along the cam's flank (`camRampDeg`, `camShape`), so how fast the
+ *     flow can rise is fixed in CRANK DEGREES. At idle that takes 13 ms and the event is a
+ *     soft, low thud; at 6000 rpm it takes under 2 and the same cylinder cracks.
+ *   - The cylinder starts at the pressure the combustion left it at (`evoKpa`, from the
+ *     tune: timing, boost, load, fuelling) and blows down through a real orifice — choked
+ *     while the pressure ratio is high, subsonic after — so a loaded engine barks and a
+ *     closed throttle, which leaves the cylinder BELOW the port, pulls gas back in first.
+ *   - Then the piston pushes out what is left (slider-crank, `rodRatio`), a slower and
+ *     bigger swell of flow that is most of what an idle is made of.
+ *   - Bore sets the valve area, displacement per cylinder and compression set the volume
+ *     being emptied, and the gas temperature sets how fast it leaves.
+ *
+ * The charge expands isentropically as it leaves. Each step's flow is limited to what
+ * would bring the cylinder level with the port and no further: without that, the flow
+ * chatters either side of equilibrium once the piston is doing the pushing, and that
+ * chatter is a whine at half the sample rate.
+ *
+ * @param {object} args
+ * @param {object} args.geometry an {@link exhaustGeometry}
+ * @param {number} args.evoKpa absolute cylinder pressure when the valve opens, kPa
+ * @param {number} args.rpm engine speed
+ * @param {number} args.sampleRate samples per second
+ * @param {number} [args.backKpa] absolute pressure in the port, kPa
+ * @param {number} [args.closeDeg] exhaust valve closing, degrees after TDC firing
+ * @returns {{flow: Float32Array, jet: Float32Array}} mass flow out of the port, kg/s
+ *   (negative is backflow), and the Mach number of the jet through the valve seat
+ */
+export function exhaustEvent({
+  geometry, evoKpa, rpm, sampleRate,
+  backKpa = BARO_KPA + ACOUSTIC.PORT_BACK_KPA, closeDeg = ACOUSTIC.EVC_ATDC_BASE,
+}) {
+  const g = geometry.gamma;
+  const openDeg = geometry.evoDeg;
+  const span = Math.max(1, closeDeg - openDeg);
+  const degPerSample = (6 * clamp(rpm, 60, 20000)) / sampleRate;
+  const n = Math.max(2, Math.ceil(span / degPerSample));
+  const flow = new Float32Array(n);
+  const jet = new Float32Array(n);
+
+  const vc = geometry.clearanceM3;
+  const vs = geometry.sweptM3;
+  const rod = geometry.rodRatio;
+  const pb = Math.max(1, backKpa) * 1000;
+  const tb = Math.max(300, geometry.portK);
+  let theta = openDeg;
+  const v0 = cylinderVolumeM3(theta, vc, vs, rod);
+  const p0 = Math.max(1, evoKpa) * 1000;
+  let m = (p0 * v0) / (R_AIR * Math.max(300, geometry.cylinderK));
+  // The charge's isentrope, p = k rho^gamma, fixed at valve opening.
+  const isentrope = p0 / Math.pow(m / v0, g);
+
+  const critical = Math.pow(2 / (g + 1), g / (g - 1));
+  const choked = Math.sqrt(g) * Math.pow(2 / (g + 1), (g + 1) / (2 * (g - 1)));
+  const subsonic = (r) => Math.sqrt(Math.max(0,
+    ((2 * g) / (g - 1)) * (Math.pow(r, 2 / g) - Math.pow(r, (g + 1) / g))));
+  const dt = 1 / sampleRate;
+
+  for (let i = 0; i < n; i++) {
+    const into = theta - openDeg;
+    const lift = Math.pow(clamp(Math.min(into, span - into) / geometry.camRampDeg, 0, 1),
+      geometry.camShape);
+    const area = geometry.valveArea * geometry.valveCd * lift;
+    // Move the piston first and read the pressure it leaves the trapped gas at. Driving the
+    // orifice from that, rather than from the pressure before the step, is what lets the
+    // piston's push come out as a smooth flow instead of a step-by-step on-off.
+    const vNext = cylinderVolumeM3(theta + degPerSample, vc, vs, rod);
+    const p1 = isentrope * Math.pow(m / vNext, g);
+    const t1 = (p1 * vNext) / (m * R_AIR);
+    // Isentropic orifice flow, whichever way the pressure difference points.
+    let mdot;
+    let mach = 0;
+    if (p1 >= pb) {
+      const r = pb / p1;
+      mdot = (area * p1 * (r <= critical ? choked : subsonic(r))) / Math.sqrt(R_AIR * t1);
+      mach = r <= critical ? 1 : Math.sqrt((2 / (g - 1)) * (Math.pow(1 / r, (g - 1) / g) - 1));
+    } else {
+      const r = p1 / pb;
+      mdot = -(area * pb * (r <= critical ? choked : subsonic(r))) / Math.sqrt(R_AIR * tb);
+    }
+    // The mass that would leave the cylinder level with the port. The flow may not carry
+    // it past that point.
+    const mLevel = vNext * Math.pow(pb / isentrope, 1 / g);
+    const most = (m - mLevel) / dt;
+    mdot = mdot >= 0 ? Math.min(mdot, Math.max(0, most)) : Math.max(mdot, Math.min(0, most));
+    flow[i] = mdot;
+    jet[i] = mdot > 0 ? mach : 0;
+    m = Math.max(1e-9, m - mdot * dt);
+    theta += degPerSample;
+  }
+  return { flow, jet };
+}
+
+/**
  * Effective exhaust flow area for one cylinder, m^2.
  *
  * @param {number} boreMm cylinder bore
@@ -506,11 +653,14 @@ export function turboAcoustics({ compressor, boostPsi, inletK }) {
  * @property {number} gasTempK exhaust gas temperature at the port, K
  * @property {number} lopeSeverity 0..1, how hard the idle loafs — 0 on a stock cam
  * @property {number} covPersistence how much of one cycle's variation carries to the next
+ * @property {number} portKpa absolute mean pressure in the exhaust port, kPa — what each
+ *   cylinder blows down against
  * @property {number} exhaustDrive exhaust enthalpy flux against a reference, 0..1 — how
  *   hard the exhaust system is being driven acoustically
  * @property {number} inductionLevel intake noise, 0..1 against a reference airflow
  * @property {number} knockLevel 0..1, how hard the engine is detonating
  * @property {number} retardDeg degrees the ECU pulled out of the commanded spark
+ * @property {number} lambda measured lambda at the operating point, 1 when not running
  * @property {number} displacementL total displacement, litres
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} shaftRpm turbo shaft speed, RPM (0 when not boosted)
@@ -717,11 +867,15 @@ export function acousticDrive({
     gasTempK,
     lopeSeverity: variation.severity,
     covPersistence: ACOUSTIC.COV_PERSISTENCE,
+    portKpa: BARO_KPA + ACOUSTIC.PORT_BACK_KPA
+      + ACOUSTIC.PORT_BACK_PER_DRIVE_KPA * clamp(powerW / ACOUSTIC.EXHAUST_POWER_REF_W, 0, 1),
     exhaustDrive: clamp(powerW / ACOUSTIC.EXHAUST_POWER_REF_W, 0, 1),
     inductionLevel: clamp((point ? point.maf : 0) / ACOUSTIC.INDUCTION_REF_GPS, 0, 1.5),
     knockLevel: point && point.knock ? clamp(point.knockPull / COEFF.MAX_KNOCK_RETARD, 0, 1) : 0,
     // Reported, not derived: how a retarded burn shapes the note is a rendering decision.
     retardDeg: point ? Math.max(0, point.commandedTiming - point.timing) : 0,
+    // Reported for the same reason: a rich burn is slower and softer, a lean one sharper.
+    lambda: point && Number.isFinite(point.lambda) ? point.lambda : 1,
     displacementL,
     overlapDeg: derived.overlapDeg || 0,
     ...turbo,
