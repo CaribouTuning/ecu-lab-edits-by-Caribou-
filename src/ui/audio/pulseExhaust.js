@@ -166,10 +166,12 @@ const LEVEL = {
   loudness: 0.3,
   /**
    * COASTING: the throttle shut (`load` below `coastLoad`) above `coastRpm`, where the
-   * engine is being driven by its own inertia rather than idling. A lift falls away on a
-   * real engine — that is what a lift sounds like — so the follower may bring a coasting
-   * engine up by at most `coastLift` over the gain it had when the throttle closed,
-   * instead of all the way back to the target. At idle it works as everywhere else.
+   * engine is being driven by its own inertia rather than idling — or the fuel cut, on the
+   * overrun or the limiter. A lift falls away on a real engine and a cylinder that is not
+   * firing is quiet — that is what a lift and a limiter sound like — so the follower may
+   * bring the note up by at most `coastLift` over the gain it had when the engine began
+   * coasting, instead of all the way back to the target. At idle it works as everywhere
+   * else.
    */
   coastLoad: 0.15, coastRpm: 1500, coastLift: 2,
 };
@@ -797,7 +799,7 @@ function sourceLevel(a, sampleRate) {
  * @param {Record<string, any>} a
  * @param {Float32Array[]} data one buffer per bank
  * @param {number} sampleRate
- * @param {boolean} coasting whether the throttle is shut above idle
+ * @param {boolean} coasting whether the throttle is shut above idle or the fuel is cut
  */
 function level(a, data, sampleRate, coasting) {
   const s = a.stream;
@@ -908,7 +910,8 @@ export function schedulePulseExhaust(a, ctx, frame) {
     for (let b = 0; b < bankCount; b++) {
       biquad(data[b], butterworth('lowpass', SOURCE_HZ, sr), s.sourceZ[b]);
     }
-    level(a, data.slice(0, bankCount), sr, f.load < LEVEL.coastLoad && f.rpm > LEVEL.coastRpm);
+    level(a, data.slice(0, bankCount), sr,
+      f.cut || (f.load < LEVEL.coastLoad && f.rpm > LEVEL.coastRpm));
     for (let b = 0; b < 3; b++) {
       if (b === 1 && bankCount < 2) continue;
       if (b === 2 && !f.cranking && s.starter < 1e-4) continue;
