@@ -292,3 +292,161 @@ describe('the drive handed to the renderer', () => {
     expect(d.whistleHz).toBe(0);
   });
 });
+
+describe('one exhaust event', () => {
+  const geom = (over = {}) => S.exhaustGeometry({
+    configuration: 'V8', cyl: 8, displacementL: 5.0, bore: 95, compression: 10.5,
+    pipeDiaIn: 3.0, gasTempK: 1000, ...over,
+  });
+  /** @param {{geometry?: object, evoKpa?: number, rpm?: number}} [args] */
+  const event = ({ geometry, ...over } = {}) => S.exhaustEvent({
+    geometry: geom(geometry), evoKpa: 400, rpm: 3000, sampleRate: 44100, ...over,
+  });
+  const peak = (xs) => Math.max(...xs);
+  const massG = (flow) => flow.reduce((t, q) => t + q, 0) / 44100 * 1000;
+
+  it('never lets out more gas than was in the cylinder', () => {
+    const g = geom();
+    const vEvo = S.cylinderVolumeM3(g.evoDeg, g.clearanceM3, g.sweptM3, g.rodRatio);
+    const heldG = ((400e3 * vEvo) / (S.R_AIR * g.cylinderK)) * 1000;
+    const out = massG(event().flow);
+    expect(out).toBeGreaterThan(0.5 * heldG);
+    expect(out).toBeLessThan(heldG);
+  });
+
+  it('blows down harder from a harder-run cylinder', () => {
+    expect(peak(event({ evoKpa: 450 }).flow)).toBeGreaterThan(peak(event({ evoKpa: 180 }).flow));
+  });
+
+  it('is quicker at speed, but spread over more of the crank, because gas takes time', () => {
+    // The valve opens along a flank fixed in crank degrees, so a faster engine opens it in
+    // less time and the event is sharper. But the gas leaves at the speed it can, not at
+    // the crank's, so the blowdown takes up more degrees the faster the engine turns —
+    // which is why a header's timing matters more at the top end.
+    const rise = (rpm) => {
+      const { flow } = event({ rpm });
+      return flow.indexOf(peak(flow)) / 44100;
+    };
+    expect(rise(6000)).toBeLessThan(rise(3000));
+    expect(rise(6000) * 6000).toBeGreaterThan(rise(3000) * 3000);
+  });
+
+  it('pulls gas back in first on a closed throttle, and is far weaker for it', () => {
+    const cut = event({ evoKpa: S.ACOUSTIC.MOTORED_EVO_KPA });
+    expect(Math.min(...cut.flow)).toBeLessThan(0);
+    expect(peak(cut.flow)).toBeLessThan(0.3 * peak(event().flow));
+  });
+
+  it('chokes the jet through the seat while the pressure ratio is high', () => {
+    expect(peak(event({ evoKpa: 450 }).jet)).toBe(1);
+    expect(peak(event({ evoKpa: 130 }).jet)).toBeLessThan(1);
+  });
+
+  it('flows smoothly once the piston is pushing, rather than chattering', () => {
+    // A step-by-step on-off at equilibrium would be a whine at half the sample rate.
+    for (const rpm of [800, 3000, 6500]) {
+      const { flow } = event({ rpm, evoKpa: 180 });
+      let flips = 0;
+      for (let i = 1; i < flow.length; i++) {
+        if (Math.sign(flow[i]) !== Math.sign(flow[i - 1]) && Math.abs(flow[i]) > 1e-6) flips++;
+      }
+      expect(flips, `${rpm} rpm`).toBeLessThan(6);
+    }
+  });
+
+  it('gives a bigger bore a bigger valve and a bigger blowdown', () => {
+    expect(peak(event({ geometry: { bore: 104 } }).flow))
+      .toBeGreaterThan(peak(event({ geometry: { bore: 86 } }).flow));
+  });
+
+  it('ends at nothing when the valve shuts', () => {
+    const { flow } = event();
+    expect(Math.abs(flow[flow.length - 1])).toBeLessThan(0.02 * peak(flow));
+  });
+});
+
+describe('combustion scatter', () => {
+  it('is always there, a little, and more at light load', () => {
+    expect(S.combustionScatter(1)).toBeGreaterThan(0);
+    expect(S.combustionScatter(0.1)).toBeGreaterThan(S.combustionScatter(1));
+  });
+
+  it('grows with a lumpy cam on top', () => {
+    expect(S.combustionScatter(0.2, 0.4)).toBeGreaterThan(S.combustionScatter(0.2, 0));
+  });
+
+  it('puts more back pressure in the port the harder the engine runs', () => {
+    expect(drive({ rpm: 6000 }).portKpa).toBeGreaterThan(drive({ rpm: 1500, mapKpa: 40 }).portKpa);
+    expect(drive({ rpm: 1500, mapKpa: 40 }).portKpa).toBeGreaterThan(S.BARO_KPA);
+  });
+});
+
+describe('the exhaust system\'s response', () => {
+  const geom = (over = {}) => S.exhaustGeometry({
+    configuration: 'V8', cyl: 8, displacementL: 5.0, bore: 95, compression: 10.5,
+    pipeDiaIn: 3.0, gasTempK: 1000, ...over,
+  });
+  const ir = (over = {}, opts = {}) => S.exhaustImpulseResponse(geom(over), 44100, opts);
+  /** When the pulse first comes out of the tailpipe, in samples. */
+  const arrival = (x) => x.findIndex((v) => Math.abs(v) > 0.1);
+  /** Treble against the whole: the first difference's energy over the signal's. */
+  const brightness = (x) => {
+    let d = 0; let e = 0;
+    for (let i = 1; i < x.length; i++) { d += (x[i] - x[i - 1]) ** 2; e += x[i] * x[i]; }
+    return d / e;
+  };
+
+  it('is finite, peaks at one, and dies away', () => {
+    const x = ir();
+    expect(x.every(Number.isFinite)).toBe(true);
+    expect(Math.max(...x.map(Math.abs))).toBeCloseTo(1, 6);
+    const total = x.reduce((t, v) => t + v * v, 0);
+    const tail = x.slice(Math.floor(x.length * 0.9)).reduce((t, v) => t + v * v, 0);
+    expect(tail / total).toBeLessThan(0.01);
+    expect(x.length / 44100).toBeLessThanOrEqual(S.ACOUSTIC.IR_MAX_SECONDS);
+  });
+
+  it('takes longer to come out of a longer system, and sooner through hotter gas', () => {
+    expect(arrival(ir({ displacementL: 6.5 }))).toBeGreaterThan(arrival(ir({ displacementL: 2.0 })));
+    expect(arrival(ir({ gasTempK: 1200 }))).toBeLessThan(arrival(ir({ gasTempK: 700 })));
+  });
+
+  it('runs one bank of a V a little further than the other', () => {
+    expect(arrival(ir({}, { bank: 1 }))).toBeGreaterThan(arrival(ir({}, { bank: 0 })));
+  });
+
+  it('lets more treble out through a straight-through cat-back', () => {
+    expect(brightness(ir({}, { catBack: true }))).toBeGreaterThan(brightness(ir()));
+  });
+
+  it('takes the top end off with a turbine in the path', () => {
+    expect(brightness(ir({ turboFitted: true }))).toBeLessThan(brightness(ir()));
+  });
+
+  it('changes with the tailpipe it is given', () => {
+    const narrow = ir({ pipeDiaIn: 2.25 });
+    const wide = ir({ pipeDiaIn: 3.5 });
+    expect(Array.from(narrow)).not.toEqual(Array.from(wide));
+  });
+});
+
+describe('the primaries', () => {
+  const geom = (over = {}) => S.exhaustGeometry({
+    configuration: 'I6', cyl: 6, displacementL: 3.0, bore: 86, compression: 10.5,
+    pipeDiaIn: 2.5, gasTempK: 1000, ...over,
+  });
+  const range = (xs) => Math.max(...xs) - Math.min(...xs);
+
+  it('gives every cylinder its own run to the collector, around the mean length', () => {
+    const g = geom();
+    const lengths = S.primaryLengthsM(g);
+    expect(lengths).toHaveLength(6);
+    const mean = lengths.reduce((t, v) => t + v, 0) / lengths.length;
+    expect(Math.abs(mean - g.primaryLength) / g.primaryLength).toBeLessThan(0.15);
+  });
+
+  it('runs a cast manifold\'s cylinders unevenly and tuned headers nearly equal', () => {
+    expect(range(S.primaryLengthsM(geom({ headers: false }))))
+      .toBeGreaterThan(3 * range(S.primaryLengthsM(geom({ headers: true }))));
+  });
+});
