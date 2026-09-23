@@ -150,6 +150,15 @@ const RUSH_HZ = 2000;
 const CRANK_WOBBLE = 0.1;
 const WOBBLE_RPM = 800;
 
+/**
+ * How long the crank takes to settle on a new speed it is given, seconds. The app updates
+ * engine speed a few to a few dozen times a second — a dyno pull steps through its
+ * measured points about ten times a second — and a note that jumped at each would climb
+ * in a staircase, heard as a ratchet. About one update long, so a pull is a smooth sweep
+ * and a blip still answers at once.
+ */
+const RPM_GLIDE = 0.1;
+
 /** Chance per unit of lope severity that a cycle barely burns at all. */
 const MISFIRE_PER_SEVERITY = 0.3;
 
@@ -490,6 +499,8 @@ export function createPulseExhaust(ctx) {
       lastCall: -1,
       /** Whether the next buffer starts the stream and fades in. */
       fadeIn: false,
+      /** The crank's speed as the events see it, gliding to the one it is given. */
+      rpm: NaN,
       /** The starter: how engaged, its phase, and the crank speed it last saw. */
       starter: 0, starterPhase: 0, commutatorPhase: 0, starterRpm: 0,
       rnd: random((Math.random() * 4294967296) >>> 0),
@@ -671,8 +682,11 @@ function addEvent(a, sampleRate, at, f) {
   if (burning && f.lope > 0 && s.rnd() < f.lope * MISFIRE_PER_SEVERITY) evo *= MISFIRE_EVO;
   evo = Math.max(20, evo);
 
+  // The crank cannot jump from one speed to another, whatever steps it is given in: it
+  // glides there, event by event.
+  const rpm = Number.isFinite(s.rpm) && s.rpm > 0 ? s.rpm : f.rpm;
   const event = exhaustEvent({
-    geometry: a.geometry, evoKpa: evo, rpm: f.rpm, sampleRate, backKpa: f.portKpa,
+    geometry: a.geometry, evoKpa: evo, rpm, sampleRate, backKpa: f.portKpa,
   });
   const { jet } = event;
   const flow = steepenPulse(event.flow, a.geometry, sampleRate, f.portKpa);
@@ -697,8 +711,9 @@ function addEvent(a, sampleRate, at, f) {
 
   let gapDeg = next.angleDeg - here.angleDeg;
   if (gapDeg <= 0) gapDeg += 720;
-  const wobble = CRANK_WOBBLE * Math.min(1, (WOBBLE_RPM / f.rpm) ** 2);
-  const gap = (gapDeg / (6 * f.rpm)) * (1 - wobble * cov * s.walk);
+  const wobble = CRANK_WOBBLE * Math.min(1, (WOBBLE_RPM / rpm) ** 2);
+  const gap = (gapDeg / (6 * rpm)) * (1 - wobble * cov * s.walk);
+  s.rpm = rpm + (f.rpm - rpm) * (1 - Math.exp(-gap / RPM_GLIDE));
   a.log.push({ at: start / sampleRate, cylinder: k, evoKpa: evo, gapSeconds: gap });
   if (a.log.length > 256) a.log.splice(0, a.log.length - 256);
   s.index++;
@@ -922,6 +937,7 @@ export function schedulePulseExhaust(a, ctx, frame) {
     if (a.silenced) wakePulseExhaust(a, ctx);
     for (const r of s.rings) r.fill(0);
     s.massKg.fill(0);
+    s.rpm = NaN;
     s.head = now + Math.ceil(START_AHEAD * sr);
     s.next = s.head;
     s.fadeIn = true;

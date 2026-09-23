@@ -124,6 +124,17 @@ describe('the rhythm, which is the layout', () => {
     expect(new Set(cyl0.map((v) => v.toFixed(3))).size).toBe(cyl0.length);
   });
 
+  it('glides to a new engine speed rather than jumping, so a stepped sweep is smooth', () => {
+    // A dyno pull hands the note its measured points about ten times a second.
+    const m = model(geom({ configuration: 'I6', cyl: 6, displacementL: 3.0 }), 'glide');
+    run(m, { rpm: 3000 }, 0.5);
+    const after = run(m, { rpm: 4000 }, 0.3).map((e) => e.gapSeconds);
+    const at = (rpm) => 120 / rpm / 6;
+    expect(after[0]).toBeLessThan(at(3000) * 1.02);
+    expect(after[0]).toBeGreaterThan(at(4000) * 1.05);
+    expect(after.at(-1)).toBeLessThan(at(4000) * 1.03);
+  });
+
   it('gives each cylinder a fixed share of its own, the same every time it is built', () => {
     const a = model(geom(), 'a').a.trims;
     const b = model(geom(), 'b').a.trims;
