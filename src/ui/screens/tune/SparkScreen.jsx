@@ -38,9 +38,11 @@ import styles from './SparkScreen.module.css';
 /**
  * @param {object} props
  * @param {CalAdvice} props.calAdvice the shell's — also read by the FUEL screen
+ * @param {React.ReactNode} [props.children] the engine management settings that belong
+ *   with this table, shown under it
  * @returns {React.ReactElement}
  */
-export function SparkScreen({ calAdvice }) {
+export function SparkScreen({ calAdvice, children }) {
   const [tune, dispatch] = useTune();
   const { timing, selection, rangeMode } = tune;
   /** @param {Selection|null} value */
@@ -72,6 +74,7 @@ export function SparkScreen({ calAdvice }) {
             Combustion is not instant — the flame front takes time to burn through the mixture. Timing decides when the burn starts so peak cylinder pressure lands just after top dead center, where it does useful work. Advance too far and pressure peaks before the piston is ready, fighting the crank and risking knock; retard too far and you are burning fuel after the piston has already started down, wasting it as heat. MBT is the earliest timing that still lands the burn right — past it, more advance buys almost nothing, only risk.
             <br /><br /><b className={styles.emInk}>As a beginner:</b> nudge one cell 1-2° at a time, run a pull, and read the log. If it comes back clean with no knock event, you probably still have room. If you see a knock warning, that cell is your new ceiling — back off to what the log suggests and move on.
           </ExpandableInfo>
+          {children}
         </div>
         <AdvisorPanel headline={report.headline} tone={report.tone}>
           <TuneAdvisory kind="timing" report={report} />

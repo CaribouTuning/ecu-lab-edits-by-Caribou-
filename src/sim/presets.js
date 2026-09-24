@@ -27,6 +27,8 @@ import { exhaustManifoldKpa } from './friction.js';
 import { bestPowerAfr, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
+import { defaultEcuCalibration } from './ecu/calibration.js';
+import { DEFAULT_ECU_HW } from './ecu/context.js';
 import { deriveEngine } from './engine.js';
 import { clamp, interp2 } from './math.js';
 import {
@@ -599,6 +601,9 @@ export function applyPreset(preset) {
     octaneIdx: preset.parts.octaneIdx,
     exhaustDiaIdx: preset.parts.exhaustDiaIdx,
     ve, timing, afr,
+    // The engine management a factory ships with: its knock threshold is set to this
+    // engine's own valvetrain noise, which is why a preset carries its own.
+    ecu: defaultEcuCalibration({ derived: deriveEngine(preset.engine), gate: DEFAULT_ECU_HW.gate }),
   };
 }
 

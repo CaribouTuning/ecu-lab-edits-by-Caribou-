@@ -16,6 +16,7 @@ import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { eventBands } from '../../components/eventBands.js';
 import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
+import { CorrectionStack } from '../../components/ecu/CorrectionStack.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
@@ -232,6 +233,27 @@ export function DataScreen() {
           </div>
         )}
         <PairRows point={shown} />
+        {shown.breakdown && (
+          <div className={styles.ecu} data-testid="ecu-readout">
+            <div className={styles.ecuHead}>ENGINE MANAGEMENT AT THIS POINT</div>
+            <p className={styles.ecuNote}>
+              {!shown.protect?.length && !(shown.knockPull > 0) && !(shown.knockUnheard > 0.3) && !(shown.misfire > 5)
+                ? 'Nothing stepped in here: the engine ran your tables as written.'
+                : 'Something stepped in here. The amber and red tiles say what; the lists below show exactly how each value was changed.'}
+            </p>
+            <div className={styles.gauges}>
+              <StatTile label="KNOCK RETARD" value={shown.knockPull.toFixed(1)} unit="°" tone={shown.knockPull > 0 ? 'warn' : 'neutral'} />
+              <StatTile label="UNHEARD KNOCK" value={(shown.knockUnheard ?? 0).toFixed(1)} unit="°" tone={shown.knockUnheard > 0.3 ? 'danger' : 'neutral'} />
+              {shown.boostTarget > 0 && <StatTile label="BOOST TARGET" value={shown.boostTarget} unit="psi" />}
+              {shown.boostTarget > 0 && <StatTile label="WASTEGATE" value={shown.wgDuty} unit="%" />}
+              <StatTile label="FUEL ΔP" value={shown.railDp} unit="kPa" tone={shown.fuelStarved ? 'danger' : 'neutral'} />
+              <StatTile label="MISFIRE" value={shown.misfire} unit="%" tone={shown.misfire > 5 ? 'danger' : 'neutral'} />
+              {(shown.camIn > 0 || shown.camEx > 0) && <StatTile label="CAMS IN / EX" value={`${shown.camIn} / ${shown.camEx}`} unit="°" />}
+              <StatTile label="PROTECTIONS" value={shown.protect?.length ? shown.protect.join(', ') : 'none'} tone={shown.protect?.length ? 'warn' : 'ok'} />
+            </div>
+            <CorrectionStack breakdown={shown.breakdown} result={{ timing: shown.timing, lambda: shown.lambda }} />
+          </div>
+        )}
       </div>
 
       <ExpandableInfo title="How to read a datalog">

@@ -215,4 +215,10 @@ describe('the Learn guide', () => {
     render(<LearnScreen active onToggle={() => {}} />);
     expect(screen.getByText('Symbol key — plain-English version')).toBeTruthy();
   });
+
+  it('explains what the dyno\'s two numbers are before its reading list', () => {
+    render(<LearnScreen active onToggle={() => {}} />);
+    expect(screen.getByText('37. Horsepower and torque: two views of one number')).toBeTruthy();
+    expect(screen.getByText('38. Further reading on engine management')).toBeTruthy();
+  });
 });
