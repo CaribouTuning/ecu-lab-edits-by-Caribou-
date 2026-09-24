@@ -64,13 +64,14 @@
 const MEASURED_BUILD_KEYS = [
   'engineConfig', 'mods', 'turboOn', 'boostCurve', 'octaneIdx', 'injIdx', 'mafScalar',
   'turbineIdx', 'turbineCount', 'compressorIdx', 'exhaustDiaIdx', 'ecuInjectorCc',
+  'fuelSystem', 'sensorHw', 'wastegate', 'coil', 'plugGapMm', 'ethanolPct',
 ];
 
 /**
  * The three calibration tables. `tablesDirty` and `selection` are the TUNE slice's
  * other two fields and neither reaches the simulation.
  */
-const MEASURED_TUNE_KEYS = ['ve', 'timing', 'afr'];
+const MEASURED_TUNE_KEYS = ['ve', 'timing', 'afr', 'ecu'];
 
 /**
  * Display names for every measured input, for the run-history timeline's "what
@@ -91,6 +92,13 @@ const INPUT_LABELS = {
   compressorIdx: 'compressor',
   exhaustDiaIdx: 'exhaust',
   ecuInjectorCc: 'ECU injector size',
+  fuelSystem: 'fuel system',
+  sensorHw: 'sensors fitted',
+  wastegate: 'wastegate',
+  coil: 'ignition coils',
+  plugGapMm: 'plug gap',
+  ethanolPct: 'ethanol content',
+  ecu: 'ECU calibration',
   ve: 'VE table',
   timing: 'timing table',
   afr: 'AFR table',
@@ -111,13 +119,18 @@ const INPUT_LABELS = {
  * @param {import('./initialState.js').BuildState} build
  * @param {import('./initialState.js').TuneState} tune
  * @param {number} loadKpa the manifold pressure the sweep is run at
+ * @param {object} [conditions] ambient conditions and injected faults
  * @returns {string} equal for two configurations iff every measured input is equal
  */
-export function pullSignature(build, tune, loadKpa) {
+export function pullSignature(build, tune, loadKpa, conditions) {
   return JSON.stringify([
     MEASURED_BUILD_KEYS.map((k) => /** @type {any} */ (build)[k]),
     MEASURED_TUNE_KEYS.map((k) => /** @type {any} */ (tune)[k]),
     loadKpa,
+    // The day and any injected fault change what the dyno measures as surely as the
+    // build does. Only appended when given, so a signature taken without them is the
+    // one it always was.
+    ...(conditions ? [conditions] : []),
   ]);
 }
 

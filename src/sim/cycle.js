@@ -154,6 +154,9 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} octaneNumber fuel antiknock index
  * @property {number} [lambda] delivered lambda; sets how hot the flame behind the
  *   front runs, which heats the end gas on top of compression
+ * @property {number} [evoAtdc] exhaust valve open, degrees after TDC firing. A retarded
+ *   exhaust cam opens it later, so the gas does more work on the piston before it
+ *   leaves. Defaults to {@link EVO_ATDC}
  */
 
 /**
@@ -178,7 +181,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
-  boreM, strokeM, trappedMassKg,
+  boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
   const thetaStart = -180 + ivcAbdc;
@@ -243,7 +246,7 @@ export function runCycle({
     return 1 - Math.exp(-COEFF.WIEBE_A * Math.pow(x, COEFF.WIEBE_M + 1));
   };
 
-  for (let theta = thetaStart; theta < EVO_ATDC; theta += step) {
+  for (let theta = thetaStart; theta < evoAtdc; theta += step) {
     const thetaNext = theta + step;
     const vNext = cylinderVolumeM3(thetaNext, clearanceM3, sweptM3, rodRatio);
     const burned = burnedFraction(thetaNext);
@@ -505,19 +508,29 @@ export function trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3 }) {
  * @param {number} input.lambda delivered lambda
  * @param {{lhv: number, octane: number, stoich: number}} input.fuel
  * @param {import('./engine.js').DerivedEngine} input.derived
+ * @param {{intakeAdvDeg?: number, exhaustRetDeg?: number}} [input.cam] where the cam
+ *   phasers have put the camshafts, crank degrees from their parked position. Advancing
+ *   the intake closes the intake valve earlier (more effective compression, more
+ *   trapped charge at low speed) and opens it earlier into the exhaust stroke (more
+ *   overlap). Retarding the exhaust holds it open later into the intake stroke (more
+ *   overlap) and opens it later on the power stroke (more expansion). Absent, the cams
+ *   sit where the grind put them, which is every engine without phasers
  * @returns {CycleInput & {residualFrac: number, trappedK: number, effectiveCr: number}}
  */
 export function cycleInputsFor({
-  rpm, mapKpa, empKpa, intakeK, airChargeG, burnedFuelG, fuelMassG, lambda, fuel, derived,
+  rpm, mapKpa, empKpa, intakeK, airChargeG, burnedFuelG, fuelMassG, lambda, fuel, derived, cam,
 }) {
   const fuelIn = fuelMassG ?? burnedFuelG;
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
   const clearanceM3 = sweptM3 / (derived.compression - 1);
-  const ivcAbdc = ivcAfterBdcDeg(derived.camDuration);
+  const intakeAdv = cam?.intakeAdvDeg ?? 0;
+  const exhaustRet = cam?.exhaustRetDeg ?? 0;
+  const ivcAbdc = ivcAfterBdcDeg(derived.camDuration) - intakeAdv;
   const vIvc = cylinderVolumeM3(-180 + ivcAbdc, clearanceM3, sweptM3, COEFF.ROD_RATIO);
+  const overlapDeg = Math.max(0, (derived.overlapDeg || 0) + intakeAdv + exhaustRet);
 
   const residualFrac = residualFraction({
-    mapKpa, empKpa, overlapDeg: derived.overlapDeg || 0, compression: derived.compression,
+    mapKpa, empKpa, overlapDeg, compression: derived.compression,
   });
   // Fuel evaporating into the charge cools it before anything else happens to it, so a
   // richer mixture starts compression colder and a leaner one starts hotter.
@@ -565,6 +578,9 @@ export function cycleInputsFor({
     lambda,
     residualFrac,
     effectiveCr: vIvc / clearanceM3,
+    // Only carried when a phaser has moved the exhaust cam, so a fixed-cam engine's
+    // cycle inputs are exactly what they always were.
+    ...(exhaustRet ? { evoAtdc: EVO_ATDC + exhaustRet } : {}),
   };
 }
 

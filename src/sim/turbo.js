@@ -83,12 +83,13 @@ export function compressorMap(compressor, flowKgS, pressureRatio) {
  * @param {number} exhaustFlowKgS mass flow through the turbine
  * @param {number} exhaustK exhaust temperature entering the turbine
  * @param {number} effectiveAreaM2 turbine effective flow area
+ * @param {number} [baroKpa] pressure the turbine exhausts to — the day's barometer
  * @returns {number} exhaust manifold pressure, kPa
  */
-export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2) {
+export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2, baroKpa = BARO_KPA) {
   const flowParam = (exhaustFlowKgS * Math.sqrt(Math.max(exhaustK, 1)))
     / Math.max(effectiveAreaM2, 1e-9);
-  return BARO_KPA + flowParam * COEFF.TURBINE_FLOW_TO_KPA;
+  return baroKpa + flowParam * COEFF.TURBINE_FLOW_TO_KPA;
 }
 
 /**
@@ -103,13 +104,15 @@ export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2
  * @param {{turbineEff: number}} input.turbine
  * @param {object} input.compressor a COMPRESSOR_OPTS entry, read through {@link compressorMap}
  * @param {number} [input.currentPr] pressure ratio to evaluate the map at
+ * @param {number} [input.baroKpa] ambient pressure both wheels work against
  * @returns {{boostPsi: number, map: ReturnType<typeof compressorMap>}}
  */
 export function achievableBoostPsi({
   airFlowKgS, fuelFlowKgS, exhaustK, intakeK, empKpa, turbine, compressor, currentPr = 1,
+  baroKpa = BARO_KPA,
 }) {
   const exhaustFlowKgS = airFlowKgS + fuelFlowKgS;
-  const expansionRatio = Math.max(1, empKpa / BARO_KPA);
+  const expansionRatio = Math.max(1, empKpa / baroKpa);
   // Work the turbine can pull out of that expansion.
   const turbineW = exhaustFlowKgS * COEFF.CP_EXHAUST * exhaustK
     * (1 - Math.pow(expansionRatio, -GAMMA_EXP)) * turbine.turbineEff
@@ -121,7 +124,7 @@ export function achievableBoostPsi({
   const specificWork = (turbineW * map.eff)
     / (airFlowKgS * COEFF.CP_AIR * Math.max(intakeK, 1));
   const pressureRatio = Math.pow(1 + specificWork, 1 / GAMMA_EXP);
-  return { boostPsi: Math.max(0, (pressureRatio - 1) * BARO_KPA / PSI_TO_KPA), map };
+  return { boostPsi: Math.max(0, (pressureRatio - 1) * baroKpa / PSI_TO_KPA), map };
 }
 
 /**
@@ -143,19 +146,29 @@ export function achievableBoostPsi({
  * @param {(boostPsi: number) => number} input.intakeKAt charge temperature at a boost level
  * @param {number} input.lambda delivered lambda, for exhaust mass and temperature
  * @param {number} input.exhaustK turbine inlet temperature
+ * @param {number} [input.baroKpa] the day's barometric pressure. At altitude a wide-open
+ *   throttle only reaches the barometer, and the turbo has to make its pressure ratio
+ *   from there
+ * @param {boolean} [input.targetIsFinal] the boost controller has already turned the
+ *   driver's request into a wastegate ceiling, so the stock throttle² scaling below must
+ *   not be applied a second time
  * @returns {{mapKpa: number, boostPsi: number, empKpa: number, throttleFrac: number,
  *   spool: number, boostShortfallPsi: number, compressorEff: number, surge: boolean,
  *   choke: boolean, mapMargin: number}}
  */
 export function solveInduction({
   rpm, loadKpa, turboOn, boostTargetPsi, turbine, compressor,
-  veAt, derived, intakeKAt, lambda, exhaustK,
+  veAt, derived, intakeKAt, lambda, exhaustK, baroKpa = BARO_KPA, targetIsFinal = false,
 }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
-  const throttledKpa = Math.min(loadKpa, BARO_KPA);
+  // `loadKpa` is the throttle expressed as the sea-level manifold pressure it would give,
+  // so at altitude the same opening gives proportionally less. At sea level this is
+  // exactly min(loadKpa, BARO_KPA).
+  const throttledKpa = baroKpa === BARO_KPA ? Math.min(loadKpa, BARO_KPA) : throttleFrac * baroKpa;
   // The throttle plate still gates a turbo engine: closed throttle means no flow to
   // compress, whatever the turbine could theoretically do.
-  const target = turboOn ? Math.max(0, boostTargetPsi) * Math.pow(throttleFrac, 2) : 0;
+  const target = turboOn
+    ? Math.max(0, boostTargetPsi) * (targetIsFinal ? 1 : Math.pow(throttleFrac, 2)) : 0;
 
   const airFlowAt = (mapKpa, boostPsi) => {
     const chargeK = intakeKAt(boostPsi);
@@ -167,19 +180,19 @@ export function solveInduction({
 
   let boostPsi = target;
   let mapKpa = throttledKpa + boostPsi * PSI_TO_KPA;
-  let empKpa = BARO_KPA;
+  let empKpa = baroKpa;
   let mapState = compressorMap(compressor, 0, 1);
 
   for (let i = 0; i < COEFF.INDUCTION_SOLVE_PASSES; i += 1) {
     const airFlowKgS = airFlowAt(mapKpa, boostPsi);
     const fuelFlowKgS = airFlowKgS / Math.max(1, lambda * COEFF.EXHAUST_STOICH_REF);
     empKpa = turboOn
-      ? turbineBackPressureKpa(airFlowKgS + fuelFlowKgS, exhaustK, turbine.effectiveAreaM2)
-      : BARO_KPA + (airFlowKgS * COEFF.EXHAUST_SYSTEM_KPA_PER_KGS);
+      ? turbineBackPressureKpa(airFlowKgS + fuelFlowKgS, exhaustK, turbine.effectiveAreaM2, baroKpa)
+      : baroKpa + (airFlowKgS * COEFF.EXHAUST_SYSTEM_KPA_PER_KGS);
     if (!turboOn) { boostPsi = 0; mapKpa = throttledKpa; break; }
     const solved = achievableBoostPsi({
       airFlowKgS, fuelFlowKgS, exhaustK, intakeK: intakeKAt(boostPsi),
-      empKpa, turbine, compressor, currentPr: mapKpa / BARO_KPA,
+      empKpa, turbine, compressor, currentPr: mapKpa / baroKpa, baroKpa,
     });
     const canMake = solved.boostPsi;
     mapState = solved.map;
@@ -202,9 +215,9 @@ export function solveInduction({
   // turbine, so the engine does not pay the full backpressure the turbine would need to
   // pass everything. That is precisely why a bigger turbine on a wastegated setup is
   // worth power even at the same boost.
-  if (turboOn && empKpa > BARO_KPA) {
+  if (turboOn && empKpa > baroKpa) {
     const gateOpen = target > 0 ? clamp(1 - boostPsi / target, 0, 1) : 0;
-    empKpa = BARO_KPA + (empKpa - BARO_KPA) * (1 - gateOpen * COEFF.WASTEGATE_RELIEF);
+    empKpa = baroKpa + (empKpa - baroKpa) * (1 - gateOpen * COEFF.WASTEGATE_RELIEF);
   }
 
   return {
