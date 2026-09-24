@@ -23,7 +23,7 @@
 import React, { useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Grid3x3, Zap, Droplets, Activity, Play,
-  Settings, TrendingUp, Fuel,
+  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind,
 } from 'lucide-react';
 
 import {
@@ -35,7 +35,8 @@ import {
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
   deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, isLocatable, presetById,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
-  veRecommendations
+  veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
+  veTruthByPhaseFor, read1,
 } from '../sim/index.js';
 import {
   beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -76,6 +77,9 @@ import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
 import { FuelScreen } from './screens/tune/FuelScreen.jsx';
 import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
 import { SensorsScreen } from './screens/tune/SensorsScreen.jsx';
+import { EcuControlScreen } from './screens/tune/EcuControlScreen.jsx';
+import { EcuSection } from './components/ecu/EcuSection.jsx';
+import { MapSlots } from './components/ecu/MapSlots.jsx';
 import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
@@ -91,7 +95,7 @@ const JOURNEY = [
     body: 'Open Engine Architecture and design a short block: bore, stroke, compression, cam, springs. Then fit parts under Induction and Exhaust. Nothing here is cosmetic — every choice changes how the engine breathes.',
     cta: 'Done building — go tune it', next: 'tune' },
   { tab: 'tune', title: 'Step 2 · Calibrate it',
-    body: 'AIR is your airflow log — if it is stale after your build, accept the re-logged values. Then SPARK sets ignition timing and FUEL sets the mixture. The advisories tell you what your hardware will tolerate; the editing is yours.',
+    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, accept the re-logged values. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now.',
     cta: 'Calibration set — start the engine', next: 'live' },
   { tab: 'live', title: 'Step 3 · Start it and listen',
     body: 'Press START. Watch it idle, hold the throttle to rev it, and watch the sensors and fuel trims respond in real time. This is your calibration actually running.',
@@ -167,45 +171,39 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
 
 const TUTORIAL_STEPS = [
   { title: 'This is an air pump',
-    body: 'An engine makes power by burning fuel, and it can only burn as much fuel as it has air to burn it with. So everything starts with airflow. The ECU measures the air, decides how much fuel to inject, and picks the moment to light it. Tuning is adjusting those last two decisions.' },
-  { title: 'The one equation everything rests on',
-    body: 'The ECU works out how much air is in the cylinder using the ideal gas law:\n\n    ρ = MAP ÷ (R × T)\n    airCharge = VE × V_cylinder × ρ\n\nMAP is manifold pressure, T is charge temperature in kelvin, R is a constant for air. VE — volumetric efficiency — is how completely the cylinder fills. That last number is the one you tune on the AIR table.' },
-  { title: 'Why the AIR table changes your power',
-    body: 'Raise a VE cell and the ECU believes more air is present, so it injects more fuel, so more energy is released and torque goes up. But VE is not a wish — it describes what the hardware actually does. Put in a number the engine cannot deliver and the mixture goes wrong, because the ECU is now fuelling for air that is not there.' },
-  { title: 'Fuel follows from air, not the other way round',
-    body: 'Once air mass is known, fuel is pure arithmetic:\n\n    fuelMass = airCharge ÷ (λ × stoichRatio)\n\nλ (lambda) is your mixture target from the FUEL table. Best power is about λ0.87, richer under boost. stoichRatio is a property of the fuel: 14.7 for gasoline, 9.8 for E85 — which is why E85 needs roughly 1.5× the fuel mass for the same lambda.' },
-  { title: 'The ECU commands time, not fuel',
-    body: 'It converts fuel mass into an injector pulse width:\n\n    PW = fuelMass ÷ (injectorCC × density ÷ 60000) + deadtime\n    cycleTime = 120000 ÷ RPM\n    duty% = PW ÷ cycleTime × 100\n\nAt 7500 RPM a cycle is only 16 ms. Past about 90% duty there is no time left, and the mixture goes lean no matter what your FUEL table says. That is a physical wall, not a calibration choice.' },
-  { title: 'Spark decides how much of that energy you keep',
-    body: 'Fuel burns over a few milliseconds, so you light it before top dead center and aim for peak pressure just after. Too early and pressure fights the rising piston; too late and you are burning into an escaping piston.\n\n    timingEff = 1 − 0.0016 × (yourTiming − MBT)²\n\nThat is why the SPARK table changes power without changing a single thing about airflow — it changes how much of the same burn reaches the crank.' },
-  { title: 'Knock is the limit on all of it',
-    body: 'The end gas can self-ignite from heat and pressure before the flame reaches it. The sim predicts that from charge mass, octane, compression, intake temperature and mixture. Ask for more timing than the engine will tolerate and the ECU pulls it back — you see commanded and actual diverge in the datalog, and the power you thought you gained disappears.' },
-  { title: 'Where the horsepower number actually comes from',
-    body: 'Nothing in this sim adds horsepower directly. Torque is derived last:\n\n    IMEP = fuelMass × LHV × η × timingEff × afrEff ÷ V_cyl\n    BMEP = IMEP − FMEP\n    torque = BMEP × Vd ÷ 4π\n\nη comes from your compression ratio. FMEP is what the engine spends on friction, pumping and valve springs. Change anything upstream and the dyno number changes — exactly like a real engine.' },
-  { title: 'So what is tuning?',
-    body: 'Tuning is finding, for every RPM and load point, the most timing and the best mixture the engine will tolerate without knocking or running out of fuel. Too conservative and you leave torque on the table. Too aggressive and you damage it. The optimum is a narrow band, and it moves the instant you change hardware.' },
+    body: 'An engine can only burn as much fuel as it has air for. So everything starts with air. The ECU works out the air, decides how much fuel to add, and picks the moment to light it.\n\nTuning is getting those last two decisions right at every speed and load.\n\n→ You will do that on three tables. The rest of this tutorial shows you which, and how to check your work.' },
+  { title: 'Air: how full the cylinder gets',
+    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIR table should match what the engine really breathes. After a hardware change, accept the re-logged values.' },
+  { title: 'Fuel: follows from the air',
+    body: 'Once the air is known, fuel is arithmetic:\n\n    fuel = air ÷ (λ × 14.7)\n\nλ (lambda) is the mixture you ask for on the FUEL table. 1.00 is exactly enough air to burn the fuel. About 0.87 makes the most power, and a boosted engine runs richer, 0.78–0.82, to keep cool.\n\nThe injectors can only be open so long: past about 90% duty there is no time left, and no table can fix that.\n\n→ Set the FUEL table. If the log says the injectors are maxed, you need bigger injectors or less boost.' },
+  { title: 'Spark: when to light it',
+    body: 'The mixture takes a few milliseconds to burn, so the spark fires before the piston reaches the top. Fire too late and the burn chases a piston that is already leaving. Fire too early and the pressure pushes against a piston still coming up.\n\nThe best point is called MBT. Past it, extra advance makes no more power.\n\n→ On SPARK, find the timing where power stops rising. Stop there, or earlier if the engine knocks.' },
+  { title: 'Knock: the limit on everything',
+    body: 'Too much advance, heat or pressure and the last of the mixture explodes on its own instead of burning smoothly. That is knock, and it breaks pistons.\n\nThe ECU listens for it and takes timing out. The datalog shows it as commanded timing and actual timing drifting apart.\n\n→ Aim for zero knock. If the log shows knock, take timing out of those cells, or add fuel there, or use better fuel.' },
+  { title: 'Where the power number comes from',
+    body: 'Nothing here adds horsepower directly. The simulator follows the pressure inside one cylinder through the whole cycle, two crank degrees at a time, and adds up the work it does on the piston. Friction and breathing losses come off. What is left is torque.\n\n    hp = lb-ft × RPM ÷ 5252\n\nSo power only changes when something real changes: more air, the right fuel, better-timed spark.' },
   { title: 'Design it on BUILD',
-    body: 'Bore, stroke, compression, cam duration, valve springs, materials, turbo, exhaust. None of it is cosmetic — every choice feeds the physics. Change the cam and watch the VE table on TUNE redraw itself, because that is genuinely what changing a cam does to an engine.' },
+    body: 'Bore, stroke, compression, cam, springs, turbo, exhaust, fuel system. None of it is cosmetic. Every part changes how the engine breathes or what it can survive.\n\n→ Change the cam and watch the AIR table on TUNE redraw itself. That is what a cam really does.' },
   { title: 'Three tables, three jobs',
-    body: 'On TUNE: AIR (volumetric efficiency — how well each cylinder fills), SPARK (ignition timing in degrees before top dead center), FUEL (target air-fuel ratio). Rows are manifold pressure in kPa, columns are RPM — the same axes real speed-density tuning software uses.' },
-  { title: 'Nothing is simulated until you pull',
-    body: 'No preview, no live guess. Press RUN DYNO PULL on DYNO and the engine sweeps 1500 RPM to its own redline, producing a real datalog. That is the only way to find out what your changes did — exactly like a real dyno session.' },
-  { title: 'Read the log before touching anything',
-    body: 'Every pull produces a Pull Log. Each problem gets a plain-language Why (what physically caused it) and a Try (what to change). The datalog next to it shows commanded vs. actual for timing and mixture. A gap between those two columns is the ECU telling you something.' },
-  { title: 'Change one thing, then pull again',
-    body: 'This is the entire method: one change, one pull, read the log, adjust. The VS. LAST PULL line tells you whether it actually helped. Tuners who change three things at once cannot tell which one worked — and tuners who guess instead of logging break engines.' },
+    body: 'On TUNE:\n\nAIR — how well each cylinder fills (VE).\nSPARK — when the plug fires, in degrees before top dead centre.\nFUEL — the mixture you want, as air-fuel ratio.\n\nColumns are RPM, rows are manifold pressure: the same layout real tuning software uses.\n\n→ These three are the tune. Most sessions never need anything else.' },
+  { title: 'Everything else is already set',
+    body: 'Real ECUs have far more: corrections for temperature and altitude, and controllers for boost, cams, idle, knock and protection. They are all on TUNE, under the tables and in the second row of buttons.\n\nEvery one starts at a working factory setting. You do not need to touch them to make a great tune. Change one and an amber dot marks it. The Factory button puts a page back.\n\n→ Leave them alone until a log tells you to go there. Each page says when that is.' },
+  { title: 'The ECU only knows what it measures',
+    body: 'The ECU never sees the truth. It sees sensors, read through the settings it was given. Fit a sensor on BUILD and tell the ECU a different one on TUNE › SENSORS, and it acts on a wrong number without knowing.\n\nThe classic: a 1-bar MAP sensor on a turbo engine. The ECU never sees boost, and fuels too little under it.\n\n→ When you change a sensor on BUILD, match it on TUNE › SENSORS. The page warns you when they differ.' },
+  { title: 'Nothing is known until you pull',
+    body: 'There is no preview. Press RUN DYNO PULL on DYNO and the engine sweeps from 1500 RPM to its redline and records a full datalog. That is the only way to find out what a change did, exactly like a real dyno day.\n\n→ Pull after every change.' },
+  { title: 'Read the log, change one thing, pull again',
+    body: 'Every pull writes a Pull Log. Each problem comes with a plain Why (what caused it) and a Try (what to change).\n\nThen: change one thing, pull, compare. The VS. LAST PULL line tells you whether it helped. Change three things at once and you will not know which one worked.\n\n→ Read the Pull Log before you look at the power number.' },
   { title: 'Know what you cannot tune away',
-    body: 'Knock, mixture and MAF errors are calibration faults — tables fix them completely. Injectors out of duty cycle, valve float, a compressor past its range: those are physical limits, and the log will tell you so. Recognising which kind you are looking at is most of the skill.' },
-  { title: 'You can hear the physics too',
-    body: 'Engine sound here is generated from the same numbers, not sampled. Each cylinder firing schedules an exhaust pulse:\n\n    firingHz = RPM ÷ 60 × cylinders ÷ 2\n\nA cross-plane V8 is even at the crank but not down either pipe — each bank fires at 180, 270, 180 and 90 degrees — and that irregular spacing is what makes it rumble. A V6 fires evenly and rings hard and hornlike. A four fires only twice per revolution, so you hear each pulse separately.\n\nRetard the timing and it turns raspy, because the charge is still burning into the exhaust. Richen it and it softens. Fit a big cam and it lopes. Add a turbo to a small engine and induction noise takes over. Tuners diagnose by ear for a reason — the sound is data.' },
+    body: 'Knock, a wrong mixture and a mis-read airflow sensor are calibration faults. Tables fix them completely.\n\nInjectors out of time, valves floating, a turbo past its limit: those are hardware limits. No table touches them, and the log says so.\n\n→ When the log names a hardware limit, change the part or ask less of it.' },
+  { title: 'Hear it, and watch it run',
+    body: 'The sound is built from the same numbers as the dyno, not recorded. Retard the spark and it turns raspy. Richen it and it softens. A big cam lopes.\n\nOn LIVE the ECU runs in real time. Its log records every channel. Switch on the A/C and watch idle hold. Try launch control. Break a sensor on purpose and see what the protections do.\n\n→ Start the engine on LIVE and rev it before your first pull.' },
   { title: 'Where this physics comes from',
-    body: 'Every relation in this simulator is standard published engineering, and each figure has been checked against a source rather than assumed.\n\nMIT OpenCourseWare 8.21 gives the Otto-cycle efficiency and, critically, the value of gamma to use: about 1.3 for combustion products at cycle temperature, which yields 50% ideal efficiency at a 10:1 compression ratio. This app originally used 1.35 and was corrected to match.\n\nNASA Glenn provides the underlying pressure and temperature relations that efficiency formula derives from. x-engineer.org confirms the foundation the whole model rests on: one engine cycle is two crank rotations, and only the power stroke produces energy.\n\nEvery formula was also checked for unit consistency. Air density resolves to 1.185 kg/m3 at sea level and 25 C against a published 1.184, and injector cycle time derives exactly from two crank revolutions.\n\nThe full source list, including what checking them changed, is under Learn on the HOME tab. If a number here looks wrong to you, go and check it — that instinct has already corrected real errors in this simulator.' },
-  { title: 'Chase the score',
-    body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
-  { title: 'Then put it in a car',
-    body: 'On DRAG the engine goes into a car and runs a quarter mile. Gearing multiplies torque and divides speed by the same factor. Grip sets a ceiling no amount of power passes. Drag rises with the square of speed. That is why trap speed measures power while sixty-foot time measures traction, and why the fastest engine does not always win.' },
+    body: 'Every relation here is published engineering, checked against its source. The cycle uses the ratio of specific heats, γ, of the gas at each stage: 1.35 for fresh charge falling to 1.235 as it burns. That brackets the ~1.3 average textbooks use, which gives the ideal 10:1 engine its 50% efficiency.\n\nAir density comes out at 1.185 kg/m³ at sea level and 25 °C, matching the published figure.\n\n→ The sources are under Learn on HOME. If a number looks wrong, check it. That has fixed real errors here.' },
+  { title: 'Chase the score, then race it',
+    body: 'Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), then combined with real output into a Pull Score with no ceiling.\n\nOn DRAG the engine goes into a car. Trap speed measures power, the 60-foot time measures traction, and the fastest engine does not always win.' },
   { title: 'Ready',
-    body: 'Sandbox lets you build and tune anything with no objectives. Career hands you customer cars with real faults to diagnose. Either way the loop is the same: build it, calibrate it, listen to it, measure it, then do it better.' },
+    body: 'Sandbox: build and tune anything, no objectives. Career: customer cars with real faults to find.\n\nThe loop is always the same: build it, set the three tables, listen to it, pull it, read the log, change one thing.\n\n→ If you are unsure what to do next, run a pull and read the Pull Log. It always tells you.' },
 ];
 
 /**
@@ -316,7 +314,7 @@ export function EcuLabApp() {
   // changed, from setters to dispatches. All three domain slices are in the store now.
   const [build, dispatch] = useBuild();
   const {
-    engineConfig, mods, turboOn, boostCurve, octaneIdx, injIdx, mafScalar,
+    engineConfig, mods, turboOn, boostCurve, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
     presetId,
   } = build;
@@ -346,7 +344,7 @@ export function EcuLabApp() {
     loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
     result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live, car, dragResult, dragRunning, dragT, treePhase,
-    mode, activeJob, completedJobs, jobResult,
+    mode, activeJob, completedJobs, jobResult, env, liveAux, faults,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
   // keeps reading the name it always read — and so a later task can move a tab's markup
@@ -400,7 +398,7 @@ export function EcuLabApp() {
   // preset.
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
 
-  const octaneBonus = OCTANE_OPTS[octaneIdx].bonus;
+  const octaneBonus = tankFuel(build).bonus;
   const engineDerived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
   // The live tach needle used to top out at a hardcoded 7500 — correct only for the
   // one preset whose redline happened to match it. Key it off this engine's own
@@ -418,7 +416,8 @@ export function EcuLabApp() {
     return e;
   }, [mods.intake, turboOn]);
 
-  const fuel = OCTANE_OPTS[octaneIdx];
+  // The fuel actually in the tank: a pump fuel, or whatever blend a flex tank holds.
+  const fuel = useMemo(() => tankFuel(build), [build]);
   const injectorCc = INJECTOR_OPTS[injIdx].cc;
 
   // Every hardware choice that physically changes how the engine breathes feeds the
@@ -452,6 +451,18 @@ export function EcuLabApp() {
   const veTruth = useMemo(
     () => computeHardwareVE(engineConfig, mods, hwForVe),
     [engineConfig, mods, hwForVe],
+  );
+
+  // The engine management's world: the parts it reads and drives, and the day. The
+  // breathing curve is solved at each cam phase the VVT model samples — only once, for
+  // an engine with fixed cams.
+  const ecuHw = useMemo(() => ({
+    ...ecuHardwareOf(build),
+    veTruthByPhase: veTruthByPhaseFor(engineConfig, mods, hwForVe),
+  }), [build, engineConfig, mods, hwForVe]);
+  const ecuBundle = useMemo(
+    () => ({ cal: tune.ecu, hw: ecuHw, cond: dynoConditions(env, faults) }),
+    [tune.ecu, ecuHw, env, faults],
   );
 
   // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
@@ -501,6 +512,7 @@ export function EcuLabApp() {
           fuel: OCTANE_OPTS[0],
         })
         : computeHardwareVE(cfg, nextMods, hw),
+      ecu: defaultEcuCalibration({ derived: deriveEngine(cfg) }),
     });
     changeTab('dyno');
   };
@@ -620,7 +632,10 @@ export function EcuLabApp() {
     // hardware). Either half swapped for the other yields a perfectly plausible table
     // that is wrong.
     const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
-    dispatch({ type: ACTIONS.RESET_TO_STOCK, ve: stockVe });
+    dispatch({
+      type: ACTIONS.RESET_TO_STOCK, ve: stockVe,
+      ecu: defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate }),
+    });
   };
   // The REPAIR button's only handler. Before the extraction this wrote a local
   // `health` that the store never saw, while REPAIR_ENGINE sat in the reducer with no
@@ -669,9 +684,21 @@ export function EcuLabApp() {
   // themselves is whether they are still about the car in front of you. See
   // pullSignature.js for exactly what counts as an input, and what does not.
   const buildSignature = useMemo(
-    () => pullSignature(build, tune, loadKpa),
-    [build, tune, loadKpa],
+    () => pullSignature(build, tune, loadKpa, { env, faults }),
+    [build, tune, loadKpa, env, faults],
   );
+
+  /**
+   * Everything a dyno pull is solved from, in one place, so the drag strip's per-gear
+   * pulls are the same pull at a different gear and nothing else.
+   * @param {number} load
+   * @param {object} ecu
+   */
+  const sweepArgs = (load, ecu) => ({
+    loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
+    fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
+    turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu,
+  });
 
   const doRun = () => {
     const a = ensureAudio();
@@ -682,11 +709,7 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    const r = simulateSweep({
-      loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: OCTANE_OPTS[octaneIdx].label,
-      fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
-    });
+    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
@@ -821,12 +844,28 @@ export function EcuLabApp() {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
 
+    // Boost limited by gear means a different engine in each gear: each gear that is
+    // limited below the curve gets its own full-throttle pull at that gear's boost.
+    const gearLimit = tune.ecu.boost.gearLimit;
+    const peakBoost = turboOn ? Math.max(...boostCurve) : 0;
+    const perGear = turboOn && car.gears.slice(0, car.gearCount).some((_, i) => read1(gearLimit, i + 1) < peakBoost);
+    const cache = new Map();
+    const torqueCurveForGear = perGear ? (g) => {
+      const cap = read1(gearLimit, g);
+      if (cap >= peakBoost) return torqueCurveNm;
+      if (!cache.has(cap)) {
+        cache.set(cap, torqueCurveFromSweep(simulateSweep(sweepArgs(100, { ...ecuBundle, cond: { ...ecuBundle.cond, gear: g } }))));
+      }
+      return cache.get(cap);
+    } : null;
     const res = simulateDragRun({
       car,
       torqueCurveNm,
       redline: engineDerived.redline,
       displacementL: engineDerived.displacementL,
       peakHp: result.peakHp,
+      ecu: { cal: tune.ecu, cyl: engineDerived.cyl },
+      torqueCurveForGear,
     });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragResult', value: res });
     // Recorded WITH the run, never re-derived afterwards: this is what lets the time
@@ -877,6 +916,9 @@ export function EcuLabApp() {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
     compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
+    // The live engine runs its own ECU controllers against the same calibration, with
+    // whatever accessories are switched on.
+    ecu: { ...ecuBundle, aux: liveAux },
   };
   throttleRef.current = throttleInput;
 
@@ -1220,12 +1262,25 @@ export function EcuLabApp() {
   // TUNE's own sub-view switcher below is unrelated: it is a second level of
   // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3 },
-    { id: 'spark', label: 'SPARK', icon: Zap },
-    { id: 'fuel', label: 'FUEL', icon: Droplets },
-    { id: 'injectors', label: 'INJECTORS', icon: Fuel },
-    { id: 'sensors', label: 'SENSORS', icon: Activity },
+    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3, row: 0 },
+    { id: 'spark', label: 'SPARK', icon: Zap, row: 0 },
+    { id: 'fuel', label: 'FUEL', icon: Droplets, row: 0 },
+    { id: 'injectors', label: 'INJECTORS', icon: Fuel, row: 0 },
+    { id: 'sensors', label: 'SENSORS', icon: Activity, row: 0 },
+    { id: 'boost', label: 'BOOST', icon: Gauge, row: 1 },
+    { id: 'vvt', label: 'VVT', icon: RotateCw, row: 1 },
+    { id: 'idle', label: 'IDLE', icon: Timer, row: 1 },
+    { id: 'protect', label: 'PROTECT', icon: ShieldAlert, row: 1 },
+    { id: 'torque', label: 'TORQUE', icon: Crosshair, row: 1 },
   ];
+  // The operating point the table editors mark, while the LIVE engine is running.
+  const liveEcu = live?.ecu;
+  const liveRow = liveEcu?.log?.[liveEcu.log.length - 1];
+  const liveVars = live?.running && liveRow ? {
+    rpm: live.rpm, map: liveEcu.sMap, ect: liveEcu.sEct, iat: liveEcu.sIat, volts: liveEcu.volts,
+    tps: liveEcu.sTps, pedal: throttleInput, maf: live.live?.maf, camIn: liveEcu.camIn,
+    boostTarget: liveEcu.boostTargetRamped, baro: ecuBundle.cond.env.baroKpa,
+  } : null;
 
   if (appView === 'start') {
     return (
@@ -1347,21 +1402,28 @@ export function EcuLabApp() {
           // viewports instead of shrinking below their min-content width and
           // overflowing the column. No media query needed, so this doesn't
           // touch the hand-maintained breakpoint list in tokens.css.
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '14px 16px 0' }}>
-            {TUNE_VIEWS.map((v) => {
-              const on = tuneView === v.id;
-              const Icon = v.icon;
-              return (
-                <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
-                  flex: '1 1 88px', padding: '10px 0 9px', borderRadius: 10, display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 10, letterSpacing: 0.4,
-                  border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
-                  color: on ? T.accInk : T.ink2,
-                }}>
-                  <Icon size={15} />{v.label}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
+            <MapSlots />
+            {/* Two rows: the base tables, then the ECU's control strategies. Five to a
+                row at 60px basis so each row stays one row on a phone. */}
+            {[0, 1].map((rowIdx) => (
+              <div key={rowIdx} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
+                  const on = tuneView === v.id;
+                  const Icon = v.icon;
+                  return (
+                    <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
+                      flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
+                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
+                      color: on ? T.accInk : T.ink2,
+                    }}>
+                      <Icon size={15} />{v.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
 
@@ -1372,15 +1434,45 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {tab === 'tune' && tuneView === 'airflow' && <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} />}
+        {tab === 'tune' && tuneView === 'airflow' && (
+          <AirflowScreen veAdvice={veAdvice} veTruth={veTruth}>
+            <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} />
+          </AirflowScreen>
+        )}
 
-        {tab === 'tune' && tuneView === 'spark' && <SparkScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'spark' && (
+          <SparkScreen calAdvice={calAdvice}>
+            <EcuSection embedded section="spark" title="Spark corrections & knock control" icon={Zap} liveVars={liveVars} />
+          </SparkScreen>
+        )}
 
-        {tab === 'tune' && tuneView === 'fuel' && <FuelScreen calAdvice={calAdvice} />}
+        {tab === 'tune' && tuneView === 'fuel' && (
+          <FuelScreen calAdvice={calAdvice}>
+            <EcuSection embedded section="fuel" title="Fuel strategy & enrichment" icon={Droplets} liveVars={liveVars} />
+          </FuelScreen>
+        )}
 
-        {tab === 'tune' && tuneView === 'injectors' && <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc} />}
+        {tab === 'tune' && tuneView === 'injectors' && (
+          <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc}>
+            <div style={{ padding: '0 16px' }}>
+              <EcuSection embedded section="injectors" title="Injector characterisation" icon={Fuel} liveVars={liveVars} />
+            </div>
+          </InjectorsScreen>
+        )}
 
-        {tab === 'tune' && tuneView === 'sensors' && <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result} />}
+        {tab === 'tune' && tuneView === 'sensors' && (
+          <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result}>
+            <div style={{ padding: '0 16px' }}>
+              <EcuSection embedded section="sensors" title="Sensor calibration" icon={Activity} liveVars={liveVars} />
+            </div>
+          </SensorsScreen>
+        )}
+
+        {tab === 'tune' && ['boost', 'vvt', 'idle', 'protect', 'torque'].includes(tuneView) && (() => {
+          const v = TUNE_VIEWS.find((x) => x.id === tuneView);
+          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management' };
+          return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
+        })()}
 
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (

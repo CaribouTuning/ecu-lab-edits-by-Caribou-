@@ -13,6 +13,8 @@ import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { RPM } from './tables.js';
+import { ecuSweepEvents } from './ecu/ecuEvents.js';
+import { ecuSteadyPoint } from './ecu/strategy.js';
 
 /** Lowest engine speed of a dyno pull, RPM. */
 export const SWEEP_START_RPM = 1500;
@@ -69,13 +71,21 @@ export function mafErrorFactor(mods, turboOn) {
 /**
  * Runs a full dyno pull and produces the datalog, event log, wear and peak figures.
  *
+ * With `ecu`, every point is solved with the engine management in the loop — boost
+ * control, cam phasing, knock control, sensors, protections — by `ecuSteadyPoint`, and
+ * the log gains the ECU's own events. Without it, the ECU is the ideal one the model has
+ * always assumed, and the result is exactly what it always was.
+ *
+ * `input.ecu`, when given, is `{cal, hw, cond}` — the calibration, the
+ * `EcuHardware` and the `EcuConditions` of `src/sim/ecu/strategy.js`.
+ *
  * @param {object} input
  * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean}}
  */
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor,
+  turbine, compressor, ecu = null,
 }) {
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
@@ -84,7 +94,21 @@ export function simulateSweep({
 
   const points = [];
   const endRpm = derived.redline ?? SWEEP_END_RPM;
+  const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
+  const ecuHw = ecu ? {
+    ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
+    injectorCc, ecuInjectorCc, mafScalar, fuel,
+    veTruthByPhase: ecu.hw.veTruthByPhase ?? [veTruth ?? ve],
+  } : null;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
+    if (ecu) {
+      // The limiter cuts before the pull gets there: those points are never reached.
+      if (rpm >= hardCut) break;
+      points.push(ecuSteadyPoint({
+        cal: ecu.cal, hw: ecuHw, cond: ecu.cond, tables: { ve, timing, afr }, rpm, loadKpa,
+      }));
+      continue;
+    }
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
     // Boost is solved from the turbine/compressor power balance, not ramped in on engine
     // speed. The target is a wastegate ceiling: ask for more than the hardware can make
@@ -129,6 +153,9 @@ export function simulateSweep({
     if (p.pressureRisk) {
       pistonWear += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
     }
+    // Knock nobody corrected: the ECU could not hear it, so it ran on, and it is charged
+    // at twice the rate of knock the controller caught and pulled.
+    if (p.knockUnheard > 0) pistonWear += p.knockUnheard * COEFF.WEAR_KNOCK * 2;
   });
   const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
   const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
@@ -319,6 +346,10 @@ export function simulateSweep({
       cause: `Peak cylinder pressure is carried by the rod into the rod and main bearings on every firing stroke, knock or no knock. ${turboOn ? `${avgBoost.toFixed(1)} psi of average boost against ` : `Running this much load against `}${derived.compression.toFixed(1)}:1 static compression is what puts it there — compression multiplies manifold pressure, so both halves of that pair count.`,
       fix: `Back off boost, or lower static compression, unless the bottom end has been built for it. An iron block holds its main bores rounder under this load than an aluminium one, and either way there is no calibration change that removes the force — only ones that reduce it.`,
     });
+  }
+
+  if (ecu) {
+    events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm }));
   }
 
   events.sort((a, b) => (b.impact ?? b.severity) - (a.impact ?? a.severity));
