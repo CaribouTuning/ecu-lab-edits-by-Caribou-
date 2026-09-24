@@ -197,7 +197,7 @@ export function DragScreen({ section, onToggle, result, engineDerived, onRun }) 
 
             <ExpandableInfo title="Why the same engine is not the same car">
               Nothing here is a handicap number — every figure is a term in an equation that is already running.
-              <br /><br /><b className={styles.em}>Mass</b> divides straight into acceleration (a = F ÷ m), and it also has to be spun up through the gearing, so it costs twice.
+              <br /><br /><b className={styles.em}>Mass</b> divides straight into acceleration (a = F ÷ m). On top of the car's own mass, the engine and gearbox have to be spun up through the gearing, which acts like extra weight — most of all in first, where the ratio is highest.
               <br /><br /><b className={styles.em}>Cd × frontal area</b> is drag, and it grows with the square of speed. Almost nothing at the line, everything at the trap — which is why a van gives up far more trap speed than ET against a coupe.
               <br /><br /><b className={styles.em}>Centre of gravity height and wheelbase</b> set weight transfer, ΔN = m·a·h ÷ L. A tall van transfers more load rearward than a low supercar, which genuinely helps it hook up — one of the few things working in its favour.
               <br /><br /><b className={styles.em}>Static rear weight</b> is how much grip you start with before any transfer at all. A mid-engined supercar begins with 57% over the driven axle; a pickup has 38%.

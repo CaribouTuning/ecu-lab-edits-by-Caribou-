@@ -16,15 +16,22 @@ import { clamp } from './math.js';
 /**
  * Intake charge temperature after compression and (optionally) intercooling.
  *
+ * The day's air is an input, not a constant: `env` carries the ambient temperature and
+ * barometric pressure the compressor starts from. Left out, it is the sea-level 25 °C
+ * day the rest of the model was built on, so every existing caller is unchanged.
+ *
  * @param {number} boostPsi gauge boost pressure, psi
  * @param {boolean} intercooler whether an intercooler is fitted
+ * @param {{ambientK?: number, baroKpa?: number}} [env] ambient conditions
  * @returns {number} charge temperature, K
  */
-export function chargeTempK(boostPsi, intercooler) {
-  if (boostPsi <= 0) return AMBIENT_K;
-  const pressureRatio = (BARO_KPA + boostPsi * PSI_TO_KPA) / BARO_KPA;
-  const tCompressed = AMBIENT_K * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF);
-  return intercooler ? AMBIENT_K + (tCompressed - AMBIENT_K) * (1 - IC_EFFECTIVENESS) : tCompressed;
+export function chargeTempK(boostPsi, intercooler, env) {
+  const ambientK = env?.ambientK ?? AMBIENT_K;
+  const baroKpa = env?.baroKpa ?? BARO_KPA;
+  if (boostPsi <= 0) return ambientK;
+  const pressureRatio = (baroKpa + boostPsi * PSI_TO_KPA) / baroKpa;
+  const tCompressed = ambientK * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF);
+  return intercooler ? ambientK + (tCompressed - ambientK) * (1 - IC_EFFECTIVENESS) : tCompressed;
 }
 
 /**
@@ -81,12 +88,16 @@ export function trappedChargeK(intakeK, residualFrac) {
  *
  * @param {number} fuelMassG fuel delivered to the cylinder, grams
  * @param {number} airMassG air trapped in the cylinder, grams
- * @param {{stoich: number}} fuel
+ * A blended fuel (a flex-fuel tank at, say, E40) carries its own `latentHeat`, mixed
+ * from its components by mass; the four pump fuels do not, and fall back to the
+ * gasoline/ethanol split on stoichiometric ratio they have always used.
+ *
+ * @param {{stoich: number, latentHeat?: number}} fuel
  * @returns {number} temperature drop, K
  */
 export function evaporativeCoolingK(fuelMassG, airMassG, fuel) {
-  const latent = fuel.stoich < COEFF.FUEL_ETHANOL_STOICH_MAX
-    ? COEFF.FUEL_LATENT_HEAT_ETHANOL : COEFF.FUEL_LATENT_HEAT_GASOLINE;
+  const latent = fuel.latentHeat ?? (fuel.stoich < COEFF.FUEL_ETHANOL_STOICH_MAX
+    ? COEFF.FUEL_LATENT_HEAT_ETHANOL : COEFF.FUEL_LATENT_HEAT_GASOLINE);
   const heatJ = (fuelMassG / 1000) * latent * COEFF.FUEL_EVAP_IN_CYLINDER;
   return heatJ / Math.max(1e-6, (airMassG / 1000) * COEFF.CHARGE_CP);
 }

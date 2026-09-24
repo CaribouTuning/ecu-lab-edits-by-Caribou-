@@ -25,6 +25,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
+import { LiveEcuPanel } from './LiveEcuPanel.jsx';
 import styles from './LiveScreen.module.css';
 
 /**
@@ -216,6 +217,7 @@ export function LiveScreen({ tachFullScaleRpm, onStart, onStop, onToggleSound, o
           <TrimBar label="LONG TERM FUEL TRIM (LTFT)" value={live.ltft} />
         </div>
       </Panel>
+      <LiveEcuPanel />
       <ExpandableInfo title="Why these gauges jitter">
         Every value above is a simulated sensor reading, with real noise and lag — not the exact internal number. That is what a tuner actually sees on a scan tool, and why real logs never look perfectly smooth.
       </ExpandableInfo>
