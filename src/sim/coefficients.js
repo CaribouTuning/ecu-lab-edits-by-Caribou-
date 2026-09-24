@@ -76,6 +76,12 @@ export const COEFF = {
   // open throttle, falling through about 700 at part throttle to 400-500 at light cruise
   // — because those are the numbers a tuner reads off a gauge and the only ones worth
   // matching. See EXHAUST_PORT_FLOW_REF for what the reference flow is.
+  //
+  // WHERE IT LANDS NOW (tests/benchmark.test.js measures it): cruise and part throttle
+  // sit in their bands, but wide open throttle reads low — about 780 C on the stock V6 at
+  // 6500 RPM, and 795-830 C on the boosted presets against the 880-950 C a production
+  // turbine inlet runs at. Lowering this to lift WOT would put a 30 kPa cruise at ~670 C,
+  // so one number cannot fix both; docs/accuracy.md carries it as a known approximation.
   EXHAUST_PORT_NTU: 1.0,
   // Reference value of trappedMass x rpm, in the units the cycle carries them (kg and
   // rev/min), measured at the stock V6 at wide-open throttle and 6500 RPM: 6.18e-4 kg of
@@ -243,13 +249,21 @@ export const COEFF = {
   // NA exhaust system backpressure per kg/s, kPa. A turbine dwarfs this; without one it
   // is the whole restriction.
   EXHAUST_SYSTEM_KPA_PER_KGS: 90,
-  // The induction solve is a fixed point (boost -> airflow -> exhaust energy -> boost).
-  // Three damped passes converge inside a tenth of a psi everywhere the app can reach.
-  INDUCTION_SOLVE_PASSES: 3,
-  INDUCTION_RELAX: 0.7,
+  // The induction solve spools the turbo up from zero (see solveInduction): it climbs in
+  // steps of at least this many psi, and at most this many steps to the target, then
+  // bisects the last step this many times — 12 halvings of a quarter psi is 0.0001 psi,
+  // far inside anything the app displays.
+  INDUCTION_SPOOL_STEP_PSI: 0.25,
+  INDUCTION_SPOOL_MAX_STEPS: 48,
+  INDUCTION_EDGE_PASSES: 12,
   // Backpressure a wastegate relieves while bleeding exhaust around the turbine. This is
   // why a larger turbine is worth power at the same boost: it spends more life gated.
-  WASTEGATE_RELIEF: 0.55,
+  // Scales the share of turbine capability above the target (see solveInduction). Fitted
+  // to the turbo presets' published ratings after the gate was corrected to open on
+  // SURPLUS rather than shortfall; at 0.2 every one lands within 5% of its rated power,
+  // with exhaust backpressure at rated power 1.0-1.4x the boost pressure, which is where
+  // small OEM turbos run. It was 0.55 when it acted in the wrong direction.
+  WASTEGATE_RELIEF: 0.2,
   // --- Compressor map (see compressorMap in turbo.js) ---
   // How sharply efficiency falls away from the island centre, and how much a unit of
   // normalised pressure-ratio error costs relative to a unit of flow error. Real islands
@@ -299,9 +313,10 @@ export const COEFF = {
   EXHAUST_PER_RETARD_K: 14,
   EXHAUST_RICH_COOLING_K: 420,
   // Where the datalog calls the pull hot, °C. Production turbine wheels and exhaust
-  // valves are rated 950-1000 sustained. The seven presets peak 881-951 on their factory
-  // calibrations, so ~30 °C of margin above the hottest (the Golf R) — RE-CHECK this if a
-  // hotter preset is added. Drives the `egtRisk` flag only; heat damage is not separately
+  // valves are rated 950-1000 sustained. On the datalog's EGT (the cycle's port
+  // temperature, not the correlation above) the seven presets peak 785-825 °C on their
+  // factory calibrations, so this is reached only by a build running far hotter than any
+  // factory one — RE-CHECK this if a hotter preset is added. Drives the `egtRisk` flag only; heat damage is not separately
   // priced, since lean-under-boost already pays through WEAR_VALVE_LEAN_BOOST.
   EGT_LIMIT_C: 980,
 

@@ -132,10 +132,10 @@ describe('measuredInputs', () => {
     expect(projected.build).not.toHaveProperty('boostSel');
   });
 
-  it('keeps the three tables and drops the tune slice cursors', () => {
+  it('keeps the three tables and the ECU calibration, and drops the tune slice cursors', () => {
     const s = makeInitialState();
     const projected = measuredInputs(s.build, { ...s.tune, selection: { type: 'cell', row: 1, col: 1 }, tablesDirty: true }, 100);
-    expect(Object.keys(projected.tune).sort()).toEqual(['afr', 'timing', 've']);
+    expect(Object.keys(projected.tune).sort()).toEqual(['afr', 'ecu', 'timing', 've']);
   });
 
   it('carries loadKpa', () => {

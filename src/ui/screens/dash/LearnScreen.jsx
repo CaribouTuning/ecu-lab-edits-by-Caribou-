@@ -1,14 +1,14 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: thirty numbered articles, in reading order, from
+ * The plain-language guide: thirty-eight numbered articles, in reading order, from
  * "an engine is an air pump" through reading a time slip to the published
  * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-eight articles twenty
+ * engine panel, and without the memo React would walk all thirty-eight articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -129,7 +129,7 @@ function LearnScreenInner({ active, onToggle }) {
         <span className={styles.formula}>cycleTime = 120000 ÷ RPM&nbsp;&nbsp;(ms per 720° cycle)</span><br />
         <span className={styles.formula}>duty% = PW ÷ cycleTime × 100</span>
         <br /><br />A four-stroke injects once every two crank revolutions, so at 7500 RPM there are only 16 ms in a cycle. An injector needing 15 of them is at 94% duty. Past about 90% there is no time left, and the mixture goes lean <i>no matter what your AFR table says</i>. This is a physical wall, not a calibration choice.
-        <br /><br /><b className={styles.em}>Critical:</b> the ECU calculates that pulse width for the injector size it has been <i>told</i> is fitted. Fit bigger injectors without updating the ECU Injector Size on FUEL and every pulse delivers proportionally more fuel than intended — the engine runs rich everywhere regardless of your tables.
+        <br /><br /><b className={styles.em}>Critical:</b> the ECU calculates that pulse width for the injector size it has been <i>told</i> is fitted. Fit bigger injectors without updating the injector scaling on TUNE → INJECTORS and every pulse delivers proportionally more fuel than intended — the engine runs rich everywhere regardless of your tables.
       </ExpandableInfo>
 
       <ExpandableInfo title="10. Step 4 — open loop, closed loop, and fuel trims">
@@ -162,11 +162,11 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <ExpandableInfo title="13. A worked example — first turbo tune">
-        Fit a turbo on BUILD and run a pull without touching anything. It will score terribly, and here is why: a factory naturally-aspirated calibration has no real tuning above 101 kPa, so the boost rows are just a flat continuation of the wide-open-throttle row — far too much timing and far too lean for the cylinder pressure you have just created.
+        Fit a turbo on BUILD, set its boost curve to about 8 psi, and run a pull without touching the tables. It will score terribly, and here is why: a factory naturally-aspirated calibration has no real tuning above 101 kPa, so the boost rows are just a flat continuation of the wide-open-throttle row — far too much timing and far too lean for the cylinder pressure you have just created.
         <br /><br /><b className={styles.em}>Read the log.</b> It will report knock across most of the range, with the RPM band and how many degrees the ECU pulled.
         <br /><br /><b className={styles.em}>Fix the spark first.</b> On SPARK, pull the 150 and 200 kPa rows down. Roughly 2° per 20 kPa of extra pressure is a sane starting point. Pull again.
         <br /><br /><b className={styles.em}>Then the mixture.</b> On FUEL, richen those same rows toward lambda 0.83 (about 12.2:1). Pull again — you should see knock margin improve as well, because a richer charge resists knock.
-        <br /><br /><b className={styles.em}>Then check the fuel system.</b> If the log reports injectors maxed, that is hardware: fit bigger injectors and set the matching ECU Injector Size, or ask for less boost. Nothing in the tables can create fuel that the injectors have no time to deliver.
+        <br /><br /><b className={styles.em}>Then check the fuel system.</b> If the log reports injectors maxed, that is hardware: fit bigger injectors and set the matching injector scaling on TUNE → INJECTORS, or ask for less boost. Nothing in the tables can create fuel that the injectors have no time to deliver.
       </ExpandableInfo>
 
       <ExpandableInfo title="14. How to read the datalog columns">
@@ -174,7 +174,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Timing: asked → got</b> — if they differ, the ECU overrode you. That is knock retard, and the gap is how far past the limit your table was.
         <br /><br /><b className={styles.em}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
         <br /><br /><b className={styles.em}>Airflow</b> — around 200 g/s is typical at redline for an engine near 300 hp, which is a quick sanity check on whether your VE table is plausible.
-        <br /><br /><b className={styles.em}>Injectors</b> — duty above 90% is the wall. <b className={styles.em}>Heat</b> — sustained EGT above ~980°C cooks turbines and valves; it rises hard with retarded timing and lean mixtures, and a rich mixture is what pulls it back down.
+        <br /><br /><b className={styles.em}>Injectors</b> — duty above 90% is the wall. <b className={styles.em}>Heat</b> — sustained EGT above about 950–1000°C cooks turbines and valves; it rises with retarded timing and as the mixture leans toward stoichiometric, and a rich mixture is what pulls it back down (the app shows less of that cooling than a real engine does — see article 39).
       </ExpandableInfo>
 
       <ExpandableInfo title="15. What tuning can fix, and what it can't">
@@ -240,6 +240,7 @@ function LearnScreenInner({ active, onToggle }) {
         A compressor is not a pump that delivers whatever number you type. It is a wheel with a <b className={styles.em}>map</b>: for a given pressure ratio it can only pass so much air, and it is only efficient in the middle of that map.
         <br /><br />Off the left edge is <b className={styles.em}>surge</b> — too little flow for the pressure being asked, and the air stalls off the blades and reverses. Off the right edge is <b className={styles.em}>choke</b>, and this one is a hard wall rather than a penalty: once the inducer reaches the speed of sound, no more air goes through it at any shaft speed. Asking for more boost past that point does nothing at all.
         <br /><br />What actually sets boost is an <b className={styles.em}>energy balance</b>. The turbine takes power out of the exhaust; the compressor spends it on the intake. Boost is wherever those two settle. That is why exhaust temperature and turbine size change boost without you touching the target, and why a wastegate lowers backpressure the moment it cracks open.
+        <br /><br />Boost builds from nothing as the turbo spools, and it stops at the first pressure the turbine cannot hold. At low RPM that is usually the surge line: past it the compressor cannot hold the pressure at so little flow. So asking for 15 psi at 2000 RPM gets you what the turbo can make there, never less than asking for 5 would.
         <br /><br />So when the app refuses you boost, it is not a rule — it is the hardware. Change the turbine, the compressor, or how much exhaust energy you are making.
       </ExpandableInfo>
 
@@ -323,6 +324,90 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Car and Driver, "Why Various Engine Types Sound So Different".</b> Firing intervals and crank arrangement as the origin of layout character — the cross-plane V8 rumble in particular.
         <br /><br /><b className={styles.em}>PhET, "Sound Waves"</b> (University of Colorado Boulder), and <b className={styles.em}>Britannica, "Sound (physics)"</b>. The fundamentals underneath all of it: pressure waves, wavelength and frequency, interference, standing waves and resonance. Start here if the rest assumed too much.
         <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="31. The rest of the ECU, and why you can mostly leave it alone">
+        <b className={styles.em}>In short:</b> your three tables are the tune. Everything else on TUNE starts at a working factory setting and only needs you when a log points to it.
+        <br /><br />A real ECU reads a base value from each of your tables (air, spark, mixture) and then adjusts it for conditions: engine temperature, intake air temperature, altitude, ethanol, each cylinder. On top of that it runs controllers for boost, cams, idle and knock, and protections that step in when something goes wrong.
+        <br /><br />None of these adds power by itself. A correction only changes what the ECU <i>asks for</i>; the engine answers with the same physics as always. Twenty degrees of advance from a correction is worth exactly what twenty degrees in your SPARK table would be.
+        <br /><br />Each page on TUNE opens with a short guide: what it is for, when to come to it, and whether anything on it has been changed. An amber dot marks any setting that is not factory, and <b className={styles.em}>Factory</b> puts a page back.
+        <br /><br /><b className={styles.em}>What to do:</b> tune the three tables first. When a number in the log looks wrong, open &ldquo;Where the numbers come from&rdquo; on LIVE (or the engine-management block in the dyno datalog). It lists every adjustment in order, so you can see which one moved it.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="32. Sensors: the ECU only knows what it measures">
+        <b className={styles.em}>In short:</b> the ECU sees voltages, not the truth. If its setting for a sensor does not match the sensor fitted, it acts confidently on a wrong number.
+        <br /><br />Every sensor sends a voltage. The ECU turns it back into pressure, mixture or temperature using the setting it was given for that part. The part is chosen on BUILD; the setting is on TUNE › SENSORS.
+        <br /><br /><b className={styles.em}>MAP sensor.</b> A 1-bar sensor reads up to atmospheric and stops. On a turbo engine the ECU never sees boost, so it fuels and times every boosted point as if it were at 100 kPa. The engine runs lean and over-advanced exactly where it can least afford it.
+        <br /><br /><b className={styles.em}>Wideband.</b> Controllers use different voltage scales. Read one with another&apos;s scale and closed loop steers the <i>reading</i> onto target while the real mixture is somewhere else.
+        <br /><br /><b className={styles.em}>Temperature sensors.</b> Different makers&apos; sensors disagree by tens of degrees at the same voltage, so the wrong setting means the wrong warm-up fuel and the wrong idle.
+        <br /><br /><b className={styles.em}>What to do:</b> whenever you change a sensor on BUILD, look at the note under it. If it says the ECU does not match, press <b className={styles.em}>Set ECU to match</b>. TUNE › SENSORS lists any mismatch too. To see what a broken sensor does, inject a fault on LIVE.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="33. Fuel over time: pressure, injector delay and the port wall">
+        <b className={styles.em}>In short:</b> the ECU does not squirt a weight of fuel; it holds an injector open for a time. Pressure, voltage and a film of fuel on the port walls all change what actually arrives.
+        <br /><br /><b className={styles.em}>Fuel pressure.</b> An injector flows as the square root of the pressure across it. A return-style regulator keeps that pressure constant. A returnless system does not: at 20 psi of boost a 43 psi rail has only 23 psi left across the injector, so it flows about 27% less, unless the ECU corrects for it (TUNE › INJECTORS). A pump that cannot keep up lets pressure sag and leans every cylinder at once.
+        <br /><br /><b className={styles.em}>Injector delay.</b> An injector takes about a millisecond to open, longer on low battery voltage. The ECU adds that delay to every pulse from its dead-time table. A wrong table throws off every short pulse, so idle suffers most.
+        <br /><br /><b className={styles.em}>The port wall.</b> Some fuel lands on the intake port wall and evaporates off it a moment later. When you hold the throttle steady it balances out. Stab the throttle and the wall soaks up fuel, so the engine goes lean for a moment; lift off and the wall gives it back, so it goes rich. Acceleration enrichment is there to cover exactly that, and a cold wall holds much more.
+        <br /><br /><b className={styles.em}>Base fuel schedule (BFS).</b> The pulse the ECU would need for λ 1 on the air it believes. Nissan ECUs log load this way, and it is in the log here too. It is why new injectors are a scaling change first (the ECU injector size), and a table change only after.
+        <br /><br /><b className={styles.em}>What to do:</b> after fitting injectors, set the ECU injector size to match. On a returnless turbo build, set pressure compensation to &ldquo;Fixed rail&rdquo;. If the LIVE log goes lean for a moment on a throttle stab, add acceleration enrichment.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="34. Knock control listens; it does not know">
+        <b className={styles.em}>In short:</b> knock control is a microphone with a volume threshold. Set the threshold wrong and it either pulls timing for noise, or misses real knock.
+        <br /><br />The knock sensor is a microphone bolted to the block. It hears knock, but it also hears the valves closing, louder at high RPM and with stiff springs. The ECU calls anything louder than its threshold &ldquo;knock&rdquo;.
+        <br /><br /><b className={styles.em}>Threshold too low:</b> valve noise counts as knock, so the ECU pulls timing from an engine that is fine, and power goes flat at the top end. This often appears after a cam or spring change.
+        <br /><br /><b className={styles.em}>Threshold too high:</b> real knock goes unheard and keeps going for the whole pull. The log calls this unheard knock, and it wears the engine faster than knock the ECU caught.
+        <br /><br />After heavy knock, some ECUs (Nissan&apos;s, for one) switch to a safer timing map and stay there until the engine has been quiet for a while.
+        <br /><br /><b className={styles.em}>What to do:</b> never rely on knock control to make a tune safe. Take timing out until the log shows no knock. If the log shows retard at high RPM but no real knock, raise the threshold there.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="35. Controllers: boost, idle and cams">
+        <b className={styles.em}>In short:</b> each controller compares what it wants with what it measures and nudges an actuator. Push too hard and it overshoots; too gently and it never gets there.
+        <br /><br /><b className={styles.em}>Boost.</b> The ECU never sets boost directly. It sets how hard the wastegate is held shut, and the turbo makes what it can under that. In closed loop the ECU corrects the wastegate until boost matches the target. The integral part builds up while the turbo spools and can overshoot when boost arrives; overboost protection catches that. A spring-type wastegate cannot hold less than its spring, whatever the ECU asks.
+        <br /><br /><b className={styles.em}>Idle.</b> With your foot off, the ECU holds the engine up on its own: air for slow drift, spark for quick dips, and a kick of extra air the moment the A/C or lights come on. The intake takes about a fifth of a second to respond at idle, so an over-eager controller chases its own delay and hunts.
+        <br /><br /><b className={styles.em}>Cams.</b> A phaser turns a whole camshaft. Advancing the intake closes its valve earlier: more low-RPM torque, less at the top. The AIR table does not know the cam moved, so a phased engine needs the VE-by-cam-angle correction (AIRFLOW page) to keep the mixture right.
+        <br /><br /><b className={styles.em}>What to do:</b> change one controller setting at a time and watch it on the LIVE log. Put boost next to its target, or RPM next to the idle target, and look for overshoot.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="36. Protections, limiters, launch and map switching">
+        <b className={styles.em}>In short:</b> protections are the ECU saving the engine from a problem. When one trips, fix the problem; do not switch the protection off.
+        <br /><br /><b className={styles.em}>Protections</b> watch what the ECU measures: lean mixture under boost, hot exhaust (it adds fuel to cool it), heavy knock, injectors nearly flat out, low oil or fuel pressure, overheating. The Pull Log names any that stepped in.
+        <br /><br /><b className={styles.em}>Rev limiters.</b> Fuel cut is smooth and cool. Spark cut sends unburned fuel into a hot exhaust, where it lights; those are the pops, and the extra heat reaches the turbo. A throttle cut just before the limit eases the engine onto it.
+        <br /><br /><b className={styles.em}>Launch control</b> holds the engine at a set RPM on the line with the throttle pinned, using spark cut and very late timing. The hot exhaust helps a turbo spool before the car moves. <b className={styles.em}>Flat-foot shifting</b> cuts spark during a manual shift so you never lift.
+        <br /><br /><b className={styles.em}>Traction control</b> takes torque away when the tyres spin. Spark acts on the next firing; a throttle has to empty the manifold; boost has to wind down. In this model the drag-strip driver already feathers the throttle perfectly, so traction control will not beat them. It shows what each method costs.
+        <br /><br /><b className={styles.em}>Map switching</b> keeps four whole calibrations in slots (say, pump gas and E85, or street and track) and switches between them, even with the engine running.
+        <br /><br /><b className={styles.em}>What to do:</b> keep protections on. If one trips, read what it says, fix the cause, and pull again.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="37. Horsepower and torque: two views of one number">
+        Torque is the twist on the crank. Power is how fast that twist does work — torque times how fast the crank turns. They are not two things an engine makes; they are the same measurement, read two ways:
+        <br /><br /><span className={styles.formula}>hp = lb-ft × RPM ÷ 5252</span><br />
+        <span className={styles.formula}>kW = N·m × RPM ÷ 9549</span>
+        <br /><br />So the two curves always cross at 5252 RPM, and peak power always sits above peak torque: past the torque peak, torque falls more slowly than RPM rises, until it does not. A tune that adds torque at 7000 RPM adds more power than the same torque at 3000.
+        <br /><br /><b className={styles.em}>Units.</b> Metric horsepower (PS) is 735.5 W, a little smaller than the 745.7 W imperial horsepower: 1 hp ≈ 1.014 PS. Most of the world quotes kW. None of it changes the engine.
+        <br /><br /><b className={styles.em}>Where it is measured.</b> Brake horsepower is measured at the crank, against an engine dyno&apos;s brake. A chassis dyno measures at the wheels, after the gearbox, driveshaft and differential have taken their share. This app reports wheel figures — crank power less a flat 15% — which is why its numbers read lower than a manufacturer&apos;s brochure for the same engine. Compare like with like: a wheel figure against a wheel figure, on the same kind of dyno.
+        <br /><br /><b className={styles.em}>Which one you feel.</b> Acceleration comes from wheel torque, and gearing trades RPM for torque (article 18). That is why power, not peak torque, decides how fast a car can go: in the right gear, more power is always more torque at the wheel. Torque low down is what makes an engine easy to drive; power is what makes it fast.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="38. Further reading on engine management">
+        <b className={styles.em}>UpRev, &ldquo;Nissan Tuning Guide&rdquo;.</b> How a production ECU is actually calibrated: base fuel schedule and the K-fuel multiplier, the fuel compensation table, cranking enrichment, injector latency as a line against voltage, the fuel target lookup delay, knock listening thresholds and high-detonation maps, cam phasing, throttle-cut rev limits, launch control, flat-foot shifting and map switching.
+        <br /><br /><b className={styles.em}>HP Tuners, &ldquo;Switch on the Fly&rdquo; user guide.</b> Map slots on a production ECU: a default slot, a maximum, which tables switch, and the active slot remembered across a restart.
+        <br /><br /><b className={styles.em}>HP Tuners, &ldquo;A Beginner&apos;s Guide to Engine Tuning&rdquo;.</b> Horsepower, torque and their units; mixture, timing and exhaust flow as the three things a tune works on; and the split every tuning suite has between an editor that changes the calibration and a scanner that logs what the engine did with it — TUNE and the dyno datalog here.
+        <br /><br /><b className={styles.em}>Driven Racing Oil, &ldquo;A Complete Guide to High-Performance Engine Tuning&rdquo;.</b> The whole job at a glance — remap, mixture, timing, forced induction, cams — and the two habits that matter most: change one thing at a time and measure it, and put reliability ahead of the peak number.
+        <br /><br /><b className={styles.em}>C. F. Aquino, &ldquo;Transient A/F Control Characteristics of the 5 Liter Central Fuel Injection Engine&rdquo;, SAE 810494.</b> Where the X-τ wall-film model comes from.
+        <br /><br /><b className={styles.em}>J. B. Heywood, <i>Internal Combustion Engine Fundamentals</i>.</b> The engine side of all of it — including why a spark needs more voltage the denser the gas across the gap.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="39. What this simulator simplifies">
+        <b className={styles.em}>In short:</b> the directions are right everywhere and the sizes are close, but this is a teaching model, not a replacement for a real dyno. Every number below is measured against real engines by the app&apos;s own tests.
+        <br /><br /><b className={styles.em}>Checked and close to real engines:</b> full-throttle mixture (λ 0.83–0.87), timing, how late the burn lands, torque per litre, cylinder pressure, friction, the airflow and fuel it reports, and how much power boost adds with and without an intercooler. Every preset makes its published power within 5%.
+        <br /><br /><b className={styles.em}>Fuel used per horsepower runs low.</b> The presets burn about 0.40–0.43 lb of fuel per horsepower-hour at full throttle. Real NA engines use about 0.45–0.50 (the best modern ones about 0.42), and turbo engines about 0.50–0.60. Power is right, so the air and fuel needed to make it read about 10–15% low, and so does injector duty. On a real car, leave more injector headroom than the app says you need.
+        <br /><br /><b className={styles.em}>Turbos spool late.</b> The turbos here take their energy from steady exhaust flow, not from the pulses a twin-scroll housing harvests. At 1500–2000 RPM the turbo presets make 15–50% less torque than the real engines, and their torque does not stay flat the way a factory torque limit holds it.
+        <br /><br /><b className={styles.em}>Exhaust temperature reads low at full throttle.</b> About 780 °C on an NA engine and 790–820 °C boosted, where production turbos run up to about 950 °C at the turbine. Going richer cools it too little: about 10–15 °C from 13.5 to 11:1, several times less than the model&apos;s own turbine-side figure for the same change.
+        <br /><br /><b className={styles.em}>Very rich costs almost no power.</b> Going from λ 0.88 to 0.70 costs a real engine a few percent; here it costs almost nothing. The pull log still flags it, because it washes the bores and fouls plugs.
+        <br /><br /><b className={styles.em}>Best timing at low RPM.</b> The advisors aim for the textbook best-torque timing (the burn half done 8–10° after top dead centre). At low RPM the model&apos;s own torque peaks a few degrees later; following the advice costs under 3%.
+        <br /><br /><b className={styles.em}>Wheel horsepower.</b> The app takes a flat 15% off for the drivetrain. Real dynos vary: a stock 350Z reads 22–28% under its rating, while BMW&apos;s and VW&apos;s turbo engines often read close to their rating, because they are rated low.
+        <br /><br /><b className={styles.em}>What to do:</b> trust the directions (what knocks, what leans out, which way a change moves power) and treat the absolute numbers as a good estimate. On a real car, a real dyno and a real wideband have the last word.
       </ExpandableInfo>
     </BuildSection>
   );

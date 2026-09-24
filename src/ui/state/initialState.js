@@ -17,8 +17,9 @@
  */
 
 import {
-  DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_CAR, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
-  DEFAULT_TIMING, EXHAUST_DIA_OPTS, clone2D, computeHardwareVE, makeLiveState,
+  DEFAULT_AFR, DEFAULT_BOOST, DEFAULT_CAR, DEFAULT_ECU_HW, DEFAULT_ENGINE_CONFIG, DEFAULT_ENV,
+  DEFAULT_MODS, DEFAULT_TIMING, EXHAUST_DIA_OPTS, clone2D, computeHardwareVE, defaultEcuCalibration,
+  deriveEngine, makeLiveState,
 } from '../../sim/index.js';
 
 /**
@@ -32,7 +33,7 @@ import {
  * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
- * @property {number} octaneIdx index into OCTANE_OPTS
+ * @property {number} octaneIdx index into FUEL_CHOICES (the pump fuels, then Flex)
  * @property {number} injIdx index into INJECTOR_OPTS
  * @property {number} mafScalar ECU's MAF correction scalar
  * @property {number} turbineIdx index into TURBINE_OPTS
@@ -43,6 +44,14 @@ import {
  * @property {string|null} presetId which factory preset (if any) is currently loaded stock
  * @property {object|null} presetPrompt the preset pending an overwrite-confirmation prompt, or null
  * @property {number} boostSel which RPM column the boost-curve editor has selected
+ * @property {{regulator: string, basePressureKpa: number, pumpIdx: number}} fuelSystem
+ *   pump and pressure regulation
+ * @property {{map: string, wideband: string, iat: string, ect: string, flex: boolean}} sensorHw
+ *   the sensors physically fitted — the ECU's scaling of them is calibration, in `tune.ecu`
+ * @property {{type: string, springPsi: number}} wastegate the wastegate actuator
+ * @property {string} coil ignition coil fitted
+ * @property {number} plugGapMm spark plug gap
+ * @property {number} ethanolPct what a flex-fuel tank actually holds
  */
 
 /**
@@ -59,10 +68,23 @@ import {
  *   the last preset load or reset-to-stock
  * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
  *   the currently selected calibration-grid cell, row, column or range, or null
+ * @property {object} ecu the engine management calibration beyond the three base tables
+ *   (`src/sim/ecu/calibration.js`) — undoable like them
+ * @property {(MapSlot|null)[]} maps the ECU's switchable map slots. The ACTIVE slot's
+ *   calibration is the working `ve`/`timing`/`afr`/`ecu` above, so its entry here is
+ *   always null; every other entry is a stored calibration, or null for a slot never
+ *   written — which, like a fresh ROM's, holds a copy of whatever is active when first
+ *   switched to
+ * @property {number} activeMap which slot the engine is running
  * @property {boolean} rangeMode whether a tap on the grid starts or extends a RECTANGLE
  *   rather than selecting one cell. Beside `selection` because it is the mode that
  *   selection is taken in, and one flag rather than three: AIR, SPARK and FUEL all
  *   render the same grid and a tuner switching between them means the same thing by it.
+ */
+
+/**
+ * A stored calibration in a map slot.
+ * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object}} MapSlot
  */
 
 /**
@@ -165,6 +187,11 @@ import {
  * @property {number[]} completedJobs indices of the jobs already passed
  * @property {'pass'|'fail'|null} jobResult how the last pull graded against the active
  *   job's target, or null before one has been run against it
+ * @property {{ambientC: number, altitudeM: number}} env the air the engine breathes, on
+ *   the dyno and in LIVE. Session state: it is the day, not the build
+ * @property {{ac: boolean, lights: boolean, launch?: boolean}} liveAux accessory loads switched
+ *   on in LIVE, and whether the clutch is in with launch control armed
+ * @property {Record<string, string>} faults injected faults, keyed by sensor or system
  */
 
 /**
@@ -221,11 +248,20 @@ export function makeInitialState() {
       presetId: null,
       presetPrompt: null,
       boostSel: 4,
+      fuelSystem: { ...DEFAULT_ECU_HW.fuelSystem },
+      sensorHw: { ...DEFAULT_ECU_HW.sensorHw },
+      wastegate: { ...DEFAULT_ECU_HW.gate },
+      coil: DEFAULT_ECU_HW.coil,
+      plugGapMm: DEFAULT_ECU_HW.plugGapMm,
+      ethanolPct: 10,
     },
     tune: {
       ve: computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS),
       timing: clone2D(DEFAULT_TIMING),
       afr: clone2D(DEFAULT_AFR),
+      ecu: defaultEcuCalibration({ derived: deriveEngine(DEFAULT_ENGINE_CONFIG), gate: DEFAULT_ECU_HW.gate }),
+      maps: [null, null, null, null],
+      activeMap: 0,
       tablesDirty: false,
       selection: null,
       rangeMode: false,
@@ -264,6 +300,9 @@ export function makeInitialState() {
       activeJob: null,
       completedJobs: [],
       jobResult: null,
+      env: { ...DEFAULT_ENV },
+      liveAux: { ac: false, lights: false },
+      faults: {},
     },
     history: { past: [], future: [] },
   };
