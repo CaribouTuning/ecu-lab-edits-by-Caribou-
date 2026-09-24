@@ -29,9 +29,11 @@ import styles from './FuelScreen.module.css';
 /**
  * @param {object} props
  * @param {CalAdvice} props.calAdvice the shell's — also read by the SPARK screen
+ * @param {React.ReactNode} [props.children] the engine management settings that belong
+ *   with this table, shown under it
  * @returns {React.ReactElement}
  */
-export function FuelScreen({ calAdvice }) {
+export function FuelScreen({ calAdvice, children }) {
   const [tune, dispatch] = useTune();
   const { afr, selection, rangeMode } = tune;
   /** @param {Selection|null} value */
@@ -59,6 +61,7 @@ export function FuelScreen({ calAdvice }) {
             <br /><br /><b className={styles.em}>Reading it in lambda:</b> lambda is AFR divided by the fuel's stoichiometric point, so lambda 0.85 means the same relative richness on any fuel. That is why tuners talk in lambda once E85 enters the picture — 12.5:1 means something completely different on E85 than on pump gas.
             <br /><br /><b className={styles.em}>As a beginner:</b> when in doubt, go richer (a lower number), not leaner. A rich cell costs a little power; a lean cell under load is how you actually damage something.
           </ExpandableInfo>
+          {children}
         </div>
         <AdvisorPanel headline={report.headline} tone={report.tone}>
           <TuneAdvisory kind="afr" report={report} />

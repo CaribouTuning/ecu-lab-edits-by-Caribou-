@@ -1,14 +1,14 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: thirty numbered articles, in reading order, from
+ * The plain-language guide: thirty-eight numbered articles, in reading order, from
  * "an engine is an air pump" through reading a time slip to the published
  * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-eight articles twenty
+ * engine panel, and without the memo React would walk all thirty-eight articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -323,6 +323,67 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Car and Driver, "Why Various Engine Types Sound So Different".</b> Firing intervals and crank arrangement as the origin of layout character — the cross-plane V8 rumble in particular.
         <br /><br /><b className={styles.em}>PhET, "Sound Waves"</b> (University of Colorado Boulder), and <b className={styles.em}>Britannica, "Sound (physics)"</b>. The fundamentals underneath all of it: pressure waves, wavelength and frequency, interference, standing waves and resonance. Start here if the rest assumed too much.
         <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="31. The engine management: base tables and the stack on top">
+        A real ECU does not read one table and fire. It reads a base value — VE, spark, target mixture — at the load it believes the engine is at, and then stacks corrections on it in a fixed order: coolant, intake air, oil temperature, barometer, ethanol content, each cylinder&apos;s own trim, idle spark, protection retard, then knock control on top of all of it. Fuel does the same with warm-up, after-start, acceleration, the fuel compensation table, the trims.
+        <br /><br />Every one of those is on TUNE, under the table it corrects. None of them adds power. Each is a number the ECU <i>commands</i>, and what it is worth is decided by the same cycle physics as everything else: twenty degrees of advance through a correction table buys nothing past MBT, exactly as twenty degrees in the base table would not.
+        <br /><br />&ldquo;Where the numbers come from&rdquo; on LIVE, and the engine management block of the dyno&apos;s datalog, show the whole stack for the moment you are looking at. When something is wrong, read the stack before touching a table: a timing number that looks too low is often the base table plus an IAT correction plus a protection retard, and only one of those is the fault.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="32. Sensors: the ECU knows what it measures, not what is true">
+        Every sensor is a voltage, and the ECU turns that voltage back into a number with the scaling it was given. The part and the scaling are separate — the part is on BUILD, the scaling on TUNE › SENSORS — and the gap between them is where some of the worst tuning faults live.
+        <br /><br /><b className={styles.em}>MAP.</b> A 1-bar sensor reads up to atmospheric and no further. On a turbo engine the ECU sees every boosted point as 100 kPa: it fuels for that much air, reads the part-throttle rows of every table, and the engine runs lean and over-advanced at exactly the loads that can least afford it.
+        <br /><br /><b className={styles.em}>Wideband.</b> Controllers output different lines — λ 0.5–1.5 over 0–5 V, AFR 10–20, AFR 7.3–22.4. Read one with another&apos;s line and closed loop trims until the <i>reading</i> is on target. The gauge says 14.7 while the exhaust is somewhere else, and lean protection acts on the wrong number in both directions.
+        <br /><br /><b className={styles.em}>Temperatures.</b> Thermistors from different makers disagree by tens of degrees at the same resistance. The wrong curve means the wrong air density, the wrong warm-up enrichment, the wrong idle target.
+        <br /><br /><b className={styles.em}>Faults.</b> A signal outside the band a working sensor can produce is a broken wire. The ECU substitutes a safe default and, if calibrated to, goes into limp mode. Try it on LIVE.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="33. Fuel in time: pressure, dead time, and the port wall">
+        <b className={styles.em}>Base fuel schedule.</b> Nissan ECUs log load as the pulse width the ECU would need for λ 1 on the air it believes it has — the BFS, logged here too. Everything else multiplies it: the target, the compensation table, the trims. It is why an injector change is a scaling change first (UpRev&apos;s K-fuel, HP Tuners&apos; flow rate, the ECU injector size here), and a table change only after.
+        <br /><br /><b className={styles.em}>Pressure.</b> An injector flows as the square root of the pressure across it. A return-style regulator holds that constant; a returnless rail does not, and under boost the injector flows less unless the ECU compensates. A pump past its capacity lets the rail sag and leans every cylinder at once.
+        <br /><br /><b className={styles.em}>Dead time.</b> The injector takes about a millisecond to open, longer at low voltage. The ECU adds that time to every pulse from its dead-time table, so a wrong table moves every short pulse — idle and cranking worst. Below about 0.35 ms of open time the needle never lifts fully, and a tiny pulse delivers less than its rating predicts.
+        <br /><br /><b className={styles.em}>The port wall.</b> Some of every injection lands on the port wall as a film and evaporates off it over a fraction of a second — the X-τ model, after Aquino (SAE 810494). Steady, the film gives back what it takes. On a tip-in the film soaks up fuel and the cylinder goes lean; on a lift it gives fuel back and the cylinder goes rich. Acceleration enrichment and decel enleanment exist to cancel exactly that, and a cold wall holds far more.
+        <br /><br /><b className={styles.em}>Lookup delay.</b> Some factory calibrations ease into a richer target when the throttle snaps open. Under boost that leaves the first moments of a pull lean — which is why tuners set it to zero.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="34. Knock control is listening, not knowing">
+        The knock sensor is an accelerometer on the block. It hears detonation ringing the cylinder, and it hears the valvetrain: valves slamming shut, louder with engine speed and with stiffer springs. The ECU compares what it hears with a threshold per RPM.
+        <br /><br />Set the threshold below the valvetrain&apos;s noise and it calls noise knock: it retards an engine that is not knocking, and power goes flat at the top end. That is why a cam or spring change calls for re-learning the threshold. Set it too high and real knock goes unheard: the controller settles where it can just hear knock, so it runs the difference into detonation for the whole pull — the log calls it unheard knock, and it wears the pistons faster than knock the controller caught.
+        <br /><br />Knock control only listens inside its window of speed and load. Heavy knock can drop the ECU onto a conservative high-detonation map, as Nissan&apos;s does, where it stays until the engine has been quiet a while. None of this replaces a calibration that does not knock: knock control is the last line, not the tune.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="35. Controllers: boost, idle and cams">
+        <b className={styles.em}>Boost.</b> The ECU never sets boost. It sets a wastegate duty, the actuator holds the gate shut up to some pressure, and the turbo makes whatever its power balance allows under that. Open loop, boost is whatever the duty table holds — right or wrong. Closed loop, a PI controller trims the duty: too much integral winds up while the turbo spools and overshoots when it arrives, which is what overboost protection is for. A pneumatic gate cannot hold less than its spring, whatever the ECU asks.
+        <br /><br /><b className={styles.em}>Idle.</b> Air for the slow drift, spark for the fast corrections, feed-forward for loads the ECU knows are coming. The manifold is a volume that takes a fifth of a second to fill at idle, so a controller with too much gain chases its own lag and hunts; one without damping overshoots every load change.
+        <br /><br /><b className={styles.em}>Cams.</b> A phaser moves a whole camshaft. Advancing the intake closes its valve earlier: more charge trapped at low speed, less at high. The VE table does not know the cam moved, so a phased engine needs a VE correction by cam angle or its speed-density fuelling drifts as the phaser works.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="36. Protection, limiters, launch and map switching">
+        <b className={styles.em}>Protections</b> act on what the ECU measures: lean under boost, hot exhaust (component protection enriches, and the extra fuel cools it), heavy knock retard, injector duty, oil and fuel pressure, overheating. Each one saved an engine somewhere. None of them is a tune.
+        <br /><br /><b className={styles.em}>Rev limiters.</b> Fuel cut is smooth and cool. Spark cut dumps unburned mixture into a hot manifold, where it lights — the pops, and heat the turbine feels. A throttle cut a hundred RPM early eases the engine onto the limit instead of bouncing it off.
+        <br /><br /><b className={styles.em}>Launch control</b> is a second limiter armed with the clutch in: spark cut and heavy retard hold the engine at launch speed, and the late, afterburning exhaust carries the energy that spools a turbo on the line. <b className={styles.em}>Flat-foot shifting</b> cuts spark while the clutch is in so a manual shift costs only the time the gearbox needs.
+        <br /><br /><b className={styles.em}>Traction control</b> takes torque out when the tyre spins, and how fast it can do that depends on how: spark acts on the next firing, a throttle has to empty the manifold, a turbo has to slow down. In this model the drag driver already feathers the throttle perfectly, so traction control does not beat them — it shows what each method costs.
+        <br /><br /><b className={styles.em}>Map switching</b> keeps whole calibrations in slots — pump gas and E85, street and track — and switches between them, even running.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="37. Horsepower and torque: two views of one number">
+        Torque is the twist on the crank. Power is how fast that twist does work — torque times how fast the crank turns. They are not two things an engine makes; they are the same measurement, read two ways:
+        <br /><br /><span className={styles.formula}>hp = lb-ft × RPM ÷ 5252</span><br />
+        <span className={styles.formula}>kW = N·m × RPM ÷ 9549</span>
+        <br /><br />So the two curves always cross at 5252 RPM, and peak power always sits above peak torque: past the torque peak, torque falls more slowly than RPM rises, until it does not. A tune that adds torque at 7000 RPM adds more power than the same torque at 3000.
+        <br /><br /><b className={styles.em}>Units.</b> Metric horsepower (PS) is 735.5 W, a little smaller than the 745.7 W imperial horsepower: 1 hp ≈ 1.014 PS. Most of the world quotes kW. None of it changes the engine.
+        <br /><br /><b className={styles.em}>Where it is measured.</b> Brake horsepower is measured at the crank, against an engine dyno&apos;s brake. A chassis dyno measures at the wheels, after the gearbox, driveshaft and differential have taken their share. This app reports wheel figures — crank power less a flat 15% — which is why its numbers read lower than a manufacturer&apos;s brochure for the same engine. Compare like with like: a wheel figure against a wheel figure, on the same kind of dyno.
+        <br /><br /><b className={styles.em}>Which one you feel.</b> Acceleration comes from wheel torque, and gearing trades RPM for torque (article 18). That is why power, not peak torque, decides how fast a car can go: in the right gear, more power is always more torque at the wheel. Torque low down is what makes an engine easy to drive; power is what makes it fast.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="38. Further reading on engine management">
+        <b className={styles.em}>UpRev, &ldquo;Nissan Tuning Guide&rdquo;.</b> How a production ECU is actually calibrated: base fuel schedule and the K-fuel multiplier, the fuel compensation table, cranking enrichment, injector latency as a line against voltage, the fuel target lookup delay, knock listening thresholds and high-detonation maps, cam phasing, throttle-cut rev limits, launch control, flat-foot shifting and map switching.
+        <br /><br /><b className={styles.em}>HP Tuners, &ldquo;Switch on the Fly&rdquo; user guide.</b> Map slots on a production ECU: a default slot, a maximum, which tables switch, and the active slot remembered across a restart.
+        <br /><br /><b className={styles.em}>HP Tuners, &ldquo;A Beginner&apos;s Guide to Engine Tuning&rdquo;.</b> Horsepower, torque and their units; mixture, timing and exhaust flow as the three things a tune works on; and the split every tuning suite has between an editor that changes the calibration and a scanner that logs what the engine did with it — TUNE and the dyno datalog here.
+        <br /><br /><b className={styles.em}>Driven Racing Oil, &ldquo;A Complete Guide to High-Performance Engine Tuning&rdquo;.</b> The whole job at a glance — remap, mixture, timing, forced induction, cams — and the two habits that matter most: change one thing at a time and measure it, and put reliability ahead of the peak number.
+        <br /><br /><b className={styles.em}>C. F. Aquino, &ldquo;Transient A/F Control Characteristics of the 5 Liter Central Fuel Injection Engine&rdquo;, SAE 810494.</b> Where the X-τ wall-film model comes from.
+        <br /><br /><b className={styles.em}>J. B. Heywood, <i>Internal Combustion Engine Fundamentals</i>.</b> The engine side of all of it — including why a spark needs more voltage the denser the gas across the gap.
       </ExpandableInfo>
     </BuildSection>
   );

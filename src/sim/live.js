@@ -19,6 +19,7 @@ import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
+import { liveStepEcu } from './ecu/liveEcu.js';
 
 /** Crank + flywheel + damper rotational inertia, kg·m². */
 export const ENGINE_INERTIA = 0.18;
@@ -87,6 +88,9 @@ export function makeLiveState() {
  * @returns {object} next state
  */
 export function liveStep(st, dt, input, cfg) {
+  // With an engine management context the ECU's own controllers run the engine; without
+  // one, the original model below, unchanged.
+  if (cfg.ecu) return liveStepEcu(st, dt, input, cfg);
   const s = { ...st };
   const {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,

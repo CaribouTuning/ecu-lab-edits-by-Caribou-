@@ -49,7 +49,7 @@ import {
 import React, { useMemo } from 'react';
 
 import {
-  INJECTOR_OPTS, OCTANE_OPTS, deriveEngine, presetById,
+  INJECTOR_OPTS, FUEL_CHOICES, deriveEngine, presetById,
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
@@ -244,7 +244,7 @@ export function StatusStrip({ onTutorial, onRepair }) {
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
-          {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
+          {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {FUEL_CHOICES[octaneIdx].flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : `${FUEL_CHOICES[octaneIdx].label} oct`} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
         </div>
         <StripField label="BOOST" value={turboOn ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
         <HealthField pct={overallHealth} />
