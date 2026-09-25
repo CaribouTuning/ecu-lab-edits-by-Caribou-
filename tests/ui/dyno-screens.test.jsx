@@ -548,6 +548,25 @@ describe('LogScreen', () => {
   });
 });
 
+describe('LogScreen crosslinks', () => {
+  it('turns every screen a fix names into a link that opens it', () => {
+    const event = {
+      type: 'nitrouslean', severity: 3, msg: 'FABRICATED LEAN CUT', cause: null, impact: 10,
+      fix: 'Fit a bigger fuel pump on BUILD → FUEL SYSTEM, or raise Fuel correction while spraying on TUNE → NITROUS.',
+    };
+    mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
+    const links = screen.getAllByRole('link');
+    expect(links.map((a) => a.textContent)).toEqual(['BUILD › FUEL SYSTEM', 'TUNE › NITROUS']);
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['#/build/fuel', '#/tune/nitrous']);
+  });
+
+  it('adds no links to a fix that names no screen', () => {
+    const event = { type: 'float', severity: 3, msg: 'FABRICATED FLOAT', cause: null, impact: 5, fix: 'Raise the valve spring rate.' };
+    mountWithResult(<LogScreen />, { result: { ...FAKE_RESULT, events: [event] } });
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
+  });
+});
+
 describe('LogScreen focus highlighting', () => {
   // jsdom does not implement `scrollIntoView` at all — the property does not exist on
   // `window.Element.prototype`, so `vi.spyOn` (which requires the property to already exist)

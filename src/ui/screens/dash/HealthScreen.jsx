@@ -5,7 +5,7 @@
  * warning that belongs beside them.
  *
  * `overallHealth` and `needsMafRecal` are the shell's, not this screen's: the header
- * bar draws the same overall figure, and the TUNE > ECU screen raises the same MAF
+ * bar draws the same overall figure, and the TUNE > SENSORS screen raises the same MAF
  * warning. One definition each, passed in.
  */
 

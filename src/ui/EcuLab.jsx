@@ -62,6 +62,7 @@ import { Seg } from './primitives/Seg.jsx';
 import { Toggle } from './primitives/Toggle.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { eventBands } from './components/eventBands.js';
+import { tuneAttention } from './components/fixLinks.js';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
@@ -1320,6 +1321,10 @@ export function EcuLabApp() {
     // nitrous tables once nitrous is enabled.
     { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
   ];
+  const TUNE_GROUPS = ['BASE TABLES & HARDWARE', 'ENGINE MANAGEMENT', 'POWER ADDER'];
+  // Which TUNE pages the last pull's log points at — only while that pull still
+  // describes the setup on screen, so a fixed problem does not keep its flag.
+  const attention = result && !scoresStale && !running ? tuneAttention(result.events) : {};
   // The operating point the table editors mark, while the LIVE engine is running.
   const liveEcu = live?.ecu;
   const liveRow = liveEcu?.log?.[liveEcu.log.length - 1];
@@ -1451,26 +1456,50 @@ export function EcuLabApp() {
           // touch the hand-maintained breakpoint list in tokens.css.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
             <MapSlots />
-            {/* Two rows: the base tables, then the ECU's control strategies. Five to a
-                row at 60px basis so each row stays one row on a phone. */}
+            {/* Grouped rows, each named for what its pages are: the base tables and the
+                parts they are scaled for, the ECU's control strategies, and a power
+                adder's own controller. Five to a row at 60px basis so each row stays one
+                row on a phone. A number on a page is how many of the last pull's log
+                entries send you there — shown only while that pull still describes this
+                setup. */}
             {(nitrous ? [0, 1, 2] : [0, 1]).map((rowIdx) => (
-              <div key={rowIdx} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
-                  const on = tuneView === v.id;
-                  const Icon = v.icon;
-                  return (
-                    <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
-                      flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
-                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
-                      color: on ? T.accInk : T.ink2,
-                    }}>
-                      <Icon size={15} />{v.label}
-                    </button>
-                  );
-                })}
+              <div key={rowIdx}>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.ink3, margin: '4px 0 5px' }}>
+                  {TUNE_GROUPS[rowIdx]}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
+                    const on = tuneView === v.id;
+                    const Icon = v.icon;
+                    const flagged = attention[v.id] ?? 0;
+                    return (
+                      <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }}
+                        aria-label={flagged ? `${v.label}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}
+                        style={{
+                          position: 'relative', flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
+                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
+                          color: on ? T.accInk : T.ink2,
+                        }}>
+                        <Icon size={15} />{v.label}
+                        {flagged > 0 && (
+                          <span aria-hidden="true" style={{
+                            position: 'absolute', top: 3, right: 4, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 8,
+                            background: T.warnBg, border: `1px solid ${T.warn}`, color: T.warnInk,
+                            fontSize: 9, fontFamily: T.mono, lineHeight: '13px', textAlign: 'center',
+                          }}>{flagged}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ))}
+            {Object.keys(attention).length > 0 && (
+              <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 2 }}>
+                Numbered pages are where the last pull&apos;s log sends you — DYNO › PULL LOG has the details.
+              </div>
+            )}
           </div>
         )}
 
