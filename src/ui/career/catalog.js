@@ -31,6 +31,7 @@ export const STARTING_SECTIONS = ['injectors', 'sensors'];
  * @property {string} summary one line: what you will be able to do
  * @property {string[]} lesson what the course teaches, in a few short paragraphs
  * @property {string} [deeper] where the full lesson lives
+ * @property {boolean} [build] opens BUILD on engine-building jobs
  */
 
 /** @type {Training[]} */
@@ -100,6 +101,16 @@ export const TRAINING = [
       'Boost is cylinder pressure. Every psi lowers the knock limit, so spark comes out of the boost rows and the mixture goes richer to cool the charge.',
     ],
     deeper: 'Learn articles 22 and 35',
+  },
+  {
+    id: 'builder', title: 'Engine building', price: 3000, rep: 50, requires: ['spark'], pages: [], build: true,
+    summary: 'Build whole engines to a customer’s wish list: BUILD opens on engine-building jobs.',
+    lesson: [
+      'An engine builder is handed a wish list, not a fault: this much power, this fuel, no boost, nothing past this RPM, and it still has to idle in traffic. Every part is a trade.',
+      'Breathing parts and a longer cam move the power up the rev range and cost idle quality and low-speed torque. Compression is free power until it meets the fuel’s knock limit. Boost is the biggest lever, and it needs injectors, spark and fuel to match.',
+      'Build first, then tune: every hardware change makes the VE table out of date, so log it again. A build is only done when the whole list is met on the dyno and it is safe.',
+    ],
+    deeper: 'The Tuning Course, chapter 4, and Learn articles 22, 40 and 45',
   },
   {
     id: 'torque', title: 'Torque management', price: 800, rep: 55, pages: ['torque'],
@@ -172,6 +183,7 @@ export const MILESTONES = [
   { id: 'dyno', title: 'A dyno of your own', test: (c) => c.owned.includes('dyno') },
   { id: 'five-jobs', title: 'Five happy customers', test: (c) => c.history.filter((h) => h.verdict === 'pass').length >= 5 },
   { id: 'first-boost', title: 'First boosted car', test: (c) => c.history.some((h) => h.verdict === 'pass' && h.boosted) },
+  { id: 'first-build', title: 'First engine built to order', test: (c) => c.history.some((h) => h.built) },
   { id: 'respected', title: 'A respected shop', test: (c) => c.rep >= 70 },
   { id: 'all-story', title: 'Every story customer served', test: (c) => c.storyDone },
 ];

@@ -57,9 +57,6 @@ const FIXES = {
   'full-session': (s) => zmul(veFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
   'blower-power': (s) => boostSparkAndFuel(s, 3, 11.8),
   nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 10),
-  'walkin-intake-hr': (s) => setBuild(s, { mafScalar: 1.11 }),
-  'walkin-injectors-v6': (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
-  'walkin-idle-v6': (s) => setCal(s, 'idle.damp', 0.04),
 };
 
 const failures = (v) => v.results.filter((x) => !x.pass).map((x) => `${x.check.label}: ${x.measured}`);

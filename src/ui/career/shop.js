@@ -7,6 +7,7 @@
 
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
+import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
 
 export const SAVE_VERSION = 1;
@@ -27,6 +28,7 @@ export const START_MONEY = 1000;
  * @property {number} paid money in (negative when a repair cost more than the job paid)
  * @property {number} repChange
  * @property {boolean} boosted
+ * @property {boolean} [built] an engine the shop built, delivered well
  * @property {number} peakHp
  */
 
@@ -46,6 +48,8 @@ export const START_MONEY = 1000;
  * @property {boolean} storyDone every story customer served
  * @property {LastDelivery|null} [last] the most recent hand-back, for the shop to show
  * @property {number} [lastSeen] the `seq` of the last hand-back the player has read
+ * @property {number} seed this career's own random seed: its customers are its own
+ * @property {string[]} offers today's walk-in customers (generated job ids)
  */
 
 /**
@@ -61,13 +65,42 @@ export const START_MONEY = 1000;
  * @property {number} seq increases with every hand-back, so the shop can tell a new one
  */
 
-/** @returns {Career} */
-export function newCareer() {
-  return {
+/**
+ * @param {number} [seed] a fixed seed, for tests; a new career gets a random one
+ * @returns {Career}
+ */
+export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
+  return withOffers({
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-  };
+    seed: seed >>> 0, offers: [],
+  });
+}
+
+/** Whether the shop has the training and equipment a template needs. @param {Career} c */
+const hasNeeds = (c) => (/** @type {{needs: {training?: string[], equipment?: string[]}}} */ t) => (t.needs.training ?? []).every((x) => c.trained.includes(x))
+  && (t.needs.equipment ?? []).every((x) => c.owned.includes(x));
+
+/**
+ * Today's walk-in customers, made for this shop, this day and its standing today. Made
+ * once when the day starts and kept, so buying or training mid-day never reshuffles who
+ * is waiting.
+ * @param {Career} c
+ * @returns {Career}
+ */
+function withOffers(c) {
+  return { ...c, offers: dayOffers(c, boardSize(c) + 1, hasNeeds(c)) };
+}
+
+/**
+ * The shop closes for the day: tomorrow brings new customers. The cars on the lifts
+ * stay where they are.
+ * @param {Career} c
+ * @returns {Career}
+ */
+export function nextDay(c) {
+  return withOffers({ ...c, day: c.day + 1 });
 }
 
 /**
@@ -80,15 +113,17 @@ export function newCareer() {
 export function reviveCareer(raw) {
   const c = /** @type {any} */ (raw);
   if (!c || typeof c !== 'object' || c.v !== SAVE_VERSION) return newCareer();
-  const fresh = newCareer();
-  return {
+  const fresh = newCareer(typeof c.seed === 'number' ? c.seed : undefined);
+  const revived = {
     ...fresh, ...c,
+    seed: fresh.seed,
     owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
     lifts: Array.isArray(c.lifts) ? c.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune) : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
   };
+  return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 
 /** How many customer cars the shop can hold at once. @param {Career} c */
@@ -144,9 +179,11 @@ export function blockers(c, job) {
  */
 export function board(c) {
   const inShop = new Set(c.lifts.map((l) => l.jobId));
-  const waiting = (j) => !inShop.has(j.id) && (j.repeat || !c.done[j.id]);
-  const story = JOBS.filter((j) => !j.repeat && waiting(j) && c.rep + 15 >= j.minRep).sort((a, b) => a.tier - b.tier);
-  const walkins = JOBS.filter((j) => j.repeat && waiting(j));
+  // The named customers first, lowest tier first, at most two at a time: they are the
+  // story. The rest of the board is today's walk-ins, and there are always walk-ins.
+  const story = JOBS.filter((j) => !inShop.has(j.id) && !c.done[j.id] && c.rep + 15 >= j.minRep)
+    .sort((a, b) => a.tier - b.tier).slice(0, 2);
+  const walkins = (c.offers ?? []).filter((id) => !inShop.has(id)).map(jobById).filter(Boolean);
   return [...story, ...walkins].slice(0, boardSize(c));
 }
 
@@ -197,17 +234,17 @@ export function deliver(c, jobId, v, extra = {}) {
     money: c.money + paid,
     rep: Math.max(0, c.rep + v.rep),
     day: leaves ? c.day + 1 : c.day,
-    done: v.verdict === 'pass' && !job.repeat ? { ...c.done, [jobId]: c.day } : c.done,
+    done: v.verdict === 'pass' && !job.generated ? { ...c.done, [jobId]: c.day } : c.done,
     lifts: leaves ? c.lifts.filter((l) => l.jobId !== jobId) : c.lifts,
     working: leaves ? null : c.working,
-    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange: v.rep, boosted: !!extra.boosted, peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
+    history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange: v.rep, boosted: !!extra.boosted, built: !!job.build && v.verdict === 'pass', peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
     last: {
       jobId, verdict: v.verdict, paid, repChange: v.rep, repair: v.repair, line: v.line, leaves,
       results: v.results.map((x) => ({ label: x.check.label, kind: x.check.kind, type: x.check.type, pass: x.pass, measured: x.measured })),
       seq: (c.last?.seq ?? 0) + 1,
     },
   };
-  return withMilestones(next);
+  return withMilestones(leaves ? withOffers(next) : next);
 }
 
 /**
@@ -218,13 +255,14 @@ export function deliver(c, jobId, v, extra = {}) {
  * @returns {Career}
  */
 export function giveUp(c, jobId) {
-  return {
+  return withOffers({
     ...c,
     rep: Math.max(0, c.rep - 2),
+    day: c.day + 1,
     lifts: c.lifts.filter((l) => l.jobId !== jobId),
     working: c.working === jobId ? null : c.working,
     history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: -2, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),
-  };
+  });
 }
 
 /**
@@ -275,7 +313,7 @@ export function train(c, id) {
 
 /** @param {Career} c @returns {Career} */
 function withMilestones(c) {
-  const storyDone = JOBS.filter((j) => !j.repeat).every((j) => c.done[j.id]);
+  const storyDone = JOBS.every((j) => c.done[j.id]);
   const next = { ...c, storyDone };
   const reached = MILESTONES.filter((m) => !next.milestones.includes(m.id) && m.test(next)).map((m) => m.id);
   return reached.length ? { ...next, milestones: [...next.milestones, ...reached] } : next;

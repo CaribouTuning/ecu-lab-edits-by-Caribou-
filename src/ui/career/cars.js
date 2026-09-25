@@ -38,7 +38,7 @@ export function customerCar(spec) {
     ...s,
     build,
     tune,
-    session: { ...s.session, env: { ...s.session.env, ...(spec.env ?? {}) }, journeyStep: 99, mode: 'career' },
+    session: { ...s.session, env: { ...s.session.env, ...(spec.env ?? {}) }, mode: 'career' },
   };
 }
 

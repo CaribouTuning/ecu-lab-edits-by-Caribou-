@@ -18,7 +18,7 @@ import { EQUIPMENT, MILESTONES, TRAINING, nextRepTier, repTier } from './catalog
 import { HOW_TO_SEE } from './evaluate.js';
 import { jobById } from './jobs.js';
 import {
-  accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, train,
+  accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, train,
 } from './shop.js';
 import { ShopScene } from './ShopScene.jsx';
 import styles from './ShopScreen.module.css';
@@ -183,7 +183,7 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
               const blocked = blockers(career, job);
               return (
                 <section key={job.id} className={styles.card} aria-label={`${job.customer.name}, ${job.customer.car}`}>
-                  <div className={styles.cardTag}>{job.repeat ? 'WALK-IN' : TIER_NAME[job.tier].toUpperCase()} · {job.customer.name} · {job.customer.car}</div>
+                  <div className={styles.cardTag}>{job.build ? 'ENGINE BUILD' : job.generated ? `WALK-IN · ${TIER_NAME[job.tier].toUpperCase()}` : TIER_NAME[job.tier].toUpperCase()} · {job.customer.name} · {job.customer.car}</div>
                   <p className={styles.quote}>&ldquo;{job.says}&rdquo;</p>
                   <p className={styles.small}><b>Wants:</b> {job.wants}</p>
                   <div className={styles.meta}><span>Pays <b>{money(job.pay)}</b></span><span>Reputation <b>+{job.rep}</b></span></div>
@@ -192,7 +192,12 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
                 </section>
               );
             })}
-            {waiting.length === 0 && <p className={styles.intro}>No one is waiting. Word gets around as your reputation grows.</p>}
+            {waiting.length === 0 && <p className={styles.intro}>No one else is waiting today.</p>}
+            <section className={styles.card} aria-label="Tomorrow">
+              <div className={styles.cardTag}>DAY {career.day} · CLOSING UP</div>
+              <p className={styles.small}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait for you overnight.</p>
+              <Button size="sm" variant="ghost" onClick={() => update(nextDay(career))}>OPEN TOMORROW</Button>
+            </section>
           </>
         )}
 

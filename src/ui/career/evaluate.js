@@ -8,7 +8,7 @@
  * danger it is, not as a success.
  */
 
-import { computeTuningScore, simulateSweep } from '../../sim/index.js';
+import { OCTANE_OPTS, computeTuningScore, simulateSweep } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
 
 import { customerCar, idleTest } from './cars.js';
@@ -107,6 +107,19 @@ function check(c, ctx) {
         measured: !t.running ? 'stalled on a warm restart'
           : `settled at ${Math.round(t.meanRpm)} RPM (target ${Math.round(t.targetRpm)}), swinging ${Math.round(t.swingRpm)} RPM; up to ${c.swing} allowed`,
       };
+    }
+    case 'fuelIs': {
+      const idx = ctx.state.build.octaneIdx;
+      return { check: c, pass: idx === c.octaneIdx, measured: `on ${OCTANE_OPTS[idx]?.label ?? '?'}; ${OCTANE_OPTS[c.octaneIdx].label} asked for` };
+    }
+    case 'naOnly': {
+      const b = ctx.state.build;
+      const adders = [b.turboOn && 'a turbo', b.blowerId && 'a supercharger', b.nitrous && 'nitrous'].filter(Boolean);
+      return { check: c, pass: adders.length === 0, measured: adders.length ? `has ${adders.join(' and ')}` : 'naturally aspirated' };
+    }
+    case 'maxRedline': {
+      const rl = ctx.state.build.engineConfig.redline;
+      return { check: c, pass: rl <= c.max, measured: `rev limit ${rl} RPM; ${c.max} allowed` };
     }
     case 'score':
       return { check: c, pass: ctx.score >= c.min, measured: `Tuning Score ${ctx.score}; ${c.min} needed` };

@@ -457,33 +457,6 @@ function selectedLoad() {
   return pressed[0].textContent;
 }
 
-describe('the guided first run', () => {
-  it('advances to the next step when the banner is followed', () => {
-    // `journeyStep` is onboarding progress, and the banner is the only thing that
-    // reads it. A dropped write leaves a new player stuck on step 1 of 4, being told
-    // to do something they have already done.
-    launch();
-    expect(screen.getByText('STEP 1 · BUILD THE ENGINE')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Done building — go tune it' }));
-
-    // The banner's onAdvance both bumps the step and changes tab, so the step-2 banner
-    // is what proves the store took the write — the tab change alone would not.
-    expect(screen.getByText('STEP 2 · CALIBRATE IT')).toBeTruthy();
-  });
-
-  it('dismisses for good on SKIP GUIDE', () => {
-    // The dismissal writes 99, a step the JOURNEY table has no entry for, so
-    // JourneyBanner renders null. Drop the write and the banner is unclosable.
-    launch();
-    expect(screen.getByText('STEP 1 · BUILD THE ENGINE')).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP GUIDE' }));
-
-    expect(screen.queryByText('STEP 1 · BUILD THE ENGINE')).toBeNull();
-  });
-});
-
 describe('banking a pull', () => {
   it('writes the career through to storage, not just to the store', async () => {
     // `BANK_PULL` updates bestScore/totalScore/pullCount/runs in the store; a

@@ -10,9 +10,9 @@
  * LAYOUT
  * This used to be one large single-component app; it has been split into
  * `ui/primitives/`, `ui/screens/` and `ui/AppShell.jsx`. What remains here is the
- * store setup, the pieces still shared across more than one screen (`JourneyBanner`,
- * `Tach`), and the top-level component that reads the route and
- * renders the right screen into the shell.
+ * store setup, the one piece still shared across more than one screen (`Tach`), and
+ * the top-level component that reads the route and renders the right screen into the
+ * shell.
  *
  * TYPE CHECKING
  * No longer opts out. This file used to carry `@ts-nocheck` while it was one large
@@ -96,27 +96,6 @@ import { LogScreen } from './screens/dyno/LogScreen.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
-// Guided first run. Walks a new player through the actual working order a tuner
-// uses — build the engine, calibrate it, hear it run, then measure it — and then
-// gets out of the way. Purely navigational: it never changes the simulation.
-const JOURNEY = [
-  { tab: 'build', title: 'Step 1 · Build the engine',
-    body: 'Open Engine Architecture and design a short block: bore, stroke, compression, cam, springs. Then fit parts under Induction and Exhaust. Nothing here is cosmetic — every choice changes how the engine breathes.',
-    cta: 'Done building — go tune it', next: 'tune' },
-  { tab: 'tune', title: 'Step 2 · Calibrate it',
-    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, run a pull and correct it from the log. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now. A NITROUS page joins them once a nitrous kit is fitted.',
-    cta: 'Calibration set — start the engine', next: 'live' },
-  { tab: 'live', title: 'Step 3 · Start it and listen',
-    body: 'Press START. Watch it idle, hold the throttle to rev it, and watch the sensors and fuel trims respond in real time. This is your calibration actually running.',
-    cta: 'Sounds good — put it on the dyno', next: 'dyno' },
-  { tab: 'dyno', title: 'Step 4 · Measure it',
-    body: 'Run a pull. Then read the Pull Log before you look at the power number — it explains anything that went wrong and what to change. From here the loop is: adjust, pull again, compare.',
-    cta: 'Measured — now race it', next: 'drag' },
-  { tab: 'drag', title: 'Step 5 · Race it',
-    body: 'Put that torque curve in a car and run a quarter mile. Body, gearing, tyres and driven wheels all change the time without touching the engine — because a torque curve is only half of acceleration. Read the 60-foot time for traction and the trap speed for power.',
-    cta: 'Finish — let me explore freely', next: null },
-];
-
 /** Where each practice mission starts: the screen its first step is about. */
 const MISSION_START = {
   'first-pull': ['build', 'engine'],
@@ -134,35 +113,6 @@ function LockedSettings({ section }) {
     <div style={{ margin: '4px 0 16px', padding: '10px 12px', borderRadius: 10, border: `1px dashed ${T.line}`, fontSize: 12, color: T.ink2, lineHeight: 1.55, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
       <Lock size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
       <span>The ECU&apos;s settings for this page are locked until the shop takes the <b style={{ color: T.ink }}>{course?.title ?? 'right'}</b> course.</span>
-    </div>
-  );
-}
-
-function JourneyBanner({ step, onAdvance, onDismiss }) {
-  const j = JOURNEY[step];
-  if (!j) return null;
-  return (
-    <div style={{ background: T.accBg, border: `1px solid ${T.acc}`, borderRadius: 12, padding: '13px 14px', margin: '0 0 14px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ fontSize: 11, letterSpacing: 1, color: T.accInk, fontWeight: 800 }}>{j.title.toUpperCase()}</div>
-        <Button variant="quiet" size="sm" style={{ flexShrink: 0 }} onClick={onDismiss}>SKIP GUIDE</Button>
-      </div>
-      <div style={{ fontSize: 12.5, color: T.inkSoft, lineHeight: 1.55, marginTop: 7 }}>{j.body}</div>
-      <div style={{ display: 'flex', gap: 5, marginTop: 11, marginBottom: 10 }}>
-        {JOURNEY.map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? T.acc : T.line }} />
-        ))}
-      </div>
-      {/* The closest thing this file has to a justified `block`, and still not one.
-          The card looks bounded, but nothing bounds it: index.html lays the app out
-          mobile-first and neither the shell nor any tab body sets a max-width, so
-          this banner is as wide as the window. `block` here would put a 2500px-wide
-          "Done building — go tune it" on a desktop monitor, which is the complaint
-          this PR exists to answer. Give the app a max-width first; `block` becomes
-          honest the moment a container is genuinely narrow. */}
-      <Button onClick={onAdvance}>
-        {j.cta}
-      </Button>
     </div>
   );
 }
@@ -334,7 +284,7 @@ export function EcuLabApp() {
   // and `route.section`, narrowed per tab, just below.
   const [session] = useSession();
   const {
-    loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
+    loadKpa, soundOn, volume, dynoPhase, dynoRpm, throttleInput, health,
     result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live, car, dragResult, dragRunning, dragT, treePhase,
     mode, env, liveAux, faults,
@@ -344,6 +294,10 @@ export function EcuLabApp() {
   // parts of the ECU the shop has learned to use.
   const [career] = useCareer();
   const inCareer = mode === 'career' && career != null;
+  // An engine-building job opens BUILD: the customer pays for parts. Every other job's
+  // car is the customer's as it came in, and BUILD is for looking.
+  const jobOnBay = inCareer && career.working ? jobById(career.working) : null;
+  const buildOpen = !!jobOnBay?.build;
   const sandboxStash = useSandboxStash();
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
   // keeps reading the name it always read — and so a later task can move a tab's markup
@@ -1382,13 +1336,8 @@ export function EcuLabApp() {
       // the tutorial was showing.
       <TutorialScreen
         key="tutorial"
-        // From CAREER the tutorial was a detour: back to the shop, with no first-run
-        // guide on a customer's car.
-        onDone={() => {
-          if (inCareer) { changeTab('shop'); return; }
-          goTab('build');
-          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 });
-        }}
+        // From CAREER the tutorial was a detour: back to the shop.
+        onDone={() => (inCareer ? changeTab('shop') : goTab('build'))}
         onCourse={goCourse}
       />
     );
@@ -1403,8 +1352,6 @@ export function EcuLabApp() {
           // Practice is SANDBOX's: from CAREER, the customer's car goes back on its lift
           // first (a no-op in SANDBOX).
           dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          // A mission is its own guide: the first-run banner would only compete with it.
-          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 });
           // Marked against SANDBOX's car, which is the one on the bench from here on.
           const start = sandboxStash ?? { session, tune };
           dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'mission', value: { id, step: 0, marks: [markOf(start)] } });
@@ -1464,7 +1411,6 @@ export function EcuLabApp() {
             an accordion card, so nothing about it reads as a HOME section. */}
         {tab === 'live' && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 2 && <JourneyBanner step={2} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 3 }); changeTab('dyno'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <LiveScreen
               tachFullScaleRpm={tachFullScaleRpm}
               onStart={startEngine} onStop={stopEngine}
@@ -1485,12 +1431,16 @@ export function EcuLabApp() {
           <div style={{ padding: 16 }}>
             {inCareer && (
               <Panel tight style={{ marginBottom: 14, fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>
-                <b style={{ color: T.ink }}>The customer&apos;s car.</b> Open any section to see what is fitted. The parts are theirs:
-                the job is the calibration, so nothing here can be changed.
+                {buildOpen ? (
+                  <><b style={{ color: T.ink }}>Build it.</b> This is an engine-building job: every part here is yours to choose, and the
+                    customer pays for them. Build to their list on the job ticket, then log and tune what you built.</>
+                ) : (
+                  <><b style={{ color: T.ink }}>The customer&apos;s car.</b> Open any section to see what is fitted. The parts are theirs:
+                    the job is the calibration, so nothing here can be changed.</>
+                )}
               </Panel>
             )}
-            <BuildLocked.Provider value={inCareer}>
-            {journeyStep === 0 && <JourneyBanner step={0} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 1 }); changeTab('tune'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
+            <BuildLocked.Provider value={inCareer && !buildOpen}>
             <Eyebrow icon={Settings}>Garage</Eyebrow>
             {!inCareer && (
               <p style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginTop: 0, marginBottom: 14 }}>
@@ -1575,13 +1525,6 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {tab === 'tune' && journeyStep === 1 && (
-          <div style={{ padding: '14px 16px 0' }}>
-            {/* Step 2 is LIVE, which this branch gives its own tab. */}
-            <JourneyBanner step={1} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 2 }); changeTab('live'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />
-          </div>
-        )}
-
         {tuneOpen && lockedPage && (() => {
           const course = trainingFor(lockedPage);
           return (
@@ -1642,7 +1585,6 @@ export function EcuLabApp() {
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
         {tab === 'dyno' && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 3 && <JourneyBanner step={3} onAdvance={() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 4 }); changeTab('drag'); }} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <Eyebrow icon={Activity}>{roadTest ? 'Road Test' : 'Dyno Cell'}</Eyebrow>
             {roadTest && (
               <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
@@ -1801,7 +1743,6 @@ export function EcuLabApp() {
             store and draws it. */}
         {tab === 'drag' && !inCareer && (
           <div style={{ padding: 16 }}>
-            {journeyStep === 4 && <JourneyBanner step={4} onAdvance={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} onDismiss={() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 })} />}
             <DragScreen
               section={dragSection} onToggle={toggleDragSection}
               result={result} engineDerived={engineDerived} onRun={runDrag}

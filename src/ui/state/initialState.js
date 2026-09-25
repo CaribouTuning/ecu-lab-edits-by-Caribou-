@@ -156,9 +156,6 @@ import {
  * @property {number} dynoRpm engine speed the pull is currently at, RPM. Run state, not
  *   view state, for the same reason `revealCount` is: it is produced by the pull's own
  *   clock and read by both the tachometer and the audio.
- * @property {number} journeyStep guided-onboarding progress: BUILD -> TUNE -> LIVE ->
- *   DYNO, then free play (step 4). Survives navigation, so it lives here rather than
- *   as view state.
  * @property {{id: string, step: number, marks: any[]}|null} mission the tutorial's
  *   practice mission in progress: which one, how many of its steps are done, and what
  *   the game looked like as each was done (see tutorial/missions.js). Null when none.
@@ -295,7 +292,6 @@ export function makeInitialState() {
       volume: 1,
       dynoPhase: null,
       dynoRpm: 820,
-      journeyStep: 0,
       mission: null,
       logFocusRpm: null,
       // A fresh object graph, like every other default here: DEFAULT_CAR is not frozen

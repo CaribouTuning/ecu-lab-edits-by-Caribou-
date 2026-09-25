@@ -61,6 +61,7 @@ export function CareerBar({ career, onShop, onHandBack }) {
               <li key={c.label}>{c.label}{HOW_TO_SEE[c.type] && <span className={styles.how}>{HOW_TO_SEE[c.type]}</span>}</li>
             ))}
           </ul>
+          {job.build && <p className={styles.note}>An engine-building job: BUILD is open, and every part you choose is on the customer. Build to their list, then log and tune what you built.</p>}
           {roadOnly && <p className={styles.note}>No dyno yet: pulls are road tests. They log everything a wideband and the ECU see, but not horsepower.</p>}
           <div className={styles.actions}>
             <Button size="sm" onClick={onHandBack}>HAND BACK THE CAR</Button>

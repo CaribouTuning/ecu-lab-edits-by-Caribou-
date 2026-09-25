@@ -18,13 +18,19 @@
  *   untouched  a table the customer asked you not to bend, within `tol`
  *   idle     holds idle: running, swing and offset from target in RPM
  *   score    Tuning Score at least `min`
+ *   fuelIs   runs on the fuel the customer asked for (`octaneIdx`)
+ *   naOnly   no turbo, supercharger or nitrous
+ *   maxRedline  the rev limit no higher than `max`
  * `kind` sorts them: the complaint is what they came in for, safety is what keeps the
  * engine alive, and request is anything else they asked for.
  */
 
+import { IDLES, SAFE, withMods } from './criteria.js';
+import { generatedJob } from './generate.js';
+
 /**
  * @typedef {object} Criterion
- * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'} type
+ * @property {'events'|'mixture'|'minHp'|'maxEgt'|'maxDuty'|'untouched'|'idle'|'score'|'fuelIs'|'naOnly'|'maxRedline'} type
  * @property {'complaint'|'safety'|'request'} kind
  * @property {string} label what the customer would call it
  * @property {string[]} [types]
@@ -37,13 +43,19 @@
  * @property {number} [swing]
  * @property {number} [offset]
  * @property {number} [min]
+ * @property {number} [octaneIdx]
  */
 
 /**
  * @typedef {object} Job
  * @property {string} id
  * @property {1|2|3} tier
- * @property {boolean} [repeat] walk-in work that can come back, at lower pay
+ * @property {boolean} [generated] made from a template (generate.js) rather than written by hand
+ * @property {string} [carKey] which of the generator's cars it came on
+ * @property {string} [template] the template a generated job was made from
+ * @property {number} [level] the shop's standing the job was offered at, 0-4
+ * @property {object} [params] what the template drew: fault sizes, targets
+ * @property {boolean} [build] an engine-building job: BUILD is open, and the customer pays for parts
  * @property {{name: string, car: string, color: string, body?: 'coupe'|'sedan'|'hatch'}} customer `color` names a paint in the shop palette (tokens.js)
  * @property {string} says the complaint, in the customer's words
  * @property {string} wants what they want, in their words
@@ -57,15 +69,6 @@
  * @property {string} hint what the customer says if it comes back unfixed: a symptom, not an answer
  * @property {string} teaches shown when it is done well
  */
-
-const SAFE = /** @type {Criterion[]} */ ([
-  { type: 'events', kind: 'safety', types: ['knock', 'unheardknock', 'nitrousknock'], label: 'No knock' },
-  { type: 'events', kind: 'safety', types: ['lean', 'nitrouslean', 'fuel'], label: 'Never lean or out of fuel under load' },
-  { type: 'maxEgt', kind: 'safety', max: 950, label: 'Exhaust temperature in a safe range' },
-]);
-const IDLES = /** @type {Criterion} */ ({ type: 'idle', kind: 'request', swing: 120, offset: 150, label: 'Still idles smoothly' });
-
-const withMods = (patch) => (b) => ({ mods: { ...b.mods, ...patch } });
 
 /** @type {Job[]} */
 export const JOBS = [
@@ -218,13 +221,13 @@ export const JOBS = [
   {
     id: 'blower-power', tier: 3,
     customer: { name: 'Rae', car: '3.5 V6 track car, supercharged', color: 'copper', body: 'coupe' },
-    says: 'Supercharger’s on, intercooled, injectors sized for it. It’s on the old tune and it rattles. I have a track weekend in two weeks.',
-    wants: '340 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
+    says: 'Supercharger’s on with the small pulley, intercooled, injectors sized for it. It’s on the old tune and it rattles. I have a track weekend in two weeks.',
+    wants: '380 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
     work: ['Supercharger kit already fitted and injectors scaled', 'Dyno tune for power and reliability'],
-    car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.4, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
+    car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.6, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
     needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 70, pay: 3200, rep: 22,
     checks: [
-      { type: 'minHp', kind: 'complaint', hp: 340, label: '340 wheel horsepower' },
+      { type: 'minHp', kind: 'complaint', hp: 380, label: '380 wheel horsepower' },
       ...SAFE,
       { type: 'maxDuty', kind: 'safety', max: 90, label: 'Injectors with headroom left' },
     ],
@@ -247,55 +250,7 @@ export const JOBS = [
     hint: 'Still bogs when it comes on, or it still makes that noise. It isn’t right yet.',
     teaches: 'Nitrous brings its own oxygen, so it needs its own fuel, and it lowers the knock limit while it sprays. Both are set for the spray alone; the base tune stays as it was.',
   },
-  // ------------------------------------------------------------------ walk-ins: repeat work
-  {
-    id: 'walkin-intake-hr', tier: 1, repeat: true,
-    customer: { name: 'A walk-in', car: '2008 Nissan 350Z', color: 'grey', body: 'coupe' },
-    says: 'New intake, and now it hesitates and drinks fuel. Can you have a look?',
-    wants: 'Make it run right with the intake.',
-    work: ['Road test and diagnose', 'Tune for the intake'],
-    car: { preset: 'vq35hr', build: withMods({ intake: true }) },
-    needs: {}, minRep: 0, pay: 250, rep: 2,
-    checks: [
-      { type: 'events', kind: 'complaint', types: ['maf'], label: 'Airflow reading right with the intake' },
-      { type: 'mixture', kind: 'complaint', pct: 6, label: 'Full-throttle mixture where it should be' },
-      ...SAFE, IDLES,
-    ],
-    hint: 'Still feels off at full throttle.',
-    teaches: 'The same intake problem on a different engine: the MAF’s calibration is what changed.',
-  },
-  {
-    id: 'walkin-injectors-v6', tier: 1, repeat: true,
-    customer: { name: 'A walk-in', car: '3.5 V6 daily', color: 'pewter', body: 'sedan' },
-    says: 'I put 550s in it for later and now it runs like it’s choking, and it won’t start cold without a fight.',
-    wants: 'Just make it run right on these injectors.',
-    work: ['Road test and diagnose', 'Correct the calibration'],
-    car: { preset: null, build: () => ({ injIdx: 2 }) },
-    needs: {}, minRep: 0, pay: 250, rep: 2,
-    checks: [
-      { type: 'events', kind: 'complaint', types: ['rich', 'injscale'], label: 'No longer drowning in fuel' },
-      { type: 'untouched', kind: 'request', table: 'afr', tol: 0.3, label: 'Fixed the cause, not by bending the fuel targets' },
-      ...SAFE, IDLES,
-    ],
-    hint: 'Still rich. Still choking.',
-    teaches: 'Injector size is a number the ECU is told. Change the part, change the number.',
-  },
-  {
-    id: 'walkin-idle-v6', tier: 1, repeat: true,
-    customer: { name: 'A walk-in', car: '3.5 V6 daily', color: 'pearl', body: 'sedan' },
-    says: 'The idle hunts and it almost stalled at a drive-through. Someone "fixed" it for me last month.',
-    wants: 'A normal idle.',
-    work: ['Diagnose the idle', 'Correct the calibration'],
-    car: { preset: null, tune: (t) => ({ ecu: { ...t.ecu, idle: { ...t.ecu.idle, damp: 0.008 } } }) },
-    needs: { training: ['idle'] }, minRep: 0, pay: 300, rep: 2,
-    checks: [
-      { type: 'idle', kind: 'complaint', swing: 60, offset: 60, label: 'Idles steadily, on its target, without stalling' },
-      ...SAFE,
-    ],
-    hint: 'Still rolls up and down at idle.',
-    teaches: 'An idle controller with no damping overshoots every correction.',
-  },
 ];
 
 /** @param {string} id */
-export const jobById = (id) => JOBS.find((j) => j.id === id);
+export const jobById = (id) => (typeof id === 'string' && id.startsWith('g:') ? generatedJob(id) : JOBS.find((j) => j.id === id));
