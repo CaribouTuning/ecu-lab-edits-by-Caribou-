@@ -20,6 +20,7 @@ import {
 } from '../../../src/ui/state/history.js';
 import { makeInitialState } from '../../../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../../../src/ui/state/reducer.js';
+import { newCareer } from '../../../src/ui/career/shop.js';
 import { RUN_LIMIT } from '../../../src/ui/state/runLog.js';
 
 /**
@@ -50,6 +51,12 @@ function makeSentinelState() {
       state[slice] = { past: [], future: [] };
       continue;
     }
+    // `career` and `stash` are null until the shop is opened: whole values, not slices
+    // of fields, so they are compared whole (see `changedFieldKeys`).
+    if ((/** @type {any} */ (init))[slice] === null) {
+      state[slice] = `SENTINEL::${slice}`;
+      continue;
+    }
     const sliceState = /** @type {any} */ ({});
     for (const field of Object.keys(/** @type {any} */ (init)[slice])) {
       sliceState[field] = `SENTINEL::${slice}.${field}`;
@@ -70,6 +77,10 @@ function makeSentinelState() {
 function changedFieldKeys(before, after) {
   const changed = new Set();
   for (const slice of Object.keys(before)) {
+    if (typeof before[slice] !== 'object' || before[slice] === null) {
+      if (before[slice] !== after[slice]) changed.add(slice);
+      continue;
+    }
     for (const field of Object.keys(before[slice])) {
       if (before[slice][field] !== after[slice][field]) {
         changed.add(`${slice}.${field}`);
@@ -102,9 +113,11 @@ const N54_PRESET = {
 };
 
 describe('makeInitialState', () => {
-  it('returns the four slices', () => {
+  it('returns the four slices, and no career until the shop is opened', () => {
     const s = makeInitialState();
-    expect(Object.keys(s).sort()).toEqual(['build', 'history', 'session', 'tune']);
+    expect(Object.keys(s).sort()).toEqual(['build', 'career', 'history', 'session', 'stash', 'tune']);
+    expect(s.career).toBeNull();
+    expect(s.stash).toBeNull();
   });
 
   it('starts with no preset loaded and clean tables', () => {
@@ -1758,5 +1771,39 @@ describe('tune.rangeMode (#105)', () => {
     expect(toggled.tune.rangeMode).toBe(true);
     expect(toggled.history.past).toHaveLength(0);
     expect(toggled.history.future).toHaveLength(1);
+  });
+});
+
+describe('CAREER and SANDBOX share the bench, never the car', () => {
+  const sandboxCar = () => {
+    const s = makeInitialState();
+    return { ...s, build: { ...s.build, mafScalar: 0.8 }, session: { ...s.session, pullCount: 7, bestScore: 1234 } };
+  };
+
+  it('sets SANDBOX aside whole on the way in, and puts it back whole on the way out', () => {
+    const career = newCareer();
+    const inCareer = reducer(sandboxCar(), { type: ACTIONS.ENTER_CAREER, career });
+    expect(inCareer.session.mode).toBe('career');
+    expect(inCareer.build.mafScalar).toBe(1);
+    expect(inCareer.session.pullCount).toBe(0);
+    const back = reducer(inCareer, { type: ACTIONS.ENTER_SANDBOX });
+    expect(back.session.mode).toBe('sandbox');
+    expect(back.build.mafScalar).toBe(0.8);
+    expect(back.session.pullCount).toBe(7);
+    expect(back.session.bestScore).toBe(1234);
+    expect(back.stash).toBeNull();
+    expect(back.career).toBe(career);
+  });
+
+  it('sends SANDBOX’s saved stats to SANDBOX even when they load after CAREER has the bench', () => {
+    const inCareer = reducer(sandboxCar(), { type: ACTIONS.ENTER_CAREER, career: newCareer() });
+    const restored = reducer(inCareer, {
+      type: ACTIONS.RESTORE_CAREER, career: { best: 5000, total: 9000, pulls: 40, runs: [], pinnedRunId: null },
+    });
+    expect(restored.session.pullCount).toBe(0);
+    expect(restored.session.bestScore).toBe(0);
+    const back = reducer(restored, { type: ACTIONS.ENTER_SANDBOX });
+    expect(back.session.pullCount).toBe(47);
+    expect(back.session.bestScore).toBe(5000);
   });
 });

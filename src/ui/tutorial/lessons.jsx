@@ -646,7 +646,7 @@ function NextSteps() {
       <H>Go deeper</H>
       <P>HOME › Learn How It Works has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 42 (correcting VE from logs, in depth), 44 (troubleshooting by symptom) and 45 (a full worked session).</P>
       <H>Real cars</H>
-      <P>Career mode hands you customer cars with real faults to find. Every one is a problem this course taught you to diagnose.</P>
+      <P>CAREER gives you a tuning shop of your own. Customers bring cars with real faults and describe what the car does, not what is wrong with it. Every fault is one this course taught you to diagnose. Training opens more of the ECU, and a dyno, more lifts and better tools open bigger jobs.</P>
       <Did>That is the course done. The loop is always the same: build it, set the tables, pull it, read the log, change one thing.</Did>
     </>
   );

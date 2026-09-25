@@ -94,6 +94,35 @@ export function useSession() {
 }
 
 /**
+ * The career shop's save (null until the shop has been opened this session).
+ * @returns {[import('../career/shop.js').Career|null, React.Dispatch<StoreAction>]}
+ */
+export function useCareer() {
+  const [state, dispatch] = useStore();
+  return [state.career, dispatch];
+}
+
+/**
+ * SANDBOX's car and bench while CAREER has the store, or null in SANDBOX.
+ * @returns {{build: any, tune: any, session: any}|null}
+ */
+export function useSandboxStash() {
+  const [state] = useStore();
+  return state.stash?.sandbox ?? null;
+}
+
+/**
+ * Whether a pull is a road test: in CAREER, until the shop owns a dyno. A road test logs
+ * everything a wideband and the ECU see, but nothing measures power, so every screen
+ * that would show horsepower asks this first.
+ * @returns {boolean}
+ */
+export function useRoadTest() {
+  const [state] = useStore();
+  return state.session.mode === 'career' && !!state.career && !state.career.owned.includes('dyno');
+}
+
+/**
  * The HISTORY slice: the undo and redo stacks.
  * @returns {[HistoryState, React.Dispatch<StoreAction>]}
  */

@@ -17,6 +17,14 @@ and run a quarter mile with it.
 
 It is a teaching tool, not a game with a horsepower slider.
 
+Three ways in: **SANDBOX** is free play; **TUTORIAL** is five minutes on the basics, with
+the full Tuning Course under HOME › Learn; **CAREER** is a tuning shop of your own.
+Customers bring cars with real faults and describe what the car does, never what is wrong
+with it. Every job is graded on the same simulator as everything else: the car you hand
+back is pulled and idled, and power bought with knock or a lean top end is not a
+finished job. Money buys a dyno, lifts and tools; training opens more of the ECU. Its
+save is separate from SANDBOX's, and switching between them loses nothing.
+
 ## The design rule
 
 **Nothing adds horsepower.** Every part changes airflow, pressure, temperature or fuel
@@ -109,6 +117,8 @@ src/
     ecu/             engine management: calibration, sensors, controllers, protections,
                      the live ECU and its pull-log events
   ui/            presentation only — no physics below this line
+    career/        CAREER: the shop, its customers and jobs, and the grading, which
+                   runs the real simulator on the car handed back
   storage.js     persistence adapter (artifact host / localStorage / memory)
 tests/           physics intent tests + the behavioural fingerprint
 ```

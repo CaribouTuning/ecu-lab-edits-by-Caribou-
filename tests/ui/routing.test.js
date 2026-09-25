@@ -60,6 +60,7 @@ describe('formatRoute', () => {
       { view: 'start', tab: null, section: null },
       { view: 'tutorial', tab: null, section: null },
       { view: 'course', tab: null, section: null },
+      { view: 'shop', tab: null, section: null },
       { view: 'app', tab: 'dash', section: null },
       { view: 'app', tab: 'tune', section: 'spark' },
     ];
@@ -75,6 +76,7 @@ describe('formatRoute', () => {
     expect(formatRoute({ view: 'start', tab: null, section: null })).toBe('#/');
     expect(formatRoute({ view: 'tutorial', tab: null, section: null })).toBe('#/tutorial');
     expect(formatRoute({ view: 'course', tab: null, section: null })).toBe('#/course');
+    expect(formatRoute({ view: 'shop', tab: null, section: null })).toBe('#/shop');
     expect(formatRoute({ view: 'app', tab: 'dash', section: null })).toBe('#/dash');
     expect(formatRoute({ view: 'app', tab: 'tune', section: 'spark' })).toBe('#/tune/spark');
   });

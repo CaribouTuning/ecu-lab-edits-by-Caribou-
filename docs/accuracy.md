@@ -186,12 +186,41 @@ and kit makers — practitioner rules, the weakest sources here).
   liquid: the engine cranks, the wideband reads the flood, and it will not fire. No
   correctly fuelled result moves.
 
+- **Knock the ECU only imagined wore the pistons.** A big cam's valvetrain noise can
+  read as knock to the sensor, and the ECU pulls timing for it (`falseknock` in the pull
+  log). That retard was also being charged as detonation damage, so a cammed engine with
+  no real knock lost pistons on every pull. Only knock beyond the false part now wears
+  them (`src/sim/sweep.js`). In the fingerprint this moves `wear.piston` alone, by at
+  most 0.003 points, in the 18 cases where real knock sat at the noise level.
+
 Together these regenerate the behavioural fingerprint. Naturally aspirated results are
 unchanged apart from exhaust temperature; boosted results move on average +1.7% (mild
 boost) and −0.8% (heavy boost), with the largest moves on turbos far too small for their
 engine, which previously made boost the compressor could not pass. The dew-point bound
 moves only the fingerprint's grossly over-fuelled cells (850 cc injectors on a 315 cc
 calibration, on E85), by at most one unit of power or torque.
+
+## Career: how a job is graded
+
+Every job is graded by `src/ui/career/evaluate.js` on the car as handed back: a
+full-throttle pull at 100 kPa in the customer's conditions (whatever the bench was last
+left on), plus a headless LIVE idle when the job is about idle. Nothing is scored by a
+separate formula. Each job is checked in `tests/career.test.js` to fail as delivered and
+to pass with a real fix.
+
+- **Mixture is graded directly.** The pull log's lean event only fires past AFR 15.2, so a
+  car can run 18% lean of its target with no event and a Tuning Score of 100. Jobs about
+  fuelling therefore compare the wideband with the commanded AFR at every full-throttle
+  point, within the percentage the job states.
+- **Damage is judged per pull on the tune handed back**, not on the health the car lost
+  while it was being diagnosed: a customer's car often arrives doing damage, and that is
+  why it came in.
+- **Without a dyno, a pull is a road test.** It logs everything a wideband and the ECU
+  see, and hides horsepower on every screen. Power targets need a dyno.
+- **What the career leaves out, and why.** There are no A/C jobs, because the A/C makes
+  the stock idle noisy in this model, so an A/C complaint could not be told apart from a
+  healthy car. There is no big-cam idle job, because no idle setting tried steadies a
+  268° cam here. Both would be jobs with no fair answer.
 
 ## Claims audit
 

@@ -44,7 +44,7 @@
  */
 
 import {
-  Activity, Flag, Flame, Gauge, Grid3x3, Info, Settings, Wrench,
+  Activity, Flag, Flame, Gauge, Grid3x3, Home, Info, Settings, Store, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
@@ -53,7 +53,7 @@ import {
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
-import { useBuild, useSession } from './state/StoreProvider.jsx';
+import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
 import styles from './AppShell.module.css';
@@ -88,6 +88,15 @@ const NAV_ITEMS = [
 ];
 
 /**
+ * CAREER's nav: the shop is home, and there is no drag strip. The customer's car is
+ * the one on the bay, so the working screens are the same ones Sandbox uses.
+ */
+const CAREER_NAV_ITEMS = [
+  { id: 'shop', label: 'SHOP', icon: Store },
+  ...NAV_ITEMS.filter((n) => n.id !== 'dash' && n.id !== 'drag'),
+];
+
+/**
  * The section nav: a bottom bar on a phone, a side rail from the breakpoint up. One
  * component and one stylesheet, not two of each — see AppShell.module.css.
  *
@@ -98,12 +107,13 @@ const NAV_ITEMS = [
  * @param {object} props
  * @param {string|null} props.tab id of the active tab, or null outside the app view
  * @param {(tab: string) => void} props.onNavigate
+ * @param {boolean} [props.career] show CAREER's destinations
  * @returns {React.ReactElement}
  */
-function SideNavInner({ tab, onNavigate }) {
+function SideNavInner({ tab, onNavigate, career = false }) {
   return (
     <nav className={styles.nav} aria-label="Sections">
-      {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+      {(career ? CAREER_NAV_ITEMS : NAV_ITEMS).map(({ id, label, icon: Icon }) => (
         <button
           key={id}
           type="button"
@@ -205,6 +215,7 @@ function EngineRunLight() {
  * @param {object} props
  * @param {() => void} [props.onTutorial]
  * @param {() => void} [props.onRepair]
+ * @param {() => void} [props.onMenu] back to the start screen
  * @returns {React.ReactElement}
  */
 /**
@@ -219,11 +230,12 @@ function fuelLabel(fuel, ethanolPct) {
   return /^\d+$/.test(fuel.label) ? `${fuel.label} oct` : fuel.label;
 }
 
-export function StatusStrip({ onTutorial, onRepair }) {
+export function StatusStrip({ onTutorial, onRepair, onMenu }) {
   const [build] = useBuild();
   const [session] = useSession();
   const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
   const { health, result } = session;
+  const roadTest = useRoadTest();
 
   // Keyed on `engineConfig` so the 20 Hz re-render does not re-derive the engine
   // twenty times a second to print the same string.
@@ -270,7 +282,7 @@ export function StatusStrip({ onTutorial, onRepair }) {
         </div>
         <StripField label="BOOST" value={turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
         <HealthField pct={overallHealth} />
-        <StripField label="LAST PULL" value={result ? `${Math.round(result.peakHp)} whp` : '—'} />
+        <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
         <EngineRunLight />
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
             button whose accessible name depends on the tooltip surviving. Note the
@@ -278,6 +290,11 @@ export function StatusStrip({ onTutorial, onRepair }) {
             name and must stay the only match. Moved here verbatim from the header
             this strip replaced. */}
         <div className={styles.actions}>
+          {onMenu && (
+            <Button variant="ghost" size="sm" title="Main menu" aria-label="Main menu" onClick={onMenu}>
+              <Home size={16} aria-hidden="true" />
+            </Button>
+          )}
           <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={onTutorial}>
             <Info size={16} aria-hidden="true" />
           </Button>
@@ -296,18 +313,21 @@ export function StatusStrip({ onTutorial, onRepair }) {
  * @param {(tab: string) => void} props.onNavigate what a nav item means
  * @param {() => void} [props.onTutorial] what the strip's Tutorial button means
  * @param {() => void} [props.onRepair] what the strip's Repair engine button means
+ * @param {() => void} [props.onMenu] what the strip's Main menu button means
+ * @param {boolean} [props.career] CAREER's nav rather than Sandbox's
+ * @param {React.ReactNode} [props.banner] pinned above the screen (CAREER's job ticket)
  * @param {React.ReactNode} props.children the screen for the current route
  * @returns {React.ReactElement}
  */
 export function AppShell({
-  route, onNavigate, onTutorial, onRepair, children,
+  route, onNavigate, onTutorial, onRepair, onMenu, career = false, banner = null, children,
 }) {
   return (
     <div className={styles.shell}>
-      <SideNav tab={route.tab} onNavigate={onNavigate} />
+      <SideNav tab={route.tab} onNavigate={onNavigate} career={career} />
       <div className={styles.main}>
-        <StatusStrip onTutorial={onTutorial} onRepair={onRepair} />
-        <div className={styles.content}>{children}</div>
+        <StatusStrip onTutorial={onTutorial} onRepair={onRepair} onMenu={onMenu} />
+        <div className={styles.content}>{banner}{children}</div>
       </div>
     </div>
   );

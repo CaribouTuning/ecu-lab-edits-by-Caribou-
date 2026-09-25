@@ -47,7 +47,7 @@ function FindYourWay() {
           { at: '[data-tour="nav-dyno"]', text: <><K>DYNO</K>: measures it. Nothing is known until you pull.</> },
           { at: '[data-tour="strip-last-pull"]', text: 'Your last pull’s peak power, always in view.' },
         ]}
-        caption="The real frame around every screen. HOME has your jobs and Learn; LIVE runs the engine in real time; DRAG puts it in a car."
+        caption="The real frame around every screen. HOME has your stats and Learn; LIVE runs the engine in real time; DRAG puts it in a car."
       >
         <div style={{ height: 290, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>

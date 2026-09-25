@@ -163,7 +163,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       {presetPrompt && (
         <div className={styles.callout}>
           <div className={styles.calloutText}>
-            <b className={styles.calloutAccent}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your career stats are kept.
+            <b className={styles.calloutAccent}>This replaces your current tune.</b> Loading {presetPrompt.name} overwrites your VE, spark and fuel tables with its factory calibration. Your sandbox stats are kept.
           </div>
           <div className={styles.calloutRow}>
             {/* The one `danger` in the app. This prompt is raised ONLY when

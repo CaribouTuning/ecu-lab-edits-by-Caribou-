@@ -28,6 +28,7 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 
 import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
+import { useRoadTest } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './ResultScreen.module.css';
@@ -118,8 +119,18 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
     if (rpm !== null) onSelectRpm(rpm);
   };
 
+  const roadTest = useRoadTest();
+
   return (
     <>
+      {roadTest ? (
+        <Panel tight className={styles.panel} data-tour="dyno-power">
+          <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
+          <p className={styles.roadNote}>
+            Road test: the wideband and the ECU log everything below, but nothing on a road measures power. A dyno does.
+          </p>
+        </Panel>
+      ) : (
       <Panel tight className={styles.panel} data-tour="dyno-power">
         <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
         <ResponsiveContainer width="100%" height={200}>
@@ -145,6 +156,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
           </LineChart>
         </ResponsiveContainer>
       </Panel>
+      )}
 
       <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
         <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>

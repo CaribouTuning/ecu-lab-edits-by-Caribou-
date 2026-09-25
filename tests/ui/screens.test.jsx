@@ -42,7 +42,7 @@ describe('StartScreen', () => {
 
   it('says what each way in is for, so the first choice is not a guess', () => {
     start();
-    expect(screen.getByText('Customer cars with real faults to diagnose')).toBeTruthy();
+    expect(screen.getByText('Run a tuning shop: customers, real faults, your reputation')).toBeTruthy();
     expect(screen.getByText('Build and tune anything, no objectives')).toBeTruthy();
   });
 

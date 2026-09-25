@@ -660,9 +660,9 @@ describe('career stats saved from a previous session', () => {
 
     // Open the panel for the other two figures: the collapsed subtitle only names the
     // pull count while no pull has been run this session.
-    fireEvent.click(screen.getByText('Career & Last Pull'));
+    fireEvent.click(screen.getByText('Sandbox Stats & Last Pull'));
     expect(statTile('BEST PULL')).toBe('812');
-    expect(statTile('CAREER TOTAL')).toBe('3405');
+    expect(statTile('TOTAL SCORE')).toBe('3405');
   });
 
   it('does not overwrite a saved career before the load completes', async () => {
