@@ -293,7 +293,7 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Knock across ${rangeLabel(run)}${/** @type {any} */ (run).intermittent ? ' (on and off)' : ''} — ECU pulled up to ${Math.max(...run.map((p) => p.knockPull)).toFixed(1)}° (peak near ${peak.rpm} RPM)`,
       cause: `Caused by ${causes.join(' and ')}. This spans ${Math.round(rangeFrac(run) * 100)}% of the RPM sweep${avgPull >= 2 ? `, averaging ${avgPull.toFixed(1)}° of retard — a common tuner's rule of thumb treats anything sustained above about 2° as a warning of expensive engine damage, not an acceptable operating point` : ''}.`,
-      fix: `On TIMING, take about ${Math.max(1, Math.ceil(-peak.margin + 1))}° out of ${tableRowsAt(peak.map)} around ${peak.rpm} RPM, so the engine runs about ${suggestedTiming}° there.${boosted ? ` Or ${lessBoost}.` : ''}${leanContrib >= 1.5 ? ` Or richen AFR toward ${peak.bestAfr}:1 there.` : ''} Higher octane, lower compression, or an aluminum head on BUILD also buy margin.`,
+      fix: `On TUNE → SPARK, take about ${Math.max(1, Math.ceil(-peak.margin + 1))}° out of ${tableRowsAt(peak.map)} around ${peak.rpm} RPM, so the engine runs about ${suggestedTiming}° there.${boosted ? ` Or ${lessBoost}.` : ''}${leanContrib >= 1.5 ? ` Or richen the FUEL table toward ${peak.bestAfr}:1 there.` : ''} Higher octane, lower compression, or an aluminum head on BUILD also buy margin.`,
     });
   });
 
@@ -346,7 +346,7 @@ export function simulateSweep({
           ? nitrousFuelFix(peak, 'more')
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `Fix what the ECU is getting wrong rather than asking for a richer number: correct VE on TUNE → AIRFLOW in this range, and check TUNE → INJECTORS and TUNE → SENSORS match the parts on BUILD (the setup warnings there name any mismatch).`
-          : `On AFR, richen the cells in this range — best power here is near ${peak.bestAfr}:1${peak.boostPsi > 1 ? ' (richer than the N/A ideal, because boost needs the charge cooling)' : ''}.${missedTarget(peak) ? ' Then correct VE there, so the engine gets what the table asks for.' : ''}`,
+          : `On TUNE → FUEL, richen the cells in this range — best power here is near ${peak.bestAfr}:1${peak.boostPsi > 1 ? ' (richer than the N/A ideal, because boost needs the charge cooling)' : ''}.${missedTarget(peak) ? ' Then correct VE there, so the engine gets what the table asks for.' : ''}`,
     });
   });
 
