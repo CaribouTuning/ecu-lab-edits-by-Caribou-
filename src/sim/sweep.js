@@ -193,7 +193,16 @@ export function simulateSweep({
 
   let pistonWear = 0, valveWear = 0;
   points.forEach((p) => {
-    if (p.knock) pistonWear += p.knockPull * COEFF.WEAR_KNOCK;
+    // Only knock that happened wears the piston. When the retard came from valvetrain
+    // noise read as knock (the controller sits at the larger of the two, see
+    // knockRetard in point.js), the engine ran further from its limit, not into it: that
+    // costs power, which the pull log reports as false knock, but it hammers nothing.
+    // It was once charged as detonation, so a big cam with the factory knock threshold
+    // lost half its pistons to a noise.
+    // `knockFalse` is logged to a tenth of a degree and `knockPull` is not, so the
+    // comparison allows for that rounding.
+    const realKnockDeg = p.knockPull > (p.knockFalse ?? 0) + 0.05 ? p.knockPull : 0;
+    if (p.knock) pistonWear += realKnockDeg * COEFF.WEAR_KNOCK;
     if (p.leanRisk) {
       if (p.valveRisk) valveWear += COEFF.WEAR_VALVE_LEAN_BOOST;
       else pistonWear += COEFF.WEAR_LEAN;

@@ -573,6 +573,30 @@ describe('dyno sweep', () => {
     expect(e.rpmEnd).toBe(run[run.length - 1].rpm);
   });
 
+  it('knock the ECU only imagined does not wear the pistons', () => {
+    // A big cam and stiff springs make valvetrain noise the factory knock threshold reads
+    // as knock, so the controller retards for nothing. That costs power; it hammers
+    // nothing. With the ECU in the loop and the mixture right, the only wear left should
+    // be the ordinary bearing load of a pull.
+    const cfg = { ...STOCK, camDuration: 268, springRate: 78 };
+    const derived = S.deriveEngine(cfg);
+    const veTruth = S.computeHardwareVE(cfg, S.DEFAULT_MODS, { turboOn: false, turbine: null, exhaustDia: 3.0, fuel: S.OCTANE_OPTS[0] });
+    const r = S.simulateSweep({
+      loadKpa: 100, ve: veTruth, veTruth, timing: S.clone2D(S.DEFAULT_TIMING), afr: S.clone2D(S.DEFAULT_AFR),
+      turboOn: false, boostCurve: [...S.DEFAULT_BOOST], octaneBonus: 0, octaneLabel: '91', fuel: S.OCTANE_OPTS[0],
+      injectorCc: 315, ecuInjectorCc: 315, injectorLabel: '315cc', mods: S.DEFAULT_MODS, mafScalar: 1.0, derived,
+      turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+      ecu: {
+        cal: S.defaultEcuCalibration({ derived: S.deriveEngine(STOCK) }),
+        hw: { ...S.ecuHardwareOf({ ...S.DEFAULT_ECU_HW, turboOn: false }), veTruthByPhase: S.veTruthByPhaseFor(cfg, S.DEFAULT_MODS, { turboOn: false, turbine: null, exhaustDia: 3.0, fuel: S.OCTANE_OPTS[0] }) },
+        cond: S.dynoConditions(),
+      },
+    });
+    expect(r.events.some((e) => e.type === 'falseknock')).toBe(true);
+    expect(r.events.some((e) => e.type === 'knock')).toBe(false);
+    expect(r.wear.piston).toBe(0);
+  });
+
   it('a MAF that under-reads is reported as LEAN, with the scalar that cancels it', () => {
     // A bigger intake housing makes the MAF read about 10% low. The ECU then fuels for
     // less air than there is: the mixture goes lean, and the log has to say so.
