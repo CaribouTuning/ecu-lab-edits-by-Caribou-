@@ -382,16 +382,20 @@ export function simulateSweep({
 
   groupRuns(points, (p) => p.mafFlag).forEach((run) => {
     const avgTrim = run.reduce((s, p) => s + p.trimPct, 0) / run.length;
-    const direction = avgTrim > 0 ? 'lean' : 'rich';
+    // `trimPct` is the MAF reading's error: below zero the MAF under-reads the air, the
+    // ECU fuels for less air than there is, and the engine runs LEAN (point.js divides
+    // the commanded lambda by this factor). This was once the other way round, and the
+    // log told a player with a lean cold-air intake to expect a rich one.
+    const direction = avgTrim < 0 ? 'lean' : 'rich';
     const source = mods.intake && turboOn ? 'the bigger intake and turbo plumbing'
       : mods.intake ? 'the bigger intake' : 'the turbo plumbing';
     const impact = Math.round(8 * (0.3 + 0.7 * rangeFrac(run)));
     events.push({
       type: 'maf', severity: 1, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
-      msg: `MAF trim averaging ${avgTrim > 0 ? '+' : ''}${avgTrim.toFixed(0)}% across ${rangeLabel(run)} — running ${direction}`,
-      cause: `${source.charAt(0).toUpperCase() + source.slice(1)} changed how much air reads across the MAF sensor at a given flow rate, and the ECU has not been rescaled for it.`,
-      fix: `On TUNE → SENSORS, adjust the MAF scalar and re-run the pull — watch the AFR trace (actual vs. commanded) until they line up.`,
+      msg: `MAF reading about ${Math.abs(avgTrim).toFixed(0)}% ${avgTrim < 0 ? 'low' : 'high'} across ${rangeLabel(run)} — running ${direction}`,
+      cause: `${source.charAt(0).toUpperCase() + source.slice(1)} changed how much air reads across the MAF sensor at a given flow rate, and the ECU has not been rescaled for it. It sees ${avgTrim < 0 ? 'less' : 'more'} air than the engine really takes in, so it fuels ${avgTrim < 0 ? 'too little' : 'too much'}.`,
+      fix: `On TUNE → SENSORS, ${avgTrim < 0 ? 'raise' : 'lower'} the MAF scalar (about ${(100 / (100 + avgTrim)).toFixed(2)} cancels this) and re-run the pull — watch the AFR trace (actual vs. commanded) until they line up.`,
     });
   });
 

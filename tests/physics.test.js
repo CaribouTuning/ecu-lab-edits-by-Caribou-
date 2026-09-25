@@ -573,6 +573,18 @@ describe('dyno sweep', () => {
     expect(e.rpmEnd).toBe(run[run.length - 1].rpm);
   });
 
+  it('a MAF that under-reads is reported as LEAN, with the scalar that cancels it', () => {
+    // A bigger intake housing makes the MAF read about 10% low. The ECU then fuels for
+    // less air than there is: the mixture goes lean, and the log has to say so.
+    const r = stockPull({ mods: { ...S.DEFAULT_MODS, intake: true } });
+    const e = r.events.find((ev) => ev.type === 'maf');
+    const p = r.points.find((q) => q.mafFlag);
+    expect(p.trimPct).toBeLessThan(0);
+    expect(p.afr / p.afrCommanded).toBeGreaterThan(1.05);
+    expect(e.msg).toMatch(/low .* running lean$/);
+    expect(e.fix).toMatch(/raise the MAF scalar \(about 1\.1\d cancels this\)/);
+  });
+
   it('leaves the three whole-pull findings unlocated', () => {
     // The other half of the pair. injscale, cam and bearing are true everywhere, so
     // a band for them would be a lie about where they apply.
@@ -587,6 +599,11 @@ describe('dyno sweep', () => {
       // that boost. The fixture matches what the build would actually be.
       turbine: S.TURBINE_OPTS[2],
       injectorCc: 400, ecuInjectorCc: 315,
+      // On E85, because on 91 the knock control pulls so much timing out of 13.5:1 at
+      // 25 psi that the pressure averages only 62 bar, under the bottom-end advisory's
+      // 66. The ethanol's knock margin lets the pressure the fixture exists to make
+      // arrive (about 75 bar).
+      sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: S.OCTANE_OPTS[3].label, octaneBonus: S.OCTANE_OPTS[3].bonus },
     });
     for (const type of ['injscale', 'cam', 'bearing']) {
       const e = r.events.find((ev) => ev.type === type);

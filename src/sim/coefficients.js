@@ -472,10 +472,13 @@ export const COEFF = {
   // a flat 0.05. Refitted when the cycle replaced the empirical pressure estimate.
   BEARING_PRESSURE_FREE_BAR: 55,
   WEAR_BEARING_PER_BAR: 0.075,
-  // Average peak pressure that raises the bottom-end advisory. Just above a healthy NA
-  // pull (the stock V6 averages about 59 bar), so it means "boosted-engine loading", not
-  // "you drove it".
-  BEARING_EVENT_BAR: 60,
+  // Average peak pressure that raises the bottom-end advisory. It means "boosted or
+  // high-compression loading", not "you drove it", so it sits above every bolt-on
+  // naturally aspirated pull on a 10.3:1 engine (stock V6 59 bar; intake, headers and
+  // exhaust 64) and below every factory-boosted engine (EA888 GTI 69, N54 70, EA888 R
+  // 78). At 60, one bar over stock, it once fired for a cold air intake with its MAF
+  // rescaled. An 11.5:1 NA engine on 93 (67 bar) still reaches it.
+  BEARING_EVENT_BAR: 66,
 
   // --- Inlet Mach index: the high-speed breathing limit (see engine.js) ---
   // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a
