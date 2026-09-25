@@ -52,7 +52,11 @@ export function BuildSection({ active, onClick, icon: Icon, label, sub, children
         </div>
         <ChevronDown size={16} style={{ color: active ? T.accInk : T.ink3, flexShrink: 0, marginLeft: 8, transform: active ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
       </button>
-      <div style={{ maxHeight: active ? 3000 : 0, opacity: active ? 1 : 0, overflow: 'hidden', transition: 'max-height .35s ease, opacity .25s ease' }}>
+      {/* A cap, because the tests read maxHeight, but one no section reaches: at 3000px
+          Learn How It Works (2400px of titles before any article opens) cut off whatever
+          was opened past it. The easing differs by direction so a close still starts
+          at once instead of spending most of its time above the content's real height. */}
+      <div style={{ maxHeight: active ? 20000 : 0, opacity: active ? 1 : 0, overflow: 'hidden', transition: active ? 'max-height .6s ease-in, opacity .25s ease' : 'max-height .35s cubic-bezier(0, 1, 0, 1), opacity .25s ease' }}>
         <div style={{ padding: '13px 2px 2px' }}>{children}</div>
       </div>
     </div>

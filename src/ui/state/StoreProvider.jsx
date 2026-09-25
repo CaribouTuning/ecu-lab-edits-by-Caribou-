@@ -28,13 +28,18 @@ const StoreContext = createContext(null);
 
 /**
  * Wraps its children in the store. Mount once, at the app root.
- * @param {{children: React.ReactNode}} props
+ *
+ * `init` is for a sandbox, never the app: the tutorial mounts real screens inside a
+ * store of their own, seeded with a demo engine's pull, so what a player clicks in a
+ * tutorial snippet can never touch their own build or tune.
+ *
+ * @param {{children: React.ReactNode, init?: (state: StoreState) => StoreState}} props
  * @returns {React.ReactElement}
  */
-export function StoreProvider({ children }) {
+export function StoreProvider({ children, init }) {
   // The third argument makes this LAZY init: makeInitialState() runs once, on
   // mount, rather than being recomputed (and thrown away) on every render.
-  const [state, dispatch] = useReducer(reducer, undefined, makeInitialState);
+  const [state, dispatch] = useReducer(reducer, init, (seed) => (seed ? seed(makeInitialState()) : makeInitialState()));
   /** @type {StoreContextValue} */
   const value = [state, dispatch];
   return (

@@ -60,19 +60,19 @@ export function LogScreen() {
                 data-tone={tone}
                 data-focused={String(focused)}
               >
-                <div className={styles.eventHead}>
+                <div className={styles.eventHead} data-tour="log-title">
                   <div className={styles.eventTitle}>
                     <AlertTriangle size={14} className={styles.eventIcon} />
                     <span>{e.msg}</span>
                   </div>
                   {e.impact != null && <span className={styles.eventImpact}>-{e.impact}</span>}
                 </div>
-                {e.cause && <div className={styles.eventCause}><b className={styles.eventLabel}>Why: </b>{e.cause}</div>}
-                {e.fix && <div className={styles.eventFix}><b className={styles.eventLabel}>Try: </b>{e.fix}</div>}
+                {e.cause && <div className={styles.eventCause} data-tour="log-why"><b className={styles.eventLabel}>Why: </b>{e.cause}</div>}
+                {e.fix && <div className={styles.eventFix} data-tour="log-try"><b className={styles.eventLabel}>Try: </b>{e.fix}</div>}
                 {/* Crosslinks: the screens the fix names, one tap away rather than found
                     by name. */}
                 {fixLinks(e.fix).length > 0 && (
-                  <div className={styles.eventLinks}>
+                  <div className={styles.eventLinks} data-tour="log-links">
                     {fixLinks(e.fix).map((l) => (
                       <a key={l.href} href={l.href} className={styles.eventLink}>
                         {l.label}<ArrowUpRight size={12} aria-hidden="true" />

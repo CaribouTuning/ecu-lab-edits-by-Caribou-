@@ -21,6 +21,7 @@ source, and the weaker sources are marked as such.
 | `tests/consistency-fuzz.test.js` | On 40 random builds, the TUNE advisor, the dyno pull log and LIVE tell the same story, and following the advice clears the knock it reports. |
 | `tests/tuning-consistency.test.js` | The same, pinned on hand-picked engines, including LIVE at idle and on the rev limiter. |
 | `tests/ve-learn.test.js` | The VE table is corrected only from what a tuner could log: the wideband against the table's target, the fuel trims, and the MAF's own error kept out (a cold air intake on the stock tune logs its real 0–5% VE gain, not the MAF housing's 10%). Only logged cells move; half-steps converge; nitrous, maxed injectors, protection, cut, warm-up and transients are left out; a log already applied cannot be applied twice. |
+| `tests/ui/tutorial.test.jsx` | The tutorial quotes the game's own numbers: its stock pull is the pull the app makes, every lesson scenario does what its lesson says (over-advanced spark knocks and loses power; the intake logs MAF and lean entries; the retune clears both), and every numbered callout still points at something on its live screen. |
 | `tests/accuracy-claims.test.js` | Every figure this page and Learn article 39 quote about the model. |
 | `tests/blower.test.js` | Superchargers: boost from low down on a Roots or twin-screw and climbing with RPM on a centrifugal; the pulley sets boost; the crank pays the compression work; efficiency ranks and heats the charge as the makers publish; no lag on LIVE; ~7 psi intercooled adds 35–50%; an over-spun blower is flagged with a pulley that fixes it. |
 | `tests/nitrous.test.js` | Nitrous: its oxygen and breakdown heat; bottle pressure against the racing charts; a 100 shot's 5–6 lb/min; gain in step with the shot; the knock limit falling about 2° per 50 hp; a wet kit rich on a cold bottle; a speed-density ECU fuelling for the air the vapour displaced, the pull log's fuel correction clearing it in one step, closed loop standing down while spraying, and a weak pump starving the kit; the controller's window, ramp and lean cut, on the dyno and LIVE. |
@@ -214,6 +215,16 @@ that the app folds corrections together (it no longer does); the README's Node
 requirement, fingerprint size and file map; stale figures in preset and coefficient
 comments. `tests/accuracy-claims.test.js` now fails if a screen name, a figure on this
 page or in Learn article 39 drifts from the model.
+
+The tutorial and Learn pass that followed rebuilt the tutorial around the live game
+screens, and in doing so found and fixed: a pull-log MAF message that called a low-reading
+MAF "running rich" when it runs lean; a bottom-end advisory set one bar above a stock
+engine, so a cold air intake tripped it (now 66 bar: above every bolt-on NA pull, below
+every factory-boosted engine); a "VS. LAST PULL" line that no screen has (the previous pull
+is drawn dashed, labelled Prev); fix lines that named a TIMING or AFR page (the pages are
+SPARK and FUEL); and four Learn articles cut off on a phone by a fixed-height expander. The
+tutorial's figures are computed from the simulator when a lesson opens, so they cannot go
+stale.
 
 What is not claimed: that every code comment in the repository was read sentence by
 sentence. Comments that explain code rather than state a measured fact were not

@@ -1,14 +1,14 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: thirty-nine numbered articles, in reading order, from
+ * The plain-language guide: forty-six numbered articles, in reading order, from
  * "an engine is an air pump" through reading a time slip to the published
  * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
  * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all thirty-nine articles twenty
+ * engine panel, and without the memo React would walk all forty-six articles twenty
  * times a second to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
@@ -19,6 +19,8 @@ import React from 'react';
 
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+
+import { LearnDeep, TryIt } from './LearnDeep.jsx';
 
 import styles from './LearnScreen.module.css';
 
@@ -36,8 +38,17 @@ function LearnScreenInner({ active, onToggle }) {
       sub="Plain-language guide to engine tuning"
     >
       <div className={styles.intro}>Read in order. Each explains a piece of what the live engine is doing right now.</div>
+      {/* Reading paths: most readers arrive with a question, not a free afternoon. */}
+      <div className={styles.paths}>
+        <div className={styles.pathsHead}>WHERE TO START</div>
+        <div><b className={styles.em}>New to tuning:</b> the tutorial (the (i) button in the top strip), then 1–5 and 12–16.</div>
+        <div><b className={styles.em}>Just fitted a part:</b> 42 and 43, then 45 for a whole job worked through.</div>
+        <div><b className={styles.em}>Something is wrong on the dyno:</b> 44, troubleshooting by symptom.</div>
+        <div><b className={styles.em}>How the game works it out:</b> 6–11, 26, 39 and 46.</div>
+      </div>
 
       <div className={`${styles.part} ${styles.partFirst}`}>PART 1 · FUNDAMENTALS</div>
+      <div className={styles.partGoal}>After this part you can say what the ECU decides, what VE and lambda are, and why timing makes torque until knock stops it.</div>
 
       <ExpandableInfo title="1. The whole thing in one paragraph">
         An engine is an air pump. However much air it swallows decides how much fuel can be burned, and burning fuel is what makes power. The ECU's entire job is to measure the air, add the right amount of fuel, and light it at the right moment. Tuning is adjusting those last two decisions.
@@ -72,6 +83,7 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.part}>PART 2 · WHAT THE ECU CALCULATES</div>
+      <div className={styles.partGoal}>After this part you can follow the ECU&apos;s arithmetic from manifold pressure to injector time to torque, with every symbol in plain words.</div>
 
       {/* Unnumbered, as it was in the reference build: a key to read the numbered
           articles by, not an article in the sequence. */}
@@ -152,13 +164,15 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.part}>PART 3 · THE TUNING PROCESS</div>
+      <div className={styles.partGoal}>After this part you can run the tuning loop, read a datalog, and tell a calibration fault from a hardware limit.</div>
 
       <ExpandableInfo title="12. The loop: change → pull → read → adjust">
         This is the whole method, and it is not a simplification:
         <br /><br /><b className={styles.em}>1. Change one thing.</b> One table region, one hardware item. Change three and you will not know which one mattered.
         <br /><br /><b className={styles.em}>2. Run a pull.</b> Nothing is known until it is measured. There is no preview in this app on purpose.
         <br /><br /><b className={styles.em}>3. Read the log first.</b> Before looking at the power number, read the Pull Log and check the datalog for gaps between commanded and actual. Power that came with 6° of knock retard is not power you keep.
-        <br /><br /><b className={styles.em}>4. Adjust and repeat.</b> The VS. LAST PULL line tells you whether the change helped. Small logged steps beat big guesses, every time.
+        <br /><br /><b className={styles.em}>4. Adjust and repeat.</b> The next pull draws the previous one dashed behind it (labelled Prev), so you can see whether the change helped, and where. Pin a pull on DYNO › HISTORY to compare against it instead. Small logged steps beat big guesses, every time.
+        <br /><br /><TryIt href="#/dyno/result">DYNO</TryIt>
       </ExpandableInfo>
 
       <ExpandableInfo title="13. A worked example — first turbo tune">
@@ -175,6 +189,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Mixture: asked → got</b> — if actual is not what you commanded, the cause is upstream of the fuel table: usually MAF scaling or injectors out of duty. Do not "fix" it by editing fuel cells; fix the cause.
         <br /><br /><b className={styles.em}>Airflow</b> — an engine near 300 hp flows around 200 g/s at peak power in this app (a real one needs 10–15% more, see article 39), which is a quick sanity check on whether your VE table is plausible.
         <br /><br /><b className={styles.em}>Injectors</b> — duty above 90% is the wall. <b className={styles.em}>Heat</b> — sustained EGT above about 950–1000°C cooks turbines and valves; it rises with retarded timing and as the mixture leans toward stoichiometric, and a rich mixture is what pulls it back down (the app shows less of that cooling than a real engine does — see article 39).
+        <br /><br /><TryIt href="#/dyno/data">DYNO › DATALOG</TryIt>
       </ExpandableInfo>
 
       <ExpandableInfo title="15. What tuning can fix, and what it can't">
@@ -189,6 +204,7 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.part}>PART 4 · GETTING IT TO THE GROUND</div>
+      <div className={styles.partGoal}>After this part you can explain why the same power runs different times: gearing, grip, weight transfer and drag.</div>
 
       <ExpandableInfo title="17. A torque curve is only half of acceleration">
         Everything up to here has been about making torque. The DRAG page is about what happens to it next, and it runs on four equations:
@@ -235,6 +251,7 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.part}>PART 5 · WHAT THE SIMULATOR IS DOING</div>
+      <div className={styles.partGoal}>After this part you can say where the model&apos;s numbers come from, what the rest of the ECU does, and where the simulator simplifies.</div>
 
       <ExpandableInfo title="22. The turbo is a machine, not a boost knob">
         A compressor is not a pump that delivers whatever number you type. It is a wheel with a <b className={styles.em}>map</b>: for a given pressure ratio it can only pass so much air, and it is only efficient in the middle of that map.
@@ -433,6 +450,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>The window.</b> The controller sprays only at full throttle, on a warm engine, between two speeds. Too low in the rev range and a big shot spikes cylinder pressure and can backfire through the intake; too close to the limiter and a fuel cut leaves oxygen with nothing to burn. A progressive controller ramps the shot in rather than hitting the tyres and the crank with all of it at once.
         <br /><br /><b className={styles.em}>What to do:</b> fit a kit on BUILD › INDUCTION with the heater on, check the window and retard on TUNE › NITROUS, arm it, and pull. Watch the mixture while it sprays: a lean nitrous mixture melts a piston in seconds, which is what the lean cut is for.
       </ExpandableInfo>
+      <LearnDeep />
     </BuildSection>
   );
 }

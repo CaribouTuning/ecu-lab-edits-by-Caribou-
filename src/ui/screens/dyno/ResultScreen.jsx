@@ -120,7 +120,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
 
   return (
     <>
-      <Panel tight className={styles.panel}>
+      <Panel tight className={styles.panel} data-tour="dyno-power">
         <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
@@ -146,7 +146,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
         </ResponsiveContainer>
       </Panel>
 
-      <Panel tight className={styles.panel}>
+      <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
         <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart

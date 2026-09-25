@@ -159,6 +159,9 @@ import {
  * @property {number} journeyStep guided-onboarding progress: BUILD -> TUNE -> LIVE ->
  *   DYNO, then free play (step 4). Survives navigation, so it lives here rather than
  *   as view state.
+ * @property {{id: string, step: number, marks: any[]}|null} mission the tutorial's
+ *   practice mission in progress: which one, how many of its steps are done, and what
+ *   the game looked like as each was done (see tutorial/missions.js). Null when none.
  * @property {number|null} logFocusRpm the RPM a chart band was activated at, so the
  *   pull log can highlight every event whose span covers it. Null means no highlight.
  *   Cleared by BANK_PULL — see that case in reducer.js.
@@ -297,6 +300,7 @@ export function makeInitialState() {
       dynoPhase: null,
       dynoRpm: 820,
       journeyStep: 0,
+      mission: null,
       logFocusRpm: null,
       // A fresh object graph, like every other default here: DEFAULT_CAR is not frozen
       // and the DRAG screen writes to a copy of it on every control change.

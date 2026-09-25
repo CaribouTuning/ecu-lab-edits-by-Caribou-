@@ -11,7 +11,7 @@
  * This used to be one large single-component app; it has been split into
  * `ui/primitives/`, `ui/screens/` and `ui/AppShell.jsx`. What remains here is the
  * store setup, the pieces still shared across more than one screen (`JourneyBanner`,
- * `Tach`, the tutorial content), and the top-level component that reads the route and
+ * `Tach`), and the top-level component that reads the route and
  * renders the right screen into the shell.
  *
  * TYPE CHECKING
@@ -48,6 +48,8 @@ import { loadCareer, saveCareer } from '../storage.js';
 import { AppShell } from './AppShell.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
+import { MissionCoach } from './tutorial/MissionCoach.jsx';
+import { markOf } from './tutorial/missions.js';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
@@ -110,6 +112,13 @@ const JOURNEY = [
     cta: 'Finish — let me explore freely', next: null },
 ];
 
+/** Where each practice mission starts: the screen its first step is about. */
+const MISSION_START = {
+  'first-pull': ['build', 'engine'],
+  'knock-limit': ['tune', 'spark'],
+  'bolt-on': ['build', 'induction'],
+};
+
 function JourneyBanner({ step, onAdvance, onDismiss }) {
   const j = JOURNEY[step];
   if (!j) return null;
@@ -170,43 +179,6 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
     </Panel>
   );
 }
-
-const TUTORIAL_STEPS = [
-  { title: 'This is an air pump',
-    body: 'An engine can only burn as much fuel as it has air for. So everything starts with air. The ECU works out the air, decides how much fuel to add, and picks the moment to light it.\n\nTuning is getting those last two decisions right at every speed and load.\n\n→ You will do that on three tables. The rest of this tutorial shows you which, and how to check your work.' },
-  { title: 'Air: how full the cylinder gets',
-    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIRFLOW table should match what the engine really breathes. Nobody can see that directly: after a hardware change, log a pull and TUNE › AIRFLOW works out the correction for each cell from the wideband, showing the maths.' },
-  { title: 'Fuel: follows from the air',
-    body: 'Once the air is known, fuel is arithmetic:\n\n    fuel = air ÷ (λ × 14.7 for gasoline)\n\nλ (lambda) is the mixture you ask for on the FUEL table. 1.00 is exactly enough air to burn the fuel. About 0.87 makes the most power, and a boosted engine runs richer, about 0.83, to keep the charge and the turbo cool.\n\nThe injectors can only be open so long: past about 90% duty there is no time left, and no table can fix that.\n\n→ Set the FUEL table. If the log says the injectors are maxed, you need bigger injectors or less boost.' },
-  { title: 'Spark: when to light it',
-    body: 'The mixture takes a few milliseconds to burn, so the spark fires before the piston reaches the top. Fire too late and the burn chases a piston that is already leaving. Fire too early and the pressure pushes against a piston still coming up.\n\nThe best point is called MBT. Past it, extra advance makes no more power.\n\n→ On SPARK, find the timing where power stops rising. Stop there, or earlier if the engine knocks.' },
-  { title: 'Knock: the limit on everything',
-    body: 'Too much advance, heat or pressure and the last of the mixture explodes on its own instead of burning smoothly. That is knock, and it breaks pistons.\n\nThe ECU listens for it and takes timing out. The datalog shows it as commanded timing and actual timing drifting apart.\n\n→ Aim for zero knock. If the log shows knock, take timing out of those cells, or add fuel there, or use better fuel.' },
-  { title: 'Where the power number comes from',
-    body: 'Nothing here adds horsepower directly. The simulator follows the pressure inside one cylinder through the whole cycle, two crank degrees at a time, and adds up the work it does on the piston. Friction and breathing losses come off. What is left is torque.\n\n    hp = lb-ft × RPM ÷ 5252\n\nSo power only changes when something real changes: more air, the right fuel, better-timed spark.' },
-  { title: 'Design it on BUILD',
-    body: 'Bore, stroke, compression, cam, springs, turbo, exhaust, fuel system. None of it is cosmetic. Every part changes how the engine breathes or what it can survive.\n\n→ Change the cam and watch the AIRFLOW table on TUNE redraw itself. That is what a cam really does.' },
-  { title: 'Three tables, three jobs',
-    body: 'On TUNE:\n\nAIRFLOW — how well each cylinder fills (VE).\nSPARK — when the plug fires, in degrees before top dead centre.\nFUEL — the mixture you want, as air-fuel ratio.\n\nColumns are RPM, rows are manifold pressure: the same layout real tuning software uses.\n\n→ These three are the tune. Most sessions never need anything else.' },
-  { title: 'Everything else is already set',
-    body: 'Real ECUs have far more: corrections for temperature and altitude, and controllers for boost, cams, idle, knock and protection. They are all on TUNE, under the tables and in the second row of buttons.\n\nEvery one starts at a working factory setting. You do not need to touch them to make a great tune. Change one and an amber dot marks it. The Factory button puts a page back.\n\n→ Leave them alone until a log tells you to go there. Each page says when that is.' },
-  { title: 'The ECU only knows what it measures',
-    body: 'The ECU never sees the truth. It sees sensors, read through the settings it was given. Fit a sensor on BUILD and tell the ECU a different one on TUNE › SENSORS, and it acts on a wrong number without knowing.\n\nThe classic: a 1-bar MAP sensor on a turbo engine. The ECU never sees boost, and fuels too little under it.\n\n→ When you change a sensor on BUILD, match it on TUNE › SENSORS. The page warns you when they differ.' },
-  { title: 'Nothing is known until you pull',
-    body: 'There is no preview. Press RUN DYNO PULL on DYNO and the engine sweeps from 1500 RPM to its redline and records a full datalog. That is the only way to find out what a change did, exactly like a real dyno day.\n\n→ Pull after every change.' },
-  { title: 'Read the log, change one thing, pull again',
-    body: 'Every pull writes a Pull Log. Each problem comes with a plain Why (what caused it) and a Try (what to change).\n\nThen: change one thing, pull, compare. The VS. LAST PULL line tells you whether it helped. Change three things at once and you will not know which one worked.\n\n→ Read the Pull Log before you look at the power number.' },
-  { title: 'Know what you cannot tune away',
-    body: 'Knock, a wrong mixture and a mis-read airflow sensor are calibration faults. The tables and the ECU\'s settings fix them completely.\n\nInjectors out of time, valves floating, a turbo past its limit: those are hardware limits. No table touches them, and the log says so.\n\n→ When the log names a hardware limit, change the part or ask less of it.' },
-  { title: 'Hear it, and watch it run',
-    body: 'The sound is built from the same numbers as the dyno, not recorded. Retard the spark and it turns raspy. Richen it and it softens. A big cam lopes.\n\nOn LIVE the ECU runs in real time. Its log records every channel. Switch on the A/C and watch idle hold. Try launch control. Break a sensor on purpose and see what the protections do.\n\n→ Start the engine on LIVE and rev it before your first pull.' },
-  { title: 'Where this physics comes from',
-    body: 'Every relation here is published engineering, checked against its source. The cycle uses the ratio of specific heats, γ, of the gas at each stage: 1.35 for fresh charge falling to 1.235 as it burns. That brackets the ~1.3 average textbooks use, which gives the ideal 10:1 engine its 50% efficiency.\n\nAir density comes out at 1.185 kg/m³ at sea level and 25 °C, matching the published figure.\n\n→ The sources are under Learn on HOME. If a number looks wrong, check it. That has fixed real errors here.' },
-  { title: 'Chase the score, then race it',
-    body: 'Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), then combined with real output into a Pull Score with no ceiling.\n\nOn DRAG the engine goes into a car. Trap speed measures power, the 60-foot time measures traction, and the fastest engine does not always win.' },
-  { title: 'Ready',
-    body: 'Sandbox: build and tune anything, no objectives. Career: customer cars with real faults to find.\n\nThe loop is always the same: build it, set the three tables, listen to it, pull it, read the log, change one thing.\n\n→ If you are unsure what to do next, run a pull and read the Pull Log. It always tells you.' },
-];
 
 /**
  * How long the christmas tree takes to go green, ms.
@@ -1380,8 +1352,14 @@ export function EcuLabApp() {
   if (appView === 'tutorial') {
     return (
       <TutorialScreen
-        steps={TUTORIAL_STEPS}
         onDone={() => { goTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
+        onPractice={(id) => {
+          // A mission is its own guide: the first-run banner would only compete with it.
+          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 });
+          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'mission', value: { id, step: 0, marks: [markOf({ session, tune })] } });
+          const start = MISSION_START[id] ?? ['build', 'engine'];
+          goSection(start[0], start[1]);
+        }}
       />
     );
   }
@@ -1393,6 +1371,7 @@ export function EcuLabApp() {
           is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
           not chrome AppShell has any opinion about. */}
       <AppShell route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine}>
+        <MissionCoach route={route} onTutorial={goTutorial} />
         {/* ---------- HOME: customer jobs, career stats, health, learning ---------- */}
         {/* One component per section, each reading the store for itself. `live` is read
             ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than

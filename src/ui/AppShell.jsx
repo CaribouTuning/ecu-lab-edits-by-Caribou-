@@ -108,6 +108,8 @@ function SideNavInner({ tab, onNavigate }) {
           key={id}
           type="button"
           className={styles.navItem}
+          // A stable hook for the tutorial's callouts, which point at real screens.
+          data-tour={`nav-${id}`}
           // `undefined`, not "false": aria-current is a token list, and the string
           // "false" is the one spelling that means "not current" while still being
           // present in the DOM. Omitting the attribute is what an assertion can see.
@@ -141,7 +143,7 @@ export const SideNav = React.memo(SideNavInner);
  */
 function StripFieldInner({ label, value, tone }) {
   return (
-    <div className={styles.field}>
+    <div className={styles.field} data-tour={`strip-${label.toLowerCase().replace(/ /g, '-')}`}>
       <span className={styles.fieldLabel}>{label}</span>
       <span className={styles.fieldValue} data-tone={tone}>{value}</span>
     </div>
@@ -161,7 +163,7 @@ const StripField = React.memo(StripFieldInner);
 function HealthFieldInner({ pct }) {
   const tone = statusTone(pct);
   return (
-    <div className={styles.field}>
+    <div className={styles.field} data-tour="strip-health">
       <span className={styles.fieldLabel}>HEALTH</span>
       <span className={styles.healthTrack}>
         <span className={styles.healthFill} data-tone={tone} style={{ width: `${pct}%` }} />
