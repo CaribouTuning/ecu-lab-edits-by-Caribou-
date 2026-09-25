@@ -104,7 +104,8 @@ export const ACTIONS = Object.freeze({
  * `presetId` (BUILD) and sets `tablesDirty` (TUNE). This is the reducer's equivalent
  * of `withTableEdit` — the one write that must cross the build/tune boundary
  * atomically, which is the whole reason this is one reducer and not two.
- * @typedef {{type: 'SET_TABLE', table: 've'|'timing'|'afr', value: number[][]}} SetTableAction
+ * `label` is the undo entry's detail, e.g. "scale +5% · 12 cells" — see `labelFor`.
+ * @typedef {{type: 'SET_TABLE', table: 've'|'timing'|'afr', value: number[][], label?: string}} SetTableAction
  */
 
 /**
@@ -891,7 +892,9 @@ function labelFor(action) {
       // — a TypeError on a different screen, at a stack naming neither the dispatch nor
       // the table. Throwing here names both.
       if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
-      return label;
+      // A bulk edit names itself ("VE edit · smooth · 20 cells"); an edit that doesn't
+      // — ACCEPT RE-LOGGED VALUES, a test's bare dispatch — keeps the table's name.
+      return action.label ? `${label} · ${action.label}` : label;
     }
     case ACTIONS.APPLY_PRESET: {
       const preset = presetById(action.preset.presetId);

@@ -47,6 +47,13 @@ export function SparkScreen({ calAdvice, children }) {
   const { timing, selection, rangeMode } = tune;
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
+  /** @param {boolean} value */
+  /**
+   * One table write, one undo step — shared by the grid's +/- keys and the dock.
+   * @param {number[][]} value
+   * @param {string} [label]
+   */
+  const setTable = (value, label) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value, label });
   const setRangeMode = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'rangeMode', value });
   // A handful of `.some()` scans over at most 96 cells, no allocation in the
   // hot path — plainly on every render, not memoised.
@@ -62,7 +69,7 @@ export function SparkScreen({ calAdvice, children }) {
           </div>
           <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} />
-          <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} />
+          <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} />
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
             The VE table can be re-logged in one tap because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner simply re-logs airflow, and the numbers are what they are. Even so, the app shows you what changed and waits for you to accept it.
@@ -81,7 +88,7 @@ export function SparkScreen({ calAdvice, children }) {
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={timing} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value })} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" rangeMode={rangeMode} />
+      <SelectionDock data={timing} setData={setTable} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" />
     </>
   );
 }
