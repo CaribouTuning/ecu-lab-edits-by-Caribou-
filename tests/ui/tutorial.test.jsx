@@ -181,12 +181,14 @@ describe('the numbers are the game’s', () => {
   }, DYNO_PULL_MS + 4000);
 
   it('each chapter-4 scenario says what the lesson says it does', () => {
-    // Over-advanced spark knocks and costs power; the intake makes the MAF and lean
-    // entries; the retune clears both and makes more than either.
+    // Over-advanced spark knocks and costs power; the intake makes the MAF entry and runs
+    // lean of target at full throttle; the retune clears both and makes more than either.
     expect(overAdvanced().result.events.some((e) => e.type === 'knock')).toBe(true);
     expect(overAdvanced().result.peakHp).toBeLessThan(stock().result.peakHp);
-    const fitted = intakeFitted().result.events.map((e) => e.type);
-    expect(fitted).toEqual(expect.arrayContaining(['maf', 'lean']));
+    const fitted = intakeFitted().result;
+    expect(fitted.events.map((e) => e.type)).toContain('maf');
+    const wotLean = Math.max(...fitted.points.filter((p) => p.openLoop).map((p) => p.afr / p.afrCommanded - 1));
+    expect(wotLean).toBeGreaterThan(0.05);
     const retuned = intakeRetuned().result;
     expect(retuned.events.filter((e) => e.type === 'maf' || e.type === 'lean')).toEqual([]);
     expect(retuned.peakHp).toBeGreaterThan(intakeFitted().result.peakHp);
@@ -246,7 +248,7 @@ describe('practice missions', () => {
     let s = base();
     let p = startOf(s);
     const WOT = LOAD.indexOf(100);
-    s = { ...s, tune: { ...s.tune, timing: s.tune.timing.map((r, ri) => (ri === WOT ? r.map((v) => v + 4) : r)) } };
+    s = { ...s, tune: { ...s.tune, timing: s.tune.timing.map((r, ri) => (ri === WOT ? r.map((v) => v + 10) : r)) } };
     p = advance(m, p, s, route('tune', 'spark'));
     expect(p.step).toBe(1);
     s = { ...s, session: { ...s.session, pullCount: 1, result: overAdvanced().result } };

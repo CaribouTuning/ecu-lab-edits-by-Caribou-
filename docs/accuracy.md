@@ -39,9 +39,9 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 | Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 300 hp / 273 lb-ft | 6400 / 6500 | 0.874 | 29.1° | 0.402 | 11.6 | 779 | 65 | 13.3 |
 | Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 273 lb-ft | 6800 / 6500 | 0.874 | 29.1° | 0.399 | 11.7 | 774 | 67 | 13.3 |
 | BMW N54 | 302 hp / 295 lb-ft | 295 hp / 314 lb-ft | 5800 / 5500 | 0.842 | 22.9° | 0.411 | 11.8 | 791 | 76 | 17.9 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 329 hp / 353 lb-ft | 5500–6500 / 5500 | 0.835 | 17.5° | 0.416 | 11.8 | 800 | 77 | 20.0 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 376 hp / 382 lb-ft | 5800 / 5700 | 0.832 | 15.9° | 0.417 | 11.8 | 812 | 81 | 21.7 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 231 hp / 249 lb-ft | 4700–6200 / 5500 | 0.834 | 18.8° | 0.428 | 11.5 | 820 | 76 | 21.4 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 329 hp / 353 lb-ft | 5500–6500 / 5500 | 0.836 | 17.5° | 0.416 | 11.8 | 800 | 77 | 20.0 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 376 hp / 382 lb-ft | 5800 / 5700 | 0.832 | 15.9° | 0.416 | 11.8 | 812 | 81 | 21.7 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 231 hp / 249 lb-ft | 4700–6200 / 5500 | 0.834 | 18.8° | 0.427 | 11.5 | 820 | 76 | 21.4 |
 | VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 305 hp / 302 lb-ft | 5400–6500 / 6300 | 0.830 | 19.5° | 0.411 | 12.0 | 819 | 89 | 25.9 |
 
 **Reference ranges** (the bands `tests/benchmark.test.js` enforces):
@@ -93,7 +93,7 @@ Learn article 39. None of them changes the direction of any lesson.
    what λ 0.88 does. On a real engine power falls away richer than best power; by how
    much is not checked here. The pull log still flags running that rich.
 5. **Best-torque timing.** The advisors aim for the textbook MBT. The model's own cycle
-   makes its best torque a median 2° later than that, within 7.5° for 95% of operating
+   makes its best torque a median 2° later than that, within 8° for 95% of operating
    points and up to about 15° at the rare extreme (mostly low RPM); following the advice
    costs under 3% of torque at any of them.
 6. **Intercooling at extreme backpressure.** With a turbine so small that a fifth of the
@@ -193,6 +193,31 @@ and kit makers — practitioner rules, the weakest sources here).
   them (`src/sim/sweep.js`). In the fingerprint this moves `wear.piston` alone, by at
   most 0.003 points, in the 18 cases where real knock sat at the noise level.
 
+- **Bolt-ons were worth about twice what they are.** An intake, cat-back and long-tube
+  headers together added 26% on the 3.5 V6 (headers alone 12%, cat-back 7%); a turbo kit
+  barely out-made them. Chassis dynos put these parts at about 5-8 whp for an intake,
+  5-8 whp for a cat-back, 15-20 whp for long tubes and 30-35 whp together on a VQ35. The
+  VE they add (`MOD_BONUS`, `src/sim/hardware.js`) was refitted to that: intake +6,
+  cat-back +8, headers +19, all three +37 whp (+14%), each with the MAF and VE retuned.
+- **The default engine's factory spark was past MBT.** Its full-load rows ran 2-6° past
+  the engine's own best-torque timing from 3500 RPM up (33° at 6500 where MBT is 28°).
+  No factory calibration does that: it buys nothing and moves toward knock. They now sit
+  about a degree short of MBT (`DEFAULT_TIMING`, `src/sim/tables.js`). The spark model
+  itself was checked against the textbook curve and left alone: 5° from MBT costs about
+  1.5%, 10° about 6%, 15° about 10% and 20° about 16%.
+- **Factory turbo cars ran 9% lean of their own fuel table.** The presets wrote the turbo
+  plumbing's MAF error into the fuel table (commanding ~11.0:1 so ~12.0:1 arrived) and
+  left the MAF scalar at 1. The delivered mixture was right, but the datalog showed
+  commanded and actual 9% apart on every factory turbo car, and fitting an intake to one
+  showed a 17% MAF error where the intake itself is 10%. A factory calibration now cancels
+  its own plumbing in the MAF calibration (`factoryCalibration`, `src/sim/presets.js`) and
+  commands the mixture it wants.
+- **A turbo that could not make its boost said nothing.** Asking a small turbo for 12 psi
+  made 5 with no log entry, so more boost on the same hardware looked like it made less
+  power. The pull log now reports underboost above 4000 RPM (below it, a shortfall is
+  spool) and points at a bigger compressor or turbine (`src/sim/sweep.js`).
+- **The MAF entry named a multiplier as if it were a setting.** "About 1.11 cancels this"
+  was right only on a car whose scalar was 1.00; it now names the value to set.
 - **A warm restart fell through its own idle.** On the step the engine caught it was still
   just under the idle target, and the idle controller's damping read the starter's
   pull-up as a flare and shut the idle valve; the start hold then held it shut. The
@@ -201,7 +226,10 @@ and kit makers — practitioner rules, the weakest sources here).
   start hid it: the cold idle air and fuel carried the dip. LIVE only (the fingerprint
   covers the dyno pull), so no fingerprint change.
 
-Together these regenerate the behavioural fingerprint. Naturally aspirated results are
+Together these regenerate the behavioural fingerprint. The bolt-on, spark-table and MAF
+fixes above move it too: peak power falls a median 7% with all three bolt-ons and 2% with
+the intake alone, is unchanged without mods, and 378 cases that ask a small turbo for more
+than it can make now carry an underboost entry. Naturally aspirated results are
 unchanged apart from exhaust temperature; boosted results move on average +1.7% (mild
 boost) and −0.8% (heavy boost), with the largest moves on turbos far too small for their
 engine, which previously made boost the compressor could not pass. The dew-point bound

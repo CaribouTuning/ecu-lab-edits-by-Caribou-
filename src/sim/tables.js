@@ -47,11 +47,21 @@ export const DEFAULT_VE = [
 export const SPARK_MIN_DEG = -5;
 export const SPARK_MAX_DEG = 50;
 
-/** Stock ignition timing table, degrees BTDC. */
+/**
+ * Stock ignition timing table, degrees BTDC.
+ *
+ * The full-load rows sit about a degree short of this engine's own MBT (the least advance
+ * that makes best torque, measured on the model at wide open throttle: 17, 21, 24, 24,
+ * 28, 28 and 30-31° from 1500 to 7500 RPM), which is where a factory calibration puts
+ * them: past MBT buys nothing and moves toward knock. They were once 2-6° past it from
+ * 3500 RPM up, so the stock engine lost about 1.5% at peak, and taking spark OUT looked
+ * almost free. The boost rows copy the full-load row, as a naturally aspirated factory
+ * calibration does; a boost kit has to take spark out of them.
+ */
 export const DEFAULT_TIMING = [
-  [10, 14, 20, 26, 30, 32, 33, 34],
-  [10, 14, 20, 26, 30, 32, 33, 34],
-  [10, 14, 20, 26, 30, 32, 33, 34],
+  [10, 16, 20, 23, 23, 27, 27, 29],
+  [10, 16, 20, 23, 23, 27, 27, 29],
+  [10, 16, 20, 23, 23, 27, 27, 29],
   [14, 22, 28, 33, 36, 37, 38, 39],
   [16, 30, 36, 40, 42, 43, 43, 43],
   [14, 34, 40, 44, 46, 47, 47, 47],

@@ -358,7 +358,7 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
       injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
       ecuInjectorCc: patch.ecuInjectorCc,
       injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-      mods: patch.mods, mafScalar: 1, derived: S.deriveEngine(patch.engineConfig),
+      mods: patch.mods, mafScalar: patch.mafScalar, derived: S.deriveEngine(patch.engineConfig),
       // The N54 is twin-turbo, and backpressure now depends on total turbine flow
       // area, so the count has to come along or this models a choked engine.
       turbine: S.presetTurbine(preset),

@@ -182,13 +182,16 @@ export function simulateSweep({
     const veActualVal = veTruth ? interp2(veTruth, rpm, man.mapKpa) : undefined;
     const timingVal = interp2(timing, rpm, man.mapKpa);
     const afrCommanded = interp2(afr, rpm, man.mapKpa);
-    points.push(evaluatePoint({
-      rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
-      veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
-      mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-      turbine: turboOn ? turbine : null, empKpa: man.empKpa,
-      ...(man.blower ? { blower: man.blower } : {}),
-    }));
+    points.push({
+      ...evaluatePoint({
+        rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
+        veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
+        mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
+        turbine: turboOn ? turbine : null, empKpa: man.empKpa,
+        ...(man.blower ? { blower: man.blower } : {}),
+      }),
+      ...(turboOn ? { boostTarget: Number(boostTarget.toFixed(1)) } : {}),
+    });
   }
 
   let pistonWear = 0, valveWear = 0;
@@ -404,9 +407,30 @@ export function simulateSweep({
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `MAF reading about ${Math.abs(avgTrim).toFixed(0)}% ${avgTrim < 0 ? 'low' : 'high'} across ${rangeLabel(run)} — running ${direction}`,
       cause: `${source.charAt(0).toUpperCase() + source.slice(1)} changed how much air reads across the MAF sensor at a given flow rate, and the ECU has not been rescaled for it. It sees ${avgTrim < 0 ? 'less' : 'more'} air than the engine really takes in, so it fuels ${avgTrim < 0 ? 'too little' : 'too much'}.`,
-      fix: `On TUNE → SENSORS, ${avgTrim < 0 ? 'raise' : 'lower'} the MAF scalar (about ${(100 / (100 + avgTrim)).toFixed(2)} cancels this) and re-run the pull — watch the AFR trace (actual vs. commanded) until they line up.`,
+      fix: `On TUNE → SENSORS, ${avgTrim < 0 ? 'raise' : 'lower'} the MAF scalar from ${mafScalar.toFixed(2)} to about ${(mafScalar * 100 / (100 + avgTrim)).toFixed(2)}, which cancels this, and re-run the pull — watch the AFR trace (actual vs. commanded) until they line up.`,
     });
   });
+
+  // UNDERBOOST: the turbo cannot make what is asked of it. Below 4000 RPM a shortfall is
+  // spool, which every turbo has and the boost curve should already allow for; above it,
+  // with the exhaust flowing hard, a turbo that still falls short is too small (its
+  // compressor runs out of flow, or its turbine chokes and cannot drive it). Nothing
+  // logged this before: asking a small turbo for 12 psi quietly made 5, and more boost
+  // on the same hardware looked like it made less power.
+  if (turboOn) {
+    groupRuns(points, (p) => p.rpm >= 4000 && p.boostTarget != null
+      && p.boostTarget - p.boostPsi > Math.max(1.5, p.boostTarget * 0.15)).forEach((run) => {
+      const worst = run.reduce((a, b) => ((b.boostTarget - b.boostPsi) > (a.boostTarget - a.boostPsi) ? b : a));
+      const impact = Math.round(10 * (0.3 + 0.7 * rangeFrac(run)));
+      events.push({
+        type: 'underboost', severity: 2, impact,
+        rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+        msg: `Boost falls short of target across ${rangeLabel(run)} (${worst.boostPsi.toFixed(1)} of ${worst.boostTarget.toFixed(1)} psi at ${worst.rpm} RPM)`,
+        cause: `The turbo cannot make this much boost here. With the wastegate shut, boost settles where the turbine's power meets what the compressor needs: a compressor too small runs out of flow, and a turbine too small chokes the exhaust and cannot drive it. Asking for more does not help — it only makes the target further away.`,
+        fix: `On BUILD → INDUCTION, fit a bigger compressor or turbine for this much boost, or ask for less boost on TUNE → BOOST.`,
+      });
+    });
+  }
 
   groupRuns(points, (p) => p.compressorOver).forEach((run) => {
     const peak = run.reduce((a, b) => (b.boostPsi > a.boostPsi ? b : a));

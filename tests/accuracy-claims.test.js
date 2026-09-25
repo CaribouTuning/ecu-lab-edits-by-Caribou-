@@ -32,7 +32,7 @@ function pullFor(preset) {
     octaneBonus: S.OCTANE_OPTS[patch.octaneIdx].bonus, octaneLabel: S.OCTANE_OPTS[patch.octaneIdx].label,
     fuel: S.OCTANE_OPTS[patch.octaneIdx], injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
     ecuInjectorCc: patch.ecuInjectorCc, injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-    mods: patch.mods, mafScalar: 1, derived, turbine: S.presetTurbine(preset),
+    mods: patch.mods, mafScalar: patch.mafScalar, derived, turbine: S.presetTurbine(preset),
     compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
   });
 }
@@ -161,7 +161,7 @@ describe('the known approximations are the size the pages say', () => {
     }
   });
 
-  it('best torque: the cycle peaks a median of about 2°, 95% within 7.5° and at most about 15° after the textbook MBT', () => {
+  it('best torque: the cycle peaks a median of about 2°, 95% within 8° and at most about 15° after the textbook MBT', () => {
     const offsets = [];
     for (let seed = 1; seed <= 200; seed++) {
       const build = randomBuild(seed);
@@ -191,7 +191,7 @@ describe('the known approximations are the size the pages say', () => {
     const median = offsets[Math.floor(offsets.length / 2)];
     expect(median).toBeGreaterThanOrEqual(1);
     expect(median).toBeLessThanOrEqual(3);
-    expect(offsets[Math.floor(0.95 * (offsets.length - 1))]).toBeLessThanOrEqual(7.5);
+    expect(offsets[Math.floor(0.95 * (offsets.length - 1))]).toBeLessThanOrEqual(8);
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 

@@ -55,7 +55,7 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
   const sweepArgs = (loadKpa = 100) => ({
     loadKpa, ...tables, veTruth, turboOn: build.turboOn, boostCurve: build.boostCurve,
     octaneLabel: fuel.label, fuel, injectorCc: S.INJECTOR_OPTS[build.injIdx].cc,
-    ecuInjectorCc: build.ecuInjectorCc, injectorLabel: 'x', mods: build.mods, mafScalar: 1,
+    ecuInjectorCc: build.ecuInjectorCc, injectorLabel: 'x', mods: build.mods, mafScalar: build.mafScalar ?? p?.mafScalar ?? 1,
     derived, turbine, compressor,
     ...(S.blowerOf(build) ? { blower: S.blowerOf(build), blowerRatio: build.blowerRatio ?? S.blowerOf(build).defaultRatio } : {}),
     ...(build.nitrous ? { nitrous: build.nitrous } : {}),

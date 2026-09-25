@@ -589,10 +589,9 @@ function baseReducer(state, action) {
           // A preset is a factory car: no supercharger or nitrous carried over from the last build.
           blowerId: null,
           nitrous: null,
-          // A preset's AFR table already bakes in a correction for the MAF error its
-          // mod set implies (factoryCalibration, src/sim/presets.js) — valid only at
-          // the neutral scalar, so loading a preset must pin this back to 1.0.
-          mafScalar: 1.0,
+          // A factory car's MAF calibration cancels its own intake and turbo plumbing
+          // (factoryCalibration, src/sim/presets.js), so a preset brings its scalar.
+          mafScalar: p.mafScalar ?? 1.0,
           presetId: p.presetId,
           presetPrompt: null,
         },
@@ -939,7 +938,7 @@ function labelFor(action) {
  */
 const SANDBOX_SESSION_FIELDS = [
   'result', 'runs', 'pinnedRunId', 'pullScores', 'histogram', 'logFocusRpm', 'health',
-  'pullCount', 'bestScore', 'totalScore', 'mission', 'journeyStep', 'revealCount',
+  'pullCount', 'bestScore', 'totalScore', 'mission', 'revealCount',
   'env', 'faults', 'liveAux',
 ];
 
@@ -975,7 +974,7 @@ function onTheBay(state, career) {
       ...state.session,
       result: null, runs: [], pinnedRunId: null, pullScores: null, histogram: null, logFocusRpm: null,
       health: { piston: 100, bearing: 100, valve: 100 }, pullCount: 0, bestScore: 0, totalScore: 0,
-      mission: null, journeyStep: 99, revealCount: 0, running: false, live: makeLiveState(),
+      mission: null, revealCount: 0, running: false, live: makeLiveState(),
       // A customer's car is worked on, and graded, in the standard shop: sea level,
       // a mild day, no faults the job did not bring, nothing switched on.
       env: fresh.session.env, faults: fresh.session.faults, liveAux: fresh.session.liveAux,

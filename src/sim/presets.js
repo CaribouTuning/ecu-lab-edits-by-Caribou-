@@ -431,7 +431,7 @@ function hardwareFor(preset) {
  * needs the mixture), then SPARK (which is knock-limited given that mixture).
  *
  * @param {Preset} preset
- * @returns {{ve: number[][], timing: number[][], afr: number[][]}}
+ * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number}}
  */
 export function factoryCalibration(preset) {
   const derived = deriveEngine(preset.engine);
@@ -450,20 +450,21 @@ export function factoryCalibration(preset) {
     : 0);
 
   // A turbo (or a bigger intake) changes the airflow profile across the MAF, so at a
-  // fixed mafScalar of 1 the ECU under-reads true air by this factor — see
-  // `mafErrorFactor` in sweep.js. A generic calibration leaves that error for the
-  // player to chase down with the MAF Scalar; a FACTORY calibration is dyno-validated
-  // and has already characterized its own sensor, so its fuel table is written to
-  // land on best-power AFR once that error is applied — not before it.
-  const mafFactor = mafErrorFactor(preset.mods, preset.induction.turboOn);
+  // scalar of 1 the ECU under-reads true air by this factor — see `mafErrorFactor` in
+  // sweep.js. A FACTORY calibration was made on its own intake and turbo plumbing, so
+  // its MAF calibration already cancels it: the scalar is the reciprocal, the ECU reads
+  // the true air, and the fuel table commands exactly the mixture it wants delivered.
+  //
+  // It used to leave the scalar at 1 and write the error into the fuel table instead
+  // (commanding ~11.0:1 so that ~12:1 arrived). The engine got the right mixture, but
+  // every factory turbo car logged its commanded and actual AFR 9% apart, forever, and
+  // an intake fitted to one showed a 17% error when the intake itself was 10%.
+  const mafScalar = Number((1 / mafErrorFactor(preset.mods, preset.induction.turboOn)).toFixed(3));
 
-  // FUEL: stoichiometric where a real ECU runs closed loop, best-power enrichment
-  // above that, pre-corrected by the known MAF error so the DELIVERED mixture (not
-  // just the commanded one) lands on best-power AFR. This is exactly the shape of a
-  // factory fuel table, MAF characterization included.
+  // FUEL: stoichiometric where a real ECU runs closed loop, best-power enrichment above.
   const afr = LOAD.map((loadKpa) => RPM.map((rpm) => {
     if (loadKpa < OPEN_LOOP_KPA) return 14.7;
-    return Number((bestPowerAfr(boostAt(rpm, loadKpa)) * mafFactor).toFixed(2));
+    return Number(bestPowerAfr(boostAt(rpm, loadKpa)).toFixed(2));
   }));
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
@@ -493,7 +494,7 @@ export function factoryCalibration(preset) {
     // stoichiometric charge burns hotter and knocks sooner than a rich one, so those
     // cells were written for a mixture the engine never receives.
     const afrCommanded = interp2(afr, rpm, loadKpa);
-    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafFactor, loadKpa);
+    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, loadKpa);
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda))
@@ -577,7 +578,7 @@ export function factoryCalibration(preset) {
     }
   });
 
-  return { ve, timing, afr };
+  return { ve, timing, afr, mafScalar };
 }
 
 /**
@@ -589,9 +590,10 @@ export function factoryCalibration(preset) {
  * @returns {object} a complete state patch
  */
 export function applyPreset(preset) {
-  const { ve, timing, afr } = factoryCalibration(preset);
+  const { ve, timing, afr, mafScalar } = factoryCalibration(preset);
   return {
     presetId: preset.id,
+    mafScalar,
     engineConfig: { ...preset.engine },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,

@@ -447,15 +447,15 @@ function BoltOn() {
         demo={d}
         height={400}
         callouts={[
-          { at: '[data-tour="log-title"]', text: 'Each entry names one symptom. There are two here, from the same part.' },
-          { at: '[data-tour="log-try"]', text: 'Each fix points at a different screen: the MAF on SENSORS, the VE on AIRFLOW.' },
+          { at: '[data-tour="log-title"]', text: 'Symptom one has its own entry: the MAF reads low, so the whole pull runs lean of what FUEL asks for.' },
+          { at: '[data-tour="log-try"]', text: 'Its fix points at SENSORS. Symptom two, better breathing, has no entry of its own: AIRFLOW’s correction from the log finds it (Lesson 4.2).' },
         ]}
         caption={`The real Pull Log after fitting a cold air intake to the stock engine and pulling, with nothing retuned. It made ${d.result.peakHp} whp against ${s.result.peakHp} stock.`}
       >
         <LogScreen />
       </ScreenSnippet>
       <P><b>Symptom one: the MAF reads low.</b> The bigger housing makes the same airflow read about 10% less, so the ECU fuels for less air than there is, and the engine runs lean.</P>
-      <P><b>Symptom two: the VE table is out of date.</b> The engine breathes a few percent better than the table says, so there is more air than the ECU calculated from AIRFLOW too.</P>
+      <P><b>Symptom two: the VE table is out of date.</b> The engine breathes a few percent better than the table says, so there is more air than the ECU calculated from AIRFLOW too. It is too small to earn a log entry of its own (the lean warning is for mixtures past 15.2:1, where damage starts), which is exactly why a tuner reads the wideband against the target on every pull, not just the warnings.</P>
       <Did>You have seen the most common situation in real tuning: new hardware, old calibration. The next two lessons fix each symptom where it lives.</Did>
     </>
   );

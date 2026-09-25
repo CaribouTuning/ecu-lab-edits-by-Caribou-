@@ -464,9 +464,9 @@ describe('the dock slider commits once, on release', () => {
     fireEvent.click(screen.getByRole('button', { name: 'SELECT OTHER' }));
 
     // Literals, not `not.toBe('40')` (passes for any non-40 value, including another
-    // stale draft) or a value re-read from the component's own earlier render. 14 is
+    // stale draft) or a value re-read from the component's own earlier render. 16 is
     // DEFAULT_TIMING[1][1], cell(1,1)'s real committed value.
-    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('14');
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('16');
     // Nothing was ever committed, and the first cell still holds its original value —
     // 10, DEFAULT_TIMING[0][0].
     expect(screen.getByTestId('depth').textContent).toBe('0');
@@ -492,8 +492,8 @@ describe('the dock slider commits once, on release', () => {
     // Same row, next column over: cell(0,1), current 14 (DEFAULT_TIMING[0][1]).
     fireEvent.click(screen.getByRole('button', { name: 'SELECT SAME ROW' }));
 
-    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('14');
-    expect(screen.getByTestId('dock-readout').textContent).toBe('14°');
+    expect(/** @type {HTMLInputElement} */ (screen.getByRole('slider')).value).toBe('16');
+    expect(screen.getByTestId('dock-readout').textContent).toBe('16°');
     expect(screen.getByTestId('depth').textContent).toBe('0');
   });
 
@@ -738,8 +738,8 @@ describe('the dock slider commits once, on release', () => {
     // slider exactly on the row's mean and releasing is a genuine edit (it flattens
     // every cell to that value), and an unscoped guard silently discards it.
     //
-    // Row 0 starts [10,14,20,26,30,32,33,34] (sum 199). +1 on cell(0,0) makes it
-    // [11,14,20,26,30,32,33,34], sum 200, mean EXACTLY 25 — the row selection's
+    // Row 0 starts [10,16,20,23,23,27,27,29] (sum 175). +1 on cell(0,0) makes it
+    // [11,16,20,23,23,27,27,29], sum 176, mean EXACTLY 22 — the row selection's
     // `current` for the rest of this test.
     render(
       <StoreProvider>
@@ -750,22 +750,22 @@ describe('the dock slider commits once, on release', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'SELECT' })); // cell(0,0), current 10
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
-    expect(screen.getByTestId('row0').textContent).toBe('[11,14,20,26,30,32,33,34]');
+    expect(screen.getByTestId('row0').textContent).toBe('[11,16,20,23,23,27,27,29]');
     expect(screen.getByTestId('depth').textContent).toBe('1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'SELECT ROW' })); // row 0, current (mean) 25
-    expect(screen.getByTestId('dock-readout').textContent).toBe('25°');
+    fireEvent.click(screen.getByRole('button', { name: 'SELECT ROW' })); // row 0, current (mean) 22
+    expect(screen.getByTestId('dock-readout').textContent).toBe('22°');
 
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '40' } });
-    fireEvent.change(slider, { target: { value: '25' } }); // lands exactly back on the mean
+    fireEvent.change(slider, { target: { value: '22' } }); // lands exactly back on the mean
     fireEvent.pointerUp(slider);
 
     // An unscoped `draft === current` guard would treat this as a no-op and throw the
     // fan-out away, leaving depth 1 and the row unchanged. The real behaviour is that
     // this flattens the row and burns a second undo entry.
     expect(screen.getByTestId('depth').textContent).toBe('2');
-    expect(screen.getByTestId('row0').textContent).toBe('[25,25,25,25,25,25,25,25]');
+    expect(screen.getByTestId('row0').textContent).toBe('[22,22,22,22,22,22,22,22]');
   });
 
   it('commits one value across the whole column as a single entry, for a column selection', () => {

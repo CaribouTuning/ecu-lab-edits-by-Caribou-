@@ -269,11 +269,21 @@ export function idealExhaustDiameter(displacementL, peakBoostPsi = 0) {
   return clamp(estCrankHp / 100, 2.0, 5.0);
 }
 
-/** Measured airflow gains per bolt-on, weighted toward the RPM where they work. */
+/**
+ * Airflow gains per bolt-on, in VE points at wide open throttle, weighted toward the RPM
+ * where each one works.
+ *
+ * Fitted to what these parts measure on a chassis dyno on a naturally aspirated 3.5 V6
+ * (the VQ35 is the most-dynoed engine these parts are sold for), each with the MAF
+ * rescaled and the VE table corrected afterwards: a cold air intake about 5-8 whp, a
+ * cat-back 5-8 whp, long-tube headers 15-20 whp, all three together about 30-35 whp,
+ * roughly 12-14% over stock. These were once about twice that (the three together
+ * added 26%, and headers alone 12%), which made a turbo kit look barely worth fitting.
+ */
 export const MOD_BONUS = {
-  intake: [0, 0, 0, 1, 2, 3, 3, 4],
-  exhaust: [0, 0, 1, 2, 3, 4, 5, 6],
-  headers: [0, 1, 2, 4, 6, 8, 9, 10],
+  intake: [0, 0, 0, 0.5, 1, 1.5, 2, 2.5],
+  exhaust: [0, 0, 0.5, 1, 1.5, 2, 2.5, 3],
+  headers: [0, 0.5, 1, 2, 3.5, 5, 6, 6.5],
 };
 
 /** Display copy for each bolt-on. */

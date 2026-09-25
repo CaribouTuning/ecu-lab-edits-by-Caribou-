@@ -16,8 +16,12 @@ const withIntake = (s) => ({ ...s, build: { ...s.build, mods: { ...s.build.mods,
 /** The engine a player gets on SANDBOX, untouched. */
 export const stock = () => runDemo('stock');
 
-/** SPARK's rows at 70 kPa and up, 4° more advanced: past the knock limit on 91. */
-export const SPARK_ADDED_DEG = 4;
+/**
+ * SPARK's rows at 70 kPa and up, 10° more advanced: well past the knock limit on 91.
+ * The stock table sits a degree short of MBT, and this engine has about 7° of margin
+ * to knock beyond that on 91, so a smaller step would add spark without knocking.
+ */
+export const SPARK_ADDED_DEG = 10;
 export const overAdvanced = () => runDemo('over-advanced', (s) => ({
   ...s,
   tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (LOAD[ri] >= 70 ? v + SPARK_ADDED_DEG : v))) },

@@ -606,7 +606,7 @@ describe('dyno sweep', () => {
     expect(p.trimPct).toBeLessThan(0);
     expect(p.afr / p.afrCommanded).toBeGreaterThan(1.05);
     expect(e.msg).toMatch(/low .* running lean$/);
-    expect(e.fix).toMatch(/raise the MAF scalar \(about 1\.1\d cancels this\)/);
+    expect(e.fix).toMatch(/raise the MAF scalar from 1\.00 to about 1\.1\d, which cancels this/);
   });
 
   it('leaves the three whole-pull findings unlocated', () => {
@@ -1006,7 +1006,7 @@ describe('the inlet Mach index', () => {
         turboOn: false, boostCurve: p.boostCurve,
         octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, octaneLabel: 'x',
         fuel: S.OCTANE_OPTS[p.octaneIdx], injectorCc: S.INJECTOR_OPTS[p.injIdx].cc,
-        ecuInjectorCc: p.ecuInjectorCc, injectorLabel: 'x', mods: p.mods, mafScalar: 1,
+        ecuInjectorCc: p.ecuInjectorCc, injectorLabel: 'x', mods: p.mods, mafScalar: p.mafScalar,
         derived, turbine: S.presetTurbine(preset),
         compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
       });
@@ -1172,7 +1172,7 @@ describe('the spark advisor', () => {
       compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
       turbine: S.presetTurbine(preset),
       injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-      mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+      mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
     });
   }
 
@@ -1232,7 +1232,7 @@ describe('the spark advisor', () => {
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.COMPRESSOR_OPTS[p.compressorIdx], turbine: S.presetTurbine(preset),
       injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-      mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+      mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
     });
     expect(a.wrongMix.length).toBeGreaterThan(0);
     for (const c of a.wrongMix) expect(c.delta).toBeCloseTo(-1.5, 1);
@@ -1348,7 +1348,7 @@ describe('spark advice survives interpolation', () => {
         mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
         compressor: S.COMPRESSOR_OPTS[p.compressorIdx], turbine: S.presetTurbine(preset),
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-        mafScalar: 1, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+        mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
       });
       expect(a.overAdvanced, `${preset.id} overAdvanced`).toHaveLength(0);
       expect(a.pastMbt, `${preset.id} pastMbt`).toHaveLength(0);
@@ -1385,7 +1385,7 @@ describe('exhaust gas temperature', () => {
         loadKpa: 100, ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
         turboOn: p.turboOn, boostCurve: p.boostCurve, fuel: S.OCTANE_OPTS[p.octaneIdx],
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-        mods: p.mods, mafScalar: 1, derived: S.deriveEngine(p.engineConfig),
+        mods: p.mods, mafScalar: p.mafScalar, derived: S.deriveEngine(p.engineConfig),
         turbine: S.presetTurbine(preset), compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
       });
       for (const pt of r.points) {

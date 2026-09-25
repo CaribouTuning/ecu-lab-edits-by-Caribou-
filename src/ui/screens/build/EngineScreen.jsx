@@ -85,7 +85,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
 
   const applyEnginePreset = (preset) => {
     const p = applyPreset(preset);
-    // The whole BUILD slice — including `mafScalar` back to 1.0, and `presetId` SET
+    // The whole BUILD slice — including the preset's own `mafScalar`, and `presetId` SET
     // rather than cleared — lands in ONE pass; see APPLY_PRESET in reducer.js.
     dispatch({ type: ACTIONS.APPLY_PRESET, preset: p });
   };
