@@ -15,6 +15,7 @@ import { ACTIONS } from '../state/reducer.js';
 import { useCareer } from '../state/StoreProvider.jsx';
 
 import { EQUIPMENT, MILESTONES, TRAINING, nextRepTier, repTier } from './catalog.js';
+import { HOW_TO_SEE } from './evaluate.js';
 import { jobById } from './jobs.js';
 import {
   accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, train,
@@ -129,7 +130,10 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
                   {last.results.map((r) => (
                     <li key={r.label} data-pass={r.pass ? 'true' : 'false'}>
                       <span className={styles.mark} aria-hidden="true">{r.pass ? '✓' : '✗'}</span>
-                      <span><b>{r.label}</b><span className={styles.measured}>{r.measured}</span></span>
+                      <span>
+                        <b>{r.label}</b><span className={styles.measured}>{r.measured}</span>
+                        {!r.pass && r.type && HOW_TO_SEE[r.type] && <span className={styles.how}>How to see it: {HOW_TO_SEE[r.type]}</span>}
+                      </span>
                     </li>
                   ))}
                 </ul>

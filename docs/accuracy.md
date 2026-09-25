@@ -193,6 +193,14 @@ and kit makers — practitioner rules, the weakest sources here).
   them (`src/sim/sweep.js`). In the fingerprint this moves `wear.piston` alone, by at
   most 0.003 points, in the 18 cases where real knock sat at the noise level.
 
+- **A warm restart fell through its own idle.** On the step the engine caught it was still
+  just under the idle target, and the idle controller's damping read the starter's
+  pull-up as a flare and shut the idle valve; the start hold then held it shut. The
+  engine flared, fell to about 400 RPM and, on the stock VQ35DE, stalled. The idle air
+  now never drops below its base value while starting (`src/sim/ecu/liveEcu.js`). A cold
+  start hid it: the cold idle air and fuel carried the dip. LIVE only (the fingerprint
+  covers the dyno pull), so no fingerprint change.
+
 Together these regenerate the behavioural fingerprint. Naturally aspirated results are
 unchanged apart from exhaust temperature; boosted results move on average +1.7% (mild
 boost) and −0.8% (heavy boost), with the largest moves on turbos far too small for their

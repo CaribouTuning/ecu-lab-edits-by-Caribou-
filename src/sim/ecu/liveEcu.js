@@ -232,7 +232,8 @@ export function liveStepEcu(st, dt, input, cfg) {
   // valve does not chase the flare down — closing the loop on it winds the controller
   // up for the dip that follows. It will still add air if the engine sags.
   if (s.running && idleZone && pedal < 3) {
-    const holding = e.sinceStart < cal.idle.startHoldS && s.rpm > idleTarget;
+    const starting = e.sinceStart < cal.idle.startHoldS;
+    const holding = starting && s.rpm > idleTarget;
     if (holding) { /* hold base air through the flare */ } else if (s.rpm < E.IDLE_CAPTURE_RPM) {
       const err = idleTarget - s.rpm;
       const gain = err > 0 ? cal.idle.gainUp : cal.idle.gainDown;
@@ -248,6 +249,11 @@ export function liveStepEcu(st, dt, input, cfg) {
       // actually decelerate; it catches the engine again below 2000 RPM.
       s.idleTrim += (E.IDLE_COAST_AIR_PCT - s.idleTrim) * cal.idle.bleed * (dt / 0.05);
     }
+    // Never less than the base air while starting. The step the engine catches on is
+    // still just under the target, and the damping term reads the starter's pull-up as
+    // a flare: without this floor it shut the valve in that one step and the hold then
+    // held it shut, so a warm restart flared, fell through the target and stalled.
+    if (starting) s.idleTrim = Math.max(s.idleTrim, read1(cal.idle.baseAir, e.sEct));
   }
   const idleAir = (s.running ? s.idleTrim : 0) + (aux.ac ? cal.idle.acAirAdd : 0) + (aux.lights ? cal.idle.elecAirAdd : 0);
   e.idleAir = idleAir;

@@ -332,6 +332,20 @@ describe('the day matters', () => {
 });
 
 describe('the live engine runs its controllers in time', () => {
+  // A warm restart is the hard start: no cold enrichment to carry the flare. The step the
+  // engine catches on reads as a flare to the idle controller's damping, and it used to
+  // shut the idle valve in that one step and hold it shut, so the engine fell through
+  // its target after the flare and stalled or nearly did.
+  it.each([[null], ['vq35hr'], ['vq35de-revup'], ['n54'], ['ea888-gti']])('restarts warm without falling through its idle (%s)', (preset) => {
+    const eng = makeEngine({ preset });
+    const from = { ...S.makeLiveState(), cranking: true, coolantC: 88, oilC: 88, ecu: { ...S.makeEcuLiveState(), sEct: 88 } };
+    const { state, rows } = runLive(eng, { seconds: 8, from });
+    expect(state.running).toBe(true);
+    const caught = rows.findIndex((r) => r.running);
+    const lowest = Math.min(...rows.slice(caught + 4).map((r) => r.rpm));
+    expect(lowest).toBeGreaterThan(560);
+  });
+
   it('charges the battery at a hot idle, and sags only under a heavy electrical load', () => {
     // A 120 A alternator gives about half its rating at idle: enough for the car itself,
     // not for lights and A/C on top.

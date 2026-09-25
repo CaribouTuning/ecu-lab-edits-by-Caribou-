@@ -12,6 +12,7 @@ import React, { useState } from 'react';
 import { Button } from '../primitives/Button.jsx';
 
 import styles from './CareerBar.module.css';
+import { HOW_TO_SEE } from './evaluate.js';
 import { jobById } from './jobs.js';
 
 /**
@@ -55,7 +56,11 @@ export function CareerBar({ career, onShop, onHandBack }) {
           <div className={styles.sub}>WORK ORDER</div>
           <ul className={styles.list}>{job.work.map((w) => <li key={w}>{w}</li>)}</ul>
           <div className={styles.sub}>WHEN IT GOES HOME, IT HAS TO</div>
-          <ul className={styles.list}>{job.checks.map((c) => <li key={c.label}>{c.label}</li>)}</ul>
+          <ul className={styles.list}>
+            {job.checks.map((c) => (
+              <li key={c.label}>{c.label}{HOW_TO_SEE[c.type] && <span className={styles.how}>{HOW_TO_SEE[c.type]}</span>}</li>
+            ))}
+          </ul>
           {roadOnly && <p className={styles.note}>No dyno yet: pulls are road tests. They log everything a wideband and the ECU see, but not horsepower.</p>}
           <div className={styles.actions}>
             <Button size="sm" onClick={onHandBack}>HAND BACK THE CAR</Button>

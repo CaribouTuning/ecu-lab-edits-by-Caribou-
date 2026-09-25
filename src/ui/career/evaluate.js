@@ -39,6 +39,24 @@ function referenceHp(spec) {
  */
 
 /**
+ * Where the player can see each check for themselves, before handing the car back. A
+ * check that fails without saying how to reproduce it reads as the game being unfair.
+ */
+export const HOW_TO_SEE = {
+  events: 'DYNO › PULL LOG lists each of these, and each entry names the page that fixes it.',
+  mixture: 'DYNO › CURVES: the AFR chart, commanded against actual. The gap at full throttle is what the customer’s gauge shows.',
+  minHp: 'DYNO › CURVES: the peak wheel horsepower.',
+  maxEgt: 'DYNO › DATALOG: exhaust temperature at each RPM.',
+  maxDuty: 'DYNO › DATALOG: injector duty at each RPM.',
+  untouched: 'This table was changed from how the car came in. The customer wants the cause fixed instead.',
+  idle: 'LIVE: START the engine and let it warm up, then STOP and START it again. The customer judges a warm restart and the idle after it settles.',
+  score: 'DYNO › SCORE: the Tuning Score of the last pull.',
+  fuelIs: 'BUILD › FUEL SYSTEM: the fuel the customer asked for.',
+  naOnly: 'BUILD › INDUCTION: no turbo, supercharger or nitrous.',
+  maxRedline: 'BUILD › ENGINE: the rev limit.',
+};
+
+/**
  * @param {Criterion} c
  * @param {{r: any, state: any, delivered: any, idle: () => ReturnType<typeof idleTest>, score: number}} ctx
  * @returns {CheckResult}
@@ -86,7 +104,8 @@ function check(c, ctx) {
       const pass = t.running && t.swingRpm <= c.swing && off <= c.offset;
       return {
         check: c, pass,
-        measured: !t.running ? 'stalled' : `idles at ${Math.round(t.meanRpm)} RPM (target ${Math.round(t.targetRpm)}), swinging ${Math.round(t.swingRpm)} RPM`,
+        measured: !t.running ? 'stalled on a warm restart'
+          : `settled at ${Math.round(t.meanRpm)} RPM (target ${Math.round(t.targetRpm)}), swinging ${Math.round(t.swingRpm)} RPM; up to ${c.swing} allowed`,
       };
     }
     case 'score':

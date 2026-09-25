@@ -89,7 +89,7 @@ export const JOBS = [
   {
     id: 'injector-scaling', tier: 1,
     customer: { name: 'Dana', car: '2008 Nissan 350Z', color: 'red', body: 'coupe' },
-    says: 'I fitted bigger injectors myself because I’m saving for a turbo. Now it stinks of fuel, the plugs come out black and it’s gutless.',
+    says: 'I fitted bigger injectors myself because I’m saving for a turbo. Now it stinks of fuel, the plugs come out black, it’s gutless, and on a cold morning it floods and won’t start.',
     wants: 'Get it running right on these injectors. And don’t just lean the fuel map out to hide it — I’ve read about that.',
     work: ['Road test and diagnose', 'Correct the calibration for the new injectors'],
     car: { preset: 'vq35hr', build: () => ({ injIdx: 4 }) },
@@ -267,7 +267,7 @@ export const JOBS = [
   {
     id: 'walkin-injectors-v6', tier: 1, repeat: true,
     customer: { name: 'A walk-in', car: '3.5 V6 daily', color: 'pewter', body: 'sedan' },
-    says: 'I put 550s in it for later and now it runs like it’s choking.',
+    says: 'I put 550s in it for later and now it runs like it’s choking, and it won’t start cold without a fight.',
     wants: 'Just make it run right on these injectors.',
     work: ['Road test and diagnose', 'Correct the calibration'],
     car: { preset: null, build: () => ({ injIdx: 2 }) },

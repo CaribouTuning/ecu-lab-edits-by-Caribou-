@@ -78,6 +78,19 @@ describe.each(JOBS.map((j) => [j.id, j]))('%s', (_id, job) => {
 });
 
 describe('grading', () => {
+  it('judges the idle once it has settled after a warm restart, not the start-up flare', () => {
+    // A player reported failing "Still idles smoothly" on a car that never idled rough in
+    // LIVE. The idle test judged four seconds straight after the flare, and a warm restart
+    // fell through the idle target (see the warm-restart tests in ecu.test.js). A MAF
+    // scalar anywhere near right must not fail the idle.
+    const job = jobById('intake-maf');
+    for (const mafScalar of [1.05, 1.11, 1.15]) {
+      const v = evaluateJob(job, setBuild(customerCar(job.car), { mafScalar }));
+      const idle = v.results.find((x) => x.check.type === 'idle');
+      expect(idle.pass, `${mafScalar}: ${idle.measured}`).toBe(true);
+    }
+  });
+
   it('big power with knock is unsafe, not a success', () => {
     const job = jobById('turbo-kit');
     // Leave the knock in and turn the boost rows richer only: fast, and knocking.

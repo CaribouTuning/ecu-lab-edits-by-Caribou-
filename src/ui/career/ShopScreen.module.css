@@ -117,6 +117,7 @@
 .checks li[data-pass='true'] .mark { color: var(--ok); }
 .checks li[data-pass='false'] .mark { color: var(--danger); }
 .measured { display: block; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
+.how { display: block; margin-top: 2px; font-size: var(--fs-xs); line-height: 1.45; color: var(--warn-ink); }
 
 .payout { display: flex; flex-wrap: wrap; gap: var(--sp-lg); font-size: var(--fs-base); }
 

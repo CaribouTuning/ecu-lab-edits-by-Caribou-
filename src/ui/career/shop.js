@@ -56,7 +56,7 @@ export const START_MONEY = 1000;
  * @property {number} repChange
  * @property {number} repair
  * @property {string} line what the customer said
- * @property {{label: string, kind: string, pass: boolean, measured: string}[]} results
+ * @property {{label: string, kind: string, type?: string, pass: boolean, measured: string}[]} results
  * @property {boolean} leaves whether the car went home
  * @property {number} seq increases with every hand-back, so the shop can tell a new one
  */
@@ -203,7 +203,7 @@ export function deliver(c, jobId, v, extra = {}) {
     history: [{ day: c.day, jobId, verdict: v.verdict, paid, repChange: v.rep, boosted: !!extra.boosted, peakHp: Math.round(v.peakHp) }, ...c.history].slice(0, 60),
     last: {
       jobId, verdict: v.verdict, paid, repChange: v.rep, repair: v.repair, line: v.line, leaves,
-      results: v.results.map((x) => ({ label: x.check.label, kind: x.check.kind, pass: x.pass, measured: x.measured })),
+      results: v.results.map((x) => ({ label: x.check.label, kind: x.check.kind, type: x.check.type, pass: x.pass, measured: x.measured })),
       seq: (c.last?.seq ?? 0) + 1,
     },
   };

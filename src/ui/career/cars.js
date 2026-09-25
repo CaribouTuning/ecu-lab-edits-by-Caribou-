@@ -8,7 +8,7 @@
  * parts, which is precisely why a modified car arrives running wrong.
  */
 
-import { EXHAUST_DIA_OPTS, applyPreset, idealExhaustDiameter, liveStep, makeLiveState, presetById } from '../../sim/index.js';
+import { EXHAUST_DIA_OPTS, applyPreset, idealExhaustDiameter, liveStep, makeEcuLiveState, makeLiveState, presetById } from '../../sim/index.js';
 import { makeInitialState } from '../state/initialState.js';
 import { pullInputs } from '../state/pullInputs.js';
 import { ACTIONS, reducer } from '../state/reducer.js';
@@ -52,7 +52,7 @@ export function customerCar(spec) {
  * @param {{seconds?: number, acAt?: number}} [opts]
  * @returns {{running: boolean, meanRpm: number, swingRpm: number, targetRpm: number}}
  */
-export function idleTest(state, { seconds = 8, acAt } = {}) {
+export function idleTest(state, { seconds = 16, acAt } = {}) {
   const { args, derived, mafErrorBase } = pullInputs(state);
   const b = state.build;
   const exhaustDiaError = EXHAUST_DIA_OPTS[b.exhaustDiaIdx].dia
@@ -61,7 +61,9 @@ export function idleTest(state, { seconds = 8, acAt } = {}) {
   const cfgWith = (ac) => ({ ...args, mafErrorBase, exhaustDiaError, ecu: { ...args.ecu, aux: { ...aux, ac } } });
   const off = cfgWith(false);
   const on = cfgWith(true);
-  let s = { ...makeLiveState(), cranking: true, coolantC: 88, oilC: 88 };
+  // Warm, and the ECU's own coolant reading warm with it: a key-on reads the sensor
+  // straight away, where a fresh ECU state would start it at 20 °C and filter up.
+  let s = { ...makeLiveState(), cranking: true, coolantC: 88, oilC: 88, ecu: { ...makeEcuLiveState(), sEct: 88 } };
   const rpms = [];
   const steps = Math.round(seconds / 0.05);
   for (let i = 0; i < steps; i += 1) {
