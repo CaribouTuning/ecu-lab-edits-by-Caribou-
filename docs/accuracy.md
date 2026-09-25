@@ -21,6 +21,8 @@ source, and the weaker sources are marked as such.
 | `tests/consistency-fuzz.test.js` | On 40 random builds, the TUNE advisor, the dyno pull log and LIVE tell the same story, and following the advice clears the knock it reports. |
 | `tests/tuning-consistency.test.js` | The same, pinned on hand-picked engines, including LIVE at idle and on the rev limiter. |
 | `tests/accuracy-claims.test.js` | Every figure this page and Learn article 39 quote about the model. |
+| `tests/blower.test.js` | Superchargers: boost from low down on a Roots or twin-screw and climbing with RPM on a centrifugal; the pulley sets boost; the crank pays the compression work; efficiency ranks and heats the charge as the makers publish; no lag on LIVE; ~7 psi intercooled adds 35–50%; an over-spun blower is flagged with a pulley that fixes it. |
+| `tests/nitrous.test.js` | Nitrous: its oxygen and breakdown heat; bottle pressure against the racing charts; a 100 shot's 5–6 lb/min; gain in step with the shot; the knock limit falling about 2° per 50 hp; a wet kit rich on a cold bottle; the controller's window, ramp and lean cut, on the dyno and LIVE. |
 
 Random builds are seeded (`tests/randomBuilds.js`), so any failure names a seed that
 rebuilds the exact engine.
@@ -112,6 +114,34 @@ Learn article 39. None of them changes the direction of any lesson.
    ethanol's low vapour pressure bite on a cold morning: a real E85 engine is hard to
    start in freezing weather (why winter E85 is blended down to around E70), while here
    it starts at −20 °C like gasoline.
+11. **Superchargers make a little more per psi than real kits.** About 7 psi on an
+   intercooled engine adds about 46% at the crank here; published kits of that boost add
+   35–50% (ProCharger quotes an LS3 from 430 to ~600 hp at 7 psi and a Coyote from 435 to
+   ~627 hp at 8 psi, +40–44%). The stock exhaust's backpressure rises in proportion to
+   flow here (`EXHAUST_SYSTEM_KPA_PER_KGS`), where a real one rises faster, so a
+   supercharged engine exhales a little too easily. Changing it would move every engine
+   in the model, so it is recorded instead.
+12. **Nitrous adds 1.0–1.35 times its rating.** A 100 shot adds about 120 hp at the crank.
+   Nitrous is oxygen, and approximation 1 — 10–15% more power per pound of oxygen than a
+   real engine — applies to it as it does to air.
+13. **Nitrous through a jet is priced as a liquid.** Flow goes as √(ρ·ΔP) from the bottle
+   to the manifold. Real nitrous starts to boil in the jet (two-phase, often choked), which
+   the kit makers' jetting charts absorb; the bottle-pressure effect here is the
+   single-phase one.
+14. **Extra oxygen does not speed the burn.** Oxygen-enriched mixtures burn faster; here the
+   burn rate follows mixture and residuals as before, so nitrous reaches the knock limit
+   through cylinder pressure and temperature alone. The retard it needs still comes out at
+   about 2° per 50 hp of shot, the figure tuners use.
+
+Sources for the supercharger and nitrous figures: Eaton (TVS R1900: 1.9 L/rev, 18,000 rpm,
+pressure ratio ~1.8, up to 75% efficient), Whipple (W175AX 2.9 L: 18,000 rpm, peak
+adiabatic efficiency 78%, volumetric 99%, built-in ratio 1.36), ProCharger (P-1SC-1:
+4.10:1 step-up, 65,000 rpm, 32 psi, 1,200 cfm); efficiency ranges for Roots (~50%),
+twin-screw (70–80%) and centrifugal (60–80%) blowers from supercharger comparisons;
+nitrous oxide's 36% oxygen, −82 kJ/mol decomposition and 16.53 kJ/mol heat of vaporisation
+(NIST); the racing bottle pressure chart (762 psi at 70 °F, 921 at 85 °F) and 900–950 psi
+recommendations; 4.8–6 lb/min for a 100 shot, and 2° per 50 hp of retard (tuning forums
+and kit makers — practitioner rules, the weakest sources here).
 
 ## Open for the maintainers
 

@@ -248,6 +248,10 @@ export function DataScreen() {
               {shown.boostTarget > 0 && <StatTile label="WASTEGATE" value={shown.wgDuty} unit="%" />}
               <StatTile label="FUEL ΔP" value={shown.railDp} unit="kPa" tone={shown.fuelStarved ? 'danger' : 'neutral'} />
               <StatTile label="MISFIRE" value={shown.misfire} unit="%" tone={shown.misfire > 5 ? 'danger' : 'neutral'} />
+              {shown.blowerRpm != null && <StatTile label="BLOWER" value={shown.blowerRpm.toLocaleString('en-US')} unit="rpm" tone={shown.blowerOverspeed ? 'danger' : 'neutral'} />}
+              {shown.blowerHp != null && <StatTile label="BLOWER DRIVE" value={shown.blowerHp} unit="hp" />}
+              {shown.nitrousLbMin > 0 && <StatTile label="NITROUS" value={shown.nitrousLbMin} unit="lb/min" />}
+              {shown.nitrousLbMin > 0 && <StatTile label="BOTTLE" value={shown.bottlePsi} unit="psi" tone={shown.bottlePsi < 850 ? 'warn' : 'neutral'} />}
               {(shown.camIn > 0 || shown.camEx > 0) && <StatTile label="CAMS IN / EX" value={`${shown.camIn} / ${shown.camEx}`} unit="°" />}
               <StatTile label="PROTECTIONS" value={shown.protect?.length ? shown.protect.join(', ') : 'none'} tone={shown.protect?.length ? 'warn' : 'ok'} />
             </div>

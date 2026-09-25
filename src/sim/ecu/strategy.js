@@ -33,6 +33,7 @@ import {
 import { read1, read2 } from './ecuTables.js';
 import { blendFuel } from './fuelBlend.js';
 import { knockDetection, knockThresholdAt } from './knockSensor.js';
+import { nitrousDelivery, nitrousFraction } from './nitrousControl.js';
 import { readSensor, widebandTrueFor } from './sensors.js';
 import { camTargets, veAtPhase } from './vvt.js';
 
@@ -63,6 +64,10 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {number} mafErrorBase
  * @property {number[][][]} veTruthByPhase hardware VE at each VE_PHASE_SAMPLES intake phase
  * @property {object} [cfg] the engine config, for the cylinder layout
+ * @property {object|null} [blower] a supercharger (a BLOWER_OPTS entry), instead of a turbo
+ * @property {number} [blowerRatio] crank pulley ÷ blower pulley
+ * @property {{kit: 'wet'|'dry', shotHp: number, heater?: boolean, bottleLb?: number}|null} [nitrous]
+ *   a nitrous kit
  */
 
 /**
@@ -76,6 +81,8 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {Record<string, string>} [faults]
  * @property {number} [pumpHealth]
  * @property {number} [oilHealth]
+ * @property {{armed: boolean, bottleK: number, setK?: number}} [nitrous] a nitrous kit's arming
+ *   switch and the bottle's temperature, which sets its pressure
  */
 
 /**
@@ -146,14 +153,16 @@ export function cylinderDistribution(derived, configuration) {
  * @param {number} [input.empKpa]
  * @param {object} [input.dyn] the live controllers' states and any protection overrides
  * @param {number} [input.cylIdx] which cylinder, when solving them separately
+ * @param {ReturnType<typeof import('../blower.js').solveBlower>} [input.blower] a
+ *   supercharger's state at this point: its efficiency sets the charge the IAT sensor reads
  * @returns {{input: object, sensed: object, breakdown: object}}
  */
 export function resolveEcuPoint({
-  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx,
+  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx, blower = null,
 }) {
   const env = cond.env;
   const faults = /** @type {Record<string, any>} */ (cond.faults ?? {});
-  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env);
+  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env, blower && blower.boostPsi > 0 ? blower.eta : undefined);
 
   // ---- SENSORS. The ECU knows nothing it cannot measure.
   const mapPart = hw.sensorHw?.map ?? '3bar';
@@ -175,6 +184,16 @@ export function resolveEcuPoint({
 
   // ---- WHAT THE ECU THINKS IS IN THE TANK.
   const ecuFuel = ecuFuelBelief(cal, hw, sEthanol);
+
+  // ---- NITROUS: the dose the controller is passing, and what the kit brings with it.
+  const ncal = cal.nitrous;
+  const nFrac = hw.nitrous && ncal ? (dyn.nitrousFrac ?? 0) : 0;
+  const nitrous = nFrac > 0
+    ? nitrousDelivery({
+      kit: hw.nitrous, frac: nFrac, bottleK: cond.nitrous?.bottleK ?? env.ambientK, mapKpa,
+      baroKpa: env.baroKpa, fuel: hw.fuel, dryFuelPct: ncal.dryFuelPct,
+    })
+    : null;
 
   // ---- BASE TABLES, read at the load the ECU believes.
   const veBase = interp2(tables.ve, rpm, sMap);
@@ -206,6 +225,7 @@ export function resolveEcuPoint({
   addT('Idle spark control', dyn.idleSparkDeg ?? 0);
   addT('Overrun retard', dyn.decel ? -cal.ignition.decelRetard : 0);
   addT('Limiter / torque retard', -(dyn.extraRetardDeg ?? 0));
+  if (nitrous) addT('Nitrous retard', -ncal.retardDeg * nFrac);
   if (dyn.cranking) {
     timing = cal.ignition.crankingDeg;
     timingSteps.push({ label: 'Cranking timing (overrides)', value: timing });
@@ -306,6 +326,9 @@ export function resolveEcuPoint({
   const dist = cylIdx != null ? dyn.dist?.[cylIdx] : null;
   const ctx = {
     env,
+    // A dry kit's fuel: the ECU adds it through the injectors, on top of what it meters
+    // for the air, so it counts against their duty like any other fuel.
+    ...(nitrous?.dryFuelKgS > 0 ? { extraFuelG: (nitrous.dryFuelKgS * 1000) / (hw.derived.cyl * (rpm / 2) / 60) } : {}),
     sensedMapKpa: sMap,
     sensedIatK: sIatC + KELVIN_OFFSET,
     airModel: cal.config.airModel,
@@ -338,6 +361,8 @@ export function resolveEcuPoint({
       derived: hw.derived, compressor: hw.compressor,
       turbine: hw.turboOn ? hw.turbine : null,
       ...(empKpa != null ? { empKpa } : {}),
+      ...(blower ? { blower } : {}),
+      ...(nitrous ? { nitrous: { n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.wetFuelKgS, bottleK: cond.nitrous?.bottleK ?? env.ambientK, bottlePsi: nitrous.bottlePsi } } : {}),
       ecu: ctx,
     },
     sensed: {
@@ -429,7 +454,16 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   const throttlePct = throttleFrac * 100;
   const gear = cond.gear ?? DYNO_GEAR;
   const protect = new Set();
-  const mod = { boostCutPsi: 0, extraFuelPct: 0, extraRetardDeg: 0, cutFrac: 0, cutType: 'fuel', loadScale: 1, highDet: false };
+  const mod = { boostCutPsi: 0, extraFuelPct: 0, extraRetardDeg: 0, cutFrac: 0, cutType: 'fuel', loadScale: 1, highDet: false, nitrousFrac: 0 };
+
+  // Nitrous: the controller's window and, on the dyno, its progressive ramp in RPM — the
+  // pull sweeps at a known rate, so seconds since the window opened are RPM travelled.
+  if (hw.nitrous && cond.nitrous?.armed && cal.nitrous) {
+    const n = cal.nitrous;
+    mod.nitrousFrac = nitrousFraction({
+      ncal: n, rpm, throttlePct, ectC: cond.ectC, sinceOnS: (rpm - n.minRpm) / E.DYNO_SWEEP_RPM_PER_S,
+    });
+  }
 
   // Rev limiter: a soft window below the hard cut.
   const hardCut = (hw.derived.redline ?? 7500) + cal.limiter.offsetRpm;
@@ -449,11 +483,12 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     const solved = solveOperatingPoint({ cal, hw, cond, rpm, loadKpa: loadKpa * mod.loadScale, throttlePct, gear, boostCutPsi: mod.boostCutPsi });
     const dyn = {
       steadyTrims: true, extraFuelPct: mod.extraFuelPct, extraRetardDeg: mod.extraRetardDeg,
-      cutFrac: mod.cutFrac, cutType: mod.cutType, highDet: mod.highDet,
+      cutFrac: mod.cutFrac, cutType: mod.cutType, highDet: mod.highDet, nitrousFrac: mod.nitrousFrac,
     };
     const { pt, resolved } = evaluateEcu({
       cal, hw, cond, tables, rpm, mapKpa: solved.man.mapKpa, boostPsi: solved.man.boostPsi,
       veActual: solved.veActual, cam: solved.cam, empKpa: solved.man.empKpa, dyn,
+      ...(solved.man.blower ? { blower: solved.man.blower } : {}),
     });
     last = { pt, resolved, solved };
 
@@ -462,6 +497,13 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     const P = cal.protect;
     const wbPart = hw.sensorHw?.wideband ?? 'lambda-0.5-1.5';
     const sensedLambda = readSensor({ kind: 'wideband', value: pt.lambdaExhaust ?? pt.lambda, part: wbPart, scale: cal.sensors.wideband }).value;
+    // A lean reading while spraying shuts the nitrous off before anything else acts: it is
+    // the likeliest cause, and the one that melts pistons.
+    if (mod.nitrousFrac > 0 && cal.nitrous.leanCutEnabled && sensedLambda > cal.nitrous.leanCutLambda) {
+      protect.add('nitrous lean');
+      mod.nitrousFrac = 0;
+      changed = true;
+    }
     if (hw.turboOn && cal.boost.overboostEnabled && pt.boostPsi > solved.target + cal.boost.overboostMarginPsi) {
       protect.add('overboost');
       if (cal.boost.overboostAction === 'fuel-cut') { if (mod.cutFrac < 1) { mod.cutFrac = 1; changed = true; } } else if (mod.boostCutPsi < E.BOOST_CUT_ALL_PSI) { mod.boostCutPsi = E.BOOST_CUT_ALL_PSI; changed = true; }
@@ -587,6 +629,7 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       derived: hw.derived,
       intakeKAt: (b) => chargeTempK(b, hw.mods.intercooler, env),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
+      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });
     if (Math.abs(next.intakeAdvDeg - cam.intakeAdvDeg) < 0.5 && Math.abs(next.exhaustRetDeg - cam.exhaustRetDeg) < 0.5) break;
@@ -615,6 +658,7 @@ function limitTorque({ cal, hw, cond, tables, rpm, loadKpa, throttlePct, gear, m
       cal, hw, cond, tables, rpm, mapKpa: solved.man.mapKpa, boostPsi: solved.man.boostPsi,
       veActual: solved.veActual, cam: solved.cam, empKpa: solved.man.empKpa,
       dyn: { steadyTrims: true, extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac, cutType: m.cutType, highDet: m.highDet },
+      ...(solved.man.blower ? { blower: solved.man.blower } : {}),
     });
     return { pt, resolved, solved };
   };

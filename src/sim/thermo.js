@@ -23,14 +23,20 @@ import { clamp } from './math.js';
  * @param {number} boostPsi gauge boost pressure, psi
  * @param {boolean} intercooler whether an intercooler is fitted
  * @param {{ambientK?: number, baroKpa?: number}} [env] ambient conditions
+ * @param {number} [isenEff] the compressor's adiabatic efficiency, for a supercharger
  * @returns {number} charge temperature, K
  */
-export function chargeTempK(boostPsi, intercooler, env) {
+export function chargeTempK(boostPsi, intercooler, env, isenEff = COMP_ISEN_EFF) {
   const ambientK = env?.ambientK ?? AMBIENT_K;
   const baroKpa = env?.baroKpa ?? BARO_KPA;
   if (boostPsi <= 0) return ambientK;
   const pressureRatio = (baroKpa + boostPsi * PSI_TO_KPA) / baroKpa;
-  const tCompressed = ambientK * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF);
+  // Isentropic compression, degraded by the compressor's efficiency. The turbo keeps the
+  // one fixed efficiency it always had (see docs/accuracy.md); a supercharger passes its
+  // own, which is how a Roots blower heats the charge more than a twin-screw at equal boost.
+  const tCompressed = isenEff === COMP_ISEN_EFF
+    ? ambientK * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF)
+    : ambientK * (1 + (Math.pow(pressureRatio, GAMMA_EXP) - 1) / isenEff);
   return intercooler ? ambientK + (tCompressed - ambientK) * (1 - IC_EFFECTIVENESS) : tCompressed;
 }
 

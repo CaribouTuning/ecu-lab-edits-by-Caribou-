@@ -30,47 +30,10 @@
 import { BARO_KPA, GAMMA_EXP, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
+import { solveBlower } from './blower.js';
+import { compressorMap } from './compressorMap.js';
 
-/**
- * Where this operating point sits on the compressor map, and what that costs.
- *
- * The map is a parametric island rather than a digitised one: peak efficiency at a
- * design flow and pressure ratio, falling off elliptically away from it, bounded by a
- * surge line on the low-flow side and a choke line on the high-flow side. That is enough
- * to reproduce the two things a single efficiency number cannot — a big compressor
- * surging on a small engine at low RPM, and a small one choking at the top end — and
- * both are matching failures a tuner has to be able to see.
- *
- * @param {object} compressor a COMPRESSOR_OPTS entry
- * @param {number} flowKgS air the engine is actually drawing
- * @param {number} pressureRatio compressor outlet over inlet
- * @returns {{eff: number, surge: boolean, choke: boolean, margin: number}} `margin` is
- *   the fraction of the flow range between the surge and choke lines that is left, so
- *   0 means hard against a limit and 1 means dead centre
- */
-export function compressorMap(compressor, flowKgS, pressureRatio) {
-  const pr = Math.max(1, pressureRatio);
-  // Surge: below this flow, the pressure ratio cannot be sustained and flow reverses.
-  const surgeFlow = compressor.surgeSlope * (pr - 1);
-  const surge = pr > COEFF.SURGE_MIN_PR && flowKgS < surgeFlow;
-  const choke = flowKgS > compressor.chokeFlowKgS;
-  // Elliptical fall-off from the island centre, in normalised flow and pressure ratio.
-  const dFlow = flowKgS / compressor.pkFlowKgS - 1;
-  const dPr = pr / compressor.pkPr - 1;
-  const distance = dFlow * dFlow + COEFF.MAP_PR_WEIGHT * dPr * dPr;
-  let eff = compressor.etaMax * (1 - COEFF.MAP_EFF_FALLOFF * distance);
-  // Past either limit line the map does not merely get worse, it stops working: a
-  // surging compressor is not pumping and a choked one is making heat, not pressure.
-  if (surge) eff *= COEFF.SURGE_EFF_PENALTY;
-  if (choke) eff *= COEFF.CHOKE_EFF_PENALTY;
-  const span = Math.max(1e-6, compressor.chokeFlowKgS - surgeFlow);
-  return {
-    eff: clamp(eff, COEFF.MAP_EFF_FLOOR, compressor.etaMax),
-    surge,
-    choke,
-    margin: clamp(Math.min(flowKgS - surgeFlow, compressor.chokeFlowKgS - flowKgS) / span, 0, 1),
-  };
-}
+export { compressorMap };
 
 /**
  * Pressure the turbine needs upstream of itself to pass a given exhaust flow.
@@ -149,16 +112,23 @@ export function achievableBoostPsi({
  * @param {number} [input.baroKpa] the day's barometric pressure. At altitude a wide-open
  *   throttle only reaches the barometer, and the turbo has to make its pressure ratio
  *   from there
+ * @param {object} [input.blower] a BLOWER_OPTS entry: a supercharger instead of a turbo.
+ *   Its boost comes from its own physics (src/sim/blower.js) and the target is ignored —
+ *   a supercharger has no wastegate; the pulley sets its boost
+ * @param {number} [input.blowerRatio] crank pulley ÷ blower pulley
+ * @param {(boostPsi: number, isenEff: number) => number} [input.intakeKAtEff] charge
+ *   temperature at a boost level for a compressor of the given efficiency
  * @param {boolean} [input.targetIsFinal] the boost controller has already turned the
  *   driver's request into a wastegate ceiling, so the stock throttle² scaling below must
  *   not be applied a second time
  * @returns {{mapKpa: number, boostPsi: number, empKpa: number, throttleFrac: number,
  *   spool: number, boostShortfallPsi: number, compressorEff: number, surge: boolean,
- *   choke: boolean, mapMargin: number}}
+ *   choke: boolean, mapMargin: number, blower?: ReturnType<typeof solveBlower>}}
  */
 export function solveInduction({
   rpm, loadKpa, turboOn, boostTargetPsi, turbine, compressor,
   veAt, derived, intakeKAt, lambda, exhaustK, baroKpa = BARO_KPA, targetIsFinal = false,
+  blower = null, blowerRatio = 1, intakeKAtEff = null,
 }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
   // `loadKpa` is the throttle expressed as the sea-level manifold pressure it would give,
@@ -177,6 +147,36 @@ export function solveInduction({
     const perCycleKg = (veAt(mapKpa) / 100) * sweptM3 * densityKgM3;
     return perCycleKg * derived.cyl * (rpm / 2) / 60;
   };
+
+  // A supercharger: its boost is its own physics, not a balance with a turbine.
+  if (blower && !turboOn) {
+    const airFlowAtK = (mapKpa, chargeK) => {
+      const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+      const densityKgM3 = (mapKpa * 1000) / (287 * chargeK);
+      return (veAt(mapKpa) / 100) * sweptM3 * densityKgM3 * derived.cyl * (rpm / 2) / 60;
+    };
+    const chargeKFor = (b, eta) => (intakeKAtEff ? intakeKAtEff(b, eta) : intakeKAt(b));
+    const sc = solveBlower({
+      blower, driveRatio: blowerRatio, rpm, throttleFrac, throttledKpa, baroKpa,
+      inletK: intakeKAt(0),
+      engineFlowAt: (mapKpa, b, eta) => airFlowAtK(mapKpa, chargeKFor(b, eta)),
+    });
+    const mapKpa = throttledKpa + sc.boostPsi * PSI_TO_KPA;
+    const airFlowKgS = airFlowAtK(mapKpa, chargeKFor(sc.boostPsi, sc.eta));
+    return {
+      mapKpa,
+      boostPsi: sc.boostPsi,
+      empKpa: baroKpa + airFlowKgS * COEFF.EXHAUST_SYSTEM_KPA_PER_KGS,
+      throttleFrac,
+      spool: 1,
+      boostShortfallPsi: 0,
+      compressorEff: sc.eta,
+      surge: sc.surge,
+      choke: sc.choke,
+      mapMargin: sc.margin,
+      blower: sc,
+    };
+  }
 
   // One turn of the loop at an assumed boost: the air that pressure pushes in, the
   // backpressure that flow meets at the turbine, and the boost the turbine could then hold.

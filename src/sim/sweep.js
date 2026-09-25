@@ -14,7 +14,9 @@ import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { LOAD, RPM } from './tables.js';
 import { ecuSweepEvents } from './ecu/ecuEvents.js';
+import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuSteadyPoint } from './ecu/strategy.js';
+import { stepBottle } from './nitrous.js';
 
 /** Lowest engine speed of a dyno pull, RPM. */
 export const SWEEP_START_RPM = 1500;
@@ -124,7 +126,7 @@ function tableRowsAt(mapKpa) {
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor, ecu = null,
+  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null,
 }) {
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
@@ -136,16 +138,28 @@ export function simulateSweep({
   const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
   const ecuHw = ecu ? {
     ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
-    injectorCc, ecuInjectorCc, mafScalar, fuel,
+    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
     veTruthByPhase: ecu.hw.veTruthByPhase ?? [veTruth ?? ve],
   } : null;
+  // A nitrous bottle through the pull: what each point sprays cools the liquid left, and
+  // the pressure falls with it unless a heater holds it.
+  const nc = ecu && nitrous ? ecu.cond.nitrous : null;
+  let bottle = nc ? { massKg: (nitrous.bottleLb ?? 10) * 0.45359237, tempK: nc.bottleK } : null;
+  const dtPerPoint = SWEEP_STEP_RPM / ECU_COEFF.DYNO_SWEEP_RPM_PER_S;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
     if (ecu) {
       // The limiter cuts before the pull gets there: those points are never reached.
       if (rpm >= hardCut) break;
-      points.push(ecuSteadyPoint({
-        cal: ecu.cal, hw: ecuHw, cond: ecu.cond, tables: { ve, timing, afr }, rpm, loadKpa,
-      }));
+      const cond = bottle
+        ? { ...ecu.cond, nitrous: { ...nc, armed: nc.armed && bottle.massKg > 0, bottleK: bottle.tempK } }
+        : ecu.cond;
+      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr }, rpm, loadKpa });
+      points.push(pt);
+      if (bottle && pt.nitrousLbMin > 0) {
+        bottle = stepBottle(bottle, (pt.nitrousLbMin * 0.45359237 / 60) * dtPerPoint, dtPerPoint, {
+          heater: !!nitrous.heater, setK: nc.setK ?? nc.bottleK, ambientK: ecu.cond.env.ambientK,
+        });
+      }
       continue;
     }
     const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
@@ -158,6 +172,7 @@ export function simulateSweep({
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+      ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
     // calibration up into the high-MAP rows automatically.
@@ -172,6 +187,7 @@ export function simulateSweep({
       veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
       mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
       turbine: turboOn ? turbine : null, empKpa: man.empKpa,
+      ...(man.blower ? { blower: man.blower } : {}),
     }));
   }
 
@@ -349,6 +365,24 @@ export function simulateSweep({
       msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
       cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 39).`,
       fix: `On BUILD, size up the compressor, or lower the boost target for this RPM range.`,
+    });
+  });
+
+  // A supercharger turns at a fixed multiple of the crank, so its speed limit is the
+  // pulley and the redline together. Past its rating the rotors or impeller and their
+  // bearings are outside what they were built for, and the belt is the next thing to go.
+  groupRuns(points, (p) => p.blowerOverspeed).forEach((run) => {
+    const peak = run.reduce((a, b) => (b.blowerRpm > a.blowerRpm ? b : a));
+    const rated = blower.maxRpm ?? blower.maxImpellerRpm;
+    const impact = Math.round(10 * (0.4 + 0.6 * rangeFrac(run)));
+    // Rounded DOWN: a ratio rounded up to two places can land back over the rating.
+    const safeRatio = (Math.floor((rated / (peak.rpm * (blower.stepUp ?? 1))) * 100) / 100).toFixed(2);
+    events.push({
+      type: 'blower', severity: 3, impact,
+      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+      msg: `Supercharger over its rated speed across ${rangeLabel(run)} (${peak.blowerRpm.toLocaleString('en-US')} rpm, rated ${rated.toLocaleString('en-US')})`,
+      cause: `A supercharger is geared to the crank: at ${peak.rpm} RPM the ${blowerRatio.toFixed(2)}:1 pulley${blower.stepUp ? ` and its ${blower.stepUp}:1 internal step-up` : ''} spin the ${blower.label} past what its ${blower.type === 'centrifugal' ? 'impeller and gears' : 'rotors and bearings'} are rated for. Nothing makes more boost for free up there: it is wear, heat and a thrown belt waiting to happen.`,
+      fix: `On BUILD → INDUCTION, fit a larger blower pulley (a lower ratio — about ${safeRatio}:1 keeps it inside its rating at this RPM), or lower the rev limit.`,
     });
   });
 

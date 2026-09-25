@@ -20,6 +20,7 @@ import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from '../constants.js';
 import { COEFF } from '../coefficients.js';
 import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
 import { clamp, interp2 } from '../math.js';
+import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
 import { RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
@@ -30,6 +31,7 @@ import { ECU_COEFF as E } from './ecuCoefficients.js';
 import { oilPressureKpa } from './ecuHardware.js';
 import { read1, read2 } from './ecuTables.js';
 import { knockDetection, knockNoiseV, knockSignalPerDegV, knockThresholdAt } from './knockSensor.js';
+import { nitrousFraction } from './nitrousControl.js';
 import { readSensor, readTps } from './sensors.js';
 import { resolveEcuPoint } from './strategy.js';
 import { VVT_AUTHORITY, VVT_OPTS, veAtPhase } from './vvt.js';
@@ -99,6 +101,9 @@ export const LOG_CHANNELS = [
   { id: 'highDet', label: 'High-det flag', unit: '' },
   { id: 'launch', label: 'Launch control', unit: '' },
   { id: 'cut', label: 'Cut', unit: '%' },
+  { id: 'nitrous', label: 'Nitrous', unit: 'lb/min' },
+  { id: 'bottle', label: 'Bottle pressure', unit: 'psi' },
+  { id: 'blowerRpm', label: 'Blower speed', unit: 'rpm' },
 ];
 
 /** How much log the live engine keeps, steps (60 s at 20 Hz). */
@@ -126,11 +131,17 @@ export function liveStepEcu(st, dt, input, cfg) {
   const tables = { ve: cfg.ve, timing: cfg.timing, afr: cfg.afr };
   const hw = {
     ...cfg.ecu.hw, derived, mods, turboOn, boostCurve, turbine, compressor,
+    blower: cfg.blower ?? null, blowerRatio: cfg.blowerRatio ?? 1, nitrous: cfg.nitrous ?? null,
     injectorCc: cfg.injectorCc, ecuInjectorCc: cfg.ecuInjectorCc, mafScalar: cfg.mafScalar,
     mafErrorBase: cfg.mafErrorBase, fuel: cfg.fuel,
     veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [cfg.veTruth ?? cfg.ve],
   };
   const redline = derived.redline ?? 7500;
+  // A nitrous bottle, carried between steps: full, at the heater's set point or the day's
+  // temperature, the first time the engine sees the kit.
+  if (hw.nitrous && !s.bottle) {
+    s.bottle = { massKg: (hw.nitrous.bottleLb ?? 10) * 0.45359237, tempK: hw.nitrous.heater ? E.N2O_HEATER_SET_K : env.ambientK };
+  }
   s.prevRpm = st.rpm;
   s.elapsed = (s.elapsed ?? 0) + dt;
   e.rpmPrev = st.ecu?.rpmSeen ?? st.rpm;
@@ -346,13 +357,17 @@ export function liveStepEcu(st, dt, input, cfg) {
       // exhaust (a two-step's spark cut) carries more energy to the turbine, which is
       // how anti-lag spools a turbo on the line.
       lambda: 1, exhaustK: Math.max(INDUCTION_REF_EXHAUST_K, e.egtK), baroKpa: baro,
+      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, env, eta) } : {}),
     });
     const spooling = steady.boostPsi > s.boostPsi;
     const flowFrac = clamp(rpmC / Math.max(1, redline) * aFrac, 0.02, 1);
     const tau = spooling
       ? COEFF.TURBO_SPOOL_TAU_S / Math.max(0.05, flowFrac) * (turbine?.inertiaScale ?? 1)
       : COEFF.TURBO_DECAY_TAU_S;
-    s.boostPsi = turboOn ? s.boostPsi + (steady.boostPsi - s.boostPsi) * clamp(dt / Math.max(dt, tau), 0, 1) : 0;
+    // A supercharger is belted to the crank: no wheel to spool, its boost is there the
+    // moment the throttle and the bypass let it through.
+    s.boostPsi = hw.blower ? steady.boostPsi
+      : turboOn ? s.boostPsi + (steady.boostPsi - s.boostPsi) * clamp(dt / Math.max(dt, tau), 0, 1) : 0;
     const mapKpa = Math.min(loadKpa * (baro / BARO_KPA), baro) + s.boostPsi * PSI_TO_KPA;
     const sMapPrev = e.sMap;
     mapRd = readSensor({ kind: 'map', value: mapKpa, part: mapPart, scale: mapScale, fault: faults.map, fallback: baro });
@@ -399,8 +414,19 @@ export function liveStepEcu(st, dt, input, cfg) {
     else e.afrTargetF += (afrTable - e.afrTargetF) * clamp(dt / cal.fuel.targetDelayS, 0, 1);
     if (cal.ignition.highDetRetard > 0 && e.knockRetard > cal.ignition.highDetTriggerDeg) { e.highDet = true; e.highDetQuiet = 0; }
     if (e.highDet && e.knockRetard === 0) { e.highDetQuiet = (e.highDetQuiet ?? 0) + dt; if (e.highDetQuiet > E.HIGH_DET_QUIET_S) e.highDet = false; }
+    // Nitrous: armed from the cockpit, sprayed inside the controller's window, ramped in
+    // real seconds on a progressive controller, and shut off by a lean cut until the
+    // driver lifts.
+    if (pedal < 3) e.nitrousCut = false;
+    let nitrousFrac = 0;
+    const armed = aux.nitrous !== false;
+    if (hw.nitrous && cal.nitrous && armed && s.running && !e.nitrousCut && s.bottle.massKg > 0) {
+      nitrousFrac = nitrousFraction({ ncal: cal.nitrous, rpm: s.rpm, throttlePct: e.sTps, ectC: e.sEct, sinceOnS: e.nitrousOnS ?? 0 });
+    }
+    e.nitrousOnS = nitrousFrac > 0 ? (e.nitrousOnS ?? 0) + dt : 0;
+    const condNow = hw.nitrous ? { ...cond, nitrous: { armed, bottleK: s.bottle.tempK } } : cond;
     const res = resolveEcuPoint({
-      cal, hw, cond, tables, rpm: rpmC, mapKpa, boostPsi: s.boostPsi, veActual,
+      cal, hw, cond: condNow, tables, rpm: rpmC, mapKpa, boostPsi: s.boostPsi, veActual,
       cam: { intakeAdvDeg: e.camIn, exhaustRetDeg: e.camEx }, empKpa: steady.empKpa,
       dyn: {
         steadyTrims: false, sensedMapKpa: e.sMap, sensedIatC: e.sIat, sensedEctC: e.sEct,
@@ -408,8 +434,9 @@ export function liveStepEcu(st, dt, input, cfg) {
         afterStartPct: s.running ? e.afterStartPct : 0, crankingPct, cylinderFuelFactor: filmFactor,
         cutFrac, cutType, extraRetardDeg: limiterRetard + e.torqueRetard, extraFuelPct: e.extraFuelPct,
         idleSparkDeg: idleSpark, cranking: s.cranking, decel: pedal < 3 && s.rpm > E.IDLE_SPARK_MAX_RPM && !dfco,
-        afrTarget: e.afrTargetF, oilC: s.oilC, highDet: e.highDet, launch: launchArmed,
+        afrTarget: e.afrTargetF, oilC: s.oilC, highDet: e.highDet, launch: launchArmed, nitrousFrac,
       },
+      ...(steady.blower ? { blower: steady.blower } : {}),
     });
     pt = evaluatePoint(/** @type {any} */ (res.input));
     e.egtK += (pt.egt + 273.15 - e.egtK) * clamp(dt / E.EGT_FILTER_S, 0, 1);
@@ -452,10 +479,16 @@ export function liveStepEcu(st, dt, input, cfg) {
       else if (P.leanAction === 'torque') e.torqueRetard = Math.min(E.LEAN_RETARD_MAX_DEG, e.torqueRetard + E.LEAN_RETARD_RATE_DEG_S * dt);
       else e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi);
     }
+    if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) {
+      prot.push('nitrous lean');
+      e.nitrousCut = true;
+    }
     if (P.egtEnabled && pt.egt > P.egtLimitC) { prot.push('egt'); e.extraFuelPct = Math.min(P.egtEnrichMaxPct, e.extraFuelPct + E.EGT_ENRICH_RATE_PCT_S * dt); } else e.extraFuelPct = Math.max(0, e.extraFuelPct - E.EGT_ENRICH_DECAY_PCT_S * dt);
     if (P.iatEnabled && e.sIat > P.iatLimitC) prot.push('iat');
-    if (P.knockEnabled && e.knockRetard > P.knockRetardDeg) { prot.push('knock'); e.boostCutPsi = Math.max(e.boostCutPsi, P.knockBoostCutPsi); }
-    if (P.dutyEnabled && pt.duty > P.dutyLimitPct) { prot.push('duty'); e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi); }
+    // Both act by cutting boost, which only a turbo's wastegate can do — as on the dyno, a
+    // supercharged or naturally aspirated engine is left to knock control and the limits.
+    if (turboOn && P.knockEnabled && e.knockRetard > P.knockRetardDeg) { prot.push('knock'); e.boostCutPsi = Math.max(e.boostCutPsi, P.knockBoostCutPsi); }
+    if (turboOn && P.dutyEnabled && pt.duty > P.dutyLimitPct) { prot.push('duty'); e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi); }
     const rail = res.sensed.rail;
     e.railKpa = rail.railGaugeKpa;
     if (P.fuelPressEnabled && rail.deltaKpa < P.fuelMinDeltaKpa && s.running) { prot.push('fuel pressure'); e.limp = e.limp ?? 'Low fuel pressure'; }
@@ -547,6 +580,12 @@ export function liveStepEcu(st, dt, input, cfg) {
   s.sensedCoolant = e.sEct;
   s.live = pt;
   s.effThrottle = effThrottle;
+  // What this step sprayed leaves the bottle, and boils off part of what stays.
+  if (s.bottle) {
+    s.bottle = stepBottle(s.bottle, ((pt?.nitrousLbMin ?? 0) * 0.45359237 / 60) * dt, dt, {
+      heater: !!hw.nitrous.heater, setK: E.N2O_HEATER_SET_K, ambientK: env.ambientK,
+    });
+  }
   s.closedLoop = closedLoop;
 
   // ---- LOG.
@@ -566,6 +605,8 @@ export function liveStepEcu(st, dt, input, cfg) {
     timing: log ? log.timing : 0, egt: log ? log.egt : 0, misfire: log ? log.misfire : 0,
     filmFactor: log ? Math.round(log.filmFactor) : 100, torque: Math.round(crankNm),
     bfs: log ? log.bfs : 0, knockCount: Math.round(s.knockCount), highDet: e.highDet ? 1 : 0, launch: launchArmed ? 1 : 0,
+    nitrous: pt?.nitrousLbMin ?? 0, bottle: s.bottle ? Math.round(bottlePressurePsi(s.bottle.tempK)) : 0,
+    blowerRpm: pt?.blowerRpm ?? 0,
   };
   e.log = [...(st.ecu?.log ?? []), row].slice(-LOG_LENGTH);
   e.breakdown = log?.breakdown ?? null;

@@ -284,6 +284,57 @@ export const COEFF = {
   INDUCTION_SPOOL_STEP_PSI: 0.25,
   INDUCTION_SPOOL_MAX_STEPS: 48,
   INDUCTION_EDGE_PASSES: 12,
+
+  // --- Superchargers (src/sim/blower.js) ---
+  // The bypass valve is held open by manifold vacuum and shuts as the throttle nears wide
+  // open: fully bypassed below 85% throttle, fully shut from 97%.
+  BLOWER_BYPASS_OPEN_FRAC: 0.85,
+  BLOWER_BYPASS_SHUT_FRAC: 0.97,
+  // Positive-displacement efficiency map (modelling choice, shaped to the published
+  // figures on each BLOWER_OPTS entry): best at 70% of rated speed and at the unit's
+  // design pressure ratio, falling away quadratically either side, never below 30%.
+  BLOWER_BEST_SPEED_FRAC: 0.7,
+  BLOWER_EFF_PR_FALLOFF: 0.9,
+  BLOWER_EFF_SPEED_FALLOFF: 0.6,
+  BLOWER_EFF_FLOOR: 0.3,
+  // Volumetric efficiency never falls below this however hard a slow rotor is pushed.
+  BLOWER_MIN_VOL_EFF: 0.3,
+  // Centrifugal work input factor (slip × power input), 0.85-0.9 for backswept impellers.
+  BLOWER_WORK_FACTOR: 0.88,
+  // Drive losses: a ribbed belt ~95%; belt plus a centrifugal's internal step-up gears ~92%.
+  BLOWER_BELT_DRIVE_EFF: 0.95,
+  BLOWER_GEAR_DRIVE_EFF: 0.92,
+  // Solver bounds.
+  BLOWER_SEARCH_MAX_PSI: 40,
+  BLOWER_SOLVE_PASSES: 30,
+
+  // --- Nitrous oxide (src/sim/nitrous.js) ---
+  // Bottle vapour pressure, psi gauge, through the racing charts' 762 psi at 70 °F; the
+  // Clausius-Clapeyron slope B (K) is fitted to their 921 psi at 85 °F.
+  N2O_REF_PSI: 762,
+  N2O_REF_K: 294.26,
+  N2O_VAPOUR_B: 2026,
+  // Liquid density shape: ρ = ρ_c · (1 + k·(1 − T/T_c)^⅓), k fitted to 907 kg/m³ at 0 °C.
+  N2O_DENSITY_SHAPE: 2.0,
+  // Jet ratings are for about 950 psi at 85 °F. A 100 shot flows 5-6 lb/min (4.8-6 quoted).
+  N2O_REF_BOTTLE_PSI: 950,
+  N2O_REF_BOTTLE_K: 302.59,
+  N2O_LB_MIN_PER_HP: 0.054,
+  // A wet kit's fuel jet is sized rich of stoichiometric on the nitrous it pairs with:
+  // λ 0.80 at rated bottle pressure, inside the 11.5-12:1 on gasoline (λ 0.78-0.82) nitrous
+  // tuners run while spraying (modelling choice). A dry kit's 100% is the same fuel.
+  N2O_WET_LAMBDA: 0.8,
+  // Share of the nitrous's latent heat drawn from the charge rather than the lines, nozzle
+  // and plate — which frost over on a real car because they give up the rest. The same
+  // idea as FUEL_EVAP_IN_CYLINDER for fuel (modelling choice).
+  N2O_CHARGE_COOLING_SHARE: 0.5,
+  // The bottle's heat budget: liquid N₂O ~1.9 kJ/kg·K near room temperature, plus the
+  // wall of a 10 lb aluminium bottle (~7 kg × 0.9 kJ/kg·K).
+  N2O_LIQUID_CP: 1900,
+  N2O_BOTTLE_WALL_J_PER_K: 6300,
+  // A blanket-style bottle heater, ~250 W, and how slowly a bottle follows the air around it.
+  N2O_HEATER_W: 250,
+  N2O_BOTTLE_AMBIENT_TAU_S: 1800,
   // Backpressure a wastegate relieves while bleeding exhaust around the turbine. This is
   // why a larger turbine is worth power at the same boost: it spends more life gated.
   // Scales the share of turbine capability above the target (see solveInduction). Fitted

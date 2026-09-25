@@ -56,7 +56,7 @@ export const DYNO_GEAR = 4;
  * Everything else is generic.
  *
  * @param {object} [input]
- * @param {{cyl?: number, springRate?: number, camDuration?: number}} [input.derived]
+ * @param {{cyl?: number, springRate?: number, camDuration?: number, redline?: number}} [input.derived]
  * @param {{type: string, springPsi: number}} [input.gate]
  * @returns {object}
  */
@@ -188,6 +188,21 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       launchRestoreRpm: 4300,
       launchTiming: -6,
       ffsEnabled: false,
+    },
+    // Nitrous control, for a kit on BUILD. The window is where a real controller sprays:
+    // not before the engine can take the hit (low RPM is where nitrous breaks parts and
+    // backfires), not near the limiter, only at wide-open throttle on a warm engine.
+    nitrous: {
+      minRpm: 3000,
+      maxRpm: Math.round(((derived.redline ?? 6800) - 300) / 100) * 100,
+      minTpsPct: 95,
+      minEctC: 70,
+      retardDeg: 4,
+      dryFuelPct: 100,
+      startPct: 100,
+      rampS: 0,
+      leanCutEnabled: true,
+      leanCutLambda: 0.95,
     },
     protect: {
       leanEnabled: true,
@@ -469,6 +484,26 @@ export const ECU_META = [
     help: 'The ECU treats the throttle as closed below this reading. A TPS that reads a few percent at rest keeps the ECU out of idle control and overrun cut altogether.' },
 
   // ---- PROTECTION ----
+  { path: 'nitrous.minRpm', section: 'nitrous', group: 'Window', label: 'Spray from', kind: 'number', unit: 'RPM', min: 1500, max: 8000, step: 100,
+    help: 'Nitrous opens only above this speed. Below about 3,000 RPM a big shot hits an engine that cannot move air through it fast enough: cylinder pressure spikes, parts break, and a wet kit\'s fuel can pool in the intake and backfire.' },
+  { path: 'nitrous.maxRpm', section: 'nitrous', group: 'Window', label: 'Spray up to', kind: 'number', unit: 'RPM', min: 2000, max: 9000, step: 100,
+    help: 'Nitrous shuts off above this speed. Set it just under the limiter: if the limiter cuts fuel while the nitrous is still flowing, the cylinders get oxygen with nothing to burn, then a lean charge the moment fuel returns.' },
+  { path: 'nitrous.minTpsPct', section: 'nitrous', group: 'Window', label: 'Throttle at least', kind: 'number', unit: '%', min: 50, max: 100, step: 1,
+    help: 'Nitrous opens only at this much throttle or more. At part throttle there is little air to mix it with and a wet kit\'s fuel settles in the manifold, which is how intake backfires happen.' },
+  { path: 'nitrous.minEctC', section: 'nitrous', group: 'Window', label: 'Coolant at least', kind: 'number', unit: '°C', min: 0, max: 100, step: 1, pro: true,
+    help: 'Nitrous stays off on a cold engine: cold fuel does not atomise, the mixture runs uneven between cylinders, and the rings and pistons are not up to size.' },
+  { path: 'nitrous.retardDeg', section: 'nitrous', group: 'Spark', label: 'Retard while spraying', kind: 'number', unit: '°', min: 0, max: 20, step: 0.5, decimals: 1,
+    help: 'Degrees pulled from the whole spark table while nitrous flows. The extra oxygen burns faster and hotter and the cylinder pressure rises, so the knock limit drops. The rule of thumb is about 2° per 50 hp of shot; the pull log shows whether this engine needs more.' },
+  { path: 'nitrous.dryFuelPct', section: 'nitrous', group: 'Fuel', label: 'Dry kit fuel', kind: 'number', unit: '%', min: 0, max: 200, step: 5,
+    help: 'A dry kit sprays only nitrous; the ECU must add the fuel through the injectors. 100% adds what the kit is made for: the fuel for its rated shot, a little rich. Less runs the nitrous lean, which melts pistons. It has no effect on a wet kit, which brings its own fuel.' },
+  { path: 'nitrous.startPct', section: 'nitrous', group: 'Progressive', label: 'Start at', kind: 'number', unit: '%', min: 10, max: 100, step: 5,
+    help: 'How much of the shot is sprayed the moment the window opens. A progressive controller pulses the solenoids to ramp the shot in rather than hit the tyres and the crank with all of it at once. 100% is on/off.' },
+  { path: 'nitrous.rampS', section: 'nitrous', group: 'Progressive', label: 'Ramp to full over', kind: 'number', unit: 's', min: 0, max: 5, step: 0.1, decimals: 1,
+    help: 'Seconds from the start percentage to the full shot. On the dyno the pull sweeps about 500 RPM a second, so a 2-second ramp reaches full about 1,000 RPM after the window opens.' },
+  { path: 'nitrous.leanCutEnabled', section: 'nitrous', group: 'Safety', label: 'Lean cut', kind: 'bool', options: onOff,
+    help: 'Shuts the nitrous off if the wideband reads leaner than the limit while spraying: a failing fuel pump, an empty fuel bottle on a wet kit, a clogged jet. A lean nitrous mixture is the fastest way there is to melt a piston.' },
+  { path: 'nitrous.leanCutLambda', section: 'nitrous', group: 'Safety', label: 'Cut above', kind: 'number', unit: 'λ', min: 0.8, max: 1.1, step: 0.01, decimals: 2,
+    help: 'Measured lambda above which the lean cut shuts the nitrous off.' },
   { path: 'limiter.mode', section: 'protect', group: 'Rev limiter', label: 'Limiter strategy', kind: 'enum',
     options: [{ id: 'fuel', label: 'Fuel cut' }, { id: 'spark', label: 'Spark cut' }, { id: 'retard', label: 'Retard, then fuel cut' }],
     help: 'Fuel cut is smooth and cool. Spark cut is abrupt and dumps unburned mixture into a hot manifold, where it lights — pops, and a lot of heat for the turbine. Retard backs torque off progressively before cutting.' },

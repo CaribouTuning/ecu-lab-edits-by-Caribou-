@@ -583,6 +583,9 @@ function baseReducer(state, action) {
           ecuInjectorCc: p.ecuInjectorCc,
           octaneIdx: p.octaneIdx,
           exhaustDiaIdx: p.exhaustDiaIdx,
+          // A preset is a factory car: no supercharger or nitrous carried over from the last build.
+          blowerId: null,
+          nitrous: null,
           // A preset's AFR table already bakes in a correction for the MAF error its
           // mod set implies (factoryCalibration, src/sim/presets.js) — valid only at
           // the neutral scalar, so loading a preset must pin this back to 1.0.

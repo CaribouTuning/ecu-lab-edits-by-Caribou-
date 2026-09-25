@@ -45,6 +45,14 @@ model say so, not because someone typed 250.
 - **Torque** as `IMEP − friction − PMEP → BMEP → T = BMEP × Vd / 4π`. Pumping work is
   exhaust manifold pressure minus intake, with its real sign, so a turbine's
   backpressure is a cost and a well-matched one can hand work back
+- **Superchargers** from their makers' figures — Roots, twin-screw and centrifugal. A
+  positive-displacement blower pumps a fixed volume per turn and boost settles where the
+  engine swallows it; a centrifugal's comes from impeller tip speed. The adiabatic
+  efficiency sets both the charge heat and the drive power, `W = ṁ·cp·T·(PR^0.286 − 1)/η`,
+  charged to the crank
+- **Nitrous oxide** as chemistry: 36% oxygen by mass, heat from its own breakdown
+  (−82 kJ/mol), charge cooling as it boils, bottle pressure from its vapour-pressure curve,
+  wet and dry kits, and the controller's window, retard, ramp and lean cut
 - **A live engine** integrating real crankshaft dynamics at 20 Hz: it idles, revs,
   stalls, hits a rev limiter with hysteresis, and cuts fuel on overrun
 - **Cam and valvetrain** — duration shifts the VE peak, overlap costs idle vacuum, and
@@ -85,7 +93,11 @@ src/
     airflow.js       hardware -> VE table
     cycle.js         the closed cycle: heat release, two-zone gas, knock integral, EGT
     knock.js         charge index and autoignition helpers
-    turbo.js         compressor map and the turbo spool-up solve
+    turbo.js         the turbo spool-up solve (and the induction solve for a supercharger)
+    compressorMap.js efficiency, surge and choke on a compressor map (turbo and centrifugal)
+    blower.js        superchargers: Roots, twin-screw and centrifugal, and what they cost the crank
+    blowerPreview.js what a supercharger and pulley will do on this engine, before a pull
+    nitrous.js       nitrous oxide: the bottle, the jets, and its oxygen and heat in the cylinder
     point.js         evaluatePoint — the heart of it
     sweep.js         a full dyno pull + the event log
     live.js          real-time crank dynamics + ECU control loop

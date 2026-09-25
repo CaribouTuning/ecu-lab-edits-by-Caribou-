@@ -20,7 +20,7 @@ import styles from './EcuControlScreen.module.css';
 
 /**
  * @param {object} props
- * @param {'boost'|'vvt'|'idle'|'protect'|'torque'} props.section
+ * @param {'boost'|'vvt'|'idle'|'protect'|'torque'|'nitrous'} props.section
  * @param {string} props.title
  * @param {React.ElementType} props.icon
  * @param {Record<string, number>|null} props.liveVars
@@ -55,6 +55,10 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
     torque: running ? [
       ['Crank torque', String(row.torque), 'Nm'], ['Spark', row.timing.toFixed(1), '°'],
     ] : null,
+    nitrous: running && build.nitrous ? [
+      ['Nitrous', row.nitrous.toFixed(2), 'lb/min'], ['Bottle', String(row.bottle), 'psi'],
+      ['Spark', row.timing.toFixed(1), '°'],
+    ] : null,
   }[section];
 
   return (
@@ -67,7 +71,12 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
         </div>
       )}
       {section === 'boost' && !build.turboOn && (
-        <div className={styles.note}><Note>No turbo fitted — these settings take effect once one is, on BUILD → INDUCTION.</Note></div>
+        <div className={styles.note}><Note>{build.blowerId
+          ? 'A supercharger has no wastegate for these settings to drive: its boost is set by its pulley, on BUILD → INDUCTION. The overboost protection below still watches it.'
+          : 'No turbo fitted — these settings take effect once one is, on BUILD → INDUCTION.'}</Note></div>
+      )}
+      {section === 'nitrous' && !build.nitrous && (
+        <div className={styles.note}><Note>No nitrous kit fitted — these settings take effect once one is, on BUILD → INDUCTION.</Note></div>
       )}
       {section === 'vvt' && !vvt.intake && (
         <div className={styles.note}><Note>This engine has fixed cams. Fit cam phasers on BUILD → ENGINE and the targets below start moving the valve events.</Note></div>
