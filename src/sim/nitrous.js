@@ -54,8 +54,9 @@ export const N2O_AIR_EQUIV = N2O.o2MassFrac / AIR_O2_MASS_FRAC;
 /**
  * Bottle pressure at a bottle temperature, psi (gauge). Clausius-Clapeyron through the
  * racing charts' 762 psi at 70 °F and 921 psi at 85 °F; it reproduces their ~590 psi at
- * 50 °F and the 1,053 psi critical point. Above the critical temperature there is no
- * liquid left to hold a vapour pressure; the bottle is held at the critical value here.
+ * 50 °F, and lands within 2% of the critical point (1,051 psia; 1,070 here). Above the
+ * critical temperature there is no liquid left to hold a vapour pressure; the bottle is
+ * held at the critical value here.
  *
  * @param {number} bottleK
  * @returns {number}
