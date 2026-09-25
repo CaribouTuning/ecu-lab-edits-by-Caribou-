@@ -316,6 +316,21 @@ describe('what the engine is doing', () => {
     expect(m.a.stream.gain).toBeGreaterThan(m.a.norm * 2);
   });
 
+  it('settles a lift into the idle rather than dipping under it', () => {
+    // A closed throttle at 3000 rpm pumps a motored cylinder out, and its pulses reach the
+    // source only some 12 dB over an idle's. Held to the coasting ceiling while the idle is
+    // brought up by the follower, it came out under the idle it was coming down to, and
+    // then swelled back up into it. Measured as the follower measures it: the source's
+    // level against the reference, times the gain it was given.
+    const out = (m) => (m.a.stream.envelope * m.a.stream.gain) / m.a.norm;
+    const idle = model();
+    run(idle, { rpm: 900, evoKpa: 48, load: 0.05, portKpa: 105 }, 2);
+    const lift = model();
+    run(lift, { rpm: 6000, evoKpa: 450, load: 1, portKpa: 130 }, 1);
+    run(lift, { rpm: 3000, evoKpa: 48, load: 0.03, portKpa: 106 }, 2);
+    expect(out(lift)).toBeGreaterThanOrEqual(out(idle) * 0.95);
+  });
+
   it('scatters more at light load than wide open', () => {
     const idle = run(model(), { rpm: 900, load: 0.1 }, 1.5).map((e) => e.evoKpa);
     const wot = run(model(), { rpm: 900, load: 1 }, 1.5).map((e) => e.evoKpa);

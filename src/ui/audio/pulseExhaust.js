@@ -147,10 +147,11 @@ const SOURCE_GAIN = 6;
 const TURBULENCE = 0.15;
 
 /**
- * Where the source stops, Hz. engine-sim runs its whole input through a Butterworth
- * low-pass at 1.9 kHz before the exhaust ever sees it, and the turbulence riding on it at
- * 2 kHz. A cylinder's flow has nothing real above that — only the corners of a sampled
- * model — and passed on, those corners are heard as a tick on every event.
+ * Where the source stops, Hz, and where its turbulence stops. engine-sim runs its whole
+ * input through a Butterworth low-pass at 1.9 kHz before the exhaust ever sees it. Here
+ * the turbulence stops at 2 kHz and the flow itself at 5 kHz, the top of the band a
+ * listener hears the engine in (`LEVEL.bandHz`). Above that a sampled model's flow has
+ * only its corners, and passed on, those are heard as a tick on every event.
  */
 const SOURCE_HZ = 5000;
 const RUSH_HZ = 2000;
@@ -211,8 +212,15 @@ const LEVEL = {
    * follower may bring the note up by at most `coastLift` rather than `maxGain`. That
    * eases back to `maxGain` as the engine comes down through the last `coastRpm` above
    * it, so a lift settles into the idle rather than dipping under it and swelling back.
+   *
+   * THE CEILING NEVER HOLDS A COAST UNDER AN IDLE, though. A motored cylinder at 3000-4000
+   * rpm reaches the source only some 12 dB over an idle's, and the follower brings an idle
+   * up by more than that, so held to `coastLift` a lift came out under the idle it was
+   * coming down to — measured in the app, 7 dB under — and then swelled back into it. So
+   * coasting may always be brought up as far as an idle comes out. `idleEnvelope` is where
+   * an idling engine's source sits against the reference: 0.085 measured on a cold VQ35DE.
    */
-  coastLoad: 0.15, coastRpm: 1500, coastLift: 1,
+  coastLoad: 0.15, coastRpm: 1500, coastLift: 1, idleEnvelope: 0.1,
 };
 
 /**
@@ -860,15 +868,21 @@ function sourceLevel(a, sampleRate) {
 /**
  * The most the level follower may bring the note up by: `LEVEL.maxGain`, or while the
  * engine is coasting (see `LEVEL.coastLoad`) `LEVEL.coastLift`, easing back to `maxGain`
- * over the last `coastRpm` above it.
+ * over the last `coastRpm` above it — but never less than brings the note up to where an
+ * idle comes out (`LEVEL.idleEnvelope`).
  *
  * @param {{rpm: number, load: number, cut: boolean}} f the frame
+ * @param {number} envelope the follower's envelope, against the reference
  * @returns {number}
  */
-function followCeiling(f) {
+function followCeiling(f, envelope) {
   if (!f.cut && f.load >= LEVEL.coastLoad) return LEVEL.maxGain;
   const x = clamp((f.rpm - LEVEL.coastRpm) / LEVEL.coastRpm, 0, 1);
-  return Math.pow(LEVEL.maxGain, 1 - x) * Math.pow(LEVEL.coastLift, x);
+  const coast = Math.pow(LEVEL.maxGain, 1 - x) * Math.pow(LEVEL.coastLift, x);
+  // An idle of `idleEnvelope` comes out at idleEnvelope ^ (1 - amount).
+  const idle = envelope > 0
+    ? Math.pow(LEVEL.idleEnvelope, 1 - LEVEL.amount) / envelope : LEVEL.maxGain;
+  return Math.min(LEVEL.maxGain, Math.max(coast, idle));
 }
 
 /**
@@ -878,9 +892,9 @@ function followCeiling(f) {
  * @param {Record<string, any>} a
  * @param {Float32Array[]} data one buffer per bank
  * @param {number} sampleRate
- * @param {number} most the most the follower may bring the note up by, from `followCeiling`
+ * @param {{rpm: number, load: number, cut: boolean}} f the frame, for `followCeiling`
  */
-function level(a, data, sampleRate, most) {
+function level(a, data, sampleRate, f) {
   const s = a.stream;
   // The note's level: the source above the lowest of the band a listener hears it in —
   // what a phone speaker can play — against the same measure at the reference.
@@ -898,6 +912,7 @@ function level(a, data, sampleRate, most) {
   s.envelope = rms + coeff * (s.envelope - rms);
   // A lift or a fuel cut still falls away: the follower only goes part of the way, and
   // coasting it may lift the note far less (see `followCeiling`).
+  const most = followCeiling(f, s.envelope);
   const follow = s.envelope > 0
     ? clamp(Math.pow(1 / s.envelope, LEVEL.amount), LEVEL.minGain, most)
     : most;
@@ -1049,7 +1064,7 @@ function pump(a, ctx, frame) {
     for (let b = 0; b < bankCount; b++) {
       biquad(data[b], butterworth('lowpass', SOURCE_HZ, sr), s.sourceZ[b]);
     }
-    level(a, data.slice(0, bankCount), sr, followCeiling(f));
+    level(a, data.slice(0, bankCount), sr, f);
     if (s.fadeIn) {
       s.fadeIn = false;
       for (const d of data) for (let i = 0; i < FADE_IN; i++) d[i] *= i / FADE_IN;
