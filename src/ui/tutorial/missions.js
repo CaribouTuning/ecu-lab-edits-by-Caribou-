@@ -1,5 +1,5 @@
 /**
- * Practice missions: the tutorial's lessons, done for real in the player's own game.
+ * Practice missions: the Tuning Course's lessons, done for real in the player's own game.
  *
  * A mission is a short checklist. Each step is a question about the game's state (has
  * a pull been run since the last step? is the intake fitted? is AIRFLOW open?), so the

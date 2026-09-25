@@ -41,9 +41,6 @@ export const intakeRetuned = () => runDemo('intake-retuned', (s) => {
   };
 });
 
-/** A turbo bolted on, on the stock 315cc injectors and the NA tune. */
-export const turboOnStockInjectors = () => runDemo('turbo-stock-inj', (s) => ({ ...s, build: { ...s.build, turboOn: true } }));
-
 /** The first logged point at `rpm` or above. */
 export const pointAt = (demo, rpm) => demo.result.points.find((p) => p.rpm >= rpm) ?? demo.result.points.at(-1);
 

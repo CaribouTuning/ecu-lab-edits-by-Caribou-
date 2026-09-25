@@ -17,7 +17,7 @@ import styles from './StartScreen.module.css';
 const WAYS_IN = [
   { key: 'career', label: 'CAREER', variant: 'primary', caption: 'Customer cars with real faults to diagnose' },
   { key: 'sandbox', label: 'SANDBOX', variant: 'ghost', caption: 'Build and tune anything, no objectives' },
-  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'The whole loop, one step at a time' },
+  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];
 
 /**

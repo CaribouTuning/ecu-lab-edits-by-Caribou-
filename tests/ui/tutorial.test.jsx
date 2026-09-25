@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
 import { TutorialScreen } from '../../src/ui/screens/TutorialScreen.jsx';
-import { CHAPTERS, LESSONS } from '../../src/ui/tutorial/lessons.jsx';
+import { COURSE, TUTORIAL } from '../../src/ui/tutorial/books.js';
 import { MISSIONS, advance, markOf } from '../../src/ui/tutorial/missions.js';
 import { intakeFitted, intakeRetuned, overAdvanced, stock } from '../../src/ui/tutorial/scenarios.js';
 import { LOAD } from '../../src/sim/index.js';
@@ -34,87 +34,122 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-const openLesson = (i) => {
-  render(<TutorialScreen onDone={() => {}} onPractice={() => {}} />);
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${LESSONS[i].number.replace('.', '\\.')} `) }));
+/** Opens lesson `i` of `book` from its contents page. */
+const openLesson = (book, i) => {
+  render(<TutorialScreen book={book} onDone={() => {}} onPractice={() => {}} onCourse={() => {}} />);
+  const nav = screen.getByRole('navigation', { name: `${book.title} contents` });
+  fireEvent.click(within(nav).getByRole('button', { name: new RegExp(`^${book.lessons[i].number.replace('.', '\\.')} `) }));
 };
 
-describe('the contents page', () => {
-  it('says what you will learn, what you need and how long, before lesson one', () => {
+describe('the tutorial is short', () => {
+  it('takes five minutes at most: a handful of cards, not a course', () => {
+    // The in-depth material is the Tuning Course's job. The tutorial is the way in, and
+    // nobody finishes a long one.
+    expect(TUTORIAL.chapters.reduce((m, c) => m + c.minutes, 0)).toBeLessThanOrEqual(5);
+    expect(TUTORIAL.lessons.length).toBeLessThanOrEqual(6);
+  });
+
+  it('opens on a short contents page, then counts through its cards', () => {
     render(<TutorialScreen onDone={() => {}} />);
     expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
     expect(screen.getByText('BY THE END YOU WILL BE ABLE TO')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    expect(screen.getByText(`TUTORIAL · 1/${TUTORIAL.lessons.length}`)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'NEXT' }));
+    expect(screen.getByText(`TUTORIAL · 2/${TUTORIAL.lessons.length}`)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
+    fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
+    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
+  });
+
+  it('ends by offering the course, or the game', () => {
+    const onDone = vi.fn();
+    const onCourse = vi.fn();
+    render(<TutorialScreen onDone={onDone} onCourse={onCourse} />);
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TUTORIAL.lessons.length} `) }));
+    fireEvent.click(screen.getByRole('button', { name: 'OPEN THE COURSE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'START TUNING' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
+    expect(onCourse).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('from the tutorial to the course, in the app', () => {
+  it('OPEN THE COURSE lands on the course\u2019s contents, not on the page the tutorial was showing', () => {
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TUTORIAL.lessons.length} `) }));
+    fireEvent.click(screen.getByRole('button', { name: 'OPEN THE COURSE' }));
+    expect(screen.getByText('COURSE · CONTENTS')).toBeTruthy();
+    expect(window.location.hash).toBe('#/course');
+  });
+});
+
+describe('the Tuning Course', () => {
+  const course = () => render(<TutorialScreen book={COURSE} onDone={() => {}} onPractice={() => {}} />);
+
+  it('says what you will learn, what you need and how long, before lesson one', () => {
+    course();
+    expect(screen.getByText('COURSE · CONTENTS')).toBeTruthy();
     expect(screen.getByText('YOU NEED')).toBeTruthy();
-    const minutes = CHAPTERS.reduce((m, c) => m + c.minutes, 0);
+    const minutes = COURSE.chapters.reduce((m, c) => m + c.minutes, 0);
     expect(screen.getByText(new RegExp(`About ${minutes} minutes`))).toBeTruthy();
   });
 
   it('shows the end result first: the stock engine on the real dyno screen, with its real numbers', () => {
-    render(<TutorialScreen onDone={() => {}} />);
+    course();
     const fig = screen.getByRole('figure', { name: 'Game screen: DYNO' });
     expect(fig.querySelector('[data-tour="dyno-power"]')).toBeTruthy();
     expect(within(fig).getByText(new RegExp(`${stock().result.peakHp} whp`))).toBeTruthy();
   });
 
   it('lists every lesson under its chapter, and ticks the ones read', () => {
-    render(<TutorialScreen onDone={() => {}} />);
-    const nav = screen.getByRole('navigation', { name: 'Tutorial contents' });
-    expect(within(nav).getAllByRole('button')).toHaveLength(LESSONS.length);
+    course();
+    const nav = screen.getByRole('navigation', { name: 'The Tuning Course contents' });
+    expect(within(nav).getAllByRole('button')).toHaveLength(COURSE.lessons.length);
     fireEvent.click(within(nav).getByRole('button', { name: /^1\.1 / }));
     fireEvent.click(screen.getByRole('button', { name: /CONTENTS/ }));
     expect(screen.getByRole('button', { name: /^1\.1 .*, read$/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^1\.2 [^,]*$/ })).toBeTruthy();
   });
 
-  it('picks up where the reader left off', () => {
-    const first = render(<TutorialScreen onDone={() => {}} />);
+  it('picks up where the reader left off, separately from the tutorial', () => {
+    const first = course();
     fireEvent.click(screen.getByRole('button', { name: /^2\.2 / }));
     first.unmount();
-    render(<TutorialScreen onDone={() => {}} />);
+    course();
     fireEvent.click(screen.getByRole('button', { name: 'CONTINUE AT 2.2' }));
     expect(screen.getByRole('heading', { level: 1, name: /FUEL/ })).toBeTruthy();
-  });
-});
-
-describe('moving through the lessons', () => {
-  it('starts at lesson one and counts through them all', () => {
+    cleanup();
     render(<TutorialScreen onDone={() => {}} />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
-    expect(screen.getByText(`TUTORIAL · 1/${LESSONS.length}`)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'NEXT' }));
-    expect(screen.getByText(`TUTORIAL · 2/${LESSONS.length}`)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
-    expect(screen.getByText(`TUTORIAL · 1/${LESSONS.length}`)).toBeTruthy();
-    // BACK from the first lesson is the contents page, not nothing.
-    fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
-    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'START' })).toBeTruthy();
   });
 
-  it('finishes into the game from the last lesson, and can be skipped from anywhere', () => {
+  it('marks the end of each chapter, and finishes back to Learn', () => {
     const onDone = vi.fn();
-    render(<TutorialScreen onDone={onDone} />);
-    fireEvent.click(screen.getByRole('button', { name: /^5\.3 / }));
-    fireEvent.click(screen.getByRole('button', { name: 'START TUNING' }));
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
-    expect(onDone).toHaveBeenCalledTimes(2);
-  });
-
-  it('marks the end of each chapter', () => {
-    openLesson(LESSONS.findIndex((l) => l.id === 'find-your-way'));
+    render(<TutorialScreen book={COURSE} onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: /^1\.2 / }));
     expect(screen.getByRole('status').textContent).toMatch(/Chapter 1 complete/);
+    fireEvent.click(screen.getByRole('button', { name: /CONTENTS/ }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${COURSE.lessons.at(-1).number.replace('.', '\\.')} `) }));
+    fireEvent.click(screen.getByRole('button', { name: 'BACK TO LEARN' }));
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
 
-describe.each(LESSONS.map((l, i) => [l.number, l.title, i]))('lesson %s, %s', (_n, _t, i) => {
-  it('opens, says what you will learn, and gives you something to do or to take away', () => {
-    openLesson(i);
+describe.each([
+  ...TUTORIAL.lessons.map((l, i) => ['tutorial', TUTORIAL, l.number, l.title, i]),
+  ...COURSE.lessons.map((l, i) => ['course', COURSE, l.number, l.title, i]),
+])('%s %s, %s', (_b, book, _n, _t, i) => {
+  it('opens, and points every callout at something that is really on its screen', () => {
+    openLesson(book, i);
     const article = screen.getByRole('article');
-    expect(within(article).getByText('YOU WILL')).toBeTruthy();
-    expect(within(article).getByText('WHAT YOU JUST DID')).toBeTruthy();
-  });
-
-  it('points every callout at something that is really on its screen', () => {
-    openLesson(i);
+    // The course's lessons carry the whole lesson shape; the tutorial's cards are short.
+    if (book === COURSE) {
+      expect(within(article).getByText('YOU WILL')).toBeTruthy();
+      expect(within(article).getByText('WHAT YOU JUST DID')).toBeTruthy();
+    }
     for (const fig of screen.queryAllByRole('figure')) {
       const name = fig.getAttribute('aria-label');
       expect({ name, missing: fig.getAttribute('data-callouts-missing') }).toEqual({ name, missing: '0' });
@@ -124,7 +159,7 @@ describe.each(LESSONS.map((l, i) => [l.number, l.title, i]))('lesson %s, %s', (_
 
 describe('a lesson’s screen is live', () => {
   it('APPLY HALF in lesson 4.2 changes the sandbox table and then asks for a new pull, as the game does', () => {
-    openLesson(LESSONS.findIndex((l) => l.id === 've-from-logs'));
+    openLesson(COURSE, COURSE.lessons.findIndex((l) => l.id === 've-from-logs'));
     const fig = screen.getByRole('figure', { name: 'Game screen: TUNE › AIRFLOW' });
     const cellBefore = within(fig).getByRole('button', { name: '7500 RPM, 100 kPa' }).textContent;
     fireEvent.click(within(fig).getByRole('button', { name: 'APPLY HALF' }));
@@ -227,9 +262,13 @@ describe('practice missions', () => {
     expect(p.step).toBe(m.steps.length);
   });
 
-  it('starts from the tutorial, follows the player into the game, and ticks the first step', () => {
+  it('starts from the course, follows the player into the game, and ticks the first step', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    // HOME › Learn is where the course lives.
+    fireEvent.click(screen.getByRole('button', { name: /HOME/ }));
+    fireEvent.click(screen.getByText('Learn How It Works'));
+    act(() => { window.location.hash = screen.getByRole('link', { name: /OPEN THE COURSE/ }).getAttribute('href'); window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
     fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
     const coach = screen.getByRole('region', { name: 'Practice mission' });
     expect(within(coach).getByText('0/4')).toBeTruthy();

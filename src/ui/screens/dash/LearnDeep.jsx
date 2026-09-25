@@ -138,7 +138,7 @@ function WorkedSession() {
   const entries = (d) => d.result.events.map((e) => e.type).join(', ') || 'clean';
   return (
     <>
-      The whole job from the tutorial&apos;s chapter 4, with every step&apos;s pull. These are real pulls of the SANDBOX engine, worked out by the game when you opened this article.
+      The whole job from chapter 4 of the Tuning Course, with every step&apos;s pull. These are real pulls of the SANDBOX engine, worked out by the game when you opened this article.
       <Table
         head={['Step', 'Peak', 'Pull Log']}
         rows={[

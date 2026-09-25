@@ -19,10 +19,10 @@ import styles from './MissionCoach.module.css';
 /**
  * @param {object} props
  * @param {{tab: string|null, section: string|null}} props.route
- * @param {() => void} props.onTutorial back to the tutorial
+ * @param {() => void} props.onCourse back to the Tuning Course, where missions start
  * @returns {React.ReactElement|null}
  */
-export function MissionCoach({ route, onTutorial }) {
+export function MissionCoach({ route, onCourse }) {
   const [session, dispatch] = useSession();
   const [build] = useBuild();
   const [tune] = useTune();
@@ -72,7 +72,7 @@ export function MissionCoach({ route, onTutorial }) {
             </ol>
           )}
           <div className={styles.actions}>
-            <Button size="sm" variant="ghost" onClick={onTutorial}>BACK TO TUTORIAL</Button>
+            <Button size="sm" variant="ghost" onClick={onCourse}>BACK TO THE COURSE</Button>
             <Button size="sm" variant="quiet" onClick={stop}>{finished ? 'CLOSE' : 'STOP PRACTICE'}</Button>
           </div>
         </div>

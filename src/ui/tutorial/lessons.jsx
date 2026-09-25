@@ -1,5 +1,7 @@
 /**
- * The tutorial's content: five chapters of short lessons, each teaching one thing.
+ * The Tuning Course: five chapters of lessons, each teaching one thing, about forty
+ * minutes in all. Opened from HOME › Learn; the five-minute tutorial (quickTour.jsx)
+ * is the way in for someone new, and points here.
  *
  * Every number a lesson quotes is worked out when the lesson opens, from the same
  * simulator the game runs (see scenarios.js), so "the stock V6 makes 254 whp at 6500
@@ -126,7 +128,7 @@ function FindYourWay() {
       </ScreenSnippet>
       <Do steps={[
         <>Tap each of <K>BUILD</K>, <K>TUNE</K> and <K>DYNO</K> once, to see where things live.</>,
-        <>Come back here any time with the <K>(i)</K> button at the right of the strip.</>,
+        <>This course is always on <K>HOME › Learn</K>; the <K>(i)</K> button at the right of the strip opens the five-minute tutorial.</>,
       ]} />
       <Did>You know the working order a tuner uses: build it, tune it, measure it. The tabs run in that order, left to right.</Did>
     </>
@@ -644,8 +646,8 @@ function NextSteps() {
       <H>Go deeper</H>
       <P>HOME › Learn How It Works has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 42 (correcting VE from logs, in depth), 44 (troubleshooting by symptom) and 45 (a full worked session).</P>
       <H>Real cars</H>
-      <P>Career mode hands you customer cars with real faults to find. Every one is a problem this tutorial taught you to diagnose.</P>
-      <Did>That is the tutorial done. The loop is always the same: build it, set the tables, pull it, read the log, change one thing.</Did>
+      <P>Career mode hands you customer cars with real faults to find. Every one is a problem this course taught you to diagnose.</P>
+      <Did>That is the course done. The loop is always the same: build it, set the tables, pull it, read the log, change one thing.</Did>
     </>
   );
 }
@@ -660,7 +662,9 @@ function NextSteps() {
  * @property {string} [mission] the practice mission that goes with it
  */
 
-/** @type {{id: string, title: string, minutes: number, lessons: Lesson[]}[]} */
+/** @typedef {{id: string, title: string, minutes: number, lessons: Lesson[]}} Chapter */
+
+/** @type {Chapter[]} */
 export const CHAPTERS = [
   { id: 'idea', title: 'The big idea', minutes: 3, lessons: [
     { id: 'air-pump', title: 'An engine is an air pump', Body: AirPump },
@@ -690,10 +694,7 @@ export const CHAPTERS = [
   ] },
 ];
 
-/** Every lesson in reading order, with its chapter and number ("2.1"). */
-export const LESSONS = CHAPTERS.flatMap((c, ci) => c.lessons.map((l, li) => ({ ...l, chapter: c, number: `${ci + 1}.${li + 1}` })));
-
-/** What the whole tutorial teaches, and what it needs: shown before lesson one. */
+/** What the whole course teaches: shown before lesson one. */
 export const OUTCOMES = [
   'Read the AIRFLOW, FUEL and SPARK tables, and work one cell of each through by hand.',
   'Run a dyno pull, and read its Pull Log and datalog.',

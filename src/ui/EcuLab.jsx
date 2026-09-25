@@ -48,6 +48,7 @@ import { loadCareer, saveCareer } from '../storage.js';
 import { AppShell } from './AppShell.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
+import { COURSE } from './tutorial/books.js';
 import { MissionCoach } from './tutorial/MissionCoach.jsx';
 import { markOf } from './tutorial/missions.js';
 import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvider.jsx';
@@ -604,6 +605,7 @@ export function EcuLabApp() {
   const toggleBuildSection = makeToggleSection('build');
   const toggleDragSection = makeToggleSection('drag');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
+  const goCourse = () => navigate({ view: 'course', tab: null, section: null });
   // `AppShell`'s `SideNav` is `React.memo`'d and reads no store, so at 20 Hz it only
   // stays skipped if `onNavigate` is referentially stable — see AppShell.jsx's header.
   // `goTab`/`setSelection` above are plain closures rebuilt every render, so calling
@@ -1351,8 +1353,22 @@ export function EcuLabApp() {
   }
   if (appView === 'tutorial') {
     return (
+      // Keyed per book: the tutorial and the course are the same component at the same
+      // place in the tree, and without a key the course would open on whatever page
+      // the tutorial was showing.
       <TutorialScreen
+        key="tutorial"
         onDone={() => { goTab('build'); dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 0 }); }}
+        onCourse={goCourse}
+      />
+    );
+  }
+  if (appView === 'course') {
+    return (
+      <TutorialScreen
+        key="course"
+        book={COURSE}
+        onDone={() => goSection('dash', 'learn')}
         onPractice={(id) => {
           // A mission is its own guide: the first-run banner would only compete with it.
           dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'journeyStep', value: 99 });
@@ -1371,7 +1387,7 @@ export function EcuLabApp() {
           is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
           not chrome AppShell has any opinion about. */}
       <AppShell route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine}>
-        <MissionCoach route={route} onTutorial={goTutorial} />
+        <MissionCoach route={route} onCourse={goCourse} />
         {/* ---------- HOME: customer jobs, career stats, health, learning ---------- */}
         {/* One component per section, each reading the store for itself. `live` is read
             ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than

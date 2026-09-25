@@ -34,7 +34,8 @@ export const ROUTES = {
 
 /**
  * @typedef {Object} Route
- * @property {'start'|'tutorial'|'app'} view - Which top-level screen is showing.
+ * @property {'start'|'tutorial'|'course'|'app'} view - Which top-level screen is showing:
+ *   the start screen, the five-minute tutorial, the Tuning Course (opened from Learn), or the app.
  * @property {string|null} tab - The active tab key (a key of `ROUTES`), or
  *   `null` when `view` is not 'app'.
  * @property {string|null} section - The open accordion section within `tab`,
@@ -47,6 +48,9 @@ const START_ROUTE = { view: 'start', tab: null, section: null };
 
 /** @type {Route} */
 const TUTORIAL_ROUTE = { view: 'tutorial', tab: null, section: null };
+
+/** @type {Route} */
+const COURSE_ROUTE = { view: 'course', tab: null, section: null };
 
 /**
  * Parse a `window.location.hash`-shaped string into a route object.
@@ -78,6 +82,10 @@ export function parseRoute(hash) {
     return { ...TUTORIAL_ROUTE };
   }
 
+  if (first === 'course') {
+    return { ...COURSE_ROUTE };
+  }
+
   if (!Object.prototype.hasOwnProperty.call(ROUTES, first)) {
     return { ...START_ROUTE };
   }
@@ -101,6 +109,10 @@ export function formatRoute(route) {
 
   if (view === 'tutorial') {
     return '#/tutorial';
+  }
+
+  if (view === 'course') {
+    return '#/course';
   }
 
   if (view === 'app' && tab != null) {

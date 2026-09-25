@@ -102,3 +102,21 @@
 }
 
 .table td { color: var(--ink); }
+
+/* The way into the Tuning Course: the one thing on this page that is not an article. */
+.course {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 var(--sp-lg);
+  padding: var(--sp-md) var(--sp-lg);
+  border: 1px solid var(--acc);
+  border-radius: var(--r-md);
+  background: var(--acc-bg);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.courseTag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--acc-ink); }
+.courseTitle { font-size: var(--fs-md); font-weight: 800; }
+.courseText { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-soft); }
+.courseCta { margin-top: 4px; font-size: var(--fs-sm); font-weight: 800; color: var(--acc-ink); }

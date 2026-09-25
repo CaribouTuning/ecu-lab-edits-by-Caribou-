@@ -1,12 +1,12 @@
 /**
- * The tutorial: a contents page, then five chapters of short lessons.
+ * The lesson reader, for both books (tutorial/books.js): the five-minute tutorial and
+ * the Tuning Course that HOME › Learn opens.
  *
- * The contents page does what the best tutorials do first: says what the reader will
- * be able to do by the end, what they need, how long it takes, and shows the finished
- * result (a real dyno pull of the engine they are about to tune) before step one.
- * Lessons are one idea each, show the real game screens (ScreenSnippet), and end with
- * something to do in the game. Lessons read are ticked on the contents page, and the
- * tutorial reopens where the player left it.
+ * A contents page first, doing what the best tutorials do first: what the reader will
+ * be able to do by the end, what they need, how long it takes, and (for the course)
+ * the finished result, a real dyno pull of the engine they are about to tune. Then the
+ * lessons, one idea each, showing the real game screens (ScreenSnippet). Lessons read
+ * are ticked on the contents page, and a book reopens where the player left it.
  */
 
 import { Check, ChevronLeft, List as ListIcon, Play } from 'lucide-react';
@@ -14,30 +14,33 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { Button } from '../primitives/Button.jsx';
 import { ResultScreen } from './dyno/ResultScreen.jsx';
-import { CHAPTERS, LESSONS, OUTCOMES } from '../tutorial/lessons.jsx';
+import { TUTORIAL } from '../tutorial/books.js';
 import { MISSIONS } from '../tutorial/missions.js';
 import { peaks, stock } from '../tutorial/scenarios.js';
 import { ScreenSnippet } from '../tutorial/ScreenSnippet.jsx';
 
 import styles from './TutorialScreen.module.css';
 
-const STORE_KEY = 'ecuLab.tutorial.v2';
-const TOTAL_MINUTES = CHAPTERS.reduce((m, c) => m + c.minutes, 0);
+/** @param {string} bookId */
+const storeKey = (bookId) => `ecuLab.${bookId}.progress`;
 
-/** Lessons read and where the reader was, remembered per browser. Never required. */
-function loadProgress() {
+/**
+ * Lessons read and where the reader was, remembered per browser. Never required.
+ * @param {string} bookId
+ */
+function loadProgress(bookId) {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null');
+    const raw = JSON.parse(localStorage.getItem(storeKey(bookId)) ?? 'null');
     return { read: Array.isArray(raw?.read) ? raw.read : [], at: typeof raw?.at === 'string' ? raw.at : null };
   } catch {
     return { read: [], at: null };
   }
 }
 
-/** @param {{read: string[], at: string|null}} p */
-function saveProgress(p) {
+/** @param {string} bookId @param {{read: string[], at: string|null}} p */
+function saveProgress(bookId, p) {
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(p));
+    localStorage.setItem(storeKey(bookId), JSON.stringify(p));
   } catch {
     // Private mode or blocked storage: progress is a convenience, not a requirement.
   }
@@ -45,12 +48,15 @@ function saveProgress(p) {
 
 /**
  * @param {object} props
- * @param {() => void} props.onDone leaves the tutorial for the game
+ * @param {import('../tutorial/books.js').Book} [props.book] which book; the tutorial by default
+ * @param {() => void} props.onDone leaves the book: for the game, or back to Learn
  * @param {(missionId: string) => void} [props.onPractice] starts a practice mission in the game
+ * @param {() => void} [props.onCourse] opens the Tuning Course, offered at the tutorial's end
  * @returns {React.ReactElement}
  */
-export function TutorialScreen({ onDone, onPractice }) {
-  const [progress, setProgress] = useState(loadProgress);
+export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }) {
+  const LESSONS = book.lessons;
+  const [progress, setProgress] = useState(() => loadProgress(book.id));
   // null is the contents page; otherwise an index into LESSONS.
   const [at, setAt] = useState(/** @type {number|null} */ (null));
   const top = useRef(/** @type {HTMLDivElement|null} */ (null));
@@ -61,10 +67,10 @@ export function TutorialScreen({ onDone, onPractice }) {
     const id = LESSONS[at].id;
     setProgress((p) => {
       const next = { read: p.read.includes(id) ? p.read : [...p.read, id], at: id };
-      saveProgress(next);
+      saveProgress(book.id, next);
       return next;
     });
-  }, [at]);
+  }, [at, LESSONS, book.id]);
 
   const resumeAt = Math.max(0, LESSONS.findIndex((l) => l.id === progress.at));
 
@@ -72,12 +78,12 @@ export function TutorialScreen({ onDone, onPractice }) {
     return (
       <div className={styles.screen}>
         <div className={styles.bar}>
-          <div className={styles.count}>TUTORIAL · CONTENTS</div>
-          <Button variant="quiet" size="sm" onClick={onDone}>SKIP</Button>
+          <div className={styles.count}>{book.label} · CONTENTS</div>
+          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'SKIP' : 'CLOSE'}</Button>
         </div>
         <div className={styles.body} ref={top}>
           <div className={styles.inner}>
-            <Contents read={progress.read} onOpen={setAt} onPractice={onPractice} />
+            <Contents book={book} read={progress.read} onOpen={setAt} onPractice={onPractice} />
           </div>
         </div>
         <div className={styles.actions}>
@@ -91,7 +97,8 @@ export function TutorialScreen({ onDone, onPractice }) {
 
   const lesson = LESSONS[at];
   const last = at === LESSONS.length - 1;
-  const chapterNo = CHAPTERS.indexOf(lesson.chapter) + 1;
+  const chapterNo = book.chapters.indexOf(lesson.chapter) + 1;
+  const multiChapter = book.chapters.length > 1;
   const chapterEnd = last || LESSONS[at + 1].chapter !== lesson.chapter;
   const mission = lesson.mission ? MISSIONS.find((m) => m.id === lesson.mission) : null;
   const { Body } = lesson;
@@ -99,18 +106,18 @@ export function TutorialScreen({ onDone, onPractice }) {
   return (
     <div className={styles.screen}>
       <div className={styles.bar}>
-        <div className={styles.count}>TUTORIAL · {at + 1}/{LESSONS.length}</div>
+        <div className={styles.count}>{book.label} · {at + 1}/{LESSONS.length}</div>
         <div className={styles.barActions}>
           <Button variant="quiet" size="sm" onClick={() => setAt(null)}>
             <ListIcon size={14} aria-hidden="true" /> CONTENTS
           </Button>
-          <Button variant="quiet" size="sm" onClick={onDone}>SKIP</Button>
+          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'SKIP' : 'CLOSE'}</Button>
         </div>
       </div>
 
       <div className={styles.body} ref={top}>
         <article className={styles.inner} key={lesson.id}>
-          <div className={styles.eyebrow}>CHAPTER {chapterNo} · {lesson.chapter.title.toUpperCase()}</div>
+          <div className={styles.eyebrow}>{multiChapter ? `CHAPTER ${chapterNo} · ` : ''}{lesson.chapter.title.toUpperCase()}</div>
           <h1 className={styles.title}><span className={styles.num}>{lesson.number}</span> {lesson.title}</h1>
           <Body />
           {mission && onPractice && (
@@ -123,7 +130,7 @@ export function TutorialScreen({ onDone, onPractice }) {
               <Button onClick={() => onPractice(mission.id)}><Play size={14} aria-hidden="true" /> START PRACTICE</Button>
             </div>
           )}
-          {chapterEnd && (
+          {chapterEnd && multiChapter && (
             <div className={styles.chapterDone} role="status">
               <Check size={16} aria-hidden="true" /> Chapter {chapterNo} complete: {lesson.chapter.title}.
             </div>
@@ -132,17 +139,24 @@ export function TutorialScreen({ onDone, onPractice }) {
       </div>
 
       <div className={styles.dots} aria-hidden="true">
-        {CHAPTERS.map((c) => (
-          <span key={c.id} className={[styles.dot, c === lesson.chapter && styles.dotOn].filter(Boolean).join(' ')} />
-        ))}
+        {multiChapter
+          ? book.chapters.map((c) => (
+            <span key={c.id} className={[styles.dot, c === lesson.chapter && styles.dotOn].filter(Boolean).join(' ')} />
+          ))
+          : LESSONS.map((l, i) => (
+            <span key={l.id} className={[styles.dot, i === at && styles.dotOn].filter(Boolean).join(' ')} />
+          ))}
       </div>
 
       <div className={styles.actions}>
         <Button size="lg" variant="ghost" onClick={() => setAt(at === 0 ? null : at - 1)}>
           <ChevronLeft size={16} aria-hidden="true" /> BACK
         </Button>
+        {last && onCourse && (
+          <Button size="lg" variant="ghost" onClick={onCourse}>OPEN THE COURSE</Button>
+        )}
         <Button size="lg" onClick={() => (last ? onDone() : setAt(at + 1))}>
-          {last ? 'START TUNING' : 'NEXT'}
+          {last ? book.doneLabel : 'NEXT'}
         </Button>
       </div>
     </div>
@@ -151,54 +165,44 @@ export function TutorialScreen({ onDone, onPractice }) {
 
 /**
  * @param {object} props
+ * @param {import('../tutorial/books.js').Book} props.book
  * @param {string[]} props.read lesson ids already read
  * @param {(index: number) => void} props.onOpen
  * @param {(missionId: string) => void} [props.onPractice]
  */
-function Contents({ read, onOpen, onPractice }) {
-  const d = stock();
-  const { hp, tq } = peaks(d);
+function Contents({ book, read, onOpen, onPractice }) {
   return (
     <>
-      <h1 className={styles.title}>Learn to tune an engine</h1>
-      <p className={styles.lede}>
-        About {TOTAL_MINUTES} minutes, in {CHAPTERS.length} chapters of short lessons. Every screen in it is the real game screen, running live, and every number is the one your own game will show.
-      </p>
+      <h1 className={styles.title}>{book.title}</h1>
+      <p className={styles.lede}>{book.lede}</p>
 
       <div className={styles.outcomes}>
         <div className={styles.sectionHead}>BY THE END YOU WILL BE ABLE TO</div>
         <ul className={styles.outcomeList}>
-          {OUTCOMES.map((o) => <li key={o}>{o}</li>)}
+          {book.outcomes.map((o) => <li key={o}>{o}</li>)}
         </ul>
         <div className={styles.sectionHead}>YOU NEED</div>
         <p className={styles.need}>No car knowledge. Multiplication helps. Sound is optional.</p>
       </div>
 
-      <div className={styles.sectionHead}>WHERE YOU ARE GOING</div>
-      <ScreenSnippet
-        where="DYNO"
-        demo={d}
-        height={250}
-        caption={`The engine you start with, on the dyno: ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM. By lesson 3.1 you will run this pull yourself; by chapter 4 you will fit a part, retune for it and prove it made more.`}
-      >
-        <ResultScreen chartData={d.chartData} engineDerived={d.derived} bands={d.bands} wholePullCount={d.wholePullCount} />
-      </ScreenSnippet>
+      {book.showResult && <EndResult />}
 
-      <nav aria-label="Tutorial contents">
-        {CHAPTERS.map((c, ci) => (
+      <nav aria-label={`${book.title} contents`}>
+        {book.chapters.map((c, ci) => (
           <section key={c.id} className={styles.chapter}>
             <div className={styles.chapterHead}>
-              <span>{ci + 1} · {c.title}</span>
+              <span>{book.chapters.length > 1 ? `${ci + 1} · ` : ''}{c.title}</span>
               <span className={styles.minutes}>{c.minutes} min</span>
             </div>
             <ul className={styles.lessonList}>
               {c.lessons.map((l) => {
-                const i = LESSONS.findIndex((x) => x.id === l.id);
+                const i = book.lessons.findIndex((x) => x.id === l.id);
+                const { number } = book.lessons[i];
                 const done = read.includes(l.id);
                 return (
                   <li key={l.id}>
-                    <button type="button" className={styles.lessonLink} onClick={() => onOpen(i)} aria-label={`${LESSONS[i].number} ${l.title}${done ? ', read' : ''}`}>
-                      <span className={styles.lessonNum}>{LESSONS[i].number}</span>
+                    <button type="button" className={styles.lessonLink} onClick={() => onOpen(i)} aria-label={`${number} ${l.title}${done ? ', read' : ''}`}>
+                      <span className={styles.lessonNum}>{number}</span>
                       <span className={styles.lessonTitle}>{l.title}</span>
                       {done && <Check size={14} aria-hidden="true" className={styles.tick} />}
                     </button>
@@ -227,6 +231,25 @@ function Contents({ read, onOpen, onPractice }) {
           </ul>
         </>
       )}
+    </>
+  );
+}
+
+/** Where the course is going: the engine the reader is about to tune, on the dyno. */
+function EndResult() {
+  const d = stock();
+  const { hp, tq } = peaks(d);
+  return (
+    <>
+      <div className={styles.sectionHead}>WHERE YOU ARE GOING</div>
+      <ScreenSnippet
+        where="DYNO"
+        demo={d}
+        height={250}
+        caption={`The engine you start with, on the dyno: ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM. By lesson 3.1 you will run this pull yourself; by chapter 4 you will fit a part, retune for it and prove it made more.`}
+      >
+        <ResultScreen chartData={d.chartData} engineDerived={d.derived} bands={d.bands} wholePullCount={d.wholePullCount} />
+      </ScreenSnippet>
     </>
   );
 }

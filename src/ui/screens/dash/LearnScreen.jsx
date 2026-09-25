@@ -37,11 +37,19 @@ function LearnScreenInner({ active, onToggle }) {
       icon={BookOpen} label="Learn How It Works"
       sub="Plain-language guide to engine tuning"
     >
-      <div className={styles.intro}>Read in order. Each explains a piece of what the live engine is doing right now.</div>
+      {/* The course is the way through this subject for someone learning it; the
+          articles below are the reference it draws on. */}
+      <a className={styles.course} href="#/course">
+        <span className={styles.courseTag}>THE TUNING COURSE</span>
+        <span className={styles.courseTitle}>Learn to tune, start to finish</span>
+        <span className={styles.courseText}>16 short lessons, about 40 minutes, a lesson at a time. Live game screens, worked maths with your engine&apos;s own numbers, a real bolt-on retune, and practice missions that tick themselves off in the game.</span>
+        <span className={styles.courseCta}>OPEN THE COURSE ›</span>
+      </a>
+      <div className={styles.intro}>The articles: read in order, or dip in. Each explains a piece of what the live engine is doing right now.</div>
       {/* Reading paths: most readers arrive with a question, not a free afternoon. */}
       <div className={styles.paths}>
         <div className={styles.pathsHead}>WHERE TO START</div>
-        <div><b className={styles.em}>New to tuning:</b> the tutorial (the (i) button in the top strip), then 1–5 and 12–16.</div>
+        <div><b className={styles.em}>New to tuning:</b> the Tuning Course above, then 1–5 and 12–16.</div>
         <div><b className={styles.em}>Just fitted a part:</b> 42 and 43, then 45 for a whole job worked through.</div>
         <div><b className={styles.em}>Something is wrong on the dyno:</b> 44, troubleshooting by symptom.</div>
         <div><b className={styles.em}>How the game works it out:</b> 6–11, 26, 39 and 46.</div>

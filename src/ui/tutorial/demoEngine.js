@@ -1,7 +1,7 @@
 /**
- * The engine the tutorial talks about — the same one a player gets on SANDBOX.
+ * The engine the tutorial and the Tuning Course talk about — the same one a player gets on SANDBOX.
  *
- * The tutorial shows real game screens, and a real screen needs real data: a pull, the
+ * Their lessons show real game screens, and a real screen needs real data: a pull, the
  * advisor's verdicts, the VE log. This works them out the way the game does, from a
  * store-shaped state (`makeInitialState()`, optionally changed by a scenario), through
  * the same simulator calls EcuLab.jsx makes. So every number a lesson quotes — "the
@@ -29,7 +29,7 @@ import { makeInitialState } from '../state/initialState.js';
  *
  * @param {StoreState} state
  */
-export function pullInputs(state) {
+function pullInputs(state) {
   const { build, tune, session } = state;
   const {
     engineConfig, mods, turboOn, boostCurve, injIdx, mafScalar, turbineIdx, turbineCount,

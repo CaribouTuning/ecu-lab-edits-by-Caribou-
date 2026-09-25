@@ -34,7 +34,7 @@ import styles from './ScreenSnippet.module.css';
  * @param {Callout[]} callouts
  * @returns {({top: number, left: number, width: number, height: number}|null)[]}
  */
-export function locateCallouts(content, callouts) {
+function locateCallouts(content, callouts) {
   const box = content.getBoundingClientRect();
   return callouts.map((c) => {
     const el = content.querySelector(c.at);
