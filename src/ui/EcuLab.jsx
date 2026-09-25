@@ -52,7 +52,7 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { pullSignature, measuredInputs } from './state/pullSignature.js';
+import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
@@ -97,7 +97,7 @@ const JOURNEY = [
     body: 'Open Engine Architecture and design a short block: bore, stroke, compression, cam, springs. Then fit parts under Induction and Exhaust. Nothing here is cosmetic — every choice changes how the engine breathes.',
     cta: 'Done building — go tune it', next: 'tune' },
   { tab: 'tune', title: 'Step 2 · Calibrate it',
-    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, accept the re-logged values. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now. A NITROUS page joins them once a nitrous kit is fitted.',
+    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, run a pull and correct it from the log. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now. A NITROUS page joins them once a nitrous kit is fitted.',
     cta: 'Calibration set — start the engine', next: 'live' },
   { tab: 'live', title: 'Step 3 · Start it and listen',
     body: 'Press START. Watch it idle, hold the throttle to rev it, and watch the sensors and fuel trims respond in real time. This is your calibration actually running.',
@@ -175,7 +175,7 @@ const TUTORIAL_STEPS = [
   { title: 'This is an air pump',
     body: 'An engine can only burn as much fuel as it has air for. So everything starts with air. The ECU works out the air, decides how much fuel to add, and picks the moment to light it.\n\nTuning is getting those last two decisions right at every speed and load.\n\n→ You will do that on three tables. The rest of this tutorial shows you which, and how to check your work.' },
   { title: 'Air: how full the cylinder gets',
-    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIRFLOW table should match what the engine really breathes. After a hardware change, accept the re-logged values.' },
+    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIRFLOW table should match what the engine really breathes. Nobody can see that directly: after a hardware change, log a pull and TUNE › AIRFLOW works out the correction for each cell from the wideband, showing the maths.' },
   { title: 'Fuel: follows from the air',
     body: 'Once the air is known, fuel is arithmetic:\n\n    fuel = air ÷ (λ × 14.7 for gasoline)\n\nλ (lambda) is the mixture you ask for on the FUEL table. 1.00 is exactly enough air to burn the fuel. About 0.87 makes the most power, and a boosted engine runs richer, about 0.83, to keep the charge and the turbo cool.\n\nThe injectors can only be open so long: past about 90% duty there is no time left, and no table can fix that.\n\n→ Set the FUEL table. If the log says the injectors are maxed, you need bigger injectors or less boost.' },
   { title: 'Spark: when to light it',
@@ -1328,8 +1328,15 @@ export function EcuLabApp() {
   const veLogPull = useMemo(() => (veLogOpen && pullFresh ? veSamplesFromPull(result.points) : []), [veLogOpen, pullFresh, result]);
   const liveLog = live?.ecu?.log;
   const veLogLive = useMemo(() => (veLogOpen ? veSamplesFromLive(liveLog, ve) : []), [veLogOpen, liveLog, ve]);
+  // Why the last pull is, or is not, in the numbers — a log only describes the tune it
+  // was taken on, and a part-throttle pull is closed loop, where the trims set the mixture.
+  /** @type {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} */
+  const pullInfo = !veLogOpen || !result ? { state: 'none' }
+    : !pullFresh ? { state: 'stale', changed: runs?.[0]?.inputs ? diffMeasuredInputs(runs[0].inputs, measuredInputs(build, tune, loadKpa)) : [] }
+      : result.points.every((p) => !p.openLoop) ? { state: 'part-load' }
+        : veLogPull.length === 0 ? { state: 'unused' } : { state: 'ok' };
   const veLog = veLogOpen ? {
-    pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend',
+    pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend', pullInfo,
     onApply: (share) => {
       const { ratio } = veCorrections([...veLogPull, ...veLogLive]);
       dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: applyVeCorrections(ve, ratio, share), label: `VE from logs (${share === 1 ? 'all' : 'half'})` });
@@ -1527,7 +1534,7 @@ export function EcuLabApp() {
         )}
 
         {tab === 'tune' && tuneView === 'airflow' && (
-          <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} veLog={veLog}>
+          <AirflowScreen veLog={veLog}>
             <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} />
           </AirflowScreen>
         )}

@@ -207,13 +207,13 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
 
       {!veAdvice.inSync && (
         <div className={styles.callout}>
-          <b className={styles.calloutAccent}>Your VE table is now stale.</b> This hardware breathes differently than what you last logged — up to {veAdvice.maxAbs.toFixed(0)}% off. Head to <b className={styles.em}>TUNE &rsaquo; AIRFLOW</b> to see which cells changed and why, then accept it there.
+          <b className={styles.calloutAccent}>Your VE table is now stale.</b> This hardware breathes differently than the engine your table was logged on. Log it again — a dyno pull for full throttle, a LIVE drive for the rest — and correct it from the log on <b className={styles.em}>TUNE &rsaquo; AIRFLOW</b>.
         </div>
       )}
       <ExpandableInfo title="Why changing hardware does not update your VE table">
         Everything that physically changes how this engine breathes feeds volumetric efficiency: bore/stroke ratio, cylinder count, compression, cam duration, valve springs, head material, intake/headers/exhaust, pipe diameter, turbine backpressure, even fuel choice (E85 evaporates cold enough to measurably densify the charge).
         <br /><br />But your VE table is a <b className={styles.em}>log</b> — a record of what the engine actually flowed last time it was measured. Bolt on a cam and that log does not rewrite itself; it just becomes wrong. In a real shop you would go back to the dyno and re-log airflow before trusting any of it.
-        <br /><br />So this app never edits it silently. It tells you what changed, by how much, and in which RPM range — and lets you accept it once you understand why it moved.
+        <br /><br />So this app never edits it silently. It tells you the table no longer matches the hardware; the logs tell you by how much, cell by cell, the way a tuner finds out — and you apply the correction once you understand why it moved.
         <br /><br />Note that <b className={styles.em}>boost is not part of VE</b>. VE measures how well the cylinder fills relative to the pressure available; boost raises that pressure (MAP) separately. That is why adding boost does not change these numbers, but adding a turbine does — the turbine is a restriction in the exhaust.
       </ExpandableInfo>
 

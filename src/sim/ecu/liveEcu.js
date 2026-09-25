@@ -520,7 +520,7 @@ export function liveStepEcu(st, dt, input, cfg) {
 
     log = {
       map: pt.map, boost: s.boostPsi, boostTarget: e.boostTargetRamped, wgDuty: duty, lambda: pt.lambdaExhaust ?? pt.lambda,
-      lambdaTarget: res.input.afrCommanded / 14.7, veTable: res.breakdown.ve[0].value, pw: pt.pw, duty: pt.duty, deadTime: pt.deadTime, railDp: pt.railDp,
+      lambdaTarget: res.input.afrCommanded / 14.7, veTable: res.breakdown.ve[0].value, mafPct: pt.trimPct ?? 0, pw: pt.pw, duty: pt.duty, deadTime: pt.deadTime, railDp: pt.railDp,
       timing: pt.timing, egt: pt.egt, misfire: pt.misfire, filmFactor: filmFactor * 100, bfs: pt.bfs,
       torque: crankNm, breakdown: res.breakdown, boostSteps: steps, closedLoopRegion: res.sensed.closedLoopRegion,
     };
@@ -624,6 +624,8 @@ export function liveStepEcu(st, dt, input, cfg) {
     // The VE table's value where the ECU looked it up, so a log can say what the table
     // should have held there — even after the table has changed since.
     veTable: log ? Number(log.veTable.toFixed(2)) : 0,
+    // The MAF's error the ECU applied to that fuel, so a VE correction can leave it out.
+    mafPct: log ? Number(log.mafPct.toFixed(2)) : 0,
   };
   e.log = [...(st.ecu?.log ?? []), row].slice(-LOG_LENGTH);
   e.breakdown = log?.breakdown ?? null;

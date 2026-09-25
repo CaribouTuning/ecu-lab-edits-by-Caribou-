@@ -7,7 +7,12 @@
  * more air than the VE table thought. HP Tuners' VE histograms, Holley's learn and
  * Haltech's quick-tune all run on this:
  *
- *     VE_new = VE × (λ measured ÷ λ target) × (1 + fuel trims)
+ *     VE_new = VE × (λ measured ÷ λ target) × (1 + fuel trims) × (MAF factor)
+ *
+ * The last term keeps the MAF's error out of the VE table. With the ECU blending a MAF
+ * reading into its fuel, a MAF that reads wrong (a new intake housing) moves the mixture
+ * too; that part belongs to the MAF calibration, and folding it into VE would have to be
+ * undone the moment the MAF is fixed — which is why tuners tune the two separately.
  *
  * sorted into the cells the data was taken in, weighted by how close each sample sat to
  * each cell, and applied only where there is data. Cells the car never visited keep
@@ -34,9 +39,24 @@ const MAX_MAP_STEP_KPA = 3;
 const MIN_ECT_C = 75;
 
 /**
- * @typedef {{rpm: number, mapKpa: number, ratio: number}} VeSample
- *   `ratio` is the factor the CURRENT table's VE at (rpm, mapKpa) is off by
+ * @typedef {object} VeSample
+ * @property {number} rpm
+ * @property {number} mapKpa manifold pressure as the ECU read it — what it looked VE up by
+ * @property {number} lambdaRatio λ measured ÷ λ target: over 1 is leaner than asked
+ * @property {number} trim what the fuel trims were adding, as a factor (1 = none)
+ * @property {number} maf the MAF's error the ECU was applying, as a factor (1 = none)
+ * @property {number} rescale the VE the row was logged against ÷ the table's VE there now
+ *   (1 for a pull, which is only used while its table is the one on screen)
+ * @property {number} ratio the factor the CURRENT table's VE at (rpm, mapKpa) is off by:
+ *   the product of the four above
+ * @property {'pull'|'live'} source
  */
+
+/**
+ * @param {Omit<VeSample, 'ratio'>} parts
+ * @returns {VeSample}
+ */
+const sample = (parts) => ({ ...parts, ratio: parts.lambdaRatio * parts.trim * parts.maf * parts.rescale });
 
 /**
  * Samples from a dyno pull. A pull runs at full throttle, open loop, so its mixture
@@ -52,9 +72,12 @@ export function veSamplesFromPull(points) {
     if (!p.openLoop || !(p.sensedLambda > 0) || !(p.afrCommanded > 0)) continue;
     if ((p.nitrousLbMin ?? 0) > 0 || p.fuelLimited || p.fuelStarved || (p.protect?.length ?? 0) > 0) continue;
     if ((p.cutPct ?? 0) > 0 || (p.misfire ?? 0) > 0) continue;
-    const ratio = p.sensedLambda / (p.afrCommanded / 14.7);
-    if (!(ratio > 0.6 && ratio < 1.6)) continue;
-    out.push({ rpm: p.rpm, mapKpa: p.sensedMap ?? p.map, ratio });
+    const s = sample({
+      rpm: p.rpm, mapKpa: p.sensedMap ?? p.map, lambdaRatio: p.sensedLambda / (p.afrCommanded / 14.7),
+      trim: 1, maf: 1 + (p.trimPct ?? 0) / 100, rescale: 1, source: 'pull',
+    });
+    if (!(s.ratio > 0.6 && s.ratio < 1.6)) continue;
+    out.push(s);
   }
   return out;
 }
@@ -76,10 +99,13 @@ export function veSamplesFromLive(rows, ve) {
     if (!steady || !r.running || r.rpm < 600 || r.ect < MIN_ECT_C) continue;
     if (Math.abs(r.ae ?? 0) >= 1 || (r.cut ?? 0) > 0 || (r.nitrous ?? 0) > 0 || (r.misfire ?? 0) > 0) continue;
     if ((r.protect?.length ?? 0) > 0 || !(r.veTable > 0) || !(r.lambdaTarget > 0) || !(r.sLambda > 0)) continue;
-    const then = (r.sLambda / r.lambdaTarget) * (1 + (r.stft ?? 0) / 100) * (1 + (r.ltft ?? 0) / 100);
-    const ratio = (then * r.veTable) / Math.max(1, interp2(ve, r.rpm, r.sMap));
-    if (!(ratio > 0.6 && ratio < 1.6)) continue;
-    out.push({ rpm: r.rpm, mapKpa: r.sMap, ratio });
+    const s = sample({
+      rpm: r.rpm, mapKpa: r.sMap, lambdaRatio: r.sLambda / r.lambdaTarget,
+      trim: (1 + (r.stft ?? 0) / 100) * (1 + (r.ltft ?? 0) / 100), maf: 1 + (r.mafPct ?? 0) / 100,
+      rescale: r.veTable / Math.max(1, interp2(ve, r.rpm, r.sMap)), source: 'live',
+    });
+    if (!(s.ratio > 0.6 && s.ratio < 1.6)) continue;
+    out.push(s);
   }
   return out;
 }
@@ -98,32 +124,67 @@ function bracket(axis, v) {
 }
 
 /**
+ * @typedef {object} VeCell
+ * @property {number} ratio the correction the cell's data asks for
+ * @property {number} weight how much data it rests on (about one per sample right on it)
+ * @property {number} samples how many samples touched it
+ * @property {number} lambdaRatio the weighted mean of each sample's part, so the
+ *   calculation can be shown: ratio ≈ lambdaRatio × trim × maf × rescale
+ * @property {number} trim
+ * @property {number} maf
+ * @property {number} rescale
+ */
+
+/**
  * The correction each cell's data asks for.
  *
  * @param {VeSample[]} samples
- * @returns {{ratio: (number|null)[][], weight: number[][], cells: number}}
- *   `ratio[row][col]` the mean factor for a cell with enough data, else null
+ * @returns {{ratio: (number|null)[][], weight: number[][], cell: (VeCell|null)[][], cells: number}}
+ *   `ratio[row][col]` the mean factor for a cell with enough data, else null; `cell`
+ *   the same cell with the parts it was worked out from
  */
 export function veCorrections(samples) {
-  const weight = LOAD.map(() => RPM.map(() => 0));
-  const sum = LOAD.map(() => RPM.map(() => 0));
+  const keys = ['ratio', 'lambdaRatio', 'trim', 'maf', 'rescale'];
+  const acc = LOAD.map(() => RPM.map(() => ({ weight: 0, samples: 0, ratio: 0, lambdaRatio: 0, trim: 0, maf: 0, rescale: 0 })));
   for (const s of samples) {
     for (const [ri, wr] of bracket(LOAD, s.mapKpa)) {
       for (const [ci, wc] of bracket(RPM, s.rpm)) {
         const w = wr * wc;
         if (w < MIN_SHARE) continue;
-        weight[ri][ci] += w;
-        sum[ri][ci] += w * s.ratio;
+        const a = acc[ri][ci];
+        a.weight += w;
+        a.samples += 1;
+        for (const k of keys) a[k] += w * /** @type {any} */ (s)[k];
       }
     }
   }
   let cells = 0;
-  const ratio = weight.map((row, ri) => row.map((w, ci) => {
-    if (w < MIN_CELL_WEIGHT) return null;
+  const cell = acc.map((row) => row.map((a) => {
+    if (a.weight < MIN_CELL_WEIGHT) return null;
     cells += 1;
-    return sum[ri][ci] / w;
+    /** @type {any} */
+    const out = { weight: a.weight, samples: a.samples };
+    for (const k of keys) out[k] = /** @type {any} */ (a)[k] / a.weight;
+    return /** @type {VeCell} */ (out);
   }));
-  return { ratio, weight, cells };
+  return {
+    ratio: cell.map((row) => row.map((c) => (c ? c.ratio : null))),
+    weight: acc.map((row) => row.map((a) => a.weight)),
+    cell,
+    cells,
+  };
+}
+
+/**
+ * The MAF's own error across the samples, as a percentage, weighted like the cells: what
+ * the MAF calibration should fix, not the VE table. Zero with no MAF in the fuel path.
+ *
+ * @param {VeSample[]} samples
+ * @returns {number}
+ */
+export function mafErrorPct(samples) {
+  if (!samples.length) return 0;
+  return (samples.reduce((sum, s) => sum + s.maf, 0) / samples.length - 1) * 100;
 }
 
 /**

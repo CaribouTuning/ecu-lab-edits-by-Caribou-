@@ -43,6 +43,24 @@ describe('correcting VE from a dyno pull', () => {
     expect(eng.tables.ve[S.LOAD.indexOf(40)]).toEqual(before[S.LOAD.indexOf(40)]);
   });
 
+  it('a cold air intake on the stock tune: the pull logs the intake\'s VE gain, and keeps the MAF housing\'s error out of it', () => {
+    // The case a player hit: fit the intake, pull, and expect the log to have something
+    // to say. The bigger housing makes the MAF read about 10% low, so the mixture goes
+    // lean by that AND by the extra air the intake flows. Only the second belongs in VE.
+    const stock = makeEngine();
+    const eng = makeEngine({ build: { mods: { ...S.DEFAULT_MODS, intake: true } } });
+    eng.tables.ve = stock.tables.ve.map((r) => [...r]);
+    const samples = S.veSamplesFromPull(eng.pull(100).points);
+    const { ratio, cell, cells } = S.veCorrections(samples);
+    expect(cells).toBeGreaterThan(4);
+    expect(S.mafErrorPct(samples)).toBeLessThan(-5);
+    for (let ci = 1; ci < S.RPM.length; ci += 1) {
+      // The wideband alone says 10-16% more air; the intake really flows 0-5% more.
+      expect(cell[WOT][ci].lambdaRatio).toBeGreaterThan(1.08);
+      expect(ratio[WOT][ci]).toBeCloseTo(eng.veTruth[WOT][ci] / stock.veTruth[WOT][ci], 1);
+    }
+  });
+
   it('applying half at a time converges, the way tuners do it', () => {
     const eng = offBy(0.85);
     const errors = [];

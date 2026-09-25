@@ -72,7 +72,7 @@ export function SparkScreen({ calAdvice, children }) {
           <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} />
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
-            The VE table can be re-logged in one tap because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner simply re-logs airflow, and the numbers are what they are. Even so, the app shows you what changed and waits for you to accept it.
+            The VE table can be corrected straight from logs because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner re-logs airflow, and the wideband says how far each cell was off. Even so, the app shows you the working and waits for you to apply it.
             <br /><br />Spark and fuel are different: they are <b className={styles.emInk}>your calibration</b>, a set of judgement calls about how much risk to take for how much power. A real ECU does not retune itself when you bolt on a turbo — it keeps running the old numbers into the new hardware, which is exactly how engines get hurt.
             <br /><br />So the app tells you what the hardware will now tolerate, and leaves the editing to you. That gap between "what the engine can take" and "what your table asks for" is the entire job.
           </ExpandableInfo>

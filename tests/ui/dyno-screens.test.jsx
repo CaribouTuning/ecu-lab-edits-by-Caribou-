@@ -235,10 +235,12 @@ describe('DataScreen', () => {
     // commanded -> table under-reads airflow -> VE goes UP) moved here verbatim
     // from EcuLab.jsx's doRun-adjacent code; this proves it still lands correctly
     // now that it runs off store reads instead of shell-scoped closures.
-    // FAKE_POINT: afr 13.0 vs afrCommanded 12.5 -> ran leaner than commanded by
-    // (13.0/12.5 - 1) * 100 = 4%, so the VE cell nearest 100 kPa / 1500 RPM should
-    // be multiplied by 1.04.
-    mountWithResult(<DataScreen />, { result: FAKE_RESULT, histogram: null });
+    // FAKE_POINT: the wideband read 13.0 vs afrCommanded 12.5 -> ran leaner than
+    // commanded by (13.0/12.5 - 1) * 100 = 4%, so the VE cell at 100 kPa / 1500 RPM
+    // should be multiplied by 1.04. It runs on the same engine as TUNE > AIRFLOW, so a
+    // point has to be open-loop wideband data, and a cell needs more than one of them.
+    const logged = { ...FAKE_POINT, openLoop: true, sensedLambda: 13.0 / 14.7, sensedMap: 100 };
+    mountWithResult(<DataScreen />, { result: { ...FAKE_RESULT, points: [logged, logged, logged] }, histogram: null });
 
     fireEvent.click(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' }));
     expect(screen.getByText('+4.0')).toBeTruthy();

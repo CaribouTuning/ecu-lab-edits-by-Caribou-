@@ -896,7 +896,7 @@ function labelFor(action) {
       // the table. Throwing here names both.
       if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
       // A bulk edit names itself ("VE edit · smooth · 20 cells"); an edit that doesn't
-      // — ACCEPT RE-LOGGED VALUES, a test's bare dispatch — keeps the table's name.
+      // — a test's bare dispatch — keeps the table's name.
       return action.label ? `${label} · ${action.label}` : label;
     }
     case ACTIONS.APPLY_PRESET: {
