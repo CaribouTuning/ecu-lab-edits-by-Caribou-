@@ -17,6 +17,8 @@
 
 import { OPEN_LOOP_KPA, VE_NOTABLE_PCT } from '../../sim/index.js';
 
+import { inRect, rectOf } from './selection.js';
+
 /** @typedef {import('./TuningGrid.jsx').Selection} Selection */
 
 /**
@@ -33,10 +35,10 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 /** Does this category contain the cell at (ri, ci)? */
 const holds = (arr, ri, ci) => arr.some((c) => c.ri === ri && c.ci === ci);
 
-/** How many of a category fall inside the selected row or column? */
+/** How many of a category fall inside the selected row, column or range? */
 function countIn(arr, selection) {
-  if (selection.type === 'row') return arr.filter((c) => c.ri === selection.row).length;
-  return arr.filter((c) => c.ci === selection.col).length;
+  const rect = rectOf(selection);
+  return arr.filter((c) => inRect(rect, c.ri, c.ci)).length;
 }
 
 /**
@@ -82,7 +84,7 @@ export function sparkReport(calAdvice, selection) {
   }
 
   if (selection) {
-    // A row or column. Danger first as always, then severity order — past MBT
+    // A row, column or range. Danger first as always, then severity order — past MBT
     // before under-advanced, the reverse of the table-wide fall-through below,
     // and with no four-cell floor: the player picked this band deliberately, so
     // one flagged cell in it is worth saying.
@@ -161,7 +163,7 @@ export function fuelReport(calAdvice, selection) {
   }
 
   if (selection) {
-    // A row or column. Only one category here, unlike sparkReport's three, so
+    // A row, column or range. Only one category here, unlike sparkReport's three, so
     // there is no severity order to preserve — just the count in the band.
     const off = countIn(wrongMix, selection);
     if (off > 0) {

@@ -1,7 +1,12 @@
 /**
- * The sticky editor for whatever `TuningGrid` selection is active: a cell, a row
- * or a column. Shows the current value, a reference blurb for a single selected
- * cell, and +/- steppers plus a slider to change it.
+ * The sticky editor for whatever `TuningGrid` selection is active: a cell, a row,
+ * a column or a range. Shows the current value (the mean, for more than one cell), a
+ * reference blurb for a single selected cell, a slider, and ADD / SCALE / SET steppers,
+ * plus INTERPOLATE and SMOOTH once the selection covers more than one cell.
+ *
+ * Every edit is one call to `setData(next, label)`: one table write, one undo step, and
+ * a label saying what it did. The maths is `src/sim/tables.js`'s; this only picks the
+ * rectangle and the op.
  *
  * Shared by TUNE's AIR, SPARK and FUEL screens — see `TuningGrid.jsx` and this
  * folder's README for why this lives here rather than beside any one screen.
@@ -12,12 +17,18 @@
 
 import React from 'react';
 
-import { LOAD, RPM, clamp, clone2D } from '../../sim/index.js';
+import { LOAD, RPM, addRect, interpolateRect, scaleRect, setRect, smoothRect } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Panel } from '../primitives/Panel.jsx';
+import { Seg } from '../primitives/Seg.jsx';
 import { T, shadowAlpha } from '../theme.js';
 
-/** @typedef {import('./TuningGrid.jsx').Selection} Selection */
+import { cellCount, opLabel, rectOf, selectionKey, signed, stepsFor } from './selection.js';
+
+/** @typedef {import('./selection.js').Selection} Selection */
+
+/** SCALE's steps, percent. */
+const SCALE_STEPS = [-5, -1, 1, 5];
 
 // Reference data for a selected cell. Deliberately DESCRIPTIVE, not predictive:
 // it tells you what this parameter does and what range is normal here, but never
@@ -74,7 +85,8 @@ const COMMIT_KEYS = new Set([
 /**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against LOAD/RPM
- * @param {(next: number[][]) => void} props.setData
+ * @param {(next: number[][], label: string) => void} props.setData one table write,
+ *   one undo step; `label` is the undo entry's detail, e.g. "scale +5% · 12 cells"
  * @param {Selection|null} props.selection
  * @param {number} props.min
  * @param {number} props.max
@@ -82,25 +94,22 @@ const COMMIT_KEYS = new Set([
  * @param {string} props.unit
  * @param {() => void} props.onClose
  * @param {'ve'|'timing'|'afr'} props.kind
- * @param {boolean} [props.rangeMode] whether the grid is taking rectangles rather than
- *   single cells. The dock only needs it to explain a half-taken range; every EDIT below
- *   is written against `cellsIn()` and so works the same for one cell or a hundred.
  * @returns {React.ReactElement|null}
  */
-export function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind, rangeMode }) {
+export function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind }) {
   // The slider's in-flight value. React maps onChange on a range input to the `input`
   // event, so a drag fires it continuously; committing each one would turn a single
   // drag into eighteen undo steps. The draft holds the value while the finger is down
   // and commits exactly once on release.
   const [draft, setDraft] = React.useState(/** @type {number|null} */ (null));
+  // Which op the stepper row applies, and SET's field. Local: nothing outside the dock
+  // needs either, and both are forgotten when the dock closes (see the reset below).
+  const [mode, setMode] = React.useState(/** @type {'add'|'scale'|'set'} */ ('add'));
+  const [setText, setSetText] = React.useState('');
 
   // A new selection is a new cell: drop any draft left over from the last one, or the
   // slider would open showing the previous cell's in-flight value.
-  const selKey = selection
-    ? (selection.type === 'range'
-      ? `range:${selection.r1},${selection.c1}:${selection.r2},${selection.c2}:${selection.complete}`
-      : `${selection.type}:${selection.row ?? ''}:${selection.col ?? ''}`)
-    : '';
+  const selKey = selectionKey(selection);
   // Adjusting state when a prop changes, done during render rather than in a
   // useEffect: an effect only runs after the browser has already painted this
   // render, so for one frame `shown` would show the PREVIOUS cell's draft against
@@ -123,61 +132,40 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     setPrevSelKey(selKey);
     setPrevData(data);
     setDraft(null);
+    // A closed dock forgets which op it was on: the next selection opens on ADD, the
+    // one every table edit starts from.
+    if (!selection) { setMode('add'); setSetText(''); }
   }
 
   if (!selection) return null;
-  // Resolve whatever shape the selection has to the list of cells it covers, so every
-  // operation below is written once and works identically for one cell or a hundred.
-  const cellsIn = () => {
-    const out = [];
-    if (selection.type === 'cell') out.push([selection.row, selection.col]);
-    else if (selection.type === 'row') data[selection.row].forEach((_, c) => out.push([selection.row, c]));
-    else if (selection.type === 'col') data.forEach((_, r) => out.push([r, selection.col]));
-    else if (selection.type === 'range') {
-      const [ra, rb] = [Math.min(selection.r1, selection.r2), Math.max(selection.r1, selection.r2)];
-      const [ca, cb] = [Math.min(selection.c1, selection.c2), Math.max(selection.c1, selection.c2)];
-      for (let r = ra; r <= rb; r++) for (let c = ca; c <= cb; c++) out.push([r, c]);
-    }
-    return out;
-  };
-  const cells = cellsIn();
-  const current = cells.reduce((sum, [r, c]) => sum + data[r][c], 0) / Math.max(cells.length, 1);
+  const rect = rectOf(selection);
+  const count = cellCount(rect);
+  const bounds = { min, max };
+  let sum = 0;
+  for (let r = rect.r1; r <= rect.r2; r++) for (let c = rect.c1; c <= rect.c2; c++) sum += data[r][c];
+  const current = sum / count;
 
-  /** Adds a fixed amount to every selected cell. */
-  const apply = (delta) => {
-    // A stepper click is a new intent on this cell: any draft left over from a drag
-    // that never released is abandoned, not pending. Without this it survives and the
-    // NEXT release overwrites the value this click just committed.
+  /**
+   * Every edit the dock makes goes through here: one table write, one undo step.
+   *
+   * A stepper click is a new intent on this selection: any draft left over from a drag
+   * that never released is abandoned, not pending. Without this it survives and the
+   * NEXT release overwrites the value this click just committed.
+   * @param {number[][]} next
+   * @param {string} desc
+   */
+  const write = (next, desc) => {
     setDraft(null);
-    const next = clone2D(data);
-    cells.forEach(([r, c]) => { next[r][c] = Number(clamp(next[r][c] + delta, min, max).toFixed(2)); });
-    setData(next);
+    setData(next, opLabel(desc, rect));
   };
-  /**
-   * Scales every selected cell by a percentage. This is the operation a tuner uses most
-   * on a VE table, because airflow error is proportional rather than absolute — a
-   * histogram correction is a percentage, so the edit that answers it should be too.
-   */
-  const scale = (pct) => {
-    const next = clone2D(data);
-    cells.forEach(([r, c]) => { next[r][c] = Number(clamp(next[r][c] * (1 + pct / 100), min, max).toFixed(2)); });
-    setData(next);
-  };
-  const setAbs = (v) => {
-    const next = clone2D(data);
-    cells.forEach(([r, c]) => { next[r][c] = clamp(v, min, max); });
-    setData(next);
-  };
-  /**
-   * Pulls the selection halfway toward its own average. A histogram correction is applied
-   * cell by cell from data that had different sample counts in each, so it can leave
-   * spikes behind; smoothing them out is the same tool real scanners provide.
-   */
-  const smooth = () => {
-    const next = clone2D(data);
-    const avg = cells.reduce((sum, [r, c]) => sum + data[r][c], 0) / Math.max(cells.length, 1);
-    cells.forEach(([r, c]) => { next[r][c] = Number(clamp(data[r][c] * 0.5 + avg * 0.5, min, max).toFixed(2)); });
-    setData(next);
+  const apply = (delta) => write(addRect(data, rect, delta, bounds), signed(delta));
+  const scale = (pct) => write(scaleRect(data, rect, pct, bounds), `scale ${signed(pct)}%`);
+  const setAbs = (v) => write(setRect(data, rect, v, bounds), `set ${Number(v.toFixed(2))}`);
+  const applySet = () => {
+    const v = Number(setText);
+    if (setText.trim() === '' || !Number.isFinite(v)) return;
+    setAbs(v);
+    setSetText('');
   };
   // What the slider and the big readout show: the finger's position while dragging,
   // the table's committed value otherwise.
@@ -188,9 +176,9 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     // undo slot AND, via SET_TABLE, clear build.presetId and set tablesDirty —
     // disowning a factory calibration the player never actually changed.
     //
-    // Cells only: for a row or column `current` is the MEAN, so landing on it is a
-    // real edit that flattens every cell to that value, not a no-op.
-    if (selection.type === 'cell' && draft === current) { setDraft(null); return; }
+    // A single cell only: for anything larger `current` is the MEAN, so landing on it
+    // is a real edit that flattens every cell to that value, not a no-op.
+    if (count === 1 && draft === current) { setDraft(null); return; }
     setAbs(draft);
     setDraft(null);
   };
@@ -206,17 +194,14 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     if (!COMMIT_KEYS.has(e.key)) return;
     commitDraft();
   };
-  const smallStep = decimals ? 0.1 : 1;
-  const bigStep = decimals ? 1 : 5;
-  let sel = 'Cell';
+  const { small: smallStep, big: bigStep } = stepsFor(decimals);
+  // LOAD runs high to low down the grid, so a range's bottom row is its LOW pressure.
+  const span = (lo, hi) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
+  let sel;
   if (selection.type === 'row') sel = `Row · ${LOAD[selection.row]} kPa MAP`;
   else if (selection.type === 'col') sel = `Column · ${RPM[selection.col]} RPM`;
   else if (selection.type === 'range') {
-    const [ra, rb] = [Math.min(selection.r1, selection.r2), Math.max(selection.r1, selection.r2)];
-    const [ca, cb] = [Math.min(selection.c1, selection.c2), Math.max(selection.c1, selection.c2)];
-    sel = selection.complete
-      ? `${cells.length} cells · ${RPM[ca]}-${RPM[cb]} RPM · ${LOAD[rb]}-${LOAD[ra]} kPa`
-      : 'Tap a second cell to complete the range';
+    sel = `Range · ${span(RPM[rect.c1], RPM[rect.c2])} RPM × ${span(LOAD[rect.r2], LOAD[rect.r1])} kPa · ${count} ${count === 1 ? 'cell' : 'cells'}`;
   } else sel = `${RPM[selection.col]} RPM · ${LOAD[selection.row]} kPa MAP`;
 
   return (
@@ -249,33 +234,44 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         onKeyUp={onSliderKeyUp}
         style={{ width: '100%', accentColor: T.acc }}
       />
-      <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
-        {/* One colour for all four: the +/- is already in the label. Painting the
-            positive steps with the status green said "raising this cell is good", which
-            is not something a stepper can know — and spending the status scale on a sign
-            is what teaches a player to ignore it where it means something. */}
-        {[-bigStep, -smallStep, smallStep, bigStep].map((d, i) => (
-          <button key={i} onClick={() => apply(d)} style={{
-            flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
-            color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
-          }}>{d > 0 ? '+' : ''}{d}</button>
-        ))}
+      <div style={{ marginTop: 9 }}>
+        <Seg
+          label="Edit mode" value={mode}
+          onChange={(id) => setMode(/** @type {'add'|'scale'|'set'} */ (id))}
+          options={[{ id: 'add', label: 'ADD' }, { id: 'scale', label: 'SCALE' }, { id: 'set', label: 'SET' }]}
+        />
       </div>
-      <div style={{ display: 'flex', gap: 7, marginTop: 7 }}>
-        {[-5, -2, 2, 5].map((pct) => (
-          <button key={pct} onClick={() => scale(pct)} style={{
-            flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-            color: pct < 0 ? T.accInk : T.cyan, fontWeight: 800, fontFamily: T.mono, fontSize: 12,
-          }}>{pct > 0 ? '+' : ''}{pct}%</button>
-        ))}
-        <button onClick={smooth} style={{
-          flex: 1, padding: '10px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel,
-          color: T.violet, fontWeight: 800, fontSize: 11,
-        }}>SMOOTH</button>
-      </div>
-      {rangeMode && selection.type === 'range' && !selection.complete && (
-        <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 7 }}>
-          Anchor set. Tap the opposite corner to select everything between.
+      {mode === 'set' ? (
+        <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
+          <input
+            type="number" aria-label="Set value" value={setText} step={smallStep}
+            onChange={(e) => setSetText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') applySet(); }}
+            style={{
+              flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: `1px solid ${T.line}`,
+              background: T.panel2, color: T.ink, fontFamily: T.mono, fontSize: 13,
+            }}
+          />
+          <Button variant="ghost" size="sm" onClick={applySet}>APPLY</Button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
+          {/* One colour for all four: the +/- is already in the label. Painting the
+              positive steps with the status green said "raising this cell is good", which
+              is not something a stepper can know — and spending the status scale on a sign
+              is what teaches a player to ignore it where it means something. */}
+          {(mode === 'scale' ? SCALE_STEPS : [-bigStep, -smallStep, smallStep, bigStep]).map((d, i) => (
+            <button key={i} onClick={() => (mode === 'scale' ? scale(d) : apply(d))} style={{
+              flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
+              color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
+            }}>{signed(d)}{mode === 'scale' ? '%' : ''}</button>
+          ))}
+        </div>
+      )}
+      {count > 1 && (
+        <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
+          <Button variant="ghost" size="sm" onClick={() => write(interpolateRect(data, rect, bounds), 'interpolate')}>INTERPOLATE</Button>
+          <Button variant="ghost" size="sm" onClick={() => write(smoothRect(data, rect, bounds), 'smooth')}>SMOOTH</Button>
         </div>
       )}
     </div>

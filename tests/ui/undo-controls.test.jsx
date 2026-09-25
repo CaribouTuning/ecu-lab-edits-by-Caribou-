@@ -267,6 +267,24 @@ describe('UndoControls', () => {
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
     expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
   });
+
+  it('Cmd+Z still undoes while the grid has focus (#105)', () => {
+    // The grid now handles its own keys (+/- nudge the selection). The global undo
+    // shortcut must still reach EcuLab's window handler from inside it, and must not be
+    // read as a nudge on its way there.
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    const gridEl = screen.getByTestId('tuning-grid');
+    const cell = within(gridEl).getByRole('button', { name: '3500 RPM, 100 kPa' });
+    fireEvent.click(cell);
+    const before = cell.textContent;
+    gridEl.focus();
+    fireEvent.keyDown(gridEl, { key: '=', code: 'Equal' });
+    expect(cell.textContent).toBe(String(Number(before) + 1));
+    fireEvent.keyDown(gridEl, { key: 'z', code: 'KeyZ', metaKey: true });
+    expect(cell.textContent).toBe(before);
+  });
 });
 
 describe('the dock slider commits once, on release', () => {

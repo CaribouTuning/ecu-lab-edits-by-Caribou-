@@ -36,6 +36,13 @@ export function FuelScreen({ calAdvice }) {
   const { afr, selection, rangeMode } = tune;
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
+  /** @param {boolean} value */
+  /**
+   * One table write, one undo step — shared by the grid's +/- keys and the dock.
+   * @param {number[][]} value
+   * @param {string} [label]
+   */
+  const setTable = (value, label) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value, label });
   const setRangeMode = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'rangeMode', value });
   // A handful of `.some()` scans over at most 96 cells, no allocation in the
   // hot path — plainly on every render, not memoised.
@@ -51,7 +58,7 @@ export function FuelScreen({ calAdvice }) {
           </div>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} />
-          <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} />
+          <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} />
 
           <ExpandableInfo title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits richer, because the extra fuel absorbs heat as it vaporizes, cooling combustion enough to make more power before knock becomes the limit. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
@@ -65,7 +72,7 @@ export function FuelScreen({ calAdvice }) {
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={afr} setData={(value) => dispatch({ type: ACTIONS.SET_TABLE, table: 'afr', value })} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" rangeMode={rangeMode} />
+      <SelectionDock data={afr} setData={setTable} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" />
     </>
   );
 }
