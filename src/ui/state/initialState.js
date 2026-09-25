@@ -57,8 +57,11 @@ import {
  * @property {number[][]} afr target air/fuel ratio table, indexed [LOAD][RPM]
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
- * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
- *   the currently selected calibration-grid cell, row or column, or null
+ * @property {import('../components/selection.js').Selection|null} selection
+ *   the currently selected calibration-grid cell, row, column or range, or null
+ * @property {boolean} rangeMode true while TUNE's grids take two taps as a range (the
+ *   touch path; a mouse drags). One flag for AIR, SPARK and FUEL, and outside the undo
+ *   snapshot like `selection`
  */
 
 /**
@@ -213,6 +216,7 @@ export function makeInitialState() {
       afr: clone2D(DEFAULT_AFR),
       tablesDirty: false,
       selection: null,
+      rangeMode: false,
     },
     session: {
       running: false,
