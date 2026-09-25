@@ -23,7 +23,7 @@
 import React, { useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import {
   Grid3x3, Zap, Droplets, Activity, Play,
-  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind,
+  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind, Flame,
 } from 'lucide-react';
 
 import {
@@ -31,9 +31,9 @@ import {
   DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
   PSI_TO_KPA,
-  R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
+  R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, isLocatable, presetById,
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, interp2, isLocatable, presetById,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, read1,
@@ -59,6 +59,7 @@ import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
+import { Toggle } from './primitives/Toggle.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { eventBands } from './components/eventBands.js';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
@@ -95,7 +96,7 @@ const JOURNEY = [
     body: 'Open Engine Architecture and design a short block: bore, stroke, compression, cam, springs. Then fit parts under Induction and Exhaust. Nothing here is cosmetic — every choice changes how the engine breathes.',
     cta: 'Done building — go tune it', next: 'tune' },
   { tab: 'tune', title: 'Step 2 · Calibrate it',
-    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, accept the re-logged values. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now.',
+    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, accept the re-logged values. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now. A NITROUS page joins them once a nitrous kit is fitted.',
     cta: 'Calibration set — start the engine', next: 'live' },
   { tab: 'live', title: 'Step 3 · Start it and listen',
     body: 'Press START. Watch it idle, hold the throttle to rev it, and watch the sensors and fuel trims respond in real time. This is your calibration actually running.',
@@ -316,7 +317,7 @@ export function EcuLabApp() {
   const {
     engineConfig, mods, turboOn, boostCurve, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
-    presetId,
+    presetId, blowerRatio, nitrous,
   } = build;
   // `presetPrompt` and `boostSel` are read from the store directly by EngineScreen
   // and InductionScreen now — neither is a shell-level derivation, so there is
@@ -437,13 +438,21 @@ export function EcuLabApp() {
     [turbineIdx, turbineCount],
   );
 
+  // A supercharger, if one is fitted instead of a turbo, and what it will make across the
+  // rev range at full throttle on this engine — the header, the injector-duty preview
+  // and the Engineer Score all need its boost before a pull is run.
+  const blower = useMemo(() => blowerOf(build), [build]);
+  const blowerWot = useMemo(() => (blower ? blowerCurve(build, fuel) : []), [blower, build, fuel]);
+  const blowerPeakPsi = blowerWot.length ? Math.max(...blowerWot.map((p) => p.boostPsi)) : 0;
+
   const hwForVe = useMemo(() => ({
     turboOn,
     turbine: turboOn ? turbine : null,
     exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     fuel,
     peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve]);
+    supercharged: !!blower,
+  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve, blower]);
 
   // TRUE cylinder filling for the hardware as currently built. The player's `ve` table
   // is only the ECU's BELIEF about this; the gap between the two is what makes the
@@ -460,9 +469,15 @@ export function EcuLabApp() {
     ...ecuHardwareOf(build),
     veTruthByPhase: veTruthByPhaseFor(engineConfig, mods, hwForVe),
   }), [build, engineConfig, mods, hwForVe]);
+  // The nitrous arming switch is the cockpit's, shared by the dyno and LIVE; the bottle
+  // starts at the heater's set point, or the day's temperature without one.
+  const nitrousArmed = liveAux.nitrous !== false;
   const ecuBundle = useMemo(
-    () => ({ cal: tune.ecu, hw: ecuHw, cond: dynoConditions(env, faults) }),
-    [tune.ecu, ecuHw, env, faults],
+    () => ({
+      cal: tune.ecu, hw: nitrous ? { ...ecuHw, nitrous } : ecuHw,
+      cond: dynoConditions(env, faults, nitrous ? { armed: nitrousArmed, heater: !!nitrous.heater } : null),
+    }),
+    [tune.ecu, ecuHw, env, faults, nitrous, nitrousArmed],
   );
 
   // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
@@ -503,6 +518,9 @@ export function EcuLabApp() {
         octaneIdx: job.setup.octaneIdx ?? 0,
         injIdx: job.setup.injIdx ?? 0,
         ecuInjectorCc: job.setup.ecuInjectorCc ?? INJECTOR_OPTS[job.setup.injIdx ?? 0].cc,
+        // The customer's car, not the last build: no supercharger or nitrous it did not come with.
+        blowerId: null,
+        nitrous: null,
       },
       // A "stale VE" job hands you the OLD log against new hardware, which is the whole
       // point of it: the table is a record of what the engine used to flow.
@@ -536,8 +554,9 @@ export function EcuLabApp() {
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu: ecuBundle,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressorIdx, ecuBundle]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressorIdx, ecuBundle, blower, blowerRatio, nitrous]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
@@ -554,7 +573,8 @@ export function EcuLabApp() {
   // Same real-units chain the sim uses, evaluated at WOT / 6500 RPM as a preview.
   const dutyPreview = useMemo(() => {
     const rpm = 6500;
-    const boostPsi = turboOn ? boostCurve[RPM.indexOf(6500)] : 0;
+    const boostPsi = turboOn ? boostCurve[RPM.indexOf(6500)]
+      : blowerWot.length ? interp1(blowerWot.map((p) => p.rpm), blowerWot.map((p) => p.boostPsi), rpm) : 0;
     const mapKpa = BARO_KPA + boostPsi * PSI_TO_KPA;
     const chargeK = chargeTempK(boostPsi, mods.intercooler);
     const vCylM3 = (engineDerived.displacementL / engineDerived.cyl) / 1000;
@@ -564,7 +584,7 @@ export function EcuLabApp() {
     const fuelMassG = airChargeG / (lambda * fuel.stoich);
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
-  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
+  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
   // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
   // this same `dutyPreview`, which stays here because the score breakdown and dyno
   // payload below also read it.
@@ -714,6 +734,7 @@ export function EcuLabApp() {
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
   const doRun = () => {
@@ -728,8 +749,8 @@ export function EcuLabApp() {
     const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
-      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
+      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
+      supercharged: !!blower, turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
@@ -932,6 +953,7 @@ export function EcuLabApp() {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
     compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
     ecu: { ...ecuBundle, aux: liveAux },
@@ -1188,8 +1210,13 @@ export function EcuLabApp() {
       // pressure. The renderer does not need to know what a rev limiter is.
       fuelCut: cut,
     });
+    // A supercharger's whine: its lobes, or its impeller's blades, passing the outlet — a
+    // pitch locked to the crank through the belt, where a turbo's whistle floats with the
+    // exhaust. It takes the turbo's voice, which a supercharged engine has no other use for.
     const frame = {
-      drive,
+      drive: blower
+        ? { ...drive, whistleHz: Math.min(9000, (blowerSpeedRpm(blower, rpm, blowerRatio) / 60) * blower.whineOrder) }
+        : drive,
       // The exhaust system, for the renderer. Everything the player can change
       // about the hardware arrives here: cylinder count and layout set the firing order
       // and how many primaries meet at each collector, displacement sets their length and
@@ -1240,6 +1267,7 @@ export function EcuLabApp() {
       converterOnRef.current = slip > 0;
     }
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
+      blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressorIdx,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
@@ -1288,6 +1316,9 @@ export function EcuLabApp() {
     { id: 'idle', label: 'IDLE', icon: Timer, row: 1 },
     { id: 'protect', label: 'PROTECT', icon: ShieldAlert, row: 1 },
     { id: 'torque', label: 'TORQUE', icon: Crosshair, row: 1 },
+    // Its own row, and only with a kit fitted — the way real ECU software shows its
+    // nitrous tables once nitrous is enabled.
+    { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
   ];
   // The operating point the table editors mark, while the LIVE engine is running.
   const liveEcu = live?.ecu;
@@ -1422,7 +1453,7 @@ export function EcuLabApp() {
             <MapSlots />
             {/* Two rows: the base tables, then the ECU's control strategies. Five to a
                 row at 60px basis so each row stays one row on a phone. */}
-            {[0, 1].map((rowIdx) => (
+            {(nitrous ? [0, 1, 2] : [0, 1]).map((rowIdx) => (
               <div key={rowIdx} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
                   const on = tuneView === v.id;
@@ -1484,9 +1515,9 @@ export function EcuLabApp() {
           </SensorsScreen>
         )}
 
-        {tab === 'tune' && ['boost', 'vvt', 'idle', 'protect', 'torque'].includes(tuneView) && (() => {
+        {tab === 'tune' && ['boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'].includes(tuneView) && (() => {
           const v = TUNE_VIEWS.find((x) => x.id === tuneView);
-          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management' };
+          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management', nitrous: 'Nitrous control' };
           return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
         })()}
 
@@ -1526,6 +1557,12 @@ export function EcuLabApp() {
             <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
+            {nitrous && (
+              <div style={{ marginTop: 10 }}>
+                <Toggle label="Spray nitrous on this pull" sub={`${nitrous.shotHp} shot ${nitrous.kit} kit, inside the window on TUNE › NITROUS — the same arming switch as LIVE`}
+                  checked={nitrousArmed} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })} />
+              </div>
+            )}
 
             <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 

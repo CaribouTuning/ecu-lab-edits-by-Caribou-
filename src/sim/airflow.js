@@ -36,6 +36,8 @@ import { DEFAULT_VE, LOAD, RPM } from './tables.js';
  *   solve needs — the same field `turbo.js` passes to `turbineBackPressureKpa`.
  * @param {number|null} [hw.exhaustDia] exhaust diameter, inches
  * @param {{stoich: number}|null} [hw.fuel]
+ * @param {boolean} [hw.supercharged] a supercharger in the intake: the same blower
+ *   ducting, intercooler core and charge piping a turbo kit carries, without a turbine
  * @param {number} [hw.peakBoostPsi] peak boost target, psi — raises the ideal exhaust
  *   diameter, because sizing follows power and boost makes power
  * @param {number} [hw.intakeCamAdvanceDeg] how far a cam phaser has advanced the intake
@@ -48,7 +50,7 @@ import { DEFAULT_VE, LOAD, RPM } from './tables.js';
  */
 export function computeHardwareVE(cfg, mods, hw = {}) {
   const {
-    turboOn = false, turbine = null, exhaustDia = null, fuel = null, peakBoostPsi = 0,
+    turboOn = false, turbine = null, exhaustDia = null, fuel = null, peakBoostPsi = 0, supercharged = false,
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
   } = hw;
   const ratio = cfg.bore / cfg.stroke;
@@ -139,6 +141,12 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
     // scavenging velocity. Both directions cost VE, in different places.
     if (diaError < 0) val *= 1 + diaError * COEFF.VE_EXHAUST_UNDERSIZE * Math.max(0, norm);
     else if (diaError > 0) val *= 1 - diaError * COEFF.VE_EXHAUST_OVERSIZE * Math.max(0, -norm);
+
+    // A supercharger kit puts the blower, its intercooler core and the charge piping in
+    // the intake path: the same flat cost a turbo kit's intake side carries. It has no
+    // turbine, so no exhaust backpressure penalty — which is why, at equal boost, it
+    // breathes better than a turbo and pays for it at the crank instead.
+    if (supercharged && !turboOn) val *= COEFF.VE_TURBINE_BACKPRESSURE;
 
     // A turbine in the exhaust stream is a restriction. Small housings choke the top
     // end; large ones flow better up high but hurt low-RPM scavenging.

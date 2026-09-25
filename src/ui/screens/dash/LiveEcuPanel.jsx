@@ -19,7 +19,7 @@ import { Panel } from '../../primitives/Panel.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { ACTIONS } from '../../state/reducer.js';
-import { useSession } from '../../state/StoreProvider.jsx';
+import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './LiveEcuPanel.module.css';
@@ -33,6 +33,9 @@ const WINDOW_S = 20;
 /** @returns {React.ReactElement|null} */
 export function LiveEcuPanel() {
   const [session, dispatch] = useSession();
+  const [build] = useBuild();
+  const kit = build.nitrous;
+  const blowerFitted = !build.turboOn && !!build.blowerId;
   const live = /** @type {Record<string, any>} */ (session.live);
   const e = live.ecu;
   const [channels, setChannels] = React.useState(DEFAULT_CHANNELS);
@@ -77,6 +80,11 @@ export function LiveEcuPanel() {
           <StatTile label="Battery" value={row.volts.toFixed(1)} unit="V" />
           <StatTile label="Oil" value={row.oil} unit="kPa" tone={e.protect.includes('oil pressure') ? 'danger' : 'neutral'} />
           <StatTile label="Protections" value={e.protect.length ? e.protect.join(', ') : 'none'} tone={e.protect.length ? 'warn' : 'ok'} />
+          {blowerFitted && <StatTile label="Blower" value={Math.round(row.blowerRpm).toLocaleString('en-US')} unit="rpm" />}
+          {kit && <StatTile label="Nitrous" value={row.nitrous.toFixed(2)} unit="lb/min" tone={row.nitrous > 0 ? 'warn' : 'neutral'} />}
+          {kit && (row.bottle > 0
+            ? <StatTile label="Bottle" value={String(row.bottle)} unit="psi" tone={row.bottle < 850 ? 'warn' : 'neutral'} />
+            : <StatTile label="Bottle" value="empty" tone="danger" />)}
         </div>
       ) : (
         <p className={styles.muted}>Start the engine to see the ECU's controllers at work.</p>
@@ -92,6 +100,16 @@ export function LiveEcuPanel() {
         <Toggle label="A/C compressor" sub="About 11 Nm on the crank when the clutch is in — watch the idle hold it" checked={!!aux.ac} onChange={(v) => setSession('liveAux', { ...aux, ac: v })} />
         <Toggle label="Headlights & fans" sub="45 A more from the alternator, which it takes from the crank" checked={!!aux.lights} onChange={(v) => setSession('liveAux', { ...aux, lights: v })} />
         <Toggle label="Clutch in — launch armed" sub="With launch control on (TUNE › TORQUE), full throttle holds the engine on the two-step" checked={!!aux.launch} onChange={(v) => setSession('liveAux', { ...aux, launch: v })} />
+        {kit && (
+          <Toggle label="Nitrous armed" sub={`${kit.shotHp} shot ${kit.kit} kit — sprays at full throttle inside the window set on TUNE › NITROUS${row ? (row.bottle > 0 ? `; bottle at ${row.bottle} psi` : '; the bottle is empty') : ''}`}
+            checked={aux.nitrous !== false} onChange={(v) => setSession('liveAux', { ...aux, nitrous: v })} />
+        )}
+        {kit && (
+          <button type="button" className={styles.chip} style={{ alignSelf: 'flex-start' }}
+            onClick={() => setSession('liveAux', { ...aux, bottleFills: (aux.bottleFills ?? 0) + 1 })}>
+            Fit a full {kit.bottleLb ?? 10} lb bottle
+          </button>
+        )}
       </div>
 
       <div className={styles.sectionHead}>
@@ -101,7 +119,7 @@ export function LiveEcuPanel() {
         <button type="button" className={styles.chip} onClick={exportCsv} disabled={!e?.log?.length}>Export CSV</button>
       </div>
       <div className={styles.channels} role="group" aria-label="Logged channels shown">
-        {LOG_CHANNELS.filter((c) => c.id !== 't').map((c) => (
+        {LOG_CHANNELS.filter((c) => c.id !== 't' && (kit || !['nitrous', 'bottle'].includes(c.id)) && (blowerFitted || c.id !== 'blowerRpm')).map((c) => (
           <button key={c.id} type="button" className={styles.channel} aria-pressed={channels.includes(c.id)} onClick={() => toggleChannel(c.id)}>{c.label}</button>
         ))}
       </div>

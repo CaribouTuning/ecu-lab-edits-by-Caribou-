@@ -13,7 +13,7 @@ import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
-import { clamp, interp2 } from './math.js';
+import { clamp, interp1, interp2 } from './math.js';
 import { evaluatePoint } from './point.js';
 import { reachableKpa } from './manifold.js';
 import {
@@ -156,8 +156,13 @@ export function calibrationAdvice({
   compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null,
 }) {
   const spark = [], fuelAdv = [];
-  /** Highest manifold pressure the boost controller is even asking for at this speed. */
-  const reachAt = (rpm) => reachableKpa({ turboOn, boostCurve, rpm });
+  /** Highest manifold pressure the boost controller is even asking for at this speed. A
+   *  supercharger asks for nothing — its boost is what the pulley makes — so there the
+   *  pull's own boost is the answer. */
+  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
+  const reachAt = (rpm) => (blowerPull
+    ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
+    : reachableKpa({ turboOn, boostCurve, rpm }));
 
   /**
    * The knock threshold at any manifold pressure, not just a row's.

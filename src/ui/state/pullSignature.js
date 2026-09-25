@@ -65,6 +65,7 @@ const MEASURED_BUILD_KEYS = [
   'engineConfig', 'mods', 'turboOn', 'boostCurve', 'octaneIdx', 'injIdx', 'mafScalar',
   'turbineIdx', 'turbineCount', 'compressorIdx', 'exhaustDiaIdx', 'ecuInjectorCc',
   'fuelSystem', 'sensorHw', 'wastegate', 'coil', 'plugGapMm', 'ethanolPct',
+  'blowerId', 'blowerRatio', 'nitrous',
 ];
 
 /**
@@ -98,6 +99,9 @@ const INPUT_LABELS = {
   coil: 'ignition coils',
   plugGapMm: 'plug gap',
   ethanolPct: 'ethanol content',
+  blowerId: 'supercharger',
+  blowerRatio: 'blower pulley',
+  nitrous: 'nitrous kit',
   ecu: 'ECU calibration',
   ve: 'VE table',
   timing: 'timing table',

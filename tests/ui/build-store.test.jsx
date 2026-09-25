@@ -600,16 +600,17 @@ describe('every segmented control', () => {
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
-    // above would each pass on whatever happened to be showing. Seventeen is the count
+    // above would each pass on whatever happened to be showing. Nineteen is the count
     // of segmented controls those three stops reach today:
-    //   BUILD 14 — Engine: Configuration, Block, Head, Cam Phasers, Ignition Coils, Plug
+    //   BUILD 15 — Engine: Configuration, Block, Head, Cam Phasers, Ignition Coils, Plug
     //     Gap; Induction: MAP Sensor, Compressor, Wastegate Actuator (the spring picker
-    //     only appears for a pneumatic gate); Fuel: Octane, Regulation, Base Pressure,
+    //     only appears for a pneumatic gate), Nitrous Kit (its shot and bottle pickers
+    //     only appear with a kit fitted); Fuel: Octane, Regulation, Base Pressure,
     //     Wideband Controller; Exhaust: Diameter.
     //   TUNE > INJECTORS 3 — the map-slot picker above every TUNE view, ECU Injector
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
-    expect(total).toBe(18);
+    expect(total).toBe(19);
   });
 });
 

@@ -111,6 +111,11 @@ export const ECU_COEFF = Object.freeze({
   /** Exhaust temperature as the ECU's model follows it, s. */
   EGT_FILTER_S: 0.3,
   /** Temperature of the air a fuel-cut event pumps through, above charge temperature, °C. */
+  // How fast a dyno pull sweeps, RPM per second: an inertia dyno in fourth gear runs
+  // 300-600. Turns a nitrous controller's progressive ramp, set in seconds, into RPM.
+  DYNO_SWEEP_RPM_PER_S: 500,
+  // Where a nitrous bottle heater's thermostat holds the bottle: 85 °F, about 920 psi.
+  N2O_HEATER_SET_K: 302.59,
   CUT_AIR_RISE_C: 150,
   /**
    * Manifold temperature rise when a full charge of unburned mixture lights in the

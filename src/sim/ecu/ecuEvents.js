@@ -99,7 +99,9 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       cause: misread
         ? `The wideband READ λ ${peak.sensedLambda.toFixed(2)} but the mixture was actually λ ${(peak.lambdaExhaust ?? peak.lambda).toFixed(2)}: the ECU's wideband scaling does not match the controller fitted, so the protection is acting on a number that is wrong.`
         : `Under boost the mixture was leaner than the λ ${cal.protect.leanLambda} limit, so the ECU ${cal.protect.leanAction === 'fuel-cut' ? 'cut fuel' : cal.protect.leanAction === 'torque' ? 'closed the throttle' : 'took boost out'} to save the pistons.`,
-      fix: misread ? 'On TUNE → SENSORS, set the wideband scaling to match the controller.' : 'Find why it is lean — AFR table, VE, injector scaling, fuel pressure — and fix that. The protection saved the engine; it is not a tune.',
+      fix: misread ? 'On TUNE → SENSORS, set the wideband scaling to match the controller.'
+        : (peak.nitrousLbMin ?? 0) > 0 ? 'It went lean while the nitrous sprayed: on TUNE → NITROUS, raise Fuel correction while spraying (and on a dry kit, Dry kit fuel). The protection saved the engine; it is not a tune.'
+          : 'Find why it is lean — AFR table, VE, injector scaling, fuel pressure — and fix that. The protection saved the engine; it is not a tune.',
     });
   });
 
@@ -108,10 +110,81 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
     events.push({
       type: 'egtprot', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Component protection enriching across ${label(run)} (EGT ${peak.egt} °C against a ${cal.protect.egtLimitC} °C limit)`,
-      cause: 'The exhaust was hotter than the turbine and valves are calibrated for, so the ECU added fuel. Extra fuel absorbs heat evaporating and leaves the burn cooler — at the cost of fuel and some power.',
-      fix: 'Hot exhaust usually means late combustion: check the spark in that range is not being pulled (knock) or commanded late. Richer AFR targets there do the same job deliberately.',
+      cause: `The exhaust was hotter than the ${hw.turboOn ? 'turbine and exhaust valves' : 'exhaust valves and catalytic converter'} are calibrated for, so the ECU added fuel. Extra fuel absorbs heat evaporating and leaves the burn cooler — at the cost of fuel and some power.${(peak.nitrousLbMin ?? 0) > 0 ? ' Nitrous raises exhaust heat on its own: more fuel burns every cycle, and the retard it needs finishes the burn later.' : ''}`,
+      fix: (peak.nitrousLbMin ?? 0) > 0
+        ? 'This is the protection doing its job on the heat nitrous brings. Keep the retard while spraying on TUNE → NITROUS to what the knock needs — more burns later and hotter in the exhaust — and hold the spray mixture near 11.5:1 rather than leaner.'
+        : 'Hot exhaust usually means late combustion: check the spark in that range is not being pulled (knock) or commanded late. Richer AFR targets there do the same job deliberately.',
     });
   });
+
+  // ---- NITROUS. What the kit did on this pull, in the terms a nitrous tuner reads it.
+  const kit = hw.nitrous;
+  if (kit && cal.nitrous) {
+    const n = cal.nitrous;
+    const spraying = (p) => (p.nitrousLbMin ?? 0) > 0;
+    groupRuns(points, (p) => has(p, 'nitrous lean')).forEach((run) => {
+      const inj = run.some((p) => p.fuelLimited);
+      const pump = run.some((p) => p.fuelStarved);
+      events.push({
+        type: 'nitrouslean', severity: 3, impact: imp(18, run), ...span(run),
+        msg: `Lean cut shut the nitrous off across ${label(run)} — the wideband read leaner than λ ${n.leanCutLambda.toFixed(2)} while spraying`,
+        cause: kit.kit === 'dry'
+          ? inj
+            ? `A dry kit's fuel goes through the injectors, and on top of what the engine already needs they ran out of time: the nitrous got its oxygen and not its fuel.`
+            : n.dryFuelPct < 100
+              ? `This is a dry kit, so the ECU adds its fuel — and it is set to ${n.dryFuelPct}% of what a ${kit.shotHp} shot needs. The nitrous's oxygen had too little to burn with.`
+              : `The dry-kit fuel is set for the rated shot, but the nitrous flowed more than rated here (a hot bottle pushes more through the jet), so the mixture went lean.`
+          : pump
+            ? `A wet kit's fuel jet runs off the same pump as the injectors. With the nitrous on, the pump could not hold rail pressure for both, and the kit's fuel fell with it while the nitrous did not.`
+            : `A wet kit meters its fuel at a fixed fuel pressure, so it does not follow the bottle: more bottle pressure pushes more nitrous through the same fuel. The fuel pressure held here, so the bottle is the suspect — or the lean-cut limit is set tighter than the mixture the kit is jetted for.`,
+        fix: kit.kit === 'dry'
+          ? inj
+            ? 'On BUILD → FUEL SYSTEM, fit larger injectors (then set TUNE → INJECTORS to match), or spray a smaller shot.'
+            : 'On TUNE → NITROUS, raise the dry kit fuel to at least 100% for this shot.'
+          : pump
+            ? 'Fit a bigger fuel pump on BUILD → FUEL SYSTEM: it has to feed the engine and the kit together.'
+            : `Bring the bottle to 85 °F (about 920 psi) with the heater on BUILD → INDUCTION, check the lean-cut limit on TUNE → NITROUS (λ ${n.leanCutLambda.toFixed(2)} now), or raise Fuel correction while spraying there.`,
+      });
+    });
+    groupRuns(points, (p) => spraying(p) && p.knockPull > 0).forEach((run) => {
+      const worst = Math.max(...run.map((p) => p.knockPull));
+      events.push({
+        type: 'nitrousknock', severity: 3, impact: imp(14, run), ...span(run),
+        msg: `Knock while spraying across ${label(run)} (up to ${worst.toFixed(1)}° pulled)`,
+        cause: `The nitrous's extra oxygen and heat raise cylinder pressure and temperature, so the knock limit drops while it flows. The retard while spraying is ${n.retardDeg}°; this engine needed about ${worst.toFixed(1)}° more on top of it here.`,
+        fix: `On TUNE → NITROUS, raise the retard while spraying to about ${Math.ceil(n.retardDeg + worst)}°, or run higher-octane fuel on BUILD → FUEL SYSTEM. The rule of thumb is 2° per 50 hp of shot: ${Math.round(kit.shotHp / 25)}° for this ${kit.shotHp} shot.`,
+      });
+    });
+    const sprayPts = points.filter(spraying);
+    if (sprayPts.length) {
+      const psi = sprayPts[0].bottlePsi;
+      const shotShare = Math.round(Math.sqrt(Math.max(0, psi) / 950) * 100);
+      if (psi < 850) {
+        events.push({
+          type: 'bottle', severity: 1, impact: imp(8, sprayPts), ...span(sprayPts),
+          msg: `Bottle pressure only ${psi} psi — the jets flowed about ${shotShare}% of the rated shot`,
+          cause: `Nitrous is stored as a liquid under its own vapour pressure, which is set by the bottle's temperature, not by how full it is. The jets are sized for about 950 psi; a cold bottle pushes less through them${kit.kit === 'wet' ? ', and a wet kit\'s fuel does not drop with it, so the nitrous mixture runs rich' : ''}.`,
+          fix: 'On BUILD → INDUCTION, switch the bottle heater on: it holds about 85 °F, which is 920-950 psi.',
+        });
+      } else if (psi > 1000) {
+        events.push({
+          type: 'bottle', severity: 2, impact: imp(10, sprayPts), ...span(sprayPts),
+          msg: `Bottle pressure ${psi} psi — hotter than the jets are sized for`,
+          cause: `Past about 90 °F the bottle's pressure climbs fast toward nitrous's critical point (97.6 °F, ~1,050 psi). More pressure pushes more nitrous through the same jet${kit.kit === 'wet' ? ' but not more fuel, so a wet kit runs lean' : ''}.`,
+          fix: 'Let the bottle cool to about 85 °F before the pass; a heater holds it there rather than above.',
+        });
+      }
+    }
+    if (n.minRpm < 2500 && kit.shotHp >= 100 && sprayPts.some((p) => p.rpm < 2500)) {
+      const low = sprayPts.filter((p) => p.rpm < 2500);
+      events.push({
+        type: 'nitrouswindow', severity: 2, impact: imp(10, low), ...span(low),
+        msg: `Spraying a ${kit.shotHp} shot from ${n.minRpm} RPM`,
+        cause: 'Low in the rev range the engine moves little air, so the same shot is a far bigger share of the charge: cylinder pressure spikes, and a wet kit\'s fuel can pool in the intake and light — an intake backfire.',
+        fix: 'On TUNE → NITROUS, start the window at 3,000 RPM or later for this shot.',
+      });
+    }
+  }
 
   groupRuns(points, (p) => has(p, 'iat')).forEach((run) => {
     const peak = run.reduce((a, b) => (b.sensedIat > a.sensedIat ? b : a));

@@ -33,6 +33,10 @@ import {
  * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
+ * @property {string|null} [blowerId] the supercharger fitted (a BLOWER_OPTS id), or none
+ * @property {number} [blowerRatio] crank pulley ÷ blower pulley
+ * @property {{kit: 'wet'|'dry', shotHp: number, heater: boolean, bottleLb: number}|null} [nitrous]
+ *   the nitrous kit fitted, or none
  * @property {number} octaneIdx index into FUEL_CHOICES (the pump fuels, then Flex)
  * @property {number} injIdx index into INJECTOR_OPTS
  * @property {number} mafScalar ECU's MAF correction scalar
@@ -189,8 +193,9 @@ import {
  *   job's target, or null before one has been run against it
  * @property {{ambientC: number, altitudeM: number}} env the air the engine breathes, on
  *   the dyno and in LIVE. Session state: it is the day, not the build
- * @property {{ac: boolean, lights: boolean, launch?: boolean}} liveAux accessory loads switched
- *   on in LIVE, and whether the clutch is in with launch control armed
+ * @property {{ac: boolean, lights: boolean, launch?: boolean, nitrous?: boolean, bottleFills?: number}} liveAux accessory loads switched
+ *   on in LIVE, whether the clutch is in with launch control armed, the nitrous arming
+ *   switch, and how many fresh bottles the driver has fitted (each one starts full)
  * @property {Record<string, string>} faults injected faults, keyed by sensor or system
  */
 
@@ -235,6 +240,11 @@ export function makeInitialState() {
       mods: DEFAULT_MODS,
       turboOn: false,
       boostCurve: [...DEFAULT_BOOST],
+      // A supercharger (a BLOWER_OPTS id) and its pulley ratio, and a nitrous kit. None
+      // fitted to start; a turbo and a supercharger are never fitted together.
+      blowerId: null,
+      blowerRatio: 1.2,
+      nitrous: null,
       octaneIdx: 0,
       injIdx: 0,
       mafScalar: 1.0,
@@ -301,7 +311,7 @@ export function makeInitialState() {
       completedJobs: [],
       jobResult: null,
       env: { ...DEFAULT_ENV },
-      liveAux: { ac: false, lights: false },
+      liveAux: { ac: false, lights: false, nitrous: true },
       faults: {},
     },
     history: { past: [], future: [] },

@@ -21,6 +21,7 @@ import { chargeIndexOf } from './knock.js';
 import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
 import { OPEN_LOOP_KPA, effectiveMafFactor } from './tables.js';
+import { N2O, N2O_AIR_EQUIV, chargeWithNitrousK, perCylinderEvent } from './nitrous.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
@@ -54,6 +55,12 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   solved the induction system and knows it. Omitted, it is computed here from this
  *   point's own exhaust flow
  * @property {number} [wastegateRelief] how much backpressure the wastegate is bleeding
+ * @property {{n2oKgS: number, fuelKgS?: number, frac?: number, bottleK: number, bottlePsi?: number}} [nitrous]
+ *   nitrous flowing at this point (src/sim/nitrous.js): the jets' nitrous, a wet kit's fuel
+ *   beside it, and the bottle it came from, whose temperature sets how much it cools
+ * @property {ReturnType<typeof import('./blower.js').solveBlower>} [blower] a supercharger's
+ *   state at this point (src/sim/blower.js): its efficiency sets the charge heat and its
+ *   drive power is charged to the crank
  * @property {EcuPointContext} [ecu] what the engine management is actually doing at this
  *   point, resolved from its calibration by `src/sim/ecu/`. Absent, the ECU is the ideal
  *   one this function always modelled — it reads the true manifold pressure and charge
@@ -72,6 +79,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *
  * @typedef {object} EcuPointContext
  * @property {{ambientK?: number, baroKpa?: number}} [env] the day's air
+ * @property {number} [extraFuelG] fuel the ECU adds per cylinder event on top of what it
+ *   meters for the air — a dry nitrous kit's fuel and a tuner's correction while spraying,
+ *   through the injectors; negative takes fuel out
  * @property {number} [sensedMapKpa] manifold pressure as the ECU's MAP sensor reports it
  * @property {number} [sensedIatK] charge temperature as the ECU's IAT sensor reports it
  * @property {'blend'|'sd'|'maf'} [airModel] how the ECU works out air mass. `blend` is the
@@ -119,10 +129,13 @@ export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
-  empKpa: empOverride, wastegateRelief = 0, ecu: E = null,
+  empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null,
 }) {
-  const compressorOver = boostPsi > compressor.boostCeiling;
-  const chargeK = E ? chargeTempK(boostPsi, mods.intercooler, E.env) : chargeTempK(boostPsi, mods.intercooler);
+  // A supercharger brings its own compressor: its ceiling and its efficiency, which set
+  // how hot the charge arrives. Without one, the turbo's compressor as always.
+  const compressorOver = blower ? false : boostPsi > compressor.boostCeiling;
+  const isenEff = blower && blower.boostPsi > 0 ? blower.eta : undefined;
+  const chargeK = E ? chargeTempK(boostPsi, mods.intercooler, E.env, isenEff) : chargeTempK(boostPsi, mods.intercooler, undefined, isenEff);
   const chargeC = chargeK - KELVIN_OFFSET;
 
   // --- AIR CHARGE: ideal gas law. MAP already carries load, so VE is used purely as
@@ -137,7 +150,22 @@ export function evaluatePoint({
   // gap is identically zero, the histogram reads nothing, and no iteration can close it.
   const veActual = veActualVal ?? veVal;
   const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
-  const airChargeG = trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3: vCylM3 });
+  // NITROUS in the intake: liquid flashing to vapour takes its latent heat from the air,
+  // so the charge arrives colder and denser; the vapour then fills room the air would
+  // have had. Both happen before the cylinder closes, so they set how much air is trapped.
+  const n2o = nitrous && nitrous.n2oKgS > 0
+    ? perCylinderEvent({ n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.fuelKgS ?? 0, rpm, cyl: derived.cyl })
+    : null;
+  let cylChargeK = chargeK;
+  let airChargeG = trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3: vCylM3 });
+  if (n2o) {
+    cylChargeK = chargeWithNitrousK({
+      airG: airChargeG, airK: chargeK, airCp: COEFF.CHARGE_CP,
+      n2oG: n2o.n2oG, bottleK: nitrous.bottleK, share: COEFF.N2O_CHARGE_COOLING_SHARE,
+    });
+    const cooledAirG = trappedAirGrams({ veActual, mapKpa, chargeK: cylChargeK, sweptM3: vCylM3 });
+    airChargeG = cooledAirG / (1 + (n2o.n2oG / N2O.molarG) / (cooledAirG / COEFF.AIR_MOLAR_G));
+  }
   // The ECU's speed-density sum runs on what its SENSORS say, not on the truth. With an
   // ideal ECU the two are the same thing.
   const airModel = E?.airModel ?? 'blend';
@@ -164,7 +192,14 @@ export function evaluatePoint({
   // fuel it believes is in the tank.
   const lambdaCommanded = (afrCommanded / 14.7) / effFactor;
   const ecuFuel = E?.ecuFuel ?? fuel;
-  const fuelMassG = (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich);
+  // Nitrous fuel the ECU adds or takes out on top (a dry kit's, a tuner's correction).
+  // Taking out can only go so far: the injectors still meter for the air.
+  const fuelMassG = E?.extraFuelG
+    ? Math.max(
+      0.2 * (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich),
+      (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich) + E.extraFuelG,
+    )
+    : (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich);
 
   // --- INJECTOR: the ECU computes pulse width for the injector size it has been TOLD
   // it has. Fit bigger injectors without rescaling and every pulse delivers
@@ -194,7 +229,13 @@ export function evaluatePoint({
     1e-6,
     (E ? ballisticOpenMs(openMs) : openMs) * actualGramsPerMs * (E?.cylinderFuelFactor ?? 1),
   );
-  const lambdaActual = airChargeG / (deliveredFuelG * fuel.stoich);
+  // A wet kit's fuel arrives through its own nozzle, beside the injectors. The nitrous
+  // brings oxygen worth 1.57 times its mass in air, so lambda counts it: this is what the
+  // flame and the wideband both see.
+  const injectedFuelG = deliveredFuelG;
+  const totalFuelG = n2o ? injectedFuelG + n2o.fuelG : injectedFuelG;
+  const oxygenAsAirG = n2o ? airChargeG + n2o.n2oG * N2O_AIR_EQUIV : airChargeG;
+  const lambdaActual = oxygenAsAirG / (totalFuelG * fuel.stoich);
   const actualAfr = lambdaActual * 14.7;
 
   // --- GAS EXCHANGE. What the piston pushes against on the exhaust stroke, and how
@@ -203,7 +244,8 @@ export function evaluatePoint({
   const chargeIndex = chargeIndexOf(veActual, mapKpa);
   // Mass actually leaving the cylinder each second — air plus the fuel that went in
   // with it — which is what the turbine has to pass.
-  const exhaustFlowKgS = ((airChargeG + deliveredFuelG) / 1000) * derived.cyl * (rpm / 2) / 60;
+  const exhaustFlowKgS = (n2o ? (airChargeG + totalFuelG + n2o.n2oG) : (airChargeG + deliveredFuelG)) / 1000
+    * derived.cyl * (rpm / 2) / 60;
   const turbineInletK = exhaustTempK({ chargeIndex, lambda: lambdaActual });
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
@@ -213,13 +255,16 @@ export function evaluatePoint({
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
   // trace rather than estimated: the work done, the peak pressure, and whether the end
   // gas had time to light itself before the flame reached it.
-  const burnedFuelG = Math.min(deliveredFuelG, airChargeG / fuel.stoich);
+  const burnedFuelG = n2o
+    ? Math.min(totalFuelG, oxygenAsAirG / fuel.stoich)
+    : Math.min(deliveredFuelG, airChargeG / fuel.stoich);
   const cycDerived = E?.chamberOffsetK
     ? { ...derived, chamberOffsetK: (derived.chamberOffsetK || 0) + E.chamberOffsetK }
     : derived;
   const cyc = cycleInputsFor({
-    rpm, mapKpa, empKpa, intakeK: chargeK,
-    airChargeG, burnedFuelG, fuelMassG: deliveredFuelG, lambda: lambdaActual, fuel,
+    rpm, mapKpa, empKpa, intakeK: cylChargeK,
+    airChargeG, burnedFuelG, fuelMassG: totalFuelG, lambda: lambdaActual, fuel,
+    ...(n2o ? { n2oG: n2o.n2oG } : {}),
     derived: cycDerived, ...(E?.cam ? { cam: E.cam } : {}),
   });
 
@@ -247,7 +292,10 @@ export function evaluatePoint({
   const rubbingPa = rubbingFmepPa(rpm, derived.springPa || 0, {
     bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
   });
-  const fmepPa = rubbingPa + pmepPa;
+  // A supercharger is driven off the crank, so the power it takes to compress the air is
+  // a load on the engine like friction: FMEP = power ÷ (displacement × firing rate).
+  const blowerPa = blower ? blower.driveW / ((derived.displacementL / 1000) * (rpm / 120)) : 0;
+  const fmepPa = rubbingPa + pmepPa + blowerPa;
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.
@@ -260,7 +308,7 @@ export function evaluatePoint({
   // Null on overrun and in deep vacuum: there is no work out, so the quantity is
   // undefined. Zero would read as an engine making power from no fuel.
   const bsfc = powerW > 0
-    ? (deliveredFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
+    ? (totalFuelG * derived.cyl * (rpm / 2) * 60 / 453.6) / (powerW / 745.7) : null;
 
   // --- MECHANICAL LOAD. Torque is what the engine gives you; peak cylinder pressure is
   // what it costs the metal. Both come off the same trace, so they cannot disagree.
@@ -355,6 +403,25 @@ export function evaluatePoint({
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
     egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
     ...ecuFields,
+    // A supercharger's own readings, only when one is fitted so every other record is
+    // unchanged: rotor or impeller speed, the power the crank spends on it, and how
+    // efficiently it is compressing.
+    // Nitrous, only while it flows: what the jets are passing, what cooled the charge,
+    // and the bottle behind them.
+    ...(n2o ? {
+      nitrousLbMin: Number((nitrous.n2oKgS * 60 / 0.45359237).toFixed(2)),
+      nitrousFuelLbMin: Number(((nitrous.fuelKgS ?? 0) * 60 / 0.45359237).toFixed(2)),
+      nitrousCoolC: Number((chargeK - cylChargeK).toFixed(0)),
+      bottlePsi: Math.round(nitrous.bottlePsi ?? 0),
+      // Share of the shot the controller is passing (a progressive ramp's, or all of it).
+      nitrousPct: Math.round((nitrous.frac ?? 1) * 1000) / 10,
+    } : {}),
+    ...(blower ? {
+      blowerRpm: Math.round(blower.blowerRpm),
+      blowerHp: Number((blower.driveW / 745.7).toFixed(1)),
+      blowerEff: Number((blower.eta * 100).toFixed(0)),
+      blowerOverspeed: blower.overspeed,
+    } : {}),
   };
 }
 
