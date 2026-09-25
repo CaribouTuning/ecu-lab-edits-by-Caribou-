@@ -1736,3 +1736,27 @@ describe('run log', () => {
     expect(after.session).toBe(withRun.session);
   });
 });
+
+describe('SET_TABLE labels (#105)', () => {
+  it('appends the detail to the table name', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.SET_TABLE, table: 've', value: [[1]], label: 'scale +5% · 12 cells' });
+    expect(s.history.past[0].label).toBe('VE edit · scale +5% · 12 cells');
+  });
+  it('keeps the bare name without one', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.SET_TABLE, table: 'afr', value: [[1]] });
+    expect(s.history.past[0].label).toBe('Fuel edit');
+  });
+});
+
+describe('tune.rangeMode (#105)', () => {
+  it('starts off and is not undoable work', () => {
+    const s0 = makeInitialState();
+    expect(s0.tune.rangeMode).toBe(false);
+    const edited = reducer(s0, { type: ACTIONS.SET_TABLE, table: 've', value: [[1]] });
+    const undone = reducer(edited, { type: ACTIONS.UNDO });
+    const toggled = reducer(undone, { type: ACTIONS.SET_TUNE_FIELD, field: 'rangeMode', value: true });
+    expect(toggled.tune.rangeMode).toBe(true);
+    expect(toggled.history.past).toHaveLength(0);
+    expect(toggled.history.future).toHaveLength(1);
+  });
+});

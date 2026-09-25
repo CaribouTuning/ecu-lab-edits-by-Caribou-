@@ -70,7 +70,7 @@ import {
  * @property {number[][]} afr target air/fuel ratio table, indexed [LOAD][RPM]
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
- * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
+ * @property {import('../components/selection.js').Selection|null} selection
  *   the currently selected calibration-grid cell, row, column or range, or null
  * @property {object} ecu the engine management calibration beyond the three base tables
  *   (`src/sim/ecu/calibration.js`) — undoable like them
@@ -80,10 +80,9 @@ import {
  *   written — which, like a fresh ROM's, holds a copy of whatever is active when first
  *   switched to
  * @property {number} activeMap which slot the engine is running
- * @property {boolean} rangeMode whether a tap on the grid starts or extends a RECTANGLE
- *   rather than selecting one cell. Beside `selection` because it is the mode that
- *   selection is taken in, and one flag rather than three: AIR, SPARK and FUEL all
- *   render the same grid and a tuner switching between them means the same thing by it.
+ * @property {boolean} rangeMode true while TUNE's grids take two taps as a range (the
+ *   touch path; a mouse drags). One flag for AIR, SPARK and FUEL, and outside the undo
+ *   snapshot like `selection`
  */
 
 /**

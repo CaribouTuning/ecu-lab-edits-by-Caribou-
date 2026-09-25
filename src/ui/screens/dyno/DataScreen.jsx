@@ -12,8 +12,9 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
-import { clamp, LOAD, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
+import { clamp, LOAD, presetById, RPM, SWEEP_STEP_RPM } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { downloadCsv, dynoSheetFilename, sweepToCsv } from '../../components/dynoCsv.js';
 import { eventBands } from '../../components/eventBands.js';
 import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
 import { CorrectionStack } from '../../components/ecu/CorrectionStack.jsx';
@@ -21,7 +22,7 @@ import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
-import { useSession, useTune } from '../../state/StoreProvider.jsx';
+import { useBuild, useSession, useTune } from '../../state/StoreProvider.jsx';
 import { deltaHeat, T, utilisationTone } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
@@ -81,6 +82,19 @@ export function DataScreen() {
   const [session, dispatch] = useSession();
   const { result, histogram } = session;
   const [tune] = useTune();
+  const [build] = useBuild();
+
+  /**
+   * The pull, as a file.
+   *
+   * Every column the datalog carries, not the three a power graph shows — the cycle
+   * quantities are the ones a spreadsheet is better at than a gauge, and they are the
+   * reason to take the log away at all: you diff two tunes on them.
+   */
+  const exportSheet = () => {
+    const name = build.presetId ? presetById(build.presetId)?.name : 'custom build';
+    downloadCsv(sweepToCsv(result.points), dynoSheetFilename({ engineName: name }));
+  };
   const { ve } = tune;
   const { logFocusRpm } = session;
   // Local, not session state. The store is one useReducer behind one context, so every
@@ -268,6 +282,12 @@ export function DataScreen() {
         <br /><br /><b className={styles.em}>EGT</b>: exhaust temperature rises with retarded timing and as the mixture leans toward stoichiometric. Sustained above about 950–1000°C cooks turbines and valves.
         <br /><br /><b className={styles.em}>PEAK P</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. In this app a naturally aspirated engine peaks around 60–70 bar and a factory turbo engine around 75–90; practitioners quote about 100–120 for real production turbo engines, so the app runs low here (see Learn article 39). Its own limit, about 105 bar, is set on the app&apos;s scale. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
       </ExpandableInfo>
+
+      <div className={styles.buildWrap}>
+        <Button variant="ghost" onClick={exportSheet}>
+          EXPORT DYNO SHEET (CSV)
+        </Button>
+      </div>
 
       <Eyebrow icon={Grid3x3}>Fuel Trim Histogram</Eyebrow>
       <ExpandableInfo title="How real tuners actually correct a VE table">
