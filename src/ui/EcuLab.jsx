@@ -36,7 +36,7 @@ import {
   deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, interp2, isLocatable, presetById,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
-  veTruthByPhaseFor, read1,
+  veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
 import {
   beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -1321,6 +1321,22 @@ export function EcuLabApp() {
     // nitrous tables once nitrous is enabled.
     { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
   ];
+  // The VE table corrected from what was logged: the last pull while it still matches
+  // the tune on screen, and the LIVE datalog. Only worked out while AIRFLOW is open.
+  const veLogOpen = tab === 'tune' && tuneView === 'airflow';
+  const pullFresh = !!result && !!pullScores && pullScores.signature === buildSignature;
+  const veLogPull = useMemo(() => (veLogOpen && pullFresh ? veSamplesFromPull(result.points) : []), [veLogOpen, pullFresh, result]);
+  const liveLog = live?.ecu?.log;
+  const veLogLive = useMemo(() => (veLogOpen ? veSamplesFromLive(liveLog, ve) : []), [veLogOpen, liveLog, ve]);
+  const veLog = veLogOpen ? {
+    pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend',
+    onApply: (share) => {
+      const { ratio } = veCorrections([...veLogPull, ...veLogLive]);
+      dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: applyVeCorrections(ve, ratio, share), label: `VE from logs (${share === 1 ? 'all' : 'half'})` });
+      // The long-term trim had been covering the error just moved into the table.
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, trimResets: (liveAux.trimResets ?? 0) + 1 } });
+    },
+  } : null;
   const TUNE_GROUPS = ['BASE TABLES & HARDWARE', 'ENGINE MANAGEMENT', 'POWER ADDER'];
   // Which TUNE pages the last pull's log points at — only while that pull still
   // describes the setup on screen, so a fixed problem does not keep its flag.
@@ -1511,7 +1527,7 @@ export function EcuLabApp() {
         )}
 
         {tab === 'tune' && tuneView === 'airflow' && (
-          <AirflowScreen veAdvice={veAdvice} veTruth={veTruth}>
+          <AirflowScreen veAdvice={veAdvice} veTruth={veTruth} veLog={veLog}>
             <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} />
           </AirflowScreen>
         )}

@@ -192,9 +192,10 @@ import {
  *   job's target, or null before one has been run against it
  * @property {{ambientC: number, altitudeM: number}} env the air the engine breathes, on
  *   the dyno and in LIVE. Session state: it is the day, not the build
- * @property {{ac: boolean, lights: boolean, launch?: boolean, nitrous?: boolean, bottleFills?: number}} liveAux accessory loads switched
+ * @property {{ac: boolean, lights: boolean, launch?: boolean, nitrous?: boolean, bottleFills?: number, trimResets?: number}} liveAux accessory loads switched
  *   on in LIVE, whether the clutch is in with launch control armed, the nitrous arming
- *   switch, and how many fresh bottles the driver has fitted (each one starts full)
+ *   switch, how many fresh bottles the driver has fitted (each one starts full), and how
+ *   many times the fuel trims have been reset from TUNE
  * @property {Record<string, string>} faults injected faults, keyed by sensor or system
  */
 

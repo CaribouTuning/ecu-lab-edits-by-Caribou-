@@ -18,6 +18,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { VeLogCorrection } from '../../components/VeLogCorrection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -49,9 +50,11 @@ import styles from './AirflowScreen.module.css';
  *   the shell's, also read by `calAdvice` and the dyno payload
  * @param {React.ReactNode} [props.children] the engine management settings that belong
  *   with this table, shown under it
+ * @param {{pull: import('../../../sim/veLearn.js').VeSample[], live: import('../../../sim/veLearn.js').VeSample[], airModel: 'blend'|'sd'|'maf', onApply: (share: number) => void}} [props.veLog]
+ *   the logged VE error, to correct the table from what was measured
  * @returns {React.ReactElement}
  */
-export function AirflowScreen({ veAdvice, veTruth, children }) {
+export function AirflowScreen({ veAdvice, veTruth, children, veLog }) {
   const [tune, dispatch] = useTune();
   const { ve, selection, rangeMode } = tune;
   /** @param {Selection|null} value */
@@ -80,10 +83,12 @@ export function AirflowScreen({ veAdvice, veTruth, children }) {
           <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data; drag or shift-click for a range.</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} />
           <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} />
+          {veLog && <VeLogCorrection pullSamples={veLog.pull} liveSamples={veLog.live} airModel={veLog.airModel} onApply={veLog.onApply} />}
 
           <ExpandableInfo title="What VE actually means">
             VE compares the air trapped in the cylinder to the theoretical maximum the swept volume could hold. It rises with RPM as intake tuning matches resonance, then falls as the valves cannot flow fast enough — that fall is why every N/A engine has a torque peak. More air here means more fuel needed to hit a given AFR and more potential torque; VE is really the master variable, and timing/AFR are how you extract power from whatever air is already there.
             <br /><br /><b className={styles.em}>As a beginner:</b> leave VE alone at first. It is set by real hardware (intake, heads, cams) — fitting an intake, headers or a cat-back on BUILD already moves it for you. Spend your early pulls learning TIMING and AFR before you start hand-editing VE.
+            <br /><br /><b className={styles.em}>How it is really tuned:</b> no ECU and no tuner can see the engine&apos;s true VE. What you can see is the wideband. Wherever the engine ran leaner than the AFR table asked, it got more air than the VE table thought, by that ratio; the fuel trims say the same thing in closed loop. Tuning software sorts that error into the cells the car was driven through and corrects only those. Log a pull or a drive, apply about half from <b className={styles.em}>Correct VE from logs</b>, log again, and repeat until the cells you use are within 2–3%. On a speed-density ECU this is the job after every change that moves air: intake, cam, exhaust, boost.
           </ExpandableInfo>
           {children}
         </div>

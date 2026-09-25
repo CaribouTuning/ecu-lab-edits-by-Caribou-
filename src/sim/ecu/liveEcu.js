@@ -104,6 +104,7 @@ export const LOG_CHANNELS = [
   { id: 'nitrous', label: 'Nitrous', unit: 'lb/min' },
   { id: 'bottle', label: 'Bottle pressure', unit: 'psi' },
   { id: 'blowerRpm', label: 'Blower speed', unit: 'rpm' },
+  { id: 'veTable', label: 'VE (table)', unit: '%' },
 ];
 
 /** How much log the live engine keeps, steps (60 s at 20 Hz). */
@@ -140,6 +141,10 @@ export function liveStepEcu(st, dt, input, cfg) {
   // A nitrous bottle, carried between steps. A full one — at the heater's set point or the
   // day's temperature — the first time the engine sees the kit, whenever the driver swaps
   // in a fresh bottle, and when BUILD fits a different size.
+  // Fuel trims reset from the tuning software — done after a VE correction takes the
+  // error the long-term trim had learned into the table.
+  const trimResets = aux.trimResets ?? 0;
+  if ((s.trimResets ?? 0) !== trimResets) { s.stft = 0; s.ltft = 0; s.trimResets = trimResets; }
   const bottleLb = hw.nitrous?.bottleLb ?? 10;
   const fills = aux.bottleFills ?? 0;
   if (hw.nitrous && (!s.bottle || s.bottle.fills !== fills || s.bottle.sizeLb !== bottleLb)) {
@@ -515,7 +520,7 @@ export function liveStepEcu(st, dt, input, cfg) {
 
     log = {
       map: pt.map, boost: s.boostPsi, boostTarget: e.boostTargetRamped, wgDuty: duty, lambda: pt.lambdaExhaust ?? pt.lambda,
-      lambdaTarget: res.input.afrCommanded / 14.7, pw: pt.pw, duty: pt.duty, deadTime: pt.deadTime, railDp: pt.railDp,
+      lambdaTarget: res.input.afrCommanded / 14.7, veTable: res.breakdown.ve[0].value, pw: pt.pw, duty: pt.duty, deadTime: pt.deadTime, railDp: pt.railDp,
       timing: pt.timing, egt: pt.egt, misfire: pt.misfire, filmFactor: filmFactor * 100, bfs: pt.bfs,
       torque: crankNm, breakdown: res.breakdown, boostSteps: steps, closedLoopRegion: res.sensed.closedLoopRegion,
     };
@@ -616,6 +621,9 @@ export function liveStepEcu(st, dt, input, cfg) {
     bfs: log ? log.bfs : 0, knockCount: Math.round(s.knockCount), highDet: e.highDet ? 1 : 0, launch: launchArmed ? 1 : 0,
     nitrous: pt?.nitrousLbMin ?? 0, bottle: s.bottle && s.bottle.massKg > 0 ? Math.round(bottlePressurePsi(s.bottle.tempK)) : 0,
     blowerRpm: pt?.blowerRpm ?? 0,
+    // The VE table's value where the ECU looked it up, so a log can say what the table
+    // should have held there — even after the table has changed since.
+    veTable: log ? Number(log.veTable.toFixed(2)) : 0,
   };
   e.log = [...(st.ecu?.log ?? []), row].slice(-LOG_LENGTH);
   e.breakdown = log?.breakdown ?? null;
