@@ -49,7 +49,7 @@ export function rng(seed) {
 export const mix = (...xs) => xs.reduce((h, x) => Math.imul(h ^ (x >>> 0), 2654435761) >>> 0, 0x9e3779b9);
 
 /** The shop's standing, 0 to 4, from reputation. */
-export const levelOf = (rep) => (rep >= 110 ? 4 : rep >= 70 ? 3 : rep >= 40 ? 2 : rep >= 15 ? 1 : 0);
+export const levelOf = (rep) => (rep >= 250 ? 4 : rep >= 130 ? 3 : rep >= 60 ? 2 : rep >= 20 ? 1 : 0);
 
 /**
  * The cars customers drive. `na` cars are the ones a bolt-on, cam or boost kit can go on;
@@ -71,7 +71,15 @@ const FIRST = [
 const PAINT = ['silver', 'red', 'blue', 'white', 'orange', 'green', 'black', 'purple', 'teal', 'copper', 'yellow', 'grey', 'pewter', 'pearl'];
 
 /** Pay grows with the shop's standing: better shops charge more. @param {number} base @param {number} level */
-const payAt = (base, level, r) => Math.round((base * (1 + level * 0.35) * r.range(0.9, 1.15)) / 10) * 10;
+const payAt = (base, level, r) => Math.round((base * (1 + level * 0.25) * r.range(0.9, 1.15)) / 10) * 10;
+
+/**
+ * How much reputation a walk-in job earns, by standing. A clean intake retune makes a new
+ * shop's name; at a destination shop it is Tuesday. Without this the shop reached the
+ * top of the ladder in about two weeks of perfect play (measured by the producer run in
+ * tests/career-economy.test.js), and an endless career had nowhere left to go.
+ */
+const REP_TAPER = [1, 0.7, 0.5, 0.35, 0.25];
 
 /** Full-throttle mixture tolerance: the better the shop, the pickier the customers. */
 const mixPct = (level) => [6, 6, 5, 5, 4][level];
@@ -321,7 +329,9 @@ const TEMPLATES = /** @type {Template[]} */ ([
     id: 'build-na', minLevel: 2, cars: ['v6', 'hr', 'de'], needs: { training: ['builder'], equipment: ['dyno'] },
     make: ({ r, level, car }) => {
       const octaneIdx = r.pick([0, 1]);
-      const share = r.range(1.06, 1.1 + level * 0.02);
+      // Up to +14%: every car here reaches +15-21% naturally aspirated with bolt-ons, a
+      // 240° cam and a retune, so the hardest ask still leaves room for a sensible build.
+      const share = r.range(1.06, 1.09 + level * 0.0125);
       const redline = r.pick([null, null, 7200]);
       return {
         tier: 3, pay: payAt(2200, level, r), rep: 14, build: true,
@@ -408,6 +418,7 @@ export function generatedJob(id) {
     needs: tpl.needs, minRep: 0,
     params,
     ...rest,
+    rep: Math.max(1, Math.round(rest.rep * REP_TAPER[level])),
   };
 }
 

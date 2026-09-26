@@ -101,3 +101,38 @@ export const TEMPLATE_FIXES = {
     return sparkClean(boostSparkAndFuel(airAndFuel(built), e85 ? 2 : 4, e85 ? 11.5 : 11.8));
   },
 };
+
+// ---------------------------------------------------------------- the story customers
+
+const getCal = (st, path) => S.getCal(st.tune.ecu, path);
+/** VE corrected from the pull's own log, `passes` times, the way AIRFLOW's panel does it. */
+const storyVeFromLogs = (st, passes = 3) => {
+  let s = st;
+  for (let i = 0; i < passes; i += 1) {
+    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points));
+    s = { ...s, tune: { ...s.tune, ve: S.applyVeCorrections(s.tune.ve, ratio, 1) } };
+  }
+  return s;
+};
+/** The last VE column, which a pull to a 7000 RPM redline cannot log, extended by hand. */
+const extendTopColumn = (st, f) => {
+  const c = S.RPM.length - 1;
+  return { ...st, tune: { ...st.tune, ve: st.tune.ve.map((row, ri) => row.map((v, ci) => (ci === c && S.LOAD[ri] >= 70 ? v * f : v))) } };
+};
+const zmul = (st, path, f) => { const t = getCal(st, path); return setCal(st, path, { ...t, z: t.z.map((v) => v * f) }); };
+
+/** How each story job is really fixed. Every one uses only controls the job's training opens. */
+export const STORY_FIXES = {
+  'intake-maf': (s) => setBuild(s, { mafScalar: 1.11 }),
+  'injector-scaling': (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
+  'headers-lean': (s) => extendTopColumn(storyVeFromLogs(s, 2), 1.16),
+  'idle-hunt': (s) => setCal(s, 'idle.damp', 0.04),
+  'cam-swap': (s) => storyVeFromLogs(s, 3),
+  e85: (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
+  'retarded-timing': (s) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: 'vq35hr' }).tune.timing } }),
+  'turbo-kit': (s) => boostSparkAndFuel(s),
+  'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
+  'blower-power': (s) => boostSparkAndFuel(s, 3, 11.8),
+  nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 10),
+};
+

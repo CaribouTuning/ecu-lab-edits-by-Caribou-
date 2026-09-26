@@ -100,7 +100,7 @@ function withOffers(c) {
  * @returns {Career}
  */
 export function nextDay(c) {
-  return withOffers({ ...c, day: c.day + 1 });
+  return advanceDay(c);
 }
 
 /**
@@ -128,6 +128,21 @@ export function reviveCareer(raw) {
 
 /** How many customer cars the shop can hold at once. @param {Career} c */
 export const capacity = (c) => 1 + (c.owned.includes('lift2') ? 1 : 0) + (c.owned.includes('expansion') ? 1 : 0);
+
+/**
+ * What the shop costs to open for a day: rent, and the running costs of what it has
+ * grown into (each extra lift is floor space and a tech, the dyno needs power and
+ * servicing, the lounge its coffee). Charged every time the day moves on, so growth is
+ * a decision, and money earned has somewhere to go. Never stops play: a shop in the red
+ * can still take work, it just cannot buy anything.
+ * @param {Career} c
+ */
+export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
+  + (c.owned.includes('dyno') ? 60 : 0) + (c.owned.includes('lounge') ? 50 : 0)
+  + (c.owned.includes('expansion') ? 120 : 0);
+
+/** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */
+const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
 
 /** How many customers wait on the board. @param {Career} c */
 export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
@@ -233,7 +248,6 @@ export function deliver(c, jobId, v, extra = {}) {
     ...c,
     money: c.money + paid,
     rep: Math.max(0, c.rep + v.rep),
-    day: leaves ? c.day + 1 : c.day,
     done: v.verdict === 'pass' && !job.generated ? { ...c.done, [jobId]: c.day } : c.done,
     lifts: leaves ? c.lifts.filter((l) => l.jobId !== jobId) : c.lifts,
     working: leaves ? null : c.working,
@@ -244,7 +258,7 @@ export function deliver(c, jobId, v, extra = {}) {
       seq: (c.last?.seq ?? 0) + 1,
     },
   };
-  return withMilestones(leaves ? withOffers(next) : next);
+  return withMilestones(leaves ? advanceDay(next) : next);
 }
 
 /**
@@ -255,10 +269,9 @@ export function deliver(c, jobId, v, extra = {}) {
  * @returns {Career}
  */
 export function giveUp(c, jobId) {
-  return withOffers({
+  return advanceDay({
     ...c,
     rep: Math.max(0, c.rep - 2),
-    day: c.day + 1,
     lifts: c.lifts.filter((l) => l.jobId !== jobId),
     working: c.working === jobId ? null : c.working,
     history: [{ day: c.day, jobId, verdict: /** @type {'fail'} */ ('fail'), paid: 0, repChange: -2, boosted: false, peakHp: 0 }, ...c.history].slice(0, 60),

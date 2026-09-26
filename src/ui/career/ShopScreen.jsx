@@ -18,7 +18,7 @@ import { EQUIPMENT, MILESTONES, TRAINING, nextRepTier, repTier } from './catalog
 import { HOW_TO_SEE } from './evaluate.js';
 import { jobById } from './jobs.js';
 import {
-  accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, train,
+  accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, overhead, train,
 } from './shop.js';
 import { ShopScene } from './ShopScene.jsx';
 import styles from './ShopScreen.module.css';
@@ -195,7 +195,7 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
             {waiting.length === 0 && <p className={styles.intro}>No one else is waiting today.</p>}
             <section className={styles.card} aria-label="Tomorrow">
               <div className={styles.cardTag}>DAY {career.day} · CLOSING UP</div>
-              <p className={styles.small}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait for you overnight.</p>
+              <p className={styles.small}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait for you overnight. Opening tomorrow costs the day&apos;s running costs, {money(overhead(career))}.</p>
               <Button size="sm" variant="ghost" onClick={() => update(nextDay(career))}>OPEN TOMORROW</Button>
             </section>
           </>
@@ -251,6 +251,10 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
               <div className={styles.cardTag}>REPUTATION · {tier.title}</div>
               <div className={styles.repTrack}><span className={styles.repFill} style={{ width: `${nextTier ? Math.min(100, ((career.rep - tier.min) / (nextTier.min - tier.min)) * 100) : 100}%` }} /></div>
               <p className={styles.small}>{nextTier ? `${nextTier.min - career.rep} more to become a ${nextTier.title.toLowerCase()}.` : 'As good as a shop gets.'} Good work raises it; unsafe work or unfinished cars cost it.</p>
+            </section>
+            <section className={styles.card} aria-label="Running costs">
+              <div className={styles.cardTag}>RUNNING COSTS · {money(overhead(career))} A DAY</div>
+              <p className={styles.small}>Rent, and what the shop has grown into: every extra lift, the dyno, the lounge. Paid each time the day moves on.</p>
             </section>
             <section className={styles.card} aria-label="Milestones">
               <div className={styles.cardTag}>MILESTONES · {career.milestones.length}/{MILESTONES.length}</div>

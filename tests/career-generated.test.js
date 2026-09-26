@@ -26,8 +26,11 @@ function coverage() {
     for (const level of [...new Set([t.minLevel, 4])]) {
       for (let seed = 1; seed < 400; seed += 1) {
         const job = generatedJob(genId(tpl, seed, level));
+        // Engine-building targets are drawn from a range: hold the hardest one each
+        // car is asked for, not whichever came up first.
         const key = `${tpl} · ${job.carKey} · level ${level}`;
-        if (!seen.has(key)) seen.set(key, job);
+        const prev = seen.get(key);
+        if (!prev || (job.build && job.params.share > prev.params.share)) seen.set(key, job);
       }
     }
   }
@@ -94,7 +97,7 @@ describe('the endless loop', () => {
   });
 
   it('offers engine-building jobs once the shop is good enough, and opens BUILD for them', () => {
-    let c = { ...shop.newCareer(5), rep: 75, money: 50000, owned: ['laptop', 'wideband', 'dyno', 'egt'], trained: ['spark', 'boost', 'builder'] };
+    let c = { ...shop.newCareer(5), rep: 140, money: 50000, owned: ['laptop', 'wideband', 'dyno', 'egt'], trained: ['spark', 'boost', 'builder'] };
     expect(levelOf(c.rep)).toBe(3);
     const builds = [];
     for (let d = 0; d < 20; d += 1) {

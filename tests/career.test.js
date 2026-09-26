@@ -13,51 +13,11 @@ import { evaluateJob } from '../src/ui/career/evaluate.js';
 import { JOBS, jobById } from '../src/ui/career/jobs.js';
 import * as shop from '../src/ui/career/shop.js';
 import { START_MONEY } from '../src/ui/career/shop.js';
-import { pullInputs } from '../src/ui/state/pullInputs.js';
 
-const pull = (st) => S.simulateSweep(pullInputs(st).args);
+import { STORY_FIXES } from './careerFixes.js';
+
+const FIXES = STORY_FIXES;
 const setBuild = (st, patch) => ({ ...st, build: { ...st.build, ...patch } });
-const setCal = (st, path, v) => ({ ...st, tune: { ...st.tune, ecu: S.setCal(st.tune.ecu, path, v) } });
-const getCal = (st, path) => S.getCal(st.tune.ecu, path);
-/** VE corrected from the pull's own log, `passes` times, the way AIRFLOW's panel does it. */
-const veFromLogs = (st, passes = 3) => {
-  let s = st;
-  for (let i = 0; i < passes; i += 1) {
-    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points));
-    s = { ...s, tune: { ...s.tune, ve: S.applyVeCorrections(s.tune.ve, ratio, 1) } };
-  }
-  return s;
-};
-/** The last VE column, which a pull to a 7000 RPM redline cannot log, extended by hand. */
-const extendTopColumn = (st, f) => {
-  const c = S.RPM.length - 1;
-  return { ...st, tune: { ...st.tune, ve: st.tune.ve.map((row, ri) => row.map((v, ci) => (ci === c && S.LOAD[ri] >= 70 ? v * f : v))) } };
-};
-/** Spark out of the boost rows (about 4° per 20 kPa) and the boost rows richer. */
-const boostSparkAndFuel = (st, degPer20 = 4, afr = 12.0) => ({
-  ...st,
-  tune: {
-    ...st.tune,
-    timing: st.tune.timing.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? v - ((S.LOAD[ri] - 100) / 20) * degPer20 : v))),
-    afr: st.tune.afr.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? afr : v))),
-  },
-});
-const zmul = (st, path, f) => { const t = getCal(st, path); return setCal(st, path, { ...t, z: t.z.map((v) => v * f) }); };
-
-/** How each job is really fixed. Every one uses only controls the job's training opens. */
-const FIXES = {
-  'intake-maf': (s) => setBuild(s, { mafScalar: 1.11 }),
-  'injector-scaling': (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
-  'headers-lean': (s) => extendTopColumn(veFromLogs(s, 2), 1.16),
-  'idle-hunt': (s) => setCal(s, 'idle.damp', 0.04),
-  'cam-swap': (s) => veFromLogs(s, 3),
-  e85: (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
-  'retarded-timing': (s) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: 'vq35hr' }).tune.timing } }),
-  'turbo-kit': (s) => boostSparkAndFuel(s),
-  'full-session': (s) => zmul(veFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
-  'blower-power': (s) => boostSparkAndFuel(s, 3, 11.8),
-  nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 10),
-};
 
 const failures = (v) => v.results.filter((x) => !x.pass).map((x) => `${x.check.label}: ${x.measured}`);
 
@@ -118,7 +78,7 @@ describe('grading', () => {
 });
 
 describe('the shop', () => {
-  const { accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, deliver, newCareer, pageUnlocked, reviveCareer, storeCar, train } = /** @type {any} */ (shop);
+  const { accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, deliver, newCareer, overhead, pageUnlocked, reviveCareer, storeCar, train } = /** @type {any} */ (shop);
 
   it('starts small: a little money, no reputation, fuel basics only, one lift, no dyno', () => {
     const c = newCareer();
@@ -149,7 +109,8 @@ describe('the shop', () => {
     const v = evaluateJob(jobById('intake-maf'), car);
     c = deliver(c, 'intake-maf', v);
     expect(v.verdict).toBe('pass');
-    expect(c.money).toBe(START_MONEY + v.pay);
+    // Paid, less the day's running costs: the day moves on when the car leaves.
+    expect(c.money).toBe(START_MONEY + v.pay - overhead(newCareer()));
     expect(c.rep).toBe(jobById('intake-maf').rep);
     expect(c.lifts).toHaveLength(0);
     expect(c.done['intake-maf']).toBe(1);

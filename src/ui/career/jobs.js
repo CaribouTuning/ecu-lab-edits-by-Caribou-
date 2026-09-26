@@ -143,7 +143,7 @@ export const JOBS = [
     wants: 'Make it run right with the cam. I know it’ll idle lumpy — that’s the point.',
     work: ['Road test and diagnose', 'Re-map for the new cam'],
     car: { preset: null, build: (b) => ({ engineConfig: { ...b.engineConfig, camDuration: 268, springRate: 78 } }) },
-    needs: {}, minRep: 25, pay: 900, rep: 10,
+    needs: {}, minRep: 30, pay: 900, rep: 10,
     checks: [
       { type: 'events', kind: 'complaint', types: ['lean', 'rich'], label: 'No longer lean or rich' },
       { type: 'mixture', kind: 'complaint', pct: 6, label: 'Full-throttle mixture where it should be' },
@@ -190,7 +190,7 @@ export const JOBS = [
     wants: 'I want to use the boost, but I don’t want to blow it up.',
     work: ['Turbo kit already fitted, injectors already scaled', 'Road test and tune for boost'],
     car: { preset: null, build: (b) => ({ turboOn: true, boostCurve: [0, 0, 3, 6, 8, 8, 8, 7], injIdx: 2, ecuInjectorCc: 550, octaneIdx: 1, mods: { ...b.mods, intercooler: true } }) },
-    needs: { training: ['spark'] }, minRep: 30, pay: 1600, rep: 14,
+    needs: { training: ['spark'] }, minRep: 45, pay: 1600, rep: 14,
     checks: [
       { type: 'events', kind: 'complaint', types: ['knock', 'knockprot'], label: 'No rattle under boost' },
       ...SAFE,
@@ -208,7 +208,7 @@ export const JOBS = [
     wants: 'A complete calibration. Clean everywhere. No excuses on the log.',
     work: ['Engine built and fitted by Coastline', 'Complete calibration'],
     car: { preset: null, build: (b) => ({ engineConfig: { ...b.engineConfig, camDuration: 252, springRate: 76 }, injIdx: 3, ecuInjectorCc: 315, mods: { ...b.mods, intake: true }, octaneIdx: 1 }) },
-    needs: { training: ['spark', 'knock'] }, minRep: 70, pay: 2800, rep: 20,
+    needs: { training: ['spark', 'knock'] }, minRep: 130, pay: 2800, rep: 20,
     checks: [
       { type: 'events', kind: 'complaint', types: ['rich', 'injscale', 'maf', 'misfire'], label: 'Fuelling and sensors all correct' },
       { type: 'events', kind: 'complaint', types: ['falseknock'], label: 'Knock control not fooled by the new valvetrain' },
@@ -225,7 +225,7 @@ export const JOBS = [
     wants: '380 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
     work: ['Supercharger kit already fitted and injectors scaled', 'Dyno tune for power and reliability'],
     car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.6, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
-    needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 70, pay: 3200, rep: 22,
+    needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 130, pay: 3200, rep: 22,
     checks: [
       { type: 'minHp', kind: 'complaint', hp: 380, label: '380 wheel horsepower' },
       ...SAFE,
@@ -241,7 +241,7 @@ export const JOBS = [
     wants: 'Make the nitrous pull clean and safe. I don’t want to hear that noise again.',
     work: ['Nitrous kit already fitted', 'Dyno tune the nitrous'],
     car: { preset: 'vq35de-revup', build: () => ({ nitrous: { kit: 'wet', shotHp: 100, heater: true, bottleLb: 10 } }) },
-    needs: { training: ['nitrous'], equipment: ['dyno', 'egt'] }, minRep: 70, pay: 2400, rep: 18,
+    needs: { training: ['nitrous'], equipment: ['dyno', 'egt'] }, minRep: 130, pay: 2400, rep: 18,
     checks: [
       { type: 'events', kind: 'complaint', types: ['rich', 'nitrousknock', 'nitrouslean'], label: 'Clean, safe mixture and no knock while spraying' },
       { type: 'events', kind: 'safety', types: ['knock', 'unheardknock', 'lean', 'fuel'], label: 'No knock or lean anywhere' },
