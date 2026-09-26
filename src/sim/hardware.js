@@ -158,6 +158,47 @@ export function turbineWithCount(base, count = 1) {
 }
 
 /**
+ * `n` compressors of one size, side by side, as a twin-turbo engine has them: each turbo
+ * carries its own compressor, and in parallel they pass `n` times the air at the same
+ * pressure ratio. So every flow on the map scales — the island's centre, the surge line
+ * and the choke line — while the pressure ratios and the efficiency do not. Twin turbos
+ * used to double only the turbine, leaving the engine one compressor's worth of air.
+ *
+ * @param {object|null} base a `COMPRESSOR_OPTS` entry
+ * @param {number} count how many turbos are fitted
+ * @returns {object|null}
+ */
+export function compressorWithCount(base, count = 1) {
+  if (!base || count === 1) return base;
+  return {
+    ...base,
+    pkFlowKgS: base.pkFlowKgS * count,
+    chokeFlowKgS: base.chokeFlowKgS * count,
+    surgeSlope: base.surgeSlope * count,
+  };
+}
+
+/**
+ * Air a turbo engine asks its compressor for, kg/s, at `rpm` and `boostPsi` — the number
+ * a turbo shop sizes a compressor by. The starting point is a full cylinder of sea-level
+ * air every other revolution, scaled by the pressure ratio; `TURBO_FILL` then takes off
+ * what a real engine does not get: it fills ~85 % of its cylinders at the top end, and
+ * the charge reaches them warmer, so thinner, than ambient even after an intercooler.
+ *
+ * The fraction is set against this model's own compressor maps: a compressor asked for
+ * more than its choke flow by this measure is one whose boost the pull shows falling
+ * away before the rev limit, and one asked for less holds its target.
+ *
+ * @param {number} displacementL
+ * @param {number} rpm
+ * @param {number} [boostPsi]
+ * @returns {number}
+ */
+export const TURBO_FILL = 0.7;
+export const turboAirflowNeedKgS = (displacementL, rpm, boostPsi = 0) =>
+  (displacementL / 1000) * (rpm / 120) * 1.184 * (1 + Math.max(0, boostPsi) / 14.7) * TURBO_FILL;
+
+/**
  * Compressors, each carrying a MAP rather than a single efficiency number.
  *
  * A real compressor map is a field of efficiency islands bounded by a surge line on the

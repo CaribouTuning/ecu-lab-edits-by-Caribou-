@@ -23,7 +23,7 @@ function realPull() {
     octaneLabel: S.OCTANE_OPTS[patch.octaneIdx].label, fuel: S.OCTANE_OPTS[patch.octaneIdx],
     injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc, ecuInjectorCc: patch.ecuInjectorCc,
     injectorLabel: 'stock', mods: patch.mods, mafScalar: 1, derived,
-    turbine: S.presetTurbine(preset), compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
+    turbine: S.presetTurbine(preset), compressor: S.presetCompressor(preset),
   });
 }
 

@@ -17,7 +17,7 @@
  */
 
 import {
-  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
+  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, compressorWithCount, turbineWithCount,
 } from './hardware.js';
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
@@ -186,11 +186,13 @@ export const ENGINE_PRESETS = [
       redline: 7000,
     },
     induction: {
-      turboOn: true, turbineIdx: 0, compressorIdx: 1,
-      // TWO of them. Now that backpressure is solved from turbine flow area rather than
-      // assumed proportional to boost, the count is load-bearing: a pair of small
-      // housings passes twice the exhaust of one before it starts choking, which is the
-      // whole reason a manufacturer fits two small turbos instead of one big one.
+      turboOn: true, turbineIdx: 0, compressorIdx: 0,
+      // TWO small turbos (Mitsubishi TD03s), each with its own turbine and compressor.
+      // Now that backpressure is solved from turbine flow area rather than assumed
+      // proportional to boost, the count is load-bearing: a pair of small housings
+      // passes twice the exhaust of one before it starts choking, and a pair of small
+      // compressors twice the air, which is the whole reason a manufacturer fits two
+      // small turbos instead of one big one.
       turbineCount: 2,
       // Twin small turbos spool early (0.6 bar / 8.5 psi target by 3500), but the
       // factory ECU tapers boost above that as exhaust backpressure and heat climb
@@ -427,6 +429,17 @@ export function presetTurbine(preset) {
   return turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount);
 }
 
+/**
+ * The compressors as fitted: one per turbo, so a twin-turbo engine has two.
+ *
+ * @param {Preset} preset
+ * @returns {object}
+ */
+export function presetCompressor(preset) {
+  const { compressorIdx, turbineCount = 1 } = preset.induction;
+  return compressorWithCount(COMPRESSOR_OPTS[compressorIdx], turbineCount);
+}
+
 /** The induction hardware bundle `computeHardwareVE` expects. */
 function hardwareFor(preset) {
   const { turboOn, turbineIdx, boost } = preset.induction;
@@ -489,7 +502,7 @@ export function factoryCalibration(preset) {
     if (!inductionMemo.has(key)) {
       inductionMemo.set(key, inductionAtMap({
         rpm, mapKpa: loadKpa, boostTargetPsi: interp1(RPM, preset.induction.boost, rpm), turbine,
-        compressor: COMPRESSOR_OPTS[preset.induction.compressorIdx],
+        compressor: presetCompressor(preset),
         veAt: (m) => interp2(ve, rpm, m), derived,
         intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
       }));

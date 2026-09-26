@@ -30,7 +30,7 @@ function pullFor(preset) {
     injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
     mods: patch.mods, mafScalar: patch.mafScalar, derived,
     turbine: S.presetTurbine(preset),
-    compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
+    compressor: S.presetCompressor(preset),
   });
 }
 

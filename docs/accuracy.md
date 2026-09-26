@@ -132,15 +132,17 @@ Learn article 39. None of them changes the direction of any lesson.
    to the manifold. Real nitrous starts to boil in the jet (two-phase, often choked), which
    the kit makers' jetting charts absorb; the bottle-pressure effect here is the
    single-phase one.
-14. **Extra oxygen does not speed the burn.** Oxygen-enriched mixtures burn faster; here the
-   burn rate follows mixture and residuals as before, so nitrous reaches the knock limit
-   through cylinder pressure and temperature alone. The knock limit falls 3–4° per 50 hp
-   of shot on pump 93, a little more than the 2° tuners start from, and the retard that
-   takes, on top of a spark table already knock-limited, burns late: the exhaust port
-   reads about 1000–1050 °C while a 100 shot sprays on the stock VQ35DE, where one owner's
-   log shows EGT falling on a 100 shot (Lightning Rodder forum, a practitioner source).
-   A faster O₂-enriched burn is the likely missing piece; there is no sourced figure for
-   it to fit to, so it is recorded instead.
+14. **Extra oxygen speeds only the flame's start, and by an estimate.** Zhang et al.
+   measured spark-to-10%-burned 3-4° shorter with the oxidant at 25% O₂ instead of 21%,
+   the 10-90% burn barely moving ([ACS Omega 2022](https://pmc.ncbi.nlm.nih.gov/articles/PMC9685745/)).
+   Nitrous's oxygen now shortens the model's flame development by the same share
+   (`FLAME_DEV_SHARE_PER_O2_PT`), but the paper does not print its baseline, so the share
+   rests on an assumed ~25° light-load baseline; a 100 shot moves full-load flame
+   development under half a degree. The knock limit falls 3–4° per 50 hp of shot on pump
+   93 (a 50 shot about 4°), a little more than the 2° tuners start from, and the exhaust
+   port reads about 960–1030 °C while a 100 shot sprays on the stock VQ35DE. One owner's log shows EGT
+   falling on a 100 shot (Lightning Rodder forum, a practitioner source); no controlled
+   measurement of EGT under nitrous was found to test that against, so it is recorded.
 15. **The bottle is two lumps, liquid and wall.** The liquid's density and heat capacity
    follow the published saturation curves, and only what boils to refill the room the
    spray left cools it. But the heat paths are estimates — about 100 W/K from wall to
@@ -295,6 +297,30 @@ and kit makers — practitioner rules, the weakest sources here).
   intercooler where the build lacks them.
 - **A wet nitrous kit's own fuel was cooled like a port injector's.** It is sprayed into
   the airstream with the nitrous, so it now takes the nitrous's share of charge cooling.
+- **Twin turbos had one compressor.** A twin setup doubled the turbine's flow area but
+  left the air side at one compressor's flow, so a twin choked at half the air it should
+  pass, and the N54 stood in a single Medium compressor for its pair. Both halves now
+  scale with the count (`compressorWithCount`), the N54 is the two small TD03s it
+  carries (its power and torque fit are unchanged), and the player could not fit a twin
+  at all; now BUILD › Induction has a Single/Twin picker with a line comparing what the engine needs
+  at the rev limit against where the compressors choke, in the lb/min turbo shops size by.
+- **The Engineer Score passed a single Medium turbo on a 7 L V8.** The too-small rule
+  matched on the size label past 4.2 L. It now compares the engine's airflow at the rev
+  limit and peak boost (`turboAirflowNeedKgS`) with the compressors' choke flow, and the
+  turbine's flow area with displacement, so it flags what the pull will show.
+- **Nitrous fuel advice could be impossible.** Rich while spraying asked to lower a dry
+  kit's fuel by 200 points from 100%, and a lean cut asked to raise it to 100% when it
+  already was. The advice now stays within what the field can move, and when the base VE
+  table is more than 8% off what the engine really fills, it sends the player to
+  TUNE → AIRFLOW instead of hiding a base-tune error in the nitrous fuel.
+- **Oxygen from nitrous now speeds the flame's start.** See approximation 14. The story
+  nitrous job's reference fix needs 10° of retard while spraying where it needed 8.
+
+These move 582 of the fingerprint's 678,605 values, all but two of them Engineer and pull
+scores: boosted builds whose pull already logged underboost from a choked compressor are
+now marked down 8 for it. The other two are the N54's part-load advice and fuel table,
+each by under half a unit, from its compressors now being the pair it has. No power or
+torque figure in the fingerprint moves; it carries no nitrous or twin-turbo case.
 - **The Engineer Score gave a port-injected engine a direct-injected engine's compression
   allowance.** Factory port-injected turbo engines sit at 8.2-8.5:1 (EJ257, 2JZ-GTE,
   SR20DET) against 10.2-11.0:1 for direct-injected ones; the score now moves a point for

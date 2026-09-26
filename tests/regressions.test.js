@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
+import { makeEngine } from './ecuHarness.js';
 
 const STOCK = S.DEFAULT_ENGINE_CONFIG;
 const NO_MODS = { ...S.DEFAULT_MODS, turboFitted: false };
@@ -358,10 +359,11 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
       ecuInjectorCc: patch.ecuInjectorCc,
       injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
       mods: patch.mods, mafScalar: patch.mafScalar, derived: S.deriveEngine(patch.engineConfig),
-      // The N54 is twin-turbo, and backpressure now depends on total turbine flow
-      // area, so the count has to come along or this models a choked engine.
+      // The N54 is twin-turbo: backpressure depends on total turbine flow area and the
+      // air supply on total compressor flow, so the count has to come along for both or
+      // this models a choked engine.
       turbine: S.presetTurbine(preset),
-      compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
+      compressor: S.presetCompressor(preset),
     });
   }
 
@@ -426,5 +428,30 @@ describe('preset-readiness hardening', () => {
     // Seven entries for an eight-point axis is the exact bug that once shipped.
     expect(() => run([0, 0, 3, 6, 8, 8, 8])).toThrow(/boost curve/i);
     expect(() => run(S.RPM.map(() => 8))).not.toThrow();
+  });
+});
+
+describe('twin turbos pass twice the air', () => {
+  it('a 7 L V8 holds its boost to redline on two Large turbos where one runs out', () => {
+    // Twins used to double only the turbine: the air side stayed one compressor, so a
+    // pair choked where it should not. Each turbo carries its own compressor.
+    const top = (count) => {
+      const eng = makeEngine({
+        build: {
+          engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, configuration: 'V8', bore: 105, stroke: 100, compression: 9.0 },
+          mods: { ...S.DEFAULT_MODS, intercooler: true, exhaust: true, headers: true },
+          turboOn: true, boostCurve: [0, 2, 6, 10, 10, 10, 10, 10],
+          turbineIdx: 2, compressorIdx: 2, turbineCount: count,
+          injIdx: S.INJECTOR_OPTS.length - 1, ecuInjectorCc: S.INJECTOR_OPTS.at(-1).cc, octaneIdx: 3,
+          fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: S.PUMP_OPTS.length - 1 },
+        },
+      });
+      return eng.pull(100).points.find((p) => p.rpm === 7000);
+    };
+    const single = top(1);
+    const twin = top(2);
+    expect(single.boostPsi).toBeLessThan(single.boostTarget - 2);
+    expect(twin.boostPsi).toBeGreaterThan(twin.boostTarget - 0.5);
+    expect(twin.hp).toBeGreaterThan(single.hp * 1.2);
   });
 });

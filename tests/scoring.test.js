@@ -86,6 +86,21 @@ describe('computeEngineerScore turbo sizing', () => {
     expect(build({ displacementL: 5.0, compressor: SMALL_COMPRESSOR }).score).toBe(92);
   });
 
+  it('judges too small by airflow, so a twin setup passes where one of the pair would not', () => {
+    // A 7 L V8 at 10 psi and 7500 RPM needs about 0.60 kg/s; one Medium compressor
+    // chokes at 0.32 and one Large at 0.50. Two Larges pass 1.0.
+    const v8 = { displacementL: 6.9 };
+    const one = build({ ...v8, turbine: S.TURBINE_OPTS[2], compressor: LARGE_COMPRESSOR });
+    const two = build({
+      ...v8,
+      turbine: S.turbineWithCount(S.TURBINE_OPTS[2], 2),
+      compressor: S.compressorWithCount(LARGE_COMPRESSOR, 2),
+    });
+    expect(one.deductions.join(' ')).toMatch(/Turbo too small/);
+    expect(two.deductions.join(' ')).not.toMatch(/Turbo too small/);
+    expect(build({ ...v8, compressor: S.COMPRESSOR_OPTS[1] }).deductions.join(' ')).toMatch(/Turbo too small/);
+  });
+
   it('says nothing about turbo sizing on a naturally aspirated build', () => {
     const na = build({ turboOn: false, displacementL: 2.0, turbine: LARGE_TURBINE });
     expect(na.deductions.join(' ')).not.toMatch(/Turbo sized/);
@@ -326,7 +341,9 @@ describe('computeEngineerScore compression headroom vs boost level', () => {
   const at = (psi, compression, fuel = S.OCTANE_OPTS[3]) => S.computeEngineerScore({
     engineConfig: { ...S.DEFAULT_ENGINE_CONFIG, compression, headMaterial: 'Aluminum', injection: 'direct' },
     turboOn: true, peakBoostPsi: psi,
-    turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[1],
+    // A Large compressor passes this 3.5 L's air at every boost here, so the turbo-sizing
+    // rule stays out of a block that is about compression.
+    turbine: S.TURBINE_OPTS[1], compressor: S.COMPRESSOR_OPTS[2],
     exhaustDiaError: 0, dutyPreview: 80, displacementL: 3.5, fuel, mods: cooled,
   });
 
@@ -366,7 +383,7 @@ describe('computeEngineerScore compression headroom vs boost level', () => {
       const r = S.computeEngineerScore({
         engineConfig: p.engineConfig, turboOn: true,
         peakBoostPsi: Math.max(...p.boostCurve),
-        turbine: S.presetTurbine(preset), compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+        turbine: S.presetTurbine(preset), compressor: S.presetCompressor(preset),
         exhaustDiaError: 0, dutyPreview: 80,
         displacementL: S.deriveEngine(p.engineConfig).displacementL,
         fuel: S.OCTANE_OPTS[p.octaneIdx], mods: p.mods,

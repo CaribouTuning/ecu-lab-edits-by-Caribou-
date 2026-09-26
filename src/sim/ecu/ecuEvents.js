@@ -125,10 +125,19 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
     groupRuns(points, (p) => has(p, 'nitrous lean')).forEach((run) => {
       const inj = run.some((p) => p.fuelLimited);
       const pump = run.some((p) => p.fuelStarved);
+      // The base tune under-fuelling shows up first on the spray, where the lean-cut
+      // limit is tighter: a VE table reading well under what the engine fills starves
+      // it of fuel whether the nitrous flows or not. More kit fuel would only paper over
+      // that until the nitrous stops.
+      const worst = run.reduce((a, b) => (b.sensedLambda > a.sensedLambda ? b : a));
+      const baseLean = worst.ve > 0 && worst.veTable / worst.ve - 1 < -0.08;
+      const baseCause = `The base fuelling is short, not the kit: the VE table says ${worst.veTable}% here where the engine actually fills ${worst.ve}%, so the ECU fuels for less air than it gets, spraying or not.`;
+      const baseFix = 'Correct VE on TUNE → AIRFLOW in this range first (log a pull and accept the suggestions), then check the spray mixture again. Leave the nitrous fuel alone until then.';
       events.push({
         type: 'nitrouslean', severity: 3, impact: imp(18, run), ...span(run),
         msg: `Lean cut shut the nitrous off across ${label(run)} — the wideband read leaner than λ ${n.leanCutLambda.toFixed(2)} while spraying`,
-        cause: kit.kit === 'dry'
+        cause: baseLean && !inj && !pump ? baseCause
+          : kit.kit === 'dry'
           ? inj
             ? `A dry kit's fuel goes through the injectors, and on top of what the engine already needs they ran out of time: the nitrous got its oxygen and not its fuel.`
             : n.dryFuelPct < 100
@@ -137,10 +146,13 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
           : pump
             ? `A wet kit's fuel jet runs off the same pump as the injectors. With the nitrous on, the pump could not hold rail pressure for both, and the kit's fuel fell with it while the nitrous did not.`
             : `A wet kit meters its fuel at a fixed fuel pressure, so it does not follow the bottle: more bottle pressure pushes more nitrous through the same fuel. The fuel pressure held here, so the bottle is the suspect — or the lean-cut limit is set tighter than the mixture the kit is jetted for.`,
-        fix: kit.kit === 'dry'
+        fix: baseLean && !inj && !pump ? baseFix
+          : kit.kit === 'dry'
           ? inj
             ? 'On BUILD → FUEL SYSTEM, fit larger injectors (then set TUNE → INJECTORS to match), or spray a smaller shot.'
-            : 'On TUNE → NITROUS, raise the dry kit fuel to at least 100% for this shot.'
+            : n.dryFuelPct < 100
+              ? 'On TUNE → NITROUS, raise the dry kit fuel to at least 100% for this shot.'
+              : `On TUNE → NITROUS, raise Fuel correction while spraying a few points at a time, or bring the bottle to 85 °F with the heater on BUILD → INDUCTION so it flows what the kit is rated for, not more. Check the lean-cut limit too (λ ${n.leanCutLambda.toFixed(2)} now).`
           : pump
             ? 'Fit a bigger fuel pump on BUILD → FUEL SYSTEM: it has to feed the engine and the kit together.'
             : `Bring the bottle to 85 °F (about 920 psi) with the heater on BUILD → INDUCTION, check the lean-cut limit on TUNE → NITROUS (λ ${n.leanCutLambda.toFixed(2)} now), or raise Fuel correction while spraying there.`,

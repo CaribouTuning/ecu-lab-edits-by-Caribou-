@@ -78,7 +78,7 @@ function pullFor(preset) {
     fuel: S.OCTANE_OPTS[patch.octaneIdx],
     injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc, ecuInjectorCc: patch.ecuInjectorCc,
     injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label, mods: patch.mods, mafScalar: patch.mafScalar,
-    derived, turbine: S.presetTurbine(preset), compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
+    derived, turbine: S.presetTurbine(preset), compressor: S.presetCompressor(preset),
   });
 }
 

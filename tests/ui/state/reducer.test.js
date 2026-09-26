@@ -212,12 +212,13 @@ describe('CLEAR_PRESET_ID', () => {
 });
 
 describe('SET_TURBINE', () => {
-  it('fits one of the chosen housing, because a twin-turbo count belongs to a preset', () => {
+  it('swaps the housing and keeps the number of turbos, which is its own pick', () => {
     const twin = { ...makeInitialState() };
     twin.build = { ...twin.build, turbineIdx: 2, turbineCount: 2 };
     const s = reducer(twin, { type: ACTIONS.SET_TURBINE, value: 1 });
     expect(s.build.turbineIdx).toBe(1);
-    expect(s.build.turbineCount).toBe(1);
+    expect(s.build.turbineCount).toBe(2);
+    expect(s.build.presetId).toBe(null);
   });
 });
 

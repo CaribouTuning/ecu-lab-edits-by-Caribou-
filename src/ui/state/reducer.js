@@ -96,9 +96,9 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
- * Fits ONE of the chosen turbine housing. A twin-turbo `turbineCount` belongs to a
- * preset, not a hand pick from the turbine list, so this always resets it to 1
- * alongside the new housing — and, like any hardware edit, clears `presetId`.
+ * Swaps the turbine housing. How many turbos are fitted (`turbineCount`) is its own
+ * pick on BUILD › Induction and stays as it was — a twin-turbo engine gets two of the
+ * new housing. Like any hardware edit, this clears `presetId`.
  * @typedef {{type: 'SET_TURBINE', value: number}} SetTurbineAction
  */
 
@@ -472,7 +472,6 @@ function baseReducer(state, action) {
         build: {
           ...state.build,
           turbineIdx: action.value,
-          turbineCount: 1,
           presetId: null,
         },
       };

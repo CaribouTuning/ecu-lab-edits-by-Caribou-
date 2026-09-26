@@ -34,7 +34,7 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
     ...patch,
   };
   const turbine = S.turbineWithCount(S.TURBINE_OPTS[build.turbineIdx], build.turbineCount);
-  const compressor = S.COMPRESSOR_OPTS[build.compressorIdx];
+  const compressor = S.compressorWithCount(S.COMPRESSOR_OPTS[build.compressorIdx], build.turbineCount);
   const fuel = S.tankFuel(build);
   const hwForVe = {
     turboOn: build.turboOn, turbine: build.turboOn ? turbine : null,

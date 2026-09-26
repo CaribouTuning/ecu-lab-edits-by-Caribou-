@@ -264,12 +264,41 @@ export function simulateSweep({
     const changeMg = (p.fuelMass + kitMg) * (p.lambda / COEFF.N2O_TARGET_LAMBDA - 1);
     return Math.round((changeMg / shotMg) * 100);
   };
+  /** The kit-fuel field this build tunes, its current setting and its limits. */
+  const kitFuelField = () => {
+    const dry = nitrous?.kit === 'dry';
+    const n = ecu?.cal?.nitrous;
+    return dry
+      ? { label: 'Dry kit fuel', now: n?.dryFuelPct, min: 0, max: 200 }
+      : { label: 'Fuel correction while spraying', now: n?.fuelTrimPct, min: -100, max: 100 };
+  };
   const nitrousFuelFix = (p, dir) => {
     const pct = nitrousFuelChangePct(p);
-    const field = nitrous?.kit === 'dry' ? 'Dry kit fuel' : 'Fuel correction while spraying';
-    const amount = pct != null ? ` by about ${Math.min(Math.abs(pct), nitrous?.kit === 'dry' ? 200 : 100)} points` : '';
-    return `On TUNE → NITROUS, ${dir === 'less' ? 'lower' : 'raise'} ${field}${amount}. That changes the fuel only while the nitrous flows — leave VE and the AFR table alone, they are right when it stops. Nitrous tuners aim for about 11.5-12:1 (λ 0.78-0.82) on pump gas.`;
+    const field = kitFuelField();
+    // The change can only go as far as the field does: a dry kit's fuel at 100% cannot be
+    // lowered by 200 points. When the whole range is not enough, the kit is not the
+    // problem, and saying "lower it by 200" hid that.
+    const room = field.now == null ? Infinity
+      : dir === 'less' ? field.now - field.min : field.max - field.now;
+    const want = pct != null ? Math.abs(pct) : null;
+    const verb = dir === 'less' ? 'lower' : 'raise';
+    const base = 'the rest of the error is in the base fuelling, so check VE on TUNE → AIRFLOW and the injector scaling on TUNE → INJECTORS.';
+    const aim = ' Nitrous tuners aim for about 11.5-12:1 (λ 0.78-0.82) on pump gas.';
+    if (room <= 0) {
+      return `On TUNE → NITROUS, ${field.label} is already at its ${dir === 'less' ? 'minimum' : 'maximum'} (${field.now}%), so the kit's fuel cannot fix this: ${base}${aim}`;
+    }
+    if (want != null && want > room) {
+      return `On TUNE → NITROUS, ${verb} ${field.label} as far as it goes (${room} points, to ${dir === 'less' ? field.min : field.max}%). That alone will not reach the target: ${base}${aim}`;
+    }
+    return `On TUNE → NITROUS, ${verb} ${field.label}${want != null ? ` by about ${want} points` : ''}. That changes the fuel only while the nitrous flows — leave VE and the AFR table alone, they are right when it stops.${aim}`;
   };
+  // The base tune can be the one off, and nitrous only makes it show: a VE table well
+  // above what the engine really fills fuels for air that is not there, spraying or not.
+  // Tuning the kit's fuel to hide that would leave the engine wrong the moment the
+  // nitrous stops. 8 % is past what the closed-loop trim or a wideband's own error
+  // explains.
+  const baseVeOff = (p) => (p.ve > 0 ? p.veTable / p.ve - 1 : 0);
+  const baseFuelFix = (p) => `The base fuelling is off, not the nitrous: the VE table says ${p.veTable}% here where the engine actually fills ${p.ve}%, so the ECU fuels for ${baseVeOff(p) > 0 ? 'air that is not there' : 'less air than it gets'} whether the kit sprays or not. Correct VE on TUNE → AIRFLOW first (log a pull and accept the suggestions), then re-check the mixture on the spray. Leave the nitrous fuel where it is until then.`;
 
   // Real knock: commanded timing past the knock limit. Without an ECU that is exactly
   // `knock`. With one, the controller can also pull timing for noise it mistook for
@@ -361,7 +390,7 @@ export function simulateSweep({
       fix: peak.fuelLimited
         ? `Upgrade injectors on BUILD → FUEL SYSTEM (and set TUNE → INJECTORS to match), or lower VE/boost so demand fits within current capacity.`
         : spraying(peak)
-          ? nitrousFuelFix(peak, 'more')
+          ? baseVeOff(peak) < -0.08 ? baseFuelFix(peak) : nitrousFuelFix(peak, 'more')
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `Fix what the ECU is getting wrong rather than asking for a richer number: correct VE on TUNE → AIRFLOW in this range, and check TUNE → INJECTORS and TUNE → SENSORS match the parts on BUILD (the setup warnings there name any mismatch).`
           : `On TUNE → FUEL, richen the cells in this range — best power here is near ${peak.bestAfr}:1${peak.boostPsi > 1 ? ' (richer than the N/A ideal, because boost needs the charge cooling)' : ''}.${missedTarget(peak) ? ' Then correct VE there, so the engine gets what the table asks for.' : ''}`,
@@ -389,10 +418,13 @@ export function simulateSweep({
       type: 'rich', severity: 3, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Dangerously rich across ${rangeLabel(run)} — down to lambda ${peak.lambda.toFixed(2)} (${peak.afr.toFixed(1)}:1)`,
-      cause: spraying(peak)
+      cause: spraying(peak) && baseVeOff(peak) > 0.08
+        ? `This is while the nitrous sprays, but most of the extra fuel is the base tune's: the VE table here reads ${Math.round(baseVeOff(peak) * 100)}% more air than the engine really gets, and a speed-density ECU fuels for the air the table says. The nitrous's own fuel comes on top of that.`
+        : spraying(peak)
         ? `This is while the nitrous sprays, and the extra fuel is the nitrous's, not the base tune's. ${nitrous?.kit === 'dry' ? 'The injectors carry the dry kit\'s fuel on top of the fuel for the air' : 'The wet kit\'s own jet adds fuel, jetted rich on purpose, on top of the injectors'} — and the nitrous vapour takes up room the air would have had. A speed-density ECU works out air from MAP and the VE table, so it cannot see that and keeps fuelling for air that is not there. Past about 11:1 the extra fuel washes the cylinder walls, fouls plugs and costs power.`
         : `Far more fuel is being delivered than the available air can burn. Raw fuel washes the oil film off the cylinder walls, fouls plugs, and passes into the exhaust. It also costs a lot of power — the mixture is well past the point where extra fuel helps.`,
-      fix: spraying(peak) ? nitrousFuelFix(peak, 'less') : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
+      fix: spraying(peak) && baseVeOff(peak) > 0.08 ? baseFuelFix(peak)
+        : spraying(peak) ? nitrousFuelFix(peak, 'less') : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
         ? `The AFR table asked for ${peak.afrCommanded.toFixed(1)}:1 but the engine got ${peak.afr.toFixed(1)}:1, so the fuelling is off, not the target. Correct VE on TUNE → AIRFLOW in this range, and check the injector scaling on TUNE → INJECTORS and the MAF scalar on TUNE → SENSORS match the parts on BUILD.`
         : `The AFR table itself asks for this much fuel. Lean the AFR cells in this range back toward ${peak.bestAfr}:1.${missedTarget(peak) ? ' Then check VE and the injector scaling on TUNE → INJECTORS, because the engine is getting even more than the table asks for.' : ''}`,
     });

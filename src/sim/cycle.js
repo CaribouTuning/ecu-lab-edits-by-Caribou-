@@ -149,6 +149,8 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} rodRatio connecting rod length ÷ crank radius
  * @property {number} ivcAbdc intake valve close, degrees after BDC
  * @property {number} burnDeg burn duration, crank degrees
+ * @property {number} [flameDevDeg] spark to self-sustaining flame, crank degrees. Absent,
+ *   `FLAME_DEVELOPMENT_DEG`; nitrous's extra oxygen shortens it
  * @property {number} boreM cylinder bore, metres — sets heat-transfer area
  * @property {number} strokeM stroke, metres — sets piston speed and liner area
  * @property {number} trappedMassKg total mass in the cylinder, for the gas-law temperature
@@ -186,6 +188,7 @@ export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
+  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
   const thetaStart = -180 + ivcAbdc;
@@ -193,7 +196,7 @@ export function runCycle({
   // Spark does not light the charge instantly: there is a delay while a kernel forms
   // and grows to a self-sustaining flame. Combustion is therefore phased from the end
   // of that delay, not from the spark event.
-  const burnStart = spark + COEFF.FLAME_DEVELOPMENT_DEG;
+  const burnStart = spark + flameDevDeg;
   const burnEnd = burnStart + burnDeg;
   // Geometry the wall heat-transfer model needs. What reaches the piston is the heat
   // release minus whatever the walls take, and the wall term is computed per step below
@@ -548,6 +551,22 @@ export function trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3 }) {
 }
 
 /**
+ * Spark to self-sustaining flame, crank degrees, for a charge whose oxidant is air plus
+ * decomposed nitrous. See `FLAME_DEV_SHARE_PER_O2_PT`.
+ *
+ * @param {number} airG air in the cylinder, grams
+ * @param {number} n2oG nitrous oxide in the cylinder, grams
+ * @returns {number}
+ */
+export function flameDevelopmentDeg(airG, n2oG) {
+  const airMol = airG / 28.96;
+  const n2oMol = n2oG / 44.013;
+  const o2Pct = (100 * (0.2095 * airMol + 0.5 * n2oMol)) / Math.max(1e-9, airMol + 1.5 * n2oMol);
+  return COEFF.FLAME_DEVELOPMENT_DEG
+    * clamp(1 - COEFF.FLAME_DEV_SHARE_PER_O2_PT * Math.max(0, o2Pct - 20.95), 0.5, 1);
+}
+
+/**
  * Builds the cycle inputs for one operating point. Shared by the per-point solve and the
  * factory calibration generator: two copies would drift, and the generated calibration
  * would then be knock-limited against a different engine than the player drives.
@@ -661,6 +680,11 @@ export function cycleInputsFor({
     burnDeg: burnDurationDeg({
       rpm, lambda, residualFrac, boreFlameFactor: derived.boreFlameFactor,
     }),
+    // Nitrous comes apart into N₂ and O₂ (2 N₂O → 2 N₂ + O₂: a third of the product
+    // moles are oxygen, against air's 21%), so the oxidant the flame sees is richer in
+    // O₂ and the kernel forms faster. Carried only when nitrous is in the cylinder, so
+    // every other cycle's inputs are exactly what they were.
+    ...(n2oG > 0 ? { flameDevDeg: flameDevelopmentDeg(airChargeG, n2oG) } : {}),
     octaneNumber: octaneIndex(fuel, trappedK, trappedPa),
     lambda,
     residualFrac,
@@ -681,7 +705,8 @@ export function cycleInputsFor({
  * @returns {number} MBT spark advance, degrees BTDC
  */
 export function mbtForCell(input) {
-  return mbtFromBurn(cycleInputsFor(input).burnDeg);
+  const cyc = cycleInputsFor(input);
+  return mbtFromBurn(cyc.burnDeg, cyc.flameDevDeg);
 }
 
 /**
@@ -693,9 +718,10 @@ export function mbtForCell(input) {
  * makes MBT respond to mixture, dilution and speed, as the old correlation could not.
  *
  * @param {number} burnDeg burn duration, crank degrees
+ * @param {number} [flameDevDeg] spark to self-sustaining flame, crank degrees
  * @returns {number} MBT spark advance, degrees BTDC
  */
-export function mbtFromBurn(burnDeg) {
+export function mbtFromBurn(burnDeg, flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG) {
   // Crank angle of 50% burn, as a fraction of the burn duration: solve the Wiebe
   // function for x where the burned fraction is one half.
   const half = Math.pow(Math.log(2) / COEFF.WIEBE_A, 1 / (COEFF.WIEBE_M + 1));
@@ -703,7 +729,7 @@ export function mbtFromBurn(burnDeg) {
   // light-load MBT work added: a very slow, heavily diluted burn would otherwise ask
   // for advance no calibration would ever write.
   return clamp(
-    COEFF.FLAME_DEVELOPMENT_DEG + half * burnDeg - COEFF.MFB50_ATDC_DEG,
+    flameDevDeg + half * burnDeg - COEFF.MFB50_ATDC_DEG,
     COEFF.MBT_MIN_DEG, COEFF.MBT_MAX_DEG,
   );
 }

@@ -105,6 +105,16 @@ export const COEFF = {
   // Spark to appreciable heat release, crank degrees, while the kernel forms. Real
   // engines show 5-15 depending on charge motion.
   FLAME_DEVELOPMENT_DEG: 8,
+  // Oxygen-enriched charge lights faster. Zhang et al. (ACS Omega 2022, a 2.0 L gasoline
+  // engine at 1500 RPM and light load) measured spark-to-10%-burned 3-4° shorter with the
+  // oxidant at 25% O₂ by volume instead of air's 21%, while the 10-90% burn barely moved.
+  // Taken as a SHARE of the flame-development period, because the kernel grows at the
+  // flame's speed and that period is long at light load and short at full load. The
+  // paper does not print its baseline; light-load spark-to-10% runs up to about 25°
+  // (26.5° is the figure used as the combustion-stability limit, Oil & Gas Sci. Tech.
+  // 2017), so 3.5° is about 14% over 4 points: 3.5% per point of O₂, an estimate. Only nitrous enriches the charge here, and a
+  // 100 shot adds 1-2 points at full load — under half a degree.
+  FLAME_DEV_SHARE_PER_O2_PT: 0.035,
   // Burn duration at the reference condition. NOTE this is the TOTAL Wiebe span, not the
   // 10-90% figure the literature quotes — at a=5, m=2 the 10-90% window is almost exactly
   // half, so 42 here is a ~21 degree 10-90%, which is where a production engine sits.

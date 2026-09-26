@@ -230,7 +230,7 @@ describe('fuel while spraying', () => {
 });
 
 describe('the pull log sends the player to screens that exist', () => {
-  it('every nitrous event names BUILD → INDUCTION / FUEL SYSTEM or TUNE → NITROUS / INJECTORS', () => {
+  it('every nitrous event names BUILD → INDUCTION / FUEL SYSTEM or TUNE → NITROUS / INJECTORS / AIRFLOW', () => {
     const cases = [
       pull(kit(150), { cal: { 'nitrous.retardDeg': 0 } }),
       pull(kit(100), { bottleK: F(55) }),
@@ -239,10 +239,47 @@ describe('the pull log sends the player to screens that exist', () => {
     for (const p of cases) {
       for (const e of p.events.filter((x) => /nitrous|bottle/.test(x.type))) {
         for (const m of e.fix.matchAll(/\b(BUILD|TUNE) → ([A-Z][A-Z ]*[A-Z])/g)) {
-          expect(['BUILD → INDUCTION', 'BUILD → FUEL SYSTEM', 'TUNE → NITROUS', 'TUNE → INJECTORS']).toContain(`${m[1]} → ${m[2]}`);
+          expect(['BUILD → INDUCTION', 'BUILD → FUEL SYSTEM', 'TUNE → NITROUS', 'TUNE → INJECTORS', 'TUNE → AIRFLOW']).toContain(`${m[1]} → ${m[2]}`);
         }
       }
     }
+  });
+});
+
+describe('the fuel advice while spraying stays possible and finds the real fault', () => {
+  /** A dry 100 shot with its fuel at 100%, on a VE table scaled from the truth. */
+  const skewed = (scale) => {
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(100, { kit: 'dry' }) } });
+    eng.tables.ve = eng.tables.ve.map((row) => row.map((v) => v * scale));
+    return eng.pull(100);
+  };
+
+  it('sends a VE table that over-reads the engine to TUNE → AIRFLOW, not to the kit fuel', () => {
+    // The shape of a player's report: a 7 L V8 with an untuned table read λ 0.48 on the
+    // spray and was told to take 200 points out of a dry kit's fuel set at 100.
+    const rich = skewed(1.45).events.find((e) => e.type === 'rich');
+    expect(rich).toBeTruthy();
+    expect(rich.fix).toMatch(/TUNE → AIRFLOW/);
+    expect(rich.fix).not.toMatch(/lower Dry kit fuel/);
+  });
+
+  it('never asks for more change than the field holds', () => {
+    for (const scale of [1.0, 1.05]) {
+      for (const e of skewed(scale).events) {
+        const m = /lower Dry kit fuel by about (\d+) points/.exec(e.fix ?? '');
+        if (m) expect(Number(m[1])).toBeLessThanOrEqual(100);
+      }
+    }
+  });
+
+  it('sends a VE table that under-reads the engine to TUNE → AIRFLOW when the spray goes lean', () => {
+    const p = skewed(0.7);
+    const lean = p.events.filter((e) => ['nitrouslean', 'lean'].includes(e.type));
+    expect(lean.length).toBeGreaterThan(0);
+    for (const e of lean) {
+      expect(e.fix).not.toMatch(/raise the dry kit fuel to at least 100%/);
+    }
+    expect(lean.some((e) => /TUNE → AIRFLOW/.test(e.fix))).toBe(true);
   });
 });
 

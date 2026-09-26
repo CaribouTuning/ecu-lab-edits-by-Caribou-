@@ -13,7 +13,8 @@
  */
 
 import { COEFF } from './coefficients.js';
-import { OCTANE_OPTS } from './hardware.js';
+import { DEFAULT_REDLINE_RPM } from './engine.js';
+import { OCTANE_OPTS, TURBINE_OPTS, turboAirflowNeedKgS } from './hardware.js';
 import { clamp } from './math.js';
 
 /**
@@ -127,8 +128,10 @@ function compressionDeduction(compression, headroom) {
  *   static-compression-under-boost rule so it never fires on a boosted build making no
  *   boost — see COEFF.COMPRESSION_BOOST_BASE for why the headroom itself does not also
  *   scale with this value
- * @param {{size: string}} input.turbine
- * @param {{size: string, boostCeiling: number}} input.compressor
+ * @param {{size: string, effectiveAreaM2?: number}} input.turbine the fitted turbine, already
+ *   scaled for a twin setup (`turbineWithCount`)
+ * @param {{size: string, boostCeiling: number, chokeFlowKgS?: number}} input.compressor
+ *   the fitted compressor, already scaled for a twin setup (`compressorWithCount`)
  * @param {number} input.exhaustDiaError inches the fitted pipe differs from ideal
  * @param {number} input.dutyPreview injector duty at current demand, percent
  * @param {number} input.displacementL
@@ -241,8 +244,18 @@ export function computeEngineerScore({
     if (displacementL < 3.0 && (turbine.size === 'large' || compressor.size === 'large')) {
       score -= 8; deductions.push('-8 Turbo sized large for this displacement — expect heavy lag');
     }
-    if (displacementL > 4.2 && (turbine.size === 'small' || compressor.size === 'small')) {
-      score -= 8; deductions.push('-8 Turbo sized small for this displacement — will choke the top end');
+    // Too small is judged the way a turbo shop sizes one: by airflow. A compressor that
+    // chokes below what the engine asks for at the rev limit and peak boost cannot
+    // supply it, so boost falls away up top; a turbine with too little flow area for
+    // the displacement dams the exhaust, and back-pressure climbs with it. Both scale
+    // with a twin setup, which is the point of one. The old rule matched on the size
+    // label past 4.2 L, so it passed a single Medium on a 7 L V8 that needs over
+    // twice what one compressor flows.
+    const needKgS = turboAirflowNeedKgS(displacementL, engineConfig.redline ?? DEFAULT_REDLINE_RPM, peakBoostPsi);
+    // A single Small housing on 4.2 L is where the old rule began, and stays the line.
+    const areaPerL = (turbine.effectiveAreaM2 ?? TURBINE_OPTS[1].effectiveAreaM2) / displacementL;
+    if (needKgS > compressor.chokeFlowKgS || areaPerL < TURBINE_OPTS[0].effectiveAreaM2 / 4.2) {
+      score -= 8; deductions.push('-8 Turbo too small for this engine\'s airflow — boost will fall away near redline and exhaust back-pressure climbs (fit a bigger turbo, or twins)');
     }
   }
   if (Math.abs(exhaustDiaError) > 0.3) {

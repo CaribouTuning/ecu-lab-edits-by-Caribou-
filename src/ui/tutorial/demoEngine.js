@@ -13,7 +13,7 @@
  */
 
 import {
-  COMPRESSOR_OPTS, calibrationAdvice, interp2, isLocatable, simulateSweep, veCorrections, veSamplesFromPull,
+  calibrationAdvice, interp2, isLocatable, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 import { eventBands } from '../components/eventBands.js';
 import { makeInitialState } from '../state/initialState.js';
@@ -57,7 +57,7 @@ export function runDemo(key, scenario = (s) => s) {
   const calAdvice = calibrationAdvice({
     ve: base.tune.ve, veTruth, timing: base.tune.timing, afr: base.tune.afr, derived,
     octaneBonus: fuel.bonus, fuel, mods: base.build.mods, turboOn: base.build.turboOn,
-    boostCurve: base.build.boostCurve, compressor: COMPRESSOR_OPTS[base.build.compressorIdx],
+    boostCurve: base.build.boostCurve, compressor: args.compressor,
     turbine: args.turbine, injectorCc: args.injectorCc, ecuInjectorCc: base.build.ecuInjectorCc,
     mafScalar: base.build.mafScalar, mafErrorBase, pull: advisorPull,
   });

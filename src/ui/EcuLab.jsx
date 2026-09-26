@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS,
+  BARO_KPA, COMPRESSOR_OPTS, compressorWithCount,
   DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
@@ -389,6 +389,11 @@ export function EcuLabApp() {
     () => turbineWithCount(TURBINE_OPTS[turbineIdx], turbineCount),
     [turbineIdx, turbineCount],
   );
+  // One compressor per turbo: a twin-turbo engine has two, side by side.
+  const compressor = useMemo(
+    () => compressorWithCount(COMPRESSOR_OPTS[compressorIdx], turbineCount),
+    [compressorIdx, turbineCount],
+  );
 
   // A supercharger, if one is fitted instead of a turbo, and what it will make across the
   // rev range at full throttle on this engine — the header, the injector-duty preview
@@ -448,17 +453,17 @@ export function EcuLabApp() {
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu: ecuBundle,
+    turbine, compressor, ecu: ecuBundle,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressorIdx, ecuBundle, blower, blowerRatio, nitrous]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor: COMPRESSOR_OPTS[compressorIdx], turbine,
+    compressor, turbine,
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressorIdx, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
+       compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, hwForVe),
@@ -644,7 +649,7 @@ export function EcuLabApp() {
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu,
+    turbine, compressor, ecu,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
@@ -661,7 +666,7 @@ export function EcuLabApp() {
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
-      supercharged: !!blower, turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
+      supercharged: !!blower, turbine, compressor,
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
@@ -854,7 +859,7 @@ export function EcuLabApp() {
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
-    compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
+    compressor, exhaustDiaError,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
@@ -1138,7 +1143,7 @@ export function EcuLabApp() {
 
     const drive = acousticDrive({
       rpm, derived: engineDerived, point, turboOn,
-      compressor: COMPRESSOR_OPTS[compressorIdx],
+      compressor,
       // The sweep only ever measures wide-open points, so the idle and overrun either
       // side of it — and every point of a drag pass — borrow one and scale it by throttle.
       throttle: onDyno || onDrag ? load : 1,
@@ -1205,7 +1210,7 @@ export function EcuLabApp() {
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
       blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
-      exhaustDiaIdx, compressorIdx,
+      exhaustDiaIdx, compressor,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
       running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT, car.boxIdx]);
 
