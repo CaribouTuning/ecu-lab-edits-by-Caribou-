@@ -149,7 +149,7 @@ function WorkedSession() {
         ]}
       />
       <b className={styles.em}>What each step did.</b> Fitting the part added {f.result.peakHp - s.result.peakHp} whp on its own, and brought two entries: the MAF reading low, and a lean top end. Rescaling the MAF fixed the mixture: {m.result.peakHp} whp, {m.result.peakHp - f.result.peakHp} more than the untuned part. Correcting VE from the log then changed peak power by {r.result.peakHp - m.result.peakHp} whp, and that is expected: its job is to put the table back in step with the hardware, so the ECU&apos;s air estimate is right from its own tables everywhere the engine runs, not only where a trim happened to catch it.
-      <br /><br /><b className={styles.em}>What was not done.</b> Nobody touched the FUEL table, because the target was never wrong. Nobody added spark to &ldquo;use&rdquo; the new air, because a clean log gives no reason to, and chapter 3 showed what +4° does on this fuel. The part was worth {r.result.peakHp - s.result.peakHp} whp, fitted and tuned.
+      <br /><br /><b className={styles.em}>What was not done.</b> Nobody touched the FUEL table, because the target was never wrong. Nobody added spark to &ldquo;use&rdquo; the new air, because a clean log gives no reason to, and chapter 3 showed what too much spark does on this fuel. The part was worth {r.result.peakHp - s.result.peakHp} whp, fitted and tuned.
       <br /><br /><TryIt href="#/build/induction">BUILD › INDUCTION</TryIt>
     </>
   );
