@@ -159,6 +159,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} [redline] rev limit, RPM
  * @property {string} [vvt] cam phasers fitted: 'none', 'intake' or 'dual'. Hardware, like
  *   the cam itself; absent means fixed cams
+ * @property {boolean} [boostRatedBottomEnd] a factory turbo engine's bottom end, designed
+ *   for boosted cylinder pressure; absent on a naturally aspirated one
  */
 
 /**
@@ -173,6 +175,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
  * @property {number} torqueScale displacement relative to the 3.5 L baseline
  * @property {number} bearingWearMult block material wear multiplier
+ * @property {number} bearingFreeBar average peak pressure the bottom end carries for free, bar
+ * @property {number} bearingEventBar average peak pressure that raises the bottom-end advisory, bar
  * @property {string} character human-readable bore/stroke description
  * @property {number} perCylL per-cylinder displacement, litres
  * @property {number} camDuration crank degrees
@@ -214,6 +218,10 @@ export function deriveEngine(cfg) {
   // comes out. Two fitted constants became a consequence of the geometry.
   const torqueScale = displacementL / 3.5;
   const bearingWearMult = cfg.blockMaterial === 'Cast Iron' ? 0.85 : 1.0;
+  // What average peak pressure the bottom end carries for free, and where the advisory
+  // starts: see BEARING_PRESSURE_FREE_BAR.
+  const bearingFreeBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_PRESSURE_FREE_BAR_BOOST_RATED : COEFF.BEARING_PRESSURE_FREE_BAR;
+  const bearingEventBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_EVENT_BAR_BOOST_RATED : COEFF.BEARING_EVENT_BAR;
   // Architecture friction. Zeroed at the V6 baseline so existing builds do not move:
   // an inline six pays for its seven mains, a large four pays for its balance shafts,
   // and the inline six's real advantage is over the four, not over the V6.
@@ -239,7 +247,7 @@ export function deriveEngine(cfg) {
     cyl, displacementL, ratio, compression: cfg.compression,
     bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, chamberOffsetK,
-    torqueScale, bearingWearMult, character, perCylL,
+    torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,
   };

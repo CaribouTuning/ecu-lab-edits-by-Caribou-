@@ -231,7 +231,7 @@ export function simulateSweep({
   // ever a proxy for it and one that ignored static compression entirely. Block
   // material still modulates it: an iron block holds its main bores rounder under load
   // than an aluminium one, which is `bearingWearMult`'s whole job.
-  const bearingWear = Math.max(0, avgPeakPressure - COEFF.BEARING_PRESSURE_FREE_BAR)
+  const bearingWear = Math.max(0, avgPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
     * COEFF.WEAR_BEARING_PER_BAR * derived.bearingWearMult;
   const wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
 
@@ -507,17 +507,18 @@ export function simulateSweep({
   // for the reason the wear number now moves. A high-compression naturally aspirated
   // engine can reach this without a turbo, and a knock-limited boosted one can stay
   // under it because the retard the ECU pulled took the pressure peak with it.
-  if (avgPeakPressure > COEFF.BEARING_EVENT_BAR) {
+  const bearingEventBar = derived.bearingEventBar ?? COEFF.BEARING_EVENT_BAR;
+  if (avgPeakPressure > bearingEventBar) {
     const bearingLevers = [
       turboOn ? 'Back off boost' : blower ? 'Fit a larger blower pulley' : null,
       points.some(spraying) ? `${turboOn || blower ? 'spray' : 'Spray'} a smaller shot` : null,
     ].filter(Boolean);
-    const impact = Math.round(clamp((avgPeakPressure - COEFF.BEARING_EVENT_BAR) * 0.25, 3, 9));
+    const impact = Math.round(clamp((avgPeakPressure - bearingEventBar) * 0.25, 3, 9));
     events.push({
       type: 'bearing', severity: 1, impact,
       msg: `Sustained cylinder pressure through the pull (averaging ${avgPeakPressure.toFixed(0)} bar peak) — bottom-end stress accumulating`,
       cause: `Peak cylinder pressure is carried by the rod into the rod and main bearings on every firing stroke, knock or no knock. ${turboOn || blower ? `${avgBoost.toFixed(1)} psi of average boost ${points.some(spraying) ? 'and the nitrous ' : ''}against ` : points.some(spraying) ? 'The nitrous\'s extra charge against ' : 'Running this much load against '}${derived.compression.toFixed(1)}:1 static compression is what puts it there — compression multiplies manifold pressure, so both halves of that pair count.`,
-      fix: `${bearingLevers.length ? `${bearingLevers.join(', ')}, or lower` : 'Lower'} static compression — on a real engine, unless the bottom end has been built for it (this app does not offer a built bottom end). An iron block holds its main bores rounder under this load than an aluminium one, and either way there is no calibration change that removes the force — only ones that reduce it.`,
+      fix: `${bearingLevers.length ? `${bearingLevers.join(', ')}, or lower` : 'Lower'} static compression. ${derived.bearingFreeBar > COEFF.BEARING_PRESSURE_FREE_BAR ? 'This is a factory turbo engine, built for boost, and this is past what its factory tune asks of it.' : 'This is a naturally aspirated bottom end: a factory turbo engine is built for this load, this one is not.'} An iron block holds its main bores rounder under this load than an aluminium one, and either way there is no calibration change that removes the force — only ones that reduce it.`,
     });
   }
 

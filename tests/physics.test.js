@@ -443,10 +443,35 @@ describe('dyno sweep', () => {
   });
 
   it('charges the bearings for compression, not only for boost', () => {
+    // Knock-free on E85, so knock retard does not take the pressure peak away and
+    // compression is the only thing that differs.
     const boostCurve = [0, 2, 8, 12, 14, 14, 14, 14];
-    const low = stockPull({ cfg: { ...STOCK, compression: 9.0 }, turboOn: true, boostCurve });
-    const high = stockPull({ cfg: { ...STOCK, compression: 12.5 }, turboOn: true, boostCurve });
+    const common = {
+      mods: { ...S.DEFAULT_MODS, intercooler: true }, turboOn: true, boostCurve,
+      injectorCc: 850, ecuInjectorCc: 850, sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
+    };
+    const low = stockPull({ ...common, cfg: { ...STOCK, compression: 9.0 } });
+    const high = stockPull({ ...common, cfg: { ...STOCK, compression: 12.5 } });
+    expect(high.wear.bearing).toBeGreaterThan(0);
     expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
+  });
+
+  it('carries a factory turbo engine on its factory tune, and charges it when tuned past that', () => {
+    // A bottom end is designed for its own service pressure: a stock B58 is not wearing
+    // itself out on its factory tune, and a naturally aspirated bottom end under the same
+    // boost is.
+    const b58 = S.presetById('b58-m1');
+    const p = S.applyPreset(b58);
+    const pull = (engineConfig, boost) => stockPull({
+      cfg: engineConfig, turboOn: true, boostCurve: p.boostCurve.map((b) => b + boost),
+      mods: p.mods, injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
+      sweep: { ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr, fuel: S.OCTANE_OPTS[p.octaneIdx], octaneLabel: S.OCTANE_OPTS[p.octaneIdx].label, octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, mafScalar: p.mafScalar, turbine: S.presetTurbine(b58), compressor: S.COMPRESSOR_OPTS[p.compressorIdx] },
+    });
+    expect(pull(p.engineConfig, 0).wear.bearing).toBe(0);
+    expect(pull(p.engineConfig, 0).events.some((e) => e.type === 'bearing')).toBe(false);
+    const naBottomEnd = { ...p.engineConfig, boostRatedBottomEnd: false };
+    expect(pull(naBottomEnd, 0).wear.bearing).toBeGreaterThan(0);
+    expect(pull(p.engineConfig, 8).wear.bearing).toBeGreaterThan(0);
   });
 
   it('leaves a stock naturally aspirated pull essentially free of bearing wear', () => {

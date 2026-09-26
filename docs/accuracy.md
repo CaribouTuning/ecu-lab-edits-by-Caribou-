@@ -218,6 +218,18 @@ and kit makers — practitioner rules, the weakest sources here).
   spool) and points at a bigger compressor or turbine (`src/sim/sweep.js`).
 - **The MAF entry named a multiplier as if it were a setting.** "About 1.11 cancels this"
   was right only on a car whose scalar was 1.00; it now names the value to set.
+- **Factory turbo engines wore out on their own factory tune.** Bearing wear started
+  at one average peak pressure for every engine (55 bar), so a stock B58 lost 1.4 points
+  of bearing life per pull and every factory turbo car logged bottom-end stress. A
+  bottom end is designed for its own service pressure: naturally aspirated ones are now
+  free to 60 bar (stock pulls average 58-59) and factory turbo engines to 80 (their
+  factory tunes average 68-78), with the advisory at 66 and 86. A turbo bolted onto a
+  naturally aspirated engine keeps its NA bottom end and pays for it
+  (`BEARING_PRESSURE_FREE_BAR`, `src/sim/coefficients.js`). Only bearing wear moves in
+  the fingerprint.
+- **The VQ35HR preset had 550 cc injectors**, leaving the stock engine at 44% duty.
+  It now has the 315 cc option (the real part is about 290 cc) and runs 72% at peak,
+  where a factory injector sits.
 - **A warm restart fell through its own idle.** On the step the engine caught it was still
   just under the idle target, and the idle controller's damping read the starter's
   pull-up as a flare and shut the idle valve; the start hold then held it shut. The

@@ -158,7 +158,10 @@ export const ENGINE_PRESETS = [
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
-    parts: { injectorIdx: 2, exhaustDiaIdx: 1, octaneIdx: 1 },
+    // The 315 cc option, the smallest the parts list carries and the nearest to the real
+    // engine's (about 290 cc): a factory injector runs about 75-85% duty at peak power.
+    // It was the 550 here, which left a stock engine at 44%.
+    parts: { injectorIdx: 0, exhaustDiaIdx: 1, octaneIdx: 1 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: false },
   },
   {
@@ -173,6 +176,7 @@ export const ENGINE_PRESETS = [
       displacementL: 2.98,
     },
     engine: {
+      boostRatedBottomEnd: true,       // a factory turbo engine: see BEARING_PRESSURE_FREE_BAR
       configuration: 'I6',
       bore: 84.0, stroke: 89.6,          // 84 x 89.6 mm
       compression: 10.2,                 // 10.2:1 — high for a turbo engine, thanks to DI
@@ -209,6 +213,7 @@ export const ENGINE_PRESETS = [
       displacementL: 3.00,
     },
     engine: {
+      boostRatedBottomEnd: true,       // a factory turbo engine: see BEARING_PRESSURE_FREE_BAR
       configuration: 'I6',
       bore: 82.0, stroke: 94.6,          // 82 x 94.6 mm
       compression: 11.0,                 // 11.0:1 — higher than the N54, two generations back
@@ -279,6 +284,7 @@ export const ENGINE_PRESETS = [
       displacementL: 3.00,
     },
     engine: {
+      boostRatedBottomEnd: true,       // a factory turbo engine: see BEARING_PRESSURE_FREE_BAR
       configuration: 'I6',
       bore: 82.0, stroke: 94.6,
       compression: 11.0,
@@ -346,6 +352,7 @@ export const ENGINE_PRESETS = [
       displacementL: 1.98,
     },
     engine: {
+      boostRatedBottomEnd: true,       // a factory turbo engine: see BEARING_PRESSURE_FREE_BAR
       configuration: 'I4',
       bore: 82.5, stroke: 92.8,          // 82.5 x 92.8 mm
       compression: 9.6,                  // 9.6:1
@@ -379,6 +386,7 @@ export const ENGINE_PRESETS = [
       displacementL: 1.98,
     },
     engine: {
+      boostRatedBottomEnd: true,       // a factory turbo engine: see BEARING_PRESSURE_FREE_BAR
       configuration: 'I4',
       bore: 82.5, stroke: 92.8,
       compression: 9.6,

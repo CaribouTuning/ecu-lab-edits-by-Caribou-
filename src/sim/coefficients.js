@@ -463,14 +463,20 @@ export const COEFF = {
   // tracks a pull's AVERAGE peak pressure, not boost. Boost was the old proxy and a bad
   // one: it charged a 9.5:1 and a 12.5:1 engine alike for the same manifold pressure.
   //
-  // These are ORDERING numbers: NA cheap, factory turbo about a point, compression-on-
-  // boost whole points per pull. Measured now: a stock NA pull costs about 0.3 and the
-  // N54 about 1.2. They were calibrated at 0.15 and 0.6 under an earlier model; the
-  // ordering holds, the absolute figures have doubled, and nothing downstream relies on
-  // the absolute value beyond the health bar. Below the free threshold the oil film carries the load indefinitely,
-  // so a part-throttle pull costs nothing — deliberate, where the old expression charged
-  // a flat 0.05. Refitted when the cycle replaced the empirical pressure estimate.
-  BEARING_PRESSURE_FREE_BAR: 55,
+  // Below the free threshold the oil film carries the load indefinitely, so a pull costs
+  // nothing; above it, each bar of average peak pressure costs WEAR_BEARING_PER_BAR.
+  //
+  // THE THRESHOLD IS THE BOTTOM END'S, not one number for every engine. A factory
+  // engine's bottom end is designed for its own service pressure with margin: stock
+  // naturally aspirated pulls average about 58-59 bar and factory turbo engines 68-78,
+  // and none of them wears out on its own factory tune. One threshold of 55 for all of
+  // them once charged a stock B58 1.4 points of bearing life per pull and flagged
+  // bottom-end stress on every factory turbo car. A naturally aspirated bottom end is
+  // free to 60 bar; a factory turbo engine's (`boostRatedBottomEnd`, set by its preset)
+  // to 80. A turbo bolted onto a naturally aspirated engine keeps the NA bottom end, and
+  // pays for it.
+  BEARING_PRESSURE_FREE_BAR: 60,
+  BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 80,
   WEAR_BEARING_PER_BAR: 0.075,
   // Average peak pressure that raises the bottom-end advisory. It means "boosted or
   // high-compression loading", not "you drove it", so it sits above every bolt-on
@@ -479,6 +485,9 @@ export const COEFF = {
   // 78). At 60, one bar over stock, it once fired for a cold air intake with its MAF
   // rescaled. An 11.5:1 NA engine on 93 (67 bar) still reaches it.
   BEARING_EVENT_BAR: 66,
+  // The same advisory on a boost-rated bottom end: past its factory tune's pressure and
+  // into what a tuned one adds.
+  BEARING_EVENT_BAR_BOOST_RATED: 86,
 
   // --- Inlet Mach index: the high-speed breathing limit (see engine.js) ---
   // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a
