@@ -45,6 +45,18 @@ export function hasBalanceShafts(configuration, displacementL) {
 export const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];
 
 /**
+ * Where the injectors spray. Port is multi-point manifold injection: one injector per
+ * intake runner, aimed at the valve. Direct sprays into the cylinder. Single-point
+ * (throttle-body) injection is not offered: no engine here used it, and its defining
+ * behaviour, uneven mixture from one cylinder to the next, needs a cylinder-by-cylinder
+ * model this simulator does not have.
+ */
+export const INJECTION_OPTS = [
+  { id: 'port', label: 'Port (multi-point)' },
+  { id: 'direct', label: 'Direct' },
+];
+
+/**
  * Fuels, each carrying its real stoichiometric ratio, liquid density and lower
  * heating value.
  *
@@ -55,15 +67,19 @@ export const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];
  * It buys big knock margin and costs fuel headroom; it is not a free upgrade.
  */
 export const OCTANE_OPTS = [
-  { label: '91', bonus: 0, octane: 91, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '93', bonus: 3, octane: 93, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
-  { label: '100', bonus: 8, octane: 100, stoich: 14.6, density: 0.750, lhv: 43.5e6 },
-  // E85's pump antiknock index is usually quoted around 100-105 AKI. The autoignition
-  // model uses `octane` directly, so this number now does real work: it is the fuel
-  // property the ignition-delay correlation reads. `bonus` is the older
-  // degrees-of-margin figure, kept because the Engineer Score still prices its
-  // compression headroom in it.
-  { label: 'E85', bonus: 14, octane: 105, stoich: 9.8, density: 0.782, lhv: 29.2e6 },
+  // Each fuel's RON and MON, not just the pump number. US pumps post the antiknock index,
+  // (RON + MON) / 2; premium 91-93 AKI is about 95.5-97.5 RON, and ethanol-blended pump
+  // gasoline runs 10-12 points of sensitivity (RON - MON). E85 is at the EN 15293
+  // minimums, RON 104 / MON 88 — (R+M)/2 of 96, where true-octane tests put it (IEA-AMF:
+  // 94-96). The knock model reads the OCTANE INDEX made from these two, which depends on
+  // the engine (see octaneIndexK in cycle.js). `octane` is the pump figure, for labels.
+  // `bonus` is the older degrees-of-margin figure, kept because the Engineer Score still
+  // prices its compression headroom in it.
+  { label: '91', bonus: 0, octane: 91, ron: 96, mon: 86, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  { label: '93', bonus: 3, octane: 93, ron: 98, mon: 88, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  // Unleaded race fuel at 100 AKI. Less sensitive than pump fuel, as racing blends are.
+  { label: '100', bonus: 8, octane: 100, ron: 104, mon: 96, stoich: 14.6, density: 0.750, lhv: 43.5e6 },
+  { label: 'E85', bonus: 14, octane: 96, ron: 104, mon: 88, stoich: 9.8, density: 0.782, lhv: 29.2e6 },
 ];
 
 /**
@@ -78,7 +94,7 @@ export const OCTANE_OPTS = [
  */
 export const FUEL_CHOICES = [
   ...OCTANE_OPTS,
-  { label: 'Flex', flex: true, bonus: 3, octane: 93, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
+  { label: 'Flex', flex: true, bonus: 3, octane: 93, ron: 98, mon: 88, stoich: 14.7, density: 0.745, lhv: 44.0e6 },
 ];
 
 /**

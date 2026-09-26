@@ -50,20 +50,24 @@ export const SPARK_MAX_DEG = 50;
 /**
  * Stock ignition timing table, degrees BTDC.
  *
- * The full-load rows sit about a degree short of this engine's own MBT (the least advance
- * that makes best torque, measured on the model at wide open throttle: 17, 21, 24, 24,
- * 28, 28 and 30-31° from 1500 to 7500 RPM), which is where a factory calibration puts
- * them: past MBT buys nothing and moves toward knock. They were once 2-6° past it from
- * 3500 RPM up, so the stock engine lost about 1.5% at peak, and taking spark OUT looked
- * almost free. The boost rows copy the full-load row, as a naturally aspirated factory
+ * What a factory calibration for a port-injected 10.3:1 engine on 91 octane looks like:
+ * at full load it is KNOCK-limited, not MBT-limited, through the low and middle of the
+ * rev range. The model's own figures at wide open throttle, 1500 to 7500 RPM:
+ *   MBT (least advance for best torque)   19  21.5 23.5 25.5 26.5 28 29
+ *   knock limit on 91                     15  18   20.5 22.5 26.5 31 38
+ * so the full-load row sits about two degrees under the knock limit up to 5500 RPM, and
+ * a degree short of MBT above it, where the faster burn gives the end gas too little
+ * time to light itself. The part-load rows are held under the knock limit the same way:
+ * at lighter load the end gas runs hotter for each bar of pressure, where pump fuel's
+ * octane index is lower (see octaneIndexK in cycle.js). The boost rows copy the full-load row, as a naturally aspirated factory
  * calibration does; a boost kit has to take spark out of them.
  */
 export const DEFAULT_TIMING = [
-  [10, 16, 20, 23, 23, 27, 27, 29],
-  [10, 16, 20, 23, 23, 27, 27, 29],
-  [10, 16, 20, 23, 23, 27, 27, 29],
-  [14, 22, 28, 33, 36, 37, 38, 39],
-  [16, 30, 36, 40, 42, 43, 43, 43],
+  [7, 13, 16, 18, 20, 24, 27, 28],
+  [7, 13, 16, 18, 20, 24, 27, 28],
+  [7, 13, 16, 18, 20, 24, 27, 28],
+  [12, 18, 22, 25, 27, 32, 38, 39],
+  [16, 27, 34, 37, 40, 43, 43, 43],
   [14, 34, 40, 44, 46, 47, 47, 47],
 ];
 
@@ -108,6 +112,7 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
   compression: 10.3,
   blockMaterial: 'Aluminum',
   headMaterial: 'Aluminum',
+  injection: 'port',
   camDuration: 210,
   springRate: 50,
   redline: 7500,

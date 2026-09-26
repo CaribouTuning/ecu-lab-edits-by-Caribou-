@@ -53,9 +53,10 @@ export function makeEcuLiveState() {
 }
 
 /** Wall-film fraction and evaporation time constant by coolant temperature. */
-function filmParams(ectC) {
+function filmParams(ectC, injection) {
   const cold = clamp((E.FILM_WARM_C - ectC) / E.FILM_COLD_SPAN_C, 0, 1);
-  return { X: E.FILM_X_WARM + E.FILM_X_COLD_ADD * cold, tau: E.FILM_TAU_WARM_S + E.FILM_TAU_COLD_ADD_S * cold };
+  const k = injection === 'direct' ? E.FILM_DIRECT_SHARE : 1;
+  return { X: k * (E.FILM_X_WARM + E.FILM_X_COLD_ADD * cold), tau: E.FILM_TAU_WARM_S + E.FILM_TAU_COLD_ADD_S * cold };
 }
 
 /** Log channels, in order, recorded every step. Units in `LOG_CHANNELS` below. */
@@ -411,7 +412,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     const decayed = e.aePct * Math.exp(-dt / Math.max(0.02, cal.fuel.accelDecayS));
     e.aePct = aeWant > 0 ? Math.max(decayed, aeWant) : aeWant < 0 ? Math.min(decayed, Math.max(-60, aeWant)) : decayed;
     if (Math.abs(e.aePct) < 0.05) e.aePct = 0;
-    const { X, tau: filmTau } = filmParams(s.coolantC);
+    const { X, tau: filmTau } = filmParams(s.coolantC, derived.injection);
     const injPerCycle = lastPt?.fuelCmd != null && !s.fuelCut ? lastPt.fuelCmd / 1000 : 0;
     const cycles = (s.rpm / 120) * dt;
     const evap = e.film * clamp(dt / filmTau, 0, 1);

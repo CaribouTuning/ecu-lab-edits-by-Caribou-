@@ -21,10 +21,10 @@ source, and the weaker sources are marked as such.
 | `tests/consistency-fuzz.test.js` | On 40 random builds, the TUNE advisor, the dyno pull log and LIVE tell the same story, and following the advice clears the knock it reports. |
 | `tests/tuning-consistency.test.js` | The same, pinned on hand-picked engines, including LIVE at idle and on the rev limiter. |
 | `tests/ve-learn.test.js` | The VE table is corrected only from what a tuner could log: the wideband against the table's target, the fuel trims, and the MAF's own error kept out (a cold air intake on the stock tune logs its real 0–5% VE gain, not the MAF housing's 10%). Only logged cells move; half-steps converge; nitrous, maxed injectors, protection, cut, warm-up and transients are left out; a log already applied cannot be applied twice. |
-| `tests/ui/tutorial.test.jsx` | The tutorial stays within five minutes, and the tutorial and the Tuning Course quote the game's own numbers: its stock pull is the pull the app makes, every lesson scenario does what its lesson says (over-advanced spark knocks and loses power; the intake logs MAF and lean entries; the retune clears both), and every numbered callout still points at something on its live screen. |
+| `tests/ui/tutorial.test.jsx` | The tutorial stays within five minutes, and the tutorial and the Tuning Course quote the game's own numbers: its stock pull is the pull the app makes, every lesson scenario does what its lesson says (over-advanced spark knocks and gains nothing; the intake logs MAF and lean entries; the retune clears both), and every numbered callout still points at something on its live screen. |
 | `tests/accuracy-claims.test.js` | Every figure this page and Learn article 39 quote about the model. |
 | `tests/blower.test.js` | Superchargers: boost from low down on a Roots or twin-screw and climbing with RPM on a centrifugal; the pulley sets boost; the crank pays the compression work; efficiency ranks and heats the charge as the makers publish; no lag on LIVE; ~7 psi intercooled adds 35–50%; an over-spun blower is flagged with a pulley that fixes it. |
-| `tests/nitrous.test.js` | Nitrous: its oxygen and breakdown heat; bottle pressure against the racing charts; a 100 shot's 5–6 lb/min; gain in step with the shot; the knock limit falling about 2° per 50 hp; a wet kit rich on a cold bottle; a speed-density ECU fuelling for the air the vapour displaced, the pull log's fuel correction clearing it in one step, closed loop standing down while spraying, and a weak pump starving the kit; the controller's window, ramp and lean cut, on the dyno and LIVE. |
+| `tests/nitrous.test.js` | Nitrous: its oxygen and breakdown heat; bottle pressure against the racing charts; a 100 shot's 5–6 lb/min; gain in step with the shot; the knock limit falling a few degrees per 50 hp (3–4° on pump 93, where tuners start from 2°); a wet kit rich on a cold bottle; a speed-density ECU fuelling for the air the vapour displaced, the pull log's fuel correction clearing it in one step, closed loop standing down while spraying, and a weak pump starving the kit; the controller's window, ramp and lean cut, on the dyno and LIVE. |
 
 Random builds are seeded (`tests/randomBuilds.js`), so any failure names a seed that
 rebuilds the exact engine.
@@ -36,13 +36,13 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 300 hp / 273 lb-ft | 6400 / 6500 | 0.874 | 29.1° | 0.402 | 11.6 | 779 | 65 | 13.3 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 273 lb-ft | 6800 / 6500 | 0.874 | 29.1° | 0.399 | 11.7 | 774 | 67 | 13.3 |
-| BMW N54 | 302 hp / 295 lb-ft | 295 hp / 314 lb-ft | 5800 / 5500 | 0.842 | 22.9° | 0.411 | 11.8 | 791 | 76 | 17.9 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 329 hp / 353 lb-ft | 5500–6500 / 5500 | 0.836 | 17.5° | 0.416 | 11.8 | 800 | 77 | 20.0 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 376 hp / 382 lb-ft | 5800 / 5700 | 0.832 | 15.9° | 0.416 | 11.8 | 812 | 81 | 21.7 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 231 hp / 249 lb-ft | 4700–6200 / 5500 | 0.834 | 18.8° | 0.427 | 11.5 | 820 | 76 | 21.4 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 305 hp / 302 lb-ft | 5400–6500 / 6300 | 0.830 | 19.5° | 0.411 | 12.0 | 819 | 89 | 25.9 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 299 hp / 268 lb-ft | 6400 / 6500 | 0.874 | 29.0° | 0.402 | 11.6 | 787 | 59 | 13.1 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 268 lb-ft | 6800 / 6500 | 0.874 | 29.1° | 0.399 | 11.7 | 781 | 61 | 13.1 |
+| BMW N54 | 302 hp / 295 lb-ft | 304 hp / 318 lb-ft | 5800 / 5600 | 0.839 | 17.5° | 0.423 | 11.5 | 804 | 65 | 18.1 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 333 hp / 352 lb-ft | 5500–6500 / 5800 | 0.834 | 13.5° | 0.434 | 11.3 | 817 | 65 | 20.0 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 380 hp / 382 lb-ft | 5800 / 5900 | 0.830 | 12.1° | 0.434 | 11.3 | 828 | 70 | 21.7 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 224 hp / 247 lb-ft | 4700–6200 / 5600 | 0.830 | 13.3° | 0.452 | 10.9 | 841 | 64 | 21.2 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 300 hp / 298 lb-ft | 5400–6500 / 6600 | 0.830 | 16.7° | 0.421 | 11.7 | 830 | 79 | 25.6 |
 
 **Reference ranges** (the bands `tests/benchmark.test.js` enforces):
 
@@ -69,23 +69,25 @@ rated low, so they read closer to their rating than a 15% loss predicts.
 Each of these is measured, written down in the code where it arises, and taught in
 Learn article 39. None of them changes the direction of any lesson.
 
-1. **Fuel per horsepower runs 10–15% low.** The presets burn 0.40–0.43 lb/hp·h against
-   0.45–0.60 for real engines of their kind, and flow about 11.5–12 hp per lb/min of air
-   against 10–11. Power is fitted to the published ratings, so the air and fuel needed to
-   make it, and the injector duty that follows, read low by the same margin. Generic
-   builds are closer (0.46–0.52 on a 9:1 turbo build on pump fuel).
+1. **Fuel per horsepower runs low.** The presets burn 0.40–0.45 lb/hp·h against
+   0.45–0.60 for real engines of their kind, and flow 10.9–11.7 hp per lb/min of air
+   against 10–11: the NA presets about 10% low, the turbo presets, knock-limited at full
+   boost as real ones are, within about 5–15%. Power is fitted to the published ratings,
+   so the air and fuel needed to make it, and the injector duty that follows, read low by
+   the same margin. Generic builds are closer (0.52–0.66 on a 9:1 turbo build on pump
+   fuel, the upper end without an intercooler).
 2. **Turbos spool late.** Turbine power comes from steady exhaust flow; the pulse energy a
    twin-scroll housing harvests is not modelled. At 1500–2000 RPM the turbo presets
-   make 15–50% less torque than the real engines, and nothing holds their torque flat the
+   make 12–50% less torque than the real engines, and nothing holds their torque flat the
    way a factory torque limit does, so most peak 3–8% above their rated torque mid-range
-   (the GTI peaks 3% under it).
+   (the GTI peaks about 4% under it).
 3. **Exhaust temperature reads low at full throttle.** The gauge reads about 780 °C (NA)
-   and 790–820 °C (boosted). Production turbo engines run up to about 950 °C at the
+   and 800–840 °C (boosted). Production turbo engines run up to about 950 °C at the
    turbine inlet before enrichment holds them there (ASME source above); the code's own
    fit target for an NA engine is about 850 °C, a figure it carries without a cited source.
    The exhaust-port cooling that sets it is fitted to the cruise and part-throttle bands,
    and one number cannot hit those and full throttle together. Enrichment cools it about
-   10–15 °C from 13.5:1 to 11:1, several times less than the turbine-side correlation
+   9–13 °C from 13.5:1 to 11:1, several times less than the turbine-side correlation
    uses for the same change, so EGT component protection is less effective in the sim.
    And it peaks at stoichiometric, where a real engine's exhaust peaks a little lean of it.
 4. **Very rich mixtures cost almost no power.** The rich burn is air-limited, which is
@@ -93,15 +95,15 @@ Learn article 39. None of them changes the direction of any lesson.
    what λ 0.88 does. On a real engine power falls away richer than best power; by how
    much is not checked here. The pull log still flags running that rich.
 5. **Best-torque timing.** The advisors aim for the textbook MBT. The model's own cycle
-   makes its best torque a median 2° later than that, within 8° for 95% of operating
+   makes its best torque a median 3° later than that, within 11° for 95% of operating
    points and up to about 15° at the rare extreme (mostly low RPM); following the advice
    costs under 3% of torque at any of them.
 6. **Intercooling at extreme backpressure.** With a turbine so small that a fifth of the
    cylinder is trapped exhaust, the hot residual sets the end-gas temperature and an
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
-7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 75–90 bar
-   (NA presets 60–70) against about 100–120 bar quoted for production turbo engines
+7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 64–79 bar
+   (NA presets about 60) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
 8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor
@@ -132,8 +134,13 @@ Learn article 39. None of them changes the direction of any lesson.
    single-phase one.
 14. **Extra oxygen does not speed the burn.** Oxygen-enriched mixtures burn faster; here the
    burn rate follows mixture and residuals as before, so nitrous reaches the knock limit
-   through cylinder pressure and temperature alone. The retard it needs still comes out at
-   about 2° per 50 hp of shot, the figure tuners use.
+   through cylinder pressure and temperature alone. The knock limit falls 3–4° per 50 hp
+   of shot on pump 93, a little more than the 2° tuners start from, and the retard that
+   takes, on top of a spark table already knock-limited, burns late: the exhaust port
+   reads about 1000–1050 °C while a 100 shot sprays on the stock VQ35DE, where one owner's
+   log shows EGT falling on a 100 shot (Lightning Rodder forum, a practitioner source).
+   A faster O₂-enriched burn is the likely missing piece; there is no sourced figure for
+   it to fit to, so it is recorded instead.
 15. **The bottle is two lumps, liquid and wall.** The liquid's density and heat capacity
    follow the published saturation curves, and only what boils to refill the room the
    spray left cools it. But the heat paths are estimates — about 100 W/K from wall to
@@ -154,11 +161,6 @@ and kit makers — practitioner rules, the weakest sources here).
 
 ## Open for the maintainers
 
-- **The Engineer Score's NA compression warning is stricter than the physics.** It starts
-  at 11.5:1 (`COMPRESSION_NA_BASE`); the stock V6 on 91 octane now loses a degree to knock
-  only at about 12.7:1. The comment beside it records both. Either the score moves to the
-  physics or the low-speed knock limit is revisited; that is a design call, so it is left
-  as it is and flagged here.
 - **Some coefficient comments quoted measurements from earlier models.** The audit
   re-measured each one that states a model output and corrected it in place, keeping the
   old figure where it explains a past decision.
@@ -201,8 +203,10 @@ and kit makers — practitioner rules, the weakest sources here).
   cat-back +8, headers +19, all three +37 whp (+14%), each with the MAF and VE retuned.
 - **The default engine's factory spark was past MBT.** Its full-load rows ran 2-6° past
   the engine's own best-torque timing from 3500 RPM up (33° at 6500 where MBT is 28°).
-  No factory calibration does that: it buys nothing and moves toward knock. They now sit
-  about a degree short of MBT (`DEFAULT_TIMING`, `src/sim/tables.js`). The spark model
+  No factory calibration does that: it buys nothing and moves toward knock. With the
+  knock model corrected (below) they now sit about 2° under the knock limit where knock
+  binds, below about 6000 RPM on 91, and a degree short of MBT above it
+  (`DEFAULT_TIMING`, `src/sim/tables.js`). The spark model
   itself was checked against the textbook curve and left alone: 5° from MBT costs about
   1.5%, 10° about 6%, 15° about 10% and 20° about 16%.
 - **Factory turbo cars ran 9% lean of their own fuel table.** The presets wrote the turbo
@@ -222,8 +226,8 @@ and kit makers — practitioner rules, the weakest sources here).
   at one average peak pressure for every engine (55 bar), so a stock B58 lost 1.4 points
   of bearing life per pull and every factory turbo car logged bottom-end stress. A
   bottom end is designed for its own service pressure: naturally aspirated ones are now
-  free to 60 bar (stock pulls average 58-59) and factory turbo engines to 80 (their
-  factory tunes average 68-78), with the advisory at 66 and 86. A turbo bolted onto a
+  free to 60 bar (stock pulls average 49-51) and factory turbo engines to 80 (their
+  factory tunes average 60-70), with the advisory at 66 and 86. A turbo bolted onto a
   naturally aspirated engine keeps its NA bottom end and pays for it
   (`BEARING_PRESSURE_FREE_BAR`, `src/sim/coefficients.js`). Only bearing wear moves in
   the fingerprint.
@@ -237,6 +241,64 @@ and kit makers — practitioner rules, the weakest sources here).
   now never drops below its base value while starting (`src/sim/ecu/liveEcu.js`). A cold
   start hid it: the cold idle air and fuel carried the dip. LIVE only (the fingerprint
   covers the dyno pull), so no fingerprint change.
+
+- **The knock model gave a stock pump-fuel engine far too much margin.** A 10.3:1 V6 on
+  91 did not knock until about 7° past its best-torque timing at full throttle, and above
+  6000 RPM could not be made to knock at all. Real 10-11:1 engines on pump fuel are
+  knock-limited at full load through the low and middle revs and reach MBT only near
+  peak power. The one fitted number, `KNOCK_TAU_SCALE`, had grown to 2.0 because two real
+  effects were missing; with both modelled it is 1.1, within a tenth of the published
+  Douaud & Eyzat correlation:
+  - *Where the injectors spray.* Every engine carries its real injection system
+    (`injection` on the engine: the VQ35DE and VQ35HR sequential multi-port; the N54
+    piezo direct; the B58s solenoid direct; the North American EA888.3 GTI and Golf R
+    direct only, where the European engine is dual). Port-injected fuel boils off the
+    hot intake valve "with minimal impact on the charge temperature" (Bromberg, Cohn &
+    Heywood, MIT LFEE 2006-01); direct injection cooled the charge 14 K more than port on
+    gasoline and 49 K more on E85, about 70% of the adiabatic maximum (Kasseris &
+    Heywood, SAE 2012-01-1275), and fills the cylinder 6% better (6% more power at
+    low-speed full throttle, reviewed in InTech's *Gasoline Direct Injection*; 9% more VE
+    on a research engine, Wyszynski, Stone & Kalghatgi, SAE 2002-01-0839). BUILD offers
+    both. Single-point (throttle-body) manifold injection is not offered: no engine here
+    used it, and its defining trait, uneven mixture cylinder to cylinder, needs a
+    cylinder-by-cylinder model this one does not have.
+  - *Pump fuel is not a reference fuel.* Douaud & Eyzat fitted their correlation on
+    primary reference fuels, for which RON = MON. Each fuel now carries its RON and MON
+    (91 AKI: 96/86; 93: 98/88; 100 race: 104/96; E85 at the EN 15293 minimums, 104/88),
+    and the correlation reads Kalghatgi's octane index, OI = RON − K·(RON − MON), with K
+    from the engine's own compression temperature at 15 bar placed between the RON test
+    (K = 0) and the MON test (K = 1). Unfitted, it lands where Kalghatgi measured: about
+    +0.1 to +0.4 on the port-injected NA engines, −0.05 to −0.42 on the boosted DI ones,
+    against −0.38 averaged over 37 production engines at full throttle and −0.4 to −0.74
+    on DI engines (Kalghatgi, Princeton CEFRC lecture 2018). Boosted, sensitive pump
+    fuel resists knock better than its RON says; at part load, worse.
+
+  The stock V6 on 91 is now knock-limited 3.7-4.1° below MBT from 1500 to 4500 RPM, 1°
+  at 5500 and at MBT from 6000; 93 buys about a degree, in line with Kalghatgi's 0.6-1°
+  per octane-index point. Every preset still makes its published power and torque
+  knock-free (the EA888.3's unpublished cam duration was refitted from 210 to 200 for
+  the direct injection's extra filling), and the turbo presets' factory spark at peak
+  power fell from 16-23° to 12-17.5°, nearer the 8-12° seen in N54 and B58 logs.
+- **The advisor and the factory calibration judged a turbo engine's part-throttle cells
+  as if its air came straight from ambient.** The dyno and LIVE have a spooled turbo
+  compressing, and heating, the air upstream of a part-open throttle, so a pull at the
+  70 kPa setting ran 53 °C air and knocked on advice that said it would not. Both now
+  grade those cells at the induction state that makes that manifold pressure
+  (`inductionAtMap`, `src/sim/turbo.js`).
+- **The knock integral jumped as spark moved.** It stopped counting on whole integration
+  steps once 95% of the charge had burned, so it stepped by about 1% as the burn slid
+  across the grid, and the knock-limit search could land a fraction of a degree past
+  knock. The last step now counts only its share before the cutoff.
+- **The pull log told the player to take out spark that spark could not fix.** Where the
+  knock limit sits past the most retard a spark table holds (−5°), the knock entry now
+  says so and points at boost, fuel and hardware instead, naming direct injection and an
+  intercooler where the build lacks them.
+- **A wet nitrous kit's own fuel was cooled like a port injector's.** It is sprayed into
+  the airstream with the nitrous, so it now takes the nitrous's share of charge cooling.
+- **The Engineer Score gave a port-injected engine a direct-injected engine's compression
+  allowance.** Factory port-injected turbo engines sit at 8.2-8.5:1 (EJ257, 2JZ-GTE,
+  SR20DET) against 10.2-11.0:1 for direct-injected ones; the score now moves a point for
+  injection type, both boosted and naturally aspirated (`COMPRESSION_DI_STEP`).
 
 Together these regenerate the behavioural fingerprint. The bolt-on, spark-table and MAF
 fixes above move it too: peak power falls a median 7% with all three bolt-ons and 2% with

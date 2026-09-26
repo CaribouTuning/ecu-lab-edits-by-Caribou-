@@ -417,7 +417,7 @@ function OneThing() {
         [`+${SPARK_ADDED_DEG}° at full throttle`, `${d.result.peakHp} whp, knock ${knock ? `${knock.rpmStart}–${knock.rpmEnd} RPM` : ''}`],
         ['Following the log (take it back out)', `${s.result.peakHp} whp, clean`],
       ]}>
-        More advance lost power twice over: past best torque (MBT) extra spark only pushes against the rising piston, and past the knock limit the knock control took timing out again. The best spark is not the most aggressive; it is MBT, or the knock limit if the engine knocks first. On this engine and fuel, MBT comes first.
+        More advance bought nothing. On 91 this engine knocks before it reaches best torque (MBT) through most of the rev range, as a real 10.3:1 engine on pump fuel does, so the knock control took the extra timing straight back out: the same power, with the pistons being hammered the whole way. The best spark is not the most aggressive; it is MBT, or the knock limit if the engine knocks first. Here the knock limit comes first below about 6000 RPM: this engine's full-throttle spark is set by its fuel, not by best torque.
       </Worked>
       <Do steps={[
         <>On <K>TUNE › SPARK</K>, tap the <K>100</K> row label to select the row, then press <K>+1</K> {SPARK_ADDED_DEG} times.</>,

@@ -17,7 +17,7 @@
  */
 
 import {
-  EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
+  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, turbineWithCount,
 } from './hardware.js';
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
@@ -30,7 +30,8 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
 import { DEFAULT_ECU_HW } from './ecu/context.js';
 import { deriveEngine } from './engine.js';
-import { clamp, interp2 } from './math.js';
+import { clamp, interp1, interp2 } from './math.js';
+import { inductionAtMap } from './turbo.js';
 import {
   effectiveMafFactor, interpolationRoomDeg, LOAD, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
@@ -85,7 +86,7 @@ export const ENGINE_PRESETS = [
       // deliberately generic 7500 RPM ceiling here.
       bore: 95.5, stroke: 81.4,
       compression: 10.3,
-      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
       // Bore, stroke, compression and redline above are published; `camDuration` and
       // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
       // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
@@ -132,7 +133,7 @@ export const ENGINE_PRESETS = [
       configuration: 'V6',
       bore: 95.5, stroke: 81.4,          // 95.5 x 81.4 mm
       compression: 10.6,                 // 10.6:1
-      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
       // Bore, stroke, compression and redline above are published figures and do not
       // move. `camDuration` and `springRate` are not published, so they are where this
       // preset is fitted.
@@ -180,7 +181,7 @@ export const ENGINE_PRESETS = [
       configuration: 'I6',
       bore: 84.0, stroke: 89.6,          // 84 x 89.6 mm
       compression: 10.2,                 // 10.2:1 — high for a turbo engine, thanks to DI
-      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // BMW High Precision Injection: piezo, direct only
       camDuration: 216, springRate: 58,
       redline: 7000,
     },
@@ -217,7 +218,7 @@ export const ENGINE_PRESETS = [
       configuration: 'I6',
       bore: 82.0, stroke: 94.6,          // 82 x 94.6 mm
       compression: 11.0,                 // 11.0:1 — higher than the N54, two generations back
-      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       // Bore, stroke, compression and redline are published and do not move.
       // `camDuration` and `springRate` are not published in terms comparable to this
       // model, so they are free to be fitted — see the VQ35HR comment above for the
@@ -288,7 +289,7 @@ export const ENGINE_PRESETS = [
       configuration: 'I6',
       bore: 82.0, stroke: 94.6,
       compression: 11.0,
-      blockMaterial: 'Aluminum', headMaterial: 'Aluminum',
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       // Same short block, so bore, stroke and compression are the M0's. The revised
       // engine's sharper calibration is carried by a slightly longer duration and the
       // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
@@ -356,8 +357,11 @@ export const ENGINE_PRESETS = [
       configuration: 'I4',
       bore: 82.5, stroke: 92.8,          // 82.5 x 92.8 mm
       compression: 9.6,                  // 9.6:1
-      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum',
-      camDuration: 210, springRate: 54,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
+      // Direct injection only: the North American EA888.3 has no port injectors (the
+      // European one is dual-injected). Duration is fitted, not published: 200 puts both
+      // this and the Golf R, which share it, on their rated power and torque.
+      camDuration: 200, springRate: 54,
       redline: 6500,
     },
     induction: {
@@ -390,8 +394,11 @@ export const ENGINE_PRESETS = [
       configuration: 'I4',
       bore: 82.5, stroke: 92.8,
       compression: 9.6,
-      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum',
-      camDuration: 210, springRate: 54,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
+      // Direct injection only: the North American EA888.3 has no port injectors (the
+      // European one is dual-injected). Duration is fitted, not published: 200 puts both
+      // this and the Golf R, which share it, on their rated power and torque.
+      camDuration: 200, springRate: 54,
       redline: 6800,
     },
     induction: {
@@ -469,10 +476,31 @@ export function factoryCalibration(preset) {
   // an intake fitted to one showed a 17% error when the intake itself was 10%.
   const mafScalar = Number((1 / mafErrorFactor(preset.mods, preset.induction.turboOn)).toFixed(3));
 
+  const turbine = presetTurbine(preset);
+
+  // A spooled turbo at part throttle still compresses, and heats, the air upstream of the
+  // plate. The dyno and LIVE solve that (`solveInduction`), and so does the advisor
+  // (`inductionAtMap`), so the generator must too: a cell written for air drawn straight
+  // from ambient is a cell the pull then finds knocking.
+  const inductionMemo = new Map();
+  const inductionAt = (rpm, loadKpa) => {
+    if (!preset.induction.turboOn) return null;
+    const key = `${rpm}:${loadKpa.toFixed(2)}`;
+    if (!inductionMemo.has(key)) {
+      inductionMemo.set(key, inductionAtMap({
+        rpm, mapKpa: loadKpa, boostTargetPsi: interp1(RPM, preset.induction.boost, rpm), turbine,
+        compressor: COMPRESSOR_OPTS[preset.induction.compressorIdx],
+        veAt: (m) => interp2(ve, rpm, m), derived,
+        intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
+      }));
+    }
+    return inductionMemo.get(key);
+  };
+
   // FUEL: stoichiometric where a real ECU runs closed loop, best-power enrichment above.
   const afr = LOAD.map((loadKpa) => RPM.map((rpm) => {
     if (loadKpa < OPEN_LOOP_KPA) return 14.7;
-    return Number(bestPowerAfr(boostAt(rpm, loadKpa)).toFixed(2));
+    return Number(bestPowerAfr(inductionAt(rpm, loadKpa)?.boostPsi ?? boostAt(rpm, loadKpa)).toFixed(2));
   }));
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
@@ -480,7 +508,6 @@ export function factoryCalibration(preset) {
   // evaluated against the mixture the engine will ACTUALLY see — see `cellAt` below —
   // rather than the commanded number, which is pre-compensated for the MAF error.
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
-  const turbine = presetTurbine(preset);
 
   /**
    * MBT and the knock ceiling at ANY manifold pressure, not just a row's.
@@ -489,7 +516,8 @@ export function factoryCalibration(preset) {
    * question at the pressures BETWEEN rows, which is where the ECU actually runs.
    */
   const cellAt = (rpm, loadKpa, veActual) => {
-    const boostPsi = boostAt(rpm, loadKpa);
+    const induction = inductionAt(rpm, loadKpa);
+    const boostPsi = induction ? induction.boostPsi : boostAt(rpm, loadKpa);
     // THE MIXTURE THIS CELL WILL ACTUALLY BURN, read the way the running engine reads
     // it: off the fuel table this function just wrote, interpolated to whatever pressure
     // is being asked about, and then un-corrected for the MAF error the table was
@@ -507,7 +535,7 @@ export function factoryCalibration(preset) {
     const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda))
       * derived.cyl * (rpm / 2) / 60;
-    const empKpa = exhaustManifoldKpa({
+    const empKpa = induction ? induction.empKpa : exhaustManifoldKpa({
       turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda }),
     });

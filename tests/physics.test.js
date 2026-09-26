@@ -353,7 +353,9 @@ describe('peak cylinder pressure', () => {
     expect(mild.peakPressure).toBeGreaterThan(0);
     expect(mild.pressureRisk).toBe(false);
     const brutal = point({
-      cfg: { ...STOCK, compression: 12.5 }, fuel: S.OCTANE_OPTS[3],
+      // Direct-injected, so E85's charge cooling holds knock off and pressure is the
+      // variable: port-injected E85 knocks here, and knock retard takes the peak away.
+      cfg: { ...STOCK, compression: 12.5, injection: 'direct' }, fuel: S.OCTANE_OPTS[3],
       mapKpa: S.BARO_KPA + 14 * S.PSI_TO_KPA, veVal: 110, timingVal: 20,
       mods: { ...NO_MODS, intercooler: true, turboFitted: true },
       // E85 at this airflow needs real injectors; the stock 315s would run out of pulse
@@ -450,8 +452,10 @@ describe('dyno sweep', () => {
       mods: { ...S.DEFAULT_MODS, intercooler: true }, turboOn: true, boostCurve,
       injectorCc: 850, ecuInjectorCc: 850, sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
     };
-    const low = stockPull({ ...common, cfg: { ...STOCK, compression: 9.0 } });
-    const high = stockPull({ ...common, cfg: { ...STOCK, compression: 12.5 } });
+    // Direct-injected: port-injected E85 does not get the charge cooling to stay
+    // knock-free at 12.5:1 on this boost.
+    const low = stockPull({ ...common, cfg: { ...STOCK, compression: 9.0, injection: 'direct' } });
+    const high = stockPull({ ...common, cfg: { ...STOCK, compression: 12.5, injection: 'direct' } });
     expect(high.wear.bearing).toBeGreaterThan(0);
     expect(high.wear.bearing).toBeGreaterThan(low.wear.bearing);
   });
@@ -462,16 +466,22 @@ describe('dyno sweep', () => {
     // boost is.
     const b58 = S.presetById('b58-m1');
     const p = S.applyPreset(b58);
-    const pull = (engineConfig, boost) => stockPull({
+    const pull = (engineConfig, { boost = 0, spark = 0, fuel = S.OCTANE_OPTS[p.octaneIdx] } = {}) => stockPull({
       cfg: engineConfig, turboOn: true, boostCurve: p.boostCurve.map((b) => b + boost),
-      mods: p.mods, injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
-      sweep: { ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr, fuel: S.OCTANE_OPTS[p.octaneIdx], octaneLabel: S.OCTANE_OPTS[p.octaneIdx].label, octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, mafScalar: p.mafScalar, turbine: S.presetTurbine(b58), compressor: S.COMPRESSOR_OPTS[p.compressorIdx] },
+      mods: p.mods, injectorCc: 1000, ecuInjectorCc: 1000,
+      sweep: {
+        ve: p.ve, veTruth: p.ve, afr: p.afr, fuel, octaneLabel: fuel.label, octaneBonus: fuel.bonus,
+        timing: p.timing.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? v + spark : v))),
+        mafScalar: p.mafScalar, turbine: S.presetTurbine(b58), compressor: S.COMPRESSOR_OPTS[p.compressorIdx],
+      },
     });
-    expect(pull(p.engineConfig, 0).wear.bearing).toBe(0);
-    expect(pull(p.engineConfig, 0).events.some((e) => e.type === 'bearing')).toBe(false);
+    expect(pull(p.engineConfig).wear.bearing).toBe(0);
+    expect(pull(p.engineConfig).events.some((e) => e.type === 'bearing')).toBe(false);
     const naBottomEnd = { ...p.engineConfig, boostRatedBottomEnd: false };
-    expect(pull(naBottomEnd, 0).wear.bearing).toBeGreaterThan(0);
-    expect(pull(p.engineConfig, 8).wear.bearing).toBeGreaterThan(0);
+    expect(pull(naBottomEnd).wear.bearing).toBeGreaterThan(0);
+    // Tuned past it the way a B58 is: more boost AND the spark to use it, on E85. Boost
+    // alone on the factory 93 spark table is held back by knock control.
+    expect(pull(p.engineConfig, { boost: 8, spark: 6, fuel: S.OCTANE_OPTS[3] }).wear.bearing).toBeGreaterThan(0);
   });
 
   it('leaves a stock naturally aspirated pull essentially free of bearing wear', () => {
@@ -481,8 +491,8 @@ describe('dyno sweep', () => {
   });
 
   it('raises the overload event only once the parts are actually over their limit', () => {
-    // Both builds run E85 through big injectors with an intercooler, so KNOCK is held
-    // roughly constant and compression-on-boost is the only variable. Without that the
+    // Both builds run E85, direct-injected, through big injectors with an intercooler,
+    // so KNOCK is held roughly constant and compression-on-boost is the only variable. Without that the
     // comparison is meaningless: the "sane" build on 91 octane knocks so hard that knock
     // wear swamps the pressure wear this test is about.
     const common = {
@@ -490,11 +500,11 @@ describe('dyno sweep', () => {
       turboOn: true, injectorCc: 850, ecuInjectorCc: 850,
       sweep: { fuel: S.OCTANE_OPTS[3], octaneLabel: 'E85' },
     };
-    const sane = stockPull({ ...common, boostCurve: [0, 2, 6, 8, 8, 8, 8, 8] });
+    const sane = stockPull({ ...common, cfg: { ...STOCK, injection: 'direct' }, boostCurve: [0, 2, 6, 8, 8, 8, 8, 8] });
     expect(sane.events.some((e) => e.type === 'pressure')).toBe(false);
     const overloaded = stockPull({
       ...common,
-      cfg: { ...STOCK, compression: 12.5 },
+      cfg: { ...STOCK, compression: 12.5, injection: 'direct' },
       boostCurve: [0, 4, 12, 16, 18, 18, 18, 18],
     });
     expect(overloaded.events.some((e) => e.type === 'pressure')).toBe(true);
@@ -554,7 +564,7 @@ describe('dyno sweep', () => {
       turboOn: true, boostCurve: [0, 2, 8, 12, 14, 14, 14, 14],
     }],
     ['pressure', (p) => p.pressureRisk, {
-      cfg: { ...STOCK, compression: 12.5 },
+      cfg: { ...STOCK, compression: 12.5, injection: 'direct' }, // E85's cooling needs DI to stay knock-free
       turboOn: true, boostCurve: [0, 4, 12, 18, 20, 20, 20, 20],
       injectorCc: 850, ecuInjectorCc: 850,
       mods: { ...S.DEFAULT_MODS, intercooler: true },
@@ -638,7 +648,11 @@ describe('dyno sweep', () => {
     // The other half of the pair. injscale, cam and bearing are true everywhere, so
     // a band for them would be a lie about where they apply.
     const r = stockPull({
-      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
+      // Direct-injected and intercooled, for the same reason it runs E85 below: the
+      // pressure has to arrive. At 25 psi through no intercooler the charge is hot enough
+      // that knock control holds the average near 64 bar, under the 66 bar advisory.
+      cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5, injection: 'direct' },
+      mods: { ...S.DEFAULT_MODS, intercooler: true },
       turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
       // A LARGE turbine, because this fixture has to make bearing-threatening cylinder
       // pressure and a medium housing no longer does at 25 psi. Now that the VE model
@@ -1323,7 +1337,11 @@ describe('spark advice survives interpolation', () => {
         for (const intercooler of [false, true]) {
           for (const loadKpa of [S.BARO_KPA, 70, 40]) {
             const r = followAdviceAndSweep({ psi, octIdx, intercooler, loadKpa });
-            const knocking = r.points.filter((p) => p.knock);
+            // Only where spark CAN answer it: a limit within the advisor's 1.5° of safety of
+            // the most retard a table holds needs cooling, octane or less boost instead (14
+            // psi on 91 through no intercooler puts this 10.3:1 engine's charge near 120 °C
+            // and its limit past TDC).
+            const knocking = r.points.filter((p) => p.knock && p.threshold >= S.SPARK_MIN_DEG + 1.5);
             expect(
               knocking.length,
               `following the spark advice still knocked at ${psi} psi on `

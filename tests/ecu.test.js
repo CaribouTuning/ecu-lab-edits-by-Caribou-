@@ -146,7 +146,11 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
     const e85 = S.OCTANE_OPTS[3];
     expect(b.stoich).toBeCloseTo(e85.stoich, 1);
     expect(b.octane).toBe(e85.octane);
-    expect(S.blendFuel(30).octane).toBeGreaterThan(93 + (105 - 93) * (30 / 85));
+    expect(b.ron).toBe(e85.ron);
+    expect(b.mon).toBe(e85.mon);
+    // Concave: a 30% blend has more than a straight-line share of E85's octane gain.
+    const g = S.OCTANE_OPTS[1];
+    expect(S.blendFuel(30).ron).toBeGreaterThan(g.ron + (e85.ron - g.ron) * (30 / 85));
   });
 
   it('leans out under boost on a returnless rail, and compensation brings it back', () => {
@@ -228,7 +232,8 @@ describe('ignition: knock control acts on what the sensor hears', () => {
   });
 
   it('misfires under boost when the coil cannot break down the gap', () => {
-    const short = { 'ignition.dwell': S.curve(S.VOLT_AXIS, () => 1.0) };
+    // 1.2 ms: too short for the stock gap at this cylinder density, long enough for 0.6 mm.
+    const short = { 'ignition.dwell': S.curve(S.VOLT_AXIS, () => 1.2) };
     const weak = at(makeEngine({ preset: 'b58-m1', cal: short }).pull(), 4500);
     const narrow = at(makeEngine({ preset: 'b58-m1', build: { plugGapMm: 0.6 }, cal: short }).pull(), 4500);
     const full = at(makeEngine({ preset: 'b58-m1' }).pull(), 4500);

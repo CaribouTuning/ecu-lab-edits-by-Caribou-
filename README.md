@@ -52,7 +52,13 @@ model say so, not because someone typed 250.
   trace rather than from a correlation
 - **Knock** as an autoignition integral over the unburned end gas, so octane,
   compression, charge temperature, residual dilution and mixture all reach it through
-  the pressure history instead of through separate corrections
+  the pressure history instead of through separate corrections. Each fuel carries its
+  RON and MON, and the integral reads Kalghatgi's octane index for the engine's own
+  conditions, so a stock 10.3:1 engine on 91 is knock-limited through the midrange, as
+  a real one is
+- **Port or direct injection** per engine, as the real ones have it: port-injected fuel
+  boils off the intake valve, direct-injected fuel cools the cylinder's own air, filling
+  it better and holding off knock
 - **Torque** as `IMEP − friction − PMEP → BMEP → T = BMEP × Vd / 4π`. Pumping work is
   exhaust manifold pressure minus intake, with its real sign, so a turbine's
   backpressure is a cost and a well-matched one can hand work back

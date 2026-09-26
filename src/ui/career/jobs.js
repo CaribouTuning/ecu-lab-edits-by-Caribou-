@@ -245,7 +245,8 @@ export const JOBS = [
     checks: [
       { type: 'events', kind: 'complaint', types: ['rich', 'nitrousknock', 'nitrouslean'], label: 'Clean, safe mixture and no knock while spraying' },
       { type: 'events', kind: 'safety', types: ['knock', 'unheardknock', 'lean', 'fuel'], label: 'No knock or lean anywhere' },
-      { type: 'maxEgt', kind: 'safety', max: 1000, label: 'Exhaust temperature survivable while spraying' },
+      // A spray lasts seconds: 1050 °C at the port is survivable for that long.
+      { type: 'maxEgt', kind: 'safety', max: 1050, label: 'Exhaust temperature survivable while spraying' },
     ],
     hint: 'Still bogs when it comes on, or it still makes that noise. It isn’t right yet.',
     teaches: 'Nitrous brings its own oxygen, so it needs its own fuel, and it lowers the knock limit while it sprays. Both are set for the spray alone; the base tune stays as it was.',

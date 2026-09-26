@@ -238,7 +238,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
   {
     id: 'retarded', minLevel: 1, cars: ['hr', 'de', 'v6'], needs: { training: ['spark'], equipment: ['dyno'] },
     make: ({ r, level, car }) => {
-      const deg = r.int(5, 9);
+      const deg = r.int(8, 12);
       const rows = r.int(3, 5);
       return {
         tier: 2, pay: payAt(850, level, r), rep: 8,

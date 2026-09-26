@@ -172,7 +172,9 @@ export function computeEngineerScore({
     // used to ignore it: 5 psi and 25 psi were graded identically. The reference is a
     // swing about the boost the base was fitted at, so a factory-level build sits exactly
     // where it always did while a 25 psi build on the same short block is charged for it.
+    const portInjected = engineConfig.injection !== 'direct';
     const headroom = COEFF.COMPRESSION_BOOST_BASE
+      - (portInjected ? COEFF.COMPRESSION_DI_STEP : 0)
       + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG
       + (mods.intercooler ? COEFF.COMPRESSION_INTERCOOLER_GAIN : 0)
       - Math.max(0, peakBoostPsi - COEFF.COMPRESSION_BOOST_REF_PSI)
@@ -192,6 +194,7 @@ export function computeEngineerScore({
       const levers = [
         fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
         mods.intercooler ? null : 'charge cooling',
+        portInjected ? 'direct injection' : null,
         peakBoostPsi > COEFF.COMPRESSION_BOOST_REF_PSI
           ? `less boost than ${peakBoostPsi.toFixed(0)} psi` : null,
         'less static compression',
@@ -212,11 +215,14 @@ export function computeEngineerScore({
     } else {
       // No boost term and no intercooler: on an NA engine neither exists, so octane is
       // the whole of it.
-      const headroom = COEFF.COMPRESSION_NA_BASE + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG;
+      const direct = engineConfig.injection === 'direct';
+      const headroom = COEFF.COMPRESSION_NA_BASE + fuel.bonus * COEFF.COMPRESSION_PER_OCTANE_DEG
+        + (direct ? COEFF.COMPRESSION_DI_STEP : 0);
       const d = compressionDeduction(engineConfig.compression, headroom);
       if (d > 0) {
         const levers = [
           fuel.bonus < MAX_OCTANE_BONUS ? 'higher octane' : null,
+          direct ? null : 'direct injection',
           'less static compression',
         ].filter(Boolean);
         score -= d;

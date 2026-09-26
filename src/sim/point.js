@@ -264,7 +264,7 @@ export function evaluatePoint({
   const cyc = cycleInputsFor({
     rpm, mapKpa, empKpa, intakeK: cylChargeK,
     airChargeG, burnedFuelG, fuelMassG: totalFuelG, lambda: lambdaActual, fuel,
-    ...(n2o ? { n2oG: n2o.n2oG } : {}),
+    ...(n2o ? { n2oG: n2o.n2oG, kitFuelG: n2o.fuelG } : {}),
     derived: cycDerived, ...(E?.cam ? { cam: E.cam } : {}),
   });
 

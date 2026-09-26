@@ -150,21 +150,37 @@ export const COEFF = {
   // Livengood-Wu until the accumulated fraction reaches 1. A, B, N and E are the
   // PUBLISHED coefficients. SCALE is the one fitted number in the knock model: published
   // Douaud-Eyzat was derived on one specific chamber, and every implementation carries a
-  // scale factor for the engine it is applied to. It also absorbs, in one place, what the
-  // cycle does not model — chamber shape, turbulence, port vs direct injection.
+  // scale factor for the engine it is applied to. It absorbs, in one place, what the
+  // cycle does not model — chamber shape, turbulence, hot spots.
+  //
+  // It sits at 1.1, within a tenth of the published correlation, because the two things
+  // that used to hide inside it are now modelled: where the injectors spray (the charge
+  // cooling of FUEL_EVAP_IN_CYLINDER_*), and that pump fuel is not a reference fuel —
+  // the correlation now reads the octane index RON − K·(RON − MON), with K from the
+  // engine's own compression temperature (octaneIndexK in cycle.js). At 2.0, before
+  // either, a stock 10.3:1 engine on 91 never met its knock limit below 7° past MBT.
   //
   // THREE ANCHORS, and changing SCALE must keep all three:
   //   1. Every preset reaches published output with its factory calibration knock-free.
-  //   2. A stock 10.3:1 on 91 octane runs out of margin lower at low speed than high —
-  //      measured now at about 37 deg at 5500 RPM, 31 at 4000, 29.5 at 3000 and 28.5 at
-  //      2500 — as a real one does. (Emergent: low speed means more milliseconds of
-  //      dwell for the end gas. The old additive envelope needed a term for it. The
-  //      figures this comment once quoted, 36.0 and 23.5, predate later model changes.)
+  //   2. A stock port-injected 10.3:1 engine on 91 is KNOCK-limited at full load through
+  //      the low and middle of the rev range, and reaches MBT only near peak power, as
+  //      real 10-11:1 pump-fuel engines are. Measured at wide open throttle, knock limit
+  //      minus MBT: about -4° from 1500 to 4500 RPM, -1° at 5500, 0 at 6000, +2 at 6500;
+  //      93 octane buys about a degree, in line with Kalghatgi's 0.6-1° per octane-index
+  //      point.
   //   3. The shipped stock calibration runs knock-free — what a new player meets first.
-  // Higher values pass the presets more easily but push the NA limit past anything the
-  // app can command, deleting the tutorial's most basic lesson.
   // `tests/presets.test.js` fails if 1 or 3 break.
-  KNOCK_TAU_SCALE: 2.0,
+  KNOCK_TAU_SCALE: 1.1,
+  // The octane tests' own charge temperatures, for Kalghatgi's K (octaneIndexK): the RON
+  // test (ASTM D2699) runs 52 °C intake air, the MON test (D2700) a 149 °C mixture, both
+  // naturally aspirated. Tcomp15 is taken at 15 bar, as Kalghatgi defines it. K is held
+  // between -1.5 (the most negative he reports, a boosted HCCI point) and 1, the MON test
+  // itself: past it lies only HCCI data, and deep-vacuum cylinders, which do not knock.
+  OCTANE_RON_TEST_INTAKE_K: 325.15,
+  OCTANE_MON_TEST_INTAKE_K: 422.15,
+  OCTANE_K_REF_PA: 15e5,
+  OCTANE_K_MIN: -1.5,
+  OCTANE_K_MAX: 1,
   KNOCK_DE_A: 17.68,
   KNOCK_DE_B: 3.402,
   KNOCK_DE_N: 1.7,
@@ -200,19 +216,27 @@ export const COEFF = {
   KNOCK_SEARCH_TOL_DEG: 0.25,
 
   // --- Charge cooling from fuel evaporation ---
-  // Latent heat of vaporisation, J/kg. A richer charge arrives colder, which is most of
-  // why E85 resists knock: double the latent heat AND ~1.4x the mass for the same lambda,
-  // so it drops charge temperature 80-90 K where pump gasoline manages 25-30.
+  // Latent heat of vaporisation, J/kg. E85 carries double the latent heat AND ~1.4x the
+  // mass for the same lambda, so fully evaporated from the air it would cool the charge
+  // 80-90 K where pump gasoline manages 25-30. How much of that the air actually gives up
+  // depends on where the fuel is sprayed (FUEL_EVAP_IN_CYLINDER_*).
   FUEL_LATENT_HEAT_GASOLINE: 350000,
   FUEL_LATENT_HEAT_ETHANOL: 760000,
   // Stoichiometric ratio below which a fuel counts as an ethanol blend.
   FUEL_ETHANOL_STOICH_MAX: 12,
   // Charge specific heat at constant pressure, J/(kg·K).
   CHARGE_CP: 1005,
-  // Share evaporating in the cylinder rather than the port. Direct injection puts nearly
-  // all of it in the trapped charge; port injection loses much to the runner walls. No
-  // injection-type input yet (issue #24), so this is the blended middle.
-  FUEL_EVAP_IN_CYLINDER: 0.6,
+  // Share of the fuel's latent heat that is taken from the charge rather than from metal.
+  //   PORT (multi-point manifold injection): the spray is aimed at the back of the hot
+  //     intake valve and evaporates off it and the port wall, "with minimal impact on the
+  //     charge temperature" (Bromberg, Cohn & Heywood, MIT LFEE 2006-01, which neglects it
+  //     outright). Kept small rather than zero: some droplets do evaporate in the air.
+  //   DIRECT: the spray evaporates in the cylinder's own air. Kasseris & Heywood (SAE
+  //     2012-01-1275) measured DI cooling the charge 14 K more than port injection on
+  //     gasoline and 49 K more on E85, both about 70% of the adiabatic maximum — so
+  //     DIRECT sits 0.7 above PORT.
+  FUEL_EVAP_IN_CYLINDER_PORT: 0.1,
+  FUEL_EVAP_IN_CYLINDER_DIRECT: 0.8,
   // How much fuel the charge can hold as vapour. Past its dew point the rest stays liquid
   // on the port, walls and plugs — a flooded engine, and the reason a cold one needs so
   // much enrichment. Saturation pressure by Clausius-Clapeyron through the Reid vapour
@@ -327,7 +351,8 @@ export const COEFF = {
   N2O_TARGET_LAMBDA: 0.8,
   // Share of the nitrous's latent heat drawn from the charge rather than the lines, nozzle
   // and plate — which frost over on a real car because they give up the rest. The same
-  // idea as FUEL_EVAP_IN_CYLINDER for fuel (modelling choice).
+  // idea as FUEL_EVAP_IN_CYLINDER_* for fuel (modelling choice). A wet kit's own fuel,
+  // sprayed into the airstream with the nitrous, takes the same share.
   N2O_CHARGE_COOLING_SHARE: 0.5,
   // The bottle wall: a 10 lb aluminium bottle, ~7 kg × 0.9 kJ/kg·K. The liquid's own heat
   // capacity comes from its saturation curve (src/sim/nitrous.js).
@@ -553,6 +578,16 @@ export const COEFF = {
   VE_PER_COMPRESSION_POINT: 0.005, // less clearance volume = less residual dilution
   VE_ALUMINIUM_HEAD_GAIN: 1.015,   // cooler chamber = denser incoming charge
   VE_E85_CHARGE_COOLING: 1.03,     // high latent heat of vaporisation densifies charge
+  // Direct injection evaporates its fuel in the cylinder while the intake valve is still
+  // open, so the cooled air is denser and more of it gets in. 0.7 of gasoline's full
+  // evaporative cooling at a full-load mixture is about 19 K on a ~305 K charge: 6%.
+  // Measured: 6% more power at low-speed full throttle than the port-injected version
+  // of the same engine (Zhao et al., reviewed in InTech "Gasoline Direct Injection"),
+  // and 9% more VE on a single-cylinder research engine (Wyszynski, Stone & Kalghatgi,
+  // SAE 2002-01-0839), whose figure also includes the air that fuel vapour displaces in
+  // a port. Late (compression-stroke) injection would not get it; full-load DI injects
+  // on the intake stroke.
+  VE_DIRECT_INJECTION: 1.06,
   VE_EXHAUST_UNDERSIZE: 0.08,      // top-end VE lost per inch undersized
   VE_EXHAUST_OVERSIZE: 0.05,       // low-end VE lost per inch oversized (scavenging)
   // Baseline cost of the induction system a turbo engine carries and an NA one does
@@ -611,15 +646,19 @@ export const COEFF = {
   // BOTTOM of that band alone, and the credits below clear the top. 10.8 + 0.3 (93
   // octane) + 0.4 (intercooler) = 11.5 is how a B58 as sold comes out unpenalised.
   //
-  // ONE KNOWN SIMPLIFICATION, deferred rather than hidden: a port-injected engine gets
-  // the same allowance as a DI one, which it has not earned — DI evaporates fuel inside
-  // the cylinder and buys real knock margin from it. Issue #24 tracks modelling
-  // injection type.
+  // That base is a DIRECT-injected engine's. A port-injected one does not get the
+  // in-cylinder evaporative cooling DI buys (FUEL_EVAP_IN_CYLINDER_*), and factory
+  // port-injected turbo engines show it: EJ257 8.2:1, 2JZ-GTE 8.5, SR20DET 8.3-8.5,
+  // against 10.2-11.0 for the DI ones above. COMPRESSION_DI_STEP takes a point off for
+  // port injection: less than that gap, because part of it is era and boost level, which
+  // the boost term below already prices. The NA base below is a PORT-injected engine's, and
+  // DI earns the same point there (Mazda's direct-injected NA Skyactiv-G runs 13:1).
   //
   // The other simplification that stood here — the headroom not scaling with boost
   // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
   // COMPRESSION_PER_BOOST_PSI below.
   COMPRESSION_BOOST_BASE: 10.8,
+  COMPRESSION_DI_STEP: 1.0,
   // Compression credit per degree of octane bonus, and per intercooler.
   //
   // Both are steep discounts, on purpose: the physics ALREADY charges for octane and
@@ -643,13 +682,12 @@ export const COEFF = {
   // 10.50 at 3000 and 11.40 at 3500, and 11.5 sat just above the 3000 RPM figure —
   // gentler than the physics, so a build was not billed twice for one decision.
   //
-  // RE-MEASURED (accuracy audit): the knock limit at low speed has since become more
-  // lenient, and the same engine now loses a degree only at about 12.7:1 at 2500, 3000
-  // and 3500 RPM alike. So 11.5 is now STRICTER than the physics by about 1.2 points of
-  // compression, the opposite of the intent above. Whether to move this to ~12.7 (a
-  // scoring change) or to revisit the low-speed knock limit is a decision for the
-  // maintainers; docs/accuracy.md records it. It still warns about the 13.0:1 pump-gas
-  // NA engine the slider will happily build.
+  // RE-MEASURED after the knock model was corrected (octane index, injection type): the
+  // stock 10.3:1 port-injected V6 on 91 is already knock-limited at full load below
+  // 6000 RPM, as real 10-11:1 pump-fuel engines are, so "where knock starts costing a
+  // degree" no longer places this. Production port-injected NA engines on 91 with knock
+  // control stop at about 11-11.5:1 (LS3 10.7, VQ37VHR and Coyote 11.0), so 11.5 sits where
+  // they stop. It still warns about the 13.0:1 pump-gas NA engine the slider will build.
   COMPRESSION_NA_BASE: 11.5,
   // How much static compression one psi of boost takes off the headroom, and the boost
   // level the base above is implicitly calibrated at.

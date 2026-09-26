@@ -70,13 +70,12 @@ describe('#1/#2 fuel-trim histogram converges on the true VE table', () => {
     // A miscalibrated table does not change cylinder filling, but it does change how
     // much fuel goes in, and mixture genuinely affects the knock limit. So the
     // threshold must move, and it must move for the right reason.
-    // A 15% under-reading table, which lands the mixture just lean of stoichiometric —
-    // where flame temperature peaks and knock margin is genuinely worst. (Push it much
-    // further lean and margin comes back, because a very lean charge releases less heat
-    // and burns cooler. That is real, and it is why this test picks a realistic
-    // miscalibration rather than an extreme one.)
-    const lean = point({ veVal: 85, veActualVal: 100 });
-    const onTarget = point({ veVal: 100, veActualVal: 100 });
+    // Knock tendency peaks near stoichiometric, a little rich of it, and falls away on
+    // both sides (Al Almaleki et al., Fuel 2023; the classic octane-requirement curve).
+    // So the realistic miscalibration is a full-load cell commanded rich, 11.5:1, whose
+    // table reads 12% low: the mixture lands at about 13:1, near that peak.
+    const lean = point({ veVal: 88, veActualVal: 100, afrCommanded: 11.5 });
+    const onTarget = point({ veVal: 100, veActualVal: 100, afrCommanded: 11.5 });
 
     expect(lean.chargeIndex).toBe(onTarget.chargeIndex);   // same air...
     expect(lean.afr).toBeGreaterThan(onTarget.afr);        // ...leaner mixture...

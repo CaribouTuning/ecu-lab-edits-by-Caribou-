@@ -69,9 +69,9 @@ export const MISSIONS = [
     blurb: 'Add spark until the engine knocks, see it in the log, then back off.',
     steps: [
       {
-        text: 'On TUNE › SPARK, select the 100 kPa row and add about 10°.',
-        check: (ctx) => rowMean(ctx.state.tune.timing) - rowMean(ctx.marks[0].timing) >= 8,
-        hint: 'Tap the 100 on the left of the table to select the whole row, then +1 ten times. The factory table already sits close to best torque, so it takes a big step to reach knock.',
+        text: 'On TUNE › SPARK, select the 100 kPa row and add about 4°.',
+        check: (ctx) => rowMean(ctx.state.tune.timing) - rowMean(ctx.marks[0].timing) >= 3,
+        hint: 'Tap the 100 on the left of the table to select the whole row, then +1 four times. On 91 the factory table sits only about 2° under the knock limit at full throttle, as a real one does.',
       },
       { text: 'Run a pull.', check: pulledSince },
       {

@@ -12,7 +12,7 @@ import { clamp, groupRuns, interp1, interp2 } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
-import { LOAD, RPM } from './tables.js';
+import { LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
 import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuSteadyPoint } from './ecu/strategy.js';
@@ -298,14 +298,20 @@ export function simulateSweep({
     if (boosted) causes.push(`boost (up to ${Math.max(...run.map((p) => p.boostPsi)).toFixed(1)} psi here) eating into your margin`);
     if (leanContrib >= 1.5) causes.push(`the mixture running leaner than the ${peak.bestAfr}:1 best-power target here (peak ${peak.afr.toFixed(1)}:1)${peak.fuelLimited ? ', partly from injectors maxing out' : ''}`);
     if (causes.length === 0) causes.push(`the commanded timing itself being too aggressive for ${octaneLabel} octane and this compression ratio at this load`);
-    const suggestedTiming = Math.max(-5, Math.round((peak.threshold - 1) * 2) / 2);
+    const suggestedTiming = Math.max(SPARK_MIN_DEG, Math.round((peak.threshold - 1) * 2) / 2);
+    const sparkCanFix = peak.threshold - 1 >= SPARK_MIN_DEG;
+    const levers = ['Higher octane', 'lower compression', ...(boosted && !mods.intercooler ? ['an intercooler'] : []),
+      ...(derived.injection !== 'direct' ? ['direct injection'] : []), ...(derived.chamberOffsetK > 0 ? ['an aluminum head'] : [])];
+    const buildLevers = `${levers.slice(0, -1).join(', ')} or ${levers.at(-1)}`;
     const impact = Math.max(5, Math.round((10 + avgPull * 7) * (0.3 + 0.7 * rangeFrac(run))));
     events.push({
       type: 'knock', severity: 3, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Knock across ${rangeLabel(run)}${/** @type {any} */ (run).intermittent ? ' (on and off)' : ''} — ECU pulled up to ${Math.max(...run.map((p) => p.knockPull)).toFixed(1)}° (peak near ${peak.rpm} RPM)`,
       cause: `Caused by ${causes.join(' and ')}. This spans ${Math.round(rangeFrac(run) * 100)}% of the RPM sweep${avgPull >= 2 ? `, averaging ${avgPull.toFixed(1)}° of retard — a common tuner's rule of thumb treats anything sustained above about 2° as a warning of expensive engine damage, not an acceptable operating point` : ''}.`,
-      fix: `On TUNE → SPARK, take about ${Math.max(1, Math.ceil(-peak.margin + 1))}° out of ${tableRowsAt(peak.map)} around ${peak.rpm} RPM, so the engine runs about ${suggestedTiming}° there.${boosted ? ` Or ${lessBoost}.` : ''}${leanContrib >= 1.5 ? ` Or richen the FUEL table toward ${peak.bestAfr}:1 there.` : ''} Higher octane, lower compression, or an aluminum head on BUILD also buy margin.`,
+      fix: `${sparkCanFix
+        ? `On TUNE → SPARK, take about ${Math.max(1, Math.ceil(-peak.margin + 1))}° out of ${tableRowsAt(peak.map)} around ${peak.rpm} RPM, so the engine runs about ${suggestedTiming}° there.${boosted ? ` Or ${lessBoost}.` : ''}`
+        : `Spark alone cannot fix this: around ${peak.rpm} RPM the engine knocks even at ${SPARK_MIN_DEG}°, the most retard a SPARK table holds.${boosted ? ` ${lessBoost[0].toUpperCase()}${lessBoost.slice(1)}.` : ''}`}${leanContrib >= 1.5 ? ` Or richen the FUEL table toward ${peak.bestAfr}:1 there.` : ''} ${buildLevers} on BUILD also buy margin.`,
     });
   });
 
