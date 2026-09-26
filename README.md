@@ -20,10 +20,13 @@ It is a teaching tool, not a game with a horsepower slider.
 Three ways in: **SANDBOX** is free play; **TUTORIAL** is five minutes on the basics, with
 the full Tuning Course under HOME › Learn; **CAREER** is a tuning shop of your own.
 Customers bring cars with real faults and describe what the car does, never what is wrong
-with it. Every job is graded on the same simulator as everything else: the car you hand
-back is pulled and idled, and power bought with knock or a lean top end is not a
-finished job. Money buys a dyno, lifts and tools; training opens more of the ECU. Its
-save is separate from SANDBOX's, and switching between them loses nothing.
+with it: a cast of named customers, and new walk-ins every day without end, generated
+from faults the simulator genuinely produces and harder as the shop's name grows. Every
+job is graded on the same simulator as everything else: the car you hand back is pulled
+and idled, and power bought with knock or a lean top end is not a finished job. Money
+buys a dyno, lifts and tools and pays the running costs; training opens more of the ECU,
+and eventually engine building, where customers bring a wish list instead of a fault.
+Its save is separate from SANDBOX's, and switching between them loses nothing.
 
 ## The design rule
 

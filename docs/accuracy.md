@@ -252,9 +252,15 @@ calibration, on E85), by at most one unit of power or torque.
 
 Every job is graded by `src/ui/career/evaluate.js` on the car as handed back: a
 full-throttle pull at 100 kPa in the customer's conditions (whatever the bench was last
-left on), plus a headless LIVE idle when the job is about idle. Nothing is scored by a
-separate formula. Each job is checked in `tests/career.test.js` to fail as delivered and
-to pass with a real fix.
+left on), plus a headless LIVE idle (a warm restart, judged once it settles) when the job
+asks for one. Nothing is scored by a separate formula. Each story job is checked in
+`tests/career.test.js`, and every generated template on every car it comes on at its
+lowest and highest level in `tests/career-generated.test.js`, to fail as delivered and
+to pass with a real fix made only with what the game shows the player. Engine-building
+targets are set inside what real builds reach on this model (bolt-ons and a 240° cam
+reach +15-21% naturally aspirated). `tests/career-economy.test.js` plays 70 days as a
+player who fixes every car properly and holds the pacing: always work to take, never
+broke, and the reputation ladder climbed over weeks.
 
 - **Mixture is graded directly.** The pull log's lean event only fires past AFR 15.2, so a
   car can run 18% lean of its target with no event and a Tuning Score of 100. Jobs about
