@@ -5,9 +5,15 @@ the upstream repository.
 
 ## Opening a pull request
 
-**Do not include this file in a branch destined for an upstream PR.** It is fork-local
-housekeeping and has no business in the upstream diff. `git rm CLAUDE.md` on the PR
-branch before handing over the compare link (it stays on `main` regardless).
+**Cut every PR branch from `upstream/main`, never from this fork's `main`.** The fork's
+`main` carries files upstream does not have — this file and `docs/audit/` — so a branch
+taken from it puts fork-local housekeeping into the upstream diff. Branching from
+`upstream/main` avoids the problem at the source, rather than deleting files afterwards:
+
+```bash
+git fetch upstream main
+git checkout -b <branch> upstream/main
+```
 
 Claude Code sessions in this repository are scoped to the fork only. Two things are
 therefore already known to fail — do not spend calls rediscovering them, and do not
@@ -15,35 +21,92 @@ report the PR as impossible on their account:
 
 - `create_pull_request` against `DNiev/ecu-lab` →
   `Access denied: repository "dniev/ecu-lab" is not configured for this session.`
-- `add_repo` with `access: "push"` for `DNiev/ecu-lab` → requires an approval that the
-  session cannot grant itself. Worth one attempt if the user wants to authorise it;
-  if it is refused at the org level, a repo admin has to enable the repository in the
-  Claude GitHub settings first.
+- `add_repo` with `access: "push"` for `DNiev/ecu-lab` → in a session that already holds
+  a `cariboutuning/*` repo it fails before any permission check:
+  `cross-tier adds are not supported in v1`. A fresh session sourced at `DNiev/ecu-lab`
+  gets past that, but not past the next wall: the connected identity is `CaribouTuning`,
+  and GitHub reports its permissions on the upstream as
+  `pull: true, push: false, admin: false`. Read-only. No session configuration changes
+  that — only Turtle.GTI adding CaribouTuning as a Write collaborator, plus the Claude
+  GitHub App being installed on `DNiev/ecu-lab`.
+- The fork-sync API (`POST /repos/:owner/:repo/merge-upstream`, the "Sync fork" button)
+  is blocked by the session proxy: `403 Write access to this GitHub API path is not
+  permitted`. Sync with git instead:
+  `git fetch upstream main && git merge upstream/main && git push origin main`.
 
 Anonymous **git reads** of the upstream DO work (clone, fetch), so the branch state can
 always be verified against it even when the API is closed.
 
 The workflow that works:
 
-1. Develop and commit on the designated branch, push to this fork
+1. Cut the branch from `upstream/main` (above), develop, commit, and push to this fork
    (`git push -u origin <branch>`).
-2. Verify the branch is a clean fast-forward on upstream before handing it over:
+2. Keep the branch a **fast-forward** on `upstream/main` for its whole life. When
+   upstream moves, `git rebase upstream/main` — never `git merge upstream/main` into
+   the branch. See "Why past PRs needed rebuilding" below; this is the single biggest
+   cause of Turtle having to take a branch over.
+3. Run the preflight before handing anything over. It lives on `main`, so pipe it in
+   rather than checking it out onto the PR branch — the script is itself fork-local:
    ```bash
-   git remote add upstream https://github.com/DNiev/ecu-lab
-   git fetch upstream main
-   git merge-base --is-ancestor upstream/main HEAD   # exit 0 = clean
-   git log --oneline upstream/main..HEAD             # exactly your commits
-   git remote remove upstream
+   git show main:scripts/pr-preflight.sh | bash                # full gate
+   git show main:scripts/pr-preflight.sh | bash -s -- --quick  # structure only, no CI
    ```
-3. Give the user a prefilled compare link — the fork is named differently from the
+   Exit 0 with no warnings means: fast-forward, linear, no stray files, and green on
+   every Node version CI uses. That is the bar for "Turtle presses Merge and that is
+   it". Anything less and he does work you were supposed to do.
+4. Give the user a prefilled compare link — the fork is named differently from the
    upstream, so the `owner:repo:branch` form is required:
    ```
    https://github.com/DNiev/ecu-lab/compare/main...CaribouTuning:ecu-lab-edits-by-Caribou-:<branch>?expand=1
    ```
-4. Supply the PR title and body as a pasteable file rather than only in chat.
+5. Supply the PR title and body as a pasteable file rather than only in chat.
 
 A PR merged into this fork's `main` is **not** the same as landing upstream. Check
 which one actually happened before saying the work is done.
+
+## Why past PRs needed rebuilding
+
+Turtle has had to open his own PR to land work from this fork. The causes are on the
+record, and all of them are preventable here:
+
+**#41 → his #45 `integrate/crank-angle-cycle`**, titled "Integrate #41's crank-angle
+cycle with main, and fix its blocking defects". Three separate problems:
+
+- The branch had gone stale and conflicted with main. His merge commit had to settle
+  which advisor survived and treat `tests/fingerprint.js` as a *union* rather than an
+  overwrite — a judgement call the PR forced onto him.
+- Three blocking review findings in the physics (fuel-mass energy released from
+  delivered rather than burnable mass; an uncapped blowdown expansion; unwired
+  `turbineCount`).
+- **The fingerprint was generated on the wrong Node.** His note: the untouched PR head
+  `f4fdaff` "passes on 20.18.1 and fails on 26.0.0, same commit, same machine". The
+  hash is float-sensitive, so a green run proves nothing unless it is green on the
+  versions CI actually uses.
+
+**#90 `claude/restore-missing-content`** never landed at all. The branch carried two
+`Merge upstream main: ...` commits and conflicts in seven files. Re-run the preflight
+against it today and it still reports both — it was unmergeable when it was handed over.
+
+The lesson in one line: **rebase, never merge, and prove the fingerprint on every Node
+in the CI matrix.**
+
+### The fingerprint and Node versions
+
+`.github/workflows/ci.yml` runs the suite on a matrix of Node **20 and 22**, on purpose
+— the comment in it says running the float-sensitive hash on more than one version
+"proves the physics is reproducible across V8 releases". `package.json` declares
+`engines: node >=20 <23` and `.nvmrc` pins 22.
+
+So a fingerprint regenerated on a single version is not evidence. Before regenerating
+one, make both versions available and confirm the hash holds on each:
+
+```bash
+nvm install 20 && nvm install 22
+git show main:scripts/pr-preflight.sh | bash    # runs every gate on both
+```
+
+Work outside that range at all — Node 23+ — and the hash it produces is one CI cannot
+reproduce. That is precisely what cost #41.
 
 ## Before you push
 
