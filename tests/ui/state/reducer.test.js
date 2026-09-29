@@ -652,6 +652,57 @@ describe('RESET_TO_STOCK', () => {
   });
 });
 
+describe('TAKE_JOB', () => {
+  /** A player mid-session: pulls banked, one pinned, edits on the undo stack. */
+  function midSession() {
+    let s = makeInitialState();
+    s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: s.tune.timing.map((r) => r.map((v) => v + 2)) });
+    s = reducer(s, { type: ACTIONS.SET_TABLE, table: 've', value: s.tune.ve.map((r) => r.map((v) => v + 1)) });
+    s = reducer(s, { type: ACTIONS.UNDO });
+    const runs = [{ id: 'r2', n: 2 }, { id: 'r1', n: 1 }];
+    return { ...s, session: { ...s.session, runs, pinnedRunId: 'r1', result: /** @type {any} */ ({ peakHp: 1 }) } };
+  }
+  const take = (s) => reducer(s, {
+    type: ACTIONS.TAKE_JOB, index: 2, build: makeInitialState().build, ve: [[70]],
+  });
+
+  it('keeps the run log and its pin, which are the player\'s saved history', () => {
+    // Both are written to storage whenever they change (the save effect in EcuLab.jsx),
+    // so emptying them here deleted every pull the player had banked, for good.
+    const before = midSession();
+    const s = take(before);
+    expect(s.session.runs).toBe(before.session.runs);
+    expect(s.session.pinnedRunId).toBe('r1');
+  });
+
+  it('clears the bench: no result measured on the last car', () => {
+    const s = take(midSession());
+    expect(s.session.result).toBeNull();
+    expect(s.session.pullScores).toBeNull();
+    expect(s.session.activeJob).toBe(2);
+    expect(s.session.jobResult).toBeNull();
+  });
+
+  it('empties both undo stacks, so neither can put the last car\'s tables on this one', () => {
+    const before = midSession();
+    // Guard the setup: there has to be something on each stack for this to mean anything.
+    expect(before.history.past.length).toBeGreaterThan(0);
+    expect(before.history.future.length).toBeGreaterThan(0);
+    const s = take(before);
+    expect(s.history).toEqual({ past: [], future: [] });
+    expect(reducer(s, { type: ACTIONS.UNDO })).toBe(s);
+    expect(reducer(s, { type: ACTIONS.REDO })).toBe(s);
+  });
+
+  it('installs the stock spark and fuel tables and the job\'s VE', () => {
+    const s = take(midSession());
+    expect(s.tune.ve).toEqual([[70]]);
+    expect(s.tune.timing).toEqual(DEFAULT_TIMING);
+    expect(s.tune.afr).toEqual(DEFAULT_AFR);
+    expect(s.tune.tablesDirty).toBe(false);
+  });
+});
+
 describe('REPAIR_ENGINE', () => {
   it('restores every component to full health', () => {
     const worn = { ...makeInitialState() };
