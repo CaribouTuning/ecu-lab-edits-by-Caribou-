@@ -1,15 +1,15 @@
 /**
  * HOME > Learn How It Works.
  *
- * The plain-language guide: twenty-eight collapsible articles, in reading order, from
+ * The plain-language guide: thirty numbered articles, in reading order, from
  * "an engine is an air pump" through reading a time slip to the published
  * correlations the engine model implements and the limits it does not cross.
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
- * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-eight articles twenty
- * times a second to produce exactly the same output. `active` and `onToggle` are its
+ * anywhere: it is the largest block of markup on HOME, the shell re-renders twenty
+ * times a second while the engine runs (whichever tab is showing), and without the
+ * memo React would walk every article each time to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
  */
@@ -72,6 +72,36 @@ function LearnScreenInner({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.part}>PART 2 · WHAT THE ECU CALCULATES</div>
+
+      {/* Unnumbered, as it was in the reference build: a key to read the numbered
+          articles by, not an article in the sequence. */}
+      <ExpandableInfo title="Symbol key — plain-English version">
+        Read this once and the formulas below stop looking like maths and start looking like a description of what the engine is doing.
+        <br /><br /><b className={styles.em}>AIR SIDE</b>
+        <br /><span className={styles.formula}>MAP</span> — manifold absolute pressure. <i>How hard the air is being pushed toward the cylinder.</i> About 101 kPa is atmospheric; 20-30 kPa at idle, because the throttle is shut and the engine pulls vacuum; above 101 means a turbo is pushing. Formulas need it in pascals, so kPa × 1000.
+        <br /><br /><span className={styles.formula}>T</span> — charge temperature in <b className={styles.em}>kelvin</b>, not celsius: add 273.15 to your °C. It has to be absolute because at 0 K a gas has no volume; celsius has no such meaning, and the formula would break.
+        <br /><br /><span className={styles.formula}>R</span> — the gas constant for air, 287 J/(kg·K). <i>A property of air itself</i> — never a tuning value; it is the same on every engine on earth.
+        <br /><br /><span className={styles.formula}>ρ</span> (rho) — air density in kg/m³. <i>How much air is actually packed into a given space.</i> Cold, dense air is more oxygen and more possible power, which is why the same car makes more power on a cold night.
+        <br /><br /><span className={styles.formula}>VE</span> — volumetric efficiency, as a fraction. <i>How good the engine is at filling its own cylinders.</i> A 95% cell means the cylinder took in 95% of what its volume could hold at that pressure.
+        <br /><br /><span className={styles.formula}>V_cyl</span> — swept volume of ONE cylinder in m³ (displacement ÷ cylinders). <span className={styles.formula}>Vd</span> — the whole engine's displacement in m³: a 3.5 L engine is 0.0035 m³.
+        <br /><br /><b className={styles.em}>FUEL SIDE</b>
+        <br /><span className={styles.formula}>stoichRatio</span> — the air:fuel mass ratio at which fuel and oxygen exactly consume each other. <i>A chemical property of the fuel, not a choice:</i> 14.7:1 for gasoline, 9.8:1 for E85.
+        <br /><br /><span className={styles.formula}>λ</span> (lambda) — measured AFR ÷ that fuel's stoichRatio. <i>How rich or lean you are, expressed so it means the same thing on any fuel.</i> 1.00 is exactly balanced, 0.85 is 15% more fuel than strictly needed — rich, and where power lives — and 1.10 is lean.
+        <br /><br /><span className={styles.formula}>LHV</span> — lower heating value, J/kg. <i>How much energy is in a kilogram of the fuel.</i> Gasoline about 44 MJ/kg, E85 about 29.2 MJ/kg. E85 has less energy per kilogram but you burn far more kilograms, which is why the power comes out similar.
+        <br /><br /><span className={styles.formula}>PW</span> — injector pulse width, milliseconds. <i>How long the injector is held open.</i> The ECU does not command fuel; it commands time.
+        <br /><br /><b className={styles.em}>OUTPUT SIDE</b>
+        <br /><span className={styles.formula}>CR</span> — compression ratio: 10.3 means the mixture is squeezed into 1/10.3 of its starting volume.
+        <br /><br /><span className={styles.formula}>η</span> (eta) — thermal efficiency, a fraction between 0 and 1. <i>The share of the fuel's chemical energy that becomes work instead of heat out of the exhaust.</i> Around 0.35 is typical; most of a fuel's energy genuinely leaves as heat.
+        <br /><br /><span className={styles.formula}>MEP</span> — mean effective pressure. <i>The single average pressure that, pushing on the piston for one stroke, would do the same work the real, varying pressure does.</i> It lets engines of different sizes be compared fairly, and comes in three kinds:
+        <br /><span className={styles.formula}>IMEP</span> — what combustion produced on the piston
+        <br /><span className={styles.formula}>FMEP</span> — what the engine spends on itself: rubbing friction, pumping air past a closed throttle, compressing valve springs
+        <br /><span className={styles.formula}>BMEP</span> — what is left and reaches the crank, IMEP − FMEP
+        <br />A healthy naturally aspirated engine peaks around 11-13 bar BMEP. Below zero, the engine cannot even pay for its own losses — which is exactly what engine braking is.
+        <br /><br /><span className={styles.formula}>MBT</span> — minimum spark advance for best torque. <i>The least advance that still makes maximum power.</i> "Minimum" matters: past MBT you gain nothing and only add knock risk.
+        <br /><br /><b className={styles.em}>TWO CONSTANTS THAT LOOK ARBITRARY</b>
+        <br /><span className={styles.formula}>4π</span> in the torque formula: a four-stroke fires once every <b className={styles.em}>two</b> crank revolutions. Work per cycle is MEP × Vd, and two revolutions is 4π radians, so torque = work ÷ angle = MEP × Vd ÷ 4π. A two-stroke fires every revolution and uses 2π.
+        <br /><br /><span className={styles.formula}>120000</span> in the duty-cycle formula: one injection per two revolutions. Two revolutions at N rpm take 2 ÷ (N/60) seconds = 120/N seconds = <b className={styles.em}>120000/N milliseconds</b>. At 7500 rpm that is 16 ms — the injector's whole time budget.
+      </ExpandableInfo>
 
       <ExpandableInfo title="6. The control loop, in order">
         Thousands of times a minute, the ECU runs the same sequence:
@@ -254,6 +284,45 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Autoignition is a correlation, not chemistry.</b> Article 5's survival time comes from a published empirical fit — the standard engineering approach, good across normal running. But real autoignition is a branching chain reaction through hundreds of intermediate species, and it does something the fit cannot: over one band of temperature gasoline gets <i>harder</i> to ignite as it gets hotter, and can light in two stages. Laboratories model this with detailed kinetic mechanisms and large computers. A browser cannot.
         <br /><br /><b className={styles.em}>There is no emissions chemistry.</b> Nothing here computes NOx, carbon monoxide or unburned hydrocarbons. So the app can say what lambda does to power and to knock, but never what it does to what leaves the pipe. Worth knowing: the narrow band around lambda 1.00 exists mainly because a three-way catalyst only converts all three pollutants at once inside it. Closed loop is an emissions strategy first.
         <br /><br /><b className={styles.em}>Fuel is a few properties, not a mixture.</b> Pump gasoline blends hundreds of hydrocarbons. Here each fuel carries a stoichiometric ratio, density, heating value, latent heat and antiknock index — enough for a tuner's decisions, not enough to say anything about distillation or seasonal blending.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="29. Why the engine sounds the way it does">
+        The sound here is not a recording. It is built live from what the engine is doing, so the things you change are the things you hear.
+        <br /><br /><b className={styles.em}>An exhaust note is a train of pulses.</b> Every time a cylinder's exhaust valve opens, the gas still inside it at several bar rushes out — the blowdown — and then the piston pushes out what is left. A pipe radiates the <i>rate of change</i> of the flow leaving it, so each event is heard as a sharp edge as the valve cracks, a rush of turbulence while the gas leaves near the speed of sound, and a softer swell as the piston pushes. How often they come is set by engine speed and cylinder count:
+        <br /><span className={styles.formula}>firing Hz = RPM ÷ 60 × cylinders ÷ 2</span>
+        <br /><b className={styles.em}>Where the pulses fall is the layout.</b> Each pulse is placed at the crank angle that cylinder actually fires at. A cross-plane V8's banks are offset, so at 3000 RPM its pulses arrive 3.6, 5.0 and 6.4 ms apart instead of an even 5.0 — and that unevenness <i>is</i> the rumble. Even-fire the same engine and it stops sounding like a V8. A 60/120° V6 fires evenly and rings hard and hornlike. A four fires twice a revolution, far enough apart to hear separately, which is the hollow four-cylinder sound.
+        <br /><br /><b className={styles.em}>Every pulse is computed, not drawn.</b> For each event the app works out the flow through the valve step by step: the cylinder starts at the pressure the burn left it at, the valve opens along the cam's flank, the gas leaves choked and then subsonic, and the piston moves as the crank turns. So the tune is in the sound — more timing, boost or load leaves more pressure at valve opening and a harder bark; a closed throttle leaves the cylinder below the pipe, so gas rushes back in first and the note goes soft. The valve opens over fixed crank degrees, so at idle an event takes about 13 ms and thuds, and at 6000 RPM it takes under 2 and cracks.
+        <br /><br /><b className={styles.em}>No two cycles are the same.</b> A real engine never repeats itself, and a repeated cycle is the fastest way to make one sound synthetic. Measured against recordings of real engines, one cycle resembles the next with a correlation of about 0.3 to 0.5. So three things vary here, as they do in the metal: combustion scatters from cycle to cycle (the pressure late in the stroke varies by roughly 5% at full throttle and more at light load), each cylinder breathes a few percent differently from its neighbours, and a strong cycle speeds the crank so the next event arrives a touch early — at idle, that is; the flywheel's energy grows with the square of engine speed, so at 4000 RPM the same cycle barely moves it and a fast engine keeps near-perfect time. On a fuel cut — the overrun and the limiter — nothing is burning, so there is nothing to scatter: the cylinders pump the same charge out every cycle. Every event is computed at every speed — nothing is looped.
+        <br /><br /><b className={styles.em}>The pipes turn pulses into a note.</b> On its way out, each pulse runs through the primaries, the collector, the converter, the muffler and the tailpipe. Every one of those is a tube, and a pressure wave runs down a tube at the local speed of sound. Wherever the pipe changes size, part of the wave bounces back — upside down where it widens, which is exactly what a collector and a muffler's chambers are for — and part carries on. The walls, the converter's honeycomb and the muffler's packing soak up energy, the treble fastest. At the open end the bass reflects back up the pipe and the treble escapes. So the system rings at many frequencies at once, each fading at its own rate:
+        <br /><span className={styles.formula}>a tube open at both ends: f = c / 2L &nbsp;·&nbsp; closed at one: f = c / 4L</span>
+        <br />The app computes that response from your build — every length, area and gas temperature — and plays every pulse through it. That is the same method the best-regarded engine simulators use, except they load a recording of a real exhaust where this one is worked out from yours. A bigger engine with a bigger pipe is a longer, larger system, so it rings lower. Hot gas carries sound faster, so the whole system tunes up as the engine warms and comes on song. A straight-through cat-back swaps a reactive muffler for a perforated tube, so more treble gets out. A turbine takes work out of every pulse and smears what is left, which is why a turbo engine sounds muted.
+        <br /><br /><b className={styles.em}>Why full throttle barks and idle thuds.</b> A small pressure wave travels at the speed of sound. A big one does not: the gas in its crest is moving fast, so the crest travels faster than the base and catches up with the front. A full-load pulse sharpens as it runs down the primary, and a sharper front carries more high harmonics — that is the bark, the crack, the rasp. Most of it happens in the primary: the collector is several times wider, so the same gas moves through it far slower and sharpens it far less. At idle the pulses are too small to steepen, so they arrive as soft thuds. The app runs every pulse down its primary and collector this way, so the same engine sounds different at idle, cruising and flat out, as a real one does.
+        <br /><br /><b className={styles.em}>Why a revving engine sings instead of ringing.</b> At idle the gas in the pipes barely moves — about 1% of the speed of sound — so the pipes ring freely between pulses, and that ringing is the deep burble of an idle. Flat out, the gas runs down the tailpipe at about a fifth of the speed of sound. Turbulent flow along the walls takes energy out of every wave, and gas rushing past the muffler's perforated core makes its packing absorb far more, so the pipes stop ringing. What is left is carried by the pulses themselves: a note that climbs with the revs, led by the firing frequency. The app works out how fast the gas is moving from the flow of every pulse and damps the pipes to match, so a blip of the throttle opens the note up and a lift lets the pipes ring again.
+        <br /><br /><b className={styles.em}>Each cylinder has its own pipe.</b> A cast manifold is a log: the end cylinder runs the length of it, the one by the outlet barely any. Those few milliseconds of difference stagger the pulses, which is why a stock engine sounds lumpier than the same engine on headers. Tuned headers are built to equal lengths, so the pulses arrive on their firing intervals. A V's two banks each have their own system, and one is always a little longer than the other.
+        <br /><br /><b className={styles.em}>Starting it.</b> A starter motor turns the engine through a small gear on the flywheel's ring gear — about 135 teeth — so it whines at the crank's revolutions per second times that. Every cylinder coming up on compression slows the crank and every one going over the top lets it run, so the crank surges several times a revolution and the whine rises and falls with it. That is the "rur-rur-rur" of an engine turning over: faster for more cylinders, harder for more compression. When it catches, the starter lets go and spins down.
+        <br /><br /><b className={styles.em}>What each change does:</b>
+        <br /><b className={styles.em}>Cylinder count</b> — pulse rate and spacing pattern. The biggest single factor.
+        <br /><b className={styles.em}>Displacement and bore</b> — a bigger cylinder has more gas to push out and a bigger valve to push it through, so each event is bigger, and it goes into a longer system, so the note sits lower and deeper.
+        <br /><b className={styles.em}>Cam duration</b> — overlap dilutes the charge at idle, so combustion scatters far more from cycle to cycle and some cycles barely burn. The note surges and stumbles. That is lope.
+        <br /><b className={styles.em}>Exhaust</b> — a bigger pipe restricts less and rings lower; a cat-back lets more treble out; headers line the cylinders' pulses up and smooth the note.
+        <br /><b className={styles.em}>Intake</b> — induction noise rising with airflow.
+        <br /><b className={styles.em}>Turbo</b> — the whistle is the compressor's blade-pass tone tracking shaft speed; the rush is air actually being moved. On a small engine that induction noise dominates, which is why a turbo four whooshes rather than barks.
+        <br /><b className={styles.em}>Ignition timing</b> — retarded means the burn is still going as the valve opens, dumping energy down the pipe: a harder, raspier note, and a hotter exhaust.
+        <br /><b className={styles.em}>Mixture</b> — rich burns slower and softer; lean is sharp and thin.
+        <br /><b className={styles.em}>Compression</b> — a smaller clearance volume changes how the cylinder empties, and a faster pressure rise gives a harder crack on each pulse.
+        <br /><b className={styles.em}>Knock</b> — a rattly edge, because that is literally what knock is: a shockwave ringing the cylinder.
+        <br /><b className={styles.em}>Throttle</b> — more charge, more pressure at valve opening, and every pulse hits harder. A fuel cut on the limiter or the overrun makes every pulse weaker without going silent, because the cylinders are still pumping air: on the limiter the throttle is still open and the engine stays loud, and on the overrun it falls away towards idle.
+        <br /><br />This matters beyond the game. Tuners diagnose by ear constantly — a lumpy idle, a lean rasp, a knock rattle. The sound is data.
+      </ExpandableInfo>
+
+      <ExpandableInfo title="30. Further reading on engine sound">
+        The ideas above are standard acoustics. These explain them properly.
+        <br /><br /><b className={styles.em}>Burns Stainless, "Exhaust Header Theory".</b> How pressure waves travel through a header and reflect at an open end — as a negative pressure wave, which is what header tuning uses to scavenge the cylinder — and why collector design changes the wave that comes back.
+        <br /><br /><b className={styles.em}>Flatirons, "Resonance and Reverberation".</b> The plain-language version: resonance when tube length matches the wavelength, interference setting tone, and larger diameter giving a louder, more open note.
+        <br /><br /><b className={styles.em}>HowStuffWorks, "How Mufflers Work".</b> Why a muffler is not simply a restriction: chambers tuned to cancel particular frequencies, and packing that absorbs broadband energy.
+        <br /><br /><b className={styles.em}>Car and Driver, "Why Various Engine Types Sound So Different".</b> Firing intervals and crank arrangement as the origin of layout character — the cross-plane V8 rumble in particular.
+        <br /><br /><b className={styles.em}>PhET, "Sound Waves"</b> (University of Colorado Boulder), and <b className={styles.em}>Britannica, "Sound (physics)"</b>. The fundamentals underneath all of it: pressure waves, wavelength and frequency, interference, standing waves and resonance. Start here if the rest assumed too much.
+        <br /><br /><b className={styles.em}>ScienceDirect, engine noise and vibration.</b> Reference material on exhaust system acoustics, for the level above this app.
       </ExpandableInfo>
     </BuildSection>
   );
