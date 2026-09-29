@@ -28,7 +28,7 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS,
-  DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
+  DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
@@ -64,7 +64,7 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { CAREER_JOBS } from './career.js';
+import { CAREER_JOBS, jobCar } from './career.js';
 import { DragScreen, dragSignature } from './screens/drag/DragScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { JobsScreen } from './screens/dash/JobsScreen.jsx';
@@ -177,11 +177,11 @@ const TUTORIAL_STEPS = [
   { title: 'The ECU commands time, not fuel',
     body: 'It converts fuel mass into an injector pulse width:\n\n    PW = fuelMass ÷ (injectorCC × density ÷ 60000) + deadtime\n    cycleTime = 120000 ÷ RPM\n    duty% = PW ÷ cycleTime × 100\n\nAt 7500 RPM a cycle is only 16 ms. Past about 90% duty there is no time left, and the mixture goes lean no matter what your FUEL table says. That is a physical wall, not a calibration choice.' },
   { title: 'Spark decides how much of that energy you keep',
-    body: 'Fuel burns over a few milliseconds, so you light it before top dead center and aim for peak pressure just after. Too early and pressure fights the rising piston; too late and you are burning into an escaping piston.\n\n    timingEff = 1 − 0.0016 × (yourTiming − MBT)²\n\nThat is why the SPARK table changes power without changing a single thing about airflow — it changes how much of the same burn reaches the crank.' },
+    body: 'Fuel burns over a span of crank rotation, so you light it before top dead center and aim for the burn to be half done just after it. Too early and pressure fights the rising piston; too late and you are burning into a cylinder already expanding.\n\nThe best timing, MBT, is not a number from a table: it is whatever advance lands that half-burned point 8 to 10° after top dead center for the burn you actually have. That is why the SPARK table changes power without changing a single thing about airflow — it changes how much of the same burn reaches the crank.' },
   { title: 'Knock is the limit on all of it',
-    body: 'The end gas can self-ignite from heat and pressure before the flame reaches it. The sim predicts that from charge mass, octane, compression, intake temperature and mixture. Ask for more timing than the engine will tolerate and the ECU pulls it back — you see commanded and actual diverge in the datalog, and the power you thought you gained disappears.' },
+    body: 'The end gas — the mixture farthest from the spark plug — can light itself from heat and pressure before the flame reaches it. The sim tracks that as a race against time, every crank degree, from pressure, temperature, octane and mixture. Ask for more timing than the engine will tolerate and the ECU pulls it back — you see commanded and actual diverge in the datalog, and the power you thought you gained disappears.' },
   { title: 'Where the horsepower number actually comes from',
-    body: 'Nothing in this sim adds horsepower directly. Torque is derived last:\n\n    IMEP = fuelMass × LHV × η × timingEff × afrEff ÷ V_cyl\n    BMEP = IMEP − FMEP\n    torque = BMEP × Vd ÷ 4π\n\nη comes from your compression ratio. FMEP is what the engine spends on friction, pumping and valve springs. Change anything upstream and the dyno number changes — exactly like a real engine.' },
+    body: 'Nothing in this sim adds horsepower directly. The simulator burns the fuel through one cylinder over its whole cycle, a couple of crank degrees at a time, and adds up the work the pressure does on the piston:\n\n    IMEP = ∮ p dV ÷ V_cyl\n    BMEP = IMEP − friction − pumping\n    torque = BMEP × Vd ÷ 4π\n\nCompression, spark, mixture and boost all change that pressure trace. Friction and pumping are what the engine spends on itself. Change anything upstream and the dyno number changes — exactly like a real engine.' },
   { title: 'So what is tuning?',
     body: 'Tuning is finding, for every RPM and load point, the most timing and the best mixture the engine will tolerate without knocking or running out of fuel. Too conservative and you leave torque on the table. Too aggressive and you damage it. The optimum is a narrow band, and it moves the instant you change hardware.' },
   { title: 'Design it on BUILD',
@@ -193,13 +193,13 @@ const TUTORIAL_STEPS = [
   { title: 'Read the log before touching anything',
     body: 'Every pull produces a Pull Log. Each problem gets a plain-language Why (what physically caused it) and a Try (what to change). The datalog next to it shows commanded vs. actual for timing and mixture. A gap between those two columns is the ECU telling you something.' },
   { title: 'Change one thing, then pull again',
-    body: 'This is the entire method: one change, one pull, read the log, adjust. The VS. LAST PULL line tells you whether it actually helped. Tuners who change three things at once cannot tell which one worked — and tuners who guess instead of logging break engines.' },
+    body: 'This is the entire method: one change, one pull, read the log, adjust. The next pull draws the last one dashed behind it, so you can see whether the change helped, and where. Tuners who change three things at once cannot tell which one worked — and tuners who guess instead of logging break engines.' },
   { title: 'Know what you cannot tune away',
     body: 'Knock, mixture and MAF errors are calibration faults — tables fix them completely. Injectors out of duty cycle, valve float, a compressor past its range: those are physical limits, and the log will tell you so. Recognising which kind you are looking at is most of the skill.' },
   { title: 'You can hear the physics too',
     body: 'Engine sound here is generated from the same numbers, not sampled. Each cylinder firing schedules an exhaust pulse:\n\n    firingHz = RPM ÷ 60 × cylinders ÷ 2\n\nA cross-plane V8 is even at the crank but not down either pipe — each bank fires at 180, 270, 180 and 90 degrees — and that irregular spacing is what makes it rumble. A V6 fires evenly and rings hard and hornlike. A four fires only twice per revolution, so you hear each pulse separately.\n\nRetard the timing and it turns raspy, because the charge is still burning into the exhaust. Richen it and it softens. Fit a big cam and it lopes. Add a turbo to a small engine and induction noise takes over. Tuners diagnose by ear for a reason — the sound is data.' },
   { title: 'Where this physics comes from',
-    body: 'Every relation in this simulator is standard published engineering, and each figure has been checked against a source rather than assumed.\n\nMIT OpenCourseWare 8.21 gives the Otto-cycle efficiency and, critically, the value of gamma to use: about 1.3 for combustion products at cycle temperature, which yields 50% ideal efficiency at a 10:1 compression ratio. This app originally used 1.35 and was corrected to match.\n\nNASA Glenn provides the underlying pressure and temperature relations that efficiency formula derives from. x-engineer.org confirms the foundation the whole model rests on: one engine cycle is two crank rotations, and only the power stroke produces energy.\n\nEvery formula was also checked for unit consistency. Air density resolves to 1.185 kg/m3 at sea level and 25 C against a published 1.184, and injector cycle time derives exactly from two crank revolutions.\n\nThe full source list, including what checking them changed, is under Learn on the HOME tab. If a number here looks wrong to you, go and check it — that instinct has already corrected real errors in this simulator.' },
+    body: 'Every relation in this simulator is published engineering, so its numbers can be checked rather than taken on trust: a Wiebe function for how the fuel burns, the Douaud and Eyzat ignition-delay correlation for knock, Woschni for heat lost to the walls, and the Heywood textbook for how they fit together.\n\nThe full list, with what each source covers, is under Learn on the HOME tab. If a number here looks wrong to you, go and check it — that instinct is how a model like this gets better.' },
   { title: 'Chase the score',
     body: 'Every pull grades Tuning (how clean the calibration is) and Engineer (how sound the hardware choices are), then combines them with actual output into an uncapped Pull Score. A big, slightly dirty pull can beat a small spotless one — the same tension a real tuner balances.' },
   { title: 'Then put it in a car',
@@ -464,44 +464,13 @@ export function EcuLabApp() {
    * @param {number} i index into {@link CAREER_JOBS}
    */
   const takeJob = (i) => {
-    const job = CAREER_JOBS[i];
-    const cfg = { ...DEFAULT_ENGINE_CONFIG };
-    if (job.setup.camDuration) cfg.camDuration = job.setup.camDuration;
-    if (job.setup.springRate) cfg.springRate = job.setup.springRate;
-    const nextMods = { ...DEFAULT_MODS, intake: !!job.setup.intake };
-    const nextTurbo = !!job.setup.turboOn;
-    const hw = {
-      turboOn: nextTurbo,
-      turbine: nextTurbo ? turbineWithCount(TURBINE_OPTS[1], 1) : null,
-      exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-      fuel: OCTANE_OPTS[job.setup.octaneIdx ?? 0],
-    };
-    // ONE action, not fifteen writes. A half-applied job is a car with the customer's
+    // ONE action, not a write per field. A half-applied job is a car with the customer's
     // fault fitted and the previous job's tables still loaded, which is not a car anyone
     // was handed — see TAKE_JOB in reducer.js. The stock timing and fuel tables, full
-    // health and the cleared bench are the reducer's to set; the hardware and the VE
-    // table are computed here because they need `computeHardwareVE`.
-    dispatch({
-      type: ACTIONS.TAKE_JOB,
-      index: i,
-      build: {
-        engineConfig: cfg,
-        mods: nextMods,
-        turboOn: nextTurbo,
-        boostCurve: job.setup.boostCurve ? [...job.setup.boostCurve] : [...DEFAULT_BOOST],
-        octaneIdx: job.setup.octaneIdx ?? 0,
-        injIdx: job.setup.injIdx ?? 0,
-        ecuInjectorCc: job.setup.ecuInjectorCc ?? INJECTOR_OPTS[job.setup.injIdx ?? 0].cc,
-      },
-      // A "stale VE" job hands you the OLD log against new hardware, which is the whole
-      // point of it: the table is a record of what the engine used to flow.
-      ve: job.setup.staleVe
-        ? computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, {
-          turboOn: false, turbine: null, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-          fuel: OCTANE_OPTS[0],
-        })
-        : computeHardwareVE(cfg, nextMods, hw),
-    });
+    // health and the cleared bench are the reducer's to set; the car and its VE table
+    // come from `jobCar`, which is pure so tests/career.test.js can hold every job to
+    // failing as delivered and passing once fixed.
+    dispatch({ type: ACTIONS.TAKE_JOB, index: i, ...jobCar(CAREER_JOBS[i]) });
     changeTab('dyno');
   };
 
@@ -724,7 +693,10 @@ export function EcuLabApp() {
         // `engineDerived` carries no name — it is displacement, cylinder count and
         // redline. The build's name is the loaded preset's, and a build with no preset
         // is exactly what "Custom build" means everywhere else in this app.
-        label: presetById(presetId)?.name ?? 'Custom build',
+        // A customer's car is named for its job, so the run log says which car a pull
+        // was on — TAKE_JOB keeps the log, and it holds the player's own builds too.
+        label: activeJob != null ? `Job · ${CAREER_JOBS[activeJob].title}`
+          : presetById(presetId)?.name ?? 'Custom build',
         result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
         inputs: measuredInputs(build, tune, loadKpa),
       }),
@@ -1191,7 +1163,7 @@ export function EcuLabApp() {
   // is silenced at once and the audio context suspended a moment later, so a stopped
   // engine costs no DSP at all — see `setEngineAudioActive`.
   const sounding = soundOn && (
-    (tab === 'dash' && (live.running || live.cranking))
+    (tab === 'live' && (live.running || live.cranking))
     || (tab === 'dyno' && running)
     || (tab === 'drag' && (dragRunning || treePhase > 0)));
   useEffect(() => {

@@ -7,9 +7,9 @@
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
- * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all twenty-eight articles twenty
- * times a second to produce exactly the same output. `active` and `onToggle` are its
+ * anywhere: it is the largest block of markup on HOME, the shell re-renders twenty
+ * times a second while the engine runs (whichever tab is showing), and without the
+ * memo React would walk every article each time to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
  */

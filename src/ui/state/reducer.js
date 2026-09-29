@@ -194,15 +194,18 @@ export const ACTIONS = Object.freeze({
  * A job is a car that arrives with one fault already in it, so taking one has to write
  * across all three slices at once — the hardware the customer turned up with, a stock
  * calibration to diagnose it against, and a bench with no trace of the last job on it.
- * Split into fifteen separate writes it would render fifteen times, and worse, a
+ * Split into separate writes it would render once per write, and worse, a
  * half-applied job is a car with the fault fitted and the old tables still loaded, which
  * is not any car the player was handed.
  *
- * `build` and `ve` are computed by the caller for the same reason `RESET_TO_STOCK`'s are:
- * they need `computeHardwareVE` fed a hardware description, which is exactly the lookup
- * the reducer should not be reaching for. Everything the reducer can set from constants —
- * the stock timing and fuel tables, full health, an empty result — it sets itself.
- * @typedef {{type: 'TAKE_JOB', index: number, build: Partial<BuildState>, ve: number[][]}} TakeJobAction
+ * `build` and `ve` are computed by the caller (`jobCar` in career.js) for the same reason
+ * `RESET_TO_STOCK`'s are: they need `computeHardwareVE` fed a hardware description, which
+ * is exactly the lookup the reducer should not be reaching for. Everything the reducer can
+ * set from constants — the stock timing and fuel tables, full health, an empty result —
+ * it sets itself.
+ *
+ * It also empties the undo stack: see the case below.
+ * @typedef {{type: 'TAKE_JOB', index: number, build: BuildState, ve: number[][]}} TakeJobAction
  */
 
 /**
@@ -574,15 +577,20 @@ function baseReducer(state, action) {
           ...state.session,
           activeJob: action.index,
           jobResult: null,
-          // A fresh bench. A pull logged on the last customer's car next to this one's
-          // target is worse than no pull at all, and the run log is where those live now.
+          // A clear bench: no result, scores or histogram measured on the last car.
+          // The run log and its pin stay. They are the player's saved history, written
+          // to storage whenever they change, so emptying them here deleted every pull
+          // the player had ever banked. A job's pulls are labelled with the job instead.
           result: null,
-          runs: [],
-          pinnedRunId: null,
           pullScores: null,
           histogram: null,
+          logFocusRpm: null,
           health: { piston: 100, bearing: 100, valve: 100 },
         },
+        // A different car. Every entry on the stack is a snapshot of the last one, so an
+        // undo here would put the previous car's tables onto the customer's, and a redo
+        // would do the same from the other direction.
+        history: { past: [], future: [] },
       };
 
     case ACTIONS.REPAIR_ENGINE:
@@ -749,6 +757,9 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  *    it as new work would mean walking from TUNE to BUILD silently killed the redo
  *    a player crossed tabs to reach.
  *  - UNDO/REDO manage `future` themselves.
+ *  - TAKE_JOB does write snapshotted fields, but it empties BOTH stacks itself (a
+ *    different car makes every entry meaningless). Listing it here would be worse than
+ *    redundant: the branch below rebuilds `history` from the pre-action `past`.
  *
  * The three UNDOABLE actions are listed here too, for one list that answers "is this
  * new work?" — they reach `future: []` through the recording branch below rather than
