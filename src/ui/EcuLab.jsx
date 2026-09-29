@@ -1132,7 +1132,7 @@ export function EcuLabApp() {
     });
     const frame = {
       drive,
-      // The exhaust system, for the renderer. Everything the player can change
+      // The exhaust system as tubes, for the exhaust's response. Everything the player can change
       // about the hardware arrives here: cylinder count and layout set the firing order
       // and how many primaries meet at each collector, displacement sets their length and
       // bore, the pipe menu sets the tailpipe, and the gas temperature the cycle computed
@@ -1160,8 +1160,8 @@ export function EcuLabApp() {
       volume,
     };
 
-    // One call. The renderer schedules its firing events ahead of the audio clock, so
-    // nothing about the exhaust's timing depends on how often React gets around to this.
+    // One call. The pulse stream keeps its own crank and tops itself up between frames,
+    // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
     // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
