@@ -403,3 +403,19 @@ describe('veReport, a row selected', () => {
     expect(r.state).toBe('group-ve');
   });
 });
+
+describe('a range selection (#105)', () => {
+  it('counts only flagged cells inside the rectangle', () => {
+    const cal = {
+      spark: [], underAdvanced: [], pastMbt: [],
+      overAdvanced: [{ ri: 0, ci: 0 }, { ri: 1, ci: 1 }, { ri: 3, ci: 3 }],
+    };
+    const r = sparkReport(cal, { type: 'range', r1: 1, c1: 1, r2: 0, c2: 0 });
+    expect(r.state).toBe('group-over');
+    expect(r.detail.count).toBe(2);
+  });
+  it('fuel counts a range the same way', () => {
+    const cal = { fuelAdv: [], wrongMix: [{ ri: 2, ci: 2 }, { ri: 5, ci: 7 }] };
+    expect(fuelReport(cal, { type: 'range', r1: 2, c1: 2, r2: 4, c2: 4 }).detail.count).toBe(1);
+  });
+});

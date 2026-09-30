@@ -236,7 +236,7 @@ describe('UndoControls', () => {
   it('puts the preset label back when a table edit is undone', () => {
     // The whole point of a snapshot spanning both slices, driven through the real app.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
 
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));
@@ -266,6 +266,24 @@ describe('UndoControls', () => {
     // different preset fails here instead of slipping through.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
     expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
+  });
+
+  it('Cmd+Z still undoes while the grid has focus (#105)', () => {
+    // The grid now handles its own keys (+/- nudge the selection). The global undo
+    // shortcut must still reach EcuLab's window handler from inside it, and must not be
+    // read as a nudge on its way there.
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    const gridEl = screen.getByTestId('tuning-grid');
+    const cell = within(gridEl).getByRole('button', { name: '3500 RPM, 100 kPa' });
+    fireEvent.click(cell);
+    const before = cell.textContent;
+    gridEl.focus();
+    fireEvent.keyDown(gridEl, { key: '=', code: 'Equal' });
+    expect(cell.textContent).toBe(String(Number(before) + 1));
+    fireEvent.keyDown(gridEl, { key: 'z', code: 'KeyZ', metaKey: true });
+    expect(cell.textContent).toBe(before);
   });
 });
 
@@ -797,7 +815,7 @@ describe('keyboard shortcuts', () => {
   // keeps the same launch path every other test in this block already exercises.
   function launchWithEdit() {
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button')
@@ -979,7 +997,7 @@ describe('keyboard shortcuts', () => {
     const removeSpy = vi.spyOn(window, 'removeEventListener');
 
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'START' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
 
     const keydownAdds = addSpy.mock.calls.filter((call) => call[0] === 'keydown');
     expect(keydownAdds.length).toBe(1);

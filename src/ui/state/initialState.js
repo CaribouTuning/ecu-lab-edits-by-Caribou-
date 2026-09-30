@@ -57,8 +57,17 @@ import {
  * @property {number[][]} afr target air/fuel ratio table, indexed [LOAD][RPM]
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
- * @property {{type: 'cell'|'row'|'col', row?: number, col?: number}|null} selection
- *   the currently selected calibration-grid cell, row or column, or null
+ * @property {import('../components/selection.js').Selection|null} selection
+ *   the currently selected calibration-grid cell, row, column or range, or null
+ * @property {boolean} rangeMode true while TUNE's grids take two taps as a range (the
+ *   touch path; a mouse drags). One flag for AIR, SPARK and FUEL, and outside the undo
+ *   snapshot like `selection`
+ * @property {{ve: number[][], timing: number[][], afr: number[][]}} baseline the tables
+ *   as they were when this calibration was loaded (start, preset, reset to stock) — what
+ *   the CHANGES view and REVERT compare against. Hand and hardware edits never move it;
+ *   it is in the undo snapshot so undoing a load puts the old one back
+ * @property {boolean} diffView true while TUNE's grids show each cell's change from
+ *   `baseline` instead of its value. Shared and outside the snapshot, like `rangeMode`
  */
 
 /**
@@ -150,6 +159,17 @@ import {
  *   run on (`dragSignature` in DragScreen.jsx). What lets the time slip say "these are
  *   last run's numbers, from before your change" instead of presenting a time the
  *   current car cannot run — the same rule `pullScores.signature` follows.
+ * @property {'sandbox'|'career'} mode which door the player came in by. CAREER is a
+ *   run of customer cars, so HOME leads with the jobs board; SANDBOX is free play with
+ *   no objectives, so it has no jobs board at all — the split the reference build (v4.8)
+ *   made at its start screen.
+ * @property {number|null} activeJob index into CAREER_JOBS of the customer car being
+ *   worked on, or null in free play. Career progress, which is what this slice holds:
+ *   taking a job resets the build and applies that job's fault, and it has to survive
+ *   every screen the player visits while diagnosing it.
+ * @property {number[]} completedJobs indices of the jobs already passed
+ * @property {'pass'|'fail'|null} jobResult how the last pull graded against the active
+ *   job's target, or null before one has been run against it
  */
 
 /**
@@ -187,6 +207,9 @@ import {
  * @returns {StoreState}
  */
 export function makeInitialState() {
+  const ve = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS);
+  const timing = clone2D(DEFAULT_TIMING);
+  const afr = clone2D(DEFAULT_AFR);
   return {
     build: {
       engineConfig: DEFAULT_ENGINE_CONFIG,
@@ -208,11 +231,15 @@ export function makeInitialState() {
       boostSel: 4,
     },
     tune: {
-      ve: computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS),
-      timing: clone2D(DEFAULT_TIMING),
-      afr: clone2D(DEFAULT_AFR),
+      ve,
+      timing,
+      afr,
+      // The same arrays, not copies: no write mutates a table, only replaces it.
+      baseline: { ve, timing, afr },
       tablesDirty: false,
       selection: null,
+      rangeMode: false,
+      diffView: false,
     },
     session: {
       running: false,
@@ -244,6 +271,10 @@ export function makeInitialState() {
       dragRunning: false,
       dragT: 0,
       treePhase: 0,
+      mode: 'sandbox',
+      activeJob: null,
+      completedJobs: [],
+      jobResult: null,
     },
     history: { past: [], future: [] },
   };
