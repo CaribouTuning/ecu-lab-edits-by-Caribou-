@@ -90,12 +90,21 @@
 }
 
 /* Capped to the same column as the content below it, so the strip's readouts line up
-   with the screen they describe instead of running to the edge of a wide display. */
+   with the screen they describe instead of running to the edge of a wide display.
+
+   No `width: 100%`: the app has no global `box-sizing: border-box`, so 100% plus the
+   side padding came out 32px wider than the strip at every width below the cap and
+   scrolled the whole shell sideways. As a block-level box it fills the strip on its
+   own, and `max-width` + auto margins still cap and centre it exactly as before.
+
+   Wraps rather than overflowing: on a phone `.readouts` takes a line of its own (see
+   below), and between the breakpoint and a wide display the readouts drop to a
+   second line only when the first genuinely has no room for them. */
 .stripInner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-lg);
-  width: 100%;
+  gap: var(--sp-sm) var(--sp-lg);
   max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--sp-sm) var(--sp-xl);
@@ -139,6 +148,21 @@
   text-overflow: ellipsis;
 }
 
+/* BOOST, HEALTH, LAST PULL and the run light, as one group so they wrap together.
+   Mobile first: `order` and the 100% basis put the group on its own line UNDER the
+   brand, build line and action buttons, so the buttons stay on the first line within
+   reach instead of being the thing pushed off the edge. The DOM order (readouts before
+   buttons) is unchanged, so what a screen reader announces is the same at every width. */
+.readouts {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  order: 1;
+  align-items: center;
+  gap: var(--sp-sm) var(--sp-lg);
+  min-width: 0;
+}
+
 .field {
   display: flex;
   flex-shrink: 0;
@@ -166,8 +190,13 @@
 
 /* 4px tall, so the 2px radius is pinned to half its own height rather than to the
    radius ramp; 54px wide is the width at which the bar still reads as a gauge next
-   to a two-character percentage. */
+   to a two-character percentage.
+
+   Hidden below the breakpoint: the percentage beside it carries the same number in
+   the same tone colour, and dropping the bar is what lets every readout, the run
+   light included, share one line at 375px. Shown again in the media query below. */
 .healthTrack {
+  display: none;
   width: 54px;
   height: 4px;
   overflow: hidden;
@@ -227,6 +256,16 @@
    bar on a desktop is a phone affordance on a machine with a pointer. */
 @media (min-width: 560px) {
   .shell { flex-direction: row; }
+
+  /* Back in DOM order, sized to its content, beside the build line — the one-line
+     strip a wide display has always had. `.stripInner` still wraps it to a second
+     line if the sidebar leaves too little room. */
+  .readouts {
+    flex-basis: auto;
+    order: 0;
+  }
+
+  .healthTrack { display: block; }
 
   .nav {
     flex-direction: column;

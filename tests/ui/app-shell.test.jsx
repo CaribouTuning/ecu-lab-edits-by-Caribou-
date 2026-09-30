@@ -13,12 +13,16 @@
  * `onNavigate` it was handed.
  */
 
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
+
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ENGINE_PRESETS, applyPreset } from '../../src/sim/index.js';
 import { AppShell } from '../../src/ui/AppShell.jsx';
+import shellStyles from '../../src/ui/AppShell.module.css';
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { ROUTES } from '../../src/ui/routing.js';
 import { StoreProvider, useBuild, useSession } from '../../src/ui/state/StoreProvider.jsx';
@@ -224,5 +228,74 @@ describe('the app\'s name', () => {
 
     expect(screen.getByText('CARIBOU TUNING')).toBeTruthy();
     expect(screen.getByText('ECU Lab')).toBeTruthy();
+  });
+});
+
+// Read the real stylesheet, the way tokens.test.js and readouts.test.jsx do: jsdom
+// does no layout, so "the strip fits a 375px phone" cannot be measured here — only
+// the declarations that make it fit can be pinned. Under jsdom the global `URL` is
+// jsdom's own, which `readFileSync` rejects, hence node:url's.
+const shellCss = readFileSync(new NodeURL('../../src/ui/AppShell.module.css', import.meta.url), 'utf8');
+// Everything from the project's one breakpoint on (see tokens.css). Empty if the
+// media query is ever renamed, which fails the `ruleBody` lookups below loudly.
+const BREAKPOINT = '@media (min-width: 560px)';
+const desktopCss = shellCss.includes(BREAKPOINT) ? shellCss.slice(shellCss.indexOf(BREAKPOINT)) : '';
+
+/**
+ * The declarations of the first `selector { ... }` rule in `css`. Matches the class
+ * exactly, so `.strip` does not find `.stripInner`. Throws when absent, so a renamed
+ * class fails loudly rather than asserting against `undefined`.
+ * @param {string} css
+ * @param {string} selector e.g. '.readouts'
+ * @returns {string}
+ */
+function ruleBody(css, selector) {
+  const escaped = selector.replace(/[.[\]()]/g, '\\$&');
+  const rule = css.match(new RegExp(`(?:^|[\\s}])${escaped}\\s*{([^}]*)}`));
+  if (!rule) throw new Error(`no "${selector}" rule in AppShell.module.css`);
+  return rule[1];
+}
+
+describe('the status strip at phone width', () => {
+  // The defect: at 375px the strip's readouts and buttons ran ~150px past the
+  // viewport, the page scrolled sideways and the brand and nav were clipped. The
+  // browser check this stands in for: at 375px on TUNE > AIRFLOW,
+  // `document.documentElement.scrollWidth === 375` and nothing under #root extends
+  // past the viewport outside its own scroller.
+
+  it('groups the readouts apart from the action buttons, so they can wrap as a unit', () => {
+    mountShell(ROUTE_DASH, () => {});
+    const readouts = document.querySelector(`.${shellStyles.readouts}`);
+    expect(readouts).toBeTruthy();
+    for (const label of ['BOOST', 'HEALTH', 'LAST PULL']) {
+      expect(within(/** @type {HTMLElement} */ (readouts)).getByText(label)).toBeTruthy();
+    }
+    // What would turn this red: the buttons folded into the group that drops to a
+    // second line, which is the very thing that used to push them off the edge.
+    expect(readouts.contains(screen.getByRole('button', { name: 'Tutorial' }))).toBe(false);
+    expect(readouts.contains(screen.getByRole('button', { name: 'Repair engine' }))).toBe(false);
+  });
+
+  it('wraps the strip instead of overflowing, with no content-box width: 100%', () => {
+    const inner = ruleBody(shellCss, '.stripInner');
+    expect(inner).toMatch(/flex-wrap:\s*wrap/);
+    // `width: 100%` + side padding, with no global border-box, was 32px wider than
+    // the strip at every width below the content cap.
+    expect(inner).not.toMatch(/(?:^|[\s;])width:\s*100%/);
+  });
+
+  it('puts the readouts on their own line below the breakpoint, and back inline above it', () => {
+    const mobile = ruleBody(shellCss, '.readouts');
+    expect(mobile).toMatch(/flex-basis:\s*100%/);
+    expect(mobile).toMatch(/order:\s*1/);
+
+    const desktop = ruleBody(desktopCss, '.readouts');
+    expect(desktop).toMatch(/flex-basis:\s*auto/);
+    expect(desktop).toMatch(/order:\s*0/);
+  });
+
+  it('drops the health bar below the breakpoint only, keeping the percentage', () => {
+    expect(ruleBody(shellCss, '.healthTrack')).toMatch(/display:\s*none/);
+    expect(ruleBody(desktopCss, '.healthTrack')).toMatch(/display:\s*block/);
   });
 });
