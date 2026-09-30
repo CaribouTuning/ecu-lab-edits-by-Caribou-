@@ -31,12 +31,7 @@ export const DYNO_COLUMNS = [
   ['afr_commanded', 'afrCommanded'],
   ['afr_actual', 'afr'],
   ['lambda', 'lambda'],
-  // What the ECU was doing about it. The flag is `knockPull > 0` and so carries nothing
-  // the retard column does not, but it carries it in the form the question is asked in:
-  // how many points knocked is SUM(knock), against a COUNTIF with a threshold in it
-  // that a reader has to get right. It is also the datalog's own flag, and a column
-  // that disagrees with the screen is a column people stop trusting.
-  ['knock', 'knock'],
+  // What the ECU was doing about it.
   ['knock_pull_deg', 'knockPull'],
   ['knock_threshold_deg', 'threshold'],
   ['knock_integral', 'knockIntegral'],
@@ -61,6 +56,14 @@ export const DYNO_COLUMNS = [
   ['pmep_bar', 'pmep'],
   ['fmep_bar', 'fmep'],
   ['bsfc', 'bsfc'],
+  // Added after v1.8.0 shipped, so it goes last: a sheet built on a v1.8.0 file reads
+  // its columns by position as often as by name, and inserting beside the retard would
+  // have moved every column after it. The flag is `knockPull > 0` and so carries nothing
+  // the retard column does not, but it carries it in the form the question is asked in:
+  // how many points knocked is SUM(knock), against a COUNTIF with a threshold in it
+  // that a reader has to get right. It is also the datalog's own flag, and a column
+  // that disagrees with the screen is a column people stop trusting.
+  ['knock', 'knock'],
 ];
 
 /**
