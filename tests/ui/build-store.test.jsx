@@ -600,11 +600,16 @@ describe('every segmented control', () => {
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
-    // above would each pass on whatever happened to be showing. Eight is the count of
-    // <Seg> call sites across the app today — they live in the screen components now,
-    // not in EcuLab.jsx (see the breakdown above) — confirmed by
-    // `grep -rn '<Seg\b' src/ui | grep -v '\.module\.css'`.
-    expect(total).toBe(8);
+    // above would each pass on whatever happened to be showing. Seventeen is the count
+    // of segmented controls those three stops reach today:
+    //   BUILD 14 — Engine: Configuration, Block, Head, Cam Phasers, Ignition Coils, Plug
+    //     Gap; Induction: MAP Sensor, Compressor, Wastegate Actuator (the spring picker
+    //     only appears for a pneumatic gate); Fuel: Octane, Regulation, Base Pressure,
+    //     Wideband Controller; Exhaust: Diameter.
+    //   TUNE > INJECTORS 3 — the map-slot picker above every TUNE view, ECU Injector
+    //     Scaling, and the ECU's Pressure Compensation.
+    //   DYNO 1 — the manifold-pressure picker.
+    expect(total).toBe(18);
   });
 });
 
