@@ -230,6 +230,23 @@ import {
  */
 
 /**
+ * The ECU-side parts of a stock car: the fuel system, sensors, wastegate, coil, plug gap
+ * and what a flex tank holds. A factory calibration (`defaultEcuCalibration`) is set up
+ * for exactly these, so a new build and a loaded preset both start from them.
+ * @returns {Pick<BuildState, 'fuelSystem'|'sensorHw'|'wastegate'|'coil'|'plugGapMm'|'ethanolPct'>}
+ */
+export function stockEcuParts() {
+  return {
+    fuelSystem: { ...DEFAULT_ECU_HW.fuelSystem },
+    sensorHw: { ...DEFAULT_ECU_HW.sensorHw },
+    wastegate: { ...DEFAULT_ECU_HW.gate },
+    coil: DEFAULT_ECU_HW.coil,
+    plugGapMm: DEFAULT_ECU_HW.plugGapMm,
+    ethanolPct: 10,
+  };
+}
+
+/**
  * Builds a fresh starting state for a new session.
  * @returns {StoreState}
  */
@@ -256,12 +273,7 @@ export function makeInitialState() {
       presetId: null,
       presetPrompt: null,
       boostSel: 4,
-      fuelSystem: { ...DEFAULT_ECU_HW.fuelSystem },
-      sensorHw: { ...DEFAULT_ECU_HW.sensorHw },
-      wastegate: { ...DEFAULT_ECU_HW.gate },
-      coil: DEFAULT_ECU_HW.coil,
-      plugGapMm: DEFAULT_ECU_HW.plugGapMm,
-      ethanolPct: 10,
+      ...stockEcuParts(),
     },
     tune: {
       ve,

@@ -335,7 +335,7 @@ export const ECU_META = [
     options: [{ id: 'none', label: 'None (assumes constant)' }, { id: 'manifold', label: 'Fixed rail, MAP-referenced' }, { id: 'sensor', label: 'Rail pressure sensor' }],
     help: 'An injector flows as the square root of the pressure across it. A return-style regulator keeps that constant; a returnless rail does not, and under boost the injectors flow less unless the ECU compensates.' },
   { path: 'injector.refPressureKpa', section: 'injectors', group: 'Fuel pressure', label: 'Assumed rail pressure', kind: 'number', unit: 'kPa', min: 200, max: 600, step: 5, pro: true,
-    help: 'The rail pressure the ECU assumes when compensating for a fixed rail.' },
+    help: 'The rail pressure the ECU sizes every pulse for: held constant across the injectors with no compensation, or at atmospheric manifold pressure on a fixed rail. Set it to the base pressure on BUILD → FUEL SYSTEM. A rail pressure sensor measures the pressure instead.' },
   { path: 'injector.maxDutyPct', section: 'injectors', group: 'Fuel pressure', label: 'Maximum duty', kind: 'number', unit: '%', min: 50, max: 100, step: 1,
     help: 'The longest pulse the ECU will command as a share of the cycle. Past about 90% an injector never fully closes between events and stops metering.' },
 

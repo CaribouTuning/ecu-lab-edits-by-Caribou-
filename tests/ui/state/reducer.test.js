@@ -10,9 +10,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  clone2D, COMPRESSOR_OPTS, computeHardwareVE, DEFAULT_AFR, DEFAULT_BOOST,
-  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, deriveEngine, INJECTOR_OPTS,
-  OCTANE_OPTS,
+  clone2D, COIL_OPTS, COMPRESSOR_OPTS, computeHardwareVE, DEFAULT_AFR, DEFAULT_BOOST,
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, deriveEngine, ecuHardwareOf, INJECTOR_OPTS,
+  OCTANE_OPTS, setupMismatches,
 } from '../../../src/sim/index.js';
 import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
 import {
@@ -498,6 +498,29 @@ describe('APPLY_PRESET', () => {
     const s = reducer(dragged, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.build.mafScalar).toBe(1.0);
   });
+
+  it('fits the factory car\'s ECU-side parts, so its factory calibration matches them', () => {
+    // A preset's ECU is set up for the stock sensors, rail and wastegate. Keeping the
+    // last car's 1-bar MAP and returnless rail under it ran a "stock" preset lean
+    // under boost, with a mismatch warning on a car the player had not touched.
+    const real = applyPreset(ENGINE_PRESETS.find((p) => p.induction.turboOn));
+    const modified = { ...makeInitialState() };
+    modified.build = {
+      ...modified.build,
+      fuelSystem: { regulator: 'returnless', basePressureKpa: 400, pumpIdx: 3 },
+      sensorHw: { ...modified.build.sensorHw, map: '1bar', flex: true },
+      wastegate: { type: 'spring', springPsi: 4 },
+      coil: COIL_OPTS[COIL_OPTS.length - 1].id,
+      plugGapMm: 1.4,
+      ethanolPct: 60,
+    };
+    const s = reducer(modified, { type: ACTIONS.APPLY_PRESET, preset: real });
+    const stock = makeInitialState().build;
+    for (const k of ['fuelSystem', 'sensorHw', 'wastegate', 'coil', 'plugGapMm', 'ethanolPct']) {
+      expect(s.build[k], k).toEqual(stock[k]);
+    }
+    expect(setupMismatches(ecuHardwareOf(s.build), s.tune.ecu)).toEqual([]);
+  });
 });
 
 describe('APPLY_PRESET — exact write surface (catches drift in both directions)', () => {
@@ -506,11 +529,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 24-field
-  // contract this action documents: a stray write grows the changed set past 24, a
-  // dropped write shrinks it below 24, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 30-field
+  // contract this action documents: a stray write grows the changed set past 30, a
+  // dropped write shrinks it below 30, and the failure message names the field either
   // way.
-  it('changes exactly the 24 documented fields, plus the two history fields', () => {
+  it('changes exactly the 30 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -520,6 +543,9 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.turbineIdx', 'build.turbineCount', 'build.compressorIdx', 'build.injIdx',
       'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
       'build.presetId', 'build.presetPrompt',
+      // The factory car's ECU-side parts, which its factory calibration is set up for.
+      'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
+      'build.plugGapMm', 'build.ethanolPct',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
       // A new engine's ROM: every map slot back to the factory calibration.
       'tune.maps', 'tune.activeMap',

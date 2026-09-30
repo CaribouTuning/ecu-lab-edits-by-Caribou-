@@ -63,14 +63,18 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
     if (!g) { g = { name: f.group, fields: [] }; groups.push(g); }
     g.fields.push(f);
   }
-  const set = (path, value) => dispatch({ type: ACTIONS.SET_ECU, path, value });
+  // A write that changes nothing (a stepper at its limit, the segment already chosen) is
+  // not an edit: it would record an empty undo step and disown the preset.
+  const set = (path, value) => {
+    if (JSON.stringify(value) !== JSON.stringify(getCal(cal, path))) dispatch({ type: ACTIONS.SET_ECU, path, value });
+  };
   const resetSection = () => {
     let next = cal;
     for (const m of ECU_META.filter((x) => x.section === section)) next = setCal(next, m.path, getCal(def, m.path));
     dispatch({ type: ACTIONS.SET_ECU, value: next, label: `Reset ${title}` });
   };
   const changedCount = ECU_META.filter((m) => m.section === section
-    && JSON.stringify(getCal(cal, m.path)) !== JSON.stringify(getCal(def, m.path))).length;
+    && isChanged(m, getCal(cal, m.path), getCal(def, m.path))).length;
   const sectionModified = changedCount > 0;
   const guide = PAGE_GUIDES[section];
   const mismatches = setupMismatches(ecuHardwareOf(build), cal).filter((m) => m.section === section);
@@ -121,6 +125,30 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
       )}
     </section>
   );
+}
+
+/**
+ * A per-cylinder setting, one entry per cylinder of the engine as built now. The
+ * calibration keeps the length it was made with, so an engine rebuilt with a different
+ * cylinder count reads its missing trims as zero, as the ECU does, and drops the extras.
+ * @param {number[]} value
+ * @param {number[]} def the factory setting, sized for this engine
+ * @returns {number[]}
+ */
+function cylValues(value, def) {
+  return def.map((_, i) => value[i] ?? 0);
+}
+
+/**
+ * Whether a setting differs from its factory value. A per-cylinder setting is compared
+ * over this engine's cylinders only, so a rebuild to a different count is not an edit.
+ * @param {{kind: string}} meta
+ * @param {any} value
+ * @param {any} def
+ */
+function isChanged(meta, value, def) {
+  const v = meta.kind === 'cyl' ? cylValues(value, def) : value;
+  return JSON.stringify(v) !== JSON.stringify(def);
 }
 
 /**
@@ -177,7 +205,7 @@ function Help({ meta }) {
  * @param {Record<string, number>|null} props.liveVars
  */
 function Field({ meta, value, def, onChange, liveVars }) {
-  const changed = JSON.stringify(value) !== JSON.stringify(def);
+  const changed = isChanged(meta, value, def);
   if (meta.kind === 'bool') {
     return (
       <div className={styles.field}>
@@ -203,16 +231,17 @@ function Field({ meta, value, def, onChange, liveVars }) {
     );
   }
   if (meta.kind === 'cyl') {
-    const labels = meta.path.endsWith('bankTrim') ? ['Bank A', 'Bank B'] : value.map((_, i) => `Cyl ${i + 1}`);
+    const trims = cylValues(value, def);
+    const labels = meta.path.endsWith('bankTrim') ? ['Bank A', 'Bank B'] : trims.map((_, i) => `Cyl ${i + 1}`);
     return (
       <div className={styles.field}>
         <FieldHead meta={meta} changed={changed} />
         <div className={styles.cyls}>
-          {value.map((v, i) => (
+          {trims.map((v, i) => (
             <label key={i} className={styles.cyl}>
               <span className={styles.cylName}>{labels[i]}</span>
               <NumberInput meta={meta} value={v} compact
-                onChange={(nv) => onChange(value.map((x, j) => (j === i ? nv : x)))} />
+                onChange={(nv) => onChange(trims.map((x, j) => (j === i ? nv : x)))} />
             </label>
           ))}
         </div>

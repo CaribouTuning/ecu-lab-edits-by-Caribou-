@@ -736,7 +736,7 @@ export function EcuLabApp() {
         label: activeJob != null ? `Job · ${CAREER_JOBS[activeJob].title}`
           : presetById(presetId)?.name ?? 'Custom build',
         result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
-        inputs: measuredInputs(build, tune, loadKpa),
+        inputs: measuredInputs(build, tune, loadKpa, { env, faults }),
       }),
     });
     const total = r.points.length;
@@ -857,7 +857,7 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragResult', value: res });
     // Recorded WITH the run, never re-derived afterwards: this is what lets the time
     // slip say the car has changed underneath it. Same rule as `pullScores.signature`.
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result) });
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result, tune.ecu) });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: 0 });
 
     // A sportsman tree: staged, then three ambers half a second apart, then green.
