@@ -7,9 +7,9 @@
  *
  * It is the only screen in the app with NO state of its own and no store read —
  * every word of it is constant — so it is memoised. That matters here more than
- * anywhere: it is the largest block of markup on HOME, it sits next to the live
- * engine panel, and without the memo React would walk all thirty-nine articles twenty
- * times a second to produce exactly the same output. `active` and `onToggle` are its
+ * anywhere: it is the largest block of markup on HOME, the shell re-renders twenty
+ * times a second while the engine runs (whichever tab is showing), and without the
+ * memo React would walk every article each time to produce exactly the same output. `active` and `onToggle` are its
  * only props, and `onToggle` is stable (see `toggleDashSection` in EcuLab.jsx), so
  * the default shallow comparison is enough.
  */
@@ -312,7 +312,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><b className={styles.em}>Mixture</b> — rich burns slower and softer; lean is sharp and thin.
         <br /><b className={styles.em}>Compression</b> — a smaller clearance volume changes how the cylinder empties, and a faster pressure rise gives a harder crack on each pulse.
         <br /><b className={styles.em}>Knock</b> — a rattly edge, because that is literally what knock is: a shockwave ringing the cylinder.
-        <br /><b className={styles.em}>Throttle</b> — more charge, more pressure at valve opening, and every pulse hits harder. A fuel cut on the limiter or the overrun drops it right back without going silent, because the cylinders are still pumping air.
+        <br /><b className={styles.em}>Throttle</b> — more charge, more pressure at valve opening, and every pulse hits harder. A fuel cut on the limiter or the overrun makes every pulse weaker without going silent, because the cylinders are still pumping air: on the limiter the throttle is still open and the engine stays loud, and on the overrun it falls away towards idle.
         <br /><br />This matters beyond the game. Tuners diagnose by ear constantly — a lumpy idle, a lean rasp, a knock rattle. The sound is data.
       </ExpandableInfo>
 

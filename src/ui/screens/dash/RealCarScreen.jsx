@@ -9,7 +9,7 @@
  * because Learn's articles are numbered in reading order and these are not a step in it.
  *
  * Constant markup and no store read, so it is memoised for the same reason LearnScreen
- * is: HOME re-renders with the live engine, and this has nothing to redraw.
+ * is: the shell re-renders with the running engine, and this has nothing to redraw.
  */
 
 import { Car } from 'lucide-react';

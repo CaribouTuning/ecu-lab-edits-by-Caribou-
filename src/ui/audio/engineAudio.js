@@ -68,6 +68,19 @@ const PARAM_HZ = 14;
  */
 const EFFECT_TRIM = 0.45;
 
+/**
+ * The engine's level at a closed and at a wide-open throttle, in front of the limiter,
+ * swept between them in decibels.
+ *
+ * THE SPREAD HAS TO BE WIDE HERE because the limiter takes it away: it passes 1 dB for
+ * every 12 over its threshold. At a closed throttle of 0.55 an idling engine already sat
+ * above that threshold, and idle and wide open reached the speaker 1.5 dB apart, measured
+ * in the app. At these levels an idle reaches the limiter near its knee rather than well
+ * over it, and comes out about 5 dB under full throttle.
+ */
+const LEVEL_CLOSED = 0.17;
+const LEVEL_OPEN = 1.15;
+
 
 /** Gas-temperature step, K, below which the tube network is not rebuilt. */
 const GEOMETRY_TEMP_STEP_K = 25;
@@ -293,8 +306,9 @@ export function updateEngineAudio(a, frame) {
   } = frame;
   const t = a.ctx.currentTime;
   // A caller may push frames far faster than any of these values can be heard changing,
-  // and each one is a scheduled automation event. The pulse scheduler works at least 150 ms
-  // ahead of the clock, so updating it at this rate costs it nothing.
+  // and each one is a scheduled automation event. The pulse stream tops itself up every
+  // 20 ms from the last state it was handed, so it never runs dry between these; a new
+  // state reaches it at this rate.
   if (t - a.paramsAt < 1 / PARAM_HZ) return;
   a.paramsAt = t;
 
@@ -381,10 +395,15 @@ export function updateEngineAudio(a, frame) {
   }
 
   // The whole engine follows the throttle: open it and it gets louder, and a fitted
-  // cat-back or headers let a little more out. A fuel cut drops it right back, quickly.
+  // cat-back or headers let a little more out.
+  //
+  // THE THROTTLE, NOT THE FUEL CUT. A cut already reaches the note: `acousticDrive` hands
+  // over a motored cylinder, so every pulse is weaker. Turning the whole engine down as
+  // well took the rev limiter, where the throttle is still wide open, to below idle, and
+  // dropped an overrun under the idle it was about to settle into.
   a.outGain.gain.setTargetAtTime(MAKEUP_GAIN, t, 0.08);
   a.satOut.gain.setTargetAtTime(OUTPUT_LEVEL * (frame.volume ?? 1), t, 0.08);
-  const vol = (cut ? 0.10 : 0.55 + load * 0.60) * (catBack ? 1.18 : 1);
+  const vol = LEVEL_CLOSED * (LEVEL_OPEN / LEVEL_CLOSED) ** load * (catBack ? 1.18 : 1);
   // A gearchange schedules its own dip and swell on this gain. A target written on top
   // of it would be inserted INTO that schedule and pull the level straight back up
   // through the gap, so while one is playing it is left alone.

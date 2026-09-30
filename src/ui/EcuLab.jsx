@@ -28,8 +28,8 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS,
-  DEFAULT_BOOST, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
-  INJ_DEADTIME_MS, INJECTOR_OPTS, OCTANE_OPTS,
+  DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
+  INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
@@ -65,7 +65,7 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { CAREER_JOBS } from './career.js';
+import { CAREER_JOBS, jobCar } from './career.js';
 import { DragScreen, dragSignature } from './screens/drag/DragScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { JobsScreen } from './screens/dash/JobsScreen.jsx';
@@ -193,7 +193,7 @@ const TUTORIAL_STEPS = [
   { title: 'Nothing is known until you pull',
     body: 'There is no preview. Press RUN DYNO PULL on DYNO and the engine sweeps from 1500 RPM to its redline and records a full datalog. That is the only way to find out what a change did, exactly like a real dyno day.\n\n→ Pull after every change.' },
   { title: 'Read the log, change one thing, pull again',
-    body: 'Every pull writes a Pull Log. Each problem comes with a plain Why (what caused it) and a Try (what to change).\n\nThen: change one thing, pull, compare. The VS. LAST PULL line tells you whether it helped. Change three things at once and you will not know which one worked.\n\n→ Read the Pull Log before you look at the power number.' },
+    body: 'Every pull writes a Pull Log. Each problem comes with a plain Why (what caused it) and a Try (what to change).\n\nThen: change one thing, pull, compare. The next pull draws the last one dashed behind it, so you can see whether it helped, and where. Change three things at once and you will not know which one worked.\n\n→ Read the Pull Log before you look at the power number.' },
   { title: 'Know what you cannot tune away',
     body: 'Knock, a wrong mixture and a mis-read airflow sensor are calibration faults. The tables and the ECU\'s settings fix them completely.\n\nInjectors out of time, valves floating, a turbo past its limit: those are hardware limits. No table touches them, and the log says so.\n\n→ When the log names a hardware limit, change the part or ask less of it.' },
   { title: 'Hear it, and watch it run',
@@ -475,45 +475,13 @@ export function EcuLabApp() {
    * @param {number} i index into {@link CAREER_JOBS}
    */
   const takeJob = (i) => {
-    const job = CAREER_JOBS[i];
-    const cfg = { ...DEFAULT_ENGINE_CONFIG };
-    if (job.setup.camDuration) cfg.camDuration = job.setup.camDuration;
-    if (job.setup.springRate) cfg.springRate = job.setup.springRate;
-    const nextMods = { ...DEFAULT_MODS, intake: !!job.setup.intake };
-    const nextTurbo = !!job.setup.turboOn;
-    const hw = {
-      turboOn: nextTurbo,
-      turbine: nextTurbo ? turbineWithCount(TURBINE_OPTS[1], 1) : null,
-      exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-      fuel: OCTANE_OPTS[job.setup.octaneIdx ?? 0],
-    };
-    // ONE action, not fifteen writes. A half-applied job is a car with the customer's
+    // ONE action, not a write per field. A half-applied job is a car with the customer's
     // fault fitted and the previous job's tables still loaded, which is not a car anyone
     // was handed — see TAKE_JOB in reducer.js. The stock timing and fuel tables, full
-    // health and the cleared bench are the reducer's to set; the hardware and the VE
-    // table are computed here because they need `computeHardwareVE`.
-    dispatch({
-      type: ACTIONS.TAKE_JOB,
-      index: i,
-      build: {
-        engineConfig: cfg,
-        mods: nextMods,
-        turboOn: nextTurbo,
-        boostCurve: job.setup.boostCurve ? [...job.setup.boostCurve] : [...DEFAULT_BOOST],
-        octaneIdx: job.setup.octaneIdx ?? 0,
-        injIdx: job.setup.injIdx ?? 0,
-        ecuInjectorCc: job.setup.ecuInjectorCc ?? INJECTOR_OPTS[job.setup.injIdx ?? 0].cc,
-      },
-      // A "stale VE" job hands you the OLD log against new hardware, which is the whole
-      // point of it: the table is a record of what the engine used to flow.
-      ve: job.setup.staleVe
-        ? computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, {
-          turboOn: false, turbine: null, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-          fuel: OCTANE_OPTS[0],
-        })
-        : computeHardwareVE(cfg, nextMods, hw),
-      ecu: defaultEcuCalibration({ derived: deriveEngine(cfg) }),
-    });
+    // health and the cleared bench are the reducer's to set; the car and its VE table
+    // come from `jobCar`, which is pure so tests/career.test.js can hold every job to
+    // failing as delivered and passing once fixed.
+    dispatch({ type: ACTIONS.TAKE_JOB, index: i, ...jobCar(CAREER_JOBS[i]) });
     changeTab('dyno');
   };
 
@@ -763,7 +731,10 @@ export function EcuLabApp() {
         // `engineDerived` carries no name — it is displacement, cylinder count and
         // redline. The build's name is the loaded preset's, and a build with no preset
         // is exactly what "Custom build" means everywhere else in this app.
-        label: presetById(presetId)?.name ?? 'Custom build',
+        // A customer's car is named for its job, so the run log says which car a pull
+        // was on — TAKE_JOB keeps the log, and it holds the player's own builds too.
+        label: activeJob != null ? `Job · ${CAREER_JOBS[activeJob].title}`
+          : presetById(presetId)?.name ?? 'Custom build',
         result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
         inputs: measuredInputs(build, tune, loadKpa),
       }),
@@ -1190,7 +1161,7 @@ export function EcuLabApp() {
     });
     const frame = {
       drive,
-      // The exhaust system, for the renderer. Everything the player can change
+      // The exhaust system as tubes, for the exhaust's response. Everything the player can change
       // about the hardware arrives here: cylinder count and layout set the firing order
       // and how many primaries meet at each collector, displacement sets their length and
       // bore, the pipe menu sets the tailpipe, and the gas temperature the cycle computed
@@ -1218,8 +1189,8 @@ export function EcuLabApp() {
       volume,
     };
 
-    // One call. The renderer schedules its firing events ahead of the audio clock, so
-    // nothing about the exhaust's timing depends on how often React gets around to this.
+    // One call. The pulse stream keeps its own crank and tops itself up between frames,
+    // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
     // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
@@ -1249,7 +1220,7 @@ export function EcuLabApp() {
   // is silenced at once and the audio context suspended a moment later, so a stopped
   // engine costs no DSP at all — see `setEngineAudioActive`.
   const sounding = soundOn && (
-    (tab === 'dash' && (live.running || live.cranking))
+    (tab === 'live' && (live.running || live.cranking))
     || (tab === 'dyno' && running)
     || (tab === 'drag' && (dragRunning || treePhase > 0)));
   useEffect(() => {

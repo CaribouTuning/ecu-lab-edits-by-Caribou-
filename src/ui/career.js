@@ -8,7 +8,79 @@
  *   `setup`          the state overrides applied when the job is taken on
  *   `goal(r, ctx)`   whether the job is complete, judged on the pull just measured
  *   `teaches`        shown once it is, because the point is the lesson and not the tick
+ *
+ * Every job is held by tests/career.test.js to two facts: it fails as the customer
+ * delivers it, and the fix its brief points at passes it.
  */
+
+import {
+  EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, computeHardwareVE, defaultEcuCalibration,
+  deriveEngine, tankFuel, turbineWithCount,
+} from '../sim/index.js';
+
+import { makeInitialState } from './state/initialState.js';
+
+/** @typedef {import('./state/initialState.js').BuildState} BuildState */
+
+/**
+ * The hardware `computeHardwareVE` reads, derived from a build exactly as the shell's
+ * `hwForVe` derives it. One derivation, so a customer's car is handed over with the VE
+ * table the AIR page would call current, not one computed on slightly different inputs.
+ *
+ * @param {BuildState} build
+ * @returns {object}
+ */
+export function hardwareOf(build) {
+  return {
+    turboOn: build.turboOn,
+    turbine: build.turboOn ? turbineWithCount(TURBINE_OPTS[build.turbineIdx], build.turbineCount) : null,
+    exhaustDia: EXHAUST_DIA_OPTS[build.exhaustDiaIdx].dia,
+    fuel: tankFuel(build),
+    peakBoostPsi: build.turboOn ? Math.max(...build.boostCurve) : 0,
+  };
+}
+
+/**
+ * The car a customer hands over: the stock car with that job's fault fitted, and the
+ * VE table and factory engine management it arrives with.
+ *
+ * Built on the WHOLE stock build rather than patched over the player's, so nothing of
+ * the previous car rides along: a pipe, turbine or compressor the player chose would
+ * otherwise turn up on a customer's car the brief says nothing about.
+ *
+ * @param {typeof CAREER_JOBS[number]} job
+ * @returns {{build: BuildState, ve: number[][], ecu: object}}
+ */
+export function jobCar(job) {
+  const stock = makeInitialState().build;
+  const s = job.setup;
+  const injIdx = s.injIdx ?? stock.injIdx;
+  /** @type {BuildState} */
+  const build = {
+    ...stock,
+    engineConfig: {
+      ...stock.engineConfig,
+      ...(s.camDuration ? { camDuration: s.camDuration } : {}),
+      ...(s.springRate ? { springRate: s.springRate } : {}),
+    },
+    mods: { ...stock.mods, intake: Boolean(s.intake) },
+    turboOn: Boolean(s.turboOn),
+    boostCurve: s.boostCurve ? [...s.boostCurve] : stock.boostCurve,
+    octaneIdx: s.octaneIdx ?? stock.octaneIdx,
+    injIdx,
+    ecuInjectorCc: s.ecuInjectorCc ?? INJECTOR_OPTS[injIdx].cc,
+  };
+  // A "stale VE" job hands you the OLD log against new hardware, which is the whole
+  // point of it: the table is a record of what the stock engine used to flow.
+  const logged = s.staleVe ? stock : build;
+  return {
+    build,
+    ve: computeHardwareVE(logged.engineConfig, logged.mods, hardwareOf(logged)),
+    // Tuned to THIS engine's valvetrain noise, as a preset's is: the previous car's knock
+    // threshold, corrections and map slots are not the customer's.
+    ecu: defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: build.wastegate }),
+  };
+}
 
 export const CAREER_JOBS = [
   {

@@ -79,6 +79,12 @@ import {
  * @property {boolean} rangeMode true while TUNE's grids take two taps as a range (the
  *   touch path; a mouse drags). One flag for AIR, SPARK and FUEL, and outside the undo
  *   snapshot like `selection`
+ * @property {{ve: number[][], timing: number[][], afr: number[][]}} baseline the tables
+ *   as they were when this calibration was loaded (start, preset, reset to stock) — what
+ *   the CHANGES view and REVERT compare against. Hand and hardware edits never move it;
+ *   it is in the undo snapshot so undoing a load puts the old one back
+ * @property {boolean} diffView true while TUNE's grids show each cell's change from
+ *   `baseline` instead of its value. Shared and outside the snapshot, like `rangeMode`
  */
 
 /**
@@ -228,6 +234,9 @@ import {
  * @returns {StoreState}
  */
 export function makeInitialState() {
+  const ve = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS);
+  const timing = clone2D(DEFAULT_TIMING);
+  const afr = clone2D(DEFAULT_AFR);
   return {
     build: {
       engineConfig: DEFAULT_ENGINE_CONFIG,
@@ -255,15 +264,18 @@ export function makeInitialState() {
       ethanolPct: 10,
     },
     tune: {
-      ve: computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS),
-      timing: clone2D(DEFAULT_TIMING),
-      afr: clone2D(DEFAULT_AFR),
+      ve,
+      timing,
+      afr,
+      // The same arrays, not copies: no write mutates a table, only replaces it.
+      baseline: { ve, timing, afr },
       ecu: defaultEcuCalibration({ derived: deriveEngine(DEFAULT_ENGINE_CONFIG), gate: DEFAULT_ECU_HW.gate }),
       maps: [null, null, null, null],
       activeMap: 0,
       tablesDirty: false,
       selection: null,
       rangeMode: false,
+      diffView: false,
     },
     session: {
       running: false,

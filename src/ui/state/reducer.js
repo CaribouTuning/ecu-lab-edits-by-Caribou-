@@ -216,15 +216,18 @@ export const ACTIONS = Object.freeze({
  * A job is a car that arrives with one fault already in it, so taking one has to write
  * across all three slices at once — the hardware the customer turned up with, a stock
  * calibration to diagnose it against, and a bench with no trace of the last job on it.
- * Split into fifteen separate writes it would render fifteen times, and worse, a
+ * Split into separate writes it would render once per write, and worse, a
  * half-applied job is a car with the fault fitted and the old tables still loaded, which
  * is not any car the player was handed.
  *
- * `build` and `ve` are computed by the caller for the same reason `RESET_TO_STOCK`'s are:
- * they need `computeHardwareVE` fed a hardware description, which is exactly the lookup
- * the reducer should not be reaching for. Everything the reducer can set from constants —
- * the stock timing and fuel tables, full health, an empty result — it sets itself.
- * @typedef {{type: 'TAKE_JOB', index: number, build: Partial<BuildState>, ve: number[][], ecu?: object}} TakeJobAction
+ * `build` and `ve` are computed by the caller (`jobCar` in career.js) for the same reason
+ * `RESET_TO_STOCK`'s are: they need `computeHardwareVE` fed a hardware description, which
+ * is exactly the lookup the reducer should not be reaching for. Everything the reducer can
+ * set from constants — the stock timing and fuel tables, full health, an empty result —
+ * it sets itself.
+ *
+ * It also empties the undo stack: see the case below.
+ * @typedef {{type: 'TAKE_JOB', index: number, build: BuildState, ve: number[][], ecu?: object}} TakeJobAction
  */
 
 /**
@@ -600,6 +603,8 @@ function baseReducer(state, action) {
           // A new engine's ROM: every map slot starts as the factory calibration.
           maps: [null, null, null, null],
           activeMap: 0,
+          // What the CHANGES view compares against from here on (issue 106).
+          baseline: { ve: p.ve, timing: p.timing, afr: p.afr },
           // Fresh factory calibration is not unsaved player work.
           tablesDirty: false,
           selection: null,
@@ -616,7 +621,9 @@ function baseReducer(state, action) {
       };
     }
 
-    case ACTIONS.RESET_TO_STOCK:
+    case ACTIONS.RESET_TO_STOCK: {
+      const timing = clone2D(DEFAULT_TIMING);
+      const afr = clone2D(DEFAULT_AFR);
       return {
         ...state,
         build: {
@@ -628,14 +635,16 @@ function baseReducer(state, action) {
         tune: {
           ...state.tune,
           ve: action.ve,
-          timing: clone2D(DEFAULT_TIMING),
-          afr: clone2D(DEFAULT_AFR),
+          timing,
+          afr,
           ...(action.ecu ? { ecu: action.ecu } : {}),
+          baseline: { ve: action.ve, timing, afr },
           // A reset baseline is not unsaved player work — no "last call" needed to
           // pin this false, it is simply false in this same pass.
           tablesDirty: false,
         },
       };
+    }
 
     case ACTIONS.TAKE_JOB:
       return {
@@ -664,15 +673,20 @@ function baseReducer(state, action) {
           ...state.session,
           activeJob: action.index,
           jobResult: null,
-          // A fresh bench. A pull logged on the last customer's car next to this one's
-          // target is worse than no pull at all, and the run log is where those live now.
+          // A clear bench: no result, scores or histogram measured on the last car.
+          // The run log and its pin stay. They are the player's saved history, written
+          // to storage whenever they change, so emptying them here deleted every pull
+          // the player had ever banked. A job's pulls are labelled with the job instead.
           result: null,
-          runs: [],
-          pinnedRunId: null,
           pullScores: null,
           histogram: null,
+          logFocusRpm: null,
           health: { piston: 100, bearing: 100, valve: 100 },
         },
+        // A different car. Every entry on the stack is a snapshot of the last one, so an
+        // undo here would put the previous car's tables onto the customer's, and a redo
+        // would do the same from the other direction.
+        history: { past: [], future: [] },
       };
 
     case ACTIONS.REPAIR_ENGINE:
@@ -837,12 +851,17 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  *  - SET_SESSION_FIELD, BANK_PULL, REPAIR_ENGINE write `session` only, which no
  *    snapshot carries and no restore touches.
  *  - SET_BOOST_SEL, SET_PRESET_PROMPT, SET_TUNE_FIELD are cursors and UI state:
- *    `boostSel`, `presetPrompt` and `selection` are all deliberately outside the
- *    snapshot (see history.js). SET_TUNE_FIELD is the generic tune setter, but its
- *    only callers pass `selection` — and one of them is the tab switch, so counting
- *    it as new work would mean walking from TUNE to BUILD silently killed the redo
- *    a player crossed tabs to reach.
+ *    `boostSel`, `presetPrompt`, `selection`, `rangeMode` (issue 105) and `diffView`
+ *    (issue 106) are all deliberately outside the snapshot (see history.js).
+ *    SET_TUNE_FIELD is the generic tune setter, and its callers write `selection`,
+ *    `rangeMode` and `diffView` — cursors and UI state, not calibration — so counting
+ *    any of those writes as new work would mean walking from TUNE to BUILD, flipping
+ *    the range mode, or toggling the overlay silently killed the redo a player crossed
+ *    tabs to reach.
  *  - UNDO/REDO manage `future` themselves.
+ *  - TAKE_JOB does write snapshotted fields, but it empties BOTH stacks itself (a
+ *    different car makes every entry meaningless). Listing it here would be worse than
+ *    redundant: the branch below rebuilds `history` from the pre-action `past`.
  *
  * The three UNDOABLE actions are listed here too, for one list that answers "is this
  * new work?" — they reach `future: []` through the recording branch below rather than
@@ -853,13 +872,14 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  * redo branch?
  *
  * `SET_TUNE_FIELD` needs the extra question because it is the one action whose write
- * surface depends on its payload rather than its type. Its five production callers all
- * pass `field: 'selection'` — a cursor, outside the snapshot, and written by `changeTab`
- * on every tab switch, so treating it as new work would mean walking from TUNE to BUILD
- * killed the redo the player crossed tabs to reach. But nothing in the type stops a
- * caller passing `'ve'`, and that write WOULD be overwritten by a redo. Asking the
- * snapshot's own key list makes the exclusion structural instead of an observation about
- * today's callers.
+ * surface depends on its payload rather than its type. Its production callers pass
+ * `field: 'selection'` (written by `changeTab` on every tab switch), `'rangeMode'`
+ * (issue 105) or `'diffView'` (issue 106) — cursors and UI state, all outside the
+ * snapshot, so treating any of those writes as new work would mean walking from TUNE to
+ * BUILD, or flipping one of those UI toggles, killed the redo the player crossed tabs to
+ * reach. But nothing in the type stops a caller passing `'ve'`, and that write WOULD be
+ * overwritten by a redo. Asking the snapshot's own key list makes the exclusion
+ * structural instead of an observation about today's callers.
  * @param {any} action
  * @returns {boolean}
  */
