@@ -155,6 +155,23 @@ describe('the controller', () => {
     expect(p.points.filter((x) => x.rpm >= 3000).every((x) => !(x.nitrousLbMin > 0))).toBe(true);
   });
 
+  it('keeps spraying while the torque limiter holds the engine to its limit', () => {
+    // The limiter acts by its own calibrated method on top of the shot: the nitrous is
+    // still flowing, so the bottle still empties and the log still sees it.
+    const limitNm = 330;
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(150) } });
+    const limited = makeEngine({
+      build: { ...FUELLED, nitrous: kit(150) },
+      cal: { 'torque.limitByRpm': { ...eng.cal.torque.limitByRpm, z: eng.cal.torque.limitByRpm.z.map(() => limitNm) } },
+    }).pull(100);
+    const held = limited.points.filter((x) => x.rpm >= 3500 && x.rpm <= 5500);
+    expect(held.length).toBeGreaterThan(0);
+    for (const x of held) {
+      expect(x.protect).toContain('torque');
+      expect(x.nitrousLbMin).toBeGreaterThan(0);
+    }
+  });
+
   it('flags a big shot sprayed too low in the rev range', () => {
     const p = pull(kit(150), { cal: { 'nitrous.minRpm': 2000 } });
     expect(p.events.some((e) => e.type === 'nitrouswindow')).toBe(true);
@@ -260,6 +277,14 @@ describe('on the LIVE engine', () => {
     const after = rows.slice(sprayed).filter((r) => r.nitrous === 0 && r.pedal > 90);
     expect(after.length).toBeGreaterThan(10);
     expect(rows.at(-1).bottle).toBe(0);
+  });
+
+  it('carries on without a fault when the kit is taken off, with no bottle left behind', () => {
+    const withKit = live(kit(100), { nitrous: true }, 6);
+    expect(withKit.state.bottle).toBeDefined();
+    const without = runLive(makeEngine({ build: FUELLED }), { seconds: 1, pedal: floorIt, coolantC: 90, from: withKit.state, holdRpm: 4500 });
+    expect(without.state.bottle).toBeUndefined();
+    expect(without.rows.every((r) => r.nitrous === 0 && r.bottle === 0)).toBe(true);
   });
 
   it('a lean cut holds the nitrous off until the driver lifts', () => {

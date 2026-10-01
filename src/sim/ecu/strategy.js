@@ -669,7 +669,10 @@ function limitTorque({ cal, hw, cond, tables, rpm, loadKpa, throttlePct, gear, m
     const { pt, resolved } = evaluateEcu({
       cal, hw, cond, tables, rpm, mapKpa: solved.man.mapKpa, boostPsi: solved.man.boostPsi,
       veActual: solved.veActual, cam: solved.cam, empKpa: solved.man.empKpa,
-      dyn: { steadyTrims: true, extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac, cutType: m.cutType, highDet: m.highDet },
+      dyn: {
+        steadyTrims: true, extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac,
+        cutType: m.cutType, highDet: m.highDet, nitrousFrac: m.nitrousFrac,
+      },
       ...(solved.man.blower ? { blower: solved.man.blower } : {}),
     });
     return { pt, resolved, solved };
