@@ -28,7 +28,8 @@ import { boostTarget, steadyGate } from './boost.js';
 import { DYNO_GEAR } from './calibration.js';
 import { ECU_COEFF as E } from './ecuCoefficients.js';
 import {
-  COIL_OPTS, coilOutput, fuelRail, injectorDeadTimeMs, oilPressureKpa,
+  COIL_OPTS, coilOutput, fuelRail, INJECTOR_RATED_DP_KPA, injectorDeadTimeMs, injectorFlowScale,
+  oilPressureKpa,
 } from './ecuHardware.js';
 import { read1, read2 } from './ecuTables.js';
 import { blendFuel } from './fuelBlend.js';
@@ -288,17 +289,18 @@ export function resolveEcuPoint({
     fuelSystem: hw.fuelSystem, mapKpa, baroKpa: env.baroKpa, demandLph: requiredLph, volts,
     pumpHealth: cond.pumpHealth ?? 1,
   });
+  // The pressure the ECU believes is across the injectors. Uncompensated, it assumes the
+  // rail pressure it was given holds steady, as a return-style regulator makes it do.
   let ecuDp = cal.injector.refPressureKpa;
-  if (cal.injector.pressureComp === 'none') ecuDp = 300;
-  else if (cal.injector.pressureComp === 'manifold') ecuDp = cal.injector.refPressureKpa + env.baroKpa - sMap;
+  if (cal.injector.pressureComp === 'manifold') ecuDp = cal.injector.refPressureKpa + env.baroKpa - sMap;
   else if (cal.injector.pressureComp === 'sensor') {
-    const fp = readSensor({ kind: 'fuelPressure', value: rail.railGaugeKpa, part: '100psi', scale: cal.sensors.fuelPressure, fault: faults.fuelPressure, fallback: 300 });
+    const fp = readSensor({ kind: 'fuelPressure', value: rail.railGaugeKpa, part: '100psi', scale: cal.sensors.fuelPressure, fault: faults.fuelPressure, fallback: INJECTOR_RATED_DP_KPA });
     ecuDp = fp.value + env.baroKpa - sMap;
   }
   const deadEcuMs = read1(cal.injector.deadTime, volts);
   const inj = {
     actualFlowScale: rail.flowScale,
-    ecuFlowScale: Math.sqrt(Math.max(1, ecuDp) / 300),
+    ecuFlowScale: injectorFlowScale(Math.max(1, ecuDp)),
     deadActualMs: injectorDeadTimeMs(volts, rail.deltaKpa),
     deadEcuMs,
     minPwMs: cal.injector.minEffPwMs > 0 ? cal.injector.minEffPwMs + deadEcuMs : 0,

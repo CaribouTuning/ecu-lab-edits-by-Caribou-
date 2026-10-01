@@ -83,6 +83,12 @@ import {
  * @property {boolean} rangeMode true while TUNE's grids take two taps as a range (the
  *   touch path; a mouse drags). One flag for AIR, SPARK and FUEL, and outside the undo
  *   snapshot like `selection`
+ * @property {{ve: number[][], timing: number[][], afr: number[][]}} baseline the tables
+ *   as they were when this calibration was loaded (start, preset, reset to stock) — what
+ *   the CHANGES view and REVERT compare against. Hand and hardware edits never move it;
+ *   it is in the undo snapshot so undoing a load puts the old one back
+ * @property {boolean} diffView true while TUNE's grids show each cell's change from
+ *   `baseline` instead of its value. Shared and outside the snapshot, like `rangeMode`
  */
 
 /**
@@ -230,10 +236,30 @@ import {
  */
 
 /**
+ * The ECU-side parts of a stock car: the fuel system, sensors, wastegate, coil, plug gap
+ * and what a flex tank holds. A factory calibration (`defaultEcuCalibration`) is set up
+ * for exactly these, so a new build and a loaded preset both start from them.
+ * @returns {Pick<BuildState, 'fuelSystem'|'sensorHw'|'wastegate'|'coil'|'plugGapMm'|'ethanolPct'>}
+ */
+export function stockEcuParts() {
+  return {
+    fuelSystem: { ...DEFAULT_ECU_HW.fuelSystem },
+    sensorHw: { ...DEFAULT_ECU_HW.sensorHw },
+    wastegate: { ...DEFAULT_ECU_HW.gate },
+    coil: DEFAULT_ECU_HW.coil,
+    plugGapMm: DEFAULT_ECU_HW.plugGapMm,
+    ethanolPct: 10,
+  };
+}
+
+/**
  * Builds a fresh starting state for a new session.
  * @returns {StoreState}
  */
 export function makeInitialState() {
+  const ve = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS);
+  const timing = clone2D(DEFAULT_TIMING);
+  const afr = clone2D(DEFAULT_AFR);
   return {
     build: {
       engineConfig: DEFAULT_ENGINE_CONFIG,
@@ -258,23 +284,21 @@ export function makeInitialState() {
       presetId: null,
       presetPrompt: null,
       boostSel: 4,
-      fuelSystem: { ...DEFAULT_ECU_HW.fuelSystem },
-      sensorHw: { ...DEFAULT_ECU_HW.sensorHw },
-      wastegate: { ...DEFAULT_ECU_HW.gate },
-      coil: DEFAULT_ECU_HW.coil,
-      plugGapMm: DEFAULT_ECU_HW.plugGapMm,
-      ethanolPct: 10,
+      ...stockEcuParts(),
     },
     tune: {
-      ve: computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS),
-      timing: clone2D(DEFAULT_TIMING),
-      afr: clone2D(DEFAULT_AFR),
+      ve,
+      timing,
+      afr,
+      // The same arrays, not copies: no write mutates a table, only replaces it.
+      baseline: { ve, timing, afr },
       ecu: defaultEcuCalibration({ derived: deriveEngine(DEFAULT_ENGINE_CONFIG), gate: DEFAULT_ECU_HW.gate }),
       maps: [null, null, null, null],
       activeMap: 0,
       tablesDirty: false,
       selection: null,
       rangeMode: false,
+      diffView: false,
     },
     session: {
       running: false,

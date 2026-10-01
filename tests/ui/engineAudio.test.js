@@ -85,11 +85,31 @@ describe('the engine synthesiser', () => {
     expect(graph.master.gain.value).toBeLessThan(wot);
   });
 
-  it('drops right back on a fuel cut without going silent', () => {
+  it('opens far enough from idle to full throttle to survive the limiter', () => {
+    // The limiter takes 12 dB for every 1 over its threshold, so a small spread in front
+    // of it is no spread at all out of it: at 5 dB, measured in the app, idle and wide open
+    // came out of the speaker 1.5 dB apart. Idle has to sit under the threshold.
+    push(frameFor({ rpm: 850, load: 0.12 }));
+    const idle = graph.master.gain.value;
+    push(frameFor({ rpm: 850, load: 1 }));
+    expect(20 * Math.log10(graph.master.gain.value / idle)).toBeGreaterThan(12);
+  });
+
+  it('holds its level on the rev limiter, where the throttle is still wide open', () => {
+    // The cut already reaches the note through the pulses: `acousticDrive` hands over a
+    // motored cylinder. Turning the whole engine down on top of that put the limiter
+    // below idle.
     push(frameFor({ load: 1 }));
     const firing = graph.master.gain.value;
     push(frameFor({ load: 1, cut: true }));
-    expect(graph.master.gain.value).toBeLessThan(firing);
+    expect(graph.master.gain.value).toBe(firing);
+  });
+
+  it('puts an overrun cut at the closed-throttle level, not under it', () => {
+    push(frameFor({ load: 0.05 }));
+    const closed = graph.master.gain.value;
+    push(frameFor({ load: 0.05, cut: true }));
+    expect(graph.master.gain.value).toBe(closed);
     expect(graph.master.gain.value).toBeGreaterThan(0);
   });
 

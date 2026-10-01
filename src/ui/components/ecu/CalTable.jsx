@@ -92,9 +92,14 @@ export function CalTable({ table, def, meta, onChange, marker }) {
     return () => window.removeEventListener('pointerup', up);
   }, []);
 
-  const setAxis = (axis, i, raw) => {
-    const next = setBreakpoint(table, axis, i, Number(raw));
+  // A breakpoint that would break the axis order (or a blank one) is refused, and the
+  // box goes back to the breakpoint the table still has rather than showing one it lacks.
+  /** @param {'x'|'y'} axis @param {number} i @param {HTMLInputElement} input */
+  const setAxis = (axis, i, input) => {
+    const raw = input.value.trim();
+    const next = raw === '' ? null : setBreakpoint(table, axis, i, Number(raw));
     if (next) commit(next);
+    else input.value = String(table[axis][i]);
   };
 
   const doCopy = () => {
@@ -146,8 +151,9 @@ export function CalTable({ table, def, meta, onChange, marker }) {
               {table.x.map((xv, c) => (
                 <th key={c} className={styles.axis} aria-selected={!!target && inRect(target, norm(target).r1, c) && norm(target).r1 === 0 && norm(target).r2 === nRows - 1}>
                   {editAxes
-                    ? <input className={styles.axisInput} defaultValue={xv} aria-label={`${meta.xLabel ?? 'x'} breakpoint ${c + 1}`}
-                      onBlur={(e) => setAxis('x', c, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') /** @type {HTMLInputElement} */ (e.target).blur(); }} />
+                    // Keyed on the value, so an undo or a map switch redraws the box.
+                    ? <input key={xv} className={styles.axisInput} defaultValue={xv} aria-label={`${meta.xLabel ?? 'x'} breakpoint ${c + 1}`}
+                      onBlur={(e) => setAxis('x', c, e.target)} onKeyDown={(e) => { if (e.key === 'Enter') /** @type {HTMLInputElement} */ (e.target).blur(); }} />
                     : <button type="button" className={styles.axisBtn} onClick={() => setSel({ r1: 0, r2: nRows - 1, c1: c, c2: c })}>{xv}</button>}
                 </th>
               ))}
@@ -159,8 +165,8 @@ export function CalTable({ table, def, meta, onChange, marker }) {
                 <th className={styles.axis}>
                   {!twoD ? <span className={styles.axisBtn}>{meta.unit}</span>
                     : editAxes
-                      ? <input className={styles.axisInput} defaultValue={table.y[r]} aria-label={`${meta.yLabel ?? 'y'} breakpoint ${r + 1}`}
-                        onBlur={(e) => setAxis('y', r, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') /** @type {HTMLInputElement} */ (e.target).blur(); }} />
+                      ? <input key={table.y[r]} className={styles.axisInput} defaultValue={table.y[r]} aria-label={`${meta.yLabel ?? 'y'} breakpoint ${r + 1}`}
+                        onBlur={(e) => setAxis('y', r, e.target)} onKeyDown={(e) => { if (e.key === 'Enter') /** @type {HTMLInputElement} */ (e.target).blur(); }} />
                       : <button type="button" className={styles.axisBtn} onClick={() => setSel({ r1: r, r2: r, c1: 0, c2: nCols - 1 })}>{table.y[r]}</button>}
                 </th>
                 {rows[r].map((v, c) => {

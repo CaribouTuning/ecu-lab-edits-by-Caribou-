@@ -31,8 +31,13 @@ export function ExpandableInfo({ title, children }) {
         </span>
         <ChevronDown size={15} style={{ color: T.ink3, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
       </button>
-      <div style={{ maxHeight: open ? 900 : 0, opacity: open ? 1 : 0, overflow: 'hidden', transition: 'max-height .3s ease, opacity .2s ease' }}>
-        <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{children}</div>
+      {/* Grid rows, not max-height: `1fr` animates to the content's own height, where a
+          max-height cap clipped any article taller than it (four Learn articles ran past
+          the old 900px on a phone, and their endings could not be read). */}
+      <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0, transition: 'grid-template-rows .3s ease, opacity .2s ease' }}>
+        <div style={{ overflow: 'hidden', minHeight: 0 }}>
+          <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{children}</div>
+        </div>
       </div>
     </div>
   );

@@ -23,10 +23,10 @@ import { sensorMismatches } from './sensors.js';
  */
 
 /**
- * @param {{fuelSystem: {regulator: string}, sensorHw: {map?: string, wideband?: string, iat?: string,
+ * @param {{fuelSystem: {regulator: string, basePressureKpa?: number}, sensorHw: {map?: string, wideband?: string, iat?: string,
  *   ect?: string, flex?: boolean}, flexTank?: boolean,
  *   ethanolPct?: number}} hw the ECU-side hardware of the build (`ecuHardwareOf`)
- * @param {{config: {stoichMode: string, flexEnabled: boolean}, injector: {pressureComp: string},
+ * @param {{config: {stoichMode: string, flexEnabled: boolean}, injector: {pressureComp: string, refPressureKpa: number},
  *   sensors: Record<string, any>}} cal
  * @returns {SetupMismatch[]}
  */
@@ -54,6 +54,19 @@ export function setupMismatches(hw, cal) {
       section: 'injectors', path: 'injector.pressureComp',
       text: 'The fuel rail is return-style, which already keeps injector pressure steady, but the ECU corrects as if it were fixed. It adds fuel under boost and removes it at idle that the engine does not need.',
       fix: { label: 'Stop correcting', value: 'none' },
+    });
+  }
+
+  // Without a rail pressure sensor the ECU works from the pressure it was told. A rail
+  // run above or below it flows more or less than every pulse is sized for.
+  const basePressure = hw.fuelSystem?.basePressureKpa;
+  const assumed = cal.injector.refPressureKpa;
+  if (comp !== 'sensor' && basePressure != null && Math.abs(assumed - basePressure) > 2) {
+    const richer = basePressure > assumed;
+    out.push({
+      section: 'injectors', path: 'injector.refPressureKpa',
+      text: `The rail is set to ${basePressure} kPa, but the ECU assumes ${assumed} kPa. The injectors flow ${richer ? 'more' : 'less'} than it expects, so every cylinder runs ${richer ? 'rich' : 'lean'}.`,
+      fix: { label: 'Match the rail', value: basePressure },
     });
   }
 

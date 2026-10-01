@@ -103,6 +103,7 @@ const INPUT_LABELS = {
   blowerRatio: 'blower pulley',
   nitrous: 'nitrous kit',
   ecu: 'ECU calibration',
+  conditions: 'conditions',
   ve: 'VE table',
   timing: 'timing table',
   afr: 'AFR table',
@@ -148,16 +149,18 @@ export function pullSignature(build, tune, loadKpa, conditions) {
  * @param {import('./initialState.js').BuildState} build
  * @param {import('./initialState.js').TuneState} tune
  * @param {number} loadKpa
- * @returns {{build: object, tune: object, loadKpa: number}}
+ * @param {object} [conditions] ambient conditions and injected faults, as
+ *   {@link pullSignature} takes them
+ * @returns {{build: object, tune: object, loadKpa: number, conditions?: object}}
  */
-export function measuredInputs(build, tune, loadKpa) {
+export function measuredInputs(build, tune, loadKpa, conditions) {
   /** @type {Record<string, *>} */
   const b = {};
   for (const k of MEASURED_BUILD_KEYS) b[k] = /** @type {any} */ (build)[k];
   /** @type {Record<string, *>} */
   const t = {};
   for (const k of MEASURED_TUNE_KEYS) t[k] = /** @type {any} */ (tune)[k];
-  return { build: b, tune: t, loadKpa };
+  return { build: b, tune: t, loadKpa, ...(conditions ? { conditions } : {}) };
 }
 
 /**
@@ -190,6 +193,7 @@ export function diffMeasuredInputs(a, b) {
     if (differs(a?.tune?.[k], b?.tune?.[k])) changed.push(k);
   }
   if (a?.loadKpa !== b?.loadKpa) changed.push('loadKpa');
+  if (differs(a?.conditions, b?.conditions)) changed.push('conditions');
   return changed.map((k) => {
     const label = INPUT_LABELS[k];
     if (!label) throw new Error(`diffMeasuredInputs: no label defined for measured input "${k}"`);

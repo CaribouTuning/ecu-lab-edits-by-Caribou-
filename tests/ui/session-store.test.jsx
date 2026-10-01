@@ -337,6 +337,24 @@ describe('running a dyno pull', () => {
       expect(screen.queryByText(/still blocking audio/)).toBeNull();
     });
 
+    it('keeps the audio context awake while the engine runs on LIVE', async () => {
+      // The gate that decides whether anything is sounding named the tab LIVE used to
+      // live on, so a running engine on LIVE counted as silence. A first START still
+      // happened to sound, because nothing had put the graph to sleep yet — but the
+      // TEST beep schedules a sleep for when it ends, and with nothing "sounding" that
+      // sleep suspended the context under a running engine.
+      launchOnLive();
+      fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+      const [ctx] = audio.contexts;
+      expect(ctx).toBeTruthy();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy(), { timeout: 5000 });
+      fireEvent.click(screen.getByRole('button', { name: 'TEST' }));
+      // Past the beep and the sleep delay after it (0.45 s + 0.5 s).
+      await new Promise((resolve) => { setTimeout(resolve, 1400); });
+      expect(ctx.suspends).toBe(0);
+      expect(ctx.state).toBe('running');
+    });
+
     it('suspends the audio context once nothing is sounding', async () => {
       // The exhaust model is sample-rate JavaScript. Left running, a stopped engine
       // costs a noticeable share of a core for the life of the page.
@@ -708,4 +726,38 @@ describe('the engine-sound toggle', () => {
     fireEvent.click(toggle());
     expect(toggle().textContent).toBe('♪');
   });
+});
+
+describe('a career job', () => {
+  /** Runs a pull from DYNO and waits for the bench to come free again. */
+  async function pullAndWait() {
+    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      { timeout: 10000 },
+    );
+  }
+
+  it('grades the pull against the job, and keeps the pulls banked before it', async () => {
+    // Taking a job used to empty the run log, and the log is saved whenever it changes,
+    // so a player's whole pull history went with it. The job's own pull is labelled
+    // with the job, so the kept log still says which car each pull was on.
+    render(<EcuLab />);
+    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    await pullAndWait();
+
+    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
+    fireEvent.click(screen.getByRole('button', { name: /Runs terrible since the fuel upgrade/ }));
+    // Taking a job goes straight to the dyno, with the job pinned above it.
+    expect(screen.getByText('JOB IN PROGRESS')).toBeTruthy();
+    await pullAndWait();
+
+    // Oversized injectors the ECU was never told about: the stock tables cannot pass it.
+    expect(screen.getByText('NOT THERE YET')).toBeTruthy();
+    const saved = await loadCareer();
+    expect(saved.runs.map((r) => r.label)).toEqual([
+      'Job · Runs terrible since the fuel upgrade', 'Custom build',
+    ]);
+  }, 2 * DYNO_PULL_MS + 6000);
 });
