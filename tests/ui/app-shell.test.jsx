@@ -182,7 +182,8 @@ describe('the status strip', () => {
       type: ACTIONS.SET_SESSION_FIELD, field: 'result', value: { peakHp: 12345, peakTq: 1, points: [], events: [] },
     }));
 
-    expect(screen.getByText('12345 hp')).toBeTruthy();
+    // Wheel horsepower, labelled as every other power figure in the app is.
+    expect(screen.getByText('12345 whp')).toBeTruthy();
   });
 });
 
@@ -235,33 +236,84 @@ describe('the app\'s name', () => {
 // does no layout, so "the strip fits a 375px phone" cannot be measured here — only
 // the declarations that make it fit can be pinned. Under jsdom the global `URL` is
 // jsdom's own, which `readFileSync` rejects, hence node:url's.
-const shellCss = readFileSync(new NodeURL('../../src/ui/AppShell.module.css', import.meta.url), 'utf8');
-// Everything from the project's one breakpoint on (see tokens.css). Empty if the
-// media query is ever renamed, which fails the `ruleBody` lookups below loudly.
-const BREAKPOINT = '@media (min-width: 560px)';
-const desktopCss = shellCss.includes(BREAKPOINT) ? shellCss.slice(shellCss.indexOf(BREAKPOINT)) : '';
+const shellCss = readFileSync(new NodeURL('../../src/ui/AppShell.module.css', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '');
 
 /**
- * The declarations of the first `selector { ... }` rule in `css`. Matches the class
- * exactly, so `.strip` does not find `.stripInner`. Throws when absent, so a renamed
- * class fails loudly rather than asserting against `undefined`.
- * @param {string} css
- * @param {string} selector e.g. '.readouts'
- * @returns {string}
+ * Splits the stylesheet into its top-level rules and its `@media`/`@container` blocks,
+ * matching braces so a block's body is exactly its own rules: nothing before it, and
+ * nothing after its closing brace.
+ * @param {string} css comment-free CSS
+ * @returns {{base: string, blocks: {prelude: string, body: string}[]}}
  */
-function ruleBody(css, selector) {
-  const escaped = selector.replace(/[.[\]()]/g, '\\$&');
-  const rule = css.match(new RegExp(`(?:^|[\\s}])${escaped}\\s*{([^}]*)}`));
-  if (!rule) throw new Error(`no "${selector}" rule in AppShell.module.css`);
-  return rule[1];
+function splitAtRules(css) {
+  const blocks = [];
+  let base = '';
+  let i = 0;
+  while (i < css.length) {
+    const at = css.indexOf('@', i);
+    if (at === -1) { base += css.slice(i); break; }
+    base += css.slice(i, at);
+    const open = css.indexOf('{', at);
+    let depth = 1;
+    let j = open + 1;
+    for (; depth > 0; j += 1) {
+      if (css[j] === '{') depth += 1;
+      else if (css[j] === '}') depth -= 1;
+    }
+    blocks.push({ prelude: css.slice(at, open).trim(), body: css.slice(open + 1, j - 1) });
+    i = j;
+  }
+  return { base, blocks };
 }
 
-describe('the status strip at phone width', () => {
+const { base: phoneCss, blocks } = splitAtRules(shellCss);
+
+/**
+ * The body of the one at-rule block whose prelude is exactly `prelude`. Throws when
+ * absent, so a renamed query fails loudly rather than asserting against nothing.
+ * @param {string} prelude e.g. '@media (min-width: 560px)'
+ * @returns {string}
+ */
+function block(prelude) {
+  const found = blocks.filter((b) => b.prelude === prelude);
+  if (found.length !== 1) throw new Error(`expected one "${prelude}" block, found ${found.length}`);
+  return found[0].body;
+}
+
+// The project's one breakpoint (see tokens.css), and the strip's own container query.
+const breakpointCss = block('@media (min-width: 560px)');
+const STRIP_QUERY = blocks.find((b) => b.prelude.startsWith('@container strip '));
+const stripQueryCss = STRIP_QUERY ? STRIP_QUERY.body : '';
+
+/**
+ * The declarations of EVERY `selector { ... }` rule in `css`, joined. Matches the
+ * selector exactly, so `.strip` does not find `.stripInner` or `.strip::after`.
+ * Every rule, not the first, so a later override cannot slip past an assertion.
+ * @param {string} css
+ * @param {string} selector e.g. '.readouts'
+ * @returns {string} '' when there is no such rule
+ */
+function decls(css, selector) {
+  const escaped = selector.replace(/[.[\]():]/g, '\\$&');
+  const rules = [...css.matchAll(new RegExp(`(?:^|[\\s},])${escaped}\\s*{([^}]*)}`, 'g'))];
+  return rules.map((r) => r[1]).join(';');
+}
+
+/**
+ * `prop: value` as a whole declaration, so `order: 1` does not also match `order: 10`.
+ * @param {string} prop @param {string} value
+ * @returns {RegExp}
+ */
+const decl = (prop, value) => new RegExp(`(?:^|[\\s;{])${prop}:\\s*${value.replace(/[()/]/g, '\\$&')}\\s*(?:;|$)`);
+
+describe('the status strip at every width', () => {
   // The defect: at 375px the strip's readouts and buttons ran ~150px past the
-  // viewport, the page scrolled sideways and the brand and nav were clipped. The
-  // browser check this stands in for: at 375px on TUNE > AIRFLOW,
-  // `document.documentElement.scrollWidth === 375` and nothing under #root extends
-  // past the viewport outside its own scroller.
+  // viewport, the page scrolled sideways and the brand and nav were clipped. Then,
+  // between the breakpoint and a wide display, the browser's greedy line-filling
+  // wrapped the action buttons onto a second line on their own. The browser check
+  // this stands in for: at 320-1400px, `document.documentElement.scrollWidth`
+  // equals the viewport and the buttons share the first line with the brand.
 
   it('groups the readouts apart from the action buttons, so they can wrap as a unit', () => {
     mountShell(ROUTE_DASH, () => {});
@@ -276,26 +328,49 @@ describe('the status strip at phone width', () => {
     expect(readouts.contains(screen.getByRole('button', { name: 'Repair engine' }))).toBe(false);
   });
 
-  it('wraps the strip instead of overflowing, with no content-box width: 100%', () => {
-    const inner = ruleBody(shellCss, '.stripInner');
-    expect(inner).toMatch(/flex-wrap:\s*wrap/);
-    // `width: 100%` + side padding, with no global border-box, was 32px wider than
-    // the strip at every width below the content cap.
-    expect(inner).not.toMatch(/(?:^|[\s;])width:\s*100%/);
+  it('wraps the strip instead of overflowing, and keeps its padding inside its width', () => {
+    const inner = decls(shellCss, '.stripInner');
+    expect(decls(phoneCss, '.stripInner')).toMatch(decl('flex-wrap', 'wrap'));
+    expect(inner).not.toMatch(decl('flex-wrap', 'nowrap'));
+    // `width: 100%` + side padding as a content box was wider than the strip at
+    // every width below the content cap.
+    if (decl('width', '100%').test(inner)) expect(inner).toMatch(decl('box-sizing', 'border-box'));
   });
 
-  it('puts the readouts on their own line below the breakpoint, and back inline above it', () => {
-    const mobile = ruleBody(shellCss, '.readouts');
-    expect(mobile).toMatch(/flex-basis:\s*100%/);
-    expect(mobile).toMatch(/order:\s*1/);
+  it('puts the readouts on their own line until the strip itself is wide enough for them', () => {
+    expect(decls(phoneCss, '.strip')).toMatch(decl('container', 'strip / inline-size'));
 
-    const desktop = ruleBody(desktopCss, '.readouts');
-    expect(desktop).toMatch(/flex-basis:\s*auto/);
-    expect(desktop).toMatch(/order:\s*0/);
+    const own = decls(phoneCss, '.readouts');
+    expect(own).toMatch(decl('flex-basis', '100%'));
+    expect(own).toMatch(decl('order', '1'));
+
+    // Inline only on the strip's width. The viewport breakpoint must not decide it:
+    // that let the buttons wrap alone between 560px and a wide display.
+    expect(STRIP_QUERY?.prelude).toMatch(/^@container strip \(min-width: \d+px\)$/);
+    const inline = decls(stripQueryCss, '.readouts');
+    expect(inline).toMatch(decl('flex', '0 0 auto'));
+    expect(inline).toMatch(decl('order', '0'));
+    expect(decls(breakpointCss, '.readouts')).not.toMatch(/order|flex/);
+  });
+
+  it('lets the build line take what the first line leaves, so the buttons never wrap', () => {
+    // A non-zero basis wrapped the buttons off the first line on a phone.
+    expect(decls(shellCss, '.engine')).toMatch(decl('flex', '1 1 0'));
   });
 
   it('drops the health bar below the breakpoint only, keeping the percentage', () => {
-    expect(ruleBody(shellCss, '.healthTrack')).toMatch(/display:\s*none/);
-    expect(ruleBody(desktopCss, '.healthTrack')).toMatch(/display:\s*block/);
+    expect(decls(phoneCss, '.healthTrack')).toMatch(decl('display', 'none'));
+    expect(decls(breakpointCss, '.healthTrack')).toMatch(decl('display', 'block'));
+  });
+
+  it('holds the run light\'s width while the engine is idle, so starting it cannot reflow the strip', () => {
+    mountShell(ROUTE_DASH, () => {});
+    expect(screen.queryByText('● RUNNING')).toBeNull();
+    // The slot is mounted while idle, and its invisible stand-in is the exact text
+    // the light shows, so lit and unlit are the same width.
+    expect(document.querySelector(`.${shellStyles.run}`)).toBeTruthy();
+    const standIn = decls(shellCss, '.run::after');
+    expect(standIn).toMatch(decl('content', "'● RUNNING'"));
+    expect(standIn).toMatch(decl('visibility', 'hidden'));
   });
 });

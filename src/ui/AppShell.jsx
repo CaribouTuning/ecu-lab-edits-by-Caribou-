@@ -49,7 +49,7 @@ import {
 import React, { useMemo } from 'react';
 
 import {
-  INJECTOR_OPTS, OCTANE_OPTS, deriveEngine, presetById,
+  INJECTOR_OPTS, FUEL_CHOICES, deriveEngine, presetById,
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
@@ -179,12 +179,17 @@ const HealthField = React.memo(HealthFieldInner);
  * rest of the strip is not dragged along by it. See this file's header for what the
  * single-context store means for that in practice today.
  *
- * @returns {React.ReactElement|null}
+ * @returns {React.ReactElement}
  */
 function EngineRunLight() {
   const [session] = useSession();
-  if (!session.live.running) return null;
-  return <span className={styles.run}>● RUNNING</span>;
+  // The slot stays mounted while idle so the strip does not change shape when the
+  // engine starts; see `.run` in AppShell.module.css for how it keeps its width.
+  return (
+    <span className={styles.run}>
+      {session.live.running && <span>● RUNNING</span>}
+    </span>
+  );
 }
 
 /**
@@ -205,6 +210,18 @@ function EngineRunLight() {
  * @param {() => void} [props.onRepair]
  * @returns {React.ReactElement}
  */
+/**
+ * The fuel as the header names it: a pump fuel by its octane ("93 oct"), E85 by name, a
+ * flex tank by the blend it holds.
+ * @param {{label: string, flex?: boolean}} fuel
+ * @param {number|null|undefined} ethanolPct
+ * @returns {string}
+ */
+function fuelLabel(fuel, ethanolPct) {
+  if (fuel.flex) return `Flex E${Math.round(ethanolPct ?? 0)}`;
+  return /^\d+$/.test(fuel.label) ? `${fuel.label} oct` : fuel.label;
+}
+
 export function StatusStrip({ onTutorial, onRepair }) {
   const [build] = useBuild();
   const [session] = useSession();
@@ -244,14 +261,14 @@ export function StatusStrip({ onTutorial, onRepair }) {
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
-          {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {OCTANE_OPTS[octaneIdx].label} oct · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
+          {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
         </div>
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>
           <StripField label="BOOST" value={turboOn ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
           <HealthField pct={overallHealth} />
-          <StripField label="LAST PULL" value={result ? `${Math.round(result.peakHp)} hp` : '—'} />
+          <StripField label="LAST PULL" value={result ? `${Math.round(result.peakHp)} whp` : '—'} />
           <EngineRunLight />
         </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
