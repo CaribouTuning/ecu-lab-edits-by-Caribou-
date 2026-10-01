@@ -13,11 +13,10 @@ import React from 'react';
 import { LOAD, RPM } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Note } from '../primitives/Note.jsx';
+import { VE_LOG_GOOD_PCT } from './advisorReports.js';
 
 import styles from './VeLogCorrection.module.css';
 
-/** Within this, a cell is as right as a wideband and trims can tell. */
-const GOOD_PCT = 2;
 /** Past this, a cell is far enough off to be worth fixing before anything else. */
 const FAR_PCT = 5;
 
@@ -61,7 +60,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
     if (Math.abs(pct) > Math.abs(worst.pct)) worst = { pct, rpm: RPM[ci], load: LOAD[ri] };
     return pct;
   }));
-  const inSync = corr.cells > 0 && Math.abs(worst.pct) < GOOD_PCT;
+  const inSync = corr.cells > 0 && Math.abs(worst.pct) < VE_LOG_GOOD_PCT;
 
   return (
     <section className={styles.panel} aria-label="Correct VE from logs">
@@ -70,7 +69,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
         {pullCount} samples from the last pull · {liveCount} from the LIVE log · <b>{corr.cells}</b> {corr.cells === 1 ? 'cell' : 'cells'} with data
       </p>
       {pullNote && <p className={styles.hint}>{pullNote}</p>}
-      {Math.abs(mafPct) >= GOOD_PCT && (
+      {Math.abs(mafPct) >= VE_LOG_GOOD_PCT && (
         <p className={styles.maf}>
           The MAF read {Math.abs(mafPct).toFixed(1)}% {mafPct < 0 ? 'low' : 'high'} in these logs. That part is the MAF scalar&apos;s job, on{' '}
           <a href="#/tune/sensors">TUNE › SENSORS</a>, and is taken out of the numbers below — tune the MAF and the VE table separately, or each hides the other&apos;s error.
@@ -93,7 +92,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
                     <th>{load}</th>
                     {RPM.map((rpm, ci) => {
                       const pct = errPct[ri][ci];
-                      const tone = pct == null ? 'none' : Math.abs(pct) < GOOD_PCT ? 'good' : Math.abs(pct) < FAR_PCT ? 'near' : 'far';
+                      const tone = pct == null ? 'none' : Math.abs(pct) < VE_LOG_GOOD_PCT ? 'good' : Math.abs(pct) < FAR_PCT ? 'near' : 'far';
                       // Rounded first, so a hair under zero shows as 0.0 rather than -0.0.
                       const shown = pct == null ? null : Number(pct.toFixed(1)) || 0;
                       return <td key={rpm} data-tone={tone}>{shown == null ? '·' : `${shown > 0 ? '+' : ''}${shown.toFixed(1)}`}</td>;
@@ -105,7 +104,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
           </div>
           <p className={styles.hint}>
             {inSync
-              ? `Every logged cell is within ${GOOD_PCT}% — as close as a wideband and fuel trims can tell.`
+              ? `Every logged cell is within ${VE_LOG_GOOD_PCT}% — as close as a wideband and fuel trims can tell.`
               : `Largest: ${worst.pct > 0 ? '+' : ''}${worst.pct.toFixed(1)}% at ${worst.rpm} RPM, ${worst.load} kPa. Positive means the engine got more air than the table thought (it ran lean).`}
           </p>
           <div className={styles.actions}>
