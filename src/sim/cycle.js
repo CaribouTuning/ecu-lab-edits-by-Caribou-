@@ -50,6 +50,7 @@
 import { COEFF } from './coefficients.js';
 import { BARO_KPA, KPA_PER_BAR, R_AIR } from './constants.js';
 import { clamp } from './math.js';
+import { N2O } from './nitrous.js';
 import { evaporativeCoolingK, fuelDewPointK, residualFraction, trappedChargeK } from './thermo.js';
 
 /**
@@ -525,10 +526,13 @@ export function trappedAirGrams({ veActual, mapKpa, chargeK, sweptM3 }) {
  *   overlap). Retarding the exhaust holds it open later into the intake stroke (more
  *   overlap) and opens it later on the power stroke (more expansion). Absent, the cams
  *   sit where the grind put them, which is every engine without phasers
+ * @param {number} [input.n2oG] nitrous oxide in the cylinder, grams. Its oxygen is already
+ *   in `burnedFuelG` (the fuel it lets burn) and `lambda`; here it adds its own gas to the
+ *   trapped pressure and the mass to heat, and the heat of its breakdown to the burn
  * @returns {CycleInput & {residualFrac: number, trappedK: number, effectiveCr: number}}
  */
 export function cycleInputsFor({
-  rpm, mapKpa, empKpa, intakeK, airChargeG, burnedFuelG, fuelMassG, lambda, fuel, derived, cam,
+  rpm, mapKpa, empKpa, intakeK, airChargeG, burnedFuelG, fuelMassG, lambda, fuel, derived, cam, n2oG = 0,
 }) {
   const fuelIn = fuelMassG ?? burnedFuelG;
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
@@ -572,14 +576,17 @@ export function cycleInputsFor({
   // ignition delay goes as pressure to the -1.7 power, that alone made boosted engines
   // far more knock-prone than they are. Pressure comes from the fresh charge; the mixed
   // temperature below is what the thermal history and the end gas run on.
-  const trappedPa = ((airChargeG / 1000) * R_AIR * cooledK) / vIvc;
+  // Nitrous vapour is gas in the cylinder too, at its own gas constant (R / 44 g/mol).
+  const trappedPa = n2oG > 0
+    ? (((airChargeG / 1000) * R_AIR + (n2oG / 1000) * N2O.gasConstant) * cooledK) / vIvc
+    : ((airChargeG / 1000) * R_AIR * cooledK) / vIvc;
 
   // Everything in the cylinder that has heat capacity: fresh air, the residual it mixed
   // with, AND the fuel vapour. Counting the fuel matters — it is why a rich mixture burns
   // cooler even though it releases the same heat. Past stoichiometric the extra fuel
   // finds no oxygen, so it adds mass to warm without adding energy, and flame temperature
   // falls. Leave it out and over-fuelling looks thermally free.
-  const totalMassKg = ((airChargeG + fuelIn) / 1000) / Math.max(0.05, 1 - residualFrac);
+  const totalMassKg = ((airChargeG + fuelIn + n2oG) / 1000) / Math.max(0.05, 1 - residualFrac);
 
   return {
     rpm,
@@ -589,7 +596,11 @@ export function cycleInputsFor({
     strokeM: derived.stroke / 1000,
     trappedMassKg: totalMassKg,
     trappedK,
-    heatJ: (burnedFuelG / 1000) * fuel.lhv * COEFF.COMBUSTION_COMPLETENESS,
+    // Nitrous coming apart (2 N₂O → 2 N₂ + O₂) releases heat of its own on top of the
+    // fuel its oxygen burns.
+    heatJ: n2oG > 0
+      ? ((burnedFuelG / 1000) * fuel.lhv + (n2oG / 1000) * N2O.decompJPerKg) * COEFF.COMBUSTION_COMPLETENESS
+      : (burnedFuelG / 1000) * fuel.lhv * COEFF.COMBUSTION_COMPLETENESS,
     clearanceM3,
     sweptM3,
     rodRatio: COEFF.ROD_RATIO,

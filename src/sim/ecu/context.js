@@ -81,12 +81,24 @@ export function ecuHardwareOf(build) {
  * A warm engine on the dyno.
  * @param {{ambientC?: number, altitudeM?: number}} [env]
  * @param {Record<string, string>} [faults]
+ * @param {{armed?: boolean, heater?: boolean, bottleK?: number}|null} [nitrous] a nitrous
+ *   kit's arming switch and bottle, when one is fitted
  * @returns {import('./strategy.js').EcuConditions}
  */
-export function dynoConditions(env, faults = {}) {
+export function dynoConditions(env, faults = {}, nitrous = null) {
+  const e = envFrom(env);
   return {
-    env: envFrom(env), ectC: 90, oilC: 100, volts: 13.5, gear: DYNO_GEAR,
+    env: e, ectC: 90, oilC: 100, volts: 13.5, gear: DYNO_GEAR,
     faults, pumpHealth: faults.pump === 'weak' ? E.WEAK_PUMP_HEALTH : 1, oilHealth: faults.oil === 'low' ? E.LOW_OIL_HEALTH : 1,
+    // A nitrous kit's bottle at the start of the pull: at the heater's set point when one
+    // is on, otherwise at the temperature of the day.
+    ...(nitrous ? {
+      nitrous: {
+        armed: nitrous.armed !== false,
+        setK: E.N2O_HEATER_SET_K,
+        bottleK: nitrous.bottleK ?? (nitrous.heater ? E.N2O_HEATER_SET_K : e.ambientK),
+      },
+    } : {}),
   };
 }
 

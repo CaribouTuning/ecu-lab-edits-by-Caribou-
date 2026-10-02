@@ -23,7 +23,7 @@
 import React, { useMemo, useEffect, useRef, useCallback, useDeferredValue } from 'react';
 import {
   Grid3x3, Zap, Droplets, Activity, Play,
-  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind,
+  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind, Flame,
 } from 'lucide-react';
 
 import {
@@ -31,12 +31,12 @@ import {
   DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
-  R_AIR, RPM, TURBINE_OPTS, acousticDrive, calibrationAdvice, chargeTempK, clamp,
+  R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp2, isLocatable, presetById,
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, interp2, isLocatable, presetById,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
-  veTruthByPhaseFor, read1,
+  veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
 import {
   beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -52,15 +52,17 @@ import { StoreProvider, useBuild, useSession, useTune } from './state/StoreProvi
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { pullSignature, measuredInputs } from './state/pullSignature.js';
+import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
+import { Toggle } from './primitives/Toggle.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { eventBands } from './components/eventBands.js';
+import { tuneAttention } from './components/fixLinks.js';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
@@ -95,7 +97,7 @@ const JOURNEY = [
     body: 'Open Engine Architecture and design a short block: bore, stroke, compression, cam, springs. Then fit parts under Induction and Exhaust. Nothing here is cosmetic — every choice changes how the engine breathes.',
     cta: 'Done building — go tune it', next: 'tune' },
   { tab: 'tune', title: 'Step 2 · Calibrate it',
-    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, accept the re-logged values. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now.',
+    body: 'Start with the three tables. AIR is how well the engine breathes: after a build change, run a pull and correct it from the log. SPARK sets ignition timing and FUEL sets the mixture; the advisories say what your hardware will tolerate. The second row of pages (BOOST, VVT, IDLE, PROTECT, TORQUE) is already set up at factory, so leave it for now. A NITROUS page joins them once a nitrous kit is fitted.',
     cta: 'Calibration set — start the engine', next: 'live' },
   { tab: 'live', title: 'Step 3 · Start it and listen',
     body: 'Press START. Watch it idle, hold the throttle to rev it, and watch the sensors and fuel trims respond in real time. This is your calibration actually running.',
@@ -173,7 +175,7 @@ const TUTORIAL_STEPS = [
   { title: 'This is an air pump',
     body: 'An engine can only burn as much fuel as it has air for. So everything starts with air. The ECU works out the air, decides how much fuel to add, and picks the moment to light it.\n\nTuning is getting those last two decisions right at every speed and load.\n\n→ You will do that on three tables. The rest of this tutorial shows you which, and how to check your work.' },
   { title: 'Air: how full the cylinder gets',
-    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIRFLOW table should match what the engine really breathes. After a hardware change, accept the re-logged values.' },
+    body: 'The ECU works out the air in each cylinder from pressure and temperature:\n\n    air in cylinder = VE × cylinder volume × MAP ÷ (R × T)\n\nVE, volumetric efficiency, is how completely the cylinder fills. It belongs to the hardware. Writing a bigger number in the table does not add air. It only makes the ECU fuel for air that is not there.\n\n→ The AIRFLOW table should match what the engine really breathes. Nobody can see that directly: after a hardware change, log a pull and TUNE › AIRFLOW works out the correction for each cell from the wideband, showing the maths.' },
   { title: 'Fuel: follows from the air',
     body: 'Once the air is known, fuel is arithmetic:\n\n    fuel = air ÷ (λ × 14.7 for gasoline)\n\nλ (lambda) is the mixture you ask for on the FUEL table. 1.00 is exactly enough air to burn the fuel. About 0.87 makes the most power, and a boosted engine runs richer, about 0.83, to keep the charge and the turbo cool.\n\nThe injectors can only be open so long: past about 90% duty there is no time left, and no table can fix that.\n\n→ Set the FUEL table. If the log says the injectors are maxed, you need bigger injectors or less boost.' },
   { title: 'Spark: when to light it',
@@ -316,7 +318,7 @@ export function EcuLabApp() {
   const {
     engineConfig, mods, turboOn, boostCurve, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
-    presetId,
+    presetId, blowerRatio, nitrous,
   } = build;
   // `presetPrompt` and `boostSel` are read from the store directly by EngineScreen
   // and InductionScreen now — neither is a shell-level derivation, so there is
@@ -437,13 +439,21 @@ export function EcuLabApp() {
     [turbineIdx, turbineCount],
   );
 
+  // A supercharger, if one is fitted instead of a turbo, and what it will make across the
+  // rev range at full throttle on this engine — the header, the injector-duty preview
+  // and the Engineer Score all need its boost before a pull is run.
+  const blower = useMemo(() => blowerOf(build), [build]);
+  const blowerWot = useMemo(() => (blower ? blowerCurve(build, fuel) : []), [blower, build, fuel]);
+  const blowerPeakPsi = blowerWot.length ? Math.max(...blowerWot.map((p) => p.boostPsi)) : 0;
+
   const hwForVe = useMemo(() => ({
     turboOn,
     turbine: turboOn ? turbine : null,
     exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     fuel,
     peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve]);
+    supercharged: !!blower,
+  }), [turboOn, turbine, exhaustDiaIdx, fuel, boostCurve, blower]);
 
   // TRUE cylinder filling for the hardware as currently built. The player's `ve` table
   // is only the ECU's BELIEF about this; the gap between the two is what makes the
@@ -460,14 +470,16 @@ export function EcuLabApp() {
     ...ecuHardwareOf(build),
     veTruthByPhase: veTruthByPhaseFor(engineConfig, mods, hwForVe),
   }), [build, engineConfig, mods, hwForVe]);
+  // The nitrous arming switch is the cockpit's, shared by the dyno and LIVE; the bottle
+  // starts at the heater's set point, or the day's temperature without one.
+  const nitrousArmed = liveAux.nitrous !== false;
   const ecuBundle = useMemo(
-    () => ({ cal: tune.ecu, hw: ecuHw, cond: dynoConditions(env, faults) }),
-    [tune.ecu, ecuHw, env, faults],
+    () => ({
+      cal: tune.ecu, hw: nitrous ? { ...ecuHw, nitrous } : ecuHw,
+      cond: dynoConditions(env, faults, nitrous ? { armed: nitrousArmed, heater: !!nitrous.heater } : null),
+    }),
+    [tune.ecu, ecuHw, env, faults, nitrous, nitrousArmed],
   );
-
-  // `recalcVE` moved into AirflowScreen — its one caller — where it dispatches off this
-  // same `veTruth`, passed down as a prop since it also feeds `calAdvice` below and
-  // the dyno payload.
 
   /**
    * Takes on a career job: resets the car to stock, then applies that customer's fault.
@@ -504,8 +516,9 @@ export function EcuLabApp() {
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu: ecuBundle,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressorIdx, ecuBundle]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressorIdx, ecuBundle, blower, blowerRatio, nitrous]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
@@ -522,7 +535,8 @@ export function EcuLabApp() {
   // Same real-units chain the sim uses, evaluated at WOT / 6500 RPM as a preview.
   const dutyPreview = useMemo(() => {
     const rpm = 6500;
-    const boostPsi = turboOn ? boostCurve[RPM.indexOf(6500)] : 0;
+    const boostPsi = turboOn ? boostCurve[RPM.indexOf(6500)]
+      : blowerWot.length ? interp1(blowerWot.map((p) => p.rpm), blowerWot.map((p) => p.boostPsi), rpm) : 0;
     const mapKpa = BARO_KPA + boostPsi * PSI_TO_KPA;
     const chargeK = chargeTempK(boostPsi, mods.intercooler);
     const vCylM3 = (engineDerived.displacementL / engineDerived.cyl) / 1000;
@@ -532,7 +546,7 @@ export function EcuLabApp() {
     const fuelMassG = airChargeG / (lambda * fuel.stoich);
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
-  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived]);
+  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
   // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
   // this same `dutyPreview`, which stays here because the score breakdown and dyno
   // payload below also read it.
@@ -682,6 +696,7 @@ export function EcuLabApp() {
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor: COMPRESSOR_OPTS[compressorIdx], ecu,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
   const doRun = () => {
@@ -696,8 +711,8 @@ export function EcuLabApp() {
     const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
-      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0,
-      turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
+      engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
+      supercharged: !!blower, turbine, compressor: COMPRESSOR_OPTS[compressorIdx],
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
@@ -903,6 +918,7 @@ export function EcuLabApp() {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
     compressor: COMPRESSOR_OPTS[compressorIdx], exhaustDiaError,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
     ecu: { ...ecuBundle, aux: liveAux },
@@ -1159,8 +1175,13 @@ export function EcuLabApp() {
       // pressure. The renderer does not need to know what a rev limiter is.
       fuelCut: cut,
     });
+    // A supercharger's whine: its lobes, or its impeller's blades, passing the outlet — a
+    // pitch locked to the crank through the belt, where a turbo's whistle floats with the
+    // exhaust. It takes the turbo's voice, which a supercharged engine has no other use for.
     const frame = {
-      drive,
+      drive: blower
+        ? { ...drive, whistleHz: Math.min(9000, (blowerSpeedRpm(blower, rpm, blowerRatio) / 60) * blower.whineOrder) }
+        : drive,
       // The exhaust system as tubes, for the exhaust's response. Everything the player can change
       // about the hardware arrives here: cylinder count and layout set the firing order
       // and how many primaries meet at each collector, displacement sets their length and
@@ -1211,6 +1232,7 @@ export function EcuLabApp() {
       converterOnRef.current = slip > 0;
     }
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
+      blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressorIdx,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
@@ -1259,7 +1281,37 @@ export function EcuLabApp() {
     { id: 'idle', label: 'IDLE', icon: Timer, row: 1 },
     { id: 'protect', label: 'PROTECT', icon: ShieldAlert, row: 1 },
     { id: 'torque', label: 'TORQUE', icon: Crosshair, row: 1 },
+    // Its own row, and only with a kit fitted — the way real ECU software shows its
+    // nitrous tables once nitrous is enabled.
+    { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
   ];
+  // The VE table corrected from what was logged: the last pull while it still matches
+  // the tune on screen, and the LIVE datalog. Only worked out while AIRFLOW is open.
+  const veLogOpen = tab === 'tune' && tuneView === 'airflow';
+  const pullFresh = !!result && !!pullScores && pullScores.signature === buildSignature;
+  const veLogPull = useMemo(() => (veLogOpen && pullFresh ? veSamplesFromPull(result.points) : []), [veLogOpen, pullFresh, result]);
+  const liveLog = live?.ecu?.log;
+  const veLogLive = useMemo(() => (veLogOpen ? veSamplesFromLive(liveLog, ve) : []), [veLogOpen, liveLog, ve]);
+  // Why the last pull is, or is not, in the numbers — a log only describes the tune it
+  // was taken on, and a part-throttle pull is closed loop, where the trims set the mixture.
+  /** @type {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} */
+  const pullInfo = !veLogOpen || !result ? { state: 'none' }
+    : !pullFresh ? { state: 'stale', changed: runs?.[0]?.inputs ? diffMeasuredInputs(runs[0].inputs, measuredInputs(build, tune, loadKpa)) : [] }
+      : result.points.every((p) => !p.openLoop) ? { state: 'part-load' }
+        : veLogPull.length === 0 ? { state: 'unused' } : { state: 'ok' };
+  const veLog = veLogOpen ? {
+    pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend', pullInfo,
+    onApply: (share) => {
+      const { ratio } = veCorrections([...veLogPull, ...veLogLive]);
+      dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: applyVeCorrections(ve, ratio, share), label: `VE from logs (${share === 1 ? 'all' : 'half'})` });
+      // The long-term trim had been covering the error just moved into the table.
+      dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, trimResets: (liveAux.trimResets ?? 0) + 1 } });
+    },
+  } : null;
+  const TUNE_GROUPS = ['BASE TABLES & HARDWARE', 'ENGINE MANAGEMENT', 'POWER ADDER'];
+  // Which TUNE pages the last pull's log points at — only while that pull still
+  // describes the setup on screen, so a fixed problem does not keep its flag.
+  const attention = result && !scoresStale && !running ? tuneAttention(result.events) : {};
   // The operating point the table editors mark, while the LIVE engine is running.
   const liveEcu = live?.ecu;
   const liveRow = liveEcu?.log?.[liveEcu.log.length - 1];
@@ -1391,26 +1443,50 @@ export function EcuLabApp() {
           // touch the hand-maintained breakpoint list in tokens.css.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
             <MapSlots />
-            {/* Two rows: the base tables, then the ECU's control strategies. Five to a
-                row at 60px basis so each row stays one row on a phone. */}
-            {[0, 1].map((rowIdx) => (
-              <div key={rowIdx} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
-                  const on = tuneView === v.id;
-                  const Icon = v.icon;
-                  return (
-                    <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }} style={{
-                      flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
-                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
-                      color: on ? T.accInk : T.ink2,
-                    }}>
-                      <Icon size={15} />{v.label}
-                    </button>
-                  );
-                })}
+            {/* Grouped rows, each named for what its pages are: the base tables and the
+                parts they are scaled for, the ECU's control strategies, and a power
+                adder's own controller. Five to a row at 60px basis so each row stays one
+                row on a phone. A number on a page is how many of the last pull's log
+                entries send you there — shown only while that pull still describes this
+                setup. */}
+            {(nitrous ? [0, 1, 2] : [0, 1]).map((rowIdx) => (
+              <div key={rowIdx}>
+                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.ink3, margin: '4px 0 5px' }}>
+                  {TUNE_GROUPS[rowIdx]}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {TUNE_VIEWS.filter((v) => v.row === rowIdx).map((v) => {
+                    const on = tuneView === v.id;
+                    const Icon = v.icon;
+                    const flagged = attention[v.id] ?? 0;
+                    return (
+                      <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }}
+                        aria-label={flagged ? `${v.label}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}
+                        style={{
+                          position: 'relative', flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
+                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
+                          color: on ? T.accInk : T.ink2,
+                        }}>
+                        <Icon size={15} />{v.label}
+                        {flagged > 0 && (
+                          <span aria-hidden="true" style={{
+                            position: 'absolute', top: 3, right: 4, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 8,
+                            background: T.warnBg, border: `1px solid ${T.warn}`, color: T.warnInk,
+                            fontSize: 9, fontFamily: T.mono, lineHeight: '13px', textAlign: 'center',
+                          }}>{flagged}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ))}
+            {Object.keys(attention).length > 0 && (
+              <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 2 }}>
+                Numbered pages are where the last pull&apos;s log sends you — DYNO › PULL LOG has the details.
+              </div>
+            )}
           </div>
         )}
 
@@ -1422,7 +1498,7 @@ export function EcuLabApp() {
         )}
 
         {tab === 'tune' && tuneView === 'airflow' && (
-          <AirflowScreen veAdvice={veAdvice} veTruth={veTruth}>
+          <AirflowScreen veLog={veLog}>
             <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} />
           </AirflowScreen>
         )}
@@ -1455,9 +1531,9 @@ export function EcuLabApp() {
           </SensorsScreen>
         )}
 
-        {tab === 'tune' && ['boost', 'vvt', 'idle', 'protect', 'torque'].includes(tuneView) && (() => {
+        {tab === 'tune' && ['boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'].includes(tuneView) && (() => {
           const v = TUNE_VIEWS.find((x) => x.id === tuneView);
-          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management' };
+          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management', nitrous: 'Nitrous control' };
           return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
         })()}
 
@@ -1497,6 +1573,12 @@ export function EcuLabApp() {
             <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
               ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
             </div>
+            {nitrous && (
+              <div style={{ marginTop: 10 }}>
+                <Toggle label="Spray nitrous on this pull" sub={`${nitrous.shotHp} shot ${nitrous.kit} kit, inside the window on TUNE › NITROUS — the same arming switch as LIVE`}
+                  checked={nitrousArmed} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })} />
+              </div>
+            )}
 
             <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 
