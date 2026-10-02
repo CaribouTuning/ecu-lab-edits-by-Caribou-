@@ -268,7 +268,7 @@ describe('every screen the app sends a player to exists', () => {
   // source rather than from messages that happen to fire, so a rare event is covered too.
   const VIEWS = {
     BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST'],
-    TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE'],
+    TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
   };
   const files = [];
   const walk = (dir) => {

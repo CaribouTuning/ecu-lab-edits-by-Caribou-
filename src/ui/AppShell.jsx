@@ -49,7 +49,7 @@ import {
 import React, { useMemo } from 'react';
 
 import {
-  INJECTOR_OPTS, FUEL_CHOICES, deriveEngine, presetById,
+  INJECTOR_OPTS, FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, presetById, tankFuel,
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
@@ -234,7 +234,15 @@ export function StatusStrip({ onTutorial, onRepair }) {
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   // Peak of the curve, not the value at any one RPM: this is "how much boost is this
   // build asking for", which is a single number a strip can hold.
-  const peakBoost = turboOn ? Math.max(...boostCurve) : 0;
+  // A supercharger's boost is its own physics, not a curve anyone set: the peak it makes
+  // at full throttle on this engine.
+  const blower = blowerOf(build);
+  const blowerPeak = React.useMemo(
+    () => (blower ? Math.max(...blowerCurve(build, tankFuel(build)).map((p) => p.boostPsi)) : 0),
+    [blower, build],
+  );
+  const peakBoost = turboOn ? Math.max(...boostCurve) : blowerPeak;
+  const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'N/A';
 
   return (
     <div className={styles.strip}>
@@ -256,9 +264,9 @@ export function StatusStrip({ onTutorial, onRepair }) {
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
-          {engineName} · {turboOn ? 'Turbo' : 'N/A'} · {fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
+          {engineName} · {induction}{build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · {fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
         </div>
-        <StripField label="BOOST" value={turboOn ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
+        <StripField label="BOOST" value={turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
         <HealthField pct={overallHealth} />
         <StripField label="LAST PULL" value={result ? `${Math.round(result.peakHp)} whp` : '—'} />
         <EngineRunLight />
