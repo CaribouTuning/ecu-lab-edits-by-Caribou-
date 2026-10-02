@@ -529,11 +529,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 30-field
-  // contract this action documents: a stray write grows the changed set past 30, a
-  // dropped write shrinks it below 30, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 32-field
+  // contract this action documents: a stray write grows the changed set past 32, a
+  // dropped write shrinks it below 32, and the failure message names the field either
   // way.
-  it('changes exactly the 30 documented fields, plus the two history fields', () => {
+  it('changes exactly the 32 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -546,6 +546,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       // The factory car's ECU-side parts, which its factory calibration is set up for.
       'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
       'build.plugGapMm', 'build.ethanolPct',
+      // A factory car: no supercharger or nitrous carried over from the previous build.
+      'build.blowerId', 'build.nitrous',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
       // A new engine's ROM: every map slot back to the factory calibration.
       'tune.maps', 'tune.activeMap',

@@ -589,6 +589,9 @@ function baseReducer(state, action) {
           ecuInjectorCc: p.ecuInjectorCc,
           octaneIdx: p.octaneIdx,
           exhaustDiaIdx: p.exhaustDiaIdx,
+          // A preset is a factory car: no supercharger or nitrous carried over from the last build.
+          blowerId: null,
+          nitrous: null,
           // A preset's AFR table already bakes in a correction for the MAF error its
           // mod set implies (factoryCalibration, src/sim/presets.js) — valid only at
           // the neutral scalar, so loading a preset must pin this back to 1.0.
@@ -919,7 +922,7 @@ function labelFor(action) {
       // the table. Throwing here names both.
       if (!label) throw new Error(`labelFor: no label defined for table "${action.table}"`);
       // A bulk edit names itself ("VE edit · smooth · 20 cells"); an edit that doesn't
-      // — ACCEPT RE-LOGGED VALUES, a test's bare dispatch — keeps the table's name.
+      // — a test's bare dispatch — keeps the table's name.
       return action.label ? `${label} · ${action.label}` : label;
     }
     case ACTIONS.APPLY_PRESET: {
