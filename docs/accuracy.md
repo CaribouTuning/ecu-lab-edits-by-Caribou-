@@ -313,6 +313,19 @@ and kit makers — practitioner rules, the weakest sources here).
   already was. The advice now stays within what the field can move, and when the base VE
   table is more than 8% off what the engine really fills, it sends the player to
   TUNE → AIRFLOW instead of hiding a base-tune error in the nitrous fuel.
+- **The pull log's fixes read like a tuner's notes, in a tuner's order.** Every entry
+  now names the screen and the table, uses the terms tuning software uses (timing, load
+  rows, AFR target, injector flow rate, boost target, knock threshold) and gives a
+  number to set. The log lists its entries setup → fuel → spark → boost → nitrous →
+  hardware, the order a calibration is worked in, because the knock limit and best
+  timing move with the mixture. Wrong advice it gave is gone: "lower VE" to fit the
+  injectors (that leans the engine), boost "on BUILD" in one entry and "on TUNE →
+  BOOST" in another (the base target is BUILD › Induction's curve), a 2.5-bar MAP
+  sensor for an engine making 376 kPa, the VE table blamed for a rich mixture the
+  injector scaling caused, and nitrous retard sized off false-knock retard.
+- **Lean protection reported the wrong reading.** It quoted the wideband after the
+  protection had pulled boost, so the log said "λ 0.96" against a λ 1.02 limit. It now
+  reports the reading that tripped it.
 - **Oxygen from nitrous now speeds the flame's start.** See approximation 14. The story
   nitrous job's reference fix needs 10° of retard while spraying where it needed 8.
 

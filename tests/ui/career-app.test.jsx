@@ -76,7 +76,9 @@ describe('CAREER in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: /JOB/ }));
     fireEvent.click(screen.getByRole('button', { name: 'HAND BACK THE CAR' }));
     expect(window.location.hash).toBe('#/shop');
-    await screen.findByText(/JOB DONE/);
+    // Grading runs a full dyno pull on the real simulator; under a loaded test run that
+    // can take longer than findByText's default second.
+    await screen.findByText(/JOB DONE/, {}, { timeout: 10000 });
     expect(money()).not.toContain('$1,000');
     expect(screen.getByTestId('shop-rep').textContent).not.toMatch(/^REP0/);
 
@@ -85,8 +87,10 @@ describe('CAREER in the app', () => {
       const saved = /** @type {any} */ (await loadShop());
       expect(saved?.history?.[0]?.verdict).toBe('pass');
       expect(saved.lifts).toEqual([]);
-    }, { timeout: 2000 });
-  });
+    }, { timeout: 10000 });
+    // The hand-back grades the car with a full dyno pull on the real simulator, so this
+    // test runs near five seconds alone and longer under a loaded suite.
+  }, 30000);
 
   it('never lets one mode see the other’s car, and keeps both across the switch', async () => {
     render(<EcuLab />);
