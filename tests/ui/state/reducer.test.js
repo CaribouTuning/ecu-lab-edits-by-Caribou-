@@ -10,9 +10,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  clone2D, COMPRESSOR_OPTS, computeHardwareVE, DEFAULT_AFR, DEFAULT_BOOST,
-  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, deriveEngine, INJECTOR_OPTS,
-  OCTANE_OPTS,
+  clone2D, COIL_OPTS, COMPRESSOR_OPTS, computeHardwareVE, DEFAULT_AFR, DEFAULT_BOOST,
+  DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, DEFAULT_TIMING, deriveEngine, ecuHardwareOf, INJECTOR_OPTS,
+  OCTANE_OPTS, setupMismatches,
 } from '../../../src/sim/index.js';
 import { applyPreset, ENGINE_PRESETS } from '../../../src/sim/presets.js';
 import {
@@ -512,19 +512,42 @@ describe('APPLY_PRESET', () => {
     const s = reducer(dragged, { type: ACTIONS.APPLY_PRESET, preset });
     expect(s.build.mafScalar).toBe(1.0);
   });
+
+  it('fits the factory car\'s ECU-side parts, so its factory calibration matches them', () => {
+    // A preset's ECU is set up for the stock sensors, rail and wastegate. Keeping the
+    // last car's 1-bar MAP and returnless rail under it ran a "stock" preset lean
+    // under boost, with a mismatch warning on a car the player had not touched.
+    const real = applyPreset(ENGINE_PRESETS.find((p) => p.induction.turboOn));
+    const modified = { ...makeInitialState() };
+    modified.build = {
+      ...modified.build,
+      fuelSystem: { regulator: 'returnless', basePressureKpa: 400, pumpIdx: 3 },
+      sensorHw: { ...modified.build.sensorHw, map: '1bar', flex: true },
+      wastegate: { type: 'spring', springPsi: 4 },
+      coil: COIL_OPTS[COIL_OPTS.length - 1].id,
+      plugGapMm: 1.4,
+      ethanolPct: 60,
+    };
+    const s = reducer(modified, { type: ACTIONS.APPLY_PRESET, preset: real });
+    const stock = makeInitialState().build;
+    for (const k of ['fuelSystem', 'sensorHw', 'wastegate', 'coil', 'plugGapMm', 'ethanolPct']) {
+      expect(s.build[k], k).toEqual(stock[k]);
+    }
+    expect(setupMismatches(ecuHardwareOf(s.build), s.tune.ecu)).toEqual([]);
+  });
 });
 
 describe('APPLY_PRESET — exact write surface (catches drift in both directions)', () => {
-  // Round 1 found 14/21 fields deletable with the suite green; round 2's hardcoded
+  // Round 1 found 14/22 fields deletable with the suite green; round 2's hardcoded
   // `boostSel: 3` sailed through the table-driven fix at 65/65. Both survived because
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 21-field
-  // contract this action documents: a stray write grows the changed set past 21, a
-  // dropped write shrinks it below 21, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 32-field
+  // contract this action documents: a stray write grows the changed set past 32, a
+  // dropped write shrinks it below 32, and the failure message names the field either
   // way.
-  it('changes exactly the 25 documented fields, plus the two history fields', () => {
+  it('changes exactly the 32 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -534,11 +557,17 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.turbineIdx', 'build.turbineCount', 'build.compressorIdx', 'build.injIdx',
       'build.ecuInjectorCc', 'build.octaneIdx', 'build.exhaustDiaIdx', 'build.mafScalar',
       'build.presetId', 'build.presetPrompt',
+      // The factory car's ECU-side parts, which its factory calibration is set up for.
+      'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
+      'build.plugGapMm', 'build.ethanolPct',
       // A factory car: no supercharger or nitrous carried over from the previous build.
       'build.blowerId', 'build.nitrous',
       'tune.ve', 'tune.timing', 'tune.afr', 'tune.tablesDirty', 'tune.selection',
       // A new engine's ROM: every map slot back to the factory calibration.
       'tune.maps', 'tune.activeMap',
+      // baseline (issue 106): APPLY_PRESET takes the preset's own tables as the
+      // CHANGES view's comparison point, in the same pass as the tables themselves.
+      'tune.baseline',
       'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
@@ -1597,14 +1626,16 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 19 build and 7 tune fields', () => {
+  it('snapshots exactly the documented 19 build and 8 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc', 'engineConfig', 'ethanolPct',
       'exhaustDiaIdx', 'fuelSystem', 'injIdx', 'mafScalar', 'mods', 'octaneIdx', 'plugGapMm',
       'presetId', 'sensorHw', 'turbineCount', 'turbineIdx', 'turboOn', 'wastegate',
     ]);
-    expect(Object.keys(snap.tune).sort()).toEqual(['activeMap', 'afr', 'ecu', 'maps', 'tablesDirty', 'timing', 've']);
+    expect(Object.keys(snap.tune).sort()).toEqual([
+      'activeMap', 'afr', 'baseline', 'ecu', 'maps', 'tablesDirty', 'timing', 've',
+    ]);
   });
 
   // Every field below is seeded to a value that differs from BOTH its
@@ -1625,6 +1656,7 @@ describe('snapshot field coverage', () => {
     const beforeVe = [[55]];
     const beforeTiming = [[33]];
     const beforeAfr = [[7]];
+    const beforeBaseline = { ve: [[1]], timing: [[2]], afr: [[3]] };
 
     const start = { ...makeInitialState() };
     start.build = {
@@ -1649,6 +1681,7 @@ describe('snapshot field coverage', () => {
       timing: beforeTiming,
       afr: beforeAfr,
       tablesDirty: true,
+      baseline: beforeBaseline,
     };
 
     const applied = reducer(start, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
@@ -1661,6 +1694,7 @@ describe('snapshot field coverage', () => {
     expect(applied.build.exhaustDiaIdx).toBe(2);
     expect(applied.build.mafScalar).toBe(1.0);
     expect(applied.tune.tablesDirty).toBe(false);
+    expect(applied.tune.baseline).toEqual({ ve: [[80]], timing: [[20]], afr: [[12]] });
 
     const undone = reducer(applied, { type: ACTIONS.UNDO });
 
@@ -1681,6 +1715,7 @@ describe('snapshot field coverage', () => {
     expect(undone.tune.timing).toBe(beforeTiming);
     expect(undone.tune.afr).toBe(beforeAfr);
     expect(undone.tune.tablesDirty).toBe(true);
+    expect(undone.tune.baseline).toBe(beforeBaseline);
   });
 });
 
@@ -1796,6 +1831,21 @@ describe('CAREER and SANDBOX share the bench, never the car', () => {
     expect(back.career).toBe(career);
   });
 
+  it('keeps SANDBOX’s run log through a visit to the shop, and no undo crosses cars', () => {
+    // The player's banked pulls are saved history: the shop must never empty them, and
+    // an undo on the customer's car must not put SANDBOX's tables onto it.
+    let s = sandboxCar();
+    s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: s.tune.timing.map((r) => r.map((v) => v + 2)) });
+    const runs = /** @type {any} */ ([{ id: 'r2', n: 2 }, { id: 'r1', n: 1 }]);
+    s = { ...s, session: { ...s.session, runs, pinnedRunId: 'r1' } };
+    expect(s.history.past.length).toBeGreaterThan(0);
+    const inCareer = reducer(s, { type: ACTIONS.ENTER_CAREER, career: newCareer() });
+    expect(inCareer.history).toEqual({ past: [], future: [] });
+    const back = reducer(inCareer, { type: ACTIONS.ENTER_SANDBOX });
+    expect(back.session.runs).toBe(runs);
+    expect(back.session.pinnedRunId).toBe('r1');
+  });
+
   it('sends SANDBOX’s saved stats to SANDBOX even when they load after CAREER has the bench', () => {
     const inCareer = reducer(sandboxCar(), { type: ACTIONS.ENTER_CAREER, career: newCareer() });
     const restored = reducer(inCareer, {
@@ -1806,5 +1856,52 @@ describe('CAREER and SANDBOX share the bench, never the car', () => {
     const back = reducer(restored, { type: ACTIONS.ENTER_SANDBOX });
     expect(back.session.pullCount).toBe(47);
     expect(back.session.bestScore).toBe(5000);
+  });
+});
+
+describe('tune.baseline (#106)', () => {
+  it('starts as the tables themselves', () => {
+    const s = makeInitialState();
+    expect(s.tune.baseline.ve).toBe(s.tune.ve);
+    expect(s.tune.baseline.timing).toBe(s.tune.timing);
+    expect(s.tune.baseline.afr).toBe(s.tune.afr);
+  });
+
+  it('APPLY_PRESET takes the preset tables as the baseline', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    expect(s.tune.baseline).toEqual({ ve: [[80]], timing: [[20]], afr: [[12]] });
+  });
+
+  it('RESET_TO_STOCK takes the reset tables as the baseline', () => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.RESET_TO_STOCK, ve: [[70]] });
+    expect(s.tune.baseline.ve).toEqual([[70]]);
+    expect(s.tune.baseline.timing).toBe(s.tune.timing);
+    expect(s.tune.baseline.afr).toBe(s.tune.afr);
+  });
+
+  it('a table edit leaves it alone', () => {
+    const s0 = makeInitialState();
+    const s = reducer(s0, { type: ACTIONS.SET_TABLE, table: 'timing', value: [[1]] });
+    expect(s.tune.baseline).toBe(s0.tune.baseline);
+  });
+
+  it('undoing a preset load puts the previous baseline back', () => {
+    const s0 = makeInitialState();
+    const loaded = reducer(s0, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
+    const undone = reducer(loaded, { type: ACTIONS.UNDO });
+    expect(undone.tune.baseline).toBe(s0.tune.baseline);
+  });
+});
+
+describe('tune.diffView (#106)', () => {
+  it('starts off and is not undoable work', () => {
+    const s0 = makeInitialState();
+    expect(s0.tune.diffView).toBe(false);
+    const edited = reducer(s0, { type: ACTIONS.SET_TABLE, table: 've', value: [[1]] });
+    const undone = reducer(edited, { type: ACTIONS.UNDO });
+    const toggled = reducer(undone, { type: ACTIONS.SET_TUNE_FIELD, field: 'diffView', value: true });
+    expect(toggled.tune.diffView).toBe(true);
+    expect(toggled.history.past).toHaveLength(0);
+    expect(toggled.history.future).toHaveLength(1);
   });
 });

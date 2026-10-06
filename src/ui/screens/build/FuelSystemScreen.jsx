@@ -79,6 +79,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       <SetupNote paths={['injector.pressureComp']} />
       <div className={styles.labelSpaced}>Base Fuel Pressure</div>
       <Seg label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
+      <SetupNote paths={['injector.refPressureKpa']} />
       <ExpandableInfo title="Pump, regulator and why pressure is fuel">
         An injector is a calibrated hole: it passes fuel as the <b className={styles.em}>square root of the pressure across it</b>. Its flow rating is only true at the pressure it was measured at — 3 bar, 43.5 psi.
         <br /><br />A <b className={styles.em}>return-style</b> regulator references the intake manifold, so rail pressure rises one-for-one with boost and the pressure across the injector never changes. A <b className={styles.em}>returnless</b> rail is held a fixed amount above atmosphere, so at 20 psi of boost a 43 psi rail has only 23 psi left to push with — the injector flows about a quarter less, unless the ECU compensates (TUNE › INJECTORS).

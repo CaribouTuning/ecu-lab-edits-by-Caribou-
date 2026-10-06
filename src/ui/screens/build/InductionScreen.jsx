@@ -12,9 +12,9 @@ import { Wind } from 'lucide-react';
 import React from 'react';
 
 import {
-  BLOWER_OPTS, COMPRESSOR_OPTS, DEFAULT_ECU_HW, KELVIN_OFFSET, LINEAR_SCALES, MOD_INFO, RPM, TURBINE_OPTS,
-  WASTEGATE_OPTS, blowerCurve, blowerOf, bottlePressurePsi, clamp, compressorWithCount, deriveEngine, envFrom,
-  starterRatio, tankFuel, turboAirflowNeedKgS,
+  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES, MOD_INFO, RPM,
+  TURBINE_OPTS, WASTEGATE_OPTS, blowerCurve, blowerOf, bottlePressurePsi, clamp, compressorWithCount, deriveEngine,
+  envFrom, starterRatio, tankFuel, turboAirflowNeedKgS,
 } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
@@ -78,8 +78,8 @@ export function InductionScreen({ active, onToggle }) {
   // day's without. The jets are sized for about 950 psi.
   const setNitrous = (patch) => set('nitrous', patch === null ? null : { kit: 'wet', shotHp: 100, heater: true, bottleLb: 10, ...(nitrous ?? {}), ...patch });
   const dayK = envFrom(session.env).ambientK;
-  const bottlePsi = Math.round(bottlePressurePsi(nitrous?.heater ? (85 - 32) * 5 / 9 + 273.15 : dayK));
-  const jetShare = Math.round(Math.sqrt(Math.max(0, bottlePsi) / 950) * 100);
+  const bottlePsi = Math.round(bottlePressurePsi(nitrous?.heater ? ECU_COEFF.N2O_HEATER_SET_K : dayK));
+  const jetShare = Math.round(Math.sqrt(Math.max(0, bottlePsi) / COEFF.N2O_REF_BOTTLE_PSI) * 100);
 
   // Every boost-curve write goes through here. Rebuilding from the RPM axis makes it
   // structurally impossible for the curve to be the wrong length or to contain a

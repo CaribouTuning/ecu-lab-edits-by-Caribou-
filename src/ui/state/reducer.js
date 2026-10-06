@@ -30,7 +30,7 @@ import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, ECU_META, li
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
-import { makeInitialState } from './initialState.js';
+import { makeInitialState, stockEcuParts } from './initialState.js';
 import { pushRun, RUN_LIMIT } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -187,7 +187,7 @@ export const ACTIONS = Object.freeze({
  *   turbineIdx: number, turbineCount: number, compressorIdx: number, injIdx: number,
  *   ecuInjectorCc: number, octaneIdx: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
- *   ecu?: object,
+ *   ecu?: object, mafScalar?: number,
  * }}} ApplyPresetAction
  */
 
@@ -407,6 +407,15 @@ export const ACTIONS = Object.freeze({
  */
 
 /**
+ * The running calibration as a map-slot entry.
+ * @param {TuneState} t
+ * @returns {import('./initialState.js').MapSlot}
+ */
+function mapOf(t) {
+  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu };
+}
+
+/**
  * Every case except UNDO/REDO. Wrapped by `reducer` below, which adds the undo stack
  * on top and is what callers actually use — see that function's own doc for what the
  * wrapper does and why it stays pure too.
@@ -444,14 +453,6 @@ export const ACTIONS = Object.freeze({
  * @param {StoreAction} action
  * @returns {StoreState}
  */
-/**
- * The running calibration as a map-slot entry.
- * @param {TuneState} t
- */
-function mapOf(t) {
-  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu };
-}
-
 function baseReducer(state, action) {
   switch (action.type) {
     case ACTIONS.SET_BUILD_FIELD:
@@ -591,6 +592,9 @@ function baseReducer(state, action) {
           // A factory car's MAF calibration cancels its own intake and turbo plumbing
           // (factoryCalibration, src/sim/presets.js), so a preset brings its scalar.
           mafScalar: p.mafScalar ?? 1.0,
+          // The factory car's fuel system, sensors, wastegate and coil: its calibration
+          // (`p.ecu`) is set up for those parts, not for whatever the last car had.
+          ...stockEcuParts(),
           presetId: p.presetId,
           presetPrompt: null,
         },
@@ -603,6 +607,8 @@ function baseReducer(state, action) {
           // A new engine's ROM: every map slot starts as the factory calibration.
           maps: [null, null, null, null],
           activeMap: 0,
+          // What the CHANGES view compares against from here on (issue 106).
+          baseline: { ve: p.ve, timing: p.timing, afr: p.afr },
           // Fresh factory calibration is not unsaved player work.
           tablesDirty: false,
           selection: null,
@@ -619,7 +625,9 @@ function baseReducer(state, action) {
       };
     }
 
-    case ACTIONS.RESET_TO_STOCK:
+    case ACTIONS.RESET_TO_STOCK: {
+      const timing = clone2D(DEFAULT_TIMING);
+      const afr = clone2D(DEFAULT_AFR);
       return {
         ...state,
         build: {
@@ -631,14 +639,16 @@ function baseReducer(state, action) {
         tune: {
           ...state.tune,
           ve: action.ve,
-          timing: clone2D(DEFAULT_TIMING),
-          afr: clone2D(DEFAULT_AFR),
+          timing,
+          afr,
           ...(action.ecu ? { ecu: action.ecu } : {}),
+          baseline: { ve: action.ve, timing, afr },
           // A reset baseline is not unsaved player work — no "last call" needed to
           // pin this false, it is simply false in this same pass.
           tablesDirty: false,
         },
       };
+    }
 
     case ACTIONS.ENTER_CAREER: {
       if (state.session.mode === 'career') return { ...state, career: action.career };
@@ -797,21 +807,22 @@ function baseReducer(state, action) {
 }
 
 /**
- * The three actions that destroy calibration the player cannot otherwise get back,
- * each mapped to HOW MUCH of its snapshot an undo puts back (history.js).
+ * The actions that destroy calibration the player cannot otherwise get back, each
+ * mapped to HOW MUCH of its snapshot an undo puts back (history.js).
  *
  * Hardware writes are deliberately absent: every hardware control already displays its
  * own current value, so it is self-reversing, and undo must not become a time machine
  * over banked career progress.
  *
  * The scope is per-action because the snapshot is not: `snapshot()` captures the union
- * of every field ANY of these three can write, so replaying an entry in full would put
- * back fields the recorded action never touched. `SET_TABLE`'s entire build-side write
- * is `presetId`, so RESTORE_CALIBRATION is exactly its write surface; the other two
+ * of every field ANY of these can write, so replaying an entry in full would put back
+ * fields the recorded action never touched. `SET_TABLE`'s and `SET_ECU`'s entire
+ * build-side write is `presetId`, and the map-slot actions write none, so
+ * RESTORE_CALIBRATION is exactly their write surface; APPLY_PRESET and RESET_TO_STOCK
  * replace the whole build, so RESTORE_ALL is exactly theirs.
  *
  * A map rather than a Set plus a lookup elsewhere: `UNDOABLE` is derived from its keys
- * below, so a fourth undoable action cannot be added to the membership list without
+ * below, so another undoable action cannot be added to the membership list without
  * also declaring what its undo restores.
  */
 const UNDO_SCOPE = Object.freeze({
@@ -844,14 +855,16 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  *  - SET_SESSION_FIELD, BANK_PULL, REPAIR_ENGINE write `session` only, which no
  *    snapshot carries and no restore touches.
  *  - SET_BOOST_SEL, SET_PRESET_PROMPT, SET_TUNE_FIELD are cursors and UI state:
- *    `boostSel`, `presetPrompt` and `selection` are all deliberately outside the
- *    snapshot (see history.js). SET_TUNE_FIELD is the generic tune setter, but its
- *    only callers pass `selection` — and one of them is the tab switch, so counting
- *    it as new work would mean walking from TUNE to BUILD silently killed the redo
- *    a player crossed tabs to reach.
+ *    `boostSel`, `presetPrompt`, `selection`, `rangeMode` (issue 105) and `diffView`
+ *    (issue 106) are all deliberately outside the snapshot (see history.js).
+ *    SET_TUNE_FIELD is the generic tune setter, and its callers write `selection`,
+ *    `rangeMode` and `diffView` — cursors and UI state, not calibration — so counting
+ *    any of those writes as new work would mean walking from TUNE to BUILD, flipping
+ *    the range mode, or toggling the overlay silently killed the redo a player crossed
+ *    tabs to reach.
  *  - UNDO/REDO manage `future` themselves.
  *
- * The three UNDOABLE actions are listed here too, for one list that answers "is this
+ * The UNDOABLE actions are listed here too, for one list that answers "is this
  * new work?" — they reach `future: []` through the recording branch below rather than
  * through this Set, and listing them keeps the two from disagreeing on paper.
  */
@@ -860,13 +873,14 @@ const UNDOABLE = new Set(Object.keys(UNDO_SCOPE));
  * redo branch?
  *
  * `SET_TUNE_FIELD` needs the extra question because it is the one action whose write
- * surface depends on its payload rather than its type. Its five production callers all
- * pass `field: 'selection'` — a cursor, outside the snapshot, and written by `changeTab`
- * on every tab switch, so treating it as new work would mean walking from TUNE to BUILD
- * killed the redo the player crossed tabs to reach. But nothing in the type stops a
- * caller passing `'ve'`, and that write WOULD be overwritten by a redo. Asking the
- * snapshot's own key list makes the exclusion structural instead of an observation about
- * today's callers.
+ * surface depends on its payload rather than its type. Its production callers pass
+ * `field: 'selection'` (written by `changeTab` on every tab switch), `'rangeMode'`
+ * (issue 105) or `'diffView'` (issue 106) — cursors and UI state, all outside the
+ * snapshot, so treating any of those writes as new work would mean walking from TUNE to
+ * BUILD, or flipping one of those UI toggles, killed the redo the player crossed tabs to
+ * reach. But nothing in the type stops a caller passing `'ve'`, and that write WOULD be
+ * overwritten by a redo. Asking the snapshot's own key list makes the exclusion
+ * structural instead of an observation about today's callers.
  * @param {any} action
  * @returns {boolean}
  */
@@ -921,10 +935,10 @@ function labelFor(action) {
       return `ECU · ${meta ? meta.label : action.path}`;
     }
     default:
-      // UNDOABLE lists exactly three action types, and `reducer` below only ever
+      // Every UNDOABLE action type has a case above, and `reducer` below only ever
       // calls `labelFor` for an action already confirmed to be in that set — so this
       // branch is unreachable BY CONSTRUCTION today. It throws instead of quietly
-      // returning 'Reset to stock' so that if a fourth action is ever added to
+      // returning 'Reset to stock' so that if another action is ever added to
       // UNDOABLE without a matching case here, it fails loudly at the call site
       // instead of mislabelling every undo button for that action "Reset to stock".
       throw new Error(`labelFor: no label defined for undoable action type "${action.type}"`);
@@ -985,9 +999,9 @@ function onTheBay(state, career) {
 /**
  * The store's reducer: `baseReducer` plus the undo stack.
  *
- * Recording is a WRAPPER rather than a line inside each undoable case, so the three
- * existing cases stay exactly as they were and a fourth undoable action is one entry in
- * `UNDOABLE` rather than a fourth place to remember. It stays a pure function of
+ * Recording is a WRAPPER rather than a line inside each undoable case, so the existing
+ * cases stay exactly as they were and another undoable action is one entry in
+ * `UNDO_SCOPE` rather than another place to remember. It stays a pure function of
  * `(state, action)` — no clock, no coalescing keys, no merge logic. The dock's slider
  * commits once on release instead (see SelectionDock.jsx), which is what keeps a drag
  * from becoming eighteen undo steps without any of that machinery.

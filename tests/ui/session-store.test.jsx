@@ -337,6 +337,24 @@ describe('running a dyno pull', () => {
       expect(screen.queryByText(/still blocking audio/)).toBeNull();
     });
 
+    it('keeps the audio context awake while the engine runs on LIVE', async () => {
+      // The gate that decides whether anything is sounding named the tab LIVE used to
+      // live on, so a running engine on LIVE counted as silence. A first START still
+      // happened to sound, because nothing had put the graph to sleep yet — but the
+      // TEST beep schedules a sleep for when it ends, and with nothing "sounding" that
+      // sleep suspended the context under a running engine.
+      launchOnLive();
+      fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+      const [ctx] = audio.contexts;
+      expect(ctx).toBeTruthy();
+      await waitFor(() => expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy(), { timeout: 5000 });
+      fireEvent.click(screen.getByRole('button', { name: 'TEST' }));
+      // Past the beep and the sleep delay after it (0.45 s + 0.5 s).
+      await new Promise((resolve) => { setTimeout(resolve, 1400); });
+      expect(ctx.suspends).toBe(0);
+      expect(ctx.state).toBe('running');
+    });
+
     it('suspends the audio context once nothing is sounding', async () => {
       // The exhaust model is sample-rate JavaScript. Left running, a stopped engine
       // costs a noticeable share of a core for the life of the page.
@@ -682,3 +700,4 @@ describe('the engine-sound toggle', () => {
     expect(toggle().textContent).toBe('♪');
   });
 });
+

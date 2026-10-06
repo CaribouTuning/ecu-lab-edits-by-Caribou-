@@ -16,7 +16,7 @@ import { FIELD_TIPS, PAGE_GUIDES, tipFor } from '../../src/ui/components/ecu/gui
 import { SetupNote } from '../../src/ui/components/ecu/SetupNote.jsx';
 import { InductionScreen } from '../../src/ui/screens/build/InductionScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { StoreProvider, useBuild } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useHistory } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
 
@@ -29,6 +29,22 @@ function FitWideband({ id }) {
     <button type="button" onClick={() => dispatch({
       type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...S.ecuHardwareOf(build).sensorHw, wideband: id },
     })}>fit-wideband</button>
+  );
+}
+
+/** How many steps the undo stack holds. */
+function UndoDepth() {
+  const [history] = useHistory();
+  return <span data-testid="undo-depth">{history.past.length}</span>;
+}
+
+/** Rebuilds the engine with another cylinder layout, the way BUILD › ENGINE does. */
+function SetConfig({ value }) {
+  const [, dispatch] = useBuild();
+  return (
+    <button type="button" onClick={() => dispatch({
+      type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { configuration: value },
+    })}>rebuild-{value}</button>
   );
 }
 
@@ -72,6 +88,15 @@ describe('setupMismatches', () => {
     expect(paths(hw(), S.setCal(cal, 'injector.pressureComp', 'sensor'))).toEqual([]);
   });
 
+  it('flags a rail pressure the ECU does not assume, unless a sensor measures it', () => {
+    const raised = hw({ fuelSystem: { ...S.DEFAULT_ECU_HW.fuelSystem, basePressureKpa: 400 } });
+    const [m] = S.setupMismatches(raised, cal);
+    expect(m.path).toBe('injector.refPressureKpa');
+    expect(m.fix.value).toBe(400);
+    expect(S.setupMismatches(raised, S.setCal(cal, m.path, m.fix.value))).toEqual([]);
+    expect(paths(raised, S.setCal(cal, 'injector.pressureComp', 'sensor'))).toEqual([]);
+  });
+
   it('knows a flex tank needs its sensor, and the sensor needs switching on', () => {
     const flex = S.ecuHardwareOf({ octaneIdx: 4, ethanolPct: 40 });
     expect(S.setupMismatches(flex, cal)[0].fix).toBeNull();
@@ -110,6 +135,27 @@ describe('the page guide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Increase A/C idle-up' }));
     expect(screen.getByText(/1 setting changed from factory/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Factory/ }));
+    expect(screen.getByText(/All factory settings/)).toBeTruthy();
+  });
+
+  it('records nothing for a press that changes nothing', () => {
+    // A stepper at its limit, or the segment already chosen, is not an edit: it must not
+    // leave an empty undo step behind.
+    mount(<><UndoDepth /><EcuSection section="idle" title="Idle" /></>);
+    const meta = S.ECU_META.find((m) => m.path === 'idle.acRpmAdd');
+    const presses = Math.round((S.getCal(S.defaultEcuCalibration({}), meta.path) - meta.min) / meta.step);
+    const down = screen.getByRole('button', { name: 'Decrease A/C idle-up' });
+    for (let i = 0; i < presses; i++) fireEvent.click(down);
+    expect(screen.getByTestId('undo-depth').textContent).toBe(String(presses));
+    fireEvent.click(down);
+    expect(screen.getByTestId('undo-depth').textContent).toBe(String(presses));
+  });
+
+  it('shows one trim per cylinder of the engine as built now, and calls a rebuild no edit', () => {
+    mount(<><SetConfig value="V8" /><EcuSection section="fuel" title="Fuel" /></>);
+    expect(screen.getAllByRole('textbox', { name: 'Cylinder fuel trim' })).toHaveLength(6);
+    fireEvent.click(screen.getByText('rebuild-V8'));
+    expect(screen.getAllByRole('textbox', { name: 'Cylinder fuel trim' })).toHaveLength(8);
     expect(screen.getByText(/All factory settings/)).toBeTruthy();
   });
 

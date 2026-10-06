@@ -194,12 +194,8 @@ export function evaluatePoint({
   const ecuFuel = E?.ecuFuel ?? fuel;
   // Nitrous fuel the ECU adds or takes out on top (a dry kit's, a tuner's correction).
   // Taking out can only go so far: the injectors still meter for the air.
-  const fuelMassG = E?.extraFuelG
-    ? Math.max(
-      0.2 * (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich),
-      (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich) + E.extraFuelG,
-    )
-    : (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich);
+  const meteredFuelG = (airChargeBelievedG * (E?.fuelMult ?? 1)) / (lambdaCommanded * ecuFuel.stoich);
+  const fuelMassG = E?.extraFuelG ? Math.max(0.2 * meteredFuelG, meteredFuelG + E.extraFuelG) : meteredFuelG;
 
   // --- INJECTOR: the ECU computes pulse width for the injector size it has been TOLD
   // it has. Fit bigger injectors without rescaling and every pulse delivers
@@ -403,9 +399,6 @@ export function evaluatePoint({
     knock: knockPull > 0, knockPull, fuelLimited, leanRisk, richRisk, valveRisk,
     egtRisk, pressureRisk, mafFlag, compressorOver, injMismatch,
     ...ecuFields,
-    // A supercharger's own readings, only when one is fitted so every other record is
-    // unchanged: rotor or impeller speed, the power the crank spends on it, and how
-    // efficiently it is compressing.
     // Nitrous, only while it flows: what the jets are passing, what cooled the charge,
     // and the bottle behind them.
     ...(n2o ? {
@@ -416,6 +409,9 @@ export function evaluatePoint({
       // Share of the shot the controller is passing (a progressive ramp's, or all of it).
       nitrousPct: Math.round((nitrous.frac ?? 1) * 1000) / 10,
     } : {}),
+    // A supercharger's own readings, only when one is fitted so every other record is
+    // unchanged: rotor or impeller speed, the power the crank spends on it, and how
+    // efficiently it is compressing.
     ...(blower ? {
       blowerRpm: Math.round(blower.blowerRpm),
       blowerHp: Number((blower.driveW / 745.7).toFixed(1)),

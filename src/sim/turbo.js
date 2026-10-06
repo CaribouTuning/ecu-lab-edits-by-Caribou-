@@ -27,7 +27,7 @@
  * choke line, not a measured field. No variable geometry, no compressor heat soak.
  */
 
-import { BARO_KPA, GAMMA_EXP, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA, GAMMA_EXP, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 import { solveBlower } from './blower.js';
@@ -141,21 +141,17 @@ export function solveInduction({
   const target = turboOn
     ? Math.max(0, boostTargetPsi) * (targetIsFinal ? 1 : Math.pow(throttleFrac, 2)) : 0;
 
-  const airFlowAt = (mapKpa, boostPsi) => {
-    const chargeK = intakeKAt(boostPsi);
+  /** Air the engine swallows at a manifold pressure and charge temperature, kg/s. */
+  const airFlowAtK = (mapKpa, chargeK) => {
     const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
-    const densityKgM3 = (mapKpa * 1000) / (287 * chargeK);
+    const densityKgM3 = (mapKpa * 1000) / (R_AIR * chargeK);
     const perCycleKg = (veAt(mapKpa) / 100) * sweptM3 * densityKgM3;
     return perCycleKg * derived.cyl * (rpm / 2) / 60;
   };
+  const airFlowAt = (mapKpa, boostPsi) => airFlowAtK(mapKpa, intakeKAt(boostPsi));
 
   // A supercharger: its boost is its own physics, not a balance with a turbine.
   if (blower && !turboOn) {
-    const airFlowAtK = (mapKpa, chargeK) => {
-      const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
-      const densityKgM3 = (mapKpa * 1000) / (287 * chargeK);
-      return (veAt(mapKpa) / 100) * sweptM3 * densityKgM3 * derived.cyl * (rpm / 2) / 60;
-    };
     const chargeKFor = (b, eta) => (intakeKAtEff ? intakeKAtEff(b, eta) : intakeKAt(b));
     const sc = solveBlower({
       blower, driveRatio: blowerRatio, rpm, throttleFrac, throttledKpa, baroKpa,

@@ -139,16 +139,18 @@ export function liveStepEcu(st, dt, input, cfg) {
     veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [cfg.veTruth ?? cfg.ve],
   };
   const redline = derived.redline ?? 7500;
-  // A nitrous bottle, carried between steps. A full one — at the heater's set point or the
-  // day's temperature — the first time the engine sees the kit, whenever the driver swaps
-  // in a fresh bottle, and when BUILD fits a different size.
   // Fuel trims reset from the tuning software — done after a VE correction takes the
   // error the long-term trim had learned into the table.
   const trimResets = aux.trimResets ?? 0;
   if ((s.trimResets ?? 0) !== trimResets) { s.stft = 0; s.ltft = 0; s.trimResets = trimResets; }
+  // A nitrous bottle, carried between steps. A full one — at the heater's set point or the
+  // day's temperature — the first time the engine sees the kit, whenever the driver swaps
+  // in a fresh bottle, and when BUILD fits a different size. Take the kit off and the
+  // bottle goes with it.
   const bottleLb = hw.nitrous?.bottleLb ?? 10;
   const fills = aux.bottleFills ?? 0;
-  if (hw.nitrous && (!s.bottle || s.bottle.fills !== fills || s.bottle.sizeLb !== bottleLb)) {
+  if (!hw.nitrous) delete s.bottle;
+  else if (!s.bottle || s.bottle.fills !== fills || s.bottle.sizeLb !== bottleLb) {
     s.bottle = {
       massKg: bottleLb * 0.45359237, tempK: hw.nitrous.heater ? E.N2O_HEATER_SET_K : env.ambientK,
       fills, sizeLb: bottleLb,

@@ -38,7 +38,7 @@ import { Panel } from '../../primitives/Panel.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
-import { useSession } from '../../state/StoreProvider.jsx';
+import { useSession, useTune } from '../../state/StoreProvider.jsx';
 
 import { DragStrip } from './DragStrip.jsx';
 
@@ -52,17 +52,23 @@ import styles from './DragScreen.module.css';
  * street tyres and the slip still reads 10.2 at 140 — a time this car cannot run. The
  * fix here is the same one the score panels use: keep the evidence, label it, and let
  * the player decide when to re-run. `peakHp` stands in for the engine, because a new
- * pull is the only thing that changes the torque curve this run was driven with.
+ * pull is the only thing that changes the torque curve this run was driven with. The
+ * engine management's launch strategy acts on the strip itself, so it is here too.
  *
  * @param {import('../../../sim/index.js').DragCar} car
  * @param {{peakHp: number}|null} result the dyno pull the run was driven from
+ * @param {{arc?: object, torque?: object, boost?: {gearLimit?: object}, limiter?: {speedLimitKph?: number}}|null} [ecu]
+ *   the calibration the run was driven with
  * @returns {string}
  */
-export function dragSignature(car, result) {
+export function dragSignature(car, result, ecu = null) {
   return [
     car.bodyIdx, car.gripIdx, car.driveIdx, car.boxIdx,
     car.gearCount, car.finalDrive, car.gears[0], car.tireDiameterIn,
     result ? result.peakHp : 'none',
+    // Two-step, flat-foot shifting, traction control, torque and boost limits by gear
+    // and the road-speed limiter: everything `simulateDragRun` reads off the calibration.
+    ecu ? JSON.stringify([ecu.arc, ecu.torque, ecu.boost?.gearLimit, ecu.limiter?.speedLimitKph]) : 'no-ecu',
   ].join('|');
 }
 
@@ -79,6 +85,7 @@ export function dragSignature(car, result) {
  */
 export function DragScreen({ section, onToggle, result, engineDerived, onRun }) {
   const [session, dispatch] = useSession();
+  const [tune] = useTune();
   const { car, dragResult, dragRunning, dragT, treePhase, dragSetup } = session;
 
   /** @param {Partial<import('../../../sim/index.js').DragCar>} patch */
@@ -92,7 +99,7 @@ export function DragScreen({ section, onToggle, result, engineDerived, onRun }) 
   const box = GEARBOX_OPTS[car.boxIdx];
   const topGear = car.gears[car.gearCount - 1];
   const firstMult = car.gears[0] * car.finalDrive;
-  const stale = !!dragResult && dragSetup !== dragSignature(car, result);
+  const stale = !!dragResult && dragSetup !== dragSignature(car, result, tune.ecu);
 
   return (
     <>

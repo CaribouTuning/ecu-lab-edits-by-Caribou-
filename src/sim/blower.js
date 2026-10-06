@@ -64,9 +64,28 @@ export function blowerSpeedRpm(blower, rpm, driveRatio) {
 }
 
 /**
+ * How efficient isochoric compression is next to an ideal compressor at a pressure ratio:
+ * the air is pushed into the manifold against its full pressure in one step rather than
+ * squeezed to it, which is what a Roots blower always does and a screw does past its
+ * built-in ratio. 1 at no boost, about 0.77 at PR 2, 0.65 at PR 3.
+ *
+ * @param {number} pr
+ * @returns {number}
+ */
+function isochoricEfficiency(pr) {
+  return pr > 1 ? (Math.pow(pr, GAMMA_EXP) - 1) / (GAMMA_EXP * (pr - 1)) : 1;
+}
+
+/**
  * Adiabatic efficiency of a positive-displacement blower: best near the pressure ratio it
- * was designed for, falling away either side, and lower at low rotor speed where the air
- * leaking back through the clearances is heated a second time.
+ * was designed for, and lower at low rotor speed where the air leaking back through the
+ * clearances is heated a second time.
+ *
+ * Below the design ratio it falls away as leakage and friction take a bigger share of
+ * less work. Above it, it follows isochoric compression down, which is gentle — a Roots
+ * blower at PR 3 is still about two-thirds as good as at PR 1.5. Falling any faster
+ * heats the charge so much that the engine swallows LESS air as boost rises, and then
+ * nothing balances the blower's delivery.
  *
  * @param {object} blower
  * @param {number} pr pressure ratio
@@ -75,8 +94,11 @@ export function blowerSpeedRpm(blower, rpm, driveRatio) {
  */
 export function displacementEfficiency(blower, pr, speedFrac) {
   const dPr = (pr - blower.prBest) / blower.prBest;
+  const prFactor = pr <= blower.prBest
+    ? 1 - COEFF.BLOWER_EFF_PR_FALLOFF * dPr * dPr
+    : isochoricEfficiency(pr) / isochoricEfficiency(blower.prBest);
   const dN = speedFrac - COEFF.BLOWER_BEST_SPEED_FRAC;
-  const eta = blower.etaPeak * (1 - COEFF.BLOWER_EFF_PR_FALLOFF * dPr * dPr) * (1 - COEFF.BLOWER_EFF_SPEED_FALLOFF * dN * dN);
+  const eta = blower.etaPeak * prFactor * (1 - COEFF.BLOWER_EFF_SPEED_FALLOFF * dN * dN);
   return clamp(eta, COEFF.BLOWER_EFF_FLOOR, blower.etaPeak);
 }
 

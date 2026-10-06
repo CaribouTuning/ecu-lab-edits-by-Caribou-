@@ -220,4 +220,19 @@ describe('diffMeasuredInputs', () => {
     expect(diffMeasuredInputs(measuredInputs(s.build, s.tune, 100), measuredInputs(other, s.tune, 100)))
       .not.toEqual([]);
   });
+
+  it('names a change of day or an injected fault, as the signature counts one', () => {
+    // The signature has counted the conditions since engine management; the run history
+    // must say so too, or a pull at altitude reads as "nothing changed" beside a
+    // different number.
+    const s = makeInitialState();
+    const sea = { env: s.session.env, faults: {} };
+    const high = { env: { ...s.session.env, altitudeM: 1600 }, faults: {} };
+    expect(pullSignature(s.build, s.tune, 100, sea)).not.toBe(pullSignature(s.build, s.tune, 100, high));
+    expect(diffMeasuredInputs(measuredInputs(s.build, s.tune, 100, sea), measuredInputs(s.build, s.tune, 100, high)))
+      .toEqual(['conditions']);
+    // A run saved before conditions were recorded is not a change either.
+    expect(diffMeasuredInputs(measuredInputs(s.build, s.tune, 100), measuredInputs(s.build, s.tune, 100, high)))
+      .toEqual([]);
+  });
 });

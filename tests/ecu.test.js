@@ -163,6 +163,17 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
     expect(Math.abs(comp.lambda - ret.lambda)).toBeLessThan(0.02);
   });
 
+  it('runs rich on a raised return-style rail until the ECU is told the pressure', () => {
+    // 400 kPa across a 300 kPa-rated injector flows √(4/3) ≈ 15% more. Without
+    // compensation the ECU still assumes a constant rail; it has to assume the right one.
+    const rail = { fuelSystem: { regulator: 'return', basePressureKpa: 400, pumpIdx: 0 } };
+    const stock = at(makeEngine().pull(), 4000);
+    const raised = at(makeEngine({ build: rail }).pull(), 4000);
+    const told = at(makeEngine({ build: rail, cal: { 'injector.refPressureKpa': 400 } }).pull(), 4000);
+    expect(raised.lambda).toBeLessThan(stock.lambda * 0.92);
+    expect(Math.abs(told.lambda - stock.lambda)).toBeLessThan(0.01);
+  });
+
   it('starves the rail when the pump is too small for the demand', () => {
     // The stock pump, and a tired one at that, against E85's fuel volume under boost.
     const eng = makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850, fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: 0 } }, faults: { pump: 'weak' } });

@@ -326,7 +326,9 @@ export const COEFF = {
   BLOWER_BYPASS_SHUT_FRAC: 0.97,
   // Positive-displacement efficiency map (modelling choice, shaped to the published
   // figures on each BLOWER_OPTS entry): best at 70% of rated speed and at the unit's
-  // design pressure ratio, falling away quadratically either side, never below 30%.
+  // design pressure ratio, falling away quadratically below it and as isochoric
+  // compression does above it (src/sim/blower.js), and quadratically either side of the
+  // best speed; never below 30%.
   BLOWER_BEST_SPEED_FRAC: 0.7,
   BLOWER_EFF_PR_FALLOFF: 0.9,
   BLOWER_EFF_SPEED_FALLOFF: 0.6,

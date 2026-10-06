@@ -693,7 +693,7 @@ export function EcuLabApp() {
         // is exactly what "Custom build" means everywhere else in this app.
         label: presetById(presetId)?.name ?? 'Custom build',
         result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
-        inputs: measuredInputs(build, tune, loadKpa),
+        inputs: measuredInputs(build, tune, loadKpa, { env, faults }),
       }),
     });
     const total = r.points.length;
@@ -814,7 +814,7 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragResult', value: res });
     // Recorded WITH the run, never re-derived afterwards: this is what lets the time
     // slip say the car has changed underneath it. Same rule as `pullScores.signature`.
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result) });
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result, tune.ecu) });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: 0 });
 
     // A sportsman tree: staged, then three ambers half a second apart, then green.
@@ -1158,7 +1158,7 @@ export function EcuLabApp() {
       drive: blower
         ? { ...drive, whistleHz: Math.min(9000, (blowerSpeedRpm(blower, rpm, blowerRatio) / 60) * blower.whineOrder) }
         : drive,
-      // The exhaust system, for the renderer. Everything the player can change
+      // The exhaust system as tubes, for the exhaust's response. Everything the player can change
       // about the hardware arrives here: cylinder count and layout set the firing order
       // and how many primaries meet at each collector, displacement sets their length and
       // bore, the pipe menu sets the tailpipe, and the gas temperature the cycle computed
@@ -1186,8 +1186,8 @@ export function EcuLabApp() {
       volume,
     };
 
-    // One call. The renderer schedules its firing events ahead of the audio clock, so
-    // nothing about the exhaust's timing depends on how often React gets around to this.
+    // One call. The pulse stream keeps its own crank and tops itself up between frames,
+    // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
     // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
@@ -1218,7 +1218,7 @@ export function EcuLabApp() {
   // is silenced at once and the audio context suspended a moment later, so a stopped
   // engine costs no DSP at all — see `setEngineAudioActive`.
   const sounding = soundOn && (
-    (tab === 'dash' && (live.running || live.cranking))
+    (tab === 'live' && (live.running || live.cranking))
     || (tab === 'dyno' && running)
     || (tab === 'drag' && (dragRunning || treePhase > 0)));
   useEffect(() => {

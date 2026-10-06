@@ -6,7 +6,9 @@
  * hardware the ECU reads — the engine itself is reported by the physics events.
  */
 
+import { COEFF } from '../coefficients.js';
 import { clamp, groupRuns, mergeNearbyRuns } from '../math.js';
+
 import { LINEAR_SCALES } from './sensors.js';
 
 /**
@@ -178,7 +180,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
     const sprayPts = points.filter(spraying);
     if (sprayPts.length) {
       const psi = sprayPts[0].bottlePsi;
-      const shotShare = Math.round(Math.sqrt(Math.max(0, psi) / 950) * 100);
+      const shotShare = Math.round(Math.sqrt(Math.max(0, psi) / COEFF.N2O_REF_BOTTLE_PSI) * 100);
       if (psi < 850) {
         events.push({
           type: 'bottle', severity: 1, impact: imp(8, sprayPts), ...span(sprayPts),

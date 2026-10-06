@@ -48,17 +48,19 @@ import styles from './AirflowScreen.module.css';
  */
 export function AirflowScreen({ children, veLog }) {
   const [tune, dispatch] = useTune();
-  const { ve, selection, rangeMode } = tune;
+  const { ve, selection, rangeMode, baseline, diffView } = tune;
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
-  /** @param {boolean} value */
   /**
    * One table write, one undo step — shared by the grid's +/- keys and the dock.
    * @param {number[][]} value
    * @param {string} [label]
    */
   const setTable = (value, label) => dispatch({ type: ACTIONS.SET_TABLE, table: 've', value, label });
+  /** @param {boolean} value */
   const setRangeMode = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'rangeMode', value });
+  /** @param {boolean} value */
+  const setDiffView = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'diffView', value });
   // A handful of `.some()`-free array reads, no allocation in the hot path —
   // plainly on every render, matching SparkScreen/FuelScreen.
   const samples = React.useMemo(() => (veLog ? [...veLog.pull, ...veLog.live] : []), [veLog]);
@@ -76,8 +78,8 @@ export function AirflowScreen({ children, veLog }) {
             <UndoControls />
           </div>
           <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data; drag or shift-click for a range.</div>
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} />
-          <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} />
+          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
+          <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} />
           {veLog && (
             <VeLogCorrection corr={corr} pullCount={veLog.pull.length} liveCount={veLog.live.length}
               pullInfo={veLog.pullInfo} mafPct={mafErrorPct(samples)} airModel={veLog.airModel} onApply={veLog.onApply} />
@@ -95,7 +97,7 @@ export function AirflowScreen({ children, veLog }) {
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={ve} setData={setTable} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" />
+      <SelectionDock data={ve} setData={setTable} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" baseline={baseline.ve} />
     </>
   );
 }
