@@ -58,6 +58,7 @@ import { COURSE } from './tutorial/books.js';
 import { MissionCoach } from './tutorial/MissionCoach.jsx';
 import { markOf } from './tutorial/missions.js';
 import { StoreProvider, useBuild, useCareer, useRoadTest, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
+import { EXTENSION_TABS } from './extensions.js';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
@@ -1754,6 +1755,10 @@ export function EcuLabApp() {
             />
           </div>
         )}
+        {/* Screens registered by an extension build (src/ui/extensions.js); none in the free app. */}
+        {!inCareer && EXTENSION_TABS.filter((t) => t.id === tab).map((t) => (
+          <div key={t.id} style={{ padding: 16 }}>{t.render({ section: route.section, navigate })}</div>
+        ))}
       </AppShell>
     </div>
   );

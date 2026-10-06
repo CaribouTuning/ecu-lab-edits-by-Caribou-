@@ -53,6 +53,7 @@ import {
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
+import { EXTENSION_TABS } from './extensions.js';
 import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
@@ -113,7 +114,7 @@ const CAREER_NAV_ITEMS = [
 function SideNavInner({ tab, onNavigate, career = false }) {
   return (
     <nav className={styles.nav} aria-label="Sections">
-      {(career ? CAREER_NAV_ITEMS : NAV_ITEMS).map(({ id, label, icon: Icon }) => (
+      {(career ? CAREER_NAV_ITEMS : [...NAV_ITEMS, ...EXTENSION_TABS]).map(({ id, label, icon: Icon }) => (
         <button
           key={id}
           type="button"
