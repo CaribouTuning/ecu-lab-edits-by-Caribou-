@@ -153,14 +153,3 @@ export async function saveShop(shop) {
     return false;
   }
 }
-
-/** Deletes the career shop's save: a new career. */
-export async function clearShop() {
-  try {
-    switch (storageBackend()) {
-      case 'artifact': await window.storage.set(SHOP_KEY, ''); break;
-      case 'local': localStorage.removeItem(SHOP_KEY); break;
-      default: memory.delete(SHOP_KEY);
-    }
-  } catch { /* nothing to clear */ }
-}
