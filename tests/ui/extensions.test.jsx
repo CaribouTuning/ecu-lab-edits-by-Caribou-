@@ -13,7 +13,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
-import { EXTENSION_TABS, registerTab } from '../../src/ui/extensions.js';
+import { EXTENSION_TABS, PRODUCT, registerTab, setProductName } from '../../src/ui/extensions.js';
 import { ROUTES, parseRoute } from '../../src/ui/routing.js';
 import { useBuild } from '../../src/ui/state/StoreProvider.jsx';
 
@@ -32,6 +32,7 @@ function ProbeScreen({ section }) {
 describe('extension tabs', () => {
   it('registers nothing in the free app', () => {
     expect(EXTENSION_TABS).toEqual([]);
+    expect(PRODUCT.name).toBe('ECU Lab');
     expect(Object.keys(ROUTES)).toEqual(['dash', 'build', 'tune', 'live', 'dyno', 'drag']);
   });
 
@@ -50,5 +51,13 @@ describe('extension tabs', () => {
     expect(screen.queryByTestId('probe')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'LAB' }));
     expect(screen.getByTestId('probe')).toBeTruthy();
+  });
+
+  it('lets an extension build rename the product in the status strip', () => {
+    setProductName('ECU Lab Pro');
+    window.location.hash = '#/tune/airflow';
+    render(<EcuLab />);
+    expect(screen.getByText('ECU Lab Pro')).toBeTruthy();
+    setProductName('ECU Lab');
   });
 });

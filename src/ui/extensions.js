@@ -23,6 +23,17 @@ import { ROUTES } from './routing.js';
  * @property {(ctx: {section: string|null, navigate: Function}) => React.ReactNode} render
  */
 
+/**
+ * The product name in the status strip. The free app is "ECU Lab"; an extension build
+ * renames itself here (before the app renders) rather than editing the shell.
+ */
+export const PRODUCT = { name: 'ECU Lab' };
+
+/** @param {string} name */
+export function setProductName(name) {
+  PRODUCT.name = name;
+}
+
 /** @type {ExtensionTab[]} */
 export const EXTENSION_TABS = [];
 

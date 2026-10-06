@@ -53,7 +53,7 @@ import {
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
-import { EXTENSION_TABS } from './extensions.js';
+import { EXTENSION_TABS, PRODUCT } from './extensions.js';
 import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
@@ -269,7 +269,7 @@ export function StatusStrip({ onTutorial, onRepair, onMenu }) {
             transplant of the header's larger type scale — see AppShell.module.css. */}
         <div className={styles.brand}>
           <span className={styles.brandMaker}>CARIBOU TUNING</span>
-          <span className={styles.brandProduct}>ECU Lab</span>
+          <span className={styles.brandProduct}>{PRODUCT.name}</span>
         </div>
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
