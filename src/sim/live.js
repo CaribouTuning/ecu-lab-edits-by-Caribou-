@@ -118,6 +118,26 @@ export function readSpeedAndAirflow(s, pt, dt, overlapDeg) {
 }
 
 /**
+ * The physics view's record of this step, kept on the live state only while the view is
+ * open (`cfg.traceCycle`): the cycle's pressure trace and starting conditions, and the
+ * crank balance the step integrated. Removed again when the view closes.
+ *
+ * @param {object} s live state being built, updated in place
+ * @param {any} trace the trace evaluatePoint filled this step, or null
+ * @param {number} crankNm combustion torque at the crank this step, N·m
+ * @param {number} dt seconds
+ * @param {object} prev the previous state
+ * @param {{cyl: number, displacementL: number}} derived the engine's geometry
+ */
+export function keepCycleTrace(s, trace, crankNm, dt, prev, derived) {
+  if (!trace) { if (s.physics) delete s.physics; return; }
+  s.physics = {
+    trace, inputs: trace.inputs ?? null, crankNm, dt, cyl: derived.cyl, displacementL: derived.displacementL,
+    rpmRate: dt > 0 ? (s.rpm - (prev.rpm ?? s.rpm)) / dt : 0,
+  };
+}
+
+/**
  * A fresh live-engine state: stopped, cold, untrimmed.
  * @returns {object}
  */
@@ -197,6 +217,8 @@ export function liveStep(st, dt, input, cfg) {
 
   // ---- combustion torque from the same physics the dyno uses ----
   let crankNm = 0, pt = null;
+  // The physics view's pressure trace: recorded only while that view is open.
+  const trace = cfg.traceCycle && (s.running || s.cranking) && s.rpm > 100 ? [] : null;
   if ((s.running || s.cranking) && s.rpm > 100) {
     const rpmClamped = clamp(s.rpm, 700, redline);
     // Throttle opening sets manifold pressure — but so does ENGINE SPEED. A nearly
@@ -258,6 +280,7 @@ export function liveStep(st, dt, input, cfg) {
       mafScalar: mafScalar * (1 + s.ltft / 100 + s.stft / 100),
       mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
       turbine: turboOn ? turbine : null, empKpa: man.empKpa,
+      trace,
     });
     // evaluatePoint already returns BRAKE torque — friction and pumping are subtracted
     // inside it — so we must not deduct them again here.
@@ -315,6 +338,7 @@ export function liveStep(st, dt, input, cfg) {
   s.sensedLambda = sensorRead(s.sensedLambda, pt && s.running && !s.fuelCut ? pt.lambda : 1.6, lag * 0.5, 0.008);
   s.sensedCoolant = sensorRead(s.sensedCoolant, s.coolantC, 0.08, 0.25);
   s.live = pt;
+  keepCycleTrace(s, trace, crankNm, dt, st, derived);
   s.effThrottle = effThrottle;
   s.closedLoop = closedLoop;
   return s;

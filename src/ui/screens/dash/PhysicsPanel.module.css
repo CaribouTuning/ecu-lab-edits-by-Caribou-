@@ -1,0 +1,127 @@
+/* LIVE's physics view. Charts and working lines; every colour from the tokens. */
+
+.opener {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-sm) var(--sp-md);
+  margin: 0 0 var(--sp-md);
+}
+
+.openerText {
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+}
+
+.panel {
+  margin-bottom: var(--sp-md);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-sm);
+}
+
+.headButtons {
+  display: flex;
+  gap: var(--sp-sm);
+}
+
+.note {
+  margin: var(--sp-sm) 0 var(--sp-md);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+.block {
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-md);
+  margin-top: var(--sp-md);
+}
+
+.blockTitle {
+  margin: 0 0 var(--sp-sm);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.step {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(0, 1fr) auto;
+  gap: var(--sp-sm) var(--sp-md);
+  align-items: baseline;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: var(--fs-sm);
+}
+
+.stepName {
+  color: var(--ink2);
+}
+
+.eq {
+  font-family: var(--mono);
+  color: var(--ink-soft);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.result {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .step { grid-template-columns: 1fr auto; }
+  .eq { grid-column: 1 / -1; grid-row: 2; }
+}
+
+.aside {
+  margin: var(--sp-sm) 0;
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  color: var(--ink2);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 4px 0 var(--sp-sm);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+}
+
+.good { color: var(--ok-ink); }
+.bad { color: var(--danger-ink); }
+
+.chart {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  margin: var(--sp-sm) 0;
+}
+
+.grid { stroke: var(--line); stroke-width: 1; }
+.tick { fill: var(--ink3); font: 11px var(--mono); }
+.axis { fill: var(--ink2); font: 12px var(--sans); }
+.marker { stroke: var(--line-hi); stroke-dasharray: 3 3; }
+.markerLabel { fill: var(--ink2); font: 11px var(--sans); }
+.limit { stroke: var(--danger); stroke-dasharray: 4 3; }
+
+.series { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.series[data-tone='acc'] { stroke: var(--acc); }
+.series[data-tone='violet'] { stroke: var(--violet); }
+.series[data-tone='cyan'] { stroke: var(--cyan); }

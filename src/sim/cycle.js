@@ -160,6 +160,19 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  *   leaves. Defaults to {@link EVO_ATDC}
  * @property {number} [exhaustManifoldPa] pressure the exhaust blows down into. Defaults
  *   to atmospheric, which is right for an open pipe and wrong ahead of a turbine
+ * @property {CycleTraceStep[]|null} [trace] when given, receives every integration step
+ *   (LIVE's physics view); recording changes nothing the cycle computes
+ */
+
+/**
+ * One integration step of the closed cycle, as recorded for LIVE's physics view.
+ * @typedef {object} CycleTraceStep
+ * @property {number} deg crank angle, degrees after TDC firing
+ * @property {number} bar cylinder pressure, bar
+ * @property {number} xb mass fraction burned, 0..1
+ * @property {number} tU unburned-zone temperature, K
+ * @property {number} tB burned-zone temperature, K
+ * @property {number} ki Livengood-Wu knock integral so far (1 = autoignition)
  */
 
 /**
@@ -185,7 +198,11 @@ export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
+  trace = null,
 }) {
+  // `trace`, when given an array, receives every integration step — crank angle, cylinder
+  // pressure, mass fraction burned, both zone temperatures and the knock integral so far —
+  // for the LIVE screen's physics view. Recording reads the state and changes nothing.
   const step = COEFF.CYCLE_STEP_DEG;
   const thetaStart = -180 + ivcAbdc;
   const spark = -sparkBtdc;
@@ -355,6 +372,7 @@ export function runCycle({
 
     if (pNext > peakPressurePa) { peakPressurePa = pNext; peakPressureDeg = thetaNext; }
     if (!crossed50 && burned >= 0.5) { mfb50Deg = thetaNext; crossed50 = true; }
+    if (trace) trace.push({ deg: thetaNext, bar: pNext / 1e5, xb: burned, tU, tB, ki: knockIntegral });
 
     p = pNext;
     v = vNext;

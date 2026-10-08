@@ -55,6 +55,10 @@ model say so, not because someone typed 250.
   wet and dry kits, and the controller's window, retard, ramp and lean cut
 - **A live engine** integrating real crankshaft dynamics at 20 Hz: it idles, revs,
   stalls, hits a rev limiter with hysteresis, and cuts fuel on overrun
+- **The physics, live** — a window on the LIVE screen that shows the simulator's own
+  working while the engine runs: the air and fuel arithmetic with this moment's numbers,
+  the cylinder pressure and burn traced degree by degree, the knock integral against its
+  limit, and the losses from indicated to brake torque
 - **Cam and valvetrain** — duration shifts the VE peak, overlap costs idle vacuum, and
   springs set the speed at which the valves stop following the lobe
 - **A quarter mile** — the measured torque curve goes into a car and runs the strip:

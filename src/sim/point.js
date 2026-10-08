@@ -61,6 +61,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  * @property {ReturnType<typeof import('./blower.js').solveBlower>} [blower] a supercharger's
  *   state at this point (src/sim/blower.js): its efficiency sets the charge heat and its
  *   drive power is charged to the crank
+ * @property {import('./cycle.js').CycleTraceStep[]|null} [trace] when given, receives the
+ *   cycle's pressure trace and, as `trace.inputs`, what it started from (LIVE's physics
+ *   view); recording changes nothing this point computes
  * @property {EcuPointContext} [ecu] what the engine management is actually doing at this
  *   point, resolved from its calibration by `src/sim/ecu/`. Absent, the ECU is the ideal
  *   one this function always modelled — it reads the true manifold pressure and charge
@@ -130,6 +133,7 @@ export function evaluatePoint({
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
   empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null,
+  trace = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
@@ -272,7 +276,17 @@ export function evaluatePoint({
   const knockPull = E?.knock ? ecuKnockRetard(margin, E.knock) : (margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0);
   const usedTiming = timingVal - knockPull;
 
-  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming });
+  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming, trace });
+  // For the LIVE screen's physics view: what the cycle started from. Only when a trace was
+  // asked for, so no other caller's result changes.
+  if (trace) {
+    /** @type {any} */ (trace).inputs = {
+      trappedBar: cyc.trappedPa / 1e5, trappedK: cyc.trappedK, heatJ: cyc.heatJ, burnDeg: cyc.burnDeg,
+      octane: cyc.octaneNumber, ivcAbdc: cyc.ivcAbdc, sparkBtdc: usedTiming,
+      flameDevDeg: COEFF.FLAME_DEVELOPMENT_DEG, trappedMassG: cyc.trappedMassKg * 1000,
+      clearanceCc: cyc.clearanceM3 * 1e6, sweptCc: cyc.sweptM3 * 1e6,
+    };
+  }
   const mbtIdeal = mbtFromBurn(cyc.burnDeg);
   // Events that did not burn: the ECU cutting them (limiter, protection, traction) and
   // the cylinder failing to light (a spark too weak for the pressure, or a mixture

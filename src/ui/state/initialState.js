@@ -154,6 +154,9 @@ import {
  * @property {number} volume engine-note output trim, 0..2, 1 being unity. A setting
  *   that sits beside `soundOn` rather than view state, because it survives navigation
  *   and is the same knob whichever screen the engine is heard on.
+ * @property {boolean} physicsOpen whether LIVE's physics view is open. Session state
+ *   because the live loop reads it: the engine records its cylinder pressure trace for
+ *   the view only while it is open (`traceCycle` in the live config).
  * @property {'settle'|'sweep'|'spooldown'|'rest'|null} dynoPhase which part of the pull
  *   SEQUENCE is playing, or null when no pull is running. A pull is not just a sweep:
  *   it settles at idle, loads and sweeps to redline, comes back down on engine braking
@@ -318,6 +321,7 @@ export function makeInitialState() {
       soundOn: true,
       audioStatus: null,
       volume: 1,
+      physicsOpen: false,
       dynoPhase: null,
       dynoRpm: 820,
       journeyStep: 0,

@@ -18,7 +18,7 @@
 
 import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from '../constants.js';
 import { COEFF } from '../coefficients.js';
-import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
+import { ENGINE_INERTIA, keepCycleTrace, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
 import { clamp, interp2 } from '../math.js';
 import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
@@ -301,6 +301,8 @@ export function liveStepEcu(st, dt, input, cfg) {
   let crankNm = 0;
   let pt = null;
   let log = null;
+  // The physics view's pressure trace: recorded only while that view is open.
+  const trace = cfg.traceCycle && (s.running || s.cranking) && s.rpm > 100 ? [] : null;
   if ((s.running || s.cranking) && s.rpm > 100) {
     const rpmC = clamp(s.rpm, 700, redline);
     const aFrac = effThrottle / 100;
@@ -451,7 +453,7 @@ export function liveStepEcu(st, dt, input, cfg) {
       },
       ...(steady.blower ? { blower: steady.blower } : {}),
     });
-    pt = evaluatePoint(/** @type {any} */ (res.input));
+    pt = evaluatePoint(/** @type {any} */ ({ ...res.input, trace }));
     e.egtK += (pt.egt + 273.15 - e.egtK) * clamp(dt / E.EGT_FILTER_S, 0, 1);
     // Cranking: the engine turns at a few hundred RPM, not the 700 the cycle is solved
     // at, so friction and pumping are the starter's to overcome; only the combustion
@@ -592,6 +594,7 @@ export function liveStepEcu(st, dt, input, cfg) {
   s.sensedLambda = e.sLambda;
   s.sensedCoolant = e.sEct;
   s.live = pt;
+  keepCycleTrace(s, trace, crankNm, dt, st, derived);
   s.effThrottle = effThrottle;
   // What this step sprayed leaves the bottle, and boils off part of what stays.
   if (s.bottle) {

@@ -346,7 +346,7 @@ export function EcuLabApp() {
     loadKpa, soundOn, volume, dynoPhase, dynoRpm, journeyStep, throttleInput, health,
     result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
     live, car, dragResult, dragRunning, dragT, treePhase,
-    mode, activeJob, completedJobs, jobResult, env, liveAux, faults,
+    mode, activeJob, completedJobs, jobResult, env, liveAux, faults, physicsOpen,
   } = session;
   // One `route.section` serves all four tabs, narrowed per tab so every call site below
   // keeps reading the name it always read — and so a later task can move a tab's markup
@@ -922,6 +922,8 @@ export function EcuLabApp() {
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
     ecu: { ...ecuBundle, aux: liveAux },
+    // LIVE's physics view is open: record the cylinder pressure trace it draws.
+    traceCycle: physicsOpen,
   };
   throttleRef.current = throttleInput;
 
