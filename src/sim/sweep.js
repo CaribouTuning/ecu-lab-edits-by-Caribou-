@@ -151,6 +151,7 @@ export function simulateSweep({
   let bottle = nc ? { massKg: (nitrous.bottleLb ?? 10) * 0.45359237, tempK: nc.bottleK } : null;
   const dtPerPoint = SWEEP_STEP_RPM / ECU_COEFF.DYNO_SWEEP_RPM_PER_S;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
+    /** @type {any} the recorder: an array that `evaluatePoint` also gives an `inputs` field */
     const trace = rpm === traceRpm ? [] : null;
     const keepTrace = (pt) => (trace ? { ...pt, physics: { trace, inputs: trace.inputs ?? null } } : pt);
     if (ecu) {

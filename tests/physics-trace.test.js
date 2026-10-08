@@ -105,7 +105,9 @@ describe('the dyno pull\'s physics view', () => {
   /** A pull's points without the recorded trace, to compare with a pull made without one. */
   const plainPoints = (r) => r.points.map(({ physics: _trace, ...p }) => p);
 
-  for (const [label, opts] of [['the ideal ECU', { legacy: true }], ['the ECU in the loop', {}]]) {
+  /** @type {[string, {legacy?: boolean}][]} */
+  const paths = [['the ideal ECU', { legacy: true }], ['the ECU in the loop', {}]];
+  for (const [label, opts] of paths) {
     for (const preset of ['vq35hr', 'b58-m1']) {
       it(`records one point and changes nothing: ${preset}, ${label}`, () => {
         const eng = makeEngine({ preset });
