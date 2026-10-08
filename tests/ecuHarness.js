@@ -67,10 +67,11 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
     /**
      * A dyno pull with the ECU in the loop (or without it, `legacy`).
      * @param {number} [loadKpa]
-     * @param {{legacy?: boolean, gear?: number}} [opts]
+     * @param {{legacy?: boolean, gear?: number, traceRpm?: number}} [opts]
      */
-    pull: (loadKpa = 100, { legacy = false, gear = undefined } = {}) => S.simulateSweep({
+    pull: (loadKpa = 100, { legacy = false, gear = undefined, traceRpm = undefined } = {}) => S.simulateSweep({
       ...sweepArgs(loadKpa),
+      ...(traceRpm ? { traceRpm } : {}),
       ...(legacy ? {} : { ecu: gear ? { ...ecu(), cond: { ...ecu().cond, gear } } : ecu() }),
     }),
     /** The live engine config, as EcuLab builds it. */

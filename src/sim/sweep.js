@@ -120,13 +120,17 @@ function tableRowsAt(mapKpa) {
  * `input.ecu`, when given, is `{cal, hw, cond}` — the calibration, the
  * `EcuHardware` and the `EcuConditions` of `src/sim/ecu/strategy.js`.
  *
+ * `input.traceRpm`, when given, records the cylinder pressure trace of the point at that
+ * engine speed on the point as `physics: {trace, inputs}` (DYNO's physics view). Every
+ * point, that one included, comes out exactly as it does without it.
+ *
  * @param {object} input
  * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean}}
  */
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null,
+  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, traceRpm = null,
 }) {
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
@@ -147,13 +151,15 @@ export function simulateSweep({
   let bottle = nc ? { massKg: (nitrous.bottleLb ?? 10) * 0.45359237, tempK: nc.bottleK } : null;
   const dtPerPoint = SWEEP_STEP_RPM / ECU_COEFF.DYNO_SWEEP_RPM_PER_S;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
+    const trace = rpm === traceRpm ? [] : null;
+    const keepTrace = (pt) => (trace ? { ...pt, physics: { trace, inputs: trace.inputs ?? null } } : pt);
     if (ecu) {
       // The limiter cuts before the pull gets there: those points are never reached.
       if (rpm >= hardCut) break;
       const cond = bottle
         ? { ...ecu.cond, nitrous: { ...nc, armed: nc.armed && bottle.massKg > 0, bottleK: bottle.tempK } }
         : ecu.cond;
-      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr }, rpm, loadKpa });
+      const pt = keepTrace(ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr }, rpm, loadKpa, trace }));
       points.push(pt);
       if (bottle && pt.nitrousLbMin > 0) {
         bottle = stepBottle(bottle, (pt.nitrousLbMin * 0.45359237 / 60) * dtPerPoint, dtPerPoint, {
@@ -182,13 +188,14 @@ export function simulateSweep({
     const veActualVal = veTruth ? interp2(veTruth, rpm, man.mapKpa) : undefined;
     const timingVal = interp2(timing, rpm, man.mapKpa);
     const afrCommanded = interp2(afr, rpm, man.mapKpa);
-    points.push(evaluatePoint({
+    points.push(keepTrace(evaluatePoint({
       rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
       veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
       mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
       turbine: turboOn ? turbine : null, empKpa: man.empKpa,
       ...(man.blower ? { blower: man.blower } : {}),
-    }));
+      trace,
+    })));
   }
 
   let pistonWear = 0, valveWear = 0;

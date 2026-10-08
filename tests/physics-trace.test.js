@@ -100,3 +100,31 @@ describe('the physics view trace', () => {
     }
   });
 });
+
+describe('the dyno pull\'s physics view', () => {
+  /** A pull's points without the recorded trace, to compare with a pull made without one. */
+  const plainPoints = (r) => r.points.map(({ physics: _trace, ...p }) => p);
+
+  for (const [label, opts] of [['the ideal ECU', { legacy: true }], ['the ECU in the loop', {}]]) {
+    for (const preset of ['vq35hr', 'b58-m1']) {
+      it(`records one point and changes nothing: ${preset}, ${label}`, () => {
+        const eng = makeEngine({ preset });
+        const plain = eng.pull(100, opts);
+        const rpm = plain.points[Math.floor(plain.points.length / 2)].rpm;
+        const traced = eng.pull(100, { ...opts, traceRpm: rpm });
+        expect(plainPoints(traced)).toEqual(plain.points);
+        expect(traced.peakHp).toBe(plain.peakHp);
+        const withTrace = traced.points.filter((p) => p.physics);
+        expect(withTrace.map((p) => p.rpm)).toEqual([rpm]);
+        const pt = withTrace[0];
+        const { trace, inputs } = pt.physics;
+        const peak = trace.reduce((a, t) => (t.bar > a.bar ? t : a), trace[0]);
+        expect(peak.bar).toBeCloseTo(pt.peakPressure, 1);
+        expect(peak.deg).toBeCloseTo(pt.peakPressureDeg, 1);
+        expect(trace.find((t) => t.xb >= 0.5).deg).toBeCloseTo(pt.mfb50, 1);
+        expect(trace[trace.length - 1].ki).toBeCloseTo(pt.knockIntegral, 3);
+        expect(inputs.sparkBtdc).toBeCloseTo(pt.timing, 1);
+      });
+    }
+  }
+});

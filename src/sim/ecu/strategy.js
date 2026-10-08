@@ -459,9 +459,12 @@ export function evaluateEcu(args) {
  * @param {{ve: number[][], timing: number[][], afr: number[][]}} input.tables
  * @param {number} input.rpm
  * @param {number} input.loadKpa the dyno's throttle, as sea-level kPa
+ * @param {any[]|null} [input.trace] when given, receives the settled point's cylinder
+ *   pressure trace (cylinder 1's when the calibration models each cylinder), for DYNO's
+ *   physics view; the point itself is unchanged
  * @returns {object} the datalog record, with ECU channels and the correction breakdown
  */
-export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
+export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, trace = null }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
   const throttlePct = throttleFrac * 100;
   const gear = cond.gear ?? DYNO_GEAR;
@@ -560,6 +563,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   }
 
   const { pt, resolved, solved } = last;
+  // The physics view's trace: the settled point solved once more with the recorder on.
+  // evaluatePoint is a pure function of its input, so this is the same cycle.
+  if (trace) evaluatePoint({ .../** @type {any} */ (resolved.input), trace });
   // Intake-temperature protection acts inside the spark resolve, not in the loop above,
   // so it is named here — a retard the player cannot see the reason for teaches nothing.
   if (cal.protect.iatEnabled && pt.sensedIat > cal.protect.iatLimitC) protect.add('iat');

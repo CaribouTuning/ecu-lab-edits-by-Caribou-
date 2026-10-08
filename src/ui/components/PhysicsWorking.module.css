@@ -1,4 +1,4 @@
-/* LIVE's physics view. Charts and working lines; every colour from the tokens. */
+/* The physics views on LIVE and DYNO (PhysicsWorking.jsx). Charts and working lines; every colour from the tokens. */
 
 .opener {
   display: flex;
@@ -125,3 +125,18 @@
 .series[data-tone='acc'] { stroke: var(--acc); }
 .series[data-tone='violet'] { stroke: var(--violet); }
 .series[data-tone='cyan'] { stroke: var(--cyan); }
+
+/* DYNO: which point of the pull is shown. */
+.scrub {
+  display: grid;
+  gap: var(--sp-xs);
+  margin: var(--sp-sm) 0;
+  font-size: var(--fs-sm);
+  color: var(--ink2);
+  font-variant-numeric: tabular-nums;
+}
+
+.scrub input {
+  width: 100%;
+  accent-color: var(--acc);
+}

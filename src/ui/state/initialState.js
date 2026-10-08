@@ -157,6 +157,8 @@ import {
  * @property {boolean} physicsOpen whether LIVE's physics view is open. Session state
  *   because the live loop reads it: the engine records its cylinder pressure trace for
  *   the view only while it is open (`traceCycle` in the live config).
+ * @property {boolean} dynoPhysicsOpen whether DYNO's physics view is open; kept here so
+ *   it stays open across pulls and DYNO's own views
  * @property {'settle'|'sweep'|'spooldown'|'rest'|null} dynoPhase which part of the pull
  *   SEQUENCE is playing, or null when no pull is running. A pull is not just a sweep:
  *   it settles at idle, loads and sweeps to redline, comes back down on engine braking
@@ -322,6 +324,7 @@ export function makeInitialState() {
       audioStatus: null,
       volume: 1,
       physicsOpen: false,
+      dynoPhysicsOpen: false,
       dynoPhase: null,
       dynoRpm: 820,
       journeyStep: 0,

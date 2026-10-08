@@ -86,6 +86,7 @@ import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
+import { DynoPhysics } from './screens/dyno/DynoPhysics.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
@@ -699,6 +700,15 @@ export function EcuLabApp() {
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
+  // The inputs the last pull was solved from, so DYNO's physics view can solve any of its
+  // points again with the cylinder trace recorded (`traceRpm`): same inputs, same numbers.
+  const lastPull = useRef(/** @type {{args: object, result: object}|null} */ (null));
+  const tracePullPoint = useCallback((pull, rpm) => {
+    const last = lastPull.current;
+    if (!last || last.result !== pull) return null;
+    return simulateSweep({ ...last.args, traceRpm: rpm }).points.find((p) => p.rpm === rpm && p.physics) ?? null;
+  }, []);
+
   const doRun = () => {
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
@@ -708,7 +718,9 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
+    const args = sweepArgs(loadKpa, ecuBundle);
+    const r = simulateSweep(args);
+    lastPull.current = { args, result: r };
     const ts = computeTuningScore(r);
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
@@ -1689,6 +1701,12 @@ export function EcuLabApp() {
                     bands={running ? [] : bands}
                     wholePullCount={running ? 0 : wholePullCount}
                     onSelectRpm={selectLogRpm}
+                  />
+                )}
+                {(running || dynoView === 'result') && (
+                  <DynoPhysics
+                    result={result} running={running} revealCount={revealCount}
+                    tracePoint={tracePullPoint} engineDerived={engineDerived}
                   />
                 )}
 
