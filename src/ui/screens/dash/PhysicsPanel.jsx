@@ -27,7 +27,7 @@ import styles from './PhysicsPanel.module.css';
 const REFRESH_MS = 250;
 
 /** A number with fixed decimals, or an en dash when the simulator has none. */
-const f = (v, dp = 1) => (Number.isFinite(v) ? Number(v).toFixed(dp) : '–');
+const fmt = (v, dp = 1) => (Number.isFinite(v) ? Number(v).toFixed(dp) : '–');
 
 /**
  * One line of working: what is computed, the equation, and the result.
@@ -64,11 +64,11 @@ function CrankChart({ points, yLabel, yMax, markers = [], limit, tone }) {
       {yTicks.map((t) => (
         <g key={t}>
           <line className={styles.grid} x1={L} x2={W - R} y1={sy(t)} y2={sy(t)} />
-          <text className={styles.tick} x={L - 4} y={sy(t) + 3} textAnchor="end">{t >= 10 ? Math.round(t) : f(t, 1)}</text>
+          <text className={styles.tick} x={L - 4} y={sy(t) + 3} textAnchor="end">{t >= 10 ? Math.round(t) : fmt(t, 1)}</text>
         </g>
       ))}
       {ticks.map((t) => (
-        <text key={t} className={styles.tick} x={sx(t)} y={H - 12} textAnchor="middle">{t === 0 ? 'TDC' : `${t}°`}</text>
+        <text key={t} className={styles.tick} x={sx(t)} y={H - 18} textAnchor="middle">{t === 0 ? 'TDC' : `${t}°`}</text>
       ))}
       <text className={styles.axis} x={W - R} y={H - 2} textAnchor="end">crank angle, ° after TDC firing</text>
       {limit != null && <line className={styles.limit} x1={L} x2={W - R} y1={sy(limit)} y2={sy(limit)} />}
@@ -164,45 +164,45 @@ export function PhysicsPanel() {
         <h3 className={styles.blockTitle}>1 · Air into each cylinder</h3>
         <Step
           name="Charge density"
-          eq={<>ρ = MAP ÷ (R × T) = {f(pt.map, 0)} kPa ÷ ({R_AIR} × {f(chargeK, 0)} K)</>}
-          result={<>≈ {f(rho, 3)} kg/m³</>}
+          eq={<>ρ = MAP ÷ (R × T) = {fmt(pt.map, 0)} kPa ÷ ({R_AIR} × {fmt(chargeK, 0)} K)</>}
+          result={<>≈ {fmt(rho, 3)} kg/m³</>}
         />
         <Step
           name="Air trapped"
-          eq={<>m = VE × V<sub>cyl</sub> × ρ = {f(pt.ve)} % × {f(vCylCc, 0)} cc × ρ</>}
-          result={<>{f(airMg, 0)} mg</>}
+          eq={<>m = VE × V<sub>cyl</sub> × ρ = {fmt(pt.ve)} % × {fmt(vCylCc, 0)} cc × ρ</>}
+          result={<>{fmt(airMg, 0)} mg</>}
         />
         <Step
           name="Mass airflow"
           eq={<>MAF = m × {ph.cyl} cylinders × rpm ÷ 120</>}
-          result={<>{f(pt.maf)} g/s</>}
+          result={<>{fmt(pt.maf)} g/s</>}
         />
-        <p className={styles.aside}>VE here is how well this engine really fills ({f(pt.ve)} %). The ECU fuels from its own VE table, which says {f(pt.veTable)} %: the gap between them is what the fuel trims chase.</p>
+        <p className={styles.aside}>VE here is how well this engine really fills ({fmt(pt.ve)} %). The ECU fuels from its own VE table, which says {fmt(pt.veTable)} %: the gap between them is what the fuel trims chase.</p>
       </section>
 
       <section className={styles.block}>
         <h3 className={styles.blockTitle}>2 · Fuel</h3>
         <Step
           name="Target mixture"
-          eq={<>λ<sub>target</sub> = AFR ÷ 14.7 = {f(pt.afrCommanded, 2)} ÷ 14.7</>}
-          result={<>≈ {f(lambdaCmd, 3)}</>}
+          eq={<>λ<sub>target</sub> = AFR ÷ 14.7 = {fmt(pt.afrCommanded, 2)} ÷ 14.7</>}
+          result={<>≈ {fmt(lambdaCmd, 3)}</>}
         />
         {pt.fuelCmd != null && (
           <Step
             name="Fuel the ECU asks for"
             eq={<>fuel = air the ECU believes ÷ (λ<sub>target</sub> × stoichiometric AFR), with its trims</>}
-            result={<>{f(pt.fuelCmd, 2)} mg</>}
+            result={<>{fmt(pt.fuelCmd, 2)} mg</>}
           />
         )}
         <Step
           name="Injector pulse"
-          eq={<>PW = fuel ÷ injector flow + dead time; duty = PW ÷ {f(cycleMs, 1)} ms per cycle</>}
-          result={<>{f(pt.pw, 2)} ms · {pt.duty} %</>}
+          eq={<>PW = fuel ÷ injector flow + dead time; duty = PW ÷ {fmt(cycleMs, 1)} ms per cycle</>}
+          result={<>{fmt(pt.pw, 2)} ms · {pt.duty} %</>}
         />
         <Step
           name="Mixture the cylinder gets"
-          eq={<>λ = air ÷ (fuel delivered{pt.fuelMass != null ? ` ${f(pt.fuelMass, 2)} mg` : ''} × stoichiometric AFR)</>}
-          result={<>λ {f(pt.lambda, 3)} · AFR {f(pt.afr, 2)}</>}
+          eq={<>λ = air ÷ (fuel delivered{pt.fuelMass != null ? ` ${fmt(pt.fuelMass, 2)} mg` : ''} × stoichiometric AFR)</>}
+          result={<>λ {fmt(pt.lambda, 3)} · AFR {fmt(pt.afr, 2)}</>}
         />
       </section>
 
@@ -211,15 +211,15 @@ export function PhysicsPanel() {
         <p className={styles.aside}>
           Integrated from intake valve close to exhaust valve open, step by step:
           dp = (γ − 1)/V · (dQ<sub>burn</sub> − dQ<sub>wall</sub>) − γ · p · dV/V, with the burn following a Wiebe curve and
-          Woschni heat loss to the walls. Trapped at intake close: {f(inp.trappedBar, 2)} bar, {f(inp.trappedK, 0)} K,
-          {' '}{f(inp.trappedMassG * 1000, 0)} mg; fuel heat to release {f(inp.heatJ, 0)} J.
+          Woschni heat loss to the walls. Trapped at intake close: {fmt(inp.trappedBar, 2)} bar, {fmt(inp.trappedK, 0)} K,
+          {' '}{fmt(inp.trappedMassG * 1000, 0)} mg; fuel heat to release {fmt(inp.heatJ, 0)} J.
         </p>
         <CrankChart points={pressure} yLabel="cylinder pressure, bar" markers={markers} tone="acc" />
         <div className={styles.facts}>
-          <span>Spark {f(inp.sparkBtdc ?? pt.timing)}° BTDC</span>
-          <span>Flame takes {f(inp.flameDevDeg, 0)}° to form, burns over {f(pt.burnDeg)}°</span>
-          <span>50 % burned at {f(pt.mfb50)}° ATDC</span>
-          <span>Peak {f(pt.peakPressure)} bar at {f(pt.peakPressureDeg)}°</span>
+          <span>Spark {fmt(inp.sparkBtdc ?? pt.timing)}° BTDC</span>
+          <span>Flame takes {fmt(inp.flameDevDeg, 0)}° to form, burns over {fmt(pt.burnDeg)}°</span>
+          <span>50 % burned at {fmt(pt.mfb50)}° ATDC</span>
+          <span>Peak {fmt(pt.peakPressure)} bar at {fmt(pt.peakPressureDeg)}°</span>
         </div>
         <CrankChart points={burned} yLabel="fraction of the charge burned" yMax={1.05} markers={markers} tone="violet" />
       </section>
@@ -234,26 +234,26 @@ export function PhysicsPanel() {
         <CrankChart points={knock} yLabel="knock integral ∫dt/τ (1 = knock)" yMax={Math.max(1.15, (pt.knockIntegral ?? 0) * 1.1)} limit={1} tone="cyan" />
         <Step
           name="This cycle"
-          eq={<>end gas peaked at {pt.endGasK} K; integral reached {f(pt.knockIntegral, 3)}</>}
+          eq={<>end gas peaked at {pt.endGasK} K; integral reached {fmt(pt.knockIntegral, 3)}</>}
           result={pt.knock ? <span className={styles.bad}>knock</span> : <span className={styles.good}>no knock</span>}
         />
         <Step
           name="Spark"
-          eq={<>knock limit {f(pt.threshold)}° · table asks {f(pt.commandedTiming)}° · margin {f(pt.margin)}°</>}
-          result={<>runs {f(pt.timing)}° BTDC</>}
+          eq={<>knock limit {fmt(pt.threshold)}° · table asks {fmt(pt.commandedTiming)}° · margin {fmt(pt.margin)}°</>}
+          result={<>runs {fmt(pt.timing)}° BTDC</>}
         />
       </section>
 
       <section className={styles.block}>
         <h3 className={styles.blockTitle}>5 · Work and losses</h3>
-        <Step name="Gas work on the piston" eq={<>IMEP = ∮ p dV ÷ V<sub>d</sub></>} result={<>{f(pt.imep, 2)} bar</>} />
-        <Step name="Pumping" eq={<>PMEP = exhaust − intake pressure loop</>} result={<>{f(pt.pmep, 2)} bar</>} />
-        <Step name="Rubbing friction and drives" eq={<>FMEP − PMEP</>} result={<>{f(rubbing, 2)} bar</>} />
-        <Step name="What reaches the crank" eq={<>BMEP = IMEP − FMEP</>} result={<>{f(pt.bmep, 2)} bar</>} />
+        <Step name="Gas work on the piston" eq={<>IMEP = ∮ p dV ÷ V<sub>d</sub></>} result={<>{fmt(pt.imep, 2)} bar</>} />
+        <Step name="Pumping" eq={<>PMEP = exhaust − intake pressure loop</>} result={<>{fmt(pt.pmep, 2)} bar</>} />
+        <Step name="Rubbing friction and drives" eq={<>FMEP − PMEP</>} result={<>{fmt(rubbing, 2)} bar</>} />
+        <Step name="What reaches the crank" eq={<>BMEP = IMEP − FMEP</>} result={<>{fmt(pt.bmep, 2)} bar</>} />
         <Step
           name="Torque"
-          eq={<>T = BMEP × V<sub>d</sub> ÷ 4π = {f(pt.bmep, 2)} bar × {f(ph.displacementL, 2)} L ÷ 4π</>}
-          result={<>≈ {f(crankFromBmep, 0)} N·m crank · {pt.torque} lb·ft wheel</>}
+          eq={<>T = BMEP × V<sub>d</sub> ÷ 4π = {fmt(pt.bmep, 2)} bar × {fmt(ph.displacementL, 2)} L ÷ 4π</>}
+          result={<>≈ {fmt(crankFromBmep, 0)} N·m crank · {pt.torque} lb·ft wheel</>}
         />
       </section>
 
@@ -261,8 +261,8 @@ export function PhysicsPanel() {
         <h3 className={styles.blockTitle}>6 · The crankshaft</h3>
         <Step
           name="Speed change"
-          eq={<>I · dω/dt = brake torque − loads; I = {ENGINE_INERTIA} kg·m², brake torque {f(ph.crankNm, 0)} N·m</>}
-          result={<>{ph.rpmRate >= 0 ? '+' : ''}{f(ph.rpmRate, 0)} rpm/s</>}
+          eq={<>I · dω/dt = brake torque − loads; I = {ENGINE_INERTIA} kg·m², brake torque {fmt(ph.crankNm, 0)} N·m</>}
+          result={<>{ph.rpmRate >= 0 ? '+' : ''}{fmt(ph.rpmRate, 0)} rpm/s</>}
         />
         <Step name="Exhaust" eq={<>blowdown and displacement from the cycle&apos;s end state</>} result={<>EGT {pt.egt} °C</>} />
       </section>

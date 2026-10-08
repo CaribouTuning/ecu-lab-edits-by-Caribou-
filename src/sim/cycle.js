@@ -200,9 +200,6 @@ export function runCycle({
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
   trace = null,
 }) {
-  // `trace`, when given an array, receives every integration step — crank angle, cylinder
-  // pressure, mass fraction burned, both zone temperatures and the knock integral so far —
-  // for the LIVE screen's physics view. Recording reads the state and changes nothing.
   const step = COEFF.CYCLE_STEP_DEG;
   const thetaStart = -180 + ivcAbdc;
   const spark = -sparkBtdc;

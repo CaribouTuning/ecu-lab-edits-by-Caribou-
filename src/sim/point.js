@@ -281,10 +281,8 @@ export function evaluatePoint({
   // asked for, so no other caller's result changes.
   if (trace) {
     /** @type {any} */ (trace).inputs = {
-      trappedBar: cyc.trappedPa / 1e5, trappedK: cyc.trappedK, heatJ: cyc.heatJ, burnDeg: cyc.burnDeg,
-      octane: cyc.octaneNumber, ivcAbdc: cyc.ivcAbdc, sparkBtdc: usedTiming,
-      flameDevDeg: COEFF.FLAME_DEVELOPMENT_DEG, trappedMassG: cyc.trappedMassKg * 1000,
-      clearanceCc: cyc.clearanceM3 * 1e6, sweptCc: cyc.sweptM3 * 1e6,
+      trappedBar: cyc.trappedPa / 1e5, trappedK: cyc.trappedK, trappedMassG: cyc.trappedMassKg * 1000,
+      heatJ: cyc.heatJ, sparkBtdc: usedTiming, flameDevDeg: COEFF.FLAME_DEVELOPMENT_DEG,
     };
   }
   const mbtIdeal = mbtFromBurn(cyc.burnDeg);

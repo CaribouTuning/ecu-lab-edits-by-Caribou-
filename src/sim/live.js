@@ -119,8 +119,9 @@ export function readSpeedAndAirflow(s, pt, dt, overlapDeg) {
 
 /**
  * The physics view's record of this step, kept on the live state only while the view is
- * open (`cfg.traceCycle`): the cycle's pressure trace and starting conditions, and the
- * crank balance the step integrated. Removed again when the view closes.
+ * open (`cfg.traceCycle`): the cycle's pressure trace and starting conditions, the crank
+ * torque the step integrated, and how fast the speed changed. Removed again when the
+ * view closes.
  *
  * @param {object} s live state being built, updated in place
  * @param {any} trace the trace evaluatePoint filled this step, or null
@@ -132,7 +133,7 @@ export function readSpeedAndAirflow(s, pt, dt, overlapDeg) {
 export function keepCycleTrace(s, trace, crankNm, dt, prev, derived) {
   if (!trace) { if (s.physics) delete s.physics; return; }
   s.physics = {
-    trace, inputs: trace.inputs ?? null, crankNm, dt, cyl: derived.cyl, displacementL: derived.displacementL,
+    trace, inputs: trace.inputs ?? null, crankNm, cyl: derived.cyl, displacementL: derived.displacementL,
     rpmRate: dt > 0 ? (s.rpm - (prev.rpm ?? s.rpm)) / dt : 0,
   };
 }
