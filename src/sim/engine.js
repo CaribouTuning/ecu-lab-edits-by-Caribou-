@@ -163,6 +163,8 @@ export function charMultiplier(rpm, ratio) {
  *   (multi-point manifold injection) or into the cylinder. Absent means port
  * @property {boolean} [boostRatedBottomEnd] a factory turbo engine's bottom end, designed
  *   for boosted cylinder pressure; absent on a naturally aspirated one
+ * @property {1|2} [sparkPlugs] spark plugs per cylinder, both firing together (the
+ *   modern Hemi, Mercedes M112, Alfa Twin Spark). Absent means one
  */
 
 /**
@@ -173,7 +175,9 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} compression static compression ratio, carried through unchanged
  * @property {number} bore cylinder bore, mm
  * @property {number} stroke stroke, mm
- * @property {number} boreFlameFactor flame-travel scaling from bore, 1 at the reference
+ * @property {number} boreFlameFactor flame-travel scaling from bore and plug count, 1 at
+ *   the reference bore with one plug
+ * @property {1|2} sparkPlugs spark plugs per cylinder
  * @property {number} chamberOffsetK chamber heat added to the charge by head material, K
  * @property {'port'|'direct'} injection where the fuel is sprayed
  * @property {number} evapInCylinder share of the fuel's latent heat drawn from the charge
@@ -212,7 +216,21 @@ export function deriveEngine(cfg) {
   // integrates what follows.
   //
   // Flame travel scales with bore, so a big cylinder burns slower.
-  const boreFlameFactor = cfg.bore / COEFF.BORE_FLAME_REF_MM;
+  //
+  // A second plug shortens the travel. Two kernels lit together each have half the
+  // chamber to cross, so the distance a flame front runs scales as one over the square
+  // root of the plug count: a burn 29% shorter with two. Published reductions bracket
+  // that: 11-15% measured on a 125 cc twin- vs single-plug engine (University of Danang,
+  // 2023, scv.udn.vn/vdqui/BBao/37172) and about 35-40% as reported from Chandra, "A
+  // Critical Study of the Dual Versus Single Plug Systems in S.I. Engines" (SAE 940452).
+  // Chrysler fitted the modern Hemi with two "to get the burn rate we needed" (Ward's
+  // Auto, Bob Lee). The flame-development delay is untouched: each kernel still forms.
+  //
+  // Not fitted. Checked afterwards against a stock 2015 6.4 L Hemi calibration (Pro's
+  // docs/STOCK-TUNE-REFERENCE.md): with one plug the model's best-torque spark ran up
+  // to 12 degrees past the factory table at part load; with two, within about 2.
+  const sparkPlugs = cfg.sparkPlugs === 2 ? 2 : 1;
+  const boreFlameFactor = (cfg.bore / COEFF.BORE_FLAME_REF_MM) / Math.sqrt(sparkPlugs);
   // An iron head runs a hotter chamber, so the charge in it starts compression hotter.
   const chamberOffsetK = cfg.headMaterial === 'Cast Iron' ? COEFF.IRON_HEAD_CHAMBER_K : 0;
   // Where the injector sprays decides how much of the fuel's evaporation cools the air
@@ -254,7 +272,7 @@ export function deriveEngine(cfg) {
   return {
     cyl, displacementL, ratio, compression: cfg.compression,
     bore: cfg.bore, stroke: cfg.stroke,
-    boreFlameFactor, chamberOffsetK, injection, evapInCylinder,
+    boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
     torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
     bearingFmepPa, balanceShaftFrac, redline,

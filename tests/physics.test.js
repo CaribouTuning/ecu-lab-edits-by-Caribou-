@@ -812,6 +812,18 @@ describe('the engine cycle', () => {
       .toBeGreaterThan(cyc({ derived: S.deriveEngine({ ...STOCK, bore: 80 }) }).burnDeg);
   });
 
+  it('burns faster with a second spark plug, and leaves one-plug engines exactly as they were', () => {
+    const one = S.deriveEngine(STOCK);
+    const two = S.deriveEngine({ ...STOCK, sparkPlugs: 2 });
+    expect(S.deriveEngine({ ...STOCK, sparkPlugs: 1 }).boreFlameFactor).toBe(one.boreFlameFactor);
+    expect(two.boreFlameFactor / one.boreFlameFactor).toBeCloseTo(1 / Math.SQRT2, 10);
+    const burnOne = cyc({ derived: one });
+    const burnTwo = cyc({ derived: two });
+    expect(burnTwo.burnDeg).toBeLessThan(burnOne.burnDeg);
+    // A faster burn reaches best-torque phasing with less advance.
+    expect(S.mbtFromBurn(burnTwo.burnDeg)).toBeLessThan(S.mbtFromBurn(burnOne.burnDeg));
+  });
+
   it('finds a knock limit that falls as compression rises', () => {
     const low = S.knockLimitedSpark(cyc({ derived: S.deriveEngine({ ...STOCK, compression: 9.0 }) }));
     const high = S.knockLimitedSpark(cyc({ derived: S.deriveEngine({ ...STOCK, compression: 12.5 }) }));
