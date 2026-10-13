@@ -17,6 +17,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -71,7 +72,9 @@ export function SparkScreen({ calAdvice, children }) {
           </div>
           <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
-          <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} />
+          <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }}>
+            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} />
+          </GridOrSurface>
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
             The VE table can be corrected straight from logs because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner re-logs airflow, and the wideband says how far each cell was off. Even so, the app shows you the working and waits for you to apply it.

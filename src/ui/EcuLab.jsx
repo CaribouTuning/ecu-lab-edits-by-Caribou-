@@ -58,6 +58,7 @@ import { COURSE } from './tutorial/books.js';
 import { MissionCoach } from './tutorial/MissionCoach.jsx';
 import { markOf } from './tutorial/missions.js';
 import { StoreProvider, useBuild, useCareer, useHistory, useRoadTest, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
+import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
@@ -1464,6 +1465,7 @@ export function EcuLabApp() {
           now — see AppShell.jsx for what each owns and why. This outer div stays: it
           is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
           not chrome AppShell has any opinion about. */}
+      <PullTraceContext.Provider value={advisorPull.points}>
       <AppShell
         route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine} onSearch={openPalette} onMenu={goMenu}
         career={inCareer}
@@ -1848,6 +1850,7 @@ export function EcuLabApp() {
         {/* In the top layer when open, so where it sits in the tree does not matter. */}
         <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
       </AppShell>
+      </PullTraceContext.Provider>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { VeLogCorrection } from '../../components/VeLogCorrection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
@@ -79,7 +80,9 @@ export function AirflowScreen({ children, veLog }) {
           </div>
           <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data; drag or shift-click for a range.</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
-          <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} />
+          <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency">
+            <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} />
+          </GridOrSurface>
           {veLog && (
             <VeLogCorrection corr={corr} pullCount={veLog.pull.length} liveCount={veLog.live.length}
               pullInfo={veLog.pullInfo} mafPct={mafErrorPct(samples)} airModel={veLog.airModel} onApply={veLog.onApply} />

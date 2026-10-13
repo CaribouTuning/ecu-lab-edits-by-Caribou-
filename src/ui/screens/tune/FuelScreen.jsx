@@ -15,6 +15,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -62,7 +63,9 @@ export function FuelScreen({ calAdvice, children }) {
           </div>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
-          <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} />
+          <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }}>
+            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} />
+          </GridOrSurface>
 
           <ExpandableInfo title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits a little richer: with some extra fuel every bit of the oxygen finds fuel to burn, and the extra fuel absorbs heat as it vaporizes, which cools the charge and holds off knock. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
