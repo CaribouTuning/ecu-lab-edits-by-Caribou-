@@ -15,7 +15,7 @@ source, and the weaker sources are marked as such.
 
 | Test | What it holds the model to |
 |---|---|
-| `tests/presets.test.js` | Each of the seven factory engines makes its published power (±5%) and torque (±10%), peaks where the maker says (±500 RPM), and does not knock. |
+| `tests/presets.test.js` | Each of the thirteen factory engines makes its published power (±5%) and torque (±10%), peaks where the maker says (±500 RPM), and does not knock. |
 | `tests/benchmark.test.js` | Everything else a dyno sheet or a textbook would show about those pulls — mixture, timing, fuel per horsepower, air per horsepower, exhaust temperature, cylinder pressure, load per litre, friction — sits inside the range real gasoline engines run in, and boost pays roughly what it does on a real engine. |
 | `tests/physics-invariants.test.js` | Laws checked on 1,500 random operating points and 120 random builds: energy (no cycle beats the ideal Otto cycle), units (hp = torque × RPM ÷ 5252, airflow, mixture and mean pressures agree), and every lever pulls the right way (octane, boost, intercooling, compression, MBT, retard, mixture, knock, and boost never falling as more is asked for). |
 | `tests/consistency-fuzz.test.js` | On 40 random builds, the TUNE advisor, the dyno pull log and LIVE tell the same story, and following the advice clears the knock it reports. |
@@ -43,6 +43,18 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 | BMW B58B30M1 | 382 hp / 369 lb-ft | 368 hp / 378 lb-ft | 5800 / 5700 | 0.830 | 10.2° | 0.462 | 10.7 | 835 | 70 | 21.4 |
 | VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 221 hp / 238 lb-ft | 4700–6200 / 5700 | 0.830 | 13.7° | 0.475 | 10.4 | 839 | 65 | 20.4 |
 | VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 292 hp / 292 lb-ft | 5400–6500 / 6200 | 0.830 | 14.1° | 0.447 | 11.0 | 830 | 80 | 25.0 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 349 hp / 373 lb-ft | 5600 / 5500 | 0.874 | 26.5° | 0.468 | 10.0 | 797 | 52 | 11.2 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 394 hp / 379 lb-ft | 6000 / 5900 | 0.874 | 26.7° | 0.463 | 10.1 | 793 | 55 | 11.4 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 328 hp / 371 lb-ft | 5200 / 5200 | 0.874 | 28.4° | 0.478 | 9.8 | 807 | 49 | 10.6 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 300 hp / 334 lb-ft | 5200 / 5300 | 0.874 | 27.2° | 0.474 | 9.9 | 800 | 50 | 10.7 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 286 hp / 304 lb-ft | 5200 / 5500 | 0.874 | 28.0° | 0.475 | 9.8 | 799 | 52 | 10.7 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 471 hp / 479 lb-ft | 6000 / 5900 | 0.874 | 19.2° | 0.418 | 11.2 | 794 | 59 | 12.7 |
+
+Each engine's one fitted input is its cam duration, set where peak power lands on the
+rating; torque and the peak speeds are predictions. On the six pushrod V8s added in
+October 2026 the predicted torque lands within 0–4% of the published figure. The twin-plug
+HEMI runs about 19° of spark at peak power where one-plug engines run 26–29°: two flames
+burn the charge faster (engine.js), so best torque needs less advance.
 
 **Reference ranges** (the bands `tests/benchmark.test.js` enforces):
 
@@ -55,7 +67,7 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 | 50% burned at MBT | 8–10° after top dead centre | Heywood (the standard MBT phasing criterion) |
 | Turbine inlet temperature | held under about 950 °C by enrichment | ASME J. Eng. Gas Turbines Power 132(11) 112801 |
 | Peak cylinder pressure, boosted | about 120 bar, 140 for the latest designs | Eng-Tips engineering forum ("Peak Cylinder Pressures") — practitioners, not a primary source |
-| BMEP at peak torque, NA / downsized turbo | 11–14 / 17–27 bar | computed from the makers' published torque and displacement (BMEP = 4π × torque ÷ displacement) |
+| BMEP at peak torque, NA / downsized turbo | 10.4–14 / 17–27 bar | computed from the makers' published torque and displacement (BMEP = 4π × torque ÷ displacement) |
 | Friction plus pumping at peak power | 0.8–3.0 bar | Heywood (engine friction); a wide band, deliberately |
 
 **Real stock dyno sheets** (wheel figures from owner and tuner posts, which vary by dyno and day — indicative, not authoritative): 350Z Rev-Up
@@ -70,8 +82,9 @@ Each of these is measured, written down in the code where it arises, and taught 
 Learn article 39. None of them changes the direction of any lesson.
 
 1. **Fuel per horsepower runs a little low.** The presets burn 0.42–0.48 lb/hp·h against
-   0.45–0.60 for real engines of their kind, and flow 10.4–11.1 hp per lb/min of air
-   against 10–11. Before October 2026 they read 0.40–0.45 and 10.9–11.7: friction was a
+   0.45–0.60 for real engines of their kind, and flow 9.8–11.2 hp per lb/min of air
+   against 10–11 (the overhead-cam engines and the HEMI 10.4–11.2; the GM pushrod V8s 9.8–10.1, so
+   they need a little more air per horsepower than the real engines, not less). Before October 2026 they read 0.40–0.45 and 10.9–11.7: friction was a
    straight line at about half of what GM's own engine computers state, and the
    geometry-based friction model that replaced it (src/sim/friction.js) moved both toward
    the real figures. Power is fitted to the published ratings, so the air and fuel needed
@@ -83,7 +96,7 @@ Learn article 39. None of them changes the direction of any lesson.
    make 14–53% less torque than the real engines, and nothing holds their torque flat the
    way a factory torque limit does, so most peak 2–7% above their rated torque mid-range
    (the GTI peaks about 8% under it).
-3. **Exhaust temperature reads low at full throttle.** The gauge reads about 780 °C (NA)
+3. **Exhaust temperature reads low at full throttle.** The gauge reads about 780–810 °C (NA)
    and 800–840 °C (boosted). Production turbo engines run up to about 950 °C at the
    turbine inlet before enrichment holds them there (ASME source above); the code's own
    fit target for an NA engine is about 850 °C, a figure it carries without a cited source.
@@ -105,7 +118,7 @@ Learn article 39. None of them changes the direction of any lesson.
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
 7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 64–80 bar
-   (NA presets about 59–63) against about 100–120 bar quoted for production turbo engines
+   (NA presets about 49–63) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
 8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor

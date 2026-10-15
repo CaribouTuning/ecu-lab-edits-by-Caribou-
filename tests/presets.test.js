@@ -35,10 +35,11 @@ function pullFor(preset) {
 }
 
 describe('preset data integrity', () => {
-  it('ships the seven engines', () => {
-    expect(S.ENGINE_PRESETS).toHaveLength(7);
+  it('ships the thirteen engines', () => {
+    expect(S.ENGINE_PRESETS).toHaveLength(13);
     expect(S.ENGINE_PRESETS.map((p) => p.id)).toEqual([
       'vq35de-revup', 'vq35hr', 'n54', 'b58-m0', 'b58-m1', 'ea888-gti', 'ea888-r',
+      'ls1', 'ls6', 'lq4', 'lm7', 'lr4', 'hemi-392',
     ]);
   });
 
@@ -137,7 +138,7 @@ describe('presets grouped by manufacturer', () => {
   // literal catches what the derivation cannot, the derivation catches the drift a
   // frozen list would miss.
   it('orders groups and their contents by first appearance in ENGINE_PRESETS', () => {
-    expect(S.PRESET_GROUPS.map((g) => g.manufacturer)).toEqual(['Nissan', 'BMW', 'Volkswagen']);
+    expect(S.PRESET_GROUPS.map((g) => g.manufacturer)).toEqual(['Nissan', 'BMW', 'Volkswagen', 'GM', 'Chrysler']);
     const firstSeen = [];
     for (const p of S.ENGINE_PRESETS) {
       if (!firstSeen.includes(p.manufacturer)) firstSeen.push(p.manufacturer);

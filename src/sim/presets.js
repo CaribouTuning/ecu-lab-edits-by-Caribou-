@@ -116,7 +116,7 @@ export const ENGINE_PRESETS = [
       // climbing into the 7000 limiter.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 222, springRate: 60,
       redline: 7000,
     },
@@ -164,7 +164,7 @@ export const ENGINE_PRESETS = [
       // the Mach term stands in for all three at once rather than reproducing any of them.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 232, springRate: 68,
       redline: 7500,
     },
@@ -197,7 +197,7 @@ export const ENGINE_PRESETS = [
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 214, springRate: 58,
       redline: 7000,
     },
@@ -316,7 +316,7 @@ export const ENGINE_PRESETS = [
       // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 210, springRate: 62,
       redline: 7000,
     },
@@ -390,7 +390,7 @@ export const ENGINE_PRESETS = [
       // this and the Golf R, which share it, on their rated power and torque.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 210, springRate: 54,
       redline: 6500,
     },
@@ -431,7 +431,7 @@ export const ENGINE_PRESETS = [
       // this and the Golf R, which share it, on their rated power and torque.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      // where power lands on the published rating again (friction.js).
       camDuration: 206, springRate: 54,
       redline: 6800,
     },
@@ -446,6 +446,214 @@ export const ENGINE_PRESETS = [
     },
     parts: { injectorIdx: 4, exhaustDiaIdx: 1, octaneIdx: 1 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: true },
+  },
+  // ---------------------------------------------------------------------------------
+  // PUSHROD V8s. Two valves per cylinder worked by pushrods and roller lifters, so the
+  // valvetrain, valve area and friction inputs (engine.js, friction.js) are what make
+  // these engines differ from the overhead-cam set above, not a per-engine factor.
+  //
+  // As for every preset, `camDuration` is the one fitted input: the simulator's single
+  // duration stands in for a real cam card, and is set where peak POWER lands on the
+  // published figure. Torque, and the speeds at which power and torque peak, are then
+  // predictions, and `tests/presets.test.js` holds them to the same bands as the rest.
+  // GM's Gen III engines run the "Older (1990s-2000s)" friction level: that level IS
+  // GM's measured friction for this family ("Friction Torque" in the factory
+  // calibrations of the LM7, LR4 and two Vortec small-blocks; see friction.js), so for
+  // these it is in-sample, not a prediction.
+  //
+  // Intake valve sizes are cylinder-head casting figures from enthusiast references
+  // (2.00 in on the 241/243/317 castings, 1.89 in on the 706/862 truck castings), not
+  // GM documents; they set the valve area the inlet Mach index reads.
+  {
+    id: 'ls1',
+    name: 'GM LS1 (C5 Corvette)',
+    manufacturer: 'GM',
+    years: '2001-2004',
+    blurb: 'The all-aluminium small-block that started the LS family. Pushrods and two big valves per cylinder make strong torque from a mild cam; a good engine for learning how a big naturally aspirated V8 fills.',
+    factory: {
+      // GM's 2004 Corvette specifications: 350 hp @ 5600, 375 lb-ft @ 4400 with the
+      // manual (360 lb-ft @ 4000 with the automatic). corvetteactioncenter.com/specs/c5/2004
+      crankHp: 350, crankHpRpm: 5600,
+      crankTq: 375, crankTqRpm: 4400,
+      displacementL: 5.67,
+    },
+    engine: {
+      configuration: 'V8',
+      // 99.0 x 92.0 mm, 10.1:1, 6000 RPM limit (GM 2004 Corvette specifications).
+      bore: 99.0, stroke: 92.0,
+      compression: 10.1,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
+      frictionLevel: 'older',
+      // Fitted: power -0.2% of the rating, torque -0.5% (predicted), power flat-top
+      // 5500-5800 against a published 5600.
+      camDuration: 202, springRate: 60,
+      redline: 6000,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    // Factory injectors are about 28-29 lb/hr (about 300 cc/min); the 315 cc option is
+    // the nearest. Twin 2.5 in pipes have about the flow area of one 3.5 in pipe.
+    parts: { injectorIdx: 0, exhaustDiaIdx: 3, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
+    id: 'ls6',
+    name: 'GM LS6 (Cadillac CTS-V)',
+    manufacturer: 'GM',
+    years: '2004-2005',
+    blurb: 'The LS1 with the Z06 treatment: higher compression, better-flowing heads and a bigger cam. It makes its power higher in the rev range, which is where the bigger cam earns its keep.',
+    factory: {
+      // 400 hp @ 6000, 395 lb-ft @ 4800 (Cadillac CTS-V specifications; MotorWeek
+      // road test #2324). The Corvette Z06's version is rated 405 / 400.
+      crankHp: 400, crankHpRpm: 6000,
+      crankTq: 395, crankTqRpm: 4800,
+      displacementL: 5.67,
+    },
+    engine: {
+      configuration: 'V8',
+      // 99 x 92 mm and 10.5:1 (GM); 6500 RPM limit.
+      bore: 99.0, stroke: 92.0,
+      compression: 10.5,
+      blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
+      frictionLevel: 'older',
+      // Fitted: power -1.5%, torque -4.1% (predicted), flat-top 5800-6400 against a
+      // published 6000. 228 rather than the 230 that lands power closer: 230 starts to
+      // trip the overlap advisory, which a factory cam does not.
+      camDuration: 228, springRate: 60,
+      redline: 6500,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 3, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
+    id: 'lq4',
+    name: 'GM LQ4 Vortec 6000',
+    manufacturer: 'GM',
+    years: '1999-2007',
+    blurb: 'The iron-block 6.0 truck engine, and one of the most popular engines to turbocharge: low compression, a strong bottom end and a mild cam that makes torque everywhere.',
+    factory: {
+      // The LQ4 carried several ratings. 325 hp @ 5200 and 370 lb-ft @ 4000 is the 2001
+      // GMC Sierra C3's (also the Yukon Denali and Suburban LTZ range). The heavy-duty
+      // trucks' 300 hp @ 4400 is a separate calibration that peaks far lower; this
+      // preset does not reproduce that one.
+      crankHp: 325, crankHpRpm: 5200,
+      crankTq: 370, crankTqRpm: 4000,
+      displacementL: 5.97,
+    },
+    engine: {
+      configuration: 'V8',
+      // 101.6 x 92 mm, 9.4:1; iron block, aluminium 317 heads. 5600 RPM is the fuel
+      // cut-off in GM's truck calibrations.
+      bore: 101.6, stroke: 92.0,
+      compression: 9.4,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
+      frictionLevel: 'older',
+      // Fitted: power +1.0%, torque +0.2% (predicted), flat-top 5100-5500. 188 lands
+      // nearer (-0.1%), but 190 is the shortest duration the duration terms are checked
+      // down to (Pro's envelope), and a truck cam is at that end of the range.
+      camDuration: 190, springRate: 60,
+      redline: 5600,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    // GM rates its trucks on 87 regular, which this game's fuel list does not carry; 91
+    // is the nearest, and a factory calibration on 91 is no more knock-limited than on 87.
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
+    id: 'lm7',
+    name: 'GM LM7 Vortec 5300',
+    manufacturer: 'GM',
+    years: '2004-2007',
+    blurb: 'The 5.3 from millions of Silverados and Tahoes. Iron block, small-port truck heads and a mild cam: built for torque and longevity, and the cheapest way into an LS swap.',
+    factory: {
+      // 295 hp @ 5200 and 335 lb-ft @ 4000 (2004-2007 rating; 285 / 325 before).
+      crankHp: 295, crankHpRpm: 5200,
+      crankTq: 335, crankTqRpm: 4000,
+      displacementL: 5.33,
+    },
+    engine: {
+      configuration: 'V8',
+      // 96 x 92 mm, 9.5:1; the 4.8's bore with the 6.0's stroke.
+      bore: 96.0, stroke: 92.0,
+      compression: 9.5,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
+      frictionLevel: 'older',
+      // Fitted: power +1.7%, torque -0.3% (predicted), flat-top 5200-5600. 186 lands
+      // nearer (-0.3%); 190 for the same reason as the LQ4.
+      camDuration: 190, springRate: 60,
+      redline: 5800,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
+    id: 'lr4',
+    name: 'GM LR4 Vortec 4800',
+    manufacturer: 'GM',
+    years: '2005-2006',
+    blurb: 'The short-stroke 4.8: the 5.3 with 9 mm less stroke. It needs revs to make power, so it shows plainly how stroke trades torque for engine speed.',
+    factory: {
+      // 285 hp @ 5200 and 295 lb-ft @ 4000 (2005-2006 rating).
+      crankHp: 285, crankHpRpm: 5200,
+      crankTq: 295, crankTqRpm: 4000,
+      displacementL: 4.81,
+    },
+    engine: {
+      configuration: 'V8',
+      // 96 x 83 mm, 9.4:1.
+      bore: 96.0, stroke: 83.0,
+      compression: 9.4,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
+      frictionLevel: 'older',
+      // Fitted: power +0.3%, torque +2.9% (predicted), flat-top 5500-5800 against a
+      // published 5200.
+      camDuration: 192, springRate: 60,
+      redline: 6000,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: 0, exhaustDiaIdx: 2, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  },
+  {
+    id: 'hemi-392',
+    name: 'Chrysler 6.4 HEMI (392)',
+    manufacturer: 'Chrysler',
+    years: '2015',
+    blurb: 'A modern pushrod V8 with two spark plugs per cylinder and big 2.14 in intake valves. The twin plugs burn the charge fast, so it needs less spark advance than a one-plug engine.',
+    factory: {
+      // 2015 Jeep Grand Cherokee SRT: 475 hp @ 6000, 470 lb-ft @ 4300 (Jeep's launch
+      // release; cars.com specifications).
+      crankHp: 475, crankHpRpm: 6000,
+      crankTq: 470, crankTqRpm: 4300,
+      displacementL: 6.42,
+    },
+    engine: {
+      configuration: 'V8',
+      // 103.9 x 94.6 mm, 10.9:1, iron block, aluminium heads, 2.14 in intake valves, two
+      // plugs per cylinder (Chrysler; Ward's: two plugs "to get the burn rate we needed").
+      bore: 103.9, stroke: 94.6,
+      compression: 10.9,
+      blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port', sparkPlugs: 2,
+      valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 54.4,
+      // A 2011-on design, so the published friction level; nothing measured for it.
+      frictionLevel: 'modern',
+      // Fitted: power -0.9%, torque +1.9% (predicted), within 1 hp of peak from 5800,
+      // peaking at 5900 against a published 6000. 212 lands power nearer (-0.2%) but stays flat to the 6400 limiter,
+      // which the real engine does not; 210 is the longest cam whose power falls before it.
+      camDuration: 210, springRate: 60,
+      redline: 6400,
+    },
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    // Factory injectors are about 40 lb/hr (about 420 cc/min): the 440 cc option.
+    parts: { injectorIdx: 1, exhaustDiaIdx: 4, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
   },
 ];
 

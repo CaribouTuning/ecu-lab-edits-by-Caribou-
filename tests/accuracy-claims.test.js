@@ -77,13 +77,13 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.42-0.48 lb/hp·h, 10.4-11.1 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.42-0.48 lb/hp·h, 9.8-11.2 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
     expect(lo).toBeGreaterThanOrEqual(0.415);
     expect(hi).toBeLessThan(0.485);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
-    expect(alo).toBeGreaterThanOrEqual(10.35);
-    expect(ahi).toBeLessThan(11.15);
+    expect(alo).toBeGreaterThanOrEqual(9.75);
+    expect(ahi).toBeLessThan(11.25);
   });
 
   it('turbo spool: 14-53% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
@@ -116,13 +116,14 @@ describe('the known approximations are the size the pages say', () => {
     }
   });
 
-  it('exhaust temperature at peak power: about 780 °C NA, 800-840 °C boosted', () => {
+  it('exhaust temperature at peak power: about 780-810 °C NA, 800-840 °C boosted', () => {
     for (const { peak, boosted } of PRESETS) {
       if (boosted) {
         expect(peak.egt).toBeGreaterThanOrEqual(800);
         expect(peak.egt).toBeLessThanOrEqual(845);
       } else {
-        expect(Math.abs(peak.egt - 780)).toBeLessThanOrEqual(10);
+        expect(peak.egt).toBeGreaterThanOrEqual(770);
+        expect(peak.egt).toBeLessThanOrEqual(815);
       }
     }
   });
@@ -195,14 +196,14 @@ describe('the known approximations are the size the pages say', () => {
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 59-63 bar on the NA presets, 64-80 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 49-63 bar on the NA presets, 64-80 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
         expect(pmax).toBeGreaterThanOrEqual(63.5);
         expect(pmax).toBeLessThanOrEqual(80);
       } else {
-        expect(pmax).toBeGreaterThanOrEqual(58);
+        expect(pmax).toBeGreaterThanOrEqual(48.5);
         expect(pmax).toBeLessThanOrEqual(63.5);
       }
     }

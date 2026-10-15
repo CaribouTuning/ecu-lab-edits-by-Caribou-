@@ -14,7 +14,7 @@
  * Technology 6(1):39-48 (2022). It replaces a straight line in RPM (45 kPa + 6.5 Pa/rpm)
  * that came from the original game with no source, ran at about half of what GM's own
  * friction model for its Gen III and Vortec engines says, and barely rose with speed
- * (Pro's docs/FRICTION.md has the comparison).
+ * (the comparison is in docs/accuracy.md).
  */
 
 import { BARO_KPA } from './constants.js';
