@@ -37,7 +37,7 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 296 hp / 259 lb-ft | 6400 / 6500 | 0.874 | 28.0° | 0.426 | 11.0 | 785 | 59 | 12.6 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 266 lb-ft | 6800 / 6500 | 0.874 | 28.5° | 0.423 | 11.1 | 778 | 63 | 13.0 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 300 hp / 262 lb-ft | 6800 / 6500 | 0.874 | 28.5° | 0.424 | 11.0 | 780 | 62 | 12.8 |
 | BMW N54 | 302 hp / 295 lb-ft | 294 hp / 313 lb-ft | 5800 / 5500 | 0.839 | 16.5° | 0.445 | 10.9 | 806 | 65 | 17.9 |
 | BMW B58B30M0 | 320 hp / 330 lb-ft | 316 hp / 340 lb-ft | 5500–6500 / 5600 | 0.833 | 12.2° | 0.458 | 10.7 | 820 | 65 | 19.4 |
 | BMW B58B30M1 | 382 hp / 369 lb-ft | 368 hp / 378 lb-ft | 5800 / 5700 | 0.830 | 10.2° | 0.462 | 10.7 | 835 | 70 | 21.4 |

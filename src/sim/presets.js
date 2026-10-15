@@ -152,8 +152,8 @@ export const ENGINE_PRESETS = [
       // lands on the published figure (-0.0%) and torque +1.8%.
       //
       // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
-      // the 7500 redline, and at 4.4 degrees of overlap this cam never trips the cam
-      // advisory.
+      // the 7500 redline, and the cam stays short of the overlap that trips the cam
+      // advisory (see the refit note below).
       //
       // THE ROLLOFF NOW EXISTS. This preset used to climb monotonically into its limiter
       // and read peak power at 7500, 700 RPM above the published 6800, because nothing in
@@ -163,9 +163,10 @@ export const ENGINE_PRESETS = [
       // engine's rolloff is cam profile, VVEL variable lift and intake-tract tuning, and
       // the Mach term stands in for all three at once rather than reproducing any of them.
       // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 232, springRate: 68,
+      // engine more friction at speed than the old straight line did: 228 is the longest
+      // duration that stays clear of the overlap advisory, which a factory cam does not
+      // trip (power -2.0%, torque -2.1%; 232 lands power on the rating but trips it).
+      camDuration: 228, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
