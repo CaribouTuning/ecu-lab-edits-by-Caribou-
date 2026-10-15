@@ -105,6 +105,9 @@ Learn article 39. None of them changes the direction of any lesson.
    9–13 °C from 13.5:1 to 11:1, several times less than the turbine-side correlation
    uses for the same change, so EGT component protection is less effective in the sim.
    And it peaks at stoichiometric, where a real engine's exhaust peaks a little lean of it.
+   At part throttle the enrichment effect is flat and can run the wrong way by a few
+   degrees: a 276° turbo cam at 7263 rpm and 78 kPa reads 595 °C at 13.5:1 and 602 °C at
+   11:1. The physics-invariant test asserts the cooling from 85 kPa up.
 4. **Very rich mixtures cost almost no power.** The rich burn is air-limited, which is
    right, but the slower and cooler flame far rich is not charged, so λ 0.70 makes about
    what λ 0.88 does. On a real engine power falls away richer than best power; by how

@@ -48,7 +48,59 @@ import { DEFAULT_VE, LOAD, RPM } from './tables.js';
  *   cam. It adds overlap, which is what a turbine's backpressure pushes against
  * @returns {number[][]} VE table, percent, indexed [LOAD][RPM]
  */
-export function computeHardwareVE(cfg, mods, hw = {}) {
+export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
+  const at = hardwareVeAt(cfg, mods, hw);
+  return (axes?.load ?? LOAD).map((mapKpa) => (axes?.rpm ?? RPM).map((rpm) => at(rpm, mapKpa)));
+}
+
+/** The manifold pressure of the full-load row the breathing curve is defined at, kPa. */
+export const VE_FULL_LOAD_KPA = 100;
+
+/**
+ * PART-LOAD BREATHING: THE IDEAL GAS-EXCHANGE PROCESS.
+ *
+ * At exhaust-valve close the clearance volume Vc holds burned gas at the exhaust
+ * pressure Pe. When the intake opens on a throttled manifold at Pi, that residual expands
+ * to Pi before any fresh charge can enter, and it takes up Vc·(Pe/Pi)^(1/γ) of the
+ * cylinder. What is left for fresh charge, as a share of the displacement Vd, is
+ *
+ *     ηv = (Vc + Vd − Vc·(Pe/Pi)^(1/γ)) / Vd = (rc − (Pe/Pi)^(1/γ)) / (rc − 1)
+ *
+ * with rc = (Vc + Vd)/Vc the compression ratio (the ideal-cycle intake process:
+ * Heywood, Internal Combustion Engine Fundamentals, ch. 5 and 6; Taylor, The
+ * Internal-Combustion Engine in Theory and Practice, vol. 1, ch. 6). This is the factor
+ * relative to the full-load row, so the full-load curve, and every rated power fitted on
+ * it, is untouched. γ is the burned gas's at exhaust temperature (RESIDUAL_EXPANSION_GAMMA).
+ * Nothing in it is fitted: at 9.5:1 it gives 0.71/0.82/0.88/0.92/0.96 of full-load VE at
+ * 20/30/40/50/70 kPa, where GM's own VE tables for the LM7 at 2400 rpm (put on an
+ * intake-air basis through their charge-temperature blend) read 0.73/0.81/0.86/0.90/0.95,
+ * and the hand-shaped rows it replaces gave 0.54/0.62/0.70/0.77/0.90.
+ *
+ * Not in it: valve overlap pushing exhaust back into a vacuum manifold, which lowers
+ * light-load VE further on long-overlap cams (the residual's TEMPERATURE effect is in
+ * `residualFraction`); and exhaust pressure above atmospheric.
+ *
+ * @param {number} mapKpa manifold absolute pressure, kPa
+ * @param {number} compression static compression ratio
+ * @returns {number} VE relative to the full-load row, 0..1
+ */
+export function partLoadVeFactor(mapKpa, compression) {
+  if (mapKpa >= VE_FULL_LOAD_KPA) return 1;
+  const rc = Math.max(4, compression);
+  const eta = (p) => (rc - Math.pow(BARO_KPA / Math.max(5, p), 1 / COEFF.RESIDUAL_EXPANSION_GAMMA)) / (rc - 1);
+  return clamp(eta(mapKpa) / eta(VE_FULL_LOAD_KPA), 0.05, 1);
+}
+
+/**
+ * The same model as `computeHardwareVE`, as a function of any (RPM, MAP), so a table on
+ * an ECU's own breakpoints is computed at them rather than interpolated off the 8 × 6 grid.
+ *
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods
+ * @param {object} [hw] as for computeHardwareVE
+ * @returns {(rpm: number, mapKpa: number) => number} VE, percent
+ */
+export function hardwareVeAt(cfg, mods, hw = {}) {
   const {
     turboOn = false, turbine = null, exhaustDia = null, fuel = null, peakBoostPsi = 0, supercharged = false,
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
@@ -112,14 +164,14 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
   const overlapFactor = Math.max(0, camOverlapDeg(camDuration) + intakeCamAdvanceDeg + exhaustCamRetardDeg)
     / COEFF.VE_BACKPRESSURE_OVERLAP_REF;
 
-  return DEFAULT_VE.map((row, ri) => row.map((v, ci) => {
-    const rpm = RPM[ci];
+  return (rpm, mapKpa) => {
     const norm = (rpm - 4500) / 3000;      // -1 at 1500, +1 at 7500
-    const loadScale = clamp(LOAD[ri] / BARO_KPA, 0, 1);
+    const loadScale = clamp(mapKpa / BARO_KPA, 0, 1);
 
-    // Sample the baseline breathing curve at the cam-shifted engine speed.
+    // Sample the baseline breathing curve at the cam-shifted engine speed: the full-load
+    // row below atmospheric (part load is the factor below), the boost rows above it.
     const camRpm = clamp(rpm - camShift, 1200, 8200);
-    const baseVe = interp1(RPM, row, camRpm);
+    const baseVe = baseBreathing(camRpm, mapKpa);
     let val = baseVe * flowGain * charMultiplier(rpm, ratio);
 
     // Valve float: past the spring's limit the valve stops following the lobe and
@@ -137,11 +189,12 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
     }
     val *= 1 + cylBreathing * Math.max(0, norm);
     val *= crFactor * headFactor * fuelFactor * injectionFactor;
+    val *= partLoadVeFactor(mapKpa, cfg.compression);
 
     // Bolt-ons: measured airflow gains, weighted toward the RPM where they work.
-    if (mods.intake) val += MOD_BONUS.intake[ci] * loadScale;
-    if (mods.exhaust) val += MOD_BONUS.exhaust[ci] * loadScale;
-    if (mods.headers) val += MOD_BONUS.headers[ci] * loadScale;
+    if (mods.intake) val += interp1(RPM, MOD_BONUS.intake, rpm) * loadScale;
+    if (mods.exhaust) val += interp1(RPM, MOD_BONUS.exhaust, rpm) * loadScale;
+    if (mods.headers) val += interp1(RPM, MOD_BONUS.headers, rpm) * loadScale;
 
     // Exhaust diameter: undersized chokes the top end, oversized kills low-RPM
     // scavenging velocity. Both directions cost VE, in different places.
@@ -180,7 +233,6 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
       // bill the same pressure three times, and at 40 kPa the ratio is about 2.5, which
       // drives this straight into its floor. What is missing from the model, and what
       // this term is for, is the turbine CHOKING under boost.
-      const mapKpa = LOAD[ri];
       if (mapKpa <= BARO_KPA) return Number(clamp(val, 10, 130).toFixed(1));
       // THIS CELL'S charge temperature, not `machChargeK`. That one is deliberately the
       // peak-boost figure because choking binds at the top end, and it is also derived
@@ -207,5 +259,15 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
     }
 
     return Number(clamp(val, 10, 130).toFixed(1));
-  }));
+  };
+}
+
+/** Rows of DEFAULT_VE at and above full load, ascending, for the boost end of the curve. */
+const BOOST_ROWS = LOAD.map((kpa, ri) => ({ kpa, row: DEFAULT_VE[ri] }))
+  .filter((r) => r.kpa >= VE_FULL_LOAD_KPA).sort((a, b) => a.kpa - b.kpa);
+
+/** The baseline breathing curve at an engine speed and a manifold pressure (see above). */
+function baseBreathing(rpm, mapKpa) {
+  const at = BOOST_ROWS.map((r) => interp1(RPM, r.row, rpm));
+  return interp1(BOOST_ROWS.map((r) => r.kpa), at, Math.max(VE_FULL_LOAD_KPA, mapKpa));
 }

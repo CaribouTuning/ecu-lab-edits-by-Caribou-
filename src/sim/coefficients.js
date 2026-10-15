@@ -300,6 +300,12 @@ export const COEFF = {
   // Temperature the residual fraction is mixed in at, K. Exhaust gas in the chamber at
   // the end of blowdown, not peak in-cylinder temperature.
   RESIDUAL_TEMP_K: 1050,
+  // Ratio of specific heats of that residual as it expands from exhaust to manifold
+  // pressure when the intake opens (airflow.js, partLoadVeFactor). Burned gas near
+  // RESIDUAL_TEMP_K: about 1.3 (Heywood, Internal Combustion Engine Fundamentals, ch. 4,
+  // the burned-gas property charts), not the 1.235 of GAMMA_BURNED at combustion
+  // temperature. Not fitted.
+  RESIDUAL_EXPANSION_GAMMA: 1.3,
 
   // --- Turbocharger (see turbo.js) ---
   // Specific heats at constant pressure, J/(kg·K). Exhaust is hot and partly triatomic,
