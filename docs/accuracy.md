@@ -36,13 +36,13 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 299 hp / 268 lb-ft | 6400 / 6500 | 0.874 | 29.0° | 0.402 | 11.6 | 787 | 59 | 13.1 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 268 lb-ft | 6800 / 6500 | 0.874 | 29.1° | 0.399 | 11.7 | 781 | 61 | 13.1 |
-| BMW N54 | 302 hp / 295 lb-ft | 304 hp / 318 lb-ft | 5800 / 5600 | 0.839 | 17.5° | 0.423 | 11.5 | 804 | 65 | 18.1 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 333 hp / 352 lb-ft | 5500–6500 / 5800 | 0.834 | 13.5° | 0.434 | 11.3 | 817 | 65 | 20.0 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 380 hp / 382 lb-ft | 5800 / 5900 | 0.830 | 12.1° | 0.434 | 11.3 | 828 | 70 | 21.7 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 224 hp / 247 lb-ft | 4700–6200 / 5600 | 0.830 | 13.3° | 0.452 | 10.9 | 841 | 64 | 21.2 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 300 hp / 298 lb-ft | 5400–6500 / 6600 | 0.830 | 16.7° | 0.421 | 11.7 | 830 | 79 | 25.6 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 296 hp / 259 lb-ft | 6400 / 6500 | 0.874 | 28.0° | 0.426 | 11.0 | 785 | 59 | 12.6 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 266 lb-ft | 6800 / 6500 | 0.874 | 28.5° | 0.423 | 11.1 | 778 | 63 | 13.0 |
+| BMW N54 | 302 hp / 295 lb-ft | 294 hp / 313 lb-ft | 5800 / 5500 | 0.839 | 16.5° | 0.445 | 10.9 | 806 | 65 | 17.9 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 316 hp / 340 lb-ft | 5500–6500 / 5600 | 0.833 | 12.2° | 0.458 | 10.7 | 820 | 65 | 19.4 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 368 hp / 378 lb-ft | 5800 / 5700 | 0.830 | 10.2° | 0.462 | 10.7 | 835 | 70 | 21.4 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 221 hp / 238 lb-ft | 4700–6200 / 5700 | 0.830 | 13.7° | 0.475 | 10.4 | 839 | 65 | 20.4 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 292 hp / 292 lb-ft | 5400–6500 / 6200 | 0.830 | 14.1° | 0.447 | 11.0 | 830 | 80 | 25.0 |
 
 **Reference ranges** (the bands `tests/benchmark.test.js` enforces):
 
@@ -69,18 +69,20 @@ rated low, so they read closer to their rating than a 15% loss predicts.
 Each of these is measured, written down in the code where it arises, and taught in
 Learn article 39. None of them changes the direction of any lesson.
 
-1. **Fuel per horsepower runs low.** The presets burn 0.40–0.45 lb/hp·h against
-   0.45–0.60 for real engines of their kind, and flow 10.9–11.7 hp per lb/min of air
-   against 10–11: the NA presets about 10% low, the turbo presets, knock-limited at full
-   boost as real ones are, within about 5–15%. Power is fitted to the published ratings,
-   so the air and fuel needed to make it, and the injector duty that follows, read low by
-   the same margin. Generic builds are closer (0.52–0.66 on a 9:1 turbo build on pump
-   fuel, the upper end without an intercooler).
+1. **Fuel per horsepower runs a little low.** The presets burn 0.42–0.48 lb/hp·h against
+   0.45–0.60 for real engines of their kind, and flow 10.4–11.1 hp per lb/min of air
+   against 10–11. Before October 2026 they read 0.40–0.45 and 10.9–11.7: friction was a
+   straight line at about half of what GM's own engine computers state, and the
+   geometry-based friction model that replaced it (src/sim/friction.js) moved both toward
+   the real figures. Power is fitted to the published ratings, so the air and fuel needed
+   to make it, and the injector duty that follows, may still read slightly low. Generic
+   builds are closer (0.54–0.70 on a 9:1 turbo build on pump fuel, the upper end without
+   an intercooler).
 2. **Turbos spool late.** Turbine power comes from steady exhaust flow; the pulse energy a
    twin-scroll housing harvests is not modelled. At 1500–2000 RPM the turbo presets
-   make 12–50% less torque than the real engines, and nothing holds their torque flat the
-   way a factory torque limit does, so most peak 3–8% above their rated torque mid-range
-   (the GTI peaks about 4% under it).
+   make 14–53% less torque than the real engines, and nothing holds their torque flat the
+   way a factory torque limit does, so most peak 2–7% above their rated torque mid-range
+   (the GTI peaks about 8% under it).
 3. **Exhaust temperature reads low at full throttle.** The gauge reads about 780 °C (NA)
    and 800–840 °C (boosted). Production turbo engines run up to about 950 °C at the
    turbine inlet before enrichment holds them there (ASME source above); the code's own
@@ -102,8 +104,8 @@ Learn article 39. None of them changes the direction of any lesson.
    cylinder is trapped exhaust, the hot residual sets the end-gas temperature and an
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
-7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 64–79 bar
-   (NA presets about 60) against about 100–120 bar quoted for production turbo engines
+7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 64–80 bar
+   (NA presets about 59–63) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
 8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor

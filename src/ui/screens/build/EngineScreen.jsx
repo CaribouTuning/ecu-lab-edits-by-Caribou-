@@ -14,7 +14,8 @@ import { RotateCcw, Settings } from 'lucide-react';
 import React from 'react';
 
 import {
-  COIL_OPTS, CONFIG_OPTS, CYL_COUNT, ENGINE_PRESETS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS, VVT_OPTS, applyPreset,
+  COIL_OPTS, CONFIG_OPTS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
+  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor,
 } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
@@ -263,6 +264,28 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b className={styles.em}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
         <br /><br />Bigger cams open valves further and faster, so they need stiffer springs. That is why "cam and springs" are sold together: fit an aggressive cam on stock springs and you will make <i>less</i> power than stock up top, because you float before you reach the RPM the cam was designed for.
         <br /><br />Stiffness is not free either — every cycle the engine compresses those springs, and that parasitic loss shows up in FMEP. Over-spring a mild cam and you simply lose a little power for nothing.
+      </ExpandableInfo>
+
+      <div className={styles.labelSpaced}>Valvetrain</div>
+      <Seg label="Valvetrain layout" options={VALVETRAIN_OPTS} value={engineConfig.valvetrain ?? 'dohc'} onChange={(v) => setCfg({ valvetrain: v, follower: undefined })} equal />
+      <div className={styles.labelSpaced}>Valves per cylinder</div>
+      <Seg label="Valves per cylinder" options={VALVES_PER_CYL_OPTS.map((n) => ({ id: n, label: String(n) }))} value={engineConfig.valvesPerCyl ?? 4} onChange={(v) => setCfg({ valvesPerCyl: Number(v), intakeValveMm: null })} equal />
+      <div className={styles.labelSpaced}>Cam followers</div>
+      <Seg label="Cam followers" options={FOLLOWER_OPTS} value={engineConfig.follower ?? ((engineConfig.valvetrain ?? 'dohc') === 'dohc' ? 'flat' : 'roller')} onChange={(v) => setCfg({ follower: v })} equal />
+      <div className={styles.labelSpaced}>
+        Intake valve: {(engineConfig.intakeValveMm ?? TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore).toFixed(1)} mm × {intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}
+        {engineConfig.intakeValveMm == null && <span className={styles.overlapNote}> · typical for this head</span>}
+      </div>
+      <input type="range" aria-label="Intake valve diameter" min={25} max={60} step={0.5} value={engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2} onChange={(e) => setCfg({ intakeValveMm: Number(e.target.value) })} className={styles.slider} />
+      <div className={styles.labelSpaced}>Spark plugs per cylinder</div>
+      <Seg label="Spark plugs per cylinder" options={[{ id: 1, label: '1' }, { id: 2, label: '2' }]} value={engineConfig.sparkPlugs ?? 1} onChange={(v) => setCfg({ sparkPlugs: Number(v) })} equal />
+      <div className={styles.labelSpaced}>Friction level</div>
+      <Seg label="Friction level" options={FRICTION_LEVEL_OPTS} value={engineConfig.frictionLevel ?? 'modern'} onChange={(v) => setCfg({ frictionLevel: v })} equal />
+      <ExpandableInfo title="Pushrods, overhead cams, and how many valves">
+        A <b className={styles.em}>pushrod</b> (OHV) engine has one camshaft in the block, working the valves through lifters, pushrods and rockers; GM&apos;s small-blocks and the modern Hemi are built this way. An <b className={styles.em}>overhead-cam</b> engine carries its cams in the head, one per bank (SOHC) or two (DOHC), working the valves directly or through short followers.
+        <br /><br />What changes here is real: <b className={styles.em}>friction</b> and <b className={styles.em}>breathing</b>. Every cam bearing and every follower on its lobe costs work: a pushrod V8 turns one cam on five bearings where a DOHC V8 turns four on twenty, and four valves per cylinder are twice the followers of two. A flat tappet or bucket slides where a roller rolls and costs more; that difference is not priced yet, because the published coefficient for it could not be obtained, so a flat-follower engine is charged as a roller one for now. Four valves give the charge more valve area than two in the same bore, so the engine keeps filling to a higher piston speed; that is why a four-valve head revs. Give the valve size if you know it: a GM LS head runs a single valve about half the bore across, almost as much area as a typical four-valve head.
+        <br /><br /><b className={styles.em}>Friction level</b> is the engine&apos;s technology rather than its layout: ring tension, coatings and oil thickness cut friction a long way between the 1990s and the 2010s. &ldquo;Older&rdquo; is what GM&apos;s own engine computers say their 2002 truck engines lose to friction: 1.6 times the published model, which matches what an independent laboratory measured on its own engine. &ldquo;Modern&rdquo; is the published model as printed, which is where the factory engines here fit their ratings; whether modern engines really run that low is not yet measured.
+        <br /><br />A <b className={styles.em}>second spark plug</b> lights the charge in two places, so each flame has less of the chamber to cross and the burn is shorter: the modern Hemi runs two for that reason.
       </ExpandableInfo>
 
       <div className={styles.label}>Cam Phasers</div>

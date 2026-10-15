@@ -8,7 +8,9 @@
 
 import { AMBIENT_K, CHAR_SCALE, GAMMA_AIR, R_AIR, SONIC_AMBIENT_MS } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { BASELINE_MAIN_BEARINGS, CYL_COUNT, MAIN_BEARINGS, hasBalanceShafts } from './hardware.js';
+import {
+  CYL_COUNT, MAIN_BEARINGS, TYPICAL_INTAKE_VALVE_SHARE, hasBalanceShafts, intakeValvesFor,
+} from './hardware.js';
 
 /** Stock camshaft duration, crank degrees. */
 export const CAM_BASE_DURATION = 210;
@@ -109,8 +111,29 @@ export function meanPistonSpeedMs(strokeMm, rpm) {
  * @param {number} [sonicMs] speed of sound in the intake charge, m/s
  * @returns {number} Mach index, dimensionless
  */
-export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS) {
-  return COEFF.MACH_BORE_VALVE_FACTOR * meanPistonSpeedMs(strokeMm, rpm) / sonicMs;
+export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS, valveAreaRatio = 1) {
+  return (COEFF.MACH_BORE_VALVE_FACTOR / valveAreaRatio) * meanPistonSpeedMs(strokeMm, rpm) / sonicMs;
+}
+
+/** The four-valve head the Mach coefficients were fitted with: two intakes at 0.36 of the bore. */
+export const REFERENCE_INTAKE_AREA_SHARE = 2 * 0.36 * 0.36;
+
+/**
+ * Intake valve area against the reference four-valve head, on the same bore: the part of
+ * Taylor's (bore / valve)² that is geometry. 1 for a four-valve head with typical valves;
+ * a typical two-valve wedge (one valve at 0.445 of the bore) has 0.78 of it and chokes at
+ * a lower piston speed; a GM LS head (one 50.8 mm valve in a 99 mm bore) has 0.98.
+ *
+ * @param {{bore: number, valvesPerCyl?: number, intakeValveMm?: number|null}} cfg
+ * @returns {{ratio: number, intakeValves: number, intakeValveMm: number, typical: boolean}}
+ */
+export function intakeValveAreaRatio(cfg) {
+  const valvesPerCyl = cfg.valvesPerCyl ?? 4;
+  const intakeValves = intakeValvesFor(valvesPerCyl);
+  const typical = cfg.intakeValveMm == null;
+  const intakeValveMm = typical ? TYPICAL_INTAKE_VALVE_SHARE[valvesPerCyl] * cfg.bore : cfg.intakeValveMm;
+  const share = intakeValveMm / cfg.bore;
+  return { ratio: (intakeValves * share * share) / REFERENCE_INTAKE_AREA_SHARE, intakeValves, intakeValveMm, typical };
 }
 
 /**
@@ -125,12 +148,12 @@ export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS
  * @param {number} rpm engine speed
  * @returns {number} multiplier on VE, 0..1
  */
-export function machVeMultiplier(boreMm, strokeMm, rpm, chargeK = AMBIENT_K) {
+export function machVeMultiplier(boreMm, strokeMm, rpm, chargeK = AMBIENT_K, valveAreaRatio = 1) {
   // Sonic velocity in the charge as it actually is, not as ambient. A boosted engine
   // runs a hotter intake, sound travels faster in it, and it therefore chokes LATER —
   // a real effect, and one of the reasons forced induction tolerates more piston speed.
   const sonicMs = Math.sqrt(GAMMA_AIR * R_AIR * chargeK);
-  const over = Math.max(0, inletMachIndex(boreMm, strokeMm, rpm, sonicMs) - COEFF.MACH_Z_CRIT);
+  const over = Math.max(0, inletMachIndex(boreMm, strokeMm, rpm, sonicMs, valveAreaRatio) - COEFF.MACH_Z_CRIT);
   return Math.max(COEFF.MACH_VE_FLOOR, 1 - COEFF.MACH_VE_LOSS * over * over);
 }
 
@@ -165,6 +188,18 @@ export function charMultiplier(rpm, ratio) {
  *   for boosted cylinder pressure; absent on a naturally aspirated one
  * @property {1|2} [sparkPlugs] spark plugs per cylinder, both firing together (the
  *   modern Hemi, Mercedes M112, Alfa Twin Spark). Absent means one
+ * @property {'ohv'|'sohc'|'dohc'} [valvetrain] how the cams work the valves; absent means
+ *   DOHC, the layout every factory preset here has
+ * @property {2|3|4|5} [valvesPerCyl] valves per cylinder; absent means 4
+ * @property {'roller'|'flat'} [follower] cam followers; absent means the layout's usual one
+ *   (roller for pushrod and SOHC, flat bucket for DOHC)
+ * @property {number|null} [intakeValveMm] intake valve head diameter, mm; absent means the
+ *   typical size for the layout (TYPICAL_INTAKE_VALVE_SHARE)
+ * @property {number} [mainJournalMm] crankshaft main journal diameter, mm; absent means
+ *   estimated from the bore (see crankGeometry in friction.js)
+ * @property {number} [rodJournalMm] connecting rod journal diameter, mm
+ * @property {'modern'|'older'} [frictionLevel] the engine's friction technology (see
+ *   FRICTION_LEVEL_OPTS); absent means modern
  */
 
 /**
@@ -192,7 +227,6 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} floatRpm valve float speed, RPM
  * @property {number} springPa spring friction FMEP, Pa
- * @property {number} bearingFmepPa extra rubbing FMEP from main bearing count, Pa
  * @property {number} balanceShaftFrac fraction of rubbing friction added by balance shafts
  * @property {number} redline rev limit, RPM
  */
@@ -248,11 +282,9 @@ export function deriveEngine(cfg) {
   // starts: see BEARING_PRESSURE_FREE_BAR.
   const bearingFreeBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_PRESSURE_FREE_BAR_BOOST_RATED : COEFF.BEARING_PRESSURE_FREE_BAR;
   const bearingEventBar = cfg.boostRatedBottomEnd ? COEFF.BEARING_EVENT_BAR_BOOST_RATED : COEFF.BEARING_EVENT_BAR;
-  // Architecture friction. Zeroed at the V6 baseline so existing builds do not move:
-  // an inline six pays for its seven mains, a large four pays for its balance shafts,
-  // and the inline six's real advantage is over the four, not over the V6.
-  const bearingFmepPa = (MAIN_BEARINGS[cfg.configuration] - BASELINE_MAIN_BEARINGS)
-    * COEFF.FMEP_PER_MAIN_BEARING_PA;
+  // Architecture friction. Main bearings are counted in the friction model itself
+  // (friction.js: an inline six pays for its seven mains); balance shafts are a share on
+  // top of it.
   const balanceShaftFrac = hasBalanceShafts(cfg.configuration, displacementL)
     ? COEFF.FMEP_BALANCE_SHAFT_FRAC : 0;
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
@@ -261,6 +293,12 @@ export function deriveEngine(cfg) {
   const floatRpm = valveFloatRpm(springRate, camDuration);
   const springPa = springFrictionPa(springRate);
   const redline = cfg.redline ?? DEFAULT_REDLINE_RPM;
+  // The valvetrain: layout, valve count and followers. They decide valvetrain friction
+  // (friction.js) and, through the intake valve area, where breathing chokes.
+  const valvetrain = cfg.valvetrain ?? 'dohc';
+  const valvesPerCyl = cfg.valvesPerCyl ?? 4;
+  const follower = cfg.follower ?? (valvetrain === 'dohc' ? 'flat' : 'roller');
+  const valves = intakeValveAreaRatio({ bore: cfg.bore, valvesPerCyl, intakeValveMm: cfg.intakeValveMm });
   const character = ratio > 1.08
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
@@ -275,6 +313,11 @@ export function deriveEngine(cfg) {
     boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
     torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
     camDuration, springRate, overlapDeg, floatRpm, springPa,
-    bearingFmepPa, balanceShaftFrac, redline,
+    balanceShaftFrac, redline,
+    configuration: cfg.configuration, valvetrain, valvesPerCyl, follower,
+    intakeValves: valves.intakeValves, intakeValveMm: valves.intakeValveMm, valveAreaRatio: valves.ratio,
+    mainBearings: MAIN_BEARINGS[cfg.configuration],
+    mainJournalMm: cfg.mainJournalMm ?? null, rodJournalMm: cfg.rodJournalMm ?? null,
+    frictionLevel: cfg.frictionLevel === 'older' ? 'older' : 'modern',
   };
 }

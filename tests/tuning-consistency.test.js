@@ -121,7 +121,10 @@ describe('the LIVE engine does not cry knock', () => {
     const onLimiter = steps.slice(-40);
     const top = Math.max(...onLimiter.map((s) => s.rpm));
     const bottom = Math.min(...onLimiter.map((s) => s.rpm));
-    expect(top - bottom).toBeLessThan(400);
+    // The swing is the restore band (320) plus how far revs fall before the restored fuel
+    // takes hold. That fall is set by friction, and the geometry-based friction model
+    // (friction.js) gives more of it at the limiter than the old two-term fit did.
+    expect(top - bottom).toBeLessThan(480);
     expect(steps.some((s) => s.knockNow)).toBe(false);
   });
 });

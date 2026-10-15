@@ -88,7 +88,9 @@ describe('units balance', () => {
   it('reports horsepower, torque, airflow, mixture and mean pressures that agree', () => {
     expect(forAll(({ at, safe, eng }) => {
       const p = at({ timingVal: safe });
-      if (Math.abs(p.hp - (p.torque * p.rpm) / 5252) > 1 + p.hp * 0.005) return `hp ${p.hp} vs tq×rpm/5252 ${(p.torque * p.rpm / 5252).toFixed(1)}`;
+      // Both are rounded to whole numbers: hp by up to 0.5, and torque by up to 0.5 lb-ft,
+      // which tq × rpm / 5252 magnifies by rpm / 5252 above 5252 rpm.
+      if (Math.abs(p.hp - (p.torque * p.rpm) / 5252) > 0.5 + 0.5 * Math.max(1, p.rpm / 5252) + p.hp * 0.005) return `hp ${p.hp} vs tq×rpm/5252 ${(p.torque * p.rpm / 5252).toFixed(1)}`;
       const maf = p.airCharge * eng.derived.cyl * (p.rpm / 120);
       if (Math.abs(maf - p.maf) > 0.02 * p.maf + 0.1) return `maf ${p.maf} vs charge×cyl×rpm/120 ${maf.toFixed(1)}`;
       if (Math.abs(p.afr - p.lambda * 14.7) > 0.03) return `afr ${p.afr} vs λ×14.7 ${(p.lambda * 14.7).toFixed(2)}`;

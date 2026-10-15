@@ -41,6 +41,69 @@ export function hasBalanceShafts(configuration, displacementL) {
   return configuration === 'I4' && displacementL >= 1.8;
 }
 
+/**
+ * How the cams open the valves. Each is a real architecture with real consequences:
+ *
+ *   ohv   one block-mounted cam, pushrods and rockers (GM's small-blocks, the modern
+ *         Hemi). Few cam bearings and, on modern engines, roller lifters; the pushrods and
+ *         rockers are extra moving mass every valve event.
+ *   sohc  one cam per bank in the head, usually rockers or finger followers.
+ *   dohc  two cams per bank, each valve worked directly or through a finger follower.
+ *
+ * Where they differ in the physics: friction (cam bearings, follower contact and the
+ * oscillating parts, see `valvetrainFmepKpa` in friction.js) and how many valves a head
+ * of that layout carries, which sets how much valve area the charge gets (engine.js).
+ */
+export const VALVETRAIN_OPTS = [
+  { id: 'ohv', label: 'Pushrod (OHV)' },
+  { id: 'sohc', label: 'SOHC' },
+  { id: 'dohc', label: 'DOHC' },
+];
+
+/**
+ * Cam followers. A roller rolls on the lobe; a flat tappet or bucket slides on it, in
+ * mixed or boundary lubrication, which is why flat followers cost several times more
+ * friction per valve (Sandoval and Heywood, SAE 2003-01-0725).
+ */
+export const FOLLOWER_OPTS = [
+  { id: 'roller', label: 'Roller' },
+  { id: 'flat', label: 'Flat tappet / bucket' },
+];
+
+/** Valves per cylinder: 2 (1 intake, 1 exhaust), 3 (2 + 1), 4 (2 + 2) or 5 (3 + 2). */
+export const VALVES_PER_CYL_OPTS = [2, 3, 4, 5];
+
+/** Intake valves in a head with `valvesPerCyl` valves per cylinder. */
+export const intakeValvesFor = (valvesPerCyl) => (valvesPerCyl >= 5 ? 3 : valvesPerCyl >= 3 ? 2 : 1);
+
+/**
+ * Typical intake valve diameter as a share of the bore, for a head that does not state
+ * its own. Heywood, Internal Combustion Engine Fundamentals (1988), §6.3: wedge and
+ * bathtub chambers 0.43-0.46 of the bore, hemispherical 0.48-0.50, four-valve pent-roof
+ * 0.35-0.37 per valve. The middle of each range; a three-valve head is taken at the
+ * four-valve figure (two intakes) and a five-valve head at 0.30 per intake (three
+ * intakes in the same chamber). A head with known valves should give them: a GM LS head
+ * runs 0.51-0.53 of its bore on one valve, well above the typical wedge.
+ */
+export const TYPICAL_INTAKE_VALVE_SHARE = { 2: 0.445, 3: 0.36, 4: 0.36, 5: 0.30 };
+
+/**
+ * How much friction the engine's technology carries, as a multiple of the published
+ * component model (friction.js). Friction is not set by geometry alone: ring tension,
+ * coatings, oil viscosity and tolerances moved it a long way between the 1990s and the
+ * 2010s, and the files Pro learned from cannot yet separate that from layout.
+ *
+ *   modern  1.0, the published model (Sandoval and Heywood, SAE 2003-01-0725): the level
+ *           every factory preset here fits its rating at.
+ *   older   the level GM's own friction model states for its 2002 Vortec and Gen III
+ *           engines (OS 12212156: LM7, LR4, L31, L35), fitted to those four tables of
+ *           measured friction and never to a power figure. See FRICTION_SCALE_OLDER.
+ */
+export const FRICTION_LEVEL_OPTS = [
+  { id: 'modern', label: 'Modern (low friction)' },
+  { id: 'older', label: 'Older (1990s–2000s)' },
+];
+
 /** Selectable block and head materials. */
 export const MATERIAL_OPTS = ['Cast Iron', 'Aluminum'];
 

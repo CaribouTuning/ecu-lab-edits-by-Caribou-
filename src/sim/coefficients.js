@@ -26,16 +26,30 @@
  * `npm run test:fingerprint:update`.
  */
 export const COEFF = {
-  // --- Friction & pumping (mean effective pressures, Pa) ---
-  RUBBING_BASE_PA: 45000,      // rubbing FMEP at zero RPM
-  RUBBING_PER_RPM: 6.5,        // rubbing FMEP rise per RPM
-  SPRING_FMEP_PER_RATE: 190,   // extra FMEP per point of valve spring rate above stock
+  // --- Friction & pumping (mean effective pressures) ---
+  // Rubbing friction by component, after Sandoval & Heywood (SAE 2003-01-0725) with the
+  // coefficients as restated by Marwaha & Subramanian (IJASTECH 6(1), 2022): units are
+  // kPa with bore, stroke and journal sizes in mm and speed in rpm (see friction.js).
+  FRIC_BEARING: 0.0202,        // hydrodynamic journal bearings, × n N^0.6 D³ L / (k B² S)
+  FRIC_SEALS: 9.36e4,          // crankshaft seals, × D / (k B² S)
+  FRIC_SKIRT: 294,             // piston skirt, × mean piston speed (m/s) / B
+  FRIC_RINGS: 4.06e4,          // piston rings, × (1 + 1000/N) / B²
+  FRIC_GAS: 6.89,              // ring gas load, × (p_i/p_a)(0.088 r + 0.182 r^(1.33 − K Up))
+  FRIC_GAS_K: 2.38e-2,         // K in that term, s/m
+  FRIC_CAM_BEARING: 6720,      // camshaft bearings, × N^0.6 n / (k B² S)
+  FRIC_ROLLER_FOLLOWER: 0.0076, // roller followers, × n_valves N / (k S)
+  // The whole sum is scaled by this. 1 is the published model as it stands.
+  FRICTION_SCALE: 1,
+  // An 'older' engine's friction over the published model. FITTED, to measured friction
+  // only, never to a power figure: least squares against GM's own Friction Torque tables
+  // in four 2002 stock images on OS 12212156 (LM7 5.3, LR4 4.8, L31 5.7, L35 4.3), at
+  // 100 kPa from 1600 to 5600 rpm: 1.60, mean residual +0.6 %, worst point 11.6 % (Pro's
+  // scripts/calibrations/gm-friction.mjs). An independent check: Marwaha and Subramanian
+  // calibrated the same model's constants to friction they measured on their own engine
+  // and their total rose from 60.9 to 99.6 kPa, a factor of 1.64.
+  FRICTION_SCALE_OLDER: 1.6,
+  SPRING_FMEP_PER_RATE: 190,   // extra FMEP per point of valve spring rate above stock, Pa
   SPRING_RPM_BIAS: 0.6,        // how much of spring drag scales with RPM (rest is constant)
-  // Extra rubbing FMEP per main bearing beyond the V6 baseline of four.
-  // Anchored arithmetically rather than guessed: total rubbing FMEP at 6000 RPM is
-  // about 84 kPa, published breakdowns put the crankshaft group near 15% of friction
-  // (~12.6 kPa), and the baseline carries four mains — so roughly 3 kPa each.
-  FMEP_PER_MAIN_BEARING_PA: 3000,
   // Fraction of rubbing friction a balance shaft pair adds. Source: National Academies
   // fuel-economy report, 6% measured on Ford's 1.0 L I3 — but that is a SINGLE shaft on
   // a triple, applied here to twin-shaft 1.8 L+ I4s. An extrapolation, not a match.
@@ -584,6 +598,12 @@ export const COEFF = {
   // A rev limiter is a hysteresis loop, not a ceiling: fuel is cut at the limit, revs
   // fall, and fuel is restored this far below it. That cut-restore cycle IS the bounce
   // you hear off a limiter, and the band is what sets how fast it stutters.
+  // KNOWN DISCREPANCY: GM's stock calibrations restore 50 RPM under the cut in every
+  // image Pro has read (B3303 "Fuel Cut-off Limiters in Gear": 6000/5950, 5600/5550,
+  // 6200/6150 RPM, 26 LM7, LR4, LQ4, LS1 and LS6 images). 320 has no source. Moving it
+  // to 50 changes the drag strip's wheelspin behaviour (a spinning street tyre on the
+  // limiter then out-runs a car that does not spin), so it waits for that model to be
+  // checked rather than going in blind.
   LIMITER_RESTORE_BAND_RPM: 320,
 
   // --- Volumetric efficiency modifiers ---

@@ -11,7 +11,7 @@ import { COEFF } from './coefficients.js';
 import { CYL_COUNT, MOD_BONUS, idealExhaustDiameter } from './hardware.js';
 import { trappedAirGrams } from './cycle.js';
 import {
-  CAM_BASE_DURATION, camOverlapDeg, camPeakShiftRpm, charMultiplier, machVeMultiplier,
+  CAM_BASE_DURATION, camOverlapDeg, camPeakShiftRpm, charMultiplier, intakeValveAreaRatio, machVeMultiplier,
   valveFloatRpm,
 } from './engine.js';
 import { clamp, interp1 } from './math.js';
@@ -101,6 +101,8 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
   // at the top end and that is where the boost curve is highest — so a boosted engine is
   // judged on the hot charge it actually breathes there, not on ambient air.
   const machChargeK = chargeTempK(turboOn ? peakBoostPsi : 0, !!mods.intercooler);
+  // Intake valve area against the four-valve head the Mach terms were fitted with.
+  const valveAreaRatio = intakeValveAreaRatio(cfg).ratio;
   const sweptM3 = (displacementL / cyl) / 1000;
   // Overlap decides how much of the cycle backpressure gets to push the wrong way: with
   // both valves open, a manifold above the intake drives burnt gas back through the
@@ -128,7 +130,7 @@ export function computeHardwareVE(cfg, mods, hw = {}) {
     // aspirated engine a power peak before its redline instead of climbing into the
     // limiter (#15). Keyed on stroke, so a long-stroke engine runs out of breath at
     // fewer revolutions than a short-stroke one, which is the real reason it cannot rev.
-    val *= machVeMultiplier(cfg.bore, cfg.stroke, rpm, machChargeK);
+    val *= machVeMultiplier(cfg.bore, cfg.stroke, rpm, machChargeK, valveAreaRatio);
 
     if (rpm > floatRpm) {
       val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);

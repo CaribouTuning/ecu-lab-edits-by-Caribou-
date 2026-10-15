@@ -77,16 +77,16 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.40-0.45 lb/hp·h, 10.9-11.7 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.42-0.48 lb/hp·h, 10.4-11.1 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.395);
-    expect(hi).toBeLessThan(0.455);
+    expect(lo).toBeGreaterThanOrEqual(0.415);
+    expect(hi).toBeLessThan(0.485);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
-    expect(alo).toBeGreaterThanOrEqual(10.85);
-    expect(ahi).toBeLessThan(11.75);
+    expect(alo).toBeGreaterThanOrEqual(10.35);
+    expect(ahi).toBeLessThan(11.15);
   });
 
-  it('turbo spool: 12-50% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
+  it('turbo spool: 14-53% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
     // Each maker publishes a flat torque plateau from a stated RPM; below 2000 RPM that is
     // the real engine's torque wherever the plateau has begun.
     const plateauFrom = { n54: 1400, 'b58-m0': 1380, 'b58-m1': 1800, 'ea888-gti': 1500, 'ea888-r': 1800 };
@@ -100,18 +100,18 @@ describe('the known approximations are the size the pages say', () => {
       }
     }
     const [lo, hi] = span(deficits);
-    expect(lo).toBeGreaterThanOrEqual(0.12);
-    expect(hi).toBeLessThanOrEqual(0.5);
+    expect(lo).toBeGreaterThanOrEqual(0.14);
+    expect(hi).toBeLessThanOrEqual(0.53);
   });
 
-  it('peak torque: most turbo presets 3-8% over their rating, the GTI about 4% under', () => {
+  it('peak torque: most turbo presets 2-7% over their rating, the GTI about 8% under', () => {
     for (const { preset, pull, boosted } of PRESETS) {
       if (!boosted) continue;
       const over = crank(pull.peakTq) / preset.factory.crankTq - 1;
-      if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.04, 1);
+      if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.08, 1);
       else {
-        expect(over).toBeGreaterThanOrEqual(0.03);
-        expect(over).toBeLessThanOrEqual(0.08);
+        expect(over).toBeGreaterThanOrEqual(0.02);
+        expect(over).toBeLessThanOrEqual(0.07);
       }
     }
   });
@@ -195,7 +195,7 @@ describe('the known approximations are the size the pages say', () => {
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 60 bar on the NA presets, 64-79 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 59-63 bar on the NA presets, 64-80 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
@@ -203,7 +203,7 @@ describe('the known approximations are the size the pages say', () => {
         expect(pmax).toBeLessThanOrEqual(80);
       } else {
         expect(pmax).toBeGreaterThanOrEqual(58);
-        expect(pmax).toBeLessThanOrEqual(63);
+        expect(pmax).toBeLessThanOrEqual(63.5);
       }
     }
     expect(S.COEFF.PEAK_PRESSURE_LIMIT_BAR).toBe(105);
@@ -219,7 +219,7 @@ describe('the known approximations are the size the pages say', () => {
     expect(S.DRIVETRAIN_EFF).toBe(0.85);
   });
 
-  it('boost: 20 psi with an intercooler is about 1.7× the NA engine; a generic turbo build burns 0.52-0.66 lb/hp·h', () => {
+  it('boost: 20 psi with an intercooler is about 1.7× the NA engine; a generic turbo build burns 0.54-0.70 lb/hp·h', () => {
     const cfg = { ...S.DEFAULT_ENGINE_CONFIG, compression: 9.0 };
     const derived = S.deriveEngine(cfg);
     const fuel = S.OCTANE_OPTS.find((o) => o.label === '93');
@@ -242,8 +242,8 @@ describe('the known approximations are the size the pages say', () => {
     expect(ratio).toBeGreaterThanOrEqual(1.65);
     expect(ratio).toBeLessThan(1.75);
     const [lo, hi] = span([powerAt(10, true), powerAt(20, true), powerAt(10, false), powerAt(20, false)].map((p) => p.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.51);
-    expect(hi).toBeLessThan(0.665);
+    expect(lo).toBeGreaterThanOrEqual(0.535);
+    expect(hi).toBeLessThan(0.71);
   });
 
   it('exhaust backpressure at rated power: 1.0-1.45× the boost pressure on the turbo presets', () => {

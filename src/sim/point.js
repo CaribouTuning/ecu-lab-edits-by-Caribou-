@@ -285,9 +285,7 @@ export function evaluatePoint({
   // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and
   // genuinely negative — work returned to the piston — when boost exceeds backpressure.
   const pmepPa = pumpingFmepPa(mapKpa, empKpa);
-  const rubbingPa = rubbingFmepPa(rpm, derived.springPa || 0, {
-    bearingFmepPa: derived.bearingFmepPa, balanceShaftFrac: derived.balanceShaftFrac,
-  });
+  const rubbingPa = rubbingFmepPa(rpm, derived.springPa || 0, derived, mapKpa);
   // A supercharger is driven off the crank, so the power it takes to compress the air is
   // a load on the engine like friction: FMEP = power ÷ (displacement × firing rate).
   const blowerPa = blower ? blower.driveW / ((derived.displacementL / 1000) * (rpm / 120)) : 0;

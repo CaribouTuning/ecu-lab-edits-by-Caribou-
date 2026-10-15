@@ -355,7 +355,11 @@ const TEMPLATES = /** @type {Template[]} */ ([
     id: 'build-boost', minLevel: 3, cars: ['v6', 'hr', 'de'], needs: { training: ['builder', 'boost'], equipment: ['dyno', 'egt'] },
     make: ({ r, level, car }) => {
       const octaneIdx = r.pick([1, 1, 3]);
-      const share = r.range(1.25, 1.3 + (level - 3) * 0.08);
+      // Pump 93 holds a boosted 10-11:1 naturally aspirated engine knock-limited, so the gain
+      // a safe tune finds on it is smaller than on E85. Set for the friction model that rises
+      // with speed as GM's measured friction does (October 2026); the old, flatter friction
+      // let pump-fuel builds reach 25-38 %.
+      const share = octaneIdx === 3 ? r.range(1.2, 1.25 + (level - 3) * 0.04) : r.range(1.15, 1.2 + (level - 3) * 0.03);
       return {
         tier: 3, pay: payAt(3400, level, r), rep: 18, build: true,
         says: `I want it fast, and I want to drive it to work. Boost is fine. ${octaneIdx === 3 ? 'There’s E85 at my station.' : 'Pump 93 only.'}`,

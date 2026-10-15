@@ -222,12 +222,14 @@ export const JOBS = [
     id: 'blower-power', tier: 3,
     customer: { name: 'Rae', car: '3.5 V6 track car, supercharged', color: 'copper', body: 'coupe' },
     says: 'Supercharger’s on with the small pulley, intercooled, injectors sized for it. It’s on the old tune and it rattles. I have a track weekend in two weeks.',
-    wants: '380 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
+    wants: '355 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
     work: ['Supercharger kit already fitted and injectors scaled', 'Dyno tune for power and reliability'],
     car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.6, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
     needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 130, pay: 3200, rep: 22,
     checks: [
-      { type: 'minHp', kind: 'complaint', hp: 380, label: '380 wheel horsepower' },
+      // 380 before October 2026, when friction rose with speed as GM's measured friction
+      // does and the same safe tune came to about 360.
+      { type: 'minHp', kind: 'complaint', hp: 355, label: '355 wheel horsepower' },
       ...SAFE,
       { type: 'maxDuty', kind: 'safety', max: 90, label: 'Injectors with headroom left' },
     ],

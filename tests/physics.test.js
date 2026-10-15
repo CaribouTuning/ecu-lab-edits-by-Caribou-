@@ -952,11 +952,11 @@ describe('engine configuration and friction', () => {
     // Architectural fact, not a preference: I6 = 7 mains, V6 = 4.
     expect(S.MAIN_BEARINGS.I6).toBe(7);
     expect(S.MAIN_BEARINGS.V6).toBe(4);
-    expect(at('I6').bearingFmepPa).toBeGreaterThan(at('V6').bearingFmepPa);
+    const mains = (d) => S.rubbingFmepParts(6000, 0, d).parts.mainBearings;
+    expect(mains(at('I6'))).toBeGreaterThan(mains(at('V6')));
   });
 
-  it('leaves the V6 baseline at zero so existing builds do not move', () => {
-    expect(at('V6').bearingFmepPa).toBe(0);
+  it('charges no balance shafts on a V6', () => {
     expect(at('V6').balanceShaftFrac).toBe(0);
   });
 
@@ -970,23 +970,59 @@ describe('engine configuration and friction', () => {
     expect(S.hasBalanceShafts('I4', 1.2)).toBe(false);
   });
 
-  it('makes an inline six cost slightly more friction than a V6 of equal size', () => {
-    const i6 = at('I6');
-    const v6 = at('V6');
-    const arch = (d) => ({ bearingFmepPa: d.bearingFmepPa, balanceShaftFrac: d.balanceShaftFrac });
-    expect(S.rubbingFmepPa(6000, 0, arch(i6))).toBeGreaterThan(S.rubbingFmepPa(6000, 0, arch(v6)));
-  });
-
-  it('keeps the friction penalty small enough to be a trade-off, not a verdict', () => {
-    const i6 = at('I6');
-    const arch = { bearingFmepPa: i6.bearingFmepPa, balanceShaftFrac: i6.balanceShaftFrac };
-    const penalty = S.rubbingFmepPa(6000, 0, arch) / S.rubbingFmepPa(6000, 0) - 1;
-    expect(penalty).toBeGreaterThan(0.02);
+  it('makes an inline six cost slightly more friction than a V6 of equal size, a trade-off not a verdict', () => {
+    const penalty = S.rubbingFmepPa(6000, 0, at('I6')) / S.rubbingFmepPa(6000, 0, at('V6')) - 1;
+    expect(penalty).toBeGreaterThan(0);
     expect(penalty).toBeLessThan(0.20);
   });
 
-  it('defaults to no architecture penalty when none is supplied', () => {
-    expect(S.rubbingFmepPa(6000, 0)).toBe(S.rubbingFmepPa(6000, 0, { bearingFmepPa: 0, balanceShaftFrac: 0 }));
+  it('defaults to the reference V6 when no geometry is supplied', () => {
+    expect(S.rubbingFmepPa(6000, 0)).toBeCloseTo(S.rubbingFmepPa(6000, 0, at('V6')), 6);
+  });
+
+  it('rises with speed the way measured engines do, not as a nearly flat line', () => {
+    // GM's own friction model for its 2002 LM7 (OS 12212156) rises from about 134 kPa at
+    // 2000 rpm to 229 kPa at 5200: about 1.7 times. A straight 45 kPa + 6.5 Pa/rpm, the
+    // simulator's old figure, rose 1.3 times.
+    const d = at('V8', { bore: 96.01, stroke: 92, compression: 9.5, valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller' });
+    expect(S.rubbingFmepPa(5200, 0, d) / S.rubbingFmepPa(2000, 0, d)).toBeGreaterThan(1.5);
+  });
+
+  it('charges followers per valve, so a four-valve head pays twice a two-valve one', () => {
+    const f = (valvesPerCyl) => S.rubbingFmepParts(5000, 0, at('V8', { valvesPerCyl })).parts.follower;
+    expect(f(4) / f(2)).toBeCloseTo(2, 9);
+  });
+
+  it('gives a pushrod V8 fewer cam bearings than an overhead-cam one', () => {
+    const v8 = (valvetrain) => S.frictionGeometry(at('V8', { valvetrain })).camBearings;
+    expect(v8('ohv')).toBe(5);
+    expect(v8('dohc')).toBe(20);
+    expect(v8('sohc')).toBe(10);
+  });
+});
+
+describe('valve count and valve size', () => {
+  const at = (over = {}) => S.deriveEngine({ ...STOCK, ...over });
+
+  it('leaves a four-valve head with typical valves exactly where the breathing terms were fitted', () => {
+    expect(at().valveAreaRatio).toBeCloseTo(1, 9);
+    expect(at({ valvesPerCyl: 4 }).intakeValves).toBe(2);
+  });
+
+  it('gives a typical two-valve wedge less intake valve area, so it chokes at a lower piston speed', () => {
+    const two = at({ valvesPerCyl: 2, valvetrain: 'ohv' });
+    expect(two.intakeValves).toBe(1);
+    expect(two.valveAreaRatio).toBeLessThan(0.85);
+    const z4 = S.inletMachIndex(95.5, 81.4, 6500, undefined, at().valveAreaRatio);
+    const z2 = S.inletMachIndex(95.5, 81.4, 6500, undefined, two.valveAreaRatio);
+    expect(z2).toBeGreaterThan(z4);
+  });
+
+  it('credits a big single valve, as a GM LS head has, with nearly four-valve area', () => {
+    // LS1: one 50.8 mm intake valve in a 99 mm bore (GM).
+    const ls = at({ bore: 99, valvesPerCyl: 2, intakeValveMm: 50.8 });
+    expect(ls.valveAreaRatio).toBeGreaterThan(0.95);
+    expect(ls.valveAreaRatio).toBeLessThan(1.05);
   });
 });
 

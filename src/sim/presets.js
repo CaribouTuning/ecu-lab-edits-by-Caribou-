@@ -87,6 +87,9 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,
       compression: 10.3,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
+      // DOHC, four valves, direct-acting buckets with shims (Nissan parts list: intake valve
+      // shim buckets; Tomei: 'conventional direct-acting valve train').
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat',
       // Bore, stroke, compression and redline above are published; `camDuration` and
       // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
       // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
@@ -111,7 +114,10 @@ export const ENGINE_PRESETS = [
       // lands on the published figure (0.0%, torque +5.0%), and the power curve's flat top
       // (within 1 hp of peak) now runs 6500-6900 against a published 6400 instead of
       // climbing into the 7000 limiter.
-      camDuration: 210, springRate: 60,
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 222, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -134,6 +140,7 @@ export const ENGINE_PRESETS = [
       bore: 95.5, stroke: 81.4,          // 95.5 x 81.4 mm
       compression: 10.6,                 // 10.6:1
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat', // as the DE: direct-acting buckets
       // Bore, stroke, compression and redline above are published figures and do not
       // move. `camDuration` and `springRate` are not published, so they are where this
       // preset is fitted.
@@ -155,7 +162,10 @@ export const ENGINE_PRESETS = [
       // published 6800 rather than sitting 700 RPM above it. What remains missing is still worth naming: the real
       // engine's rolloff is cam profile, VVEL variable lift and intake-tract tuning, and
       // the Mach term stands in for all three at once rather than reproducing any of them.
-      camDuration: 218, springRate: 68,
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 232, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -182,7 +192,13 @@ export const ENGINE_PRESETS = [
       bore: 84.0, stroke: 89.6,          // 84 x 89.6 mm
       compression: 10.2,                 // 10.2:1 — high for a turbo engine, thanks to DI
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // BMW High Precision Injection: piezo, direct only
-      camDuration: 216, springRate: 58,
+      // DOHC, four valves; roller finger followers on hydraulic lash adjusters, as BMW's
+      // later B58 (an inference for the N54, not a sourced figure).
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 214, springRate: 58,
       redline: 7000,
     },
     induction: {
@@ -221,6 +237,8 @@ export const ENGINE_PRESETS = [
       bore: 82.0, stroke: 94.6,          // 82 x 94.6 mm
       compression: 11.0,                 // 11.0:1 — higher than the N54, two generations back
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
+      // DOHC, four valves, roller finger followers ('roller drag lever', BMW part 11337640533).
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Bore, stroke, compression and redline are published and do not move.
       // `camDuration` and `springRate` are not published in terms comparable to this
       // model, so they are free to be fitted — see the VQ35HR comment above for the
@@ -292,10 +310,14 @@ export const ENGINE_PRESETS = [
       bore: 82.0, stroke: 94.6,
       compression: 11.0,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Same short block, so bore, stroke and compression are the M0's. The revised
       // engine's sharper calibration is carried by a slightly longer duration and the
       // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
-      camDuration: 218, springRate: 62,
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 210, springRate: 62,
       redline: 7000,
     },
     induction: {
@@ -360,10 +382,16 @@ export const ENGINE_PRESETS = [
       bore: 82.5, stroke: 92.8,          // 82.5 x 92.8 mm
       compression: 9.6,                  // 9.6:1
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
+      // DOHC, four valves; roller finger followers (an inference: the layout VW's modern
+      // four-valve heads use, not a sourced figure for the EA888.3).
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Direct injection only: the North American EA888.3 has no port injectors (the
       // European one is dual-injected). Duration is fitted, not published: 200 puts both
       // this and the Golf R, which share it, on their rated power and torque.
-      camDuration: 200, springRate: 54,
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 210, springRate: 54,
       redline: 6500,
     },
     induction: {
@@ -397,10 +425,14 @@ export const ENGINE_PRESETS = [
       bore: 82.5, stroke: 92.8,
       compression: 9.6,
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
+      valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Direct injection only: the North American EA888.3 has no port injectors (the
       // European one is dual-injected). Duration is fitted, not published: 200 puts both
       // this and the Golf R, which share it, on their rated power and torque.
-      camDuration: 200, springRate: 54,
+      // REFITTED for the geometry-based friction model (friction.js), which charges this
+      // engine more friction at speed than the old straight line did: duration moved to
+      // where power lands on the published rating again (Pro docs/FRICTION.md).
+      camDuration: 206, springRate: 54,
       redline: 6800,
     },
     induction: {
