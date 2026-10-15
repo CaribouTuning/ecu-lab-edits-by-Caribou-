@@ -20,7 +20,7 @@ import {
   COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, EXHAUST_DIA_OPTS, INJECTOR_OPTS, MATERIAL_OPTS, OCTANE_OPTS, TURBINE_OPTS,
   VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount,
 } from './hardware.js';
-import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
@@ -1009,21 +1009,36 @@ export function applyPreset(preset) {
 
 /**
  * What a player must type to describe an engine of their own, and the range each figure
- * can honestly take. They are the ranges of the road engines this simulator's physics was
- * built and checked on: outside them its answers would be extrapolation, so the form
- * refuses rather than guesses. BUILD's sliders use the same ranges, so anything the form
- * accepts, the sliders can show and the player can then adjust.
+ * can take: the range the model's physics is checked across, and no wider. The property
+ * and consistency tests (tests/physics-invariants.test.js, tests/consistency-fuzz.test.js)
+ * build thousands of random engines from exactly these ranges (tests/randomBuilds.js) and
+ * hold every one to energy, mass, units and the direction each lever pulls. Widened to a
+ * 110 mm bore and 14:1, those tests found engines where enrichment stops cooling the
+ * exhaust and the ECU stops matching the open-loop model, so the form refuses such
+ * figures rather than show numbers nobody has checked. The stroke reaches 102 mm for the
+ * GM LQ4's 101.6.
+ *
+ * The redline stops where the tables do. Every table, and the airflow the model works out
+ * for each, ends at the top of the RPM axis (7500); past it a pull would read the last
+ * column's airflow at every speed and its power would climb in a straight line with RPM,
+ * which no engine does.
+ *
+ * BUILD's sliders use the same ranges, so anything the form accepts, the sliders can show
+ * and the player can then adjust.
  */
 export const CUSTOM_ENGINE_LIMITS = Object.freeze({
-  bore: { min: 70, max: 110, step: 0.5, unit: 'mm' },
-  stroke: { min: 60, max: 110, step: 0.5, unit: 'mm' },
-  compression: { min: 8, max: 14, step: 0.1, unit: ':1' },
-  redline: { min: 4000, max: 11000, step: 100, unit: 'rpm' },
+  bore: { min: 75, max: 105, step: 0.5, unit: 'mm', why: 'Outside this range the simulator\'s physics has not been checked.' },
+  stroke: { min: 65, max: 102, step: 0.5, unit: 'mm', why: 'Outside this range the simulator\'s physics has not been checked.' },
+  compression: { min: 8.5, max: 13, step: 0.1, unit: ':1', why: 'Outside this range the simulator\'s physics has not been checked.' },
+  redline: {
+    min: 4000, max: RPM[RPM.length - 1], step: 100, unit: 'rpm',
+    why: `The simulator's tables and airflow run to ${RPM[RPM.length - 1]} rpm.`,
+  },
   camDuration: { min: 180, max: 300, step: 2, unit: '°' },
 });
 
-/** Typical peak naturally aspirated crank power per litre, hp/L, used only to size injectors. */
-const INJECTOR_SIZING_HP_PER_L = 80;
+/** The most a player's own engine's injectors are sized to be open at full throttle (85 %, the usual rule). */
+const INJECTOR_SIZING_MAX_DUTY = 0.85;
 
 /**
  * Checks the figures a player entered for an engine of their own.
@@ -1045,7 +1060,7 @@ export function validateCustomEngine(spec) {
     const v = Number(raw);
     const lim = CUSTOM_ENGINE_LIMITS[key];
     if (!Number.isFinite(v)) { errors[key] = 'Enter a number.'; return null; }
-    if (v < lim.min || v > lim.max) { errors[key] = `Between ${lim.min} and ${lim.max} ${lim.unit}.`; return null; }
+    if (v < lim.min || v > lim.max) { errors[key] = `Between ${lim.min} and ${lim.max} ${lim.unit}.${lim.why ? ` ${lim.why}` : ''}`; return null; }
     return v;
   };
   if (!CONFIG_OPTS.includes(spec.configuration)) errors.configuration = 'Choose the cylinder layout.';
@@ -1073,6 +1088,7 @@ export function validateCustomEngine(spec) {
   const material = (m) => (MATERIAL_OPTS.includes(m) ? m : 'Aluminum');
   if (!spec.blockMaterial) { estimated.push('block material (aluminium assumed)'); assumed.push('blockMaterial'); }
   if (!spec.headMaterial) { estimated.push('head material (aluminium assumed)'); assumed.push('headMaterial'); }
+  if (!spec.injection) { estimated.push('fuel injection (port assumed)'); assumed.push('injection'); }
   return {
     ok: true,
     estimated,
@@ -1094,8 +1110,8 @@ export function validateCustomEngine(spec) {
  * Everything the app needs to start on an engine the player described, as one patch: the
  * same shape `applyPreset` returns, with a factory-style calibration generated from the
  * physics for these exact figures (never a table borrowed from another engine), the
- * smallest stock injector that covers a typical naturally aspirated power for its size,
- * and the exhaust nearest the ideal diameter. `presetId` is null: it is not a catalogue
+ * smallest stock injector that feeds that calibration's own full-throttle airflow at no
+ * more than 85 % duty, and the exhaust nearest the ideal diameter. `presetId` is null: it is not a catalogue
  * engine, so nothing may claim to be a published figure.
  *
  * @param {import('./engine.js').EngineConfig} engine from {@link validateCustomEngine}
@@ -1105,33 +1121,61 @@ export function validateCustomEngine(spec) {
 export function customEnginePatch(engine, assumed = []) {
   const derived = deriveEngine(engine);
   const cylinders = CYL_COUNT[engine.configuration];
-  // Fuel flow at the assumed power: BSFC 0.5 lb/hp/hr, injectors no more than 90 % open,
-  // 10.5 cc/min per lb/hr of gasoline.
-  const neededCc = ((derived.displacementL * INJECTOR_SIZING_HP_PER_L * 0.5) / cylinders / 0.9) * 10.5;
-  const injectorIdx = Math.max(0, INJECTOR_OPTS.findIndex((o) => o.cc >= neededCc));
   const ideal = idealExhaustDiameter(derived.displacementL);
   const exhaustDiaIdx = EXHAUST_DIA_OPTS.reduce((best, o, i) => (Math.abs(o.dia - ideal) < Math.abs(EXHAUST_DIA_OPTS[best].dia - ideal) ? i : best), 0);
-  /** @type {Preset} */
-  const adHoc = {
+  /** @param {number} injectorIdx @returns {Preset} */
+  const adHoc = (injectorIdx) => ({
     id: 'custom', name: 'Your engine', manufacturer: '', years: '', blurb: '',
     factory: { displacementL: derived.displacementL },
     engine,
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
-    parts: { injectorIdx: injectorIdx === -1 ? INJECTOR_OPTS.length - 1 : injectorIdx, exhaustDiaIdx, octaneIdx: 0 },
+    parts: { injectorIdx, exhaustDiaIdx, octaneIdx: 0 },
     mods: { intake: false, exhaust: false, headers: false, intercooler: false },
-  };
-  return { ...applyPreset(adHoc), presetId: null, assumed };
+  });
+  // Injectors sized from this engine's own full-throttle airflow, cam and all, read off the
+  // calibration's VE and fuel tables at every speed up to the redline: each cylinder's fuel
+  // per cycle has to fit in 85 % of the cycle, less the injector's dead time. (A flat
+  // power-per-litre guess left a 270-degree cam out of injector at the top of its first pull.)
+  const fuel = OCTANE_OPTS[0];
+  const cal = applyPreset(adHoc(INJECTOR_OPTS.length - 1));
+  const speeds = [...RPM.filter((r) => r < engine.redline), engine.redline];
+  const neededCc = Math.max(...speeds.map((rpm) => {
+    const airPerCylG = (interp2(cal.ve, rpm, BARO_KPA) / 100) * (derived.displacementL / 1000 / cylinders) * RHO_AIR * 1000;
+    const fuelPerCylG = airPerCylG / ((interp2(cal.afr, rpm, BARO_KPA) / 14.7) * fuel.stoich);
+    const openMs = INJECTOR_SIZING_MAX_DUTY * (120000 / rpm) - INJ_DEADTIME_MS;
+    return (fuelPerCylG * 60000) / (fuel.density * openMs);
+  }));
+  // The smallest that covers it; the largest stocked when none does.
+  const fits = INJECTOR_OPTS.findIndex((o) => o.cc >= neededCc);
+  const injectorIdx = fits === -1 ? INJECTOR_OPTS.length - 1 : fits;
+  return { ...applyPreset(adHoc(injectorIdx)), presetId: null, assumed };
 }
 
 /**
- * The factory-style calibration for the hardware on the bench, with its bolt-ons taken off:
- * what RESET ALL TO STOCK writes. Generated from the physics for THIS engine, fuel and
+ * The bolt-ons RESET ALL TO STOCK leaves on: none, except an intercooler while a turbo or a
+ * supercharger is fitted. The reset keeps the induction hardware (it resets a calibration,
+ * it does not uninstall a turbo), and the intercooler is part of it: every factory turbo
+ * engine in the catalogue has one. Taking it off left a stock N54 or Golf R logging IAT and
+ * EGT protection on its next pull.
+ *
+ * @param {{mods?: {intercooler?: boolean}, turboOn?: boolean, blowerId?: string|null}} build
+ * @returns {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}}
+ */
+export function stockModsOf(build) {
+  const forced = !!build.turboOn || !!build.blowerId;
+  return { intake: false, exhaust: false, headers: false, intercooler: forced && !!build.mods?.intercooler };
+}
+
+/**
+ * The factory-style calibration for the hardware on the bench, with its bolt-ons taken off
+ * (`stockModsOf`): what RESET ALL TO STOCK writes. Generated from the physics for THIS engine, fuel and
  * boost, exactly as a catalogue preset's own is, so it is knock-safe on a turbo or a big V8
  * as much as on the Nissan V6 the generic tables were drawn for.
  *
  * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
- *   octaneIdx: number, ethanolPct?: number}} build the BUILD slice (or the fields of it named)
+ *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null}} build the BUILD
+ *   slice (or the fields of it named)
  * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number}}
  */
 export function stockCalibrationFor(build) {
@@ -1145,7 +1189,7 @@ export function stockCalibrationFor(build) {
       compressorIdx: build.compressorIdx, boost: build.boostCurve,
     },
     parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
-    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+    mods: stockModsOf(build),
     fuel: tankFuel(/** @type {any} */ (build)),
   };
   return factoryCalibration(hardware);

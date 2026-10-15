@@ -260,8 +260,8 @@ export function stockEcuParts() {
  *
  * `blank` is SANDBOX's own first launch: no engine yet. The hardware and tables are the
  * same placeholders (the simulator needs numbers to exist), but `build.engineReady` is
- * false and every screen that would show them asks for an engine instead. The tutorial's
- * demo engine and the career's cars start from the ready default.
+ * false and every screen that would show them asks for an engine instead. The career's cars
+ * start from the ready default; the tutorial's demo applies its lesson engine on top of it.
  *
  * @param {{blank?: boolean}} [opts]
  * @returns {StoreState}

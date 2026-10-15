@@ -21,8 +21,9 @@ import styles from './LogScreen.module.css';
 /**
  * @param {object} props
  * @param {{ri: number, ci: number}[]} [props.flagged] the cells TUNE's advisor says are past the
- *   knock limit. A pull only runs the tables along its own load, so a clean pull and a flagged
- *   cell are both true; the log says so rather than leaving the two screens to contradict.
+ *   knock limit that this pull did not run (`cellsNotRunBy`). A pull only runs the tables along
+ *   its own load, so a clean pull and a flagged cell are both true; the log says so rather than
+ *   leaving the two screens to contradict.
  * @returns {React.ReactElement}
  */
 export function LogScreen({ flagged = [] }) {

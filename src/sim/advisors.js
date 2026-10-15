@@ -429,6 +429,27 @@ export function cellsInForce(rpm, mapKpa) {
 }
 
 /**
+ * The cells of `cells` that `pull` never read: no operating point of the pull gave one of
+ * them a real share of its timing (the same in-force test the advisor judges a pull by).
+ *
+ * TUNE's advisor judges every cell against its own full-throttle pull, but the player can
+ * pull at any load. A flagged cell the player's pull did run has already had its say in
+ * that pull's log; only the rest are ones the log cannot have shown.
+ *
+ * @template {{ri: number, ci: number}} C
+ * @param {C[]} cells
+ * @param {{points: {rpm: number, map: number}[]}} pull a `simulateSweep` result
+ * @returns {C[]}
+ */
+export function cellsNotRunBy(cells, pull) {
+  const run = new Set();
+  for (const p of pull.points) {
+    for (const { ri, ci, w } of cellsInForce(p.rpm, p.map)) if (w >= IN_FORCE_WEIGHT) run.add(`${ri}|${ci}`);
+  }
+  return cells.filter((c) => !run.has(`${c.ri}|${c.ci}`));
+}
+
+/**
  * The spark verdicts, judged against a full-throttle pull of the same engine.
  *
  * Grading every cell at its own row pressure is right for a table's shape, but it is not

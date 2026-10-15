@@ -161,19 +161,22 @@ describe('a lesson’s screen is live', () => {
   it('APPLY HALF in lesson 4.2 changes the sandbox table and then asks for a new pull, as the game does', () => {
     openLesson(COURSE, COURSE.lessons.findIndex((l) => l.id === 've-from-logs'));
     const fig = screen.getByRole('figure', { name: 'Game screen: TUNE › AIRFLOW' });
-    const cellBefore = within(fig).getByRole('button', { name: '7500 RPM, 100 kPa' }).textContent;
+    // The cell the lesson works through: the intake pull logged it.
+    const cellBefore = within(fig).getByRole('button', { name: '5500 RPM, 100 kPa' }).textContent;
     fireEvent.click(within(fig).getByRole('button', { name: 'APPLY HALF' }));
-    expect(within(fig).getByRole('button', { name: '7500 RPM, 100 kPa' }).textContent).not.toBe(cellBefore);
+    expect(within(fig).getByRole('button', { name: '5500 RPM, 100 kPa' }).textContent).not.toBe(cellBefore);
     const panel = within(fig).getByRole('region', { name: 'Correct VE from logs' });
     expect(within(panel).getByText(/before you changed VE table .* run another pull/)).toBeTruthy();
   });
 });
 
 describe('the numbers are the game’s', () => {
-  it('the stock pull the tutorial quotes is the pull the app makes', async () => {
-    render(<EcuLab />);
+  it('the stock pull the tutorial quotes is the pull the app makes on the engine it names', async () => {
+    // As a player does it: SANDBOX opens with no engine, and the lessons name the Rev-Up.
+    render(<EcuLab blankStart />);
     fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
     fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' }));
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(), { timeout: 10000 });
     const strip = document.querySelector('[data-tour="strip-last-pull"]');

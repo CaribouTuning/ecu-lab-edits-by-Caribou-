@@ -1,11 +1,14 @@
 /**
- * The engine the tutorial and the Tuning Course talk about — the same one a player gets on SANDBOX.
+ * The engine the tutorial and the Tuning Course talk about: the Nissan VQ35DE Rev-Up, loaded
+ * as a player loads it from BUILD (and the engine a practice mission puts on the bench).
+ * SANDBOX opens with no engine, so the lessons name a prebuilt one the player can pick;
+ * the old default engine is not in the catalogue and no player could have matched it.
  *
  * Their lessons show real game screens, and a real screen needs real data: a pull, the
  * advisor's verdicts, the VE log. This works them out the way the game does, from a
- * store-shaped state (`makeInitialState()`, optionally changed by a scenario), through
+ * store-shaped state (the preset applied by the app's own reducer, optionally changed by a scenario), through
  * the same simulator calls EcuLab.jsx makes. So every number a lesson quotes — "the
- * stock V6 makes 258 whp", "this cell reads 95%" — is the number the player will see
+ * stock Rev-Up makes 252 whp", "this cell reads 95%" — is the number the player will see
  * when they do it themselves, and it moves with the physics instead of going stale.
  *
  * Pure apart from its cache: state in, derived data out. `tests/ui/tutorial.test.jsx`
@@ -13,11 +16,18 @@
  */
 
 import {
-  calibrationAdvice, interp2, isLocatable, simulateSweep, veCorrections, veSamplesFromPull,
+  applyPreset, calibrationAdvice, interp2, isLocatable, presetById, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 import { eventBands } from '../components/eventBands.js';
 import { makeInitialState } from '../state/initialState.js';
 import { pullInputs } from '../state/pullInputs.js';
+import { ACTIONS, reducer } from '../state/reducer.js';
+
+/** The prebuilt engine the lessons and the practice missions are written around. */
+export const LESSON_ENGINE = 'vq35de-revup';
+
+/** The store a player has after picking the lesson engine on BUILD, untouched. */
+const lessonStart = () => reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: applyPreset(presetById(LESSON_ENGINE)) });
 
 /** @typedef {import('../state/initialState.js').StoreState} StoreState */
 
@@ -44,12 +54,12 @@ const cache = new Map();
  * screens are handed.
  *
  * @param {string} key a cache key, one per scenario
- * @param {(state: StoreState) => StoreState} [scenario] changes to the SANDBOX start
+ * @param {(state: StoreState) => StoreState} [scenario] changes to the lesson engine as loaded
  * @returns {Demo}
  */
 export function runDemo(key, scenario = (s) => s) {
   if (cache.has(key)) return cache.get(key);
-  const base = scenario(makeInitialState());
+  const base = scenario(lessonStart());
   const { args, derived, veTruth, fuel, mafErrorBase } = pullInputs(base);
   const result = simulateSweep(args);
   // The advisor's pull is the same full-throttle pull, as in EcuLab.jsx.

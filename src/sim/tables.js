@@ -57,17 +57,23 @@ export const SPARK_MAX_DEG = 50;
  *   knock limit on 91                     15  18   20.5 22.5 26.5 31 38
  * so the full-load row sits about two degrees under the knock limit up to 5500 RPM, and
  * a degree short of MBT above it, where the faster burn gives the end gas too little
- * time to light itself. The part-load rows are held under the knock limit the same way:
- * at lighter load the end gas runs hotter for each bar of pressure, where pump fuel's
- * octane index is lower (see octaneIndexK in cycle.js). The boost rows copy the full-load row, as a naturally aspirated factory
- * calibration does; a boost kit has to take spark out of them.
+ * time to light itself. The 70 and 40 kPa rows are each cell's MBT, or the knock limit on
+ * 91 less TUNE's 1.5 degree safety margin where that is lower (rounded down to the half
+ * degree), as TUNE's advisor works them out: at lighter load the end gas runs hotter for
+ * each bar of pressure, where pump fuel's octane index is lower (see octaneIndexK in
+ * cycle.js), so the knock limit binds through the middle of the rev range at 70 kPa. An
+ * earlier 40 kPa row sat past the knock limit at 3500 to 5500 RPM and past MBT elsewhere,
+ * which TUNE flagged on a stock engine while a 100 kPa pull, which never runs that row,
+ * logged it clean. The idle column and the 20 kPa (overrun) row are left as they were. The
+ * boost rows copy the full-load row, as a naturally aspirated factory calibration does; a
+ * boost kit has to take spark out of them.
  */
 export const DEFAULT_TIMING = [
   [7, 13, 16, 18, 20, 24, 27, 28],
   [7, 13, 16, 18, 20, 24, 27, 28],
   [7, 13, 16, 18, 20, 24, 27, 28],
-  [12, 18, 22, 25, 27, 32, 38, 39],
-  [16, 27, 34, 30.5, 33, 37, 43, 43],
+  [12, 17, 20.5, 22.5, 25, 29.5, 31, 32.5],
+  [16, 30, 31.5, 33, 35, 36.5, 37.5, 39],
   [14, 34, 40, 44, 46, 47, 47, 47],
 ];
 

@@ -37,6 +37,7 @@ const ASSUMED_LABEL = {
   valvesPerCyl: (c) => `${c.valvesPerCyl ?? 4} valves per cylinder`,
   blockMaterial: (c) => `${c.blockMaterial.toLowerCase()} block`,
   headMaterial: (c) => `${c.headMaterial.toLowerCase()} head`,
+  injection: (c) => `${c.injection === 'direct' ? 'direct' : 'port'} fuel injection`,
 };
 
 /**

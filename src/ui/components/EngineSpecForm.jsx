@@ -106,15 +106,15 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
           </span>
           {errors.camDuration && <span className={styles.error} role="alert">{errors.camDuration}</span>}
         </label>
-        <div className={styles.label}>Valvetrain</div>
+        <div className={styles.label}>Valvetrain <span className={styles.typical}>DOHC if left blank</span></div>
         <Seg label="Valvetrain" equal value={spec.valvetrain} options={VALVETRAIN_OPTS} onChange={(v) => set({ valvetrain: v })} />
-        <div className={styles.label}>Valves per cylinder</div>
+        <div className={styles.label}>Valves per cylinder <span className={styles.typical}>4 if left blank</span></div>
         <Seg label="Valves per cylinder" equal value={spec.valvesPerCyl} options={VALVES_PER_CYL_OPTS.map((n) => ({ id: n, label: String(n) }))} onChange={(v) => set({ valvesPerCyl: Number(v) })} />
-        <div className={styles.label}>Fuel injection</div>
+        <div className={styles.label}>Fuel injection <span className={styles.typical}>port if left blank</span></div>
         <Seg label="Fuel injection" equal value={spec.injection} options={INJECTION_OPTS} onChange={(v) => set({ injection: v })} />
-        <div className={styles.label}>Block</div>
+        <div className={styles.label}>Block <span className={styles.typical}>aluminium if left blank</span></div>
         <Seg label="Block material" equal value={spec.blockMaterial} options={MATERIAL_OPTS.map((m) => ({ id: m, label: m }))} onChange={(v) => set({ blockMaterial: v })} />
-        <div className={styles.label}>Cylinder head</div>
+        <div className={styles.label}>Cylinder head <span className={styles.typical}>aluminium if left blank</span></div>
         <Seg label="Head material" equal value={spec.headMaterial} options={MATERIAL_OPTS.map((m) => ({ id: m, label: m }))} onChange={(v) => set({ headMaterial: v })} />
       </details>
 
@@ -125,6 +125,13 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
       )}
       {check.ok && check.estimated.length > 0 && (
         <Note>Not entered, so typical values will be used: {check.estimated.join('; ')}. You can change each on BUILD afterwards.</Note>
+      )}
+      {check.ok && (
+        <Note>
+          It starts naturally aspirated, on 91 octane, with no bolt-ons. Add a turbo, supercharger,
+          intercooler or a different fuel on BUILD afterwards, then press RESET ALL TO STOCK on BUILD ›
+          ENGINE: it writes a calibration generated for that hardware.
+        </Note>
       )}
       <div>
         <Button type="submit" size="lg" onClick={submit}>{submitLabel}</Button>

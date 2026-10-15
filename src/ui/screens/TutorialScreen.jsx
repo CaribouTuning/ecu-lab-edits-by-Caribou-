@@ -246,7 +246,7 @@ function EndResult() {
         where="DYNO"
         demo={d}
         height={250}
-        caption={`The engine you start with, on the dyno: ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM. By lesson 3.1 you will run this pull yourself; by chapter 4 you will fit a part, retune for it and prove it made more.`}
+        caption={`The engine these lessons use, the Nissan VQ35DE Rev-Up, on the dyno: ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM. By lesson 3.1 you will run this pull yourself; by chapter 4 you will fit a part, retune for it and prove it made more.`}
       >
         <ResultScreen chartData={d.chartData} engineDerived={d.derived} bands={d.bands} wholePullCount={d.wholePullCount} />
       </ScreenSnippet>

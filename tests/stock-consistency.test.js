@@ -36,27 +36,93 @@ describe('stock calibrations against TUNE\'s advisor', () => {
   });
 });
 
-describe('RESET ALL TO STOCK', () => {
-  it.each(S.ENGINE_PRESETS.map((p) => p.id))('writes a calibration that is clean on %s, not the Nissan V6 tables', (id) => {
+/** TUNE's advice as the app gives it: judged against its own 100 kPa pull. */
+const adviseWithPull = (eng, tables = eng.tables, mafScalar = eng.build.mafScalar ?? 1) => {
+  const cc = S.INJECTOR_OPTS[eng.build.injIdx].cc;
+  return S.calibrationAdvice({
+    ve: tables.ve, veTruth: eng.veTruth, timing: tables.timing, afr: tables.afr,
+    derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn,
+    boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
+    injectorCc: cc, ecuInjectorCc: eng.build.ecuInjectorCc, mafScalar,
+    mafErrorBase: S.mafErrorFactor(eng.build.mods, eng.build.turboOn), pull: eng.pull(100),
+  });
+};
+const where = (cells) => cells.map((c) => `${S.LOAD[c.ri]} kPa / ${S.RPM[c.ci]} rpm`);
+const logged = (eng) => [100, 70, 40].flatMap((k) => eng.pull(k).events.map((e) => `${k} kPa: ${e.type}`));
+
+describe('a stock engine tells one story on every screen', () => {
+  // Past MBT is not dangerous, but TUNE says so, and a factory table that TUNE marks up is a
+  // stock tune two screens disagree about.
+  it('the default engine: nothing past MBT or the knock limit on TUNE, nothing in the log at 100, 70 or 40 kPa', () => {
+    const eng = makeEngine({});
+    const a = adviseWithPull(eng);
+    expect(where(a.overAdvanced)).toEqual([]);
+    expect(where(a.pastMbt)).toEqual([]);
+    expect(logged(eng)).toEqual([]);
+  });
+
+  it.each(S.ENGINE_PRESETS.map((p) => p.id))('%s: the same', (id) => {
     const eng = makeEngine({ preset: id });
-    const stock = S.stockCalibrationFor(eng.build);
+    const a = adviseWithPull(eng, eng.tables, S.applyPreset(S.presetById(id)).mafScalar ?? 1);
+    expect(where(a.overAdvanced)).toEqual([]);
+    expect(where(a.pastMbt)).toEqual([]);
+    expect(logged(eng)).toEqual([]);
+  });
+});
+
+describe('RESET ALL TO STOCK', () => {
+  /** The engine as RESET leaves it, the way EcuLab and the reducer do it. */
+  const reset = (id, modsBefore) => {
+    const p = S.applyPreset(S.presetById(id));
+    const before = { ...p, mods: modsBefore ?? p.mods };
+    const eng = makeEngine({ preset: id, build: { mods: S.stockModsOf(before) } });
+    const stock = S.stockCalibrationFor({ ...eng.build });
     eng.tables.timing = stock.timing;
     eng.tables.afr = stock.afr;
-    const hw = {
-      turboOn: eng.build.turboOn, turbine: eng.build.turboOn ? eng.turbine : null,
-      exhaustDia: S.EXHAUST_DIA_OPTS[eng.build.exhaustDiaIdx].dia, fuel: eng.fuel,
-      peakBoostPsi: eng.build.turboOn ? Math.max(...eng.build.boostCurve) : 0,
-    };
-    eng.tables.ve = S.computeHardwareVE(eng.build.engineConfig, S.DEFAULT_MODS, hw);
-    const cc = S.INJECTOR_OPTS[eng.build.injIdx].cc;
-    const advice = S.calibrationAdvice({
-      ve: eng.tables.ve, veTruth: eng.veTruth, timing: stock.timing, afr: stock.afr,
-      derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn,
-      boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
-      injectorCc: cc, ecuInjectorCc: eng.build.ecuInjectorCc, mafScalar: stock.mafScalar,
-      mafErrorBase: S.mafErrorFactor(eng.build.mods, eng.build.turboOn),
-    });
-    expect(advice.overAdvanced).toEqual([]);
-    expect(eng.pull(100).events.filter((e) => e.type === 'knock' || e.type === 'knockprot')).toEqual([]);
+    eng.tables.ve = eng.veTruth;
+    eng.build.mafScalar = stock.mafScalar;
+    return { eng, stock, preset: p };
+  };
+
+  it.each(S.ENGINE_PRESETS.map((p) => p.id))('%s: gives back the preset\'s own tables, clean on TUNE and in the log', (id) => {
+    const { eng, stock, preset } = reset(id);
+    expect(stock.timing).toEqual(preset.timing);
+    expect(stock.afr).toEqual(preset.afr);
+    const a = adviseWithPull(eng, eng.tables, stock.mafScalar);
+    expect(where(a.overAdvanced)).toEqual([]);
+    expect(where(a.pastMbt)).toEqual([]);
+    expect(logged(eng)).toEqual([]);
+  });
+
+  it('takes the bolt-ons off but leaves a turbo engine its intercooler', () => {
+    const all = { intake: true, exhaust: true, headers: true, intercooler: true };
+    expect(S.stockModsOf({ mods: all, turboOn: true })).toEqual({ intake: false, exhaust: false, headers: false, intercooler: true });
+    expect(S.stockModsOf({ mods: all, turboOn: false, blowerId: 'tvs1900' })).toEqual({ intake: false, exhaust: false, headers: false, intercooler: true });
+    expect(S.stockModsOf({ mods: all, turboOn: false, blowerId: null })).toEqual({ intake: false, exhaust: false, headers: false, intercooler: false });
+    // An N54 with every bolt-on fitted resets to the factory car, not one with no intercooler.
+    const { stock, preset } = reset('n54', all);
+    expect(stock.timing).toEqual(preset.timing);
+  });
+});
+
+describe('cells the pull did not run', () => {
+  // The default table with its 40 kPa row 8° advanced: past the knock limit there.
+  const knockingAt40 = () => {
+    const eng = makeEngine({});
+    eng.tables.timing = eng.tables.timing.map((row, ri) => (S.LOAD[ri] === 40 ? row.map((v, ci) => (ci === 0 ? v : v + 8)) : row));
+    return eng;
+  };
+
+  it('are judged against the player\'s own pull: a 40 kPa pull runs the 40 kPa row, a 100 kPa pull does not', () => {
+    const eng = knockingAt40();
+    const flagged = adviseWithPull(eng).overAdvanced.filter((c) => S.LOAD[c.ri] === 40);
+    expect(flagged.length).toBeGreaterThan(0);
+    expect(S.cellsNotRunBy(flagged, eng.pull(100))).toEqual(flagged);
+    const at40 = eng.pull(40);
+    const notRun = S.cellsNotRunBy(flagged, at40);
+    expect(notRun.length).toBeLessThan(flagged.length);
+    // The 40 kPa pull's own log charges what it ran; the score charges the rest once each.
+    const charged = S.computeTuningScore(at40, notRun);
+    expect(charged.deductions.filter((d) => /did not run/.test(d))).toHaveLength(notRun.length ? 1 : 0);
   });
 });

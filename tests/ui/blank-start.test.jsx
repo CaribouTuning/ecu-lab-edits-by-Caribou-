@@ -5,9 +5,9 @@
  * player's own specs) instead of showing a placeholder engine nobody chose.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import React from 'react';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 
@@ -16,6 +16,7 @@ const hadResizeObserver = 'ResizeObserver' in window;
 if (!hadResizeObserver) window.ResizeObserver = ResizeObserverStub;
 afterAll(() => { if (!hadResizeObserver) delete window.ResizeObserver; });
 afterEach(cleanup);
+beforeEach(() => localStorage.clear());
 
 const launchBlank = () => {
   window.location.hash = '';
@@ -55,7 +56,7 @@ describe('SANDBOX with no engine yet', () => {
     expect(screen.getByTestId('engine-start')).toBeTruthy();
     fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '400' } });
     fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
-    expect(form.getByText('Between 70 and 110 mm.')).toBeTruthy();
+    expect(form.getByText(/^Between 75 and 105 mm\. Outside this range/)).toBeTruthy();
   });
 
   it('builds an engine from the player\'s own figures, showing its displacement first', () => {
@@ -107,5 +108,40 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.change(screen.getAllByRole('slider').find((s) => s.getAttribute('min') === '180'), { target: { value: '222' } });
     expect(note()).not.toMatch(/cam duration/);
     expect(note()).toMatch(/valvetrain DOHC/);
+  });
+});
+
+describe('a practice mission with no engine chosen yet', () => {
+  const openCourse = () => act(() => { window.location.hash = '#/course'; window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
+
+  it('puts the engine the missions were written around on the bench, from SANDBOX', () => {
+    launchBlank();
+    openCourse();
+    fireEvent.click(screen.getByRole('button', { name: 'Start practice: Find the knock limit' }));
+    expect(screen.queryByTestId('engine-start')).toBeNull();
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up/);
+    expect(within(screen.getByRole('region', { name: 'Practice mission' })).getByText('0/4')).toBeTruthy();
+  });
+
+  it('does the same when started from CAREER, whose SANDBOX car is the one with no engine', async () => {
+    window.location.hash = '';
+    render(<EcuLab blankStart />);
+    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    await screen.findByText('Your tuning shop');
+    openCourse();
+    fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
+    expect(screen.queryByTestId('engine-start')).toBeNull();
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up/);
+  });
+});
+
+describe('the form refuses what the simulator cannot answer for, and says why', () => {
+  it('a redline past the end of the tables', () => {
+    launchBlank();
+    goTo(/^BUILD/i);
+    const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
+    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '9000' } });
+    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    expect(form.getByText(/Between 4000 and 7500 rpm\. The simulator's tables and airflow run to 7500 rpm\./)).toBeTruthy();
   });
 });

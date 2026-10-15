@@ -28,7 +28,7 @@ function AirPump() {
         <><b>How much fuel</b> that air needs: the <K>FUEL</K> table.</>,
         <><b>When to fire the spark</b>: the <K>SPARK</K> table.</>,
       ]} />
-      <P>Tuning is getting those three tables right at every speed and load. The engine you start with makes {hp.hp} horsepower at the wheels; in four cards you will know how to make it more, safely.</P>
+      <P>Tuning is getting those three tables right at every speed and load. The engine these cards use, the Nissan VQ35DE Rev-Up (pick it on BUILD), makes {hp.hp} horsepower at the wheels; in four cards you will know how to make it more, safely.</P>
     </>
   );
 }

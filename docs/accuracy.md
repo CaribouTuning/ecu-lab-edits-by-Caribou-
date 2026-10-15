@@ -463,16 +463,28 @@ player different things about the same engine.
 
 - **The stock tune was flagged, and the dyno called it clean.** On the default engine, TUNE's
   advisor put three 40 kPa cells past the knock limit; a 100 kPa pull never runs that row, so
-  the pull log said "Clean pull". Both were true and neither said so. The three cells are
-  lowered (3500, 4500 and 5500 rpm: 37, 40 and 43° to 30.5, 33 and 37°), the pull log now
-  says when TUNE flags cells at a load it did not run, and the Tuning Score charges 2 points
-  per such cell (at most 12) instead of reading "Dialed In 100" on a tune that knocks at
-  part throttle. `tests/stock-consistency.test.js` holds every preset, and the default engine
-  at every pump octane, clean on TUNE at every cell.
+  the pull log said "Clean pull". Both were true and neither said so. The 70 and 40 kPa rows
+  of the default table are now each cell's MBT, or the knock limit on 91 less TUNE's 1.5°
+  margin where that is lower, as the advisor works them out (the first repair lowered only
+  three cells, leaving a dip at 3500 rpm and six cells 2 to 6° past MBT, which TUNE also
+  flags). The pull log now says when TUNE flags cells at a load the pull did not run, and the
+  Tuning Score charges 2 points per such cell (at most 12) instead of reading "Dialed In 100"
+  on a tune that knocks at part throttle. Which cells a pull "did not run" is judged against
+  the player's own pull, at whatever load it ran (`cellsNotRunBy`): judged against TUNE's
+  own full-throttle pull, a 40 kPa pull charged a knocking cell twice (once in its log, once
+  as "not run") and said it had not run cells it had. `tests/stock-consistency.test.js` holds
+  every preset, and the default engine at every pump octane, clean on TUNE at every cell, and
+  the default engine and every preset free of past-MBT cells and of pull-log entries at 100,
+  70 and 40 kPa.
 - **RESET ALL TO STOCK wrote the Nissan V6's spark and fuel tables onto every engine.** On an
   N54, B58, GTI or 6.4 Hemi that is 18 to 27 cells past the knock limit and a pull that
   knocks. It now writes the factory-style calibration the physics generates for the hardware
-  on the bench (`stockCalibrationFor`), the way a preset's own is made.
+  on the bench (`stockCalibrationFor`), the way a preset's own is made. The reset also takes
+  the bolt-ons off, and it took the intercooler off with them, even from a factory turbo
+  engine: an N54, B58 or EA888 then pulled with IAT and EGT protection in its log and up to
+  100 whp down. An intercooler now stays while a turbo or supercharger is fitted
+  (`stockModsOf`), as the turbo itself does, so RESET on an untouched preset gives back that
+  preset's own tables exactly.
 - **"N/A" on the status strip read as "not available".** Naturally aspirated is now "NA", and
   a non-boosted engine's BOOST reads "none".
 - **LIVE showed "1.00 λ", "FUEL ON" and an idle-air trim on an engine that was off.** They
@@ -482,8 +494,22 @@ player different things about the same engine.
   build" and the Rev-Up preset were the same engine reporting 238 and 252 whp. SANDBOX now
   opens with no engine: a prebuilt one, or the player's own figures (`validateCustomEngine`).
   The bore, stroke, compression and cam ranges the form accepts are the ranges BUILD's
-  sliders show, so a figure the form takes can always be seen and adjusted.
+  sliders show, so a figure the form takes can always be seen and adjusted. They are the
+  ranges the property and consistency tests build their random engines from (bore 75 to 105
+  mm, stroke 65 to 102, compression 8.5 to 13). A first version accepted a 110 mm bore and
+  14:1; those tests, widened to match, found engines where enrichment no longer cooled the
+  exhaust and the ECU path no longer matched the open-loop model, so the form refuses them.
+  The redline stops at 7500 rpm, where the tables end: an 11,000 rpm redline was accepted,
+  and above 7500 the pull read the last column's airflow at every speed and its power rose
+  in a straight line with RPM.
 
 What is still known to disagree: the app's own Learn article 39 states where the model runs
 10-15% high (power per lb/min of air) and where it reads low (peak cylinder pressure on boosted
-engines). Those are physics limits, not wording, and are not changed here.
+engines). Those are physics limits, not wording, and are not changed here. One more, found
+while checking the above: on a big-bore boosted engine with high static compression (a 6.4 L
+V8 at 11:1 on boost, say) the knock limit sits 20° or more before MBT, and there richening the
+mixture past λ 0.85 leaves the modelled exhaust temperature flat, within a few degrees, where
+a real engine runs cooler. The slower, later burn of a rich mixture heats the exhaust as much
+as the extra fuel cools it. Such an engine is inside the ranges above (a 104.5 x 93.5 mm V8 at
+11:1 with a turbo showed it). The property test's current random sample does not happen to
+draw one, so it is recorded here rather than by a failing test.

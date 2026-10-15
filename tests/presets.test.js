@@ -242,3 +242,33 @@ describe('factory calibration validates against real published figures', () => {
     });
   });
 });
+
+describe('an engine of the player\'s own', () => {
+  const spec = { configuration: 'V6', bore: 95.5, stroke: 81.4, compression: 10.3, redline: 6600 };
+  /** The validation result, either branch, for reading in a test. */
+  const check = (patch = {}) => /** @type {any} */ (S.validateCustomEngine({ ...spec, ...patch }));
+
+  it('names every figure it filled in, fuel injection included', () => {
+    const v = check();
+    expect(v.ok).toBe(true);
+    expect(v.assumed).toEqual(['camDuration', 'valvetrain', 'valvesPerCyl', 'blockMaterial', 'headMaterial', 'injection']);
+    expect(v.estimated.at(-1)).toBe('fuel injection (port assumed)');
+    expect(check({ injection: 'direct' }).assumed).not.toContain('injection');
+  });
+
+  it('refuses a redline past the end of the tables, and a bore outside the checked range, saying why', () => {
+    const v = check({ redline: 9000, bore: 110 });
+    expect(v.ok).toBe(false);
+    expect(v.errors.redline).toMatch(/run to 7500 rpm/);
+    expect(v.errors.bore).toMatch(/has not been checked/);
+  });
+
+  it('gets the smallest stock injector that covers a typical power for its size', () => {
+    const small = S.customEnginePatch(check({ configuration: 'I4', bore: 81, stroke: 77 }).engine);
+    const big = S.customEnginePatch(check({ configuration: 'I4', bore: 105, stroke: 102 }).engine);
+    expect(S.INJECTOR_OPTS[small.injIdx].cc).toBe(315);
+    // 3.5 L in four cylinders: about 30 lb/hr each, more than the 315 cc stock size.
+    expect(S.INJECTOR_OPTS[big.injIdx].cc).toBeGreaterThan(315);
+    expect(big.ecuInjectorCc).toBe(S.INJECTOR_OPTS[big.injIdx].cc);
+  });
+});

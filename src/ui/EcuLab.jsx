@@ -28,12 +28,12 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS, compressorWithCount,
-  DEFAULT_MODS, EXHAUST_DIA_OPTS, GEARBOX_OPTS,
+  EXHAUST_DIA_OPTS, GEARBOX_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  applyPreset, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
+  applyPreset, cellsNotRunBy, stockCalibrationFor, stockModsOf, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
@@ -602,7 +602,8 @@ export function EcuLabApp() {
     // pass: a reset baseline is not unsaved player work.
     //
     // The reducer does NOT compute the stock VE table; the caller does, and the mix of
-    // arguments is the point: DEFAULT_MODS (the bolt-ons come off) against the CURRENT
+    // arguments is the point: the stock parts (`stockModsOf`: the bolt-ons come off, an
+    // intercooler stays with its turbo) against the CURRENT
     // `hwForVe` (the turbo does not — resetting the calibration is not uninstalling the
     // hardware). Either half swapped for the other yields a perfectly plausible table
     // that is wrong.
@@ -611,7 +612,7 @@ export function EcuLabApp() {
     // (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables this used to write
     // knock on every other engine in the catalogue.
     const stock = stockCalibrationFor(build);
-    const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
+    const stockVe = computeHardwareVE(engineConfig, stockModsOf(build), hwForVe);
     dispatch({
       type: ACTIONS.RESET_TO_STOCK, ve: stockVe, timing: stock.timing, afr: stock.afr, mafScalar: stock.mafScalar,
       ecu: defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate }),
@@ -693,9 +694,12 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
     const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
-    // Cells TUNE says are past the knock limit that this pull did not itself run: its log
-    // cannot show them, so they cost the score here instead of leaving it at "Dialed In".
-    const ts = computeTuningScore(r, calAdvice.overAdvanced.filter((c) => !c.knockingOnPull));
+    // Cells TUNE says are past the knock limit that THIS pull did not run: its log cannot
+    // show them, so they cost the score here instead of leaving it at "Dialed In". Judged
+    // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
+    // this pull did run is already charged by its log, and charging it again would count
+    // one knocking cell twice.
+    const ts = computeTuningScore(r, cellsNotRunBy(calAdvice.overAdvanced, r));
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
       supercharged: !!blower, turbine, compressor,
@@ -1478,11 +1482,17 @@ export function EcuLabApp() {
           // Practice is SANDBOX's: from CAREER, the customer's car goes back on its lift
           // first (a no-op in SANDBOX).
           dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          // The missions are written for a stock engine on the bench. A player who has not
-          // chosen one yet gets the Nissan VQ35DE Rev-Up they were written around.
-          if (build.engineReady === false && !inCareer) dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(presetById(MISSION_ENGINE)) });
           // Marked against SANDBOX's car, which is the one on the bench from here on.
-          const start = sandboxStash ?? { session, tune };
+          let start = sandboxStash ?? { session, tune };
+          // The missions are written for a stock engine on the bench. A player who has not
+          // chosen one yet (SANDBOX's own car: from CAREER, the stashed one) gets the Nissan
+          // VQ35DE Rev-Up they were written around, and the mission is marked against ITS
+          // tables, not the placeholders behind the start screen.
+          if ((sandboxStash?.build ?? build).engineReady === false) {
+            const engine = applyPreset(presetById(MISSION_ENGINE));
+            dispatch({ type: ACTIONS.APPLY_PRESET, preset: engine });
+            start = { session: start.session, tune: { ...start.tune, ve: engine.ve, timing: engine.timing } };
+          }
           dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'mission', value: { id, step: 0, marks: [markOf(start)] } });
           const where = MISSION_START[id] ?? ['build', 'engine'];
           goSection(where[0], where[1]);
@@ -1853,7 +1863,7 @@ export function EcuLabApp() {
                 )}
 
                 {!running && dynoView === 'log' && (
-                  <LogScreen flagged={calAdvice.overAdvanced} />
+                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result) : []} />
                 )}
 
                 {!running && dynoView === 'score' && scores && (
@@ -1903,7 +1913,7 @@ export function EcuLabApp() {
  *
 
  * `blankStart` is the real app's first launch: SANDBOX opens with no engine chosen. Tests and
- * the tutorial's own stores start from the ready default engine.
+ * the tutorial's demo starts from the Nissan VQ35DE Rev-Up as BUILD loads it.
  *
  * @param {{blankStart?: boolean}} props
  * @returns {React.ReactElement}

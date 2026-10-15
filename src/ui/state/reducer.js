@@ -25,7 +25,7 @@
  * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, ECU_META, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_TIMING, ECU_META, stockModsOf, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
 
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
@@ -672,7 +672,9 @@ function baseReducer(state, action) {
         ...state,
         build: {
           ...state.build,
-          mods: DEFAULT_MODS,
+          // The bolt-ons come off; an intercooler stays with the turbo or blower it cools,
+          // which a reset does not uninstall either (`stockModsOf`).
+          mods: stockModsOf(state.build),
           mafScalar: action.mafScalar ?? 1.0,
           presetId: null,
         },

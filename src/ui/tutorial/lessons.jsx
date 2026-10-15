@@ -84,7 +84,7 @@ function AirPump() {
         <><b>When should the spark fire?</b> The <K>SPARK</K> table says how early.</>,
       ]} />
       <P>Tuning means getting those three tables right at every speed and load. Everything else in the game exists to change how much air gets in, or how much of the fuel&apos;s energy you can safely use.</P>
-      <Worked title="the engine you start with" rows={[
+      <Worked title="the engine these lessons use: the Nissan VQ35DE Rev-Up" rows={[
         ['Engine', `${d.derived.displacementL.toFixed(1)} L V${d.derived.cyl}, naturally aspirated`],
         ['Fuel', `${d.fuel.label} octane pump gas`],
         ['Peak power on the dyno', `${hp.hp} whp at ${hp.rpm} RPM`],
@@ -105,7 +105,7 @@ function FindYourWay() {
   return (
     <>
       <Goal learn="find every part of the game, and read the strip that is always on screen." need="Lesson 1.1." />
-      <P>This is the frame around every screen in the game. It is shown here live, with the SANDBOX engine you get when you start.</P>
+      <P>This is the frame around every screen in the game. It is shown here live, with the engine these lessons use: the Nissan VQ35DE Rev-Up, which you can pick on BUILD.</P>
       <ScreenSnippet
         where="Every screen"
         demo={d}
@@ -179,7 +179,7 @@ function AirflowLesson() {
       ]} />
       <Did>You read the ECU&apos;s belief about how the engine breathes, and worked out the air it calculates from it. Fuel and power both follow from this number.</Did>
       <Trouble items={[
-        ['My cell shows a different number.', <>You have changed the build or loaded a preset. On <K>BUILD</K>, <K>RESET ALL TO STOCK</K> puts the SANDBOX engine back.</>],
+        ['My cell shows a different number.', <>Your engine or tune differs from the one these lessons use. On <K>BUILD</K>, pick <K>Nissan VQ35DE Rev-Up</K> from the prebuilt engines to load it as these numbers have it.</>],
         ['The table redrew itself when I changed the cam.', 'That is BUILD showing you what the new cam breathes like. Your ECU still runs the old table until you correct it from a log.'],
       ]} />
       <Aside title="Why kelvin, and why 287?">
@@ -296,7 +296,7 @@ function FirstPull() {
           { at: '[data-tour="dyno-power"]', text: `Power (blue) and torque (cyan) against RPM. This engine peaks at ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM.` },
           { at: '[data-tour="dyno-afr-timing"]', text: 'Mixture asked for (dashed) against mixture got (solid), and the timing the engine really ran. Where the lines part, something overrode your table.' },
         ]}
-        caption="The real DYNO charts for the stock SANDBOX engine. Coloured bands appear on these charts when the pull log has something to say at those RPMs."
+        caption="The real DYNO charts for the stock Nissan VQ35DE Rev-Up. Coloured bands appear on these charts when the pull log has something to say at those RPMs."
       >
         <ResultScreen chartData={d.chartData} engineDerived={d.derived} bands={d.bands} wholePullCount={d.wholePullCount} />
       </ScreenSnippet>
@@ -313,7 +313,7 @@ function FirstPull() {
       <Did>You measured the engine. From now on every change gets a pull, and every pull gets compared with the one before.</Did>
       <Trouble items={[
         ['No sound.', <>Sound is optional. On an iPhone the ring/silent switch mutes web audio; the <K>TEST</K> button on DYNO says whether the browser allowed sound.</>],
-        ['My number is not the one above.', 'Something in your build or tune differs from SANDBOX stock. That is fine: every lesson works on any engine, only the numbers change.'],
+        ['My number is not the one above.', 'Something in your build or tune differs from the stock Nissan VQ35DE Rev-Up these lessons use. That is fine: every lesson works on any engine, only the numbers change.'],
       ]} />
     </>
   );

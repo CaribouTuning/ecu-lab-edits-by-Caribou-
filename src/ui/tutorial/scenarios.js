@@ -1,5 +1,6 @@
 /**
- * The engines the tutorial's lessons are about. Each is the SANDBOX start with one
+ * The engines the tutorial's lessons are about. Each is the lesson engine (the Nissan VQ35DE
+ * Rev-Up, as BUILD loads it) with one
  * change a player can make themselves, so a lesson can say "do this and you will see
  * exactly this" and be right.
  */
@@ -13,7 +14,7 @@ const WOT = LOAD.indexOf(100);
 /** @param {any} s */
 const withIntake = (s) => ({ ...s, build: { ...s.build, mods: { ...s.build.mods, intake: true } } });
 
-/** The engine a player gets on SANDBOX, untouched. */
+/** The lesson engine as a player loads it on BUILD, untouched. */
 export const stock = () => runDemo('stock');
 
 /**

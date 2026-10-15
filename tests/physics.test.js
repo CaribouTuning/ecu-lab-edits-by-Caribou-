@@ -1223,15 +1223,19 @@ describe('the spark advisor', () => {
     expect(over.size + past.size).toBe(tooMuch.length);
   });
 
-  it('reports the stock light-load cells as past peak torque, not as knock risk', () => {
-    // The stock table runs 40-47 deg at 20 kPa where MBT is in the low 40s, so a few
-    // of those cells genuinely are past MBT — but the knock limit there is over 100,
-    // so none of them are dangerous.
+  it('reports light-load cells past peak torque as wasted advance, not as knock risk', () => {
+    // The stock table sits at or under MBT everywhere, so the cells are put past it here:
+    // 2.5 degrees over MBT wherever the knock limit leaves at least 4 degrees above MBT.
+    // There they genuinely are past MBT and nowhere near knock.
     //
     // Assert on `knocking`, which comes from the physics, NOT on how pastMbt was
     // built. An earlier version of this test asserted the classification flag against
     // itself and so could never fail, which hid a real inversion.
-    const a = advice();
+    const timing = S.DEFAULT_TIMING.map((row) => [...row]);
+    for (const c of advice().spark) {
+      if (!c.bracketOnly && c.knockCeiling - c.mbt >= 4) timing[c.ri][c.ci] = Math.round((c.mbt + 2.5) * 2) / 2;
+    }
+    const a = advice({ timing });
     expect(a.pastMbt.length).toBeGreaterThan(0);
     for (const c of a.pastMbt) expect(c.knocking).toBe(false);
   });
