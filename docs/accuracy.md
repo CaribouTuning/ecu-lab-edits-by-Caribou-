@@ -455,3 +455,35 @@ sentence. Comments that explain code rather than state a measured fact were not
 re-verified, and a few real-world figures rest on practitioner sources, marked as such
 above.
 
+
+## One story across the screens
+
+Found by driving the app screen by screen, not by reading it. Each was two screens telling a
+player different things about the same engine.
+
+- **The stock tune was flagged, and the dyno called it clean.** On the default engine, TUNE's
+  advisor put three 40 kPa cells past the knock limit; a 100 kPa pull never runs that row, so
+  the pull log said "Clean pull". Both were true and neither said so. The three cells are
+  lowered (3500, 4500 and 5500 rpm: 37, 40 and 43° to 30.5, 33 and 37°), the pull log now
+  says when TUNE flags cells at a load it did not run, and the Tuning Score charges 2 points
+  per such cell (at most 12) instead of reading "Dialed In 100" on a tune that knocks at
+  part throttle. `tests/stock-consistency.test.js` holds every preset, and the default engine
+  at every pump octane, clean on TUNE at every cell.
+- **RESET ALL TO STOCK wrote the Nissan V6's spark and fuel tables onto every engine.** On an
+  N54, B58, GTI or 6.4 Hemi that is 18 to 27 cells past the knock limit and a pull that
+  knocks. It now writes the factory-style calibration the physics generates for the hardware
+  on the bench (`stockCalibrationFor`), the way a preset's own is made.
+- **"N/A" on the status strip read as "not available".** Naturally aspirated is now "NA", and
+  a non-boosted engine's BOOST reads "none".
+- **LIVE showed "1.00 λ", "FUEL ON" and an idle-air trim on an engine that was off.** They
+  read "—" until it cranks.
+- **SANDBOX no longer opens on an engine nobody chose.** The default engine had the Nissan
+  VQ35DE Rev-Up's bore, stroke and compression but not its cam, redline or power, so "custom
+  build" and the Rev-Up preset were the same engine reporting 238 and 252 whp. SANDBOX now
+  opens with no engine: a prebuilt one, or the player's own figures (`validateCustomEngine`).
+  The bore, stroke, compression and cam ranges the form accepts are the ranges BUILD's
+  sliders show, so a figure the form takes can always be seen and adjusted.
+
+What is still known to disagree: the app's own Learn article 39 states where the model runs
+10-15% high (power per lb/min of air) and where it reads low (peak cylinder pressure on boosted
+engines). Those are physics limits, not wording, and are not changed here.

@@ -9,6 +9,7 @@ import React, { useEffect, useRef } from 'react';
 
 import { AlertTriangle, ArrowUpRight } from 'lucide-react';
 
+import { LOAD } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { coversRpm, eventTone } from '../../components/eventBands.js';
@@ -18,9 +19,13 @@ import { fixStep, inFixOrder } from '../../components/fixOrder.js';
 import styles from './LogScreen.module.css';
 
 /**
+ * @param {object} props
+ * @param {{ri: number, ci: number}[]} [props.flagged] the cells TUNE's advisor says are past the
+ *   knock limit. A pull only runs the tables along its own load, so a clean pull and a flagged
+ *   cell are both true; the log says so rather than leaving the two screens to contradict.
  * @returns {React.ReactElement}
  */
-export function LogScreen() {
+export function LogScreen({ flagged = [] }) {
   const [session] = useSession();
   const { result, logFocusRpm } = session;
 
@@ -42,6 +47,16 @@ export function LogScreen() {
       {result.events.length === 0 ? (
         <div className={styles.clean}>
           Clean pull — no knock, fueling, or trim issues across the sweep.
+          {flagged.length > 0 && (() => {
+            const loads = [...new Set(flagged.map((c) => LOAD[c.ri]))].sort((a, b) => b - a);
+            return (
+              <div className={styles.cleanNote} data-testid="log-flagged-elsewhere">
+                This pull ran at {result.loadKpa ?? session.loadKpa} kPa. TUNE still flags {flagged.length} spark cell{flagged.length === 1 ? '' : 's'} past
+                the knock limit at {loads.join(' and ')} kPa, which a pull at that load will test.{' '}
+                {fixLinks('TUNE › SPARK').map((l) => <a key={l.href} href={l.href} className={styles.eventLink}>{l.label}</a>)}
+              </div>
+            );
+          })()}
         </div>
       ) : (
         <div className={styles.events}>

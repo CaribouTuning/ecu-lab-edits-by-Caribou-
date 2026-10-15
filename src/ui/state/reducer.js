@@ -195,7 +195,7 @@ export const ACTIONS = Object.freeze({
  *   turbineIdx: number, turbineCount: number, compressorIdx: number, injIdx: number,
  *   ecuInjectorCc: number, octaneIdx: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
- *   ecu?: object, mafScalar?: number,
+ *   ecu?: object, mafScalar?: number, assumed?: string[],
  * }}} ApplyPresetAction
  */
 
@@ -212,7 +212,7 @@ export const ACTIONS = Object.freeze({
  * — three of the five earlier calls set it true via `withTableEdit`/`withPresetField`,
  * so the LAST write had to win. One action has no "last write" to get right: it is
  * simply false in the object literal below.
- * @typedef {{type: 'RESET_TO_STOCK', ve: number[][], ecu?: object}} ResetToStockAction
+ * @typedef {{type: 'RESET_TO_STOCK', ve: number[][], timing?: number[][], afr?: number[][], mafScalar?: number, ecu?: object}} ResetToStockAction
  */
 
 /**
@@ -594,6 +594,8 @@ function baseReducer(state, action) {
         build: {
           ...state.build,
           engineConfig: { ...state.build.engineConfig, ...action.patch },
+          // A figure the player sets is no longer one the app assumed for them.
+          assumed: (state.build.assumed ?? []).filter((k) => !(k in action.patch)),
           presetId: null,
         },
       };
@@ -625,6 +627,10 @@ function baseReducer(state, action) {
           // (`p.ecu`) is set up for those parts, not for whatever the last car had.
           ...stockEcuParts(),
           presetId: p.presetId,
+          engineReady: true,
+          // The figures of the player's own engine the app filled in because they were left
+          // blank (BUILD says so until each is set); none for a catalogue engine.
+          assumed: p.assumed ?? [],
           presetPrompt: null,
         },
         tune: {
@@ -658,14 +664,16 @@ function baseReducer(state, action) {
     }
 
     case ACTIONS.RESET_TO_STOCK: {
-      const timing = clone2D(DEFAULT_TIMING);
-      const afr = clone2D(DEFAULT_AFR);
+      // The caller's physics-generated factory tables for THIS hardware; the generic Nissan
+      // V6 tables only when it has none (a bare dispatch).
+      const timing = clone2D(action.timing ?? DEFAULT_TIMING);
+      const afr = clone2D(action.afr ?? DEFAULT_AFR);
       return {
         ...state,
         build: {
           ...state.build,
           mods: DEFAULT_MODS,
-          mafScalar: 1.0,
+          mafScalar: action.mafScalar ?? 1.0,
           presetId: null,
         },
         tune: {
@@ -694,7 +702,7 @@ function baseReducer(state, action) {
       const career = carBackOnItsLift(state, state.career);
       let back = state.stash?.sandbox;
       if (!back) {
-        const fresh = makeInitialState();
+        const fresh = makeInitialState({ blank: true });
         back = { build: fresh.build, tune: fresh.tune, session: pickFields(fresh.session, SANDBOX_SESSION_FIELDS) };
       }
       return {
@@ -954,7 +962,7 @@ function labelFor(action) {
     }
     case ACTIONS.APPLY_PRESET: {
       const preset = presetById(action.preset.presetId);
-      return `Preset · ${preset ? preset.name : 'factory calibration'}`;
+      return `Preset · ${preset ? preset.name : (action.preset.presetId == null ? 'your engine' : 'factory calibration')}`;
     }
     case ACTIONS.RESET_TO_STOCK:
       return 'Reset to stock';

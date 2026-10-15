@@ -249,6 +249,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
   // twenty times a second to print the same string.
   const derived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
   const preset = presetId ? presetById(presetId) : null;
+  const noEngine = build.engineReady === false;
   const engineName = preset
     ? preset.name
     : `${derived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
@@ -265,7 +266,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
   );
   const peakBoost = turboOn ? Math.max(...boostCurve) : blowerPeak;
   const apple = isApplePlatform();
-  const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'N/A';
+  const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'NA';
 
   return (
     <div className={styles.strip}>
@@ -287,13 +288,15 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
-          {engineName} · {induction}{build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · {fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
+          {noEngine
+            ? `No engine chosen yet · ${BUILD_VERSION}`
+            : `${engineName} · ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · ${INJECTOR_OPTS[injIdx].label} · ${BUILD_VERSION}`}
         </div>
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>
-          <StripField label="BOOST" value={turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
-          <HealthField pct={overallHealth} />
+          <StripField label="BOOST" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
+          {noEngine ? <StripField label="HEALTH" value="—" /> : <HealthField pct={overallHealth} />}
           <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
           <EngineRunLight />
         </div>

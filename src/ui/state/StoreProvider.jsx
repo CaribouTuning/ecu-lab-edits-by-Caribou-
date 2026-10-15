@@ -33,13 +33,15 @@ const StoreContext = createContext(null);
  * store of their own, seeded with a demo engine's pull, so what a player clicks in a
  * tutorial snippet can never touch their own build or tune.
  *
- * @param {{children: React.ReactNode, init?: (state: StoreState) => StoreState}} props
+ * `blank` is the app's own first launch (see makeInitialState): no engine chosen yet.
+ *
+ * @param {{children: React.ReactNode, init?: (state: StoreState) => StoreState, blank?: boolean}} props
  * @returns {React.ReactElement}
  */
-export function StoreProvider({ children, init }) {
+export function StoreProvider({ children, init, blank = false }) {
   // The third argument makes this LAZY init: makeInitialState() runs once, on
   // mount, rather than being recomputed (and thrown away) on every render.
-  const [state, dispatch] = useReducer(reducer, init, (seed) => (seed ? seed(makeInitialState()) : makeInitialState()));
+  const [state, dispatch] = useReducer(reducer, init, (seed) => (seed ? seed(makeInitialState({ blank })) : makeInitialState({ blank })));
   /** @type {StoreContextValue} */
   const value = [state, dispatch];
   return (

@@ -12,6 +12,24 @@ import * as S from '../src/sim/index.js';
 
 const ev = (type, impact, msg = `${type} event`) => ({ type, impact, severity: 2, msg });
 
+describe('computeTuningScore and cells the pull did not run', () => {
+  it('charges 2 points per flagged cell, so a tune TUNE calls knocking is not "Dialed In" at 100', () => {
+    const r = S.computeTuningScore({ events: [] }, [{ ri: 4, ci: 3 }, { ri: 4, ci: 4 }]);
+    expect(r.score).toBe(96);
+    expect(r.deductions[0]).toMatch(/-4 {2}TUNE flags 2 spark cells past the knock limit that this pull did not run/);
+  });
+
+  it('caps the charge at 12 and no longer reads Dialed In once it bites', () => {
+    const r = S.computeTuningScore({ events: [] }, Array.from({ length: 20 }, (_, i) => ({ ri: 4, ci: i % 8 })));
+    expect(r.score).toBe(88);
+    expect(r.label).toBe('Solid');
+  });
+
+  it('is unchanged with no flagged cells', () => {
+    expect(S.computeTuningScore({ events: [] }, []).score).toBe(100);
+  });
+});
+
 describe('computeTuningScore', () => {
   it('scores a clean pull at 100', () => {
     expect(S.computeTuningScore({ events: [] }).score).toBe(100);

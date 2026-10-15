@@ -71,6 +71,14 @@ remaining risk is the same Node major with a different libm, which is what step 
   Rev-Up's bore, stroke and compression. The model is most accurate near that baseline,
   and error grows with distance from it. When a preset misses its factory figure, check
   whether the miss scales with that distance before suspecting the preset data.
+- **SANDBOX opens with no engine** (`makeInitialState({ blank: true })`, `build.engineReady` false):
+  the placeholder hardware behind that gate is nobody's engine and no screen shows it. The
+  tutorial's demo store and the career's cars start from the ready default instead. A player's
+  own engine is built by `validateCustomEngine` + `customEnginePatch` (sim/presets.js), which
+  generates its calibration from the physics. The advisor, the pull log and the Tuning Score
+  must tell one story: a stock calibration is clean on TUNE at every load, and RESET ALL TO
+  STOCK writes `stockCalibrationFor` the hardware on the bench, never the Nissan V6 tables
+  (those knocked every other engine in the catalogue).
 - **Preset fidelity is tracked in #19.** The gap is the shape of the airflow curve, not a
   missing effect such as direct injection: the DI presets already sit at MBT timing
   almost everywhere. Fix #15 (no naturally aspirated power peak before redline) before

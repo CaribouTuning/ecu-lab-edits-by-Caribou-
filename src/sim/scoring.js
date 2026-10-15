@@ -50,15 +50,31 @@ const MAX_OCTANE_BONUS = Math.max(...OCTANE_OPTS.map((f) => f.bonus));
 const HARDWARE_EVENT_TYPES = new Set(['cam', 'float', 'bearing', 'pressure']);
 
 /**
+ * Points a calibration loses for each cell TUNE flags past the knock limit that the pull
+ * did not itself run, and the most it can lose that way. A pull only exercises the tables
+ * along its own load, so without this a tune with knocking cells at part throttle could be
+ * graded "Dialed In" by one screen while another says it is past the limit.
+ */
+const UNRUN_KNOCK_CELL_POINTS = 2;
+const UNRUN_KNOCK_CELL_CAP = 12;
+
+/**
  * Grades how clean a calibration is, from the pull's event log.
  *
  * @param {{events: {type?: string, impact?: number, msg: string}[]}} result a completed sweep
+ * @param {{ri: number, ci: number}[]} [unrunKnockCells] cells the advisor says are past the
+ *   knock limit and this pull did not run, so its log cannot have shown them
  * @returns {{score: number, label: string, deductions: string[], advisories: string[]}}
  */
-export function computeTuningScore(result) {
+export function computeTuningScore(result, unrunKnockCells = []) {
   let score = 100;
   const deductions = [];
   const advisories = [];
+  if (unrunKnockCells.length) {
+    const d = Math.min(UNRUN_KNOCK_CELL_CAP, UNRUN_KNOCK_CELL_POINTS * unrunKnockCells.length);
+    score -= d;
+    deductions.push(`-${d}  TUNE flags ${unrunKnockCells.length} spark cell${unrunKnockCells.length === 1 ? '' : 's'} past the knock limit that this pull did not run. Pull at those loads to see it, then pull the timing back.`);
+  }
   result.events.forEach((e) => {
     if (HARDWARE_EVENT_TYPES.has(e.type)) {
       advisories.push(e.msg);

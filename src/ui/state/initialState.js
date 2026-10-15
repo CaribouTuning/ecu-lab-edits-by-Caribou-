@@ -45,6 +45,11 @@ import {
  * @property {number} compressorIdx index into COMPRESSOR_OPTS
  * @property {number} exhaustDiaIdx index into EXHAUST_DIA_OPTS
  * @property {number} ecuInjectorCc injector size the ECU is calibrated for, cc/min
+ * @property {boolean} [engineReady] false until the player has chosen a prebuilt engine or entered
+ *   their own engine's specs. Until then the figures below are placeholders no screen shows: SANDBOX
+ *   gates TUNE, LIVE, DYNO and DRAG on it. Absent (a saved state from before it existed) means ready
+ * @property {string[]} [assumed] the `EngineConfig` keys of the player's own engine that were left blank
+ *   and filled with a typical value (cam duration, valvetrain...). BUILD lists them until each is set
  * @property {string|null} presetId which factory preset (if any) is currently loaded stock
  * @property {object|null} presetPrompt the preset pending an overwrite-confirmation prompt, or null
  * @property {number} boostSel which RPM column the boost-curve editor has selected
@@ -252,9 +257,16 @@ export function stockEcuParts() {
 
 /**
  * Builds a fresh starting state for a new session.
+ *
+ * `blank` is SANDBOX's own first launch: no engine yet. The hardware and tables are the
+ * same placeholders (the simulator needs numbers to exist), but `build.engineReady` is
+ * false and every screen that would show them asks for an engine instead. The tutorial's
+ * demo engine and the career's cars start from the ready default.
+ *
+ * @param {{blank?: boolean}} [opts]
  * @returns {StoreState}
  */
-export function makeInitialState() {
+export function makeInitialState({ blank = false } = {}) {
   const ve = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS);
   const timing = clone2D(DEFAULT_TIMING);
   const afr = clone2D(DEFAULT_AFR);
@@ -279,6 +291,8 @@ export function makeInitialState() {
       // silently change which pipe a new build starts with.
       exhaustDiaIdx: EXHAUST_DIA_OPTS.findIndex((o) => o.dia === 3.0),
       ecuInjectorCc: 315,
+      engineReady: !blank,
+      assumed: [],
       presetId: null,
       presetPrompt: null,
       boostSel: 4,

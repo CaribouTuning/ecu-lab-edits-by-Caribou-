@@ -33,7 +33,7 @@ import {
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
+  applyPreset, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
@@ -98,8 +98,15 @@ import { SparkScreen } from './screens/tune/SparkScreen.jsx';
 import { DataScreen } from './screens/dyno/DataScreen.jsx';
 import { HistoryScreen } from './screens/dyno/HistoryScreen.jsx';
 import { LogScreen } from './screens/dyno/LogScreen.jsx';
+import { EngineStart } from './screens/build/EngineStart.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
+
+/** The tabs that need an engine; HOME (stats, health, Learn) does not. */
+const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'drag'];
+
+/** The engine a practice mission is built around, put on the bench when the player has none yet. */
+const MISSION_ENGINE = 'vq35de-revup';
 
 /** Where each practice mission starts: the screen its first step is about. */
 const MISSION_START = {
@@ -306,6 +313,8 @@ export function EcuLabApp() {
   // parts of the ECU the shop has learned to use.
   const [career] = useCareer();
   const inCareer = mode === 'career' && career != null;
+  // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
+  const engineMissing = !inCareer && build.engineReady === false;
   // An engine-building job opens BUILD: the customer pays for parts. Every other job's
   // car is the customer's as it came in, and BUILD is for looking.
   const jobOnBay = inCareer && career.working ? jobById(career.working) : null;
@@ -597,9 +606,14 @@ export function EcuLabApp() {
     // `hwForVe` (the turbo does not — resetting the calibration is not uninstalling the
     // hardware). Either half swapped for the other yields a perfectly plausible table
     // that is wrong.
+    //
+    // The spark and fuel tables are generated for this engine, fuel and boost
+    // (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables this used to write
+    // knock on every other engine in the catalogue.
+    const stock = stockCalibrationFor(build);
     const stockVe = computeHardwareVE(engineConfig, DEFAULT_MODS, hwForVe);
     dispatch({
-      type: ACTIONS.RESET_TO_STOCK, ve: stockVe,
+      type: ACTIONS.RESET_TO_STOCK, ve: stockVe, timing: stock.timing, afr: stock.afr, mafScalar: stock.mafScalar,
       ecu: defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate }),
     });
   };
@@ -668,6 +682,8 @@ export function EcuLabApp() {
   });
 
   const doRun = () => {
+    // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
+    if (engineMissing) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     // The reveal animation's own state: `running` gates the RUN button's label and the
@@ -677,7 +693,9 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
     const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
-    const ts = computeTuningScore(r);
+    // Cells TUNE says are past the knock limit that this pull did not itself run: its log
+    // cannot show them, so they cost the score here instead of leaving it at "Dialed In".
+    const ts = computeTuningScore(r, calAdvice.overAdvanced.filter((c) => !c.knockingOnPull));
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
       supercharged: !!blower, turbine, compressor,
@@ -798,7 +816,7 @@ export function EcuLabApp() {
    * seconds of physics running against a repaint.
    */
   const runDrag = () => {
-    if (!torqueCurveNm || dragRunning) return;
+    if (engineMissing || !torqueCurveNm || dragRunning) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
 
@@ -923,6 +941,7 @@ export function EcuLabApp() {
   // gas temperature — and `audio/engineAudio.js` renders them.
   // These two functions only start and stop the engine.
   const startEngine = () => {
+    if (engineMissing) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
@@ -1320,7 +1339,7 @@ export function EcuLabApp() {
   // CAREER: the TUNE pages and ECU settings a shop can use grow with its training. A
   // locked page still shows in the nav, with a padlock, so the player can see what
   // there is to learn; opening one says which course opens it.
-  const tuneOpen = tab === 'tune' && (!inCareer || !!career.working);
+  const tuneOpen = tab === 'tune' && !engineMissing && (!inCareer || !!career.working);
   const lockedPage = inCareer && tuneView != null && !pageUnlocked(career, tuneView) ? tuneView : null;
   const tunePage = tuneOpen && !lockedPage;
   /** @param {string} sec */
@@ -1377,12 +1396,13 @@ export function EcuLabApp() {
     const engineOn = live.running || live.cranking;
     /** @type {(Omit<import('./commands.js').Command, 'kind'>|false)[]} */
     const actions = [
-      engineOn
+      engineMissing ? false
+      : engineOn
         ? { id: 'act:stop', label: 'Stop engine', keywords: ['engine', 'off'], run: stopEngine }
         // To LIVE first, as a pull goes to DYNO: the engine is only heard and seen there,
         // so started from any other page it would seem to do nothing.
         : { id: 'act:start', label: 'Start engine', keywords: ['engine', 'crank'], run: () => { changeTab('live'); startEngine(); } },
-      !running && {
+      !running && !engineMissing && {
         id: 'act:pull', label: 'Run dyno pull', keywords: ['dyno', 'sweep', 'power'],
         run: () => { goSection('dyno', 'result'); doRun(); },
       },
@@ -1458,6 +1478,9 @@ export function EcuLabApp() {
           // Practice is SANDBOX's: from CAREER, the customer's car goes back on its lift
           // first (a no-op in SANDBOX).
           dispatch({ type: ACTIONS.ENTER_SANDBOX });
+          // The missions are written for a stock engine on the bench. A player who has not
+          // chosen one yet gets the Nissan VQ35DE Rev-Up they were written around.
+          if (build.engineReady === false && !inCareer) dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(presetById(MISSION_ENGINE)) });
           // Marked against SANDBOX's car, which is the one on the bench from here on.
           const start = sandboxStash ?? { session, tune };
           dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'mission', value: { id, step: 0, marks: [markOf(start)] } });
@@ -1516,7 +1539,10 @@ export function EcuLabApp() {
             design it, calibrate it, HEAR IT RUN, then measure it. It was a collapsed
             section on HOME, several taps down and easy never to find. It is a page, not
             an accordion card, so nothing about it reads as a HOME section. */}
-        {tab === 'live' && (!inCareer || career.working) && (
+        {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
+        {engineMissing && ENGINE_TABS.includes(tab) && <EngineStart />}
+
+        {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
             <LiveScreen
               tachFullScaleRpm={tachFullScaleRpm}
@@ -1534,7 +1560,7 @@ export function EcuLabApp() {
             advisory), so they stay here and are passed down rather than recomputed.
             `idealExhaustDia` stays for the same reason — it is the input to
             `exhaustDiaError`, which the score breakdown and the dyno payload also read. */}
-        {tab === 'build' && (!inCareer || career.working) && (
+        {tab === 'build' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
             {inCareer && (
               <Panel tight style={{ marginBottom: 14, fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>
@@ -1690,7 +1716,7 @@ export function EcuLabApp() {
         })()}
 
         {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
-        {tab === 'dyno' && (!inCareer || career.working) && (
+        {tab === 'dyno' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
             <Eyebrow icon={Activity}>{roadTest ? 'Road Test' : 'Dyno Cell'}</Eyebrow>
             {roadTest && (
@@ -1827,7 +1853,7 @@ export function EcuLabApp() {
                 )}
 
                 {!running && dynoView === 'log' && (
-                  <LogScreen />
+                  <LogScreen flagged={calAdvice.overAdvanced} />
                 )}
 
                 {!running && dynoView === 'score' && scores && (
@@ -1847,7 +1873,7 @@ export function EcuLabApp() {
             same reason the dyno reveal is: the run needs the audio context and a timer
             that outlives a render. The screen reads the solved run back out of the
             store and draws it. */}
-        {tab === 'drag' && !inCareer && (
+        {tab === 'drag' && !inCareer && !engineMissing && (
           <div style={{ padding: 16 }}>
             <DragScreen
               section={dragSection} onToggle={toggleDragSection}
@@ -1875,11 +1901,16 @@ export function EcuLabApp() {
  * gets the same single store the browser does instead of having to reconstruct the
  * app's root providers by hand.
  *
+
+ * `blankStart` is the real app's first launch: SANDBOX opens with no engine chosen. Tests and
+ * the tutorial's own stores start from the ready default engine.
+ *
+ * @param {{blankStart?: boolean}} props
  * @returns {React.ReactElement}
  */
-export default function EcuLab() {
+export default function EcuLab({ blankStart = false }) {
   return (
-    <StoreProvider>
+    <StoreProvider blank={blankStart}>
       <EcuLabApp />
     </StoreProvider>
   );

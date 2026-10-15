@@ -17,7 +17,8 @@
  */
 
 import {
-  COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, OCTANE_OPTS, TURBINE_OPTS, compressorWithCount, turbineWithCount,
+  COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, EXHAUST_DIA_OPTS, INJECTOR_OPTS, MATERIAL_OPTS, OCTANE_OPTS, TURBINE_OPTS,
+  VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount,
 } from './hardware.js';
 import { BARO_KPA, PSI_TO_KPA } from './constants.js';
 import { computeHardwareVE } from './airflow.js';
@@ -28,7 +29,7 @@ import { bestPowerAfr, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
-import { DEFAULT_ECU_HW } from './ecu/context.js';
+import { DEFAULT_ECU_HW, tankFuel } from './ecu/context.js';
 import { deriveEngine } from './engine.js';
 import { clamp, interp1, interp2 } from './math.js';
 import { inductionAtMap } from './turbo.js';
@@ -63,6 +64,8 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
  * @property {object} induction
  * @property {object} parts
  * @property {object} mods
+ * @property {object} [fuel] the tank's fuel (`tankFuel`), when it is not one of OCTANE_OPTS
+ *   by index: a flex-fuel blend. A catalogue preset names its pump fuel by index instead
  */
 
 /** @type {Preset[]} */
@@ -688,7 +691,7 @@ function hardwareFor(preset) {
     turboOn,
     turbine: turboOn ? TURBINE_OPTS[turbineIdx] : null,
     exhaustDia: EXHAUST_DIA_OPTS[preset.parts.exhaustDiaIdx].dia,
-    fuel: OCTANE_OPTS[preset.parts.octaneIdx],
+    fuel: preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx],
     peakBoostPsi: turboOn ? Math.max(...boost) : 0,
   };
 }
@@ -704,7 +707,7 @@ function hardwareFor(preset) {
  */
 export function factoryCalibration(preset) {
   const derived = deriveEngine(preset.engine);
-  const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
+  const fuel = preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx];
   const hw = hardwareFor(preset);
   const ve = computeHardwareVE(preset.engine, preset.mods, hw);
 
@@ -889,7 +892,7 @@ export function factoryCalibration(preset) {
 export function factoryCalibrationOn(preset, layout) {
   if (!layout || layout.id === 'game') return { ...factoryCalibration(preset), layout: null };
   const derived = deriveEngine(preset.engine);
-  const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
+  const fuel = preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx];
   const hw = hardwareFor(preset);
   const veGrid = computeHardwareVE(preset.engine, preset.mods, hw);
   const veAt = (rpm, kpa) => interp2(veGrid, rpm, kpa);
@@ -1002,6 +1005,150 @@ export function applyPreset(preset) {
     // engine's own valvetrain noise, which is why a preset carries its own.
     ecu: defaultEcuCalibration({ derived: deriveEngine(preset.engine), gate: DEFAULT_ECU_HW.gate }),
   };
+}
+
+/**
+ * What a player must type to describe an engine of their own, and the range each figure
+ * can honestly take. They are the ranges of the road engines this simulator's physics was
+ * built and checked on: outside them its answers would be extrapolation, so the form
+ * refuses rather than guesses. BUILD's sliders use the same ranges, so anything the form
+ * accepts, the sliders can show and the player can then adjust.
+ */
+export const CUSTOM_ENGINE_LIMITS = Object.freeze({
+  bore: { min: 70, max: 110, step: 0.5, unit: 'mm' },
+  stroke: { min: 60, max: 110, step: 0.5, unit: 'mm' },
+  compression: { min: 8, max: 14, step: 0.1, unit: ':1' },
+  redline: { min: 4000, max: 11000, step: 100, unit: 'rpm' },
+  camDuration: { min: 180, max: 300, step: 2, unit: '°' },
+});
+
+/** Typical peak naturally aspirated crank power per litre, hp/L, used only to size injectors. */
+const INJECTOR_SIZING_HP_PER_L = 80;
+
+/**
+ * Checks the figures a player entered for an engine of their own.
+ *
+ * @param {{configuration?: string, bore?: number|string, stroke?: number|string, compression?: number|string,
+ *   redline?: number|string, camDuration?: number|string|null, injection?: string, valvetrain?: string,
+ *   valvesPerCyl?: number|string, blockMaterial?: string, headMaterial?: string}} spec
+ * @returns {{ok: true, engine: import('./engine.js').EngineConfig, estimated: string[], assumed: string[]}
+ *   | {ok: false, errors: Record<string, string>}} `estimated` names every figure that was
+ *   not entered and so was filled with a stated typical value; `assumed` is the same figures'
+ *   `EngineConfig` keys, which the app keeps so the engine screen can say so until they are set
+ */
+export function validateCustomEngine(spec) {
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const num = (key) => {
+    const raw = spec[key];
+    if (raw === '' || raw == null) { errors[key] = 'Required.'; return null; }
+    const v = Number(raw);
+    const lim = CUSTOM_ENGINE_LIMITS[key];
+    if (!Number.isFinite(v)) { errors[key] = 'Enter a number.'; return null; }
+    if (v < lim.min || v > lim.max) { errors[key] = `Between ${lim.min} and ${lim.max} ${lim.unit}.`; return null; }
+    return v;
+  };
+  if (!CONFIG_OPTS.includes(spec.configuration)) errors.configuration = 'Choose the cylinder layout.';
+  const bore = num('bore');
+  const stroke = num('stroke');
+  const compression = num('compression');
+  const redline = num('redline');
+  /** @type {string[]} */
+  const estimated = [];
+  /** @type {string[]} */
+  const assumed = [];
+  let camDuration = 210;
+  if (spec.camDuration === '' || spec.camDuration == null) { estimated.push('cam duration (210° assumed)'); assumed.push('camDuration'); }
+  else {
+    const v = Number(spec.camDuration);
+    const lim = CUSTOM_ENGINE_LIMITS.camDuration;
+    if (!Number.isFinite(v) || v < lim.min || v > lim.max) errors.camDuration = `Between ${lim.min} and ${lim.max} ${lim.unit}, or leave blank.`;
+    else camDuration = v;
+  }
+  if (Object.keys(errors).length) return { ok: false, errors };
+  const valvetrain = /** @type {'ohv'|'sohc'|'dohc'} */ (VALVETRAIN_OPTS.some((o) => o.id === spec.valvetrain) ? spec.valvetrain : 'dohc');
+  const valvesPerCyl = /** @type {2|3|4|5} */ (VALVES_PER_CYL_OPTS.includes(Number(spec.valvesPerCyl)) ? Number(spec.valvesPerCyl) : 4);
+  if (!spec.valvetrain) { estimated.push('valvetrain (DOHC assumed)'); assumed.push('valvetrain'); }
+  if (!spec.valvesPerCyl) { estimated.push('valves per cylinder (4 assumed)'); assumed.push('valvesPerCyl'); }
+  const material = (m) => (MATERIAL_OPTS.includes(m) ? m : 'Aluminum');
+  if (!spec.blockMaterial) { estimated.push('block material (aluminium assumed)'); assumed.push('blockMaterial'); }
+  if (!spec.headMaterial) { estimated.push('head material (aluminium assumed)'); assumed.push('headMaterial'); }
+  return {
+    ok: true,
+    estimated,
+    assumed,
+    engine: {
+      configuration: /** @type {'I4'|'I6'|'V6'|'V8'} */ (spec.configuration),
+      bore: /** @type {number} */ (bore), stroke: /** @type {number} */ (stroke),
+      compression: /** @type {number} */ (compression),
+      blockMaterial: /** @type {'Cast Iron'|'Aluminum'} */ (material(spec.blockMaterial)),
+      headMaterial: /** @type {'Cast Iron'|'Aluminum'} */ (material(spec.headMaterial)),
+      injection: spec.injection === 'direct' ? 'direct' : 'port',
+      camDuration, springRate: 50, redline: /** @type {number} */ (redline),
+      valvetrain, valvesPerCyl,
+    },
+  };
+}
+
+/**
+ * Everything the app needs to start on an engine the player described, as one patch: the
+ * same shape `applyPreset` returns, with a factory-style calibration generated from the
+ * physics for these exact figures (never a table borrowed from another engine), the
+ * smallest stock injector that covers a typical naturally aspirated power for its size,
+ * and the exhaust nearest the ideal diameter. `presetId` is null: it is not a catalogue
+ * engine, so nothing may claim to be a published figure.
+ *
+ * @param {import('./engine.js').EngineConfig} engine from {@link validateCustomEngine}
+ * @param {string[]} [assumed] the `assumed` keys from {@link validateCustomEngine}
+ * @returns {object} a complete state patch
+ */
+export function customEnginePatch(engine, assumed = []) {
+  const derived = deriveEngine(engine);
+  const cylinders = CYL_COUNT[engine.configuration];
+  // Fuel flow at the assumed power: BSFC 0.5 lb/hp/hr, injectors no more than 90 % open,
+  // 10.5 cc/min per lb/hr of gasoline.
+  const neededCc = ((derived.displacementL * INJECTOR_SIZING_HP_PER_L * 0.5) / cylinders / 0.9) * 10.5;
+  const injectorIdx = Math.max(0, INJECTOR_OPTS.findIndex((o) => o.cc >= neededCc));
+  const ideal = idealExhaustDiameter(derived.displacementL);
+  const exhaustDiaIdx = EXHAUST_DIA_OPTS.reduce((best, o, i) => (Math.abs(o.dia - ideal) < Math.abs(EXHAUST_DIA_OPTS[best].dia - ideal) ? i : best), 0);
+  /** @type {Preset} */
+  const adHoc = {
+    id: 'custom', name: 'Your engine', manufacturer: '', years: '', blurb: '',
+    factory: { displacementL: derived.displacementL },
+    engine,
+    induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
+    parts: { injectorIdx: injectorIdx === -1 ? INJECTOR_OPTS.length - 1 : injectorIdx, exhaustDiaIdx, octaneIdx: 0 },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+  };
+  return { ...applyPreset(adHoc), presetId: null, assumed };
+}
+
+/**
+ * The factory-style calibration for the hardware on the bench, with its bolt-ons taken off:
+ * what RESET ALL TO STOCK writes. Generated from the physics for THIS engine, fuel and
+ * boost, exactly as a catalogue preset's own is, so it is knock-safe on a turbo or a big V8
+ * as much as on the Nissan V6 the generic tables were drawn for.
+ *
+ * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
+ *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
+ *   octaneIdx: number, ethanolPct?: number}} build the BUILD slice (or the fields of it named)
+ * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number}}
+ */
+export function stockCalibrationFor(build) {
+  /** @type {Preset} */
+  const hardware = {
+    id: 'stock', name: 'Stock', manufacturer: '', years: '', blurb: '',
+    factory: {},
+    engine: /** @type {any} */ (build.engineConfig),
+    induction: {
+      turboOn: build.turboOn, turbineIdx: build.turbineIdx, turbineCount: build.turbineCount ?? 1,
+      compressorIdx: build.compressorIdx, boost: build.boostCurve,
+    },
+    parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
+    mods: { intake: false, exhaust: false, headers: false, intercooler: false },
+    fuel: tankFuel(/** @type {any} */ (build)),
+  };
+  return factoryCalibration(hardware);
 }
 
 /**

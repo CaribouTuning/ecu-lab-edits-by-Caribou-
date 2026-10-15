@@ -14,10 +14,11 @@ import { RotateCcw, Settings } from 'lucide-react';
 import React from 'react';
 
 import {
-  COIL_OPTS, CONFIG_OPTS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
+  COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
   TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor,
 } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
+import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
@@ -28,6 +29,15 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './EngineScreen.module.css';
+
+/** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
+const ASSUMED_LABEL = {
+  camDuration: (c) => `intake cam duration ${c.camDuration}°`,
+  valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
+  valvesPerCyl: (c) => `${c.valvesPerCyl ?? 4} valves per cylinder`,
+  blockMaterial: (c) => `${c.blockMaterial.toLowerCase()} block`,
+  headMaterial: (c) => `${c.headMaterial.toLowerCase()} head`,
+};
 
 /**
  * @typedef {object} EngineDerived
@@ -59,6 +69,7 @@ import styles from './EngineScreen.module.css';
  */
 export function EngineScreen({ active, onToggle, engineDerived, activePreset, veAdvice, onResetToStock }) {
   const [build, dispatch] = useBuild();
+  const [ownOpen, setOwnOpen] = React.useState(false);
   const { engineConfig, presetId, presetPrompt } = build;
   const [tune] = useTune();
   const { tablesDirty } = tune;
@@ -135,6 +146,20 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
           if (p) choosePreset(p);
         }}
       />
+      <details className={styles.ownEngine} onToggle={(e) => setOwnOpen(e.currentTarget.open)}>
+        <summary>Enter my own engine&apos;s specs instead</summary>
+        <p className={styles.ownLead}>
+          Replaces the engine, and its calibration, with one built from your figures. You can undo it.
+        </p>
+        {/* Mounted only while open: a blank form has no option selected yet, which nothing
+            else on this screen does. */}
+        {ownOpen && (
+          <EngineSpecForm
+            submitLabel="REPLACE THE ENGINE WITH THIS ONE"
+            onCreate={(patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); setOwnOpen(false); }}
+          />
+        )}
+      </details>
       {activePreset && (
         // Panel builds its own className from `tight` and spreads rest props AFTER
         // it with no merge, so a caller's `className` would replace `tight` outright
@@ -157,6 +182,12 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
             Factory figures are at the crank; the dyno here reads at the wheels, so expect roughly 15% less. The factory calibration is deliberately conservative — beating it is the exercise.
           </div>
         </Panel>
+      )}
+      {(build.assumed?.length ?? 0) > 0 && (
+        <Note tone="warn">
+          <b>Assumed, not entered:</b> {build.assumed.map((k) => ASSUMED_LABEL[k]?.(engineConfig) ?? k).join('; ')}.
+          {' '}These are typical values, not your engine&apos;s own. Set each below and this note goes away.
+        </Note>
       )}
       {!presetId && (
         <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
@@ -225,15 +256,15 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
-      <input type="range" min={75} max={105} step={0.5} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} className={styles.slider} />
+      <input type="range" min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} className={styles.slider} />
       <div className={styles.labelSpaced}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
-      <input type="range" min={65} max={100} step={0.5} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} className={styles.slider} />
+      <input type="range" min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} className={styles.slider} />
       <ExpandableInfo title="Bore, stroke, and engine character">
         Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
-      <input type="range" min={8.5} max={13.0} step={0.1} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} className={styles.slider} />
+      <input type="range" min={CUSTOM_ENGINE_LIMITS.compression.min} max={CUSTOM_ENGINE_LIMITS.compression.max} step={CUSTOM_ENGINE_LIMITS.compression.step} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} className={styles.slider} />
       <ExpandableInfo title="Compression ratio's trade-off">
         Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
       </ExpandableInfo>
@@ -241,7 +272,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       <div className={styles.labelSpaced}>
         Camshaft Duration: {engineConfig.camDuration}° <span className={styles.overlapNote}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
       </div>
-      <input type="range" min={180} max={300} step={2} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
+      <input type="range" min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
       <div className={styles.rangeCaption}>
         <span>mild · low-end torque</span><span>wild · top-end power</span>
       </div>

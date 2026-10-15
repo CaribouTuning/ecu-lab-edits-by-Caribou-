@@ -61,7 +61,7 @@ const BUILD_KEYS = [
   'engineConfig', 'mods', 'turboOn', 'boostCurve', 'turbineIdx', 'turbineCount',
   'compressorIdx', 'injIdx', 'ecuInjectorCc', 'octaneIdx', 'exhaustDiaIdx',
   'mafScalar', 'presetId', 'fuelSystem', 'sensorHw', 'wastegate', 'coil', 'plugGapMm',
-  'ethanolPct',
+  'ethanolPct', 'engineReady', 'assumed',
 ];
 
 /**
