@@ -872,6 +872,108 @@ export function factoryCalibration(preset) {
 }
 
 /**
+ * The factory calibration on an engine computer's own breakpoints (layouts.js).
+ *
+ * The same physics and the same rules as `factoryCalibration`, cell by cell at the
+ * layout's breakpoints instead of the game's 8 × 6: VE read off the engine's airflow
+ * model the way the simulator reads it, fuel stoichiometric in closed loop and best-power
+ * above it, spark the lower of best-torque and the knock limit less the factory margin,
+ * then walked so the blend between two rows is safe. A spark table indexed by air per
+ * cylinder is solved at the manifold pressure that traps that much air at that speed,
+ * which is the cell an engine computer reading its own airmass looks up.
+ *
+ * @param {Preset} preset
+ * @param {import('./layouts.js').Layout|null} layout the game's grid when null
+ * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number, layout: string|null}}
+ */
+export function factoryCalibrationOn(preset, layout) {
+  if (!layout || layout.id === 'game') return { ...factoryCalibration(preset), layout: null };
+  const derived = deriveEngine(preset.engine);
+  const fuel = OCTANE_OPTS[preset.parts.octaneIdx];
+  const hw = hardwareFor(preset);
+  const veGrid = computeHardwareVE(preset.engine, preset.mods, hw);
+  const veAt = (rpm, kpa) => interp2(veGrid, rpm, kpa);
+  const boostAt = (kpa) => (preset.induction.turboOn && kpa > BARO_KPA ? Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA) : 0);
+  const mafScalar = Number((1 / mafErrorFactor(preset.mods, preset.induction.turboOn)).toFixed(3));
+  const turbine = presetTurbine(preset);
+  const memo = new Map();
+  const inductionAt = (rpm, kpa) => {
+    if (!preset.induction.turboOn) return null;
+    const key = `${rpm}:${kpa.toFixed(3)}`;
+    if (!memo.has(key)) {
+      memo.set(key, inductionAtMap({
+        rpm, mapKpa: kpa, boostTargetPsi: interp1(RPM, preset.induction.boost, rpm), turbine,
+        compressor: presetCompressor(preset), veAt: (m) => veAt(rpm, m), derived,
+        intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
+      }));
+    }
+    return memo.get(key);
+  };
+  const boostPsiAt = (rpm, kpa) => inductionAt(rpm, kpa)?.boostPsi ?? boostAt(kpa);
+  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
+  const chargeKAt = (rpm, kpa) => chargeTempK(boostPsiAt(rpm, kpa), preset.mods.intercooler);
+  const airAt = (rpm, kpa) => trappedAirGrams({ veActual: veAt(rpm, kpa), mapKpa: kpa, chargeK: chargeKAt(rpm, kpa), sweptM3 });
+  /** Manifold pressure for a load-axis value: itself, or the pressure trapping that air. */
+  const kpaOf = (axes, rpm, v) => {
+    if (axes.loadUnit === 'kPa') return v;
+    const g = axes.loadUnit === 'mg/cyl' ? v / 1000 : v;
+    let lo = 5; let hi = 600;
+    for (let i = 0; i < 40; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (airAt(rpm, mid) < g) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+  const afrAtKpa = (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(bestPowerAfr(boostPsiAt(rpm, kpa)).toFixed(2)));
+  const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
+
+  const ve = grid(layout.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
+  const afr = grid(layout.afr, afrAtKpa);
+  const cellAt = (rpm, kpa) => {
+    const induction = inductionAt(rpm, kpa);
+    const boostPsi = induction ? induction.boostPsi : boostAt(kpa);
+    const veActual = veAt(rpm, kpa);
+    const lambda = (afrAtKpa(rpm, kpa) / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa);
+    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
+    const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
+    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
+    const empKpa = induction ? induction.empKpa : exhaustManifoldKpa({
+      turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
+      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, kpa), lambda }),
+    });
+    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
+    const cyc = cycleInputsFor({
+      rpm, mapKpa: kpa, empKpa, intakeK: chargeK, airChargeG,
+      burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich), fuelMassG: deliveredFuelG, lambda, fuel, derived,
+    });
+    return { safe: knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG, mbt: mbtFromBurn(cyc.burnDeg) };
+  };
+  const T = layout.timing;
+  const timing = grid(T, (rpm, kpa) => {
+    const { safe, mbt } = cellAt(rpm, kpa);
+    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+  });
+  // Safe between rows, as factoryCalibration walks it, in the axis's own unit.
+  const peakBoostCurve = RPM.map(() => Math.max(0, ...preset.induction.boost));
+  T.rpm.forEach((rpm, ci) => {
+    const reachKpa = reachableKpa({ turboOn: preset.induction.turboOn, boostCurve: peakBoostCurve, rpm });
+    const reach = T.loadUnit === 'kPa' ? reachKpa : airAt(rpm, reachKpa) * (T.loadUnit === 'mg/cyl' ? 1000 : 1);
+    for (let ri = 1; ri < T.load.length; ri += 1) {
+      const span = T.load[ri - 1] - T.load[ri];
+      const entered = clamp((reach - T.load[ri]) / span, 0, 1);
+      if (entered <= 0) continue;
+      const room = interpolationRoomDeg({
+        ceilingAtFrac: (f) => cellAt(rpm, kpaOf(T, rpm, T.load[ri] + f * span)).safe,
+        aboveDeg: timing[ri - 1][ci],
+        entered,
+      });
+      if (room < timing[ri][ci]) timing[ri][ci] = Number(clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+    }
+  });
+  return { ve, timing, afr, mafScalar, layout: layout.id };
+}
+
+/**
  * Everything the app needs to switch to this engine, as one patch.
  *
  * Returned rather than applied, so preset behaviour is testable without React.

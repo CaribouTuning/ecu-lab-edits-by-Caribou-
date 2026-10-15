@@ -19,7 +19,8 @@
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
 import { OCTANE_OPTS } from '../hardware.js';
-import { clamp, interp2 } from '../math.js';
+import { needsAirmass, readEcuTable } from '../layouts.js';
+import { clamp } from '../math.js';
 import { evaluatePoint } from '../point.js';
 import { RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
@@ -145,7 +146,7 @@ export function cylinderDistribution(derived, configuration) {
  * @param {object} input.cal the calibration
  * @param {EcuHardware} input.hw
  * @param {EcuConditions} input.cond
- * @param {{ve: number[][], timing: number[][], afr: number[][]}} input.tables
+ * @param {{ve: number[][], timing: number[][], afr: number[][], layout?: import('../layouts.js').Layout|null}} input.tables
  * @param {number} input.rpm
  * @param {number} input.mapKpa true manifold pressure
  * @param {number} input.boostPsi
@@ -196,12 +197,17 @@ export function resolveEcuPoint({
     })
     : null;
 
-  // ---- BASE TABLES, read at the load the ECU believes.
-  const veBase = interp2(tables.ve, rpm, sMap);
+  // ---- BASE TABLES, read at the load the ECU believes: manifold pressure, or (on a
+  // layout that reads spark by air per cylinder, layouts.js) the air its own VE table
+  // and sensors work out.
+  const veBase = readEcuTable(tables, 've', rpm, { mapKpa: sMap });
   const camVe = read2(cal.airflow.camVeCorr, rpm, cam.intakeAdvDeg);
   const veVal = veBase * (1 + camVe / 100);
-  const timingBase = interp2(tables.timing, rpm, sMap);
-  const afrBase = interp2(tables.afr, rpm, sMap);
+  const ecuAirG = needsAirmass(tables.layout)
+    ? trappedAirGrams({ veActual: veVal, mapKpa: sMap, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
+    : 0;
+  const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: sMap, airmassG: ecuAirG });
+  const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: sMap, airmassG: ecuAirG });
 
   // ---- SPARK: base, then every correction in the order the ECU stacks them.
   const timingSteps = [{ label: 'Base table', value: timingBase }];
@@ -456,7 +462,7 @@ export function evaluateEcu(args) {
  * @param {object} input.cal
  * @param {EcuHardware} input.hw
  * @param {EcuConditions} input.cond
- * @param {{ve: number[][], timing: number[][], afr: number[][]}} input.tables
+ * @param {{ve: number[][], timing: number[][], afr: number[][], layout?: import('../layouts.js').Layout|null}} input.tables
  * @param {number} input.rpm
  * @param {number} input.loadKpa the dyno's throttle, as sea-level kPa
  * @returns {object} the datalog record, with ECU channels and the correction breakdown

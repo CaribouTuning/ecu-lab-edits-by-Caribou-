@@ -25,7 +25,7 @@
  * resolves them against the `live` it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, ECU_META, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
+import { clamp, clone2D, DEFAULT_AFR, DEFAULT_MODS, DEFAULT_TIMING, ECU_META, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
 
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
@@ -64,6 +64,7 @@ export const ACTIONS = Object.freeze({
   SWITCH_MAP: 'SWITCH_MAP',
   COPY_MAP: 'COPY_MAP',
   SWAP_MAPS: 'SWAP_MAPS',
+  SET_LAYOUT: 'SET_LAYOUT',
   LIVE_STEP: 'LIVE_STEP',
   LIVE_PATCH: 'LIVE_PATCH',
   UNDO: 'UNDO',
@@ -126,6 +127,13 @@ export const ACTIONS = Object.freeze({
  * @typedef {{type: 'SWITCH_MAP', index: number}} SwitchMapAction
  * @typedef {{type: 'COPY_MAP', to: number}} CopyMapAction
  * @typedef {{type: 'SWAP_MAPS', a: number, b: number}} SwapMapsAction
+ */
+
+/**
+ * Moves the three main tables onto another engine computer's breakpoints, already
+ * converted (state/layoutSwitch.js), with the baseline that goes with them.
+ * @typedef {{type: 'SET_LAYOUT', layout: string|null, ve: number[][], timing: number[][], afr: number[][],
+ *   baseline: {ve: number[][], timing: number[][], afr: number[][]}}} SetLayoutAction
  */
 
 /**
@@ -390,7 +398,7 @@ export const ACTIONS = Object.freeze({
  * decorative — a typo'd payload key (`presset` instead of `preset`) would typecheck
  * clean. Without the catch-all, `tsc` must reject it.
  * @typedef {SetBuildFieldAction | ClearPresetIdAction | SetTurbineAction | SetTableAction | SetEcuAction |
- *   SwitchMapAction | CopyMapAction | SwapMapsAction |
+ *   SwitchMapAction | CopyMapAction | SwapMapsAction | SetLayoutAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
  *   ResetToStockAction | RepairEngineAction | BankPullAction | RestoreCareerAction |
@@ -412,7 +420,7 @@ export const ACTIONS = Object.freeze({
  * @returns {import('./initialState.js').MapSlot}
  */
 function mapOf(t) {
-  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu };
+  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu, layout: t.layout ?? null };
 }
 
 /**
@@ -482,6 +490,27 @@ function baseReducer(state, action) {
         ...state,
         build: { ...state.build, presetId: null },
         tune: { ...state.tune, [action.table]: action.value, tablesDirty: true },
+      };
+
+    case ACTIONS.SET_LAYOUT:
+      // The three main tables moved onto another engine computer's breakpoints
+      // (sim/layouts.js), already converted by the caller (state/layoutSwitch.js), with
+      // the baseline the CHANGES view compares against. A different grid has different
+      // cells, so the selection goes; the tables are the same calibration, so neither
+      // `tablesDirty` nor the preset changes.
+      return {
+        ...state,
+        tune: {
+          ...state.tune,
+          layout: action.layout,
+          ve: action.ve,
+          timing: action.timing,
+          afr: action.afr,
+          baseline: action.baseline,
+          selection: null,
+        },
+        // A datalog histogram is binned onto the old grid's cells.
+        session: { ...state.session, histogram: null },
       };
 
     case ACTIONS.SET_ECU:
@@ -604,6 +633,9 @@ function baseReducer(state, action) {
           timing: p.timing,
           afr: p.afr,
           ...(p.ecu ? { ecu: p.ecu } : {}),
+          // A preset's factory calibration is generated on the ECU Lab grid; the layout
+          // switch (TUNE) moves it onto the car's own computer's breakpoints.
+          layout: null,
           // A new engine's ROM: every map slot starts as the factory calibration.
           maps: [null, null, null, null],
           activeMap: 0,
@@ -642,6 +674,7 @@ function baseReducer(state, action) {
           timing,
           afr,
           ...(action.ecu ? { ecu: action.ecu } : {}),
+          layout: null,
           baseline: { ve: action.ve, timing, afr },
           // A reset baseline is not unsaved player work — no "last call" needed to
           // pin this false, it is simply false in this same pass.
@@ -831,6 +864,7 @@ const UNDO_SCOPE = Object.freeze({
   [ACTIONS.SWITCH_MAP]: RESTORE_CALIBRATION,
   [ACTIONS.COPY_MAP]: RESTORE_CALIBRATION,
   [ACTIONS.SWAP_MAPS]: RESTORE_CALIBRATION,
+  [ACTIONS.SET_LAYOUT]: RESTORE_CALIBRATION,
   [ACTIONS.APPLY_PRESET]: RESTORE_ALL,
   [ACTIONS.RESET_TO_STOCK]: RESTORE_ALL,
 });
@@ -893,6 +927,7 @@ const CLEARS_REDO = new Set([
   ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,
   ACTIONS.SET_ENGINE_CONFIG_PATCH, ACTIONS.SET_TABLE, ACTIONS.APPLY_PRESET,
   ACTIONS.RESET_TO_STOCK, ACTIONS.SET_ECU, ACTIONS.SWITCH_MAP, ACTIONS.COPY_MAP, ACTIONS.SWAP_MAPS,
+  ACTIONS.SET_LAYOUT,
 ]);
 
 /**
@@ -929,6 +964,8 @@ function labelFor(action) {
       return `Copy to Map ${action.to + 1}`;
     case ACTIONS.SWAP_MAPS:
       return `Swap Maps ${action.a + 1} and ${action.b + 1}`;
+    case ACTIONS.SET_LAYOUT:
+      return `Table layout · ${layoutById(action.layout).label}`;
     case ACTIONS.SET_ECU: {
       if (!action.path) return action.label ?? 'ECU calibration';
       const meta = ECU_META.find((m) => m.path === action.path);

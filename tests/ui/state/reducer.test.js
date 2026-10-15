@@ -543,11 +543,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 32-field
-  // contract this action documents: a stray write grows the changed set past 32, a
-  // dropped write shrinks it below 32, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 33-field
+  // contract this action documents: a stray write grows the changed set past 33, a
+  // dropped write shrinks it below 33, and the failure message names the field either
   // way.
-  it('changes exactly the 32 documented fields, plus the two history fields', () => {
+  it('changes exactly the 33 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -568,6 +568,9 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       // baseline (issue 106): APPLY_PRESET takes the preset's own tables as the
       // CHANGES view's comparison point, in the same pass as the tables themselves.
       'tune.baseline',
+      // A preset's factory tables are on the ECU Lab grid (sim/layouts.js), whatever
+      // layout the last calibration sat on.
+      'tune.layout',
       'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.
@@ -1626,7 +1629,7 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 19 build and 8 tune fields', () => {
+  it('snapshots exactly the documented 19 build and 9 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc', 'engineConfig', 'ethanolPct',
@@ -1634,7 +1637,7 @@ describe('snapshot field coverage', () => {
       'presetId', 'sensorHw', 'turbineCount', 'turbineIdx', 'turboOn', 'wastegate',
     ]);
     expect(Object.keys(snap.tune).sort()).toEqual([
-      'activeMap', 'afr', 'baseline', 'ecu', 'maps', 'tablesDirty', 'timing', 've',
+      'activeMap', 'afr', 'baseline', 'ecu', 'layout', 'maps', 'tablesDirty', 'timing', 've',
     ]);
   });
 

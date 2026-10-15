@@ -10,11 +10,12 @@ import React from 'react';
 
 import { Zap } from 'lucide-react';
 
-import { SPARK_MAX_DEG, SPARK_MIN_DEG } from '../../../sim/index.js';
+import { SPARK_MAX_DEG, SPARK_MIN_DEG, layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { sparkReport } from '../../components/advisorReports.js';
 import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
+import { LayoutAdviceNote, LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
@@ -46,6 +47,10 @@ import styles from './SparkScreen.module.css';
 export function SparkScreen({ calAdvice, children }) {
   const [tune, dispatch] = useTune();
   const { timing, selection, rangeMode, baseline, diffView } = tune;
+  // The breakpoints this table sits on (sim/layouts.js): the ECU Lab grid unless TUNE's
+  // layout switch has put it on the engine computer's own.
+  const axes = layoutById(tune.layout).timing;
+  const dims = { rows: axes.load.length, cols: axes.rpm.length };
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
   /**
@@ -60,7 +65,9 @@ export function SparkScreen({ calAdvice, children }) {
   const setDiffView = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'diffView', value });
   // A handful of `.some()` scans over at most 96 cells, no allocation in the
   // hot path — plainly on every render, not memoised.
-  const report = sparkReport(calAdvice, selection);
+  // Cell advice reads the ECU Lab grid (EcuLab.jsx `gameView`): on another layout a
+  // selection names a different cell, so the report covers the whole table instead.
+  const report = sparkReport(calAdvice, tune.layout ? null : selection);
 
   return (
     <>
@@ -71,9 +78,10 @@ export function SparkScreen({ calAdvice, children }) {
             <UndoControls />
           </div>
           <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
-          <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} />
+          <LayoutSwitch />
+          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
+            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
@@ -89,11 +97,12 @@ export function SparkScreen({ calAdvice, children }) {
           {children}
         </div>
         <AdvisorPanel headline={report.headline} tone={report.tone}>
+          <LayoutAdviceNote />
           <TuneAdvisory kind="timing" report={report} />
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={timing} setData={setTable} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" baseline={baseline.timing} />
+      <SelectionDock data={timing} setData={setTable} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" baseline={baseline.timing} axes={axes} />
     </>
   );
 }

@@ -9,10 +9,12 @@ import React from 'react';
 
 import { Droplets } from 'lucide-react';
 
+import { layoutById } from '../../../sim/index.js';
 import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { fuelReport } from '../../components/advisorReports.js';
 import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
+import { LayoutAdviceNote, LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
@@ -37,6 +39,9 @@ import styles from './FuelScreen.module.css';
 export function FuelScreen({ calAdvice, children }) {
   const [tune, dispatch] = useTune();
   const { afr, selection, rangeMode, baseline, diffView } = tune;
+  // The breakpoints this table sits on (sim/layouts.js); see SparkScreen.jsx.
+  const axes = layoutById(tune.layout).afr;
+  const dims = { rows: axes.load.length, cols: axes.rpm.length };
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
   /**
@@ -51,7 +56,7 @@ export function FuelScreen({ calAdvice, children }) {
   const setDiffView = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'diffView', value });
   // A handful of `.some()` scans over at most 96 cells, no allocation in the
   // hot path — plainly on every render, not memoised.
-  const report = fuelReport(calAdvice, selection);
+  const report = fuelReport(calAdvice, tune.layout ? null : selection);
 
   return (
     <>
@@ -62,9 +67,10 @@ export function FuelScreen({ calAdvice, children }) {
             <UndoControls />
           </div>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} />
-          <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} />
+          <LayoutSwitch />
+          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
+            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why AFR trades power for safety">
@@ -76,11 +82,12 @@ export function FuelScreen({ calAdvice, children }) {
           {children}
         </div>
         <AdvisorPanel headline={report.headline} tone={report.tone}>
+          <LayoutAdviceNote />
           <TuneAdvisory kind="afr" report={report} />
         </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
-      <SelectionDock data={afr} setData={setTable} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" baseline={baseline.afr} />
+      <SelectionDock data={afr} setData={setTable} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" baseline={baseline.afr} axes={axes} />
     </>
   );
 }

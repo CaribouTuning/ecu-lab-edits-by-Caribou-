@@ -17,6 +17,8 @@ import { clamp, interp1, interp2 } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
+import { trappedAirGrams } from './cycle.js';
+import { needsAirmass, readEcuTable } from './layouts.js';
 import { assertBoostCurve } from './sweep.js';
 import { RPM } from './tables.js';
 import { liveStepEcu } from './ecu/liveEcu.js';
@@ -147,8 +149,9 @@ export function liveStep(st, dt, input, cfg) {
   const s = { ...st };
   const {
     ve, veTruth, timing, afr, derived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
-    mafErrorBase, turboOn, boostCurve, turbine, compressor,
+    mafErrorBase, turboOn, boostCurve, turbine, compressor, layout = null,
   } = cfg;
+  const tables = { ve, timing, afr, layout };
   if (turboOn) assertBoostCurve(boostCurve);
   const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
   const limiterCutRpm = redline + LIMITER_OVERSHOOT_RPM;
@@ -239,8 +242,11 @@ export function liveStep(st, dt, input, cfg) {
       mapKpa: Math.min(loadKpa, BARO_KPA) + boostPsi * PSI_TO_KPA,
       boostShortfallPsi: Math.max(0, boostTarget - boostPsi),
     };
-    const veVal = interp2(ve, rpmClamped, man.mapKpa);
+    const veVal = readEcuTable(tables, 've', rpmClamped, { mapKpa: man.mapKpa });
     const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
+    const airmassG = needsAirmass(layout)
+      ? trappedAirGrams({ veActual: veVal, mapKpa: man.mapKpa, chargeK: chargeTempK(man.boostPsi, mods.intercooler), sweptM3: (derived.displacementL / derived.cyl) / 1000 })
+      : 0;
     // Spark-based idle stabilisation: the air path is slow (throttle -> manifold ->
     // cylinder takes several cycles), so real ECUs hold idle with IGNITION timing,
     // which changes torque on the very next firing event. Air trim handles the slow
@@ -249,8 +255,8 @@ export function liveStep(st, dt, input, cfg) {
     if (s.running && userThrottle < 3 && s.rpm < 1600) {
       idleSpark = clamp((IDLE_TARGET_RPM - s.rpm) * COEFF.IDLE_SPARK_GAIN, -COEFF.IDLE_SPARK_LIMIT, COEFF.IDLE_SPARK_LIMIT);
     }
-    const timingVal = interp2(timing, rpmClamped, man.mapKpa) + idleSpark;
-    const afrCmd = interp2(afr, rpmClamped, man.mapKpa) / coldEnrich;
+    const timingVal = readEcuTable(tables, 'timing', rpmClamped, { mapKpa: man.mapKpa, airmassG }) + idleSpark;
+    const afrCmd = readEcuTable(tables, 'afr', rpmClamped, { mapKpa: man.mapKpa, airmassG }) / coldEnrich;
     pt = evaluatePoint({
       rpm: rpmClamped, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
       veVal, veActualVal, timingVal, afrCommanded: afrCmd, fuel,

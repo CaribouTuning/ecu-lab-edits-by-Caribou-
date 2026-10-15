@@ -16,10 +16,12 @@
  * ran, unchanged.
  */
 
-import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from '../constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { COEFF } from '../coefficients.js';
 import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
-import { clamp, interp2 } from '../math.js';
+import { trappedAirGrams } from '../cycle.js';
+import { needsAirmass, readEcuTable } from '../layouts.js';
+import { clamp } from '../math.js';
 import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
 import { RPM } from '../tables.js';
@@ -130,7 +132,7 @@ export function liveStepEcu(st, dt, input, cfg) {
   const env = cond.env;
   const baro = env.baroKpa;
   const { derived, mods, turboOn, boostCurve, turbine, compressor } = cfg;
-  const tables = { ve: cfg.ve, timing: cfg.timing, afr: cfg.afr };
+  const tables = { ve: cfg.ve, timing: cfg.timing, afr: cfg.afr, layout: cfg.layout ?? null };
   const hw = {
     ...cfg.ecu.hw, derived, mods, turboOn, boostCurve, turbine, compressor,
     blower: cfg.blower ?? null, blowerRatio: cfg.blowerRatio ?? 1, nitrous: cfg.nitrous ?? null,
@@ -429,7 +431,12 @@ export function liveStepEcu(st, dt, input, cfg) {
     const crankingPct = s.cranking ? read1(cal.fuel.cranking, e.sEct) : 0;
     // Target lookup delay: a move to a richer target is eased in over the delay; a move
     // leaner is immediate.
-    const afrTable = interp2(tables.afr, rpmC, e.sMap);
+    const afrTable = readEcuTable(tables, 'afr', rpmC, {
+      mapKpa: e.sMap,
+      airmassG: needsAirmass(tables.layout)
+        ? trappedAirGrams({ veActual: readEcuTable(tables, 've', rpmC, { mapKpa: e.sMap }), mapKpa: e.sMap, chargeK: e.sIat + KELVIN_OFFSET, sweptM3: (derived.displacementL / derived.cyl) / 1000 })
+        : 0,
+    });
     if (e.afrTargetF == null || cal.fuel.targetDelayS <= 0 || afrTable > e.afrTargetF) e.afrTargetF = afrTable;
     else e.afrTargetF += (afrTable - e.afrTargetF) * clamp(dt / cal.fuel.targetDelayS, 0, 1);
     if (cal.ignition.highDetRetard > 0 && e.knockRetard > cal.ignition.highDetTriggerDeg) { e.highDet = true; e.highDetQuiet = 0; }

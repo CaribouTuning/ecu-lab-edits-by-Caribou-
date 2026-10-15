@@ -6,16 +6,20 @@
 
 import React from 'react';
 
-import { LOAD, RPM } from '../../../sim/index.js';
+import { GAME_LAYOUT } from '../../../sim/index.js';
 
+import { LOAD_UNIT_LABEL } from '../TuningGrid.jsx';
 import styles from './surface.module.css';
 import { TableSurface, ViewToggle, useTableView } from './TableSurface.jsx';
 
-const LOAD_UP = [...LOAD].reverse();
+/** Which pull field places a point on each kind of load axis. */
+const Y_VAR = { kPa: 'map', 'g/cyl': 'airG', 'mg/cyl': 'airMg' };
 
 /**
  * @param {object} props
- * @param {number[][]} props.data rows against LOAD (highest first), columns against RPM
+ * @param {number[][]} props.data rows against the load axis (highest first), columns against RPM
+ * @param {import('../../../sim/layouts.js').TableAxes} [props.axes] the ECU Lab grid's unless
+ *   the tune sits on an engine computer's own breakpoints
  * @param {number} props.min
  * @param {number} props.max
  * @param {number} props.decimals
@@ -24,15 +28,16 @@ const LOAD_UP = [...LOAD].reverse();
  * @param {{label: string, read: (p: object) => number}} [props.commanded]
  * @param {React.ReactNode} props.children the grid
  */
-export function GridOrSurface({ data, min, max, decimals, unit, title, commanded, children }) {
+export function GridOrSurface({ data, min, max, decimals, unit, title, commanded, children, axes = GAME_LAYOUT.ve }) {
   const [view, setView] = useTableView();
   const z = React.useMemo(() => [...data].reverse(), [data]);
+  const loadUp = React.useMemo(() => [...axes.load].reverse(), [axes]);
   return (
     <div className={styles.wrap}>
       <div className={styles.switchRow}><ViewToggle mode={view} onChange={setView} /></div>
       {view === '3d'
-        ? <TableSurface x={RPM} y={LOAD_UP} z={z} lo={min} hi={max} xLabel="RPM" yLabel="MAP kPa" unit={unit} decimals={decimals}
-          title={title} xVar="rpm" yVar="map" commanded={commanded} />
+        ? <TableSurface x={axes.rpm} y={loadUp} z={z} lo={min} hi={max} xLabel="RPM" yLabel={LOAD_UNIT_LABEL[axes.loadUnit]} unit={unit} decimals={decimals}
+          title={title} xVar="rpm" yVar={Y_VAR[axes.loadUnit]} commanded={commanded} />
         : children}
     </div>
   );

@@ -12,6 +12,8 @@ import { clamp, groupRuns, interp1, interp2, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
+import { trappedAirGrams } from './cycle.js';
+import { loadFor, needsAirmass, readEcuTable } from './layouts.js';
 import { LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
 import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
@@ -77,17 +79,27 @@ const KNOCK_MERGE_GAP_RPM = 600;
  * The spark-table rows in force at a manifold pressure, as a tuner would look for them:
  * one row when the engine sits on it, the two either side (and where between) when it
  * runs between them — which, under boost, it nearly always does.
+ * On a layout that reads spark by air per cylinder (layouts.js) the rows are named in
+ * that unit, at the air the point trapped.
  * @param {number} mapKpa
+ * @param {import('./layouts.js').Layout|null} [layout]
+ * @param {number} [airmassG]
  * @returns {string}
  */
-function tableRowsAt(mapKpa) {
-  const rows = [...LOAD].sort((a, b) => a - b);
-  const on = rows.find((r) => Math.abs(r - mapKpa) <= 3);
-  if (on !== undefined) return `the ${on} kPa load row`;
-  if (mapKpa > rows[rows.length - 1]) return `the ${rows[rows.length - 1]} kPa load row (it ran at ${Math.round(mapKpa)} kPa)`;
-  const hi = rows.find((r) => r > mapKpa);
-  const lo = [...rows].reverse().find((r) => r < mapKpa);
-  return `the ${lo} and ${hi} kPa load rows (it ran at ${Math.round(mapKpa)} kPa, between them)`;
+function tableRowsAt(mapKpa, layout = null, airmassG = 0) {
+  const axes = layout?.timing ?? { load: LOAD, loadUnit: 'kPa' };
+  const v = loadFor(/** @type {any} */ (axes), { mapKpa, airmassG });
+  const u = axes.loadUnit;
+  const fmt = (x) => (u === 'g/cyl' ? x.toFixed(2) : String(Math.round(x)));
+  const near = u === 'kPa' ? 3 : u === 'g/cyl' ? 0.01 : 10;
+  const rows = [...axes.load].sort((a, b) => a - b);
+  const on = rows.find((r) => Math.abs(r - v) <= near);
+  if (on !== undefined) return `the ${fmt(on)} ${u} load row`;
+  if (v > rows[rows.length - 1]) return `the ${fmt(rows[rows.length - 1])} ${u} load row (it ran at ${fmt(v)} ${u})`;
+  if (v < rows[0]) return `the ${fmt(rows[0])} ${u} load row (it ran at ${fmt(v)} ${u})`;
+  const hi = rows.find((r) => r > v);
+  const lo = [...rows].reverse().find((r) => r < v);
+  return `the ${fmt(lo)} and ${fmt(hi)} ${u} load rows (it ran at ${fmt(v)} ${u}, between them)`;
 }
 
 /**
@@ -107,7 +119,7 @@ function tableRowsAt(mapKpa) {
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null,
+  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null,
 }) {
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
@@ -134,7 +146,7 @@ export function simulateSweep({
       const cond = bottle
         ? { ...ecu.cond, nitrous: { ...nc, armed: nc.armed && bottle.massKg > 0, bottleK: bottle.tempK } }
         : ecu.cond;
-      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr }, rpm, loadKpa });
+      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr, layout }, rpm, loadKpa });
       points.push(pt);
       if (bottle && pt.nitrousLbMin > 0) {
         bottle = stepBottle(bottle, (pt.nitrousLbMin * 0.45359237 / 60) * dtPerPoint, dtPerPoint, {
@@ -157,12 +169,16 @@ export function simulateSweep({
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
     // calibration up into the high-MAP rows automatically.
-    const veVal = interp2(ve, rpm, man.mapKpa);
+    const tables = { ve, timing, afr, layout };
+    const veVal = readEcuTable(tables, 've', rpm, { mapKpa: man.mapKpa });
     // `veTruth` is what the hardware actually flows. When it is omitted the ECU's
     // table is taken as correct, which is the "perfectly calibrated" case.
     const veActualVal = veTruth ? interp2(veTruth, rpm, man.mapKpa) : undefined;
-    const timingVal = interp2(timing, rpm, man.mapKpa);
-    const afrCommanded = interp2(afr, rpm, man.mapKpa);
+    const airmassG = needsAirmass(layout)
+      ? trappedAirGrams({ veActual: veVal, mapKpa: man.mapKpa, chargeK: chargeTempK(man.boostPsi, mods.intercooler), sweptM3: (derived.displacementL / derived.cyl) / 1000 })
+      : 0;
+    const timingVal = readEcuTable(tables, 'timing', rpm, { mapKpa: man.mapKpa, airmassG });
+    const afrCommanded = readEcuTable(tables, 'afr', rpm, { mapKpa: man.mapKpa, airmassG });
     points.push({
       ...evaluatePoint({
         rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
@@ -332,7 +348,7 @@ export function simulateSweep({
             ? `Fuel first: the AFR target asks for ${peak.afrCommanded.toFixed(1)}:1 but it ran ${peak.afr.toFixed(1)}:1, so correct the VE table there on TUNE → AIRFLOW until it hits the target — a lean charge knocks sooner.`
             : null,
         sparkCanFix
-          ? `On TUNE → SPARK, pull about ${Math.max(1, Math.ceil(-peak.margin + 1))}° of timing from ${tableRowsAt(peak.map)} around ${peak.rpm} RPM, to about ${suggestedTiming}° there (less either side, across ${rangeLabel(run)}). Aim for 0–1° of knock retard on the next pull.`
+          ? `On TUNE → SPARK, pull about ${Math.max(1, Math.ceil(-peak.margin + 1))}° of timing from ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM, to about ${suggestedTiming}° there (less either side, across ${rangeLabel(run)}). Aim for 0–1° of knock retard on the next pull.`
           : `Timing alone can't fix this: at ${peak.rpm} RPM it knocks even at ${SPARK_MIN_DEG}°, the most retard the SPARK table holds.`,
         boosted ? `${sparkCanFix ? 'Or' : 'Instead,'} ${lessBoost}.` : null,
         `Hardware that raises the knock limit: ${buildLevers} (BUILD).`,

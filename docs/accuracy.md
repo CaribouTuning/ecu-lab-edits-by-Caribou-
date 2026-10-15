@@ -179,6 +179,28 @@ liquid heat capacity from the ESDU 91022 correlations used in hybrid-rocket tank
 recommendations; 4.8–6 lb/min for a 100 shot, and 2° per 50 hp of retard (tuning forums
 and kit makers — practitioner rules, the weakest sources here).
 
+## Part-load airflow and table layouts
+
+**Part-load VE** comes from the ideal gas-exchange process (`partLoadVeFactor`,
+src/sim/airflow.js): the residual in the clearance volume expands from exhaust to manifold
+pressure before fresh charge enters, so VE / VE(full load) = (rc − (Pe/Pi)^(1/γ)) / (rc − 1).
+Nothing in it is fitted. On GM's own LM7 VE tables (2400 rpm, intake-air basis) it gives
+0.71/0.82/0.88/0.92/0.96 of full load at 20/30/40/50/70 kPa against GM's 0.73/0.81/0.86/0.90/0.95;
+the hand-shaped rows it replaced gave 0.54/0.62/0.70/0.77/0.90. Not in it: overlap pushing
+exhaust back into a vacuum manifold, which lowers light-load VE further on long cams.
+
+**Table layouts** (src/sim/layouts.js). TUNE can put the VE, spark and mixture tables on
+the breakpoints an engine's own computer uses, where those were read from real
+calibrations: GM P01/P59 (VE 19 × 20 on MAP; spark 29 × 25 on grams of air per cylinder,
+44 stock images) for the five GM V8s, and Chrysler GPEC2 (spark 17 × 17 on milligrams of
+air per cylinder, from one stock image) for the 6.4 Hemi. Spark on an airmass axis is read
+at the air the ECU's own VE table works out, as those computers read it. The values stay
+in ECU Lab's units (VE %, degrees, AFR); GM's VE table itself is grams·K/kPa on GM's
+charge temperature. The VQ35, N54, B58 and EA888 computers keep their breakpoints in
+the car's flash: their definitions give each table's size but not its axis values, so no
+layout is offered for them. Cell-by-cell advice is worked out on the ECU Lab grid and says
+so; the tutorials, missions and the career always run on it.
+
 ## Open for the maintainers
 
 - **Some coefficient comments quoted measurements from earlier models.** The audit

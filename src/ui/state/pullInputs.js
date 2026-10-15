@@ -7,7 +7,7 @@
 import {
   COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, compressorWithCount,
   blowerOf, computeHardwareVE, deriveEngine, dynoConditions,
-  ecuHardwareOf, tankFuel, turbineWithCount, veTruthByPhaseFor,
+  ecuHardwareOf, layoutById, tankFuel, turbineWithCount, veTruthByPhaseFor,
 } from '../../sim/index.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -45,6 +45,7 @@ export function pullInputs(state) {
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived, turbine,
     compressor: compressorWithCount(COMPRESSOR_OPTS[compressorIdx], turbineCount), ecu,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
+    layout: tune.layout ? layoutById(tune.layout) : null,
   };
   let mafErrorBase = 1;
   if (mods.intake) mafErrorBase *= 0.90;

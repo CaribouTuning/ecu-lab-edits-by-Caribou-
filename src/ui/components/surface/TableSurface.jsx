@@ -24,6 +24,9 @@ export const PullTraceContext = React.createContext(/** @type {object[]|null} */
 export const PULL_FIELD = Object.freeze({
   rpm: (p) => p.rpm,
   map: (p) => p.sensedMap ?? p.map,
+  // Air per cylinder, for a layout that reads spark by it (sim/layouts.js).
+  airG: (p) => p.airCharge,
+  airMg: (p) => (p.airCharge == null ? null : p.airCharge * 1000),
   iat: (p) => p.sensedIat ?? p.iat,
   maf: (p) => p.maf,
   camIn: (p) => p.camIn,

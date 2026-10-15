@@ -33,7 +33,7 @@ import {
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, interp2, isLocatable, presetById,
+  deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
@@ -62,6 +62,7 @@ import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
+import { toGameGrid } from './state/layoutSwitch.js';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
@@ -275,6 +276,12 @@ export function EcuLabApp() {
   // so it is not re-bound here.
   const [tune] = useTune();
   const { ve, timing, afr } = tune;
+  // The engine computer whose breakpoints the tables sit on (sim/layouts.js), or null
+  // for the ECU Lab grid. Every pull and the live engine read the tables through it.
+  const layout = useMemo(() => (tune.layout ? layoutById(tune.layout) : null), [tune.layout]);
+  // The advisors judge cells of the ECU Lab grid. On another layout they read these
+  // tables moved onto it, and TUNE's per-cell advice says it is about that grid.
+  const gameView = useMemo(() => (layout ? toGameGrid({ ve, timing, afr }, layout, build) : { ve, timing, afr }), [layout, ve, timing, afr, build]);
   // `tablesDirty` is read from the store directly by EngineScreen now (it is
   // `hasTuningWork()`'s one input) — nothing else in the shell reads it.
   // `selection` itself is read from the store directly by AirflowScreen/SparkScreen/
@@ -452,18 +459,20 @@ export function EcuLabApp() {
   // is one a pull knocks on, and one it calls clean is one a pull does not. Deferred, so
   // editing a table never waits on the pull; both read the same deferred tables, so they
   // always describe the same calibration.
-  const advisorTables = useMemo(() => ({ ve, timing, afr }), [ve, timing, afr]);
+  // The layout defers WITH its tables: a deferred 8 × 6 read through a fresh GM layout
+  // (or the reverse) is a table read off the wrong breakpoints.
+  const advisorTables = useMemo(() => ({ ve, timing, afr, layout, game: gameView }), [ve, timing, afr, layout, gameView]);
   const deferredTables = useDeferredValue(advisorTables);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu: ecuBundle,
+    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
        injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
   const calAdvice = useMemo(() => calibrationAdvice({
-    ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
+    ve: deferredTables.game.ve, veTruth, timing: deferredTables.game.timing, afr: deferredTables.game.afr,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor, turbine,
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull,
@@ -471,8 +480,8 @@ export function EcuLabApp() {
        compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
 
   const veAdvice = useMemo(
-    () => veRecommendations(ve, engineConfig, mods, hwForVe),
-    [ve, engineConfig, mods, hwForVe]
+    () => veRecommendations(gameView.ve, engineConfig, mods, hwForVe),
+    [gameView, engineConfig, mods, hwForVe]
   );
 
   // Same real-units chain the sim uses, evaluated at WOT / 6500 RPM as a preview.
@@ -484,12 +493,12 @@ export function EcuLabApp() {
     const chargeK = chargeTempK(boostPsi, mods.intercooler);
     const vCylM3 = (engineDerived.displacementL / engineDerived.cyl) / 1000;
     const airDensity = (mapKpa * 1000) / (R_AIR * chargeK);
-    const airChargeG = (interp2(ve, rpm, mapKpa) / 100) * vCylM3 * airDensity * 1000;
-    const lambda = interp2(afr, rpm, mapKpa) / 14.7;
+    const airChargeG = (readEcuTable({ ve, timing, afr, layout }, 've', rpm, { mapKpa }) / 100) * vCylM3 * airDensity * 1000;
+    const lambda = readEcuTable({ ve, timing, afr, layout }, 'afr', rpm, { mapKpa, airmassG: airChargeG }) / 14.7;
     const fuelMassG = airChargeG / (lambda * fuel.stoich);
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
-  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
+  }, [ve, timing, afr, layout, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
   // `dutyDangerous` moved into InjectorsScreen — its one reader — computed there off
   // this same `dutyPreview`, which stays here because the score breakdown and dyno
   // payload below also read it.
@@ -654,7 +663,7 @@ export function EcuLabApp() {
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu,
+    turbine, compressor, ecu, layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
@@ -864,7 +873,7 @@ export function EcuLabApp() {
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
-    compressor, exhaustDiaError,
+    compressor, exhaustDiaError, layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
@@ -1322,7 +1331,7 @@ export function EcuLabApp() {
   const pullFresh = !!result && !!pullScores && pullScores.signature === buildSignature;
   const veLogPull = useMemo(() => (veLogOpen && pullFresh ? veSamplesFromPull(result.points) : []), [veLogOpen, pullFresh, result]);
   const liveLog = live?.ecu?.log;
-  const veLogLive = useMemo(() => (veLogOpen ? veSamplesFromLive(liveLog, ve) : []), [veLogOpen, liveLog, ve]);
+  const veLogLive = useMemo(() => (veLogOpen ? veSamplesFromLive(liveLog, ve, layout?.ve) : []), [veLogOpen, liveLog, ve, layout]);
   // Why the last pull is, or is not, in the numbers — a log only describes the tune it
   // was taken on, and a part-throttle pull is closed loop, where the trims set the mixture.
   /** @type {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} */
@@ -1333,7 +1342,7 @@ export function EcuLabApp() {
   const veLog = veLogOpen ? {
     pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend', pullInfo,
     onApply: (share) => {
-      const { ratio } = veCorrections([...veLogPull, ...veLogLive]);
+      const { ratio } = veCorrections([...veLogPull, ...veLogLive], layout?.ve);
       dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: applyVeCorrections(ve, ratio, share), label: `VE from logs (${share === 1 ? 'all' : 'half'})` });
       // The long-term trim had been covering the error just moved into the table.
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, trimResets: (liveAux.trimResets ?? 0) + 1 } });

@@ -12,6 +12,7 @@
 export * from './constants.js';
 export * from './coefficients.js';
 export * from './tables.js';
+export * from './layouts.js';
 export * from './hardware.js';
 export * from './math.js';
 export * from './thermo.js';

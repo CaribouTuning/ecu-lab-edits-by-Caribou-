@@ -12,7 +12,7 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
-import { clamp, LOAD, presetById, RPM, SWEEP_STEP_RPM, veCorrections, veSamplesFromPull } from '../../../sim/index.js';
+import { clamp, layoutById, presetById, SWEEP_STEP_RPM, veCorrections, veSamplesFromPull } from '../../../sim/index.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { downloadCsv, dynoSheetFilename, sweepToCsv } from '../../components/dynoCsv.js';
 import { eventBands } from '../../components/eventBands.js';
@@ -97,6 +97,8 @@ export function DataScreen() {
     downloadCsv(sweepToCsv(result.points), dynoSheetFilename({ engineName: name }));
   };
   const { ve } = tune;
+  // The VE table's breakpoints (sim/layouts.js): the histogram bins onto the cells it corrects.
+  const veAxes = layoutById(tune.layout).ve;
   const { logFocusRpm } = session;
   // Local, not session state. The store is one useReducer behind one context, so every
   // dispatch re-renders every consumer — the reason LiveScreen is its own file. A drag
@@ -166,7 +168,7 @@ export function DataScreen() {
   // swallowed MORE air than the table claimed, so the cell must come UP by that much.
   const buildHistogram = () => {
     if (!result) return;
-    const { ratio } = veCorrections(veSamplesFromPull(result.points));
+    const { ratio } = veCorrections(veSamplesFromPull(result.points), veAxes);
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'histogram', value: ratio.map((row) => row.map((r) => (r == null ? null : (r - 1) * 100))) });
   };
   const applyHistogram = () => {
@@ -303,14 +305,14 @@ export function DataScreen() {
             <div className={styles.tableInner}>
               <div className={styles.tableRow}>
                 <div className={styles.cornerCell} />
-                {RPM.map((r) => (
+                {veAxes.rpm.map((r) => (
                   <div key={r} className={styles.headerCell}>{r}</div>
                 ))}
               </div>
-              {LOAD.map((m, ri) => (
+              {veAxes.load.map((m, ri) => (
                 <div key={m} className={styles.tableRow}>
                   <div className={styles.loadCell}>{m}</div>
-                  {RPM.map((_, ci) => {
+                  {veAxes.rpm.map((_, ci) => {
                     const e = histogram[ri][ci];
                     const bg = e == null ? T.panel2 : deltaHeat(e);
                     return (

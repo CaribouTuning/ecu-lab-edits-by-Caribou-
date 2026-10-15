@@ -10,7 +10,7 @@
 
 import React from 'react';
 
-import { LOAD, RPM } from '../../sim/index.js';
+import { GAME_LAYOUT } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Note } from '../primitives/Note.jsx';
 import { VE_LOG_GOOD_PCT } from './advisorReports.js';
@@ -36,9 +36,12 @@ const PULL_NOTE = {
  * @param {number} props.mafPct the MAF's own reading error across the samples, percent
  * @param {'blend'|'sd'|'maf'} props.airModel the ECU's air-mass strategy
  * @param {(share: number) => void} props.onApply applies that share of the correction
+ * @param {import('../../sim/layouts.js').TableAxes} [props.axes] the VE table's breakpoints
  * @returns {React.ReactElement}
  */
-export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, airModel, onApply }) {
+export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, airModel, onApply, axes = GAME_LAYOUT.ve }) {
+  const RPM = axes.rpm;
+  const LOAD = axes.load;
   const pullNote = pullInfo.state === 'stale'
     ? `The last pull was run before you changed ${pullInfo.changed?.length ? pullInfo.changed.join(', ') : 'the conditions'} — a log only describes the tune it was taken on, so run another pull.`
     : PULL_NOTE[/** @type {keyof typeof PULL_NOTE} */ (pullInfo.state)] ?? null;
