@@ -143,6 +143,7 @@ function draw(ctx, o) {
   const cy = Math.cos(view.yaw); const sy = Math.sin(view.yaw);
   const cp = Math.cos(view.pitch); const sp = Math.sin(view.pitch);
   // World: X across the columns and Y along the rows, both −1…1; Z up from the floor.
+  /** @type {(fi: number, fj: number, v: number) => [number, number, number]} */
   const world = (fi, fj, v) => [nx > 1 ? (fi / (nx - 1)) * 2 - 1 : 0, ny > 1 ? (fj / (ny - 1)) * 2 - 1 : 0, ((Math.min(hi, Math.max(lo, v)) - lo) / span) * H];
   const rot = ([X, Y, Z]) => {
     const xr = X * cy - Y * sy;

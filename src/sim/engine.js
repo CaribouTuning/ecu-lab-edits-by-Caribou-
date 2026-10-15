@@ -229,6 +229,17 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} springPa spring friction FMEP, Pa
  * @property {number} balanceShaftFrac fraction of rubbing friction added by balance shafts
  * @property {number} redline rev limit, RPM
+ * @property {string} configuration cylinder layout id, as in the config
+ * @property {'ohv'|'sohc'|'dohc'} valvetrain how the cams work the valves
+ * @property {number} valvesPerCyl valves per cylinder
+ * @property {'roller'|'flat'} follower cam follower type
+ * @property {number} intakeValves intake valves per cylinder
+ * @property {number} intakeValveMm intake valve head diameter, mm (typical for the bore when not given)
+ * @property {number} valveAreaRatio intake valve area relative to the reference 4-valve head
+ * @property {number} mainBearings crankshaft main bearings
+ * @property {number|null} mainJournalMm main journal diameter, mm; null means the bore's typical share
+ * @property {number|null} rodJournalMm rod journal diameter, mm; null means the bore's typical share
+ * @property {'modern'|'older'} frictionLevel the engine's friction technology (friction.js)
  */
 
 /**
