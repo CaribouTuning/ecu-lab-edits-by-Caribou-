@@ -44,7 +44,7 @@
  */
 
 import {
-  Activity, Flag, Flame, Gauge, Grid3x3, Home, Info, Settings, Store, Wrench,
+  Activity, Flag, Flame, Gauge, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
@@ -53,6 +53,8 @@ import {
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
+import { isApplePlatform } from './commands.js';
+import { TAB_NAMES } from './routing.js';
 import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
@@ -79,12 +81,12 @@ import styles from './AppShell.module.css';
 // measure it. LIVE used to be a collapsed section on HOME, several taps down and easy
 // never to find — a poor place for the one screen that shows a calibration running.
 const NAV_ITEMS = [
-  { id: 'dash', label: 'HOME', icon: Gauge },
-  { id: 'build', label: 'BUILD', icon: Settings },
-  { id: 'tune', label: 'TUNE', icon: Grid3x3 },
-  { id: 'live', label: 'LIVE', icon: Flame },
-  { id: 'dyno', label: 'DYNO', icon: Activity },
-  { id: 'drag', label: 'DRAG', icon: Flag },
+  { id: 'dash', label: TAB_NAMES.dash, icon: Gauge },
+  { id: 'build', label: TAB_NAMES.build, icon: Settings },
+  { id: 'tune', label: TAB_NAMES.tune, icon: Grid3x3 },
+  { id: 'live', label: TAB_NAMES.live, icon: Flame },
+  { id: 'dyno', label: TAB_NAMES.dyno, icon: Activity },
+  { id: 'drag', label: TAB_NAMES.drag, icon: Flag },
 ];
 
 /**
@@ -191,33 +193,19 @@ const HealthField = React.memo(HealthFieldInner);
  * rest of the strip is not dragged along by it. See this file's header for what the
  * single-context store means for that in practice today.
  *
- * @returns {React.ReactElement|null}
+ * @returns {React.ReactElement}
  */
 function EngineRunLight() {
   const [session] = useSession();
-  if (!session.live.running) return null;
-  return <span className={styles.run}>● RUNNING</span>;
+  // The slot stays mounted while idle so the strip does not change shape when the
+  // engine starts; see `.run` in AppShell.module.css for how it keeps its width.
+  return (
+    <span className={styles.run}>
+      {session.live.running && <span>● RUNNING</span>}
+    </span>
+  );
 }
 
-/**
- * The always-visible status strip: what is built, how hard it is boosted, how healthy
- * it is, and what the last pull made. Engine state never leaves the screen.
- *
- * It reads the store itself rather than being handed props by the app — the shell is
- * mounted once and outlives every screen, so threading five values through
- * `EcuLab.jsx` would only move the same re-render one level up.
- *
- * `onTutorial`/`onRepair` are the exception: what those two icon buttons DO is not
- * chrome's business (see this file's header), so they arrive as props from
- * `EcuLab.jsx` exactly like `onNavigate` does, and are rendered here because this is
- * where the header's icon buttons used to live.
- *
- * @param {object} props
- * @param {() => void} [props.onTutorial]
- * @param {() => void} [props.onRepair]
- * @param {() => void} [props.onMenu] back to the start screen
- * @returns {React.ReactElement}
- */
 /**
  * The fuel as the header names it: a pump fuel by its octane ("93 oct"), E85 by name, a
  * flex tank by the blend it holds.
@@ -230,7 +218,27 @@ function fuelLabel(fuel, ethanolPct) {
   return /^\d+$/.test(fuel.label) ? `${fuel.label} oct` : fuel.label;
 }
 
-export function StatusStrip({ onTutorial, onRepair, onMenu }) {
+/**
+ * The always-visible status strip: what is built, how hard it is boosted, how healthy
+ * it is, and what the last pull made. Engine state never leaves the screen.
+ *
+ * It reads the store itself rather than being handed props by the app — the shell is
+ * mounted once and outlives every screen, so threading five values through
+ * `EcuLab.jsx` would only move the same re-render one level up.
+ *
+ * `onTutorial`/`onRepair`/`onSearch` are the exception: what those icon buttons DO is
+ * not chrome's business (see this file's header), so they arrive as props from
+ * `EcuLab.jsx` exactly like `onNavigate` does, and are rendered here because this is
+ * where the header's icon buttons used to live.
+ *
+ * @param {object} props
+ * @param {() => void} [props.onTutorial]
+ * @param {() => void} [props.onRepair]
+ * @param {() => void} [props.onSearch] opens the command palette
+ * @param {() => void} [props.onMenu] back to the start screen
+ * @returns {React.ReactElement}
+ */
+export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
   const [build] = useBuild();
   const [session] = useSession();
   const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
@@ -256,6 +264,7 @@ export function StatusStrip({ onTutorial, onRepair, onMenu }) {
     [blower, build],
   );
   const peakBoost = turboOn ? Math.max(...boostCurve) : blowerPeak;
+  const apple = isApplePlatform();
   const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'N/A';
 
   return (
@@ -280,21 +289,34 @@ export function StatusStrip({ onTutorial, onRepair, onMenu }) {
         <div className={styles.engine} data-testid="build-line">
           {engineName} · {induction}{build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · {fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · {INJECTOR_OPTS[injIdx].label} · {BUILD_VERSION}
         </div>
-        <StripField label="BOOST" value={turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
-        <HealthField pct={overallHealth} />
-        <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
-        <EngineRunLight />
+        {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
+            for how the strip fits a phone. */}
+        <div className={styles.readouts}>
+          <StripField label="BOOST" value={turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'N/A'} />
+          <HealthField pct={overallHealth} />
+          <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
+          <EngineRunLight />
+        </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a
             button whose accessible name depends on the tooltip surviving. Note the
             lower-case names — the start screen's TUTORIAL button is queried by exact
-            name and must stay the only match. Moved here verbatim from the header
-            this strip replaced. */}
+            name and must stay the only match. Tutorial and Repair engine were moved
+            here verbatim from the header this strip replaced; Search came with the
+            command palette (issue 63), its tooltip naming the shortcut this platform
+            uses (see the Cmd-K handler in EcuLab.jsx). */}
         <div className={styles.actions}>
           {onMenu && (
             <Button variant="ghost" size="sm" title="Main menu" aria-label="Main menu" onClick={onMenu}>
               <Home size={16} aria-hidden="true" />
             </Button>
           )}
+          <Button
+            variant="ghost" size="sm" title={`Search (${apple ? '⌘K' : 'Ctrl+K'})`}
+            aria-label="Search pages and actions" aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
+            onClick={onSearch}
+          >
+            <Search size={16} aria-hidden="true" />
+          </Button>
           <Button variant="ghost" size="sm" title="Tutorial" aria-label="Tutorial" onClick={onTutorial}>
             <Info size={16} aria-hidden="true" />
           </Button>
@@ -313,6 +335,7 @@ export function StatusStrip({ onTutorial, onRepair, onMenu }) {
  * @param {(tab: string) => void} props.onNavigate what a nav item means
  * @param {() => void} [props.onTutorial] what the strip's Tutorial button means
  * @param {() => void} [props.onRepair] what the strip's Repair engine button means
+ * @param {() => void} [props.onSearch] what the strip's Search button means
  * @param {() => void} [props.onMenu] what the strip's Main menu button means
  * @param {boolean} [props.career] CAREER's nav rather than Sandbox's
  * @param {React.ReactNode} [props.banner] pinned above the screen (CAREER's job ticket)
@@ -320,13 +343,13 @@ export function StatusStrip({ onTutorial, onRepair, onMenu }) {
  * @returns {React.ReactElement}
  */
 export function AppShell({
-  route, onNavigate, onTutorial, onRepair, onMenu, career = false, banner = null, children,
+  route, onNavigate, onTutorial, onRepair, onSearch, onMenu, career = false, banner = null, children,
 }) {
   return (
     <div className={styles.shell}>
       <SideNav tab={route.tab} onNavigate={onNavigate} career={career} />
       <div className={styles.main}>
-        <StatusStrip onTutorial={onTutorial} onRepair={onRepair} onMenu={onMenu} />
+        <StatusStrip onTutorial={onTutorial} onRepair={onRepair} onSearch={onSearch} onMenu={onMenu} />
         <div className={styles.content}>{banner}{children}</div>
       </div>
     </div>
