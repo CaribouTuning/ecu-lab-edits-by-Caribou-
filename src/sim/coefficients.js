@@ -319,6 +319,30 @@ export const COEFF = {
   // Molar heat capacities of the combustion products at 2000 K, J/(mol K), from the JANAF
   // tables (NIST-JANAF Thermochemical Tables, 4th ed., 1998), for `burnedGammaShift`.
   PRODUCT_CP_J_MOL_K: Object.freeze({ N2: 36.00, O2: 37.74, CO2: 60.43, H2O: 51.18, CO: 36.25, H2: 34.28 }),
+  // DISSOCIATION of the hot products, for `dissociatedEnergyJPerKg` in thermo.js. Near
+  // peak combustion temperature part of the CO2 and water comes apart (CO2 <-> CO + 1/2 O2,
+  // H2O <-> H2 + 1/2 O2), holding back the energy the fuel would have released until the
+  // gas cools on expansion and they recombine, late, where it does less work. It costs a
+  // stoichiometric mixture most: a rich one's surplus CO and H2 hold the equilibria back,
+  // and it burns cooler. That is why real engines make best power at lambda 0.86-0.91
+  // (Heywood 1988, sections 4.7 and 5.5; the fuel-air cycle's mep peaks near phi 1.1)
+  // rather than at stoichiometric. Equilibrium constants Kp (atm^0.5) are the JANAF values
+  // as tabulated by Turns, An Introduction to Combustion, 3rd ed., Table A.11: ln Kp at
+  // 1500 / 2000 / 2500 / 3000 / 3500 K (the same values as Moran & Shapiro, Fundamentals of
+  // Engineering Thermodynamics, Table A-27: CO2 log10 K -2.884 / -1.444 / -0.485 at 2000 /
+  // 2500 / 3000 K). Hydroxyl, H2O <-> OH + 1/2 H2, from the same table at 2000 / 2500 /
+  // 3000 K (log10 K -3.545 / -2.217 / -1.236), checked against NIST-JANAF formation
+  // enthalpies and entropies to within 0.1 in log10 K. Atomic H and O and NO are not carried
+  // (smaller still at engine pressures), so this is the lower bound of the effect.
+  DISSOC_T_K: Object.freeze([1500, 2000, 2500, 3000, 3500]),
+  DISSOC_LN_KP_CO2: Object.freeze([-13.266, -6.635, -3.317, -1.111, 0.465]),
+  DISSOC_LN_KP_H2O: Object.freeze([-14.512, -8.145, -5.276, -3.095, -1.590]),
+  DISSOC_OH_T_K: Object.freeze([2000, 2500, 3000]),
+  DISSOC_LN_KP_OH: Object.freeze([-8.163, -5.105, -2.846]),
+  // Enthalpy of H2O -> OH + 1/2 H2, J/mol (NIST: OH formation 37.3, water vapour -241.8 kJ/mol).
+  OH_DISSOC_J_PER_MOL: 279100,
+  // Below this burned-gas temperature dissociation is under 0.01% and is not computed.
+  DISSOC_MIN_K: 1700,
 
   // --- Residual gas (internal EGR) ---
   // Exhaust left from the previous cycle. Dilutes the charge, slows the burn, and arrives
@@ -361,6 +385,17 @@ export const COEFF = {
   // about 0.8x — the sizing trade, emergent rather than a multiplier. (This comment once
   // quoted 1.4x / over 2x / under 1x; those figures predate later changes.)
   TURBINE_FLOW_TO_KPA: 0.04,
+  // BLOWDOWN PULSE ENERGY at the turbine (turbo.js, achievableBoostPsi). Share of the
+  // pulse's extra available energy (over the steady-flow expansion) a production manifold
+  // and turbine recover. Watson & Janota (1982, ch. 7) put practical pulse systems at
+  // roughly a third to a half of the blowdown energy. FITTED on one engine only, the N54's
+  // published torque plateau (300 lb-ft from 1400 RPM); the B58s and the EA888s are the
+  // check (docs/accuracy.md, "Turbo spool").
+  TURBINE_PULSE_RECOVERY: 0.35,
+  // Cylinder pressure at exhaust valve opening over manifold pressure, as a line in RPM
+  // through the crank-angle cycle's own full-load values (turbo.js exhaustPulsePressureKpa).
+  EVO_PRESSURE_RATIO_AT_0: 2.75,
+  EVO_PRESSURE_RATIO_PER_RPM: 0.00092,
   // AFR the exhaust-mass estimate assumes. Only total mass matters, so gasoline is close
   // enough for every fuel.
   EXHAUST_STOICH_REF: 14.7,
@@ -681,6 +716,12 @@ export const COEFF = {
   //
   // Overlap this is fitted at, crank degrees — the stock V6's.
   VE_BACKPRESSURE_OVERLAP_REF: 24,
+  // Overlap backflow at low speed and manifold vacuum (airflow.js). FITTED to the stock GM
+  // Gen III calibrations' part-load VE (LM7, LQ4, LR4; Pro's GM benchmark): the share of
+  // filling lost at 800 RPM and full vacuum with a stock-overlap cam, fading linearly to
+  // none at OVERLAP_BACKFLOW_FADE_RPM, where the model and GM's tables agree.
+  OVERLAP_BACKFLOW_LOSS: 0.105,
+  OVERLAP_BACKFLOW_FADE_RPM: 2400,
   // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
   // reference overlap. Fitted against the five boosted presets' published figures.
   VE_BACKPRESSURE_PER_PR: 0.50,

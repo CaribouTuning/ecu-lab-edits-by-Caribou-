@@ -1188,9 +1188,11 @@ describe('the spark advisor', () => {
   });
 
   it('never recommends more advance than a production table could hold', () => {
+    // The table's own range (SPARK_MIN_DEG..SPARK_MAX_DEG). Lugging at 800 RPM wide open
+    // is knock-limited near TDC on 91, so the floor is the table's, not 5 degrees.
     for (const c of advice().spark) {
-      expect(c.suggested).toBeLessThanOrEqual(50);
-      expect(c.suggested).toBeGreaterThanOrEqual(5);
+      expect(c.suggested).toBeLessThanOrEqual(S.SPARK_MAX_DEG);
+      expect(c.suggested).toBeGreaterThanOrEqual(S.SPARK_MIN_DEG);
     }
   });
 

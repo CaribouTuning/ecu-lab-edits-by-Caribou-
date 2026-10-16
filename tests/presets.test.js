@@ -205,7 +205,11 @@ const KNOWN_GAPS = {
   // knocks at 5100 RPM once an intake and headers are fitted, which a factory margin does
   // not allow (presets.js).
   vq35hr: { hp: -0.05 },
-  'b58-m1': { hp: -0.073 },
+  'b58-m1': { hp: -0.079 },
+  // Its cam is held at 228 by the overlap advisory (a factory cam never trips it); with
+  // dissociation that lands -5.0%, on the edge of the band. Its real heads out-flow the
+  // LS1's on the same valve size, which the valve-diameter breathing model cannot see.
+  ls6: { hp: -0.05 },
   'ea888-gti': { tq: -0.102 },
 };
 

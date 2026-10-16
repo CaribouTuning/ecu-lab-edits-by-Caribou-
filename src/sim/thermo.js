@@ -269,6 +269,140 @@ export function burnedGammaShift(phi, fuel) {
 }
 
 /**
+ * The products of a kg of CHARGE (fuel plus its air) at a mixture, moles of each species:
+ * `combustionProducts` per kg of fuel, scaled by the fuel's share of the charge. The burned
+ * zone of the cycle carries this composition.
+ *
+ * @param {number} phi fuel-air equivalence ratio
+ * @param {{stoich: number}} fuel
+ */
+export function productsPerKgCharge(phi, fuel) {
+  const pr = combustionProducts(phi, fuel);
+  const fuelShare = 1 / (1 + fuel.stoich / Math.max(0.05, phi));
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const [k, n] of Object.entries(pr)) out[k] = n * fuelShare;
+  // The mixture, for the dissociation grid (dissociatedEnergyFast).
+  return /** @type {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi: number, stoich: number}} */ ({ ...out, phi, stoich: fuel.stoich });
+}
+
+/** ln Kp at a temperature, linear in 1/T between the tabulated points (ln Kp is near-linear in 1/T). */
+const lnKpAt = (table, tK, T = COEFF.DISSOC_T_K) => {
+  const inv = 1 / tK;
+  if (tK <= T[0]) return table[0] + (table[1] - table[0]) * (inv - 1 / T[0]) / (1 / T[1] - 1 / T[0]);
+  for (let i = 1; i < T.length; i++) {
+    if (tK <= T[i]) return table[i - 1] + (table[i] - table[i - 1]) * (inv - 1 / T[i - 1]) / (1 / T[i] - 1 / T[i - 1]);
+  }
+  const n = T.length - 1;
+  return table[n - 1] + (table[n] - table[n - 1]) * (inv - 1 / T[n - 1]) / (1 / T[n] - 1 / T[n - 1]);
+};
+
+/**
+ * Energy the burned gas holds back in dissociated CO and H2 at a temperature and pressure,
+ * J per kg of burned gas: the equilibria CO2 <-> CO + 1/2 O2 and H2O <-> H2 + 1/2 O2 solved
+ * together on top of the element-balance products (`productsPerKgCharge`). Released again
+ * as the gas cools (recombination), so the cycle subtracts the change in it from the heat
+ * the flame adds at each step. See COEFF.DISSOC_LN_KP_CO2 for the source and what is left
+ * out.
+ *
+ * @param {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number}} pr moles per kg
+ * @param {number} tK burned-gas temperature
+ * @param {number} pPa pressure
+ * @returns {number} J per kg of burned gas
+ */
+export function dissociatedEnergyJPerKg(pr, tK, pPa) {
+  if (!(tK > COEFF.DISSOC_MIN_K)) return 0;
+  const k1 = Math.exp(lnKpAt(COEFF.DISSOC_LN_KP_CO2, tK));
+  const k2 = Math.exp(lnKpAt(COEFF.DISSOC_LN_KP_H2O, tK));
+  const k3 = Math.exp(lnKpAt(COEFF.DISSOC_LN_KP_OH, tK, COEFF.DISSOC_OH_T_K));
+  const pAtm = pPa / 101325;
+  const n0 = pr.CO2 + pr.CO + pr.H2O + pr.H2 + pr.O2 + pr.N2;
+  // Extents: x splits CO2 into CO + 1/2 O2, y splits water into H2 + 1/2 O2, z splits water
+  // into OH + 1/2 H2. Given the free O2, each equilibrium is linear in its own extent, so
+  // the whole solve is one unknown: the O2 the extents themselves release must equal the O2
+  // assumed. That balance is monotonic, so it is bisected in log space (the O2 runs from
+  // parts per billion in a rich flame to percent lean). Same answers as solving the three
+  // together; about twenty times cheaper, which matters at every crank step of every pull.
+  const nt0 = n0;
+  const extentsAt = (o2) => {
+    const sO2 = Math.sqrt(o2 * pAtm / nt0);
+    const x = clamp((k1 * pr.CO2 - pr.CO * sO2) / (sO2 + k1), 0, pr.CO2);
+    let y = 0;
+    let z = 0;
+    for (let k = 0; k < 3; k++) {
+      y = clamp((k2 * (pr.H2O - z) - (pr.H2 + z / 2) * sO2) / (sO2 + k2), 0, Math.max(0, pr.H2O - z));
+      const sH2 = Math.sqrt(Math.max(1e-30, pr.H2 + y + z / 2) * pAtm / nt0);
+      z = clamp((k3 * (pr.H2O - y)) / (sH2 + k3), 0, Math.max(0, pr.H2O - y));
+    }
+    return { x, y, z };
+  };
+  let lo = Math.log(Math.max(1e-12, pr.O2 + 1e-12));
+  let hi = Math.log(pr.O2 + pr.CO2 + pr.H2O + 1e-9);
+  for (let i = 0; i < 48; i++) {
+    const mid = (lo + hi) / 2;
+    const o2 = Math.exp(mid);
+    const e = extentsAt(o2);
+    if (pr.O2 + (e.x + e.y) / 2 > o2) lo = mid; else hi = mid;
+  }
+  const { x, y, z } = extentsAt(Math.exp((lo + hi) / 2));
+  return x * COEFF.CO_LHV_J_PER_MOL + y * COEFF.H2_LHV_J_PER_MOL + z * COEFF.OH_DISSOC_J_PER_MOL;
+}
+
+/** Nodes of the cached dissociation grid: temperature step, K, and pressure step in ln(Pa). */
+const DISSOC_T_STEP_K = 25;
+const DISSOC_LNP_STEP = 0.1;
+/** Solved grid nodes per mixture: a lazily filled grid, NaN until a node is first needed. Bounded. */
+const dissocCache = new Map();
+const DISSOC_T_NODES = 72;      // 1700-3500 K
+const DISSOC_P_NODE0 = 92;      // ln(1e4 Pa) / 0.1
+const DISSOC_P_NODES = 82;      // up to ~350 bar
+const DISSOC_PHI_STEP = 0.01;
+
+/**
+ * `dissociatedEnergyJPerKg` read off a grid of solved nodes (25 K, 10 % in pressure, 0.01 in
+ * equivalence ratio) by interpolation, each node solved once. The cycle asks at every crank
+ * step of every cycle of every pull; within a mixture the held energy is smooth in
+ * temperature and pressure, so the grid reproduces the solve to within about a percent of
+ * the energy held (itself a few percent of the heat) and costs a pull almost nothing.
+ *
+ * @param {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi?: number, stoich?: number}} pr
+ *   the burned gas, with its mixture (productsPerKgCharge sets `phi` and `stoich`)
+ * @param {number} tK
+ * @param {number} pPa
+ */
+export function dissociatedEnergyFast(pr, tK, pPa) {
+  if (!(tK > COEFF.DISSOC_MIN_K) || pr.phi == null) return dissociatedEnergyJPerKg(pr, tK, pPa);
+  const ft = (tK - COEFF.DISSOC_MIN_K) / DISSOC_T_STEP_K;
+  const fp = Math.log(Math.max(1e4, pPa)) / DISSOC_LNP_STEP - DISSOC_P_NODE0;
+  const fq = pr.phi / DISSOC_PHI_STEP;
+  const i = Math.floor(ft); const j = Math.floor(fp); const q = Math.floor(fq);
+  if (i < 0 || j < 0 || q < 1 || i + 1 >= DISSOC_T_NODES || j + 1 >= DISSOC_P_NODES) return dissociatedEnergyJPerKg(pr, tK, pPa);
+  const gridOf = (qq) => {
+    const key = qq * 1000 + Math.round(pr.stoich * 10);
+    let grid = dissocCache.get(key);
+    if (!grid) {
+      if (dissocCache.size > 2000) dissocCache.clear();
+      grid = { pr: productsPerKgCharge(qq * DISSOC_PHI_STEP, { stoich: pr.stoich }), v: new Float64Array(DISSOC_T_NODES * DISSOC_P_NODES).fill(NaN) };
+      dissocCache.set(key, grid);
+    }
+    return grid;
+  };
+  const at = (grid, a, b) => {
+    const k = a * DISSOC_P_NODES + b;
+    let v = grid.v[k];
+    if (Number.isNaN(v)) {
+      v = dissociatedEnergyJPerKg(grid.pr, COEFF.DISSOC_MIN_K + a * DISSOC_T_STEP_K, Math.exp((b + DISSOC_P_NODE0) * DISSOC_LNP_STEP));
+      grid.v[k] = v;
+    }
+    return v;
+  };
+  const u = ft - i; const w = fp - j; const r = fq - q;
+  const bilinear = (grid) => (at(grid, i, j) * (1 - u) + at(grid, i + 1, j) * u) * (1 - w)
+    + (at(grid, i, j + 1) * (1 - u) + at(grid, i + 1, j + 1) * u) * w;
+  return bilinear(gridOf(q)) * (1 - r) + bilinear(gridOf(q + 1)) * r;
+}
+
+/**
  * Exhaust gas temperature for the TURBINE BALANCE, K.
  *
  * NOT the number the datalog reports as EGT — that comes from `runCycle`'s `exhaustK`,

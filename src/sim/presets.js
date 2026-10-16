@@ -656,7 +656,9 @@ export const ENGINE_PRESETS = [
       // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
       // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
       // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 202, springRate: 60,
+      // Back to 200 with dissociation (thermo.js, dissociatedEnergyJPerKg): at 202 the
+      // power peak reached the 6000 limiter; 200 lands -2.6% and peaks before it.
+      camDuration: 200, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },

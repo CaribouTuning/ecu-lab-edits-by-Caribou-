@@ -327,7 +327,11 @@ export function calibrationAdvice({
       // generator does not share. Advice is free to be stricter than judgement; judgement
       // is not free to cry wolf.
       const rowKpa = kpaOf(T, rpm, rowLoad);
-      const bracketOnly = Math.abs(gradeKpa - rowKpa) > 1e-6;
+      // Below cranking speed the cell is in the table for the start, not for a load the
+      // engine can hold (it idles at 800 and stalls well above this under load), so it is
+      // advised but not classified either: an engine-sized table reaches down to 500 RPM,
+      // where wide-open throttle on a big V8 knocks below the table's own floor.
+      const bracketOnly = Math.abs(gradeKpa - rowKpa) > 1e-6 || rpm < CRANKING_MAX_RPM;
       // The row's own VE, mixture and true airflow (the cell's, where the tables share
       // breakpoints), graded at the pressure the row is in force at.
       const veCell = read('ve', rpm, rowKpa);
@@ -496,6 +500,9 @@ export function calibrationAdvice({
 
 /** A cell carrying less than this share of a point's timing is not "in force" there. */
 const IN_FORCE_WEIGHT = 0.15;
+
+/** Below this speed an engine is cranking or stalling, not running under load. */
+const CRANKING_MAX_RPM = 600;
 
 /** Columns at or below this speed are the idle columns: run under MBT on purpose. */
 const IDLE_COLUMN_MAX_RPM = 1000;

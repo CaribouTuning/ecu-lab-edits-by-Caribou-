@@ -27,14 +27,28 @@ export const LOAD = [200, 150, 100, 70, 40, 20];
  */
 export const CURVE_RPM = [...RPM, 8500, 9500, 10500, 11500];
 
-/** Stock volumetric efficiency table, percent. */
+/**
+ * Stock volumetric efficiency table, percent. Its full-load and boost rows are also the
+ * shape every engine's breathing curve is read from (airflow.js, `baseBreathing`, at speed
+ * scaled to the engine's own VE peak).
+ *
+ * The low-speed end is GM's measured one. Against the full-load rows of 7 distinct stock
+ * GM Gen III calibrations (LS1, LS6, LQ4, LM7, LR4; github.com/BoredTruckOwner/
+ * LS_Based_Engine_Repository, read on the intake-air basis as Pro's benchmark does), a real
+ * engine keeps about 0.76 of its peak VE at a sixth of its peak speed, 0.81 at a third and
+ * 0.83 at a little over half; this curve had 0.57, 0.68 and 0.81, reading 10-20 VE points
+ * low below 2000 RPM on every one of them. From three quarters of the peak speed up the two
+ * agreed and are unchanged. The boost rows carry the same factor at 800, 1500 and 2500 RPM;
+ * the 70, 40 and 20 kPa rows (the default engine's own table) carry it less the overlap
+ * backflow GM's part-load cells show at low speed (airflow.js, OVERLAP_BACKFLOW_LOSS).
+ */
 export const DEFAULT_VE = [
-  [60, 70, 84, 95, 104, 101, 94, 84],
-  [58, 68, 82, 93, 102, 99, 92, 82],
-  [55, 65, 78, 88, 96, 92, 85, 75],
-  [49, 58, 70, 80, 87, 84, 77, 68],
-  [38, 45, 55, 63, 69, 66, 61, 53],
-  [29, 34, 42, 48, 52, 50, 46, 40],
+  [80, 84, 86, 95, 104, 101, 94, 84],
+  [77, 82, 84, 93, 102, 99, 92, 82],
+  [73, 78, 80, 88, 96, 92, 85, 75],
+  [61, 68, 72, 80, 87, 84, 77, 68],
+  [46, 52, 56, 63, 69, 66, 61, 53],
+  [34, 39, 43, 48, 52, 50, 46, 40],
 ];
 
 /**
@@ -76,13 +90,19 @@ export const SPARK_MAX_DEG = 50;
  * logged it clean. The idle column and the 20 kPa (overrun) row are left as they were. The
  * boost rows copy the full-load row, as a naturally aspirated factory calibration does; a
  * boost kit has to take spark out of them.
+ *
+ * October 2026: the breathing curve's low-speed end was corrected to GM's measured one
+ * (DEFAULT_VE), so the engine traps more charge at 800-2500 RPM and knocks sooner there.
+ * The same rule was reapplied and only ever took spark away: the 800 and 1500 RPM columns
+ * at 70 kPa and up, 2500 RPM at full load, and half a degree at 40 kPa where MBT moved.
+ * Lugging at 800 RPM wide open is knock-limited near TDC on 91, as a real 10.3:1 engine is.
  */
 export const DEFAULT_TIMING = [
-  [7, 13, 16, 18, 20, 24, 27, 28],
-  [7, 13, 16, 18, 20, 24, 27, 28],
-  [7, 13, 16, 18, 20, 24, 27, 28],
-  [12, 17, 20.5, 22.5, 25, 29.5, 31, 32.5],
-  [16, 30, 31.5, 33, 35, 36.5, 37.5, 39],
+  [0.5, 7.5, 15, 18, 20, 24, 27, 28],
+  [0.5, 7.5, 15, 18, 20, 24, 27, 28],
+  [0.5, 7.5, 15, 18, 20, 24, 27, 28],
+  [-2.5, 8, 20.5, 22.5, 25, 29.5, 31, 32.5],
+  [16, 30, 31.5, 33, 34.5, 36, 37.5, 39],
   [14, 34, 40, 44, 46, 47, 47, 47],
 ];
 
