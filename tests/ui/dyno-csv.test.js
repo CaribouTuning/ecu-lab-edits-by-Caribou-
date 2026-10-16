@@ -23,7 +23,7 @@ function realPull({ advance = 0 } = {}) {
   const derived = S.deriveEngine(patch.engineConfig);
   const timing = patch.timing.map((row) => row.map((deg) => deg + advance));
   return S.simulateSweep({
-    loadKpa: 100, ve: patch.ve, veTruth: patch.ve, timing, afr: patch.afr,
+    loadKpa: 100, ve: patch.ve, veTruth: patch.ve, layout: patch.layout, timing, afr: patch.afr,
     turboOn: patch.turboOn, boostCurve: patch.boostCurve,
     octaneBonus: S.OCTANE_OPTS[patch.octaneIdx].bonus,
     octaneLabel: S.OCTANE_OPTS[patch.octaneIdx].label, fuel: S.OCTANE_OPTS[patch.octaneIdx],

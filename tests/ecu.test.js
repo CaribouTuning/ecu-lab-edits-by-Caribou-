@@ -238,8 +238,10 @@ describe('ignition: knock control acts on what the sensor hears', () => {
     const base = at(makeEngine().pull(), 3000);
     const adv = at(makeEngine({ cal: { 'ignition.iatCorr': S.curve(S.IAT_AXIS, () => 20) } }).pull(), 3000);
     expect(adv.commandedTiming).toBeCloseTo(base.commandedTiming + 20, 0);
-    // Twenty degrees past a table that was already near MBT buys nothing, or costs.
-    expect(adv.torque).toBeLessThanOrEqual(base.torque + 2);
+    // Twenty degrees past the table buys nothing like twenty degrees' worth: at 3000 RPM
+    // on 91 this engine is knock-limited, so knock control pulls it back to the knock
+    // limit, and the most it can gain is the margin the table left under that limit.
+    expect(adv.torque).toBeLessThanOrEqual(base.torque + 4);
   });
 
   it('misfires under boost when the coil cannot break down the gap', () => {

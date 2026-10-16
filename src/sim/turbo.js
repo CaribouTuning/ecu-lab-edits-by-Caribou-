@@ -214,7 +214,7 @@ export function solveInduction({
   // is monotone by construction: asking for more never gives less.
   let boostPsi = 0;
   if (target > 0) {
-    const step = Math.max(COEFF.INDUCTION_SPOOL_STEP_PSI, target / COEFF.INDUCTION_SPOOL_MAX_STEPS);
+    const step = COEFF.INDUCTION_SPOOL_STEP_PSI;
     let failed = null;
     for (let b = Math.min(step, target); ; b = Math.min(b + step, target)) {
       if (stateAt(b).canMake >= b) {

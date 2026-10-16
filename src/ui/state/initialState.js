@@ -94,13 +94,14 @@ import {
  *   it is in the undo snapshot so undoing a load puts the old one back
  * @property {boolean} diffView true while TUNE's grids show each cell's change from
  *   `baseline` instead of its value. Shared and outside the snapshot, like `rangeMode`
- * @property {string|null} [layout] the engine computer whose breakpoints `ve`, `timing`
- *   and `afr` sit on (an `ECU_LAYOUTS` id, sim/layouts.js); null for the ECU Lab grid
+ * @property {import('../../sim/layouts.js').Layout|string|null} [layout] the breakpoints `ve`, `timing`
+ *   and `afr` sit on (sim/layouts.js): sized to the engine (`engineLayout`), an engine
+ *   computer's own, an `ECU_LAYOUTS` id from an older save, or null for the old 8 × 6 grid
  */
 
 /**
  * A stored calibration in a map slot.
- * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: string|null}} MapSlot
+ * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: import('../../sim/layouts.js').Layout|string|null}} MapSlot
  */
 
 /**

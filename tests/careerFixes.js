@@ -25,7 +25,7 @@ const extendTrend = (ratio) => ratio.map((row) => {
 export const veFix = (st, passes = 3) => {
   let s = st;
   for (let i = 0; i < passes; i += 1) {
-    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points));
+    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points), axesOf(s, 've'));
     s = { ...s, tune: { ...s.tune, ve: S.applyVeCorrections(s.tune.ve, extendTrend(ratio), 1) } };
   }
   return s;
@@ -38,15 +38,18 @@ export const mafFix = (st) => {
   return m ? setBuild(st, { mafScalar: Number(m[1]) }) : st;
 };
 
+/** The breakpoints one of the tune's tables sits on. @param {any} st @param {'ve'|'timing'|'afr'} t */
+const axesOf = (st, t) => S.layoutById(st.tune.layout)[t];
+
 /** The ECU told the injector size that is fitted. */
 export const scaleFix = (st) => setBuild(st, { ecuInjectorCc: S.INJECTOR_OPTS[st.build.injIdx].cc });
 
 /** Spark out of the full-load rows a degree at a time until the log has no knock. */
 export const sparkClean = (st) => {
   let s = st;
-  for (let i = 0; i < 10; i += 1) {
+  for (let i = 0; i < 20; i += 1) {
     if (!pull(s).events.some((e) => e.type === 'knock')) return s;
-    s = { ...s, tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (S.LOAD[ri] >= 90 ? v - 1 : v))) } };
+    s = { ...s, tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (axesOf(s, 'timing').load[ri] >= 90 ? v - 1 : v))) } };
   }
   return s;
 };
@@ -56,8 +59,8 @@ export const boostSparkAndFuel = (st, degPer20 = 4, afr = 12.0) => ({
   ...st,
   tune: {
     ...st.tune,
-    timing: st.tune.timing.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? v - ((S.LOAD[ri] - 100) / 20) * degPer20 : v))),
-    afr: st.tune.afr.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? afr : v))),
+    timing: st.tune.timing.map((row, ri) => row.map((v) => (axesOf(st, 'timing').load[ri] > 100 ? v - ((axesOf(st, 'timing').load[ri] - 100) / 20) * degPer20 : v))),
+    afr: st.tune.afr.map((row, ri) => row.map((v) => (axesOf(st, 'afr').load[ri] > 100 ? afr : v))),
   },
 });
 
@@ -74,7 +77,8 @@ export const TEMPLATE_FIXES = {
   headers: (s) => veFix(s, 3),
   cam: (s) => veFix(s, 3),
   retarded: (s, job) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: job.car.preset }).tune.timing } }),
-  e85: (s) => scaleFix(s),
+  // E85's charge cooling moves the airflow too, so the real fix ends with a pass from the log.
+  e85: (s) => veFix(scaleFix(s), 1),
   turbo: (s) => boostSparkAndFuel(s),
   pair: (s) => airAndFuel(s),
   'build-na': (s, job) => {
@@ -109,15 +113,15 @@ const getCal = (st, path) => S.getCal(st.tune.ecu, path);
 const storyVeFromLogs = (st, passes = 3) => {
   let s = st;
   for (let i = 0; i < passes; i += 1) {
-    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points));
+    const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points), axesOf(s, 've'));
     s = { ...s, tune: { ...s.tune, ve: S.applyVeCorrections(s.tune.ve, ratio, 1) } };
   }
   return s;
 };
 /** The last VE column, which a pull to a 7000 RPM redline cannot log, extended by hand. */
 const extendTopColumn = (st, f) => {
-  const c = S.RPM.length - 1;
-  return { ...st, tune: { ...st.tune, ve: st.tune.ve.map((row, ri) => row.map((v, ci) => (ci === c && S.LOAD[ri] >= 70 ? v * f : v))) } };
+  const c = axesOf(st, 've').rpm.length - 1;
+  return { ...st, tune: { ...st.tune, ve: st.tune.ve.map((row, ri) => row.map((v, ci) => (ci === c && axesOf(st, 've').load[ri] >= 70 ? v * f : v))) } };
 };
 const zmul = (st, path, f) => { const t = getCal(st, path); return setCal(st, path, { ...t, z: t.z.map((v) => v * f) }); };
 
@@ -132,7 +136,7 @@ export const STORY_FIXES = {
   'retarded-timing': (s) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: 'vq35hr' }).tune.timing } }),
   'turbo-kit': (s) => boostSparkAndFuel(s),
   'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),
-  'blower-power': (s) => boostSparkAndFuel(s, 3, 11.8),
-  nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 10),
+  'blower-power': (s) => boostSparkAndFuel(s, 3, 12.2),
+  nitrous: (s) => setCal(setCal(s, 'nitrous.fuelTrimPct', getCal(s, 'nitrous.fuelTrimPct') - 25), 'nitrous.retardDeg', 12),
 };
 

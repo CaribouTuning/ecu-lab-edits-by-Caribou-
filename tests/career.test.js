@@ -52,7 +52,7 @@ describe('grading', () => {
     const job = jobById('turbo-kit');
     // Leave the knock in and turn the boost rows richer only: fast, and knocking.
     const s = customerCar(job.car);
-    const v = evaluateJob(job, { ...s, tune: { ...s.tune, afr: s.tune.afr.map((row, ri) => row.map((x) => (S.LOAD[ri] > 100 ? 11.8 : x))) } });
+    const v = evaluateJob(job, { ...s, tune: { ...s.tune, afr: s.tune.afr.map((row, ri) => row.map((x) => (S.layoutById(s.tune.layout).afr.load[ri] > 100 ? 11.8 : x))) } });
     expect(v.verdict).toBe('unsafe');
     expect(v.pay).toBe(0);
     expect(v.rep).toBeLessThan(0);

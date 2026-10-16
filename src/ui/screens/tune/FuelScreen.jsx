@@ -14,7 +14,7 @@ import { AdvisorPanel } from '../../components/AdvisorPanel.jsx';
 import { fuelReport } from '../../components/advisorReports.js';
 import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
-import { LayoutAdviceNote, LayoutSwitch } from '../../components/LayoutSwitch.jsx';
+import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
 import { TuningGrid } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
@@ -54,9 +54,9 @@ export function FuelScreen({ calAdvice, children }) {
   const setRangeMode = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'rangeMode', value });
   /** @param {boolean} value */
   const setDiffView = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'diffView', value });
-  // A handful of `.some()` scans over at most 96 cells, no allocation in the
+  // A handful of `.some()` scans over a few hundred cells at most, no allocation in the
   // hot path — plainly on every render, not memoised.
-  const report = fuelReport(calAdvice, tune.layout ? null : selection);
+  const report = fuelReport(calAdvice, selection);
 
   return (
     <>
@@ -82,7 +82,6 @@ export function FuelScreen({ calAdvice, children }) {
           {children}
         </div>
         <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <LayoutAdviceNote />
           <TuneAdvisory kind="afr" report={report} />
         </AdvisorPanel>
       </div>

@@ -32,11 +32,11 @@ import {
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
-  computeEngineerScore, computeHardwareVE, computePullScore, computeTuningScore,
-  applyPreset, cellsNotRunBy, stockCalibrationFor, stockModsOf, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
+  computeEngineerScore, computePullScore, computeTuningScore,
+  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
   simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
-  veTruthByPhaseFor, read1, applyVeCorrections, veCorrections, veSamplesFromLive, veSamplesFromPull,
+  veTruthByPhaseFor, read1, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
 import {
   beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -62,7 +62,6 @@ import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { toGameGrid } from './state/layoutSwitch.js';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
@@ -286,9 +285,6 @@ export function EcuLabApp() {
   // The engine computer whose breakpoints the tables sit on (sim/layouts.js), or null
   // for the ECU Lab grid. Every pull and the live engine read the tables through it.
   const layout = useMemo(() => (tune.layout ? layoutById(tune.layout) : null), [tune.layout]);
-  // The advisors judge cells of the ECU Lab grid. On another layout they read these
-  // tables moved onto it, and TUNE's per-cell advice says it is about that grid.
-  const gameView = useMemo(() => (layout ? toGameGrid({ ve, timing, afr }, layout, build) : { ve, timing, afr }), [layout, ve, timing, afr, build]);
   // `tablesDirty` is read from the store directly by EngineScreen now (it is
   // `hasTuningWork()`'s one input) — nothing else in the shell reads it.
   // `selection` itself is read from the store directly by AirflowScreen/SparkScreen/
@@ -435,9 +431,11 @@ export function EcuLabApp() {
   // TRUE cylinder filling for the hardware as currently built. The player's `ve` table
   // is only the ECU's BELIEF about this; the gap between the two is what makes the
   // mixture drift off target and what the fuel-trim histogram measures and corrects.
+  // With cam phasers, that is the filling at the phase the calibration puts the cam at.
+  const vvtCal = tune.ecu?.vvt;
   const veTruth = useMemo(
-    () => computeHardwareVE(engineConfig, mods, hwForVe),
-    [engineConfig, mods, hwForVe],
+    () => scheduledVeAt(engineConfig, mods, hwForVe, vvtCal),
+    [engineConfig, mods, hwForVe, vvtCal],
   );
 
   // The engine management's world: the parts it reads and drives, and the day. The
@@ -470,7 +468,7 @@ export function EcuLabApp() {
   // always describe the same calibration.
   // The layout defers WITH its tables: a deferred 8 × 6 read through a fresh GM layout
   // (or the reverse) is a table read off the wrong breakpoints.
-  const advisorTables = useMemo(() => ({ ve, timing, afr, layout, game: gameView }), [ve, timing, afr, layout, gameView]);
+  const advisorTables = useMemo(() => ({ ve, timing, afr, layout }), [ve, timing, afr, layout]);
   const deferredTables = useDeferredValue(advisorTables);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
@@ -480,17 +478,19 @@ export function EcuLabApp() {
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
        injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
+  // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
+  const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   const calAdvice = useMemo(() => calibrationAdvice({
-    ve: deferredTables.game.ve, veTruth, timing: deferredTables.game.timing, afr: deferredTables.game.afr,
+    ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor, turbine,
+    compressor, turbine, camAt,
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
+       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
 
   const veAdvice = useMemo(
-    () => veRecommendations(gameView.ve, engineConfig, mods, hwForVe),
-    [gameView, engineConfig, mods, hwForVe]
+    () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
+    [ve, engineConfig, mods, veTruth, layout]
   );
 
   // Same real-units chain the sim uses, evaluated at WOT / 6500 RPM as a preview.
@@ -611,11 +611,13 @@ export function EcuLabApp() {
     // The spark and fuel tables are generated for this engine, fuel and boost
     // (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables this used to write
     // knock on every other engine in the catalogue.
+    // All three on breakpoints sized to this engine as it stands (its redline, its boost),
+    // with the cam-phaser schedule they were written for.
     const stock = stockCalibrationFor(build);
-    const stockVe = computeHardwareVE(engineConfig, stockModsOf(build), hwForVe);
     dispatch({
-      type: ACTIONS.RESET_TO_STOCK, ve: stockVe, timing: stock.timing, afr: stock.afr, mafScalar: stock.mafScalar,
-      ecu: defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate }),
+      type: ACTIONS.RESET_TO_STOCK, ve: stock.ve, timing: stock.timing, afr: stock.afr, mafScalar: stock.mafScalar,
+      layout: stock.layout,
+      ecu: { ...defaultEcuCalibration({ derived: engineDerived, gate: ecuHw.gate, axes: stock.layout.timing }), vvt: stock.ecu.vvt },
     });
   };
   // The REPAIR button's only handler. Before the extraction this wrote a local
@@ -699,7 +701,7 @@ export function EcuLabApp() {
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
     // this pull did run is already charged by its log, and charging it again would count
     // one knocking cell twice.
-    const ts = computeTuningScore(r, cellsNotRunBy(calAdvice.overAdvanced, r));
+    const ts = computeTuningScore(r, cellsNotRunBy(calAdvice.overAdvanced, r, (layout ?? layoutById(null)).timing));
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
       supercharged: !!blower, turbine, compressor,
@@ -1863,7 +1865,7 @@ export function EcuLabApp() {
                 )}
 
                 {!running && dynoView === 'log' && (
-                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result) : []} />
+                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} />
                 )}
 
                 {!running && dynoView === 'score' && scores && (

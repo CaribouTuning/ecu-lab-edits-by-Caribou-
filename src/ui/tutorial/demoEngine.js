@@ -16,7 +16,7 @@
  */
 
 import {
-  applyPreset, calibrationAdvice, interp2, isLocatable, presetById, simulateSweep, veCorrections, veSamplesFromPull,
+  applyPreset, calibrationAdvice, intakeCamAt, layoutById, readEcuTable, isLocatable, presetById, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 import { eventBands } from '../components/eventBands.js';
 import { makeInitialState } from '../state/initialState.js';
@@ -42,7 +42,7 @@ const lessonStart = () => reducer(makeInitialState(), { type: ACTIONS.APPLY_PRES
  * @property {{pull: object[], live: object[], airModel: 'blend'|'sd'|'maf', pullInfo: {state: 'none'|'stale'|'part-load'|'unused'|'ok'}, onApply: (share: number) => void}} veLog
  *   TUNE › AIRFLOW's log correction, fed from this pull
  * @property {ReturnType<typeof import('../../sim/index.js').deriveEngine>} derived
- * @property {number[][]} veTruth the engine's real breathing (for the tutorial's own maths, never shown as a tuning aid)
+ * @property {(rpm: number, kpa: number) => number} veTruth the engine's real breathing (for the tutorial's own maths, never shown as a tuning aid)
  * @property {object} fuel
  */
 
@@ -65,7 +65,8 @@ export function runDemo(key, scenario = (s) => s) {
   // The advisor's pull is the same full-throttle pull, as in EcuLab.jsx.
   const advisorPull = base.session.loadKpa === 100 ? result : simulateSweep({ ...args, loadKpa: 100 });
   const calAdvice = calibrationAdvice({
-    ve: base.tune.ve, veTruth, timing: base.tune.timing, afr: base.tune.afr, derived,
+    ve: base.tune.ve, veTruth, timing: base.tune.timing, afr: base.tune.afr, layout: args.layout, derived,
+    camAt: intakeCamAt(base.build.engineConfig, base.tune.ecu?.vvt),
     octaneBonus: fuel.bonus, fuel, mods: base.build.mods, turboOn: base.build.turboOn,
     boostCurve: base.build.boostCurve, compressor: args.compressor,
     turbine: args.turbine, injectorCc: args.injectorCc, ecuInjectorCc: base.build.ecuInjectorCc,
@@ -102,7 +103,7 @@ export function runDemo(key, scenario = (s) => s) {
  */
 export function airPerCylinder(demo, rpm, mapKpa) {
   const p = demo.result.points.reduce((best, q) => (Math.abs(q.rpm - rpm) < Math.abs(best.rpm - rpm) ? q : best));
-  const ve = interp2(demo.state.tune.ve, rpm, mapKpa);
+  const ve = readEcuTable(demo.state.tune, 've', rpm, { mapKpa });
   const vCylL = demo.derived.displacementL / demo.derived.cyl;
   const tK = p.iat + 273.15;
   const rho = (mapKpa * 1000) / (287 * tK);
@@ -112,6 +113,6 @@ export function airPerCylinder(demo, rpm, mapKpa) {
 
 /** The log's correction for one cell, split into the parts TUNE › AIRFLOW shows. */
 export function veCellMaths(demo, row, col) {
-  const { cell } = veCorrections(demo.veLog.pull);
+  const { cell } = veCorrections(demo.veLog.pull, layoutById(demo.state.tune.layout).ve);
   return cell[row]?.[col] ?? null;
 }

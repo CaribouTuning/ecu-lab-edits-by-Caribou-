@@ -142,7 +142,9 @@ export const JOBS = [
     says: 'Had a shop put a big cam in. It sounds mean, but it bogs, runs rough, and pops lean up top. They said it “just needs a tune”.',
     wants: 'Make it run right with the cam. I know it’ll idle lumpy — that’s the point.',
     work: ['Road test and diagnose', 'Re-map for the new cam'],
-    car: { preset: null, build: (b) => ({ engineConfig: { ...b.engineConfig, camDuration: 268, springRate: 78 } }) },
+    // The shop that fitted the cam fitted the 440s a cam that size needs at the top end,
+    // and set the ECU's injector size for them: the fault left is the airflow record.
+    car: { preset: null, build: (b) => ({ engineConfig: { ...b.engineConfig, camDuration: 268, springRate: 78 }, injIdx: 1, ecuInjectorCc: 440 }) },
     needs: {}, minRep: 30, pay: 900, rep: 10,
     checks: [
       { type: 'events', kind: 'complaint', types: ['lean', 'rich'], label: 'No longer lean or rich' },
@@ -222,14 +224,16 @@ export const JOBS = [
     id: 'blower-power', tier: 3,
     customer: { name: 'Rae', car: '3.5 V6 track car, supercharged', color: 'copper', body: 'coupe' },
     says: 'Supercharger’s on with the small pulley, intercooled, injectors sized for it. It’s on the old tune and it rattles. I have a track weekend in two weeks.',
-    wants: '355 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
+    wants: '330 at the wheels, and it has to survive the whole weekend. No knock, no heat, no drama.',
     work: ['Supercharger kit already fitted and injectors scaled', 'Dyno tune for power and reliability'],
     car: { preset: null, build: (b) => ({ blowerId: 'm90', blowerRatio: 1.6, octaneIdx: 1, injIdx: 2, ecuInjectorCc: 550, mods: { ...b.mods, intercooler: true } }) },
     needs: { training: ['spark'], equipment: ['dyno', 'egt'] }, minRep: 130, pay: 3200, rep: 22,
     checks: [
       // 380 before October 2026, when friction rose with speed as GM's measured friction
-      // does and the same safe tune came to about 360.
-      { type: 'minHp', kind: 'complaint', hp: 355, label: '355 wheel horsepower' },
+      // does and the same safe tune came to about 360; then 355, until a rich flame stopped
+      // being credited with heat its CO and H2 never release, and the same safe tune at
+      // 12.2:1 came to about 335.
+      { type: 'minHp', kind: 'complaint', hp: 330, label: '330 wheel horsepower' },
       ...SAFE,
       { type: 'maxDuty', kind: 'safety', max: 90, label: 'Injectors with headroom left' },
     ],

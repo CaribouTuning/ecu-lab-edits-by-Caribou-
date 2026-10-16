@@ -22,7 +22,7 @@ import { OCTANE_OPTS } from '../hardware.js';
 import { needsAirmass, readEcuTable } from '../layouts.js';
 import { clamp } from '../math.js';
 import { evaluatePoint } from '../point.js';
-import { RPM } from '../tables.js';
+import { CURVE_RPM, RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
 import { solveInduction } from '../turbo.js';
 import { boostTarget, steadyGate } from './boost.js';
@@ -631,7 +631,7 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
   // The target is decided before the turbo has answered, on the IAT the ECU reads now.
   const iatGuessC = chargeTempK(hw.turboOn ? Math.max(...hw.boostCurve) * E.IAT_GUESS_BOOST_SHARE : 0, hw.mods.intercooler, env) - KELVIN_OFFSET;
   const bt = hw.turboOn
-    ? boostTarget({ cal: cal.boost, baseCurve: hw.boostCurve, rpmAxis: RPM, rpm, throttlePct, gear, iatC: iatGuessC })
+    ? boostTarget({ cal: cal.boost, baseCurve: hw.boostCurve, rpmAxis: hw.boostCurve.length === CURVE_RPM.length ? CURVE_RPM : RPM, rpm, throttlePct, gear, iatC: iatGuessC })
     : { target: 0, steps: [] };
   let target = bt.target;
   const steps = [...bt.steps];

@@ -25,7 +25,7 @@ function advise(eng) {
   const pull = eng.pull(100);
   const cc = S.INJECTOR_OPTS[eng.build.injIdx].cc;
   const advice = S.calibrationAdvice({
-    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr,
+    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr, layout: eng.tables.layout, camAt: eng.camAt,
     derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn,
     boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: cc, mafScalar: 1,

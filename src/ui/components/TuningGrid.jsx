@@ -79,7 +79,6 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   const dense = axes.rpm.length > 12;
   const cw = dense ? 42 : 51;
   const ch = dense ? 28 : 37;
-  const game = axes === GAME_LAYOUT.ve || (axes.rpm.length === GAME_LAYOUT.ve.rpm.length && axes.load.length === GAME_LAYOUT.ve.load.length);
   const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
   // 96 subtractions, on renders that already walk every cell — not memoised.
   const diff = diffView && baseline ? diffTable(data, baseline) : null;
@@ -207,7 +206,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
         </div>
         {axes.load.map((load, ri) => (
           <div key={load} style={{ display: 'flex' }}>
-            <button onClick={() => selectRow(ri)} data-tour={game ? `grid-load-${load}` : undefined} style={{
+            <button onClick={() => selectRow(ri)} data-tour={axes.loadUnit === 'kPa' ? `grid-load-${load}` : undefined} style={{
               width: 44, height: ch, flexShrink: 0, border: 'none', borderRight: `1px solid ${T.line}`, borderTop: `1px solid ${T.line}`,
               background: selection?.type === 'row' && selection.row === ri ? T.acc : T.panel,
               color: selection?.type === 'row' && selection.row === ri ? T.accOn : T.ink2,

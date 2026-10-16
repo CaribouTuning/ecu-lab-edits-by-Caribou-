@@ -36,7 +36,7 @@ function randomPoint(seed) {
   const injectorCc = S.INJECTOR_OPTS[build.injIdx].cc;
   const base = {
     rpm, mapKpa, boostPsi,
-    veVal: S.interp2(eng.veTruth, rpm, mapKpa),
+    veVal: eng.veTruth(rpm, mapKpa),
     afrCommanded: boostPsi > 1 ? 11.8 : 12.9,
     fuel: eng.fuel, mods: { ...build.mods, turboFitted: build.turboOn }, mafScalar: 1, mafErrorBase: 1,
     injectorCc, ecuInjectorCc: injectorCc, derived: eng.derived, compressor: eng.compressor,
@@ -249,7 +249,7 @@ describe('every lever pulls the way it does on a real engine', () => {
       const solve = (target) => S.solveInduction({
         rpm: base.rpm, loadKpa: 100, turboOn: true, boostTargetPsi: target, targetIsFinal: true,
         turbine: eng.turbine, compressor: eng.compressor, derived: eng.derived,
-        veAt: (m) => S.interp2(eng.veTruth, base.rpm, m), intakeKAt: (b) => S.chargeTempK(b, build.mods.intercooler),
+        veAt: (m) => eng.veTruth(base.rpm, m), intakeKAt: (b) => S.chargeTempK(b, build.mods.intercooler),
         lambda: 1, exhaustK: S.INDUCTION_REF_EXHAUST_K,
       }).boostPsi;
       let last = 0;
@@ -289,8 +289,11 @@ describe('whole pulls on random builds', () => {
       const ecu = eng.pull(100);
       ecu.points.forEach((p, i) => {
         const l = legacy.points[i];
+        // An injector held open past its whole cycle is the ECU's pulse limit deciding the
+        // fuel, not the table: the two paths saturate differently, and since a rich
+        // flame's heat depends on how rich it is (thermo.js, heatReleasedShare) that shows.
         const ecuActed = (p.protect?.length ?? 0) > 0 || p.knockPull > 0 || l.knockPull > 0
-          || p.misfire > 0 || p.cutPct > 0;
+          || p.misfire > 0 || p.cutPct > 0 || p.duty >= 100;
         // One unit of rounding: the ECU prices the injector pulse through its own dead time,
         // which on a mis-scaled injector moves the charge by a hundredth of a percent.
         const off = (a, b) => Math.abs(a - b) > Math.max(1, 0.005 * b);

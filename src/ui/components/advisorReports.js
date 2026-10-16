@@ -59,7 +59,9 @@ export function sparkReport(calAdvice, selection) {
     if (holds(overAdvanced, cell.ri, cell.ci)) {
       return {
         tone: 'danger',
-        headline: `${(cell.current - cell.knockCeiling).toFixed(1)} deg past the knock limit`,
+        headline: cell.sparkCannotFix
+          ? 'Past the knock limit at any spark the table can hold'
+          : `${(cell.current - cell.knockCeiling).toFixed(1)} deg past the knock limit`,
         state: 'cell-over',
         detail: { cell },
       };

@@ -59,9 +59,13 @@ export const COEFF = {
   // Integration step, crank degrees. 133 steps over the closed period. Halving it moves
   // indicated work under 0.2% and doubles the cost of every knock search — not worth it.
   CYCLE_STEP_DEG: 2,
-  // Rod length / crank radius. Production petrol runs 1.5-1.9. Not player-editable, but
-  // read from here rather than assumed infinite, which would misplace the piston at TDC.
-  ROD_RATIO: 1.75,
+  // Rod length / crank RADIUS, which is what the slider-crank geometry (cylinderVolumeM3)
+  // takes. Production petrol engines run 1.5-1.9 rod length per STROKE — 3.0-3.8 per crank
+  // radius: a VQ35DE's 144.2 mm rod on its 40.7 mm radius is 3.54, a GM LS's 154.9 mm on
+  // 46 mm is 3.37. This was once 1.75, the per-stroke figure, which gave every engine a rod
+  // half its real length and moved the piston away from TDC too fast around the burn.
+  // Not player-editable, but read from here rather than assumed infinite.
+  ROD_RATIO: 3.5,
   // Intake valve close, degrees after BDC, and how it tracks cam duration. IVC sets
   // EFFECTIVE compression — the piston does not compress until the valve shuts — which is
   // why a big cam tolerates more static compression and gives away low-RPM pressure.
@@ -177,7 +181,7 @@ export const COEFF = {
   // scale factor for the engine it is applied to. It absorbs, in one place, what the
   // cycle does not model — chamber shape, turbulence, hot spots.
   //
-  // It sits at 1.1, within a tenth of the published correlation, because the two things
+  // It sits near 1 (1.3; see the refit note below), close to the published correlation, because the two things
   // that used to hide inside it are now modelled: where the injectors spray (the charge
   // cooling of FUEL_EVAP_IN_CYLINDER_*), and that pump fuel is not a reference fuel —
   // the correlation now reads the octane index RON − K·(RON − MON), with K from the
@@ -194,7 +198,13 @@ export const COEFF = {
   //      point.
   //   3. The shipped stock calibration runs knock-free — what a new player meets first.
   // `tests/presets.test.js` fails if 1 or 3 break.
-  KNOCK_TAU_SCALE: 1.1,
+  //
+  // REFITTED from 1.1 to 1.3 when ROD_RATIO was corrected (it had been the per-stroke
+  // figure, half the real rod): a proper-length rod holds the piston near TDC longer, the
+  // end gas hotter for longer, and the knock limit fell about 1.8 degrees everywhere. 1.1
+  // had been absorbing that error. At 1.3 anchor 2 reads -4.0 at 4500, -0.9 at 5500 and
+  // +3.1 at 6500 on 91 (low RPM still runs -8, as it already did at 1.1 before the fix).
+  KNOCK_TAU_SCALE: 1.3,
   // The octane tests' own charge temperatures, for Kalghatgi's K (octaneIndexK): the RON
   // test (ASTM D2699) runs 52 °C intake air, the MON test (D2700) a 149 °C mixture, both
   // naturally aspirated. Tcomp15 is taken at 15 bar, as Kalghatgi defines it. K is held
@@ -238,6 +248,9 @@ export const COEFF = {
   // whatever else binds (MBT, at light load) is correctly the lower ceiling.
   KNOCK_UNBOUNDED_BTDC: 90,
   KNOCK_SEARCH_TOL_DEG: 0.25,
+  // When the ceiling does not knock, how far below it the search looks to tell "below the
+  // hump, nothing can knock" from "past the hump" (knockLimitedSpark), degrees.
+  KNOCK_HUMP_PROBE_DEG: 5,
 
   // --- Charge cooling from fuel evaporation ---
   // Latent heat of vaporisation, J/kg. E85 carries double the latent heat AND ~1.4x the
@@ -283,6 +296,29 @@ export const COEFF = {
   // figure: gasoline 14.7, ethanol 9.0.
   STOICH_GASOLINE: 14.7,
   STOICH_ETHANOL: 9.0,
+  // What a RICH flame leaves unburned, for `richHeatReleased` in thermo.js. Past
+  // stoichiometric there is not enough oxygen to take every carbon to CO2 and every hydrogen
+  // to water, so the products carry CO and H2, and the energy still in them never reaches the
+  // gas. How the oxygen shortfall splits between the two is set by the water-gas shift
+  // (CO + H2O <-> CO2 + H2), frozen as the gas cools on expansion; Heywood, Internal
+  // Combustion Engine Fundamentals (1988) section 4.9, takes its equilibrium constant as 3.5
+  // for exactly this, and the CO it predicts (about 3% at 13.5:1, 6-7% at 12:1) is what SI
+  // exhaust measures. Fuel compositions: gasoline as CH1.87 (Heywood table D.4), ethanol
+  // C2H5OH. Heating values: CO 10.1 MJ/kg, H2 120 MJ/kg (lower values).
+  WATER_GAS_K: 3.5,
+  GASOLINE_H_TO_C: 1.87,
+  CO_LHV_J_PER_MOL: 283000,
+  H2_LHV_J_PER_MOL: 241800,
+  // How uneven the mixture is inside one charge and across the cylinders, as the standard
+  // deviation of the local equivalence ratio (`heatReleasedShare`). Set by the exhaust: a
+  // stoichiometric SI engine's exhaust carries about 0.5% O2 and 0.5-1% CO together
+  // (Heywood 1988, section 4.9), and 0.06 reproduces 0.5% and 0.7%.
+  MIXTURE_PHI_SPREAD: 0.06,
+  // Nitrogen to oxygen in air, by moles.
+  AIR_N2_PER_O2: 3.773,
+  // Molar heat capacities of the combustion products at 2000 K, J/(mol K), from the JANAF
+  // tables (NIST-JANAF Thermochemical Tables, 4th ed., 1998), for `burnedGammaShift`.
+  PRODUCT_CP_J_MOL_K: Object.freeze({ N2: 36.00, O2: 37.74, CO2: 60.43, H2O: 51.18, CO: 36.25, H2: 34.28 }),
 
   // --- Residual gas (internal EGR) ---
   // Exhaust left from the previous cycle. Dilutes the charge, slows the burn, and arrives
@@ -332,11 +368,11 @@ export const COEFF = {
   // is the whole restriction.
   EXHAUST_SYSTEM_KPA_PER_KGS: 90,
   // The induction solve spools the turbo up from zero (see solveInduction): it climbs in
-  // steps of at least this many psi, and at most this many steps to the target, then
-  // bisects the last step this many times — 12 halvings of a quarter psi is 0.0001 psi,
-  // far inside anything the app displays.
-  INDUCTION_SPOOL_STEP_PSI: 0.25,
-  INDUCTION_SPOOL_MAX_STEPS: 48,
+  // steps of this many psi on a grid that does not depend on the target, then bisects
+  // the last step this many times — 12 halvings of half a psi is 0.0001 psi, far inside
+  // anything the app displays. The same grid for every target is what makes asking for
+  // more never give less: a step sized from the target could straddle a different edge.
+  INDUCTION_SPOOL_STEP_PSI: 0.5,
   INDUCTION_EDGE_PASSES: 12,
 
   // --- Superchargers (src/sim/blower.js) ---
@@ -402,9 +438,12 @@ export const COEFF = {
   // why a larger turbine is worth power at the same boost: it spends more life gated.
   // Scales the share of turbine capability above the target (see solveInduction). Fitted
   // to the turbo presets' published ratings after the gate was corrected to open on
-  // SURPLUS rather than shortfall; at 0.2 every one lands within 5% of its rated power,
+  // SURPLUS rather than shortfall; at 0.2 every one landed within 5% of its rated power,
   // with exhaust backpressure at rated power 1.0-1.4x the boost pressure, which is where
-  // small OEM turbos run. It was 0.55 when it acted in the wrong direction.
+  // small OEM turbos run. It was 0.55 when it acted in the wrong direction. Not refitted
+  // after the rich-flame chemistry (thermo.js, heatReleasedShare) took 4-6% of heat out of
+  // their full-boost points: the B58B30M1 now reads 7% under (docs/accuracy.md), held there
+  // by its knock limit rather than by its turbine.
   WASTEGATE_RELIEF: 0.2,
   // --- Compressor map (see compressorMap in turbo.js) ---
   // How sharply efficiency falls away from the island centre, and how much a unit of
@@ -650,6 +689,9 @@ export const COEFF = {
   VE_BACKPRESSURE_LAMBDA_REF: 0.88,
   // However choked the turbine, the engine still breathes something.
   VE_BACKPRESSURE_FLOOR: 0.70,
+  // Boost over which the backpressure term above phases in, kPa: the first 0.5 bar. Below
+  // atmospheric the same backpressure is charged through residual gas and pumping work.
+  VE_BACKPRESSURE_RAMP_KPA: 50,
 
   // --- Fuel trims ---
   STFT_GAIN: 42,

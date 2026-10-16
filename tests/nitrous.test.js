@@ -96,14 +96,16 @@ describe('the jets', () => {
 });
 
 describe('what it does to the engine', () => {
-  it('adds power in step with the shot: 1.0-1.35 × the rating at the crank', () => {
-    // 1.0-1.35 rather than 1.0: the model makes 10-15% more power per unit of oxygen than
-    // real engines (docs/accuracy.md, approximation 1), and nitrous is oxygen.
+  it('adds power in step with the shot: 0.85-1.05 × the rating at the crank', () => {
+    // Kit ratings are crank figures and real kits land near them. It read 1.0-1.35 while a
+    // rich flame was credited with all the heat its oxygen could release; a wet kit sprays
+    // at lambda 0.75-0.80, where the CO and H2 left behind cost real power (thermo.js,
+    // heatReleasedShare), and the smallest shot, sprayed richest, lands lowest.
     const base = at(pull(null), 4500).hp;
     const gains = [50, 100, 150].map((shot) => (at(pull(kit(shot)), 4500).hp - base) / S.DRIVETRAIN_EFF / shot);
     for (const g of gains) {
-      expect(g).toBeGreaterThan(1.0);
-      expect(g).toBeLessThan(1.35);
+      expect(g).toBeGreaterThan(0.85);
+      expect(g).toBeLessThan(1.05);
     }
     expect(Math.max(...gains) - Math.min(...gains)).toBeLessThan(0.1);
   });
@@ -112,7 +114,8 @@ describe('what it does to the engine', () => {
     // Measured as the knock limit itself, with and without the shot at the same speed.
     // (Measuring the retard the ECU applied instead reads the drop minus whatever margin
     // the spark table happened to leave, and hid a drop of about 7° per 50 hp once.)
-    // Tuners start from 2° per 50 hp; on pump 93 the model asks for a little more.
+    // Tuners start from 2° per 50 hp; on pump 93 the model asks for more, about 3.5-5°
+    // (docs/accuracy.md: it read 3.0-4.1 before the rod length was corrected).
     const base = pull(null);
     for (const shot of [50, 100, 150]) {
       const p = pull(kit(shot), { cal: { 'nitrous.retardDeg': 0 } });
@@ -121,7 +124,7 @@ describe('what it does to the engine', () => {
         .sort((a, b) => a - b);
       const perFifty = drops[Math.floor(drops.length / 2)] / (shot / 50);
       expect(perFifty).toBeGreaterThan(1.5);
-      expect(perFifty).toBeLessThan(4.5);
+      expect(perFifty).toBeLessThan(5.5);
     }
   });
 
@@ -208,7 +211,8 @@ describe('fuel while spraying', () => {
     const after = stock(kit(150), { cal: { 'nitrous.fuelTrimPct': -pct } });
     expect(after.events.some((e) => e.type === 'rich' || e.type === 'lean')).toBe(false);
     const spray = after.points.filter((x) => x.nitrousLbMin > 0);
-    expect(Math.min(...spray.map((x) => x.lambda))).toBeGreaterThan(0.76);
+    // Clear of the point where the pull log calls it too rich to be safe.
+    expect(Math.min(...spray.map((x) => x.lambda))).toBeGreaterThan(S.COEFF.RICH_DAMAGE_LAMBDA);
     // Never leaner on the spray than the engine's own tune runs without it.
     for (const x of spray) expect(x.lambda).toBeLessThanOrEqual(x.afrCommanded / 14.7 + 0.005);
     expect(at(after, 2500).hp).toBe(at(before, 2500).hp);

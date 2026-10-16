@@ -8,6 +8,7 @@
 
 import { AMBIENT_K, CHAR_SCALE, GAMMA_AIR, R_AIR, SONIC_AMBIENT_MS } from './constants.js';
 import { COEFF } from './coefficients.js';
+import { bottomEndLimit } from './bottomEnd.js';
 import {
   CYL_COUNT, MAIN_BEARINGS, TYPICAL_INTAKE_VALVE_SHARE, hasBalanceShafts, intakeValvesFor,
 } from './hardware.js';
@@ -166,7 +167,11 @@ export function machVeMultiplier(boreMm, strokeMm, rpm, chargeK = AMBIENT_K, val
  */
 export function charMultiplier(rpm, ratio) {
   const norm = (rpm - 4500) / 3000; // -1 at 1500 rpm, +1 at 7500 rpm
-  return 1 + (ratio - 1) * CHAR_SCALE * norm;
+  // Fitted between 1500 and 7500 RPM. Past 7500 an oversquare engine's credit is held
+  // where it was measured rather than extrapolated; an undersquare engine's deficit keeps
+  // growing (its long stroke is also what the Mach term charges, in the same direction).
+  const n = ratio > 1 ? Math.min(norm, 1) : norm;
+  return 1 + (ratio - 1) * CHAR_SCALE * n;
 }
 
 /**
@@ -184,6 +189,10 @@ export function charMultiplier(rpm, ratio) {
  *   the cam itself; absent means fixed cams
  * @property {'port'|'direct'} [injection] where the injectors spray: into each intake port
  *   (multi-point manifold injection) or into the cylinder. Absent means port
+ * @property {string} [bottomEnd] what the pistons and rods are built from: a
+ *   BOTTOM_END_OPTS id (bottomEnd.js). Absent means production parts
+ * @property {number} [bottomEndRatedRpm] a catalogue engine's factory assembly is rated to
+ *   this speed, its own factory limiter; set when the preset is loaded
  * @property {boolean} [boostRatedBottomEnd] a factory turbo engine's bottom end, designed
  *   for boosted cylinder pressure; absent on a naturally aspirated one
  * @property {1|2} [sparkPlugs] spark plugs per cylinder, both firing together (the
@@ -226,6 +235,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} springRate valve spring rate
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} floatRpm valve float speed, RPM
+ * @property {ReturnType<typeof bottomEndLimit>} bottomEnd what the pistons and rods are
+ *   rated to: mean piston speed and the engine speed it is reached at (bottomEnd.js)
  * @property {number} springPa spring friction FMEP, Pa
  * @property {number} balanceShaftFrac fraction of rubbing friction added by balance shafts
  * @property {number} redline rev limit, RPM
@@ -304,6 +315,8 @@ export function deriveEngine(cfg) {
   const floatRpm = valveFloatRpm(springRate, camDuration);
   const springPa = springFrictionPa(springRate);
   const redline = cfg.redline ?? DEFAULT_REDLINE_RPM;
+  // What the pistons and rods are good for (bottomEnd.js).
+  const bottomEnd = bottomEndLimit(cfg);
   // The valvetrain: layout, valve count and followers. They decide valvetrain friction
   // (friction.js) and, through the intake valve area, where breathing chokes.
   const valvetrain = cfg.valvetrain ?? 'dohc';
@@ -323,7 +336,7 @@ export function deriveEngine(cfg) {
     bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
     torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
-    camDuration, springRate, overlapDeg, floatRpm, springPa,
+    camDuration, springRate, overlapDeg, floatRpm, springPa, bottomEnd,
     balanceShaftFrac, redline,
     configuration: cfg.configuration, valvetrain, valvesPerCyl, follower,
     intakeValves: valves.intakeValves, intakeValveMm: valves.intakeValveMm, valveAreaRatio: valves.ratio,

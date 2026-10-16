@@ -21,7 +21,7 @@ const TURBO_10 = { turboOn: true, boostCurve: [0, 2, 6, 10, 10, 10, 10, 9] };
 function advise(eng) {
   const pull = eng.pull(100);
   const advice = S.calibrationAdvice({
-    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr,
+    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr, layout: eng.tables.layout, camAt: eng.camAt,
     derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn,
     boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: 315, ecuInjectorCc: 315, mafScalar: 1,
@@ -96,7 +96,7 @@ describe('the pull log blames the right table for a bad mixture', () => {
 
   it('sends a lean AFR target to the AFR table', () => {
     const eng = makeEngine();
-    eng.tables.afr = eng.tables.afr.map((row, ri) => row.map((v) => (S.LOAD[ri] >= 90 ? 15.8 : v)));
+    eng.tables.afr = eng.tables.afr.map((row, ri) => row.map((v) => ((eng.tables.layout?.afr.load ?? S.LOAD)[ri] >= 90 ? 15.8 : v)));
     const lean = eng.pull(100).events.find((e) => e.type === 'lean');
     expect(lean.fix).toMatch(/richen/);
   });

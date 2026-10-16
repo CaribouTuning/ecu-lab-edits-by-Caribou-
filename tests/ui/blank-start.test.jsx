@@ -136,12 +136,12 @@ describe('a practice mission with no engine chosen yet', () => {
 });
 
 describe('the form refuses what the simulator cannot answer for, and says why', () => {
-  it('a redline past the end of the tables', () => {
+  it('a redline past 11,000 rpm', () => {
     launchBlank();
     goTo(/^BUILD/i);
     const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
-    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '9000' } });
+    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '11500' } });
     fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
-    expect(form.getByText(/Between 4000 and 7500 rpm\. The simulator's tables and airflow run to 7500 rpm\./)).toBeTruthy();
+    expect(form.getByText(/Between 4000 and 11000 rpm\. Past 11,000 rpm is racing-engine territory/)).toBeTruthy();
   });
 });

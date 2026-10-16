@@ -10,8 +10,8 @@
 import React, { useState } from 'react';
 
 import {
-  CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, INJECTION_OPTS, MATERIAL_OPTS, VALVES_PER_CYL_OPTS,
-  VALVETRAIN_OPTS, customEnginePatch, validateCustomEngine,
+  BOTTOM_END_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, INJECTION_OPTS, MATERIAL_OPTS, VALVES_PER_CYL_OPTS,
+  VALVETRAIN_OPTS, bottomEndLimit, customEnginePatch, pistonMotion, validateCustomEngine,
 } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Note } from '../primitives/Note.jsx';
@@ -36,7 +36,7 @@ const REQUIRED = [
 export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' }) {
   const [spec, setSpec] = useState(/** @type {Record<string, any>} */ ({
     configuration: '', bore: '', stroke: '', compression: '', redline: '',
-    camDuration: '', valvetrain: '', valvesPerCyl: '', injection: '', blockMaterial: '', headMaterial: '',
+    camDuration: '', valvetrain: '', valvesPerCyl: '', injection: '', blockMaterial: '', headMaterial: '', bottomEnd: '',
   }));
   const [tried, setTried] = useState(false);
   const set = (patch) => setSpec((s) => ({ ...s, ...patch }));
@@ -112,6 +112,8 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
         <Seg label="Valves per cylinder" equal value={spec.valvesPerCyl} options={VALVES_PER_CYL_OPTS.map((n) => ({ id: n, label: String(n) }))} onChange={(v) => set({ valvesPerCyl: Number(v) })} />
         <div className={styles.label}>Fuel injection <span className={styles.typical}>port if left blank</span></div>
         <Seg label="Fuel injection" equal value={spec.injection} options={INJECTION_OPTS} onChange={(v) => set({ injection: v })} />
+        <div className={styles.label}>Pistons and rods <span className={styles.typical}>production if left blank</span></div>
+        <Seg label="Pistons and rods" equal value={spec.bottomEnd} options={BOTTOM_END_OPTS.map((o) => ({ id: o.id, label: o.label.split(' (')[0] }))} onChange={(v) => set({ bottomEnd: v })} />
         <div className={styles.label}>Block <span className={styles.typical}>aluminium if left blank</span></div>
         <Seg label="Block material" equal value={spec.blockMaterial} options={MATERIAL_OPTS.map((m) => ({ id: m, label: m }))} onChange={(v) => set({ blockMaterial: v })} />
         <div className={styles.label}>Cylinder head <span className={styles.typical}>aluminium if left blank</span></div>
@@ -123,6 +125,25 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
           That is <b>{displacement.toFixed(2)} L</b> ({(displacement * 61.0237).toFixed(0)} cu in). Check it against your engine&apos;s own figure before creating it.
         </div>
       )}
+      {check.ok && (() => {
+        // What the redline asks of the pistons and rods (bottomEnd.js), said before the
+        // engine exists rather than discovered on the dyno.
+        const limit = bottomEndLimit(check.engine);
+        const at = pistonMotion(check.engine.stroke, check.engine.redline);
+        const past = check.engine.redline > limit.ratedRpm;
+        return (
+          <div className={styles.result} data-testid="spec-bottom-end">
+            At {check.engine.redline.toLocaleString('en-US')} RPM the pistons average <b>{at.meanSpeedMs.toFixed(1)} m/s</b>.
+            {' '}{limit.label} are good for about {limit.limitMs} m/s, which this stroke reaches at {limit.ratedRpm.toLocaleString('en-US')} RPM.
+            {past
+              ? ' The redline is past that: the engine will rev there, but the parts are outside what they are built for. Pick a stronger assembly, a shorter stroke or a lower redline.'
+              : ''}
+            {check.engine.redline > 9000
+              ? ' Past 9,000 RPM the breathing curve is carried beyond the speeds the factory engines it was built from reach; docs/accuracy.md shows how it compares with five real high-revving engines.'
+              : ''}
+          </div>
+        );
+      })()}
       {check.ok && check.estimated.length > 0 && (
         <Note>Not entered, so typical values will be used: {check.estimated.join('; ')}. You can change each on BUILD afterwards.</Note>
       )}

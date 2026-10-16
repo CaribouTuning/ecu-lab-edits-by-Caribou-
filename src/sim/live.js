@@ -13,14 +13,14 @@
 import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { frictionTorqueNm } from './friction.js';
-import { clamp, interp1, interp2 } from './math.js';
+import { clamp, curveAt } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { trappedAirGrams } from './cycle.js';
-import { needsAirmass, readEcuTable } from './layouts.js';
+import { needsAirmass, readEcuTable, truthReader } from './layouts.js';
 import { assertBoostCurve } from './sweep.js';
-import { RPM } from './tables.js';
+
 import { liveStepEcu } from './ecu/liveEcu.js';
 
 /** Crank + flywheel + damper rotational inertia, kg·m². */
@@ -152,6 +152,8 @@ export function liveStep(st, dt, input, cfg) {
     mafErrorBase, turboOn, boostCurve, turbine, compressor, layout = null,
   } = cfg;
   const tables = { ve, timing, afr, layout };
+  const truthAt = truthReader(veTruth, tables.layout?.ve ?? null);
+  const flowAt = truthAt ?? ((r, m) => readEcuTable(tables, 've', r, { mapKpa: m }));
   if (turboOn) assertBoostCurve(boostCurve);
   const redline = derived.redline ?? (REDLINE_CUT - LIMITER_OVERSHOOT_RPM);
   const limiterCutRpm = redline + LIMITER_OVERSHOOT_RPM;
@@ -212,10 +214,10 @@ export function liveStep(st, dt, input, cfg) {
     // COEFF.MANIFOLD_VACUUM_RPM_NORM in coefficients.js for why that is deliberate.
     const nFrac = clamp(rpmClamped / COEFF.MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
     const loadKpa = steadyManifoldKpa(aFrac, nFrac, derived.overlapDeg || 0);
-    const boostTarget = turboOn ? interp1(RPM, boostCurve, rpmClamped) : 0;
+    const boostTarget = turboOn ? curveAt(boostCurve, rpmClamped) : 0;
     const steady = solveInduction({
       rpm: rpmClamped, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
-      veAt: (mapKpa) => interp2(veTruth ?? ve, rpmClamped, mapKpa),
+      veAt: (mapKpa) => flowAt(rpmClamped, mapKpa),
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
@@ -243,7 +245,7 @@ export function liveStep(st, dt, input, cfg) {
       boostShortfallPsi: Math.max(0, boostTarget - boostPsi),
     };
     const veVal = readEcuTable(tables, 've', rpmClamped, { mapKpa: man.mapKpa });
-    const veActualVal = veTruth ? interp2(veTruth, rpmClamped, man.mapKpa) : undefined;
+    const veActualVal = truthAt ? truthAt(rpmClamped, man.mapKpa) : undefined;
     const airmassG = needsAirmass(layout)
       ? trappedAirGrams({ veActual: veVal, mapKpa: man.mapKpa, chargeK: chargeTempK(man.boostPsi, mods.intercooler), sweptM3: (derived.displacementL / derived.cyl) / 1000 })
       : 0;

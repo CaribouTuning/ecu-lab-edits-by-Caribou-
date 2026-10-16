@@ -8,13 +8,13 @@
  */
 
 import { COEFF } from './coefficients.js';
-import { clamp, groupRuns, interp1, interp2, mergeNearbyRuns } from './math.js';
+import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
 import { trappedAirGrams } from './cycle.js';
-import { loadFor, needsAirmass, readEcuTable } from './layouts.js';
-import { LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
+import { loadFor, needsAirmass, readEcuTable, truthReader } from './layouts.js';
+import { CURVE_RPM, LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
 import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuSteadyPoint } from './ecu/strategy.js';
@@ -38,11 +38,11 @@ export const SWEEP_STEP_RPM = 100;
  * @throws {Error} if the curve does not match the RPM axis
  */
 export function assertBoostCurve(boostCurve) {
-  if (!Array.isArray(boostCurve) || boostCurve.length !== RPM.length) {
+  if (!Array.isArray(boostCurve) || (boostCurve.length !== RPM.length && boostCurve.length !== CURVE_RPM.length)) {
     throw new Error(
-      `boost curve must have ${RPM.length} entries, one per RPM breakpoint — got ${
+      `boost curve must have ${RPM.length} entries (the table grid's columns) or ${CURVE_RPM.length} (CURVE_RPM, to 11,500 RPM) — got ${
         Array.isArray(boostCurve) ? boostCurve.length : typeof boostCurve
-      }. Build it with RPM.map(...).`,
+      }. Build it with RPM.map(...) or CURVE_RPM.map(...).`,
     );
   }
   const bad = boostCurve.findIndex((v) => !Number.isFinite(v));
@@ -127,12 +127,18 @@ export function simulateSweep({
   const modsWithTurbo = { ...mods, turboFitted: turboOn };
 
   const points = [];
+  // The engine's true breathing at any speed and pressure (`hardwareVeAt`), or, when the
+  // caller gives none, the ECU's own VE table taken as correct: the "perfectly calibrated"
+  // case. Read on the table's own breakpoints either way, never clamped at a grid's edge.
+  const tables = { ve, timing, afr, layout };
+  const truthAt = truthReader(veTruth, tables.layout?.ve ?? null);
+  const flowAt = truthAt ?? ((r, m) => readEcuTable(tables, 've', r, { mapKpa: m }));
   const endRpm = derived.redline ?? SWEEP_END_RPM;
   const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
   const ecuHw = ecu ? {
     ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
     injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
-    veTruthByPhase: ecu.hw.veTruthByPhase ?? [veTruth ?? ve],
+    veTruthByPhase: ecu.hw.veTruthByPhase ?? [flowAt],
   } : null;
   // A nitrous bottle through the pull: what each point sprays makes the liquid left boil
   // and cool, and the pressure falls with it — a heater is too slow to hold it mid-pass.
@@ -155,13 +161,13 @@ export function simulateSweep({
       }
       continue;
     }
-    const boostTarget = turboOn ? interp1(RPM, boostCurve, rpm) : 0;
+    const boostTarget = turboOn ? curveAt(boostCurve, rpm) : 0;
     // Boost is solved from the turbine/compressor power balance, not ramped in on engine
     // speed. The target is a wastegate ceiling: ask for more than the hardware can make
     // and the log will show what it actually made.
     const man = solveInduction({
       rpm, loadKpa, turboOn, boostTargetPsi: boostTarget, turbine, compressor,
-      veAt: (mapKpa) => interp2(veTruth ?? ve, rpm, mapKpa),
+      veAt: (mapKpa) => flowAt(rpm, mapKpa),
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
@@ -169,11 +175,10 @@ export function simulateSweep({
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
     // calibration up into the high-MAP rows automatically.
-    const tables = { ve, timing, afr, layout };
     const veVal = readEcuTable(tables, 've', rpm, { mapKpa: man.mapKpa });
     // `veTruth` is what the hardware actually flows. When it is omitted the ECU's
     // table is taken as correct, which is the "perfectly calibrated" case.
-    const veActualVal = veTruth ? interp2(veTruth, rpm, man.mapKpa) : undefined;
+    const veActualVal = truthAt ? truthAt(rpm, man.mapKpa) : undefined;
     const airmassG = needsAirmass(layout)
       ? trappedAirGrams({ veActual: veVal, mapKpa: man.mapKpa, chargeK: chargeTempK(man.boostPsi, mods.intercooler), sweptM3: (derived.displacementL / derived.cyl) / 1000 })
       : 0;
@@ -534,6 +539,24 @@ export function simulateSweep({
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
       fix: `On BUILD → ENGINE, raise the valve spring rate until float sits above your ${endRpm} RPM redline, or fit a milder cam. Or keep the engine under it: set the rev limiter below ${Math.round(floatRpm)} RPM on TUNE → PROTECT. No table change fixes valve float.`,
+    });
+  }
+
+  // The bottom end past what it is built for: mean piston speed over its rating
+  // (bottomEnd.js). A guideline crossed, not a failure modelled: power is unaffected,
+  // which is exactly why it has to be said.
+  const bottomEnd = derived.bottomEnd;
+  if (bottomEnd && endRpm > bottomEnd.ratedRpm) {
+    const peakMs = 2 * (derived.stroke / 1000) * (endRpm / 60);
+    const factory = bottomEnd.id === 'factory';
+    events.push({
+      type: 'bottomEnd', severity: 3, impact: Math.round(clamp((endRpm - bottomEnd.ratedRpm) / 60, 6, 30)),
+      rpmStart: bottomEnd.ratedRpm, rpmEnd: endRpm,
+      msg: `Pistons and rods past their rating above ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM (${peakMs.toFixed(1)} m/s mean piston speed, rated ${bottomEnd.limitMs.toFixed(1)})`,
+      cause: factory
+        ? `This engine's factory pistons and rods are rated to its own ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM limiter, ${bottomEnd.limitMs.toFixed(1)} m/s on its ${derived.stroke} mm stroke. The inertia load on each rod grows with the square of engine speed, so ${endRpm.toLocaleString('en-US')} RPM loads them ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% harder than the maker ever validated. The dyno shows the power; it does not show the rod bearing wearing out or the rod that lets go.`
+        : `${bottomEnd.label} are good for about ${bottomEnd.limitMs} m/s of mean piston speed, which this ${derived.stroke} mm stroke reaches at ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM. Rod inertia load grows with the square of engine speed: at ${endRpm.toLocaleString('en-US')} RPM it is ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% past what these parts are built for. Production engines run about 16-21 m/s; 25 is NASCAR and Formula One. The simulator does not model the failure; it tells you the parts are past their band.`,
+      fix: `Keep the limiter at or below ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM on TUNE → PROTECT, or ${factory ? 'build the bottom end for the speed: forged pistons and rods' : 'fit stronger pistons and rods on BUILD → ENGINE'}, or a shorter stroke.`,
     });
   }
 

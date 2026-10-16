@@ -75,36 +75,52 @@ describe('the layout switch', () => {
     return reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('ls1')) });
   };
 
-  it('regenerates an untouched factory calibration on the new breakpoints, and undo puts the grid back', () => {
+  it('regenerates an untouched factory calibration on the new breakpoints, and undo puts the engine\'s own back', () => {
     let s = onLs1();
     s = reducer(s, { type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 2, col: 3 } });
     s = reducer(s, /** @type {any} */ (layoutSwitch(s, 'gm-gen3')));
-    expect(s.tune.layout).toBe('gm-gen3');
+    expect(S.layoutById(s.tune.layout).id).toBe('gm-gen3');
     expect(s.tune.timing).toHaveLength(29);
     expect(s.tune.ve[0]).toHaveLength(20);
     expect(s.tune.baseline.timing).toEqual(s.tune.timing);
     expect(s.tune.selection).toBeNull();
     expect(s.build.presetId).toBe('ls1');
     s = reducer(s, { type: ACTIONS.UNDO });
-    expect(s.tune.layout).toBeNull();
-    expect(s.tune.timing).toHaveLength(6);
+    expect(S.layoutById(s.tune.layout).id).toBe('engine');
+    expect(s.tune.timing).toHaveLength(16);
   });
 
   it('carries the player\'s own edits across, cell by cell', () => {
     let s = onLs1();
     const edited = s.tune.timing.map((row) => row.map((v) => v - 2));
     s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: edited });
+    const own = S.layoutById(s.tune.layout).timing;
     s = reducer(s, /** @type {any} */ (layoutSwitch(s, 'gm-gen3')));
-    const back = layoutSwitch(s, null);
-    // 4500 rpm, 100 kPa: well inside both grids.
-    expect(Math.abs(back.timing[2][4] - edited[2][4])).toBeLessThan(1);
+    const back = layoutSwitch(s, 'engine');
+    // The cell nearest 4500 rpm and 100 kPa: well inside both grids.
+    const near = (xs, x) => xs.reduce((b, v, i) => (Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b), 0);
+    const ri = near(own.load, 100); const ci = near(own.rpm, 4500);
+    expect(Math.abs(back.timing[ri][ci] - edited[ri][ci])).toBeLessThan(1);
   });
 
-  it('starts a preset on the ECU Lab grid, and the career never leaves it', () => {
+  it('starts a preset on breakpoints sized to that engine', () => {
     let s = onLs1();
     s = reducer(s, /** @type {any} */ (layoutSwitch(s, 'gm-gen3')));
     s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('lm7')) });
-    expect(s.tune.layout).toBeNull();
-    expect(makeInitialState().tune.layout).toBeNull();
+    const L = S.layoutById(s.tune.layout);
+    expect(L.id).toBe('engine');
+    // The LM7's 5600 limiter, 250 past it, and no boost: 100 kPa is the top row.
+    expect(L.timing.rpm.at(-1)).toBeGreaterThanOrEqual(5600);
+    expect(L.timing.load[0]).toBe(100);
+  });
+
+  it('follows the build: more boost re-spans the load axis and carries the tables onto it', () => {
+    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) });
+    const before = S.layoutById(s.tune.layout);
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map((b) => (b > 0 ? b + 8 : b)) });
+    const after = S.layoutById(s.tune.layout);
+    expect(after.timing.load[0]).toBeGreaterThan(before.timing.load[0]);
+    expect(s.tune.timing).toHaveLength(after.timing.load.length);
+    expect(s.tune.baseline.timing).toHaveLength(after.timing.load.length);
   });
 });

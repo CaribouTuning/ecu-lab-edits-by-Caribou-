@@ -10,9 +10,67 @@
  */
 
 import {
-  BARO_KPA, PSI_TO_KPA, chargeTempK, deriveEngine, factoryCalibrationOn, layoutById, presetById,
-  readTable, resampleTable, trappedAirGrams,
+  BARO_KPA, ECU_LAYOUTS, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
+  factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
+  sameLayout, tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
+
+/**
+ * The breakpoints sized to the engine as built: from cranking to just past its limiter,
+ * from overrun to just past the most manifold pressure it makes (sim/layouts.js
+ * `engineLayout`), 16 × 16 like most standalone and factory computers.
+ *
+ * @param {StoreState['build']} build
+ */
+export function buildLayout(build) {
+  const wot = build.blowerId ? blowerCurve(build, tankFuel(build)) : [];
+  return engineLayout({
+    redline: build.engineConfig.redline ?? 7000,
+    peakMapKpa: peakMapKpaOf({
+      turboOn: build.turboOn, boostCurve: build.boostCurve,
+      blowerPeakPsi: wot.length ? Math.max(...wot.map((p) => p.boostPsi)) : 0,
+    }),
+  });
+}
+
+/**
+ * The layout a TUNE layout choice names, for this build: `engine` for breakpoints sized to
+ * it, or an engine computer's own (an ECU_LAYOUTS id), whose tables it gives no
+ * breakpoints for sit on the engine's.
+ *
+ * @param {StoreState['build']} build
+ * @param {string} choice
+ */
+export function layoutFor(build, choice) {
+  const engine = buildLayout(build);
+  return ECU_LAYOUTS[choice] ? oemLayout(choice, engine.ve) : engine;
+}
+
+/**
+ * The tune after a BUILD change, on breakpoints that still span the engine: when the
+ * engine reaches further (a higher limiter, more boost) or less far than its tables, they
+ * are carried onto new axes cell by cell, as tuning software's rescale-axis does — new
+ * cells past the old edge take the edge's values, for the player (and the advisor) to
+ * work out. Untouched for an engine computer's own breakpoints, which do not move, and
+ * when the new axes come out the same.
+ *
+ * @param {Pick<StoreState, 'build'|'tune'>} state the state AFTER the build change
+ * @returns {StoreState['tune']}
+ */
+export function respanTune(state) {
+  const { build, tune } = state;
+  if (!tune.layout || typeof tune.layout !== 'object' || tune.layout.id !== 'engine') return tune;
+  const to = buildLayout(build);
+  if (sameLayout(to, tune.layout)) return tune;
+  const from = tune.layout;
+  const conv = airmassConversion(state);
+  return {
+    ...tune,
+    layout: to,
+    ...moveTables(tune, from, to, conv),
+    baseline: moveTables(tune.baseline, from, to, conv),
+  };
+}
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 
@@ -46,22 +104,21 @@ export function airmassConversion(state) {
 /**
  * The SET_LAYOUT payload that puts the tune on `layoutId`'s breakpoints.
  * @param {Pick<StoreState, 'build'|'tune'>} state
- * @param {string|null} layoutId an ECU_LAYOUTS id, or null for the ECU Lab grid
- * @returns {{type: 'SET_LAYOUT', layout: string|null, ve: number[][], timing: number[][], afr: number[][], baseline: {ve: number[][], timing: number[][], afr: number[][]}}}
+ * @param {string|null} layoutId an ECU_LAYOUTS id, or `engine` (or null) for breakpoints sized to the engine
+ * @returns {{type: 'SET_LAYOUT', layout: import('../../sim/layouts.js').Layout, ve: number[][], timing: number[][], afr: number[][], baseline: {ve: number[][], timing: number[][], afr: number[][]}}}
  */
 export function layoutSwitch(state, layoutId) {
   const { build, tune } = state;
-  const to = layoutById(layoutId);
-  const id = to.id === 'game' ? null : to.id;
+  const to = layoutFor(build, layoutId ?? 'engine');
   const preset = build.presetId ? presetById(build.presetId) : null;
   if (preset && !tune.tablesDirty) {
-    const f = factoryCalibrationOn(preset, id ? to : null);
+    const f = factoryCalibrationOn(preset, to);
     const tables = { ve: f.ve, timing: f.timing, afr: f.afr };
-    return { type: 'SET_LAYOUT', layout: id, ...tables, baseline: tables };
+    return { type: 'SET_LAYOUT', layout: to, ...tables, baseline: tables };
   }
   const from = layoutById(tune.layout);
   const conv = airmassConversion(state);
-  return { type: 'SET_LAYOUT', layout: id, ...moveTables(tune, from, to, conv), baseline: moveTables(tune.baseline, from, to, conv) };
+  return { type: 'SET_LAYOUT', layout: to, ...moveTables(tune, from, to, conv), baseline: moveTables(tune.baseline, from, to, conv) };
 }
 
 /**
@@ -77,15 +134,4 @@ export function moveTables(t, from, to, conv) {
     timing: resampleTable(t.timing, from.timing, to.timing, conv, 1),
     afr: resampleTable(t.afr, from.afr, to.afr, conv, 2),
   };
-}
-
-/**
- * Tables on an ECU layout, seen on the ECU Lab grid: what the per-cell advisors read.
- * @param {{ve: number[][], timing: number[][], afr: number[][]}} tables
- * @param {import('../../sim/layouts.js').Layout} layout
- * @param {StoreState['build']} build
- */
-export function toGameGrid(tables, layout, build) {
-  const conv = airmassConversion(/** @type {any} */ ({ build, tune: { layout: layout.id, ve: tables.ve } }));
-  return moveTables(tables, layout, layoutById(null), conv);
 }

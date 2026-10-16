@@ -470,8 +470,8 @@ describe('dyno sweep', () => {
       cfg: engineConfig, turboOn: true, boostCurve: p.boostCurve.map((b) => b + boost),
       mods: p.mods, injectorCc: 1000, ecuInjectorCc: 1000,
       sweep: {
-        ve: p.ve, veTruth: p.ve, afr: p.afr, fuel, octaneLabel: fuel.label, octaneBonus: fuel.bonus,
-        timing: p.timing.map((row, ri) => row.map((v) => (S.LOAD[ri] > 100 ? v + spark : v))),
+        ve: p.ve, veTruth: p.ve, layout: p.layout, afr: p.afr, fuel, octaneLabel: fuel.label, octaneBonus: fuel.bonus,
+        timing: p.timing.map((row, ri) => row.map((v) => ((p.layout?.timing.load ?? S.LOAD)[ri] > 100 ? v + spark : v))),
         mafScalar: p.mafScalar, turbine: S.presetTurbine(b58), compressor: S.presetCompressor(b58),
       },
     });
@@ -1089,7 +1089,7 @@ describe('the inlet Mach index', () => {
       if (p.turboOn) continue;                       // a boost curve places these itself
       const derived = S.deriveEngine(p.engineConfig);
       const r = S.simulateSweep({
-        loadKpa: 100, ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        loadKpa: 100, ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
         turboOn: false, boostCurve: p.boostCurve,
         octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, octaneLabel: 'x',
         fuel: S.OCTANE_OPTS[p.octaneIdx], injectorCc: S.INJECTOR_OPTS[p.injIdx].cc,
@@ -1257,7 +1257,7 @@ describe('the spark advisor', () => {
   function factoryAdvice(preset) {
     const p = S.applyPreset(preset);
     return S.calibrationAdvice({
-      ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+      ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
       derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.presetCompressor(preset),
@@ -1317,7 +1317,7 @@ describe('the spark advisor', () => {
     const preset = S.ENGINE_PRESETS.find((p) => p.id === 'vq35hr');
     const p = S.applyPreset(preset);
     const a = S.calibrationAdvice({
-      ve: p.ve, veTruth: p.ve, timing: p.timing,
+      ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing,
       afr: p.afr.map((row) => row.map((v) => v + 1.5)),
       derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
@@ -1438,7 +1438,7 @@ describe('spark advice survives interpolation', () => {
     for (const preset of S.ENGINE_PRESETS) {
       const p = S.applyPreset(preset);
       const a = S.calibrationAdvice({
-        ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
         derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
         mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
         compressor: S.presetCompressor(preset), turbine: S.presetTurbine(preset),
@@ -1477,7 +1477,7 @@ describe('exhaust gas temperature', () => {
     for (const preset of S.ENGINE_PRESETS) {
       const p = S.applyPreset(preset);
       const r = S.simulateSweep({
-        loadKpa: 100, ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+        loadKpa: 100, ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
         turboOn: p.turboOn, boostCurve: p.boostCurve, fuel: S.OCTANE_OPTS[p.octaneIdx],
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
         mods: p.mods, mafScalar: p.mafScalar, derived: S.deriveEngine(p.engineConfig),

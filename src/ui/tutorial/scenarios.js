@@ -5,11 +5,10 @@
  * exactly this" and be right.
  */
 
-import { LOAD, RPM, applyVeCorrections, veCorrections } from '../../sim/index.js';
+import { applyVeCorrections, layoutById, veCorrections } from '../../sim/index.js';
 
 import { runDemo } from './demoEngine.js';
 
-const WOT = LOAD.indexOf(100);
 
 /** @param {any} s */
 const withIntake = (s) => ({ ...s, build: { ...s.build, mods: { ...s.build.mods, intake: true } } });
@@ -25,7 +24,7 @@ export const stock = () => runDemo('stock');
 export const SPARK_ADDED_DEG = 4;
 export const overAdvanced = () => runDemo('over-advanced', (s) => ({
   ...s,
-  tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (LOAD[ri] >= 70 ? v + SPARK_ADDED_DEG : v))) },
+  tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (layoutById(s.tune.layout).timing.load[ri] >= 70 ? v + SPARK_ADDED_DEG : v))) },
 }));
 
 /** A cold air intake fitted, and nothing retuned. */
@@ -37,7 +36,7 @@ export const INTAKE_MAF_SCALAR = 1.11;
 /** The intake retuned: the MAF scalar set, and the pull's VE correction applied. */
 export const intakeRetuned = () => runDemo('intake-retuned', (s) => {
   const fitted = intakeFitted();
-  const { ratio } = veCorrections(fitted.veLog.pull);
+  const { ratio } = veCorrections(fitted.veLog.pull, lessonAxes(fitted));
   const t = withIntake(s);
   return {
     ...t,
@@ -58,7 +57,15 @@ export const peaks = (demo) => {
   };
 };
 
-export { LOAD, RPM, WOT };
+/**
+ * The breakpoints a lesson engine's tables sit on: sized to it, as BUILD loads it.
+ * @param {import('./demoEngine.js').Demo} [d] the demo; the stock lesson engine when absent
+ */
+export const lessonAxes = (d = stock()) => layoutById(d.state.tune.layout).ve;
+/** The table row at a manifold pressure on the lesson engine's breakpoints. @param {number} kpa */
+export const lessonRow = (kpa) => lessonAxes().load.indexOf(kpa);
+/** The table column at an engine speed on the lesson engine's breakpoints. @param {number} rpm */
+export const lessonCol = (rpm) => lessonAxes().rpm.indexOf(rpm);
 
 /**
  * The apply-half loop, run for real: fit the intake, rescale the MAF, then pull,
@@ -76,7 +83,7 @@ export function veHalfPasses(passes) {
       const t = withIntake(s);
       return { ...t, build: { ...t.build, mafScalar: INTAKE_MAF_SCALAR }, tune: { ...t.tune, ve: ve ?? t.tune.ve } };
     });
-    const { ratio, cells } = veCorrections(d.veLog.pull);
+    const { ratio, cells } = veCorrections(d.veLog.pull, lessonAxes(d));
     const worst = ratio.flat().filter((r) => r != null).reduce((w, r) => (Math.abs(r - 1) > Math.abs(w) ? r - 1 : w), 0);
     rows.push({ pass: k + 1, worstPct: worst * 100, cells, peakHp: d.result.peakHp });
     ve = applyVeCorrections(d.state.tune.ve, ratio, 0.5);

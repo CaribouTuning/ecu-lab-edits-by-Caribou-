@@ -26,7 +26,7 @@ import {
   DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, ENGINE_PRESETS, OCTANE_OPTS, TURBINE_OPTS,
   applyPreset, computeHardwareVE, turbineWithCount,
 } from '../../src/sim/index.js';
-import { LOAD, RPM } from '../../src/sim/tables.js';
+import { RPM } from '../../src/sim/tables.js';
 import EcuLab, { DYNO_PULL_MS, EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
@@ -137,19 +137,9 @@ describe('moving the tune-grid cursor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
     const grid = within(screen.getByTestId('tuning-grid'));
-    // TuningGrid renders, in DOM order: RPM.length column-header buttons (each
-    // itself a numeric label, so a text-pattern filter can't tell them apart from
-    // data cells), then one row per LOAD entry — a numeric row-header button
-    // followed by RPM.length data-cell buttons. Slicing by that known layout is
-    // what actually isolates the data cells; text content alone can collide (a VE
-    // cell can legitimately read "100", same as a LOAD header).
-    const allButtons = grid.getAllByRole('button');
-    const dataCells = [];
-    let idx = RPM.length;
-    for (let row = 0; row < LOAD.length; row += 1) {
-      idx += 1; // row-header button
-      for (let col = 0; col < RPM.length; col += 1) { dataCells.push(allButtons[idx]); idx += 1; }
-    }
+    // The data cells, by their accessible names ("<rpm> RPM, <load> kPa"): the grid is
+    // sized to the engine, so its shape is not a constant to slice by.
+    const dataCells = grid.getAllByRole('button', { name: / RPM, [\d.]+ kPa$/ });
 
     // Selecting a grid cell mounts the SelectionDock, whose readout line names the
     // selected cell's coordinates: "<rpm> RPM · <map> kPa MAP". Reading it after two
@@ -158,7 +148,7 @@ describe('moving the tune-grid cursor', () => {
     // same cell twice) would leave the header intact and the test would pass while
     // proving nothing.
     const cellLabel = () => within(screen.getByTestId('selection-dock'))
-      .getByText(/^\d+ RPM · \d+ kPa MAP$/).textContent;
+      .getByText(/^\d+ RPM · [\d.]+ kPa MAP$/).textContent;
 
     fireEvent.click(dataCells[0]);
     const first = cellLabel();
@@ -614,7 +604,8 @@ describe('every segmented control', () => {
     //   TUNE > INJECTORS 3 — the map-slot picker above every TUNE view, ECU Injector
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
-    expect(total).toBe(26);
+    //   (BUILD › ENGINE also has Pistons and rods, the bottom-end picker.)
+    expect(total).toBe(27);
   });
 });
 

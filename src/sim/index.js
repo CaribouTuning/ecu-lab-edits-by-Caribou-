@@ -18,6 +18,7 @@ export * from './math.js';
 export * from './thermo.js';
 export * from './friction.js';
 export * from './engine.js';
+export * from './bottomEnd.js';
 export * from './knock.js';
 export * from './manifold.js';
 export * from './turbo.js';

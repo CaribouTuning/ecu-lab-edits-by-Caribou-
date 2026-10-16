@@ -161,10 +161,12 @@ describe('a lesson’s screen is live', () => {
   it('APPLY HALF in lesson 4.2 changes the sandbox table and then asks for a new pull, as the game does', () => {
     openLesson(COURSE, COURSE.lessons.findIndex((l) => l.id === 've-from-logs'));
     const fig = screen.getByRole('figure', { name: 'Game screen: TUNE › AIRFLOW' });
-    // The cell the lesson works through: the intake pull logged it.
-    const cellBefore = within(fig).getByRole('button', { name: '5500 RPM, 100 kPa' }).textContent;
+    // The cells the intake pull logged: half the correction moves some of them by more
+    // than the grid's displayed rounding (at 5500 RPM it is under one VE point).
+    const cells = () => within(fig).getAllByRole('button', { name: / RPM, \d+(\.\d+)? kPa$/ }).map((b) => b.textContent).join('|');
+    const before = cells();
     fireEvent.click(within(fig).getByRole('button', { name: 'APPLY HALF' }));
-    expect(within(fig).getByRole('button', { name: '5500 RPM, 100 kPa' }).textContent).not.toBe(cellBefore);
+    expect(cells()).not.toBe(before);
     const panel = within(fig).getByRole('region', { name: 'Correct VE from logs' });
     expect(within(panel).getByText(/before you changed VE table .* run another pull/)).toBeTruthy();
   });
@@ -186,7 +188,9 @@ describe('the numbers are the game’s', () => {
   it('each chapter-4 scenario says what the lesson says it does', () => {
     // Over-advanced spark knocks and gains nothing, because knock control takes it back
     // out; the intake makes the MAF entry and runs lean of target at full throttle; the
-    // retune clears both and makes more than either.
+    // retune clears both and keeps the part's gain over stock. (Not more than the untuned
+    // pull: that one ran lean of its rich target, and a leaner flame releases a little more
+    // heat; thermo.js, heatReleasedShare. The lesson says so from these same numbers.)
     expect(overAdvanced().result.events.some((e) => e.type === 'knock')).toBe(true);
     expect(overAdvanced().result.peakHp).toBeLessThanOrEqual(stock().result.peakHp + 1);
     const fitted = intakeFitted().result;
@@ -195,7 +199,7 @@ describe('the numbers are the game’s', () => {
     expect(wotLean).toBeGreaterThan(0.05);
     const retuned = intakeRetuned().result;
     expect(retuned.events.filter((e) => e.type === 'maf' || e.type === 'lean')).toEqual([]);
-    expect(retuned.peakHp).toBeGreaterThan(intakeFitted().result.peakHp);
+    expect(retuned.peakHp).toBeGreaterThan(stock().result.peakHp);
   });
 });
 

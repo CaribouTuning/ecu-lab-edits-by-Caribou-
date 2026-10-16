@@ -12,12 +12,11 @@
 import React from 'react';
 
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
-import { RPM } from '../../../sim/index.js';
 import { COEFF } from '../../../sim/coefficients.js';
 import { AirflowScreen } from '../tune/AirflowScreen.jsx';
 import { veCellMaths } from '../../tutorial/demoEngine.js';
 import {
-  INTAKE_MAF_SCALAR, WOT, intakeFitted, intakeMafOnly, intakeRetuned, pointAt, stock, veHalfPasses,
+  INTAKE_MAF_SCALAR, intakeFitted, lessonCol, lessonRow, intakeMafOnly, intakeRetuned, pointAt, stock, veHalfPasses,
 } from '../../tutorial/scenarios.js';
 import { ScreenSnippet } from '../../tutorial/ScreenSnippet.jsx';
 
@@ -42,9 +41,10 @@ function Table({ head, rows }) {
 
 function VeFromLogs() {
   const d = intakeFitted();
-  const col = RPM.indexOf(5500);
-  const m = veCellMaths(d, WOT, col);
-  const table = d.state.tune.ve[WOT][col];
+  const row = lessonRow(100);
+  const col = lessonCol(5500);
+  const m = veCellMaths(d, row, col);
+  const table = d.state.tune.ve[row][col];
   const passes = veHalfPasses(4);
   return (
     <>

@@ -12,7 +12,7 @@ const advise = (eng, octaneIdx) => {
   const build = { ...eng.build, octaneIdx };
   const cc = S.INJECTOR_OPTS[build.injIdx].cc;
   return S.calibrationAdvice({
-    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr,
+    ve: eng.tables.ve, veTruth: eng.veTruth, timing: eng.tables.timing, afr: eng.tables.afr, layout: eng.tables.layout, camAt: eng.camAt,
     derived: eng.derived, fuel: S.OCTANE_OPTS[octaneIdx], mods: build.mods, turboOn: build.turboOn,
     boostCurve: build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: cc, mafScalar: build.mafScalar ?? 1,
@@ -24,14 +24,14 @@ describe('stock calibrations against TUNE\'s advisor', () => {
   it('the default engine is clean on every table cell at every pump octane it can be given', () => {
     const eng = makeEngine({});
     for (let oi = 0; oi < S.OCTANE_OPTS.length; oi += 1) {
-      const over = advise(eng, oi).overAdvanced.map((c) => `${S.LOAD[c.ri]} kPa / ${S.RPM[c.ci]} rpm`);
+      const over = advise(eng, oi).overAdvanced.map((c) => `${c.map} kPa / ${c.rpm} rpm`);
       expect(over, `octane option ${oi}`).toEqual([]);
     }
   });
 
   it.each(S.ENGINE_PRESETS.map((p) => p.id))('%s is clean at the pump fuel its preset names', (id) => {
     const eng = makeEngine({ preset: id });
-    const over = advise(eng, eng.build.octaneIdx).overAdvanced.map((c) => `${S.LOAD[c.ri]} kPa / ${S.RPM[c.ci]} rpm`);
+    const over = advise(eng, eng.build.octaneIdx).overAdvanced.map((c) => `${c.map} kPa / ${c.rpm} rpm`);
     expect(over).toEqual([]);
   });
 });
@@ -40,14 +40,14 @@ describe('stock calibrations against TUNE\'s advisor', () => {
 const adviseWithPull = (eng, tables = eng.tables, mafScalar = eng.build.mafScalar ?? 1) => {
   const cc = S.INJECTOR_OPTS[eng.build.injIdx].cc;
   return S.calibrationAdvice({
-    ve: tables.ve, veTruth: eng.veTruth, timing: tables.timing, afr: tables.afr,
+    ve: tables.ve, veTruth: eng.veTruth, timing: tables.timing, afr: tables.afr, layout: tables.layout ?? eng.tables.layout, camAt: eng.camAt,
     derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn,
     boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: eng.build.ecuInjectorCc, mafScalar,
     mafErrorBase: S.mafErrorFactor(eng.build.mods, eng.build.turboOn), pull: eng.pull(100),
   });
 };
-const where = (cells) => cells.map((c) => `${S.LOAD[c.ri]} kPa / ${S.RPM[c.ci]} rpm`);
+const where = (cells) => cells.map((c) => `${c.map} kPa / ${c.rpm} rpm`);
 const logged = (eng) => [100, 70, 40].flatMap((k) => eng.pull(k).events.map((e) => `${k} kPa: ${e.type}`));
 
 describe('a stock engine tells one story on every screen', () => {
@@ -79,7 +79,8 @@ describe('RESET ALL TO STOCK', () => {
     const stock = S.stockCalibrationFor({ ...eng.build });
     eng.tables.timing = stock.timing;
     eng.tables.afr = stock.afr;
-    eng.tables.ve = eng.veTruth;
+    eng.tables.ve = stock.ve;
+    eng.tables.layout = stock.layout;
     eng.build.mafScalar = stock.mafScalar;
     return { eng, stock, preset: p };
   };
@@ -106,16 +107,19 @@ describe('RESET ALL TO STOCK', () => {
 });
 
 describe('cells the pull did not run', () => {
-  // The default table with its 40 kPa row 8° advanced: past the knock limit there.
+  // The default table with its 40 kPa row 18° advanced: past the knock limit there (at
+  // 40 kPa there is little end-gas pressure to knock with, so it takes more than it did
+  // before the rod length was corrected, and more again once an uneven stoichiometric
+  // mixture stopped releasing all of its heat: thermo.js, heatReleasedShare).
   const knockingAt40 = () => {
     const eng = makeEngine({});
-    eng.tables.timing = eng.tables.timing.map((row, ri) => (S.LOAD[ri] === 40 ? row.map((v, ci) => (ci === 0 ? v : v + 8)) : row));
+    eng.tables.timing = eng.tables.timing.map((row, ri) => ((eng.tables.layout?.timing.load ?? S.LOAD)[ri] === 40 ? row.map((v, ci) => (ci === 0 ? v : Math.min(S.SPARK_MAX_DEG, v + 18))) : row));
     return eng;
   };
 
   it('are judged against the player\'s own pull: a 40 kPa pull runs the 40 kPa row, a 100 kPa pull does not', () => {
     const eng = knockingAt40();
-    const flagged = adviseWithPull(eng).overAdvanced.filter((c) => S.LOAD[c.ri] === 40);
+    const flagged = adviseWithPull(eng).overAdvanced.filter((c) => c.map === 40);
     expect(flagged.length).toBeGreaterThan(0);
     expect(S.cellsNotRunBy(flagged, eng.pull(100))).toEqual(flagged);
     const at40 = eng.pull(40);

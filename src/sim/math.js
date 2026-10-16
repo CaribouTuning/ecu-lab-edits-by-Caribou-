@@ -6,7 +6,7 @@
  * import from it without creating a cycle.
  */
 
-import { LOAD, RPM } from './tables.js';
+import { CURVE_RPM, LOAD, RPM } from './tables.js';
 
 /**
  * Deep-copies a 2D array of numbers.
@@ -61,6 +61,27 @@ const LOAD_ASC = [...LOAD].reverse();
  * @param {number} loadKpa manifold absolute pressure, kPa
  * @returns {number}
  */
+/**
+ * A per-RPM curve (boost target, bolt-on gains) read at any engine speed: written either
+ * on the table grid's 8 columns or on the longer CURVE_RPM, held flat past its ends.
+ *
+ * @param {number[]} values
+ * @param {number} rpm
+ * @returns {number}
+ */
+export function curveAt(values, rpm) {
+  return interp1(values.length === CURVE_RPM.length ? CURVE_RPM : RPM, values, rpm);
+}
+
+/**
+ * A curve carried onto CURVE_RPM, its last value held past its own end.
+ * @param {number[]} values written on the table grid's columns or on CURVE_RPM
+ * @returns {number[]}
+ */
+export function onCurveRpm(values) {
+  return values.length === CURVE_RPM.length ? [...values] : CURVE_RPM.map((rpm) => curveAt(values, rpm));
+}
+
 export function interp2(table, rpm, loadKpa) {
   const rowVals = LOAD.map((_, ri) => interp1(RPM, table[ri], rpm));
   return interp1(LOAD_ASC, rowVals.reverse(), loadKpa);

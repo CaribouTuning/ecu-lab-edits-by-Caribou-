@@ -32,12 +32,12 @@ import { useTune } from '../state/StoreProvider.jsx';
 import { airPerCylinder, runDemo, veCellMaths } from './demoEngine.js';
 import { Aside, Did, Do, F, Goal, H, K, List, P, Trouble, Worked } from './LessonParts.jsx';
 import {
-  INTAKE_MAF_SCALAR, LOAD, RPM, SPARK_ADDED_DEG, WOT, intakeFitted, intakeRetuned, overAdvanced, peaks, pointAt, stock,
+  INTAKE_MAF_SCALAR, SPARK_ADDED_DEG, intakeFitted, lessonCol, lessonRow, intakeRetuned, overAdvanced, peaks, pointAt, stock,
 } from './scenarios.js';
 import { ScreenSnippet } from './ScreenSnippet.jsx';
 
 /** A selected grid cell, as the store holds it. */
-const cell = (rpm, load) => ({ type: 'cell', row: LOAD.indexOf(load), col: RPM.indexOf(rpm) });
+const cell = (rpm, load) => ({ type: 'cell', row: lessonRow(load), col: lessonCol(rpm) });
 /** A seed that selects `sel` on the snippet's grid. @param {object} sel */
 const selecting = (sel) => (/** @type {any} */ s) => ({ ...s, tune: { ...s.tune, selection: sel } });
 const n1 = (v) => v.toFixed(1);
@@ -463,11 +463,11 @@ function BoltOn() {
 
 function VeFromLogs() {
   const d = intakeFitted();
-  const row = WOT;
-  const col = RPM.indexOf(5500);
+  const row = lessonRow(100);
+  const col = lessonCol(5500);
   const m = veCellMaths(d, row, col);
   const table = d.state.tune.ve[row][col];
-  const truth = d.veTruth[row][col];
+  const truth = d.veTruth(5500, 100);
   return (
     <>
       <Goal learn="correct the VE table from a log, and follow the maths for one cell." need="Lesson 4.1." />
@@ -568,7 +568,11 @@ function Compare() {
         ['Intake fitted, nothing retuned', `${f.result.peakHp} whp · ${f.result.events.map((e) => e.type).join(', ') || 'clean'}`],
         [`MAF scalar ${INTAKE_MAF_SCALAR.toFixed(2)} + VE from the log`, `${r.result.peakHp} whp · ${r.result.events.map((e) => e.type).join(', ') || 'clean log'}`],
       ]}>
-        The part was worth {r.result.peakHp - s.result.peakHp} whp, and {r.result.peakHp - f.result.peakHp} of that only arrived once it was tuned for. That is why real shops sell the tune with the part.
+        The part was worth {r.result.peakHp - s.result.peakHp} whp.{' '}
+        {r.result.peakHp > f.result.peakHp
+          ? <>{r.result.peakHp - f.result.peakHp} of that only arrived once it was tuned for.</>
+          : <>Untuned it showed {f.result.peakHp - r.result.peakHp >= 1 ? `${f.result.peakHp - r.result.peakHp} whp more` : 'about the same'}, because it was running lean of its full-throttle target: a leaner flame releases a little more heat, and the margin against knock and burnt valves pays for it.</>}
+        {' '}The retune is what makes the gain safe to drive on, which is why real shops sell the tune with the part.
       </Worked>
       <ScreenSnippet
         where="DYNO › PULL LOG"

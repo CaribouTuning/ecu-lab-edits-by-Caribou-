@@ -66,6 +66,8 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   one this function always modelled — it reads the true manifold pressure and charge
  *   temperature, knows the fuel, flows its injectors at their rating and finds the knock
  *   limit exactly — and the result is identical to before the ECU layer existed.
+ * @property {{intakeAdvDeg?: number, exhaustRetDeg?: number}|null} [cam] cam phaser positions
+ *   to solve the cycle at when there is no `ecu` context; the ECU's own win when there is
  */
 
 /**
@@ -129,7 +131,7 @@ export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
-  empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null,
+  empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
@@ -261,7 +263,10 @@ export function evaluatePoint({
     rpm, mapKpa, empKpa, intakeK: cylChargeK,
     airChargeG, burnedFuelG, fuelMassG: totalFuelG, lambda: lambdaActual, fuel,
     ...(n2o ? { n2oG: n2o.n2oG, kitFuelG: n2o.fuelG } : {}),
-    derived: cycDerived, ...(E?.cam ? { cam: E.cam } : {}),
+    // Cam phasers move intake valve close, and with it effective compression: the ECU's
+    // own phaser position when it is running, else the position the caller states (the
+    // advisor grading a table against the VVT calibration it runs with).
+    derived: cycDerived, ...(E?.cam ? { cam: E.cam } : cam ? { cam } : {}),
   });
 
   // The knock limit is solved from the same cycle, so it responds to compression,

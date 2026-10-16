@@ -350,7 +350,7 @@ describe('#31 compression under boost costs the bottom end, not just knock margi
     const patch = S.applyPreset(preset);
     return S.simulateSweep({
       loadKpa: 100,
-      ve: patch.ve, veTruth: patch.ve, timing: patch.timing, afr: patch.afr,
+      ve: patch.ve, veTruth: patch.ve, layout: patch.layout, timing: patch.timing, afr: patch.afr,
       turboOn: patch.turboOn, boostCurve: patch.boostCurve,
       octaneBonus: S.OCTANE_OPTS[octaneIdx].bonus,
       octaneLabel: S.OCTANE_OPTS[octaneIdx].label,

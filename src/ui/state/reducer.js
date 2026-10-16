@@ -32,6 +32,7 @@ import {
 } from './history.js';
 import { makeInitialState, stockEcuParts } from './initialState.js';
 import { pushRun, RUN_LIMIT } from './runLog.js';
+import { respanTune } from './layoutSwitch.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -132,7 +133,7 @@ export const ACTIONS = Object.freeze({
 /**
  * Moves the three main tables onto another engine computer's breakpoints, already
  * converted (state/layoutSwitch.js), with the baseline that goes with them.
- * @typedef {{type: 'SET_LAYOUT', layout: string|null, ve: number[][], timing: number[][], afr: number[][],
+ * @typedef {{type: 'SET_LAYOUT', layout: import('../../sim/layouts.js').Layout|string|null, ve: number[][], timing: number[][], afr: number[][],
  *   baseline: {ve: number[][], timing: number[][], afr: number[][]}}} SetLayoutAction
  */
 
@@ -195,7 +196,7 @@ export const ACTIONS = Object.freeze({
  *   turbineIdx: number, turbineCount: number, compressorIdx: number, injIdx: number,
  *   ecuInjectorCc: number, octaneIdx: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
- *   ecu?: object, mafScalar?: number, assumed?: string[],
+ *   ecu?: object, mafScalar?: number, assumed?: string[], layout?: import('../../sim/layouts.js').Layout|null,
  * }}} ApplyPresetAction
  */
 
@@ -212,7 +213,8 @@ export const ACTIONS = Object.freeze({
  * — three of the five earlier calls set it true via `withTableEdit`/`withPresetField`,
  * so the LAST write had to win. One action has no "last write" to get right: it is
  * simply false in the object literal below.
- * @typedef {{type: 'RESET_TO_STOCK', ve: number[][], timing?: number[][], afr?: number[][], mafScalar?: number, ecu?: object}} ResetToStockAction
+ * @typedef {{type: 'RESET_TO_STOCK', ve: number[][], timing?: number[][], afr?: number[][], mafScalar?: number, ecu?: object,
+ *   layout?: import('../../sim/layouts.js').Layout|null}} ResetToStockAction
  */
 
 /**
@@ -639,9 +641,10 @@ function baseReducer(state, action) {
           timing: p.timing,
           afr: p.afr,
           ...(p.ecu ? { ecu: p.ecu } : {}),
-          // A preset's factory calibration is generated on the ECU Lab grid; the layout
-          // switch (TUNE) moves it onto the car's own computer's breakpoints.
-          layout: null,
+          // A preset's factory calibration is generated on breakpoints sized to the engine
+          // (from cranking to past its limiter, from overrun to past its peak boost); the
+          // layout switch (TUNE) moves it onto a real computer's own.
+          layout: p.layout ?? null,
           // A new engine's ROM: every map slot starts as the factory calibration.
           maps: [null, null, null, null],
           activeMap: 0,
@@ -684,7 +687,7 @@ function baseReducer(state, action) {
           timing,
           afr,
           ...(action.ecu ? { ecu: action.ecu } : {}),
-          layout: null,
+          layout: action.layout ?? null,
           baseline: { ve: action.ve, timing, afr },
           // A reset baseline is not unsaved player work — no "last call" needed to
           // pin this false, it is simply false in this same pass.
@@ -1058,6 +1061,30 @@ function onTheBay(state, career) {
  * @returns {StoreState}
  */
 export function reducer(state, action) {
+  return withSpan(state, undoableReducer(state, action));
+}
+
+/**
+ * Tables sized to the engine keep spanning it: when a change to the BUILD (any action,
+ * undo and redo included) moves what the engine reaches — its limiter, its boost — the
+ * tables are carried onto axes that span it again (`respanTune`).
+ *
+ * @param {StoreState} prev
+ * @param {StoreState} next
+ * @returns {StoreState}
+ */
+function withSpan(prev, next) {
+  if (next.build === prev.build) return next;
+  const tune = respanTune(next);
+  return tune === next.tune ? next : { ...next, tune };
+}
+
+/**
+ * @param {StoreState} state
+ * @param {any} action
+ * @returns {StoreState}
+ */
+function undoableReducer(state, action) {
   if (action.type === ACTIONS.UNDO) {
     const { past, future } = state.history;
     if (past.length === 0) return state;

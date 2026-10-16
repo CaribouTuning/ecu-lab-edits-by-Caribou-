@@ -15,7 +15,7 @@ import { ACTIONS } from '../state/reducer.js';
 import { useTune } from '../state/StoreProvider.jsx';
 
 import { K, List, P } from './LessonParts.jsx';
-import { LOAD, RPM, overAdvanced, peaks, stock } from './scenarios.js';
+import { lessonCol, lessonRow, overAdvanced, peaks, stock } from './scenarios.js';
 import { ScreenSnippet } from './ScreenSnippet.jsx';
 
 function AirPump() {
@@ -79,7 +79,7 @@ function AirflowGrid() {
 
 function ThreeTables() {
   const d = stock();
-  const ve = d.state.tune.ve[LOAD.indexOf(100)][RPM.indexOf(4500)];
+  const ve = d.state.tune.ve[lessonRow(100)][lessonCol(4500)];
   return (
     <>
       <P>All three tables share one layout, the one real tuning software uses. Here is AIRFLOW, live:</P>

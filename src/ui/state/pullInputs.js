@@ -6,8 +6,8 @@
 
 import {
   COMPRESSOR_OPTS, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, compressorWithCount,
-  blowerOf, computeHardwareVE, deriveEngine, dynoConditions,
-  ecuHardwareOf, layoutById, tankFuel, turbineWithCount, veTruthByPhaseFor,
+  blowerOf, deriveEngine, dynoConditions,
+  ecuHardwareOf, layoutById, scheduledVeAt, tankFuel, turbineWithCount, veTruthByPhaseFor,
 } from '../../sim/index.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -32,7 +32,8 @@ export function pullInputs(state) {
     turboOn, turbine: turboOn ? turbine : null, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, fuel,
     peakBoostPsi: turboOn ? Math.max(...boostCurve) : 0, supercharged: !!blower,
   };
-  const veTruth = computeHardwareVE(engineConfig, mods, hwForVe);
+  // The cylinder's filling with the intake cam where the calibration puts it.
+  const veTruth = scheduledVeAt(engineConfig, mods, hwForVe, tune.ecu?.vvt);
   const ecuHw = { ...ecuHardwareOf(build), veTruthByPhase: veTruthByPhaseFor(engineConfig, mods, hwForVe) };
   const armed = session.liveAux?.nitrous !== false;
   const ecu = {

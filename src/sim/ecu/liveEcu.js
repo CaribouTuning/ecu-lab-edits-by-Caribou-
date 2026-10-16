@@ -20,11 +20,11 @@ import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constant
 import { COEFF } from '../coefficients.js';
 import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
 import { trappedAirGrams } from '../cycle.js';
-import { needsAirmass, readEcuTable } from '../layouts.js';
+import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
 import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
-import { RPM } from '../tables.js';
+import { CURVE_RPM, RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
 import { solveInduction } from '../turbo.js';
 import { boostTarget, gateHoldPsi } from './boost.js';
@@ -138,7 +138,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     blower: cfg.blower ?? null, blowerRatio: cfg.blowerRatio ?? 1, nitrous: cfg.nitrous ?? null,
     injectorCc: cfg.injectorCc, ecuInjectorCc: cfg.ecuInjectorCc, mafScalar: cfg.mafScalar,
     mafErrorBase: cfg.mafErrorBase, fuel: cfg.fuel,
-    veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [cfg.veTruth ?? cfg.ve],
+    veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [truthReader(cfg.veTruth, tables.layout?.ve ?? null) ?? ((r, m) => readEcuTable(tables, 've', r, { mapKpa: m }))],
   };
   const redline = derived.redline ?? 7500;
   // Fuel trims reset from the tuning software — done after a VE correction takes the
@@ -333,7 +333,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     let target = 0;
     let steps = [];
     if (turboOn) {
-      const bt = boostTarget({ cal: cal.boost, baseCurve: boostCurve, rpmAxis: RPM, rpm: rpmC, throttlePct: e.sTps, gear: DYNO_GEAR, iatC: e.sIat });
+      const bt = boostTarget({ cal: cal.boost, baseCurve: boostCurve, rpmAxis: boostCurve.length === CURVE_RPM.length ? CURVE_RPM : RPM, rpm: rpmC, throttlePct: e.sTps, gear: DYNO_GEAR, iatC: e.sIat });
       target = Math.max(0, bt.target - e.boostCutPsi - (limp ? E.BOOST_CUT_ALL_PSI : 0));
       steps = bt.steps;
     }

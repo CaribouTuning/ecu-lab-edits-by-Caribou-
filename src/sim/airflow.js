@@ -14,7 +14,7 @@ import {
   CAM_BASE_DURATION, camOverlapDeg, camPeakShiftRpm, charMultiplier, intakeValveAreaRatio, machVeMultiplier,
   valveFloatRpm,
 } from './engine.js';
-import { clamp, interp1 } from './math.js';
+import { clamp, curveAt, interp1 } from './math.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { DEFAULT_VE, LOAD, RPM } from './tables.js';
@@ -164,13 +164,34 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
   const overlapFactor = Math.max(0, camOverlapDeg(camDuration) + intakeCamAdvanceDeg + exhaustCamRetardDeg)
     / COEFF.VE_BACKPRESSURE_OVERLAP_REF;
 
+  // Where this engine's breathing peaks: the reference curve's peak, moved by the cam.
+  const peakRpm = BASE_PEAK_RPM + camShift;
+
   return (rpm, mapKpa) => {
     const norm = (rpm - 4500) / 3000;      // -1 at 1500, +1 at 7500
+    // The empirical speed terms below were fitted between 1500 and 7500 RPM. Where one is
+    // a GAIN it is held at its 7500 value past that, rather than extrapolated into credit
+    // no engine was measured to earn; where it is a LOSS it keeps growing, because the
+    // flow it is charged on keeps growing.
+    const gainNorm = Math.min(norm, 1);
     const loadScale = clamp(mapKpa / BARO_KPA, 0, 1);
 
-    // Sample the baseline breathing curve at the cam-shifted engine speed: the full-load
-    // row below atmospheric (part load is the factor below), the boost rows above it.
-    const camRpm = clamp(rpm - camShift, 1200, 8200);
+    // THE BREATHING CURVE IS A FUNCTION OF SPEED RELATIVE TO WHERE THE ENGINE IS TUNED,
+    // NOT OF RPM PAST IT. Inertial ram and wave tuning — what shapes a VE curve either side
+    // of its peak — are resonances, and a resonance's width scales with its frequency: an
+    // intake and cam tuned for 6000 RPM stay on their peak over a third more RPM than one
+    // tuned for 4500 (Heywood, Internal Combustion Engine Fundamentals, 2nd ed., §7.6;
+    // Taylor, The Internal-Combustion Engine in Theory and Practice, vol. 1, ch. 6).
+    // So the reference curve is read at speed SCALED to the reference peak, not slid along
+    // the axis by a fixed number of RPM. With the reference cam the two are identical.
+    // Sliding instead gave every high-revving engine the reference engine's 3000-RPM
+    // fall-off: an F136 or S54 fell 25-30% in VE above its torque peak where the
+    // published torque falls 10-18%, and read 11-35% short of its rated power (docs/accuracy.md).
+    const camRpm = Math.max(BASE_RPM_FLOOR, rpm * (BASE_PEAK_RPM / Math.max(BASE_RPM_FLOOR, peakRpm)));
+    // NOT divided by the reference engine's own valve choking: the curve does not carry it.
+    // Read alone, it put the VQ35DE's power peak at its limiter, which is why the choking
+    // term below was added (#15); dividing it back out re-credits the reference engine
+    // the 3% at 7000 RPM that term exists to take away.
     const baseVe = baseBreathing(camRpm, mapKpa);
     let val = baseVe * flowGain * charMultiplier(rpm, ratio);
 
@@ -187,14 +208,14 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     if (rpm > floatRpm) {
       val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
     }
-    val *= 1 + cylBreathing * Math.max(0, norm);
+    val *= 1 + cylBreathing * Math.max(0, cylBreathing > 0 ? gainNorm : norm);
     val *= crFactor * headFactor * fuelFactor * injectionFactor;
     val *= partLoadVeFactor(mapKpa, cfg.compression);
 
     // Bolt-ons: measured airflow gains, weighted toward the RPM where they work.
-    if (mods.intake) val += interp1(RPM, MOD_BONUS.intake, rpm) * loadScale;
-    if (mods.exhaust) val += interp1(RPM, MOD_BONUS.exhaust, rpm) * loadScale;
-    if (mods.headers) val += interp1(RPM, MOD_BONUS.headers, rpm) * loadScale;
+    if (mods.intake) val += curveAt(MOD_BONUS.intake, rpm) * loadScale;
+    if (mods.exhaust) val += curveAt(MOD_BONUS.exhaust, rpm) * loadScale;
+    if (mods.headers) val += curveAt(MOD_BONUS.headers, rpm) * loadScale;
 
     // Exhaust diameter: undersized chokes the top end, oversized kills low-RPM
     // scavenging velocity. Both directions cost VE, in different places.
@@ -210,7 +231,7 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     // A turbine in the exhaust stream is a restriction. Small housings choke the top
     // end; large ones flow better up high but hurt low-RPM scavenging.
     if (turboOn && turbine) {
-      val *= 1 + turbine.topEndMult * Math.max(0, norm);
+      val *= 1 + turbine.topEndMult * Math.max(0, turbine.topEndMult > 0 ? gainNorm : norm);
       // Intake side: intercooler core and charge piping, fixed hardware, flat cost.
       val *= COEFF.VE_TURBINE_BACKPRESSURE;
 
@@ -252,9 +273,14 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
       // Below 1 the manifold is lower than the intake and overlap scavenges — a real
       // gain, but a small one, so it is not credited here; only the loss is charged.
       const pressureRatio = empKpa / Math.max(1, mapKpa);
+      // Phased in over the first VE_BACKPRESSURE_RAMP_KPA of boost rather than switched on at
+      // atmospheric: an engine has no step at 100 kPa. Switched on whole, a long cam on a
+      // small turbine lost 30% of its filling between 100 and 105 kPa, which no real engine
+      // does and which a table could only meet by being wrong on one side of the step.
+      const boostShare = clamp((mapKpa - BARO_KPA) / COEFF.VE_BACKPRESSURE_RAMP_KPA, 0, 1);
       val *= clamp(
-        1 - COEFF.VE_BACKPRESSURE_PER_PR * Math.max(0, pressureRatio - 1) * overlapFactor,
-        COEFF.VE_BACKPRESSURE_FLOOR, 1,
+        1 - COEFF.VE_BACKPRESSURE_PER_PR * Math.max(0, pressureRatio - 1) * overlapFactor * boostShare,
+        COEFF.VE_BACKPRESSURE_FLOOR + (1 - COEFF.VE_BACKPRESSURE_FLOOR) * (1 - boostShare), 1,
       );
     }
 
@@ -266,8 +292,25 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
 const BOOST_ROWS = LOAD.map((kpa, ri) => ({ kpa, row: DEFAULT_VE[ri] }))
   .filter((r) => r.kpa >= VE_FULL_LOAD_KPA).sort((a, b) => a.kpa - b.kpa);
 
-/** The baseline breathing curve at an engine speed and a manifold pressure (see above). */
+/** Speed at which the reference breathing curve peaks (the full-load row of DEFAULT_VE). */
+const BASE_PEAK_RPM = 4500;
+/** Lowest speed the reference curve is read at: below its first breakpoint it is held. */
+const BASE_RPM_FLOOR = 600;
+/** Past its last breakpoint the curve continues on its own last slope, never below this share of its last value. */
+const BASE_EXTRAPOLATION_FLOOR = 0.5;
+
+/**
+ * The baseline breathing curve at an engine speed and a manifold pressure (see above).
+ * Beyond the curve's last breakpoint (7500) it continues falling on the slope of its last
+ * segment — the trend it was on — instead of holding flat, which would hand an engine read
+ * past the reference's speed range breathing nobody measured.
+ */
 function baseBreathing(rpm, mapKpa) {
-  const at = BOOST_ROWS.map((r) => interp1(RPM, r.row, rpm));
+  const last = RPM.length - 1;
+  const at = BOOST_ROWS.map((r) => {
+    if (rpm <= RPM[last]) return interp1(RPM, r.row, rpm);
+    const slope = (r.row[last] - r.row[last - 1]) / (RPM[last] - RPM[last - 1]);
+    return Math.max(r.row[last] * BASE_EXTRAPOLATION_FLOOR, r.row[last] + slope * (rpm - RPM[last]));
+  });
   return interp1(BOOST_ROWS.map((r) => r.kpa), at, Math.max(VE_FULL_LOAD_KPA, mapKpa));
 }

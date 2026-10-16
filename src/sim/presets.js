@@ -21,20 +21,22 @@ import {
   VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount,
 } from './hardware.js';
 import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
-import { computeHardwareVE } from './airflow.js';
+import { COEFF } from './coefficients.js';
+import { engineLayout, layoutById, readEcuTable, readTable } from './layouts.js';
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { bestPowerAfr, reachableKpa } from './manifold.js';
+import { bestPowerAfr, peakMapKpaOf, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
-import { DEFAULT_ECU_HW, tankFuel } from './ecu/context.js';
-import { deriveEngine } from './engine.js';
-import { clamp, interp1, interp2 } from './math.js';
+import { DEFAULT_ECU_HW, factoryIntakeSchedule, intakeCamAt, scheduledVeAt, tankFuel } from './ecu/context.js';
+import { deriveEngine, valveFloatRpm } from './engine.js';
+import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
+import { clamp, curveAt } from './math.js';
 import { inductionAtMap } from './turbo.js';
 import {
-  effectiveMafFactor, interpolationRoomDeg, LOAD, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -65,6 +67,8 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
  * @property {object} parts
  * @property {object} mods
  * @property {object} [fuel] the tank's fuel (`tankFuel`), when it is not one of OCTANE_OPTS
+ * @property {number} [bottomEndRatedRpm] the speed the factory pistons and rods are rated to,
+ *   when it is not the published limiter
  *   by index: a flex-fuel blend. A catalogue preset names its pump fuel by index instead
  */
 
@@ -120,7 +124,19 @@ export const ENGINE_PRESETS = [
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
       // where power lands on the published rating again (friction.js).
-      camDuration: 222, springRate: 60,
+      // REFITTED for the breathing curve read at speed scaled to its peak (airflow.js) and
+      // the corrected rod length: 214 (power -3.9%, torque 0.0%) is the longest duration
+      // whose power still falls away before the 7000 limiter (peak 6600 against a
+      // published 6400). Longer lands power on the rating but flat into the limiter,
+      // which the real engine does not do.
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda. Duration stays at 214, still the longest whose power falls
+      // away before the 7000 limiter: every longer cam runs flat into it, which the real
+      // engine does not do. So this preset now reads about 9% under its rating, a known gap
+      // recorded in tests/presets.test.js (KNOWN_GAPS): the model's top-end rolloff, not
+      // its cam, is what holds it there.
+      camDuration: 214, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -169,7 +185,14 @@ export const ENGINE_PRESETS = [
       // engine more friction at speed than the old straight line did: 228 is the longest
       // duration that stays clear of the overlap advisory, which a factory cam does not
       // trip (power -2.0%, torque -2.1%; 232 lands power on the rating but trips it).
-      camDuration: 228, springRate: 68,
+      // REFITTED for the breathing curve read at speed scaled to its peak (airflow.js) and
+      // the corrected rod length: 226 lands power on the rating (0.0%, torque +0.1%, peak
+      // 7000 against a published 6800), clear of the overlap advisory.
+      // KEPT through the rich-flame chemistry (thermo.js, heatReleasedShare), which took
+      // about 4% of heat per kg of air out of full throttle: power now reads about -5%. 228
+      // reads -3.9%, but then the stock spark table knocks at 5100 RPM once an intake and
+      // headers are fitted, which a factory margin does not allow.
+      camDuration: 226, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -436,7 +459,10 @@ export const ENGINE_PRESETS = [
       // REFITTED for the geometry-based friction model (friction.js), which charges this
       // engine more friction at speed than the old straight line did: duration moved to
       // where power lands on the published rating again (friction.js).
-      camDuration: 206, springRate: 54,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 212, springRate: 54,
       redline: 6800,
     },
     induction: {
@@ -491,7 +517,10 @@ export const ENGINE_PRESETS = [
       frictionLevel: 'older',
       // Fitted: power -0.2% of the rating, torque -0.5% (predicted), power flat-top
       // 5500-5800 against a published 5600.
-      camDuration: 202, springRate: 60,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 210, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -558,7 +587,10 @@ export const ENGINE_PRESETS = [
       // Fitted: power +1.0%, torque +0.2% (predicted), flat-top 5100-5500. 188 lands
       // nearer (-0.1%), but 190 is the shortest duration the duration terms are checked
       // down to (Pro's envelope), and a truck cam is at that end of the range.
-      camDuration: 190, springRate: 60,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 198, springRate: 60,
       redline: 5600,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -589,7 +621,10 @@ export const ENGINE_PRESETS = [
       frictionLevel: 'older',
       // Fitted: power +1.7%, torque -0.3% (predicted), flat-top 5200-5600. 186 lands
       // nearer (-0.3%); 190 for the same reason as the LQ4.
-      camDuration: 190, springRate: 60,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 198, springRate: 60,
       redline: 5800,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -618,7 +653,10 @@ export const ENGINE_PRESETS = [
       frictionLevel: 'older',
       // Fitted: power +0.3%, torque +2.9% (predicted), flat-top 5500-5800 against a
       // published 5200.
-      camDuration: 192, springRate: 60,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 202, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -651,7 +689,10 @@ export const ENGINE_PRESETS = [
       // Fitted: power -0.9%, torque +1.9% (predicted), within 1 hp of peak from 5800,
       // peaking at 5900 against a published 6000. 212 lands power nearer (-0.2%) but stays flat to the 6400 limiter,
       // which the real engine does not; 210 is the longest cam whose power falls before it.
-      camDuration: 210, springRate: 60,
+      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
+      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
+      // full-throttle lambda, so duration came up until power is on the rating again.
+      camDuration: 220, springRate: 60,
       redline: 6400,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -686,10 +727,12 @@ export function presetCompressor(preset) {
 
 /** The induction hardware bundle `computeHardwareVE` expects. */
 function hardwareFor(preset) {
-  const { turboOn, turbineIdx, boost } = preset.induction;
+  const { turboOn, boost } = preset.induction;
   return {
     turboOn,
-    turbine: turboOn ? TURBINE_OPTS[turbineIdx] : null,
+    // Every turbine the engine carries, as the app's own hardware does (pullInputs):
+    // a twin-turbo engine breathes against two housings, not one.
+    turbine: presetTurbine(preset),
     exhaustDia: EXHAUST_DIA_OPTS[preset.parts.exhaustDiaIdx].dia,
     fuel: preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx],
     peakBoostPsi: turboOn ? Math.max(...boost) : 0,
@@ -697,215 +740,78 @@ function hardwareFor(preset) {
 }
 
 /**
- * Generates the factory calibration for a preset.
+ * The breakpoints a preset's tables are generated on when none are asked for: sized to
+ * the engine (`engineLayout`), from cranking to just past its rev limit and from overrun
+ * to just past the most manifold pressure it makes.
+ *
+ * @param {Preset} preset
+ * @param {{rpmCount?: number, loadCount?: number}} [depth] the target computer's table size
+ * @returns {import('./layouts.js').Layout}
+ */
+export function presetLayout(preset, depth = {}) {
+  return engineLayout({
+    redline: preset.engine.redline ?? 7000,
+    peakMapKpa: peakMapKpaOf({ turboOn: preset.induction.turboOn, boostCurve: preset.induction.boost }),
+    ...depth,
+  });
+}
+
+/**
+ * Generates the factory calibration for a preset, on any layout: the engine-sized one
+ * by default, or an engine computer's own breakpoints.
  *
  * Order matters: VE first (it is the physical truth), then FUEL (the knock model
  * needs the mixture), then SPARK (which is knock-limited given that mixture).
  *
+ * The airflow every cell is written for is the engine's own breathing at that speed and
+ * pressure (`hardwareVeAt`), not a value read off a coarser grid: a table cell at 9000 RPM
+ * is the engine at 9000 RPM. A spark table indexed by air per cylinder is solved at the
+ * manifold pressure that traps that much air at that speed, which is the cell an engine
+ * computer reading its own airmass looks up.
+ *
  * @param {Preset} preset
- * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number}}
+ * @param {import('./layouts.js').Layout|string|null} [layout] the engine-sized layout when absent
+ * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number, layout: import('./layouts.js').Layout,
+ *   ecu: ReturnType<typeof defaultEcuCalibration>, boost: number[]}} `ecu` is the engine management the
+ *   tables go with; `boost` the boost target curve the factory runs them at
  */
-export function factoryCalibration(preset) {
+export function factoryCalibration(preset, layout = null) {
+  const L = layout ? layoutById(layout) : presetLayout(preset);
   const derived = deriveEngine(preset.engine);
   const fuel = preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx];
   const hw = hardwareFor(preset);
-  const ve = computeHardwareVE(preset.engine, preset.mods, hw);
+  // An engine with cam phasers is calibrated with them working: the factory schedule puts
+  // the intake cam where it fills the cylinder best, on the ECU's own VVT breakpoints, and
+  // every table below is written for the cylinder filling at that phase.
+  const ecu = defaultEcuCalibration({ derived, gate: DEFAULT_ECU_HW.gate, axes: L.timing });
+  const schedule = factoryIntakeSchedule(preset.engine, preset.mods, hw, ecu.vvt.intakeTarget.x, ecu.vvt.intakeTarget.y);
+  if (schedule) ecu.vvt.intakeTarget = { ...ecu.vvt.intakeTarget, z: schedule };
+  const veAt = scheduledVeAt(preset.engine, preset.mods, hw, schedule ? ecu.vvt : null);
+  const camAt = schedule ? intakeCamAt(preset.engine, ecu.vvt) : null;
 
-  // Boost actually present at this cell, derived from the LOAD (MAP) axis rather than
-  // from the preset's boost curve keyed by RPM. A generated table must be a valid,
-  // self-consistent surface at every MAP cell regardless of what boost the preset's
-  // curve happens to produce at a given RPM, so this reads pressure back off the axis
-  // the table is actually indexed by. `_rpm` is unused for that reason, kept only so
-  // every call site can pass the same (rpm, mapKpa) shape as the other per-cell helpers.
-  const boostAt = (_rpm, mapKpa) => (preset.induction.turboOn && mapKpa > BARO_KPA
-    ? Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA)
-    : 0);
+  // Boost actually present at a cell, read off the MAP the cell is indexed by rather than
+  // off the preset's boost curve keyed by RPM: a generated table has to be a valid,
+  // self-consistent surface at every pressure, whatever this curve reaches at this speed.
+  const boostAt = (kpa) => (preset.induction.turboOn && kpa > BARO_KPA ? Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA) : 0);
 
   // A turbo (or a bigger intake) changes the airflow profile across the MAF, so at a
   // scalar of 1 the ECU under-reads true air by this factor — see `mafErrorFactor` in
-  // sweep.js. A FACTORY calibration was made on its own intake and turbo plumbing, so
-  // its MAF calibration already cancels it: the scalar is the reciprocal, the ECU reads
-  // the true air, and the fuel table commands exactly the mixture it wants delivered.
-  //
-  // It used to leave the scalar at 1 and write the error into the fuel table instead
-  // (commanding ~11.0:1 so that ~12:1 arrived). The engine got the right mixture, but
-  // every factory turbo car logged its commanded and actual AFR 9% apart, forever, and
-  // an intake fitted to one showed a 17% error when the intake itself was 10%.
+  // sweep.js. A FACTORY calibration was made on its own intake and turbo plumbing, so its
+  // MAF calibration already cancels it: the scalar is the reciprocal, the ECU reads the
+  // true air, and the fuel table commands exactly the mixture it wants delivered.
   const mafScalar = Number((1 / mafErrorFactor(preset.mods, preset.induction.turboOn)).toFixed(3));
-
   const turbine = presetTurbine(preset);
 
   // A spooled turbo at part throttle still compresses, and heats, the air upstream of the
   // plate. The dyno and LIVE solve that (`solveInduction`), and so does the advisor
-  // (`inductionAtMap`), so the generator must too: a cell written for air drawn straight
-  // from ambient is a cell the pull then finds knocking.
-  const inductionMemo = new Map();
-  const inductionAt = (rpm, loadKpa) => {
-    if (!preset.induction.turboOn) return null;
-    const key = `${rpm}:${loadKpa.toFixed(2)}`;
-    if (!inductionMemo.has(key)) {
-      inductionMemo.set(key, inductionAtMap({
-        rpm, mapKpa: loadKpa, boostTargetPsi: interp1(RPM, preset.induction.boost, rpm), turbine,
-        compressor: presetCompressor(preset),
-        veAt: (m) => interp2(ve, rpm, m), derived,
-        intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
-      }));
-    }
-    return inductionMemo.get(key);
-  };
-
-  // FUEL: stoichiometric where a real ECU runs closed loop, best-power enrichment above.
-  const afr = LOAD.map((loadKpa) => RPM.map((rpm) => {
-    if (loadKpa < OPEN_LOOP_KPA) return 14.7;
-    return Number(bestPowerAfr(inductionAt(rpm, loadKpa)?.boostPsi ?? boostAt(rpm, loadKpa)).toFixed(2));
-  }));
-
-  // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
-  // margin where there is not. That is what a production calibration is. Knock is
-  // evaluated against the mixture the engine will ACTUALLY see — see `cellAt` below —
-  // rather than the commanded number, which is pre-compensated for the MAF error.
-  const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
-
-  /**
-   * MBT and the knock ceiling at ANY manifold pressure, not just a row's.
-   *
-   * Pulled out of the row loop so the interpolation pass below can ask the same
-   * question at the pressures BETWEEN rows, which is where the ECU actually runs.
-   */
-  const cellAt = (rpm, loadKpa, veActual) => {
-    const induction = inductionAt(rpm, loadKpa);
-    const boostPsi = induction ? induction.boostPsi : boostAt(rpm, loadKpa);
-    // THE MIXTURE THIS CELL WILL ACTUALLY BURN, read the way the running engine reads
-    // it: off the fuel table this function just wrote, interpolated to whatever pressure
-    // is being asked about, and then un-corrected for the MAF error the table was
-    // pre-compensated with. That is `evaluatePoint`'s own arithmetic, so the generator
-    // and the advisor now agree about the mixture at every pressure — including the ones
-    // between rows, which is where they used to part company.
-    //
-    // The old form graded every cell at best-power lambda, including the closed-loop
-    // cells where this table commands 14.7 and the O2 sensor holds it there. A
-    // stoichiometric charge burns hotter and knocks sooner than a rich one, so those
-    // cells were written for a mixture the engine never receives.
-    const afrCommanded = interp2(afr, rpm, loadKpa);
-    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, loadKpa);
-    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
-    const airChargeG = trappedAirGrams({ veActual, mapKpa: loadKpa, chargeK, sweptM3 });
-    const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda))
-      * derived.cyl * (rpm / 2) / 60;
-    const empKpa = induction ? induction.empKpa : exhaustManifoldKpa({
-      turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
-      exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, loadKpa), lambda }),
-    });
-    // The generator asks the physics the same question the running ECU asks — how much
-    // spark will this cylinder take — by solving the same cycle. A second, simpler
-    // knock estimate here would drift from the one the player then drives against.
-    const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
-    const cyc = cycleInputsFor({
-      rpm, mapKpa: loadKpa, empKpa, intakeK: chargeK,
-      airChargeG,
-      // Burnable mass releases the heat; delivered mass evaporates and cools the charge.
-      // Split exactly as point.js splits it, so the generator and the running ECU answer
-      // the same question with the same number.
-      burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich),
-      fuelMassG: deliveredFuelG,
-      lambda, fuel, derived,
-    });
-    return {
-      safe: knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG,
-      mbt: mbtFromBurn(cyc.burnDeg),
-    };
-  };
-
-  const timing = LOAD.map((loadKpa, ri) => RPM.map((rpm, ci) => {
-    const { safe, mbt } = cellAt(rpm, loadKpa, ve[ri][ci]);
-    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
-  }));
-
-  // THE TABLE HAS TO BE SAFE BETWEEN ITS ROWS, NOT ONLY ON THEM.
-  //
-  // Every cell above is optimal at its own pressure. The ECU does not run there: it
-  // reads the table with `interp2`, so between two rows the cylinder gets a blend at a
-  // pressure no row sits on, and the knock ceiling falls faster than the blend does.
-  // A table written row-by-row therefore detonates in the gaps — which is exactly what
-  // `calibrationAdvice` reports about it (#43), and why the app's own factory tables
-  // read as dangerous to the app's own advisor once the over-retard that had been
-  // masking it was removed (#46).
-  //
-  // Same constraint, same reachability helper, same direction of walk as the advisor:
-  // from the most boosted row downward, so the tighter row above is already pinned and
-  // the excess comes out of the cell reaching up into pressure it does not have to carry.
-  //
-  // ONE DELIBERATE DIFFERENCE IN WHAT IT IS ASKED. The advisor reads reachability off
-  // the player's boost curve at each RPM, because it is judging one build. The generator
-  // asks at the preset's PEAK boost for every RPM, for the reason `boostAt` reads boost
-  // off the MAP axis: a factory table has to be a valid surface at every pressure, not
-  // only the ones this curve happens to reach at this speed. That is the stricter of the
-  // two, so a generated table can never fail the advisor on it. Asking per RPM instead
-  // was measured when this was written: it moved the N54's torque peak further from the
-  // published 3000 RPM (from 3700 to 4200, on the model of the day; the turbo solve has
-  // changed since, and the N54 now plateaus at about 313 lb-ft at the crank from 4000 to
-  // 4500 RPM).
-  const peakBoostCurve = RPM.map(() => Math.max(0, ...preset.induction.boost));
-  RPM.forEach((rpm, ci) => {
-    const reachKpa = reachableKpa({
-      turboOn: preset.induction.turboOn, boostCurve: peakBoostCurve, rpm,
-    });
-    for (let ri = 1; ri < LOAD.length; ri += 1) {
-      const span = LOAD[ri - 1] - LOAD[ri];
-      const entered = clamp((reachKpa - LOAD[ri]) / span, 0, 1);
-      if (entered <= 0) continue;
-      const room = interpolationRoomDeg({
-        // VE read the way the sweep reads it — interpolated to the same pressure — so
-        // this is the ceiling that genuinely applies between the two rows.
-        ceilingAtFrac: (f) => cellAt(
-          rpm, LOAD[ri] + f * span, interp2(ve, rpm, LOAD[ri] + f * span),
-        ).safe,
-        aboveDeg: timing[ri - 1][ci],
-        entered,
-      });
-      if (room < timing[ri][ci]) {
-        timing[ri][ci] = Number(
-          clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1),
-        );
-      }
-    }
-  });
-
-  return { ve, timing, afr, mafScalar };
-}
-
-/**
- * The factory calibration on an engine computer's own breakpoints (layouts.js).
- *
- * The same physics and the same rules as `factoryCalibration`, cell by cell at the
- * layout's breakpoints instead of the game's 8 × 6: VE read off the engine's airflow
- * model the way the simulator reads it, fuel stoichiometric in closed loop and best-power
- * above it, spark the lower of best-torque and the knock limit less the factory margin,
- * then walked so the blend between two rows is safe. A spark table indexed by air per
- * cylinder is solved at the manifold pressure that traps that much air at that speed,
- * which is the cell an engine computer reading its own airmass looks up.
- *
- * @param {Preset} preset
- * @param {import('./layouts.js').Layout|null} layout the game's grid when null
- * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number, layout: string|null}}
- */
-export function factoryCalibrationOn(preset, layout) {
-  if (!layout || layout.id === 'game') return { ...factoryCalibration(preset), layout: null };
-  const derived = deriveEngine(preset.engine);
-  const fuel = preset.fuel ?? OCTANE_OPTS[preset.parts.octaneIdx];
-  const hw = hardwareFor(preset);
-  const veGrid = computeHardwareVE(preset.engine, preset.mods, hw);
-  const veAt = (rpm, kpa) => interp2(veGrid, rpm, kpa);
-  const boostAt = (kpa) => (preset.induction.turboOn && kpa > BARO_KPA ? Math.max(0, (kpa - BARO_KPA) / PSI_TO_KPA) : 0);
-  const mafScalar = Number((1 / mafErrorFactor(preset.mods, preset.induction.turboOn)).toFixed(3));
-  const turbine = presetTurbine(preset);
+  // (`inductionAtMap`), so the generator must too.
   const memo = new Map();
   const inductionAt = (rpm, kpa) => {
     if (!preset.induction.turboOn) return null;
     const key = `${rpm}:${kpa.toFixed(3)}`;
     if (!memo.has(key)) {
       memo.set(key, inductionAtMap({
-        rpm, mapKpa: kpa, boostTargetPsi: interp1(RPM, preset.induction.boost, rpm), turbine,
+        rpm, mapKpa: kpa, boostTargetPsi: curveAt(preset.induction.boost, rpm), turbine,
         compressor: presetCompressor(preset), veAt: (m) => veAt(rpm, m), derived,
         intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
       }));
@@ -927,16 +833,33 @@ export function factoryCalibrationOn(preset, layout) {
     }
     return (lo + hi) / 2;
   };
-  const afrAtKpa = (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(bestPowerAfr(boostPsiAt(rpm, kpa)).toFixed(2)));
+  const loadOf = (axes, rpm, kpa) => (axes.loadUnit === 'kPa' ? kpa : airAt(rpm, kpa) * (axes.loadUnit === 'mg/cyl' ? 1000 : 1));
   const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
 
-  const ve = grid(layout.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
-  const afr = grid(layout.afr, afrAtKpa);
+  // VE: the engine's breathing at each cell. FUEL: stoichiometric where a real ECU runs
+  // closed loop, best-power enrichment above.
+  const ve = grid(L.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
+  const afr = grid(L.afr, (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(bestPowerAfr(boostPsiAt(rpm, kpa)).toFixed(2))));
+
+  // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
+  // margin where there is not. That is what a production calibration is. Knock is
+  // evaluated against the mixture the engine will ACTUALLY see: the fuel table just
+  // written, read the way the running ECU reads it (interpolated to whatever pressure is
+  // asked about, between rows too), then un-corrected for the MAF error it was
+  // pre-compensated with. That is `evaluatePoint`'s own arithmetic.
   const cellAt = (rpm, kpa) => {
     const induction = inductionAt(rpm, kpa);
     const boostPsi = induction ? induction.boostPsi : boostAt(kpa);
     const veActual = veAt(rpm, kpa);
-    const lambda = (afrAtKpa(rpm, kpa) / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa);
+    const afrCommanded = readTable(afr, L.afr, rpm, loadOf(L.afr, rpm, kpa));
+    // The ECU fuels for the air its VE table CLAIMS. Between rows that is the table's
+    // straight-line blend, and breathing is not a straight line in pressure, so the real
+    // mixture there is off by truth / table — leaner where the blend under-reads. Exact
+    // on the rows themselves; it is the between-row mixture the interpolation walk below
+    // has to protect (point.js: airChargeBelievedG).
+    const veTable = readTable(ve, L.ve, rpm, loadOf(L.ve, rpm, kpa));
+    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa)
+      * (veActual / veTable);
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
@@ -944,27 +867,57 @@ export function factoryCalibrationOn(preset, layout) {
       turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, kpa), lambda }),
     });
+    // The generator asks the physics the same question the running ECU asks — how much
+    // spark will this cylinder take — by solving the same cycle. Burnable mass releases
+    // the heat; delivered mass evaporates and cools the charge, split as point.js splits it.
     const deliveredFuelG = airChargeG / (fuel.stoich * lambda);
+    // At the cam phase the schedule puts the intake cam: advance closes the intake valve
+    // earlier, raising effective compression, which is what the knock limit answers to.
     const cyc = cycleInputsFor({
       rpm, mapKpa: kpa, empKpa, intakeK: chargeK, airChargeG,
       burnedFuelG: Math.min(deliveredFuelG, airChargeG / fuel.stoich), fuelMassG: deliveredFuelG, lambda, fuel, derived,
+      ...(camAt ? { cam: { intakeAdvDeg: camAt(rpm, kpa) } } : {}),
     });
     return { safe: knockLimitedSpark(cyc) - FACTORY_KNOCK_MARGIN_DEG, mbt: mbtFromBurn(cyc.burnDeg) };
   };
-  const T = layout.timing;
-  const timing = grid(T, (rpm, kpa) => {
-    const { safe, mbt } = cellAt(rpm, kpa);
-    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+  // A FACTORY BOOST TARGET NEVER ASKS FOR PRESSURE ITS SPARK TABLE CANNOT PROTECT. Where
+  // even the most retard the table can hold is past the knock limit at the published boost
+  // (low speed, full boost: the longest time the end gas has to light itself), a
+  // production calibration limits boost there instead — the low-speed torque or boost
+  // limit every turbo ECU carries. Stepped down by half a psi until spark can protect it.
+  const curveRpm = preset.induction.boost.length === CURVE_RPM.length ? CURVE_RPM : RPM;
+  const boost = preset.induction.boost.map((psi, i) => {
+    if (!preset.induction.turboOn || psi <= 0) return psi;
+    let p = psi;
+    while (p > 0 && cellAt(curveRpm[i], BARO_KPA + p * PSI_TO_KPA).safe < SPARK_MIN_DEG) p -= 0.5;
+    return Math.max(0, p);
   });
-  // Safe between rows, as factoryCalibration walks it, in the axis's own unit.
-  const peakBoostCurve = RPM.map(() => Math.max(0, ...preset.induction.boost));
+
+  const T = L.timing;
+  // Which cells can knock at all: a row gap between two that cannot needs no check
+  // between them, because knock only gets likelier with pressure.
+  const unbounded = T.load.map(() => T.rpm.map(() => false));
+  const timing = T.load.map((v, ri) => T.rpm.map((rpm, ci) => {
+    const { safe, mbt } = cellAt(rpm, kpaOf(T, rpm, v));
+    unbounded[ri][ci] = safe >= COEFF.KNOCK_UNBOUNDED_BTDC - FACTORY_KNOCK_MARGIN_DEG;
+    return Number(clamp(Math.min(mbt, safe), SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
+  }));
+
+  // THE TABLE HAS TO BE SAFE BETWEEN ITS ROWS, NOT ONLY ON THEM. The ECU reads the table
+  // interpolated, so between two rows the cylinder gets a blend at a pressure no row sits
+  // on, and the knock ceiling falls faster than the blend does (#43, #46). Same
+  // constraint and direction of walk as the advisor: from the most boosted row down, so
+  // the excess comes out of the cell reaching up into pressure it does not have to carry.
+  // Asked at the preset's PEAK boost at every speed: a factory table has to be a valid
+  // surface at every pressure, not only the ones this curve reaches at this speed.
+  const peakBoostCurve = CURVE_RPM.map(() => Math.max(0, ...preset.induction.boost));
   T.rpm.forEach((rpm, ci) => {
     const reachKpa = reachableKpa({ turboOn: preset.induction.turboOn, boostCurve: peakBoostCurve, rpm });
-    const reach = T.loadUnit === 'kPa' ? reachKpa : airAt(rpm, reachKpa) * (T.loadUnit === 'mg/cyl' ? 1000 : 1);
+    const reach = loadOf(T, rpm, reachKpa);
     for (let ri = 1; ri < T.load.length; ri += 1) {
       const span = T.load[ri - 1] - T.load[ri];
       const entered = clamp((reach - T.load[ri]) / span, 0, 1);
-      if (entered <= 0) continue;
+      if (entered <= 0 || (unbounded[ri][ci] && unbounded[ri - 1][ci])) continue;
       const room = interpolationRoomDeg({
         ceilingAtFrac: (f) => cellAt(rpm, kpaOf(T, rpm, T.load[ri] + f * span)).safe,
         aboveDeg: timing[ri - 1][ci],
@@ -973,7 +926,25 @@ export function factoryCalibrationOn(preset, layout) {
       if (room < timing[ri][ci]) timing[ri][ci] = Number(clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
     }
   });
-  return { ve, timing, afr, mafScalar, layout: layout.id };
+  // Tables written for the boost the engine will actually be asked for: where the limit
+  // took boost out, the calibration is generated again at the limited curve (once — the
+  // limit is already met there), so RESET, which starts from that curve, gives it back.
+  if (boost.some((b, i) => b !== preset.induction.boost[i])) {
+    return factoryCalibration({ ...preset, induction: { ...preset.induction, boost } }, layout);
+  }
+  return { ve, timing, afr, mafScalar, layout: L, ecu, boost };
+}
+
+/**
+ * The factory calibration on an engine computer's own breakpoints (layouts.js), or on the
+ * engine-sized layout when `layout` is null. Kept for callers written before every
+ * calibration could take a layout.
+ *
+ * @param {Preset} preset
+ * @param {import('./layouts.js').Layout|string|null} layout
+ */
+export function factoryCalibrationOn(preset, layout) {
+  return factoryCalibration(preset, layout);
 }
 
 /**
@@ -984,15 +955,18 @@ export function factoryCalibrationOn(preset, layout) {
  * @param {Preset} preset
  * @returns {object} a complete state patch
  */
-export function applyPreset(preset) {
-  const { ve, timing, afr, mafScalar } = factoryCalibration(preset);
+export function applyPreset(preset, layout = null) {
+  const { ve, timing, afr, mafScalar, layout: L, ecu, boost } = factoryCalibration(preset, layout);
   return {
     presetId: preset.id,
     mafScalar,
-    engineConfig: { ...preset.engine },
+    // A catalogue engine's own reciprocating assembly, rated to its own factory limiter:
+    // raise the redline past that and BUILD and the pull log say the parts are past it.
+    engineConfig: { ...preset.engine, bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,
-    boostCurve: [...preset.induction.boost],
+    // The published boost, limited where the spark table cannot protect it (factoryCalibration).
+    boostCurve: boost,
     turbineIdx: preset.induction.turbineIdx,
     turbineCount: preset.induction.turbineCount ?? 1,
     compressorIdx: preset.induction.compressorIdx,
@@ -1001,9 +975,12 @@ export function applyPreset(preset) {
     octaneIdx: preset.parts.octaneIdx,
     exhaustDiaIdx: preset.parts.exhaustDiaIdx,
     ve, timing, afr,
+    // The breakpoints the three tables are on, kept with them.
+    layout: L,
     // The engine management a factory ships with: its knock threshold is set to this
-    // engine's own valvetrain noise, which is why a preset carries its own.
-    ecu: defaultEcuCalibration({ derived: deriveEngine(preset.engine), gate: DEFAULT_ECU_HW.gate }),
+    // engine's own valvetrain noise, which is why a preset carries its own; and, on an
+    // engine with cam phasers, the intake schedule its tables were written for.
+    ecu,
   };
 }
 
@@ -1018,10 +995,14 @@ export function applyPreset(preset) {
  * figures rather than show numbers nobody has checked. The stroke reaches 102 mm for the
  * GM LQ4's 101.6.
  *
- * The redline stops where the tables do. Every table, and the airflow the model works out
- * for each, ends at the top of the RPM axis (7500); past it a pull would read the last
- * column's airflow at every speed and its power would climb in a straight line with RPM,
- * which no engine does.
+ * The redline reaches 11,000 RPM. The tables are sized to the engine (layouts.js) and the
+ * breathing is worked out at every speed, not read off a grid, so nothing stops at a
+ * column. What can stop an engine is its bottom end: the form takes what the pistons and
+ * rods are built from (`bottomEnd`), and BUILD and the pull log say when the redline puts
+ * them past their mean piston speed (bottomEnd.js). The physics above 7500 RPM is checked
+ * against five published high-revving engines (docs/accuracy.md), not against 11,000-RPM
+ * ones, of which there are none on sale; past about 9,000 it is extrapolation and BUILD
+ * says so.
  *
  * BUILD's sliders use the same ranges, so anything the form accepts, the sliders can show
  * and the player can then adjust.
@@ -1031,11 +1012,27 @@ export const CUSTOM_ENGINE_LIMITS = Object.freeze({
   stroke: { min: 65, max: 102, step: 0.5, unit: 'mm', why: 'Outside this range the simulator\'s physics has not been checked.' },
   compression: { min: 8.5, max: 13, step: 0.1, unit: ':1', why: 'Outside this range the simulator\'s physics has not been checked.' },
   redline: {
-    min: 4000, max: RPM[RPM.length - 1], step: 100, unit: 'rpm',
-    why: `The simulator's tables and airflow run to ${RPM[RPM.length - 1]} rpm.`,
+    min: 4000, max: 11000, step: 100, unit: 'rpm',
+    why: 'Past 11,000 rpm is racing-engine territory the simulator has no published engine to check against.',
   },
   camDuration: { min: 180, max: 300, step: 2, unit: '°' },
 });
+
+/** How far past the limiter a builder's valve springs hold the valves on the cam, RPM. */
+const SPRING_MARGIN_RPM = 500;
+
+/**
+ * The spring rate that floats the valves SPRING_MARGIN_RPM past a redline with this cam
+ * (the inverse of `valveFloatRpm`), never below the stock 50.
+ *
+ * @param {number} redline
+ * @param {number} camDuration
+ * @returns {number}
+ */
+export function springRateFor(redline, camDuration) {
+  const needed = 50 + (redline + SPRING_MARGIN_RPM - valveFloatRpm(50, camDuration)) / COEFF.FLOAT_PER_SPRING_RATE;
+  return Math.max(50, Math.ceil(needed));
+}
 
 /** The most a player's own engine's injectors are sized to be open at full throttle (85 %, the usual rule). */
 const INJECTOR_SIZING_MAX_DUTY = 0.85;
@@ -1045,7 +1042,7 @@ const INJECTOR_SIZING_MAX_DUTY = 0.85;
  *
  * @param {{configuration?: string, bore?: number|string, stroke?: number|string, compression?: number|string,
  *   redline?: number|string, camDuration?: number|string|null, injection?: string, valvetrain?: string,
- *   valvesPerCyl?: number|string, blockMaterial?: string, headMaterial?: string}} spec
+ *   valvesPerCyl?: number|string, blockMaterial?: string, headMaterial?: string, bottomEnd?: string}} spec
  * @returns {{ok: true, engine: import('./engine.js').EngineConfig, estimated: string[], assumed: string[]}
  *   | {ok: false, errors: Record<string, string>}} `estimated` names every figure that was
  *   not entered and so was filled with a stated typical value; `assumed` is the same figures'
@@ -1081,6 +1078,7 @@ export function validateCustomEngine(spec) {
     else camDuration = v;
   }
   if (Object.keys(errors).length) return { ok: false, errors };
+  const bottomEnd = BOTTOM_END_OPTS.some((o) => o.id === spec.bottomEnd) ? spec.bottomEnd : DEFAULT_BOTTOM_END;
   const valvetrain = /** @type {'ohv'|'sohc'|'dohc'} */ (VALVETRAIN_OPTS.some((o) => o.id === spec.valvetrain) ? spec.valvetrain : 'dohc');
   const valvesPerCyl = /** @type {2|3|4|5} */ (VALVES_PER_CYL_OPTS.includes(Number(spec.valvesPerCyl)) ? Number(spec.valvesPerCyl) : 4);
   if (!spec.valvetrain) { estimated.push('valvetrain (DOHC assumed)'); assumed.push('valvetrain'); }
@@ -1089,6 +1087,7 @@ export function validateCustomEngine(spec) {
   if (!spec.blockMaterial) { estimated.push('block material (aluminium assumed)'); assumed.push('blockMaterial'); }
   if (!spec.headMaterial) { estimated.push('head material (aluminium assumed)'); assumed.push('headMaterial'); }
   if (!spec.injection) { estimated.push('fuel injection (port assumed)'); assumed.push('injection'); }
+  if (!spec.bottomEnd) { estimated.push('pistons and rods (production assumed)'); assumed.push('bottomEnd'); }
   return {
     ok: true,
     estimated,
@@ -1100,8 +1099,12 @@ export function validateCustomEngine(spec) {
       blockMaterial: /** @type {'Cast Iron'|'Aluminum'} */ (material(spec.blockMaterial)),
       headMaterial: /** @type {'Cast Iron'|'Aluminum'} */ (material(spec.headMaterial)),
       injection: spec.injection === 'direct' ? 'direct' : 'port',
-      camDuration, springRate: 50, redline: /** @type {number} */ (redline),
-      valvetrain, valvesPerCyl,
+      // Valve springs specified for the redline, as a builder specifies them: stiff enough
+      // to keep the valves on the cam SPRING_MARGIN_RPM past the limiter, never softer than
+      // the stock rate. A 9000-RPM engine on stock springs floats its valves at 8000, which
+      // no one who chose that redline would build.
+      camDuration, springRate: springRateFor(/** @type {number} */ (redline), camDuration), redline: /** @type {number} */ (redline),
+      valvetrain, valvesPerCyl, bottomEnd,
     },
   };
 }
@@ -1138,17 +1141,23 @@ export function customEnginePatch(engine, assumed = []) {
   // power-per-litre guess left a 270-degree cam out of injector at the top of its first pull.)
   const fuel = OCTANE_OPTS[0];
   const cal = applyPreset(adHoc(INJECTOR_OPTS.length - 1));
-  const speeds = [...RPM.filter((r) => r < engine.redline), engine.redline];
+  const speeds = [];
+  for (let r = 1500; r < engine.redline; r += 250) speeds.push(r);
+  speeds.push(engine.redline);
   const neededCc = Math.max(...speeds.map((rpm) => {
-    const airPerCylG = (interp2(cal.ve, rpm, BARO_KPA) / 100) * (derived.displacementL / 1000 / cylinders) * RHO_AIR * 1000;
-    const fuelPerCylG = airPerCylG / ((interp2(cal.afr, rpm, BARO_KPA) / 14.7) * fuel.stoich);
+    const airPerCylG = (readEcuTable(cal, 've', rpm, { mapKpa: BARO_KPA }) / 100) * (derived.displacementL / 1000 / cylinders) * RHO_AIR * 1000;
+    const fuelPerCylG = airPerCylG / ((readEcuTable(cal, 'afr', rpm, { mapKpa: BARO_KPA }) / 14.7) * fuel.stoich);
     const openMs = INJECTOR_SIZING_MAX_DUTY * (120000 / rpm) - INJ_DEADTIME_MS;
     return (fuelPerCylG * 60000) / (fuel.density * openMs);
   }));
   // The smallest that covers it; the largest stocked when none does.
   const fits = INJECTOR_OPTS.findIndex((o) => o.cc >= neededCc);
   const injectorIdx = fits === -1 ? INJECTOR_OPTS.length - 1 : fits;
-  return { ...applyPreset(adHoc(injectorIdx)), presetId: null, assumed };
+  const patch = applyPreset(adHoc(injectorIdx));
+  // Not a catalogue engine: its pistons and rods are what the player said they are
+  // (`bottomEnd`), not a factory assembly rated to whatever redline was typed.
+  const { bottomEndRatedRpm: _rated, ...engineConfig } = patch.engineConfig;
+  return { ...patch, engineConfig, presetId: null, assumed };
 }
 
 /**
@@ -1176,9 +1185,11 @@ export function stockModsOf(build) {
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
  *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null}} build the BUILD
  *   slice (or the fields of it named)
- * @returns {{ve: number[][], timing: number[][], afr: number[][], mafScalar: number}}
+ * @param {import('./layouts.js').Layout|string|null} [layout] the breakpoints to write on: the
+ *   tune's own, so a reset changes the numbers and not the axes the player is looking at
+ * @returns {ReturnType<typeof factoryCalibration>}
  */
-export function stockCalibrationFor(build) {
+export function stockCalibrationFor(build, layout = null) {
   /** @type {Preset} */
   const hardware = {
     id: 'stock', name: 'Stock', manufacturer: '', years: '', blurb: '',
@@ -1192,7 +1203,7 @@ export function stockCalibrationFor(build) {
     mods: stockModsOf(build),
     fuel: tankFuel(/** @type {any} */ (build)),
   };
-  return factoryCalibration(hardware);
+  return factoryCalibration(hardware, layout);
 }
 
 /**

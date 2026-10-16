@@ -14,8 +14,8 @@ import { RotateCcw, Settings } from 'lucide-react';
 import React from 'react';
 
 import {
-  COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
-  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor,
+  BOTTOM_END_OPTS, COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
+  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor, pistonMotion,
 } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
@@ -48,6 +48,8 @@ const ASSUMED_LABEL = {
  * @property {number} overlapDeg
  * @property {number} floatRpm
  * @property {number} redline
+ * @property {{id: string, label: string, limitMs: number, ratedRpm: number}} bottomEnd what
+ *   the pistons and rods are rated to (bottomEnd.js)
  */
 
 /**
@@ -109,6 +111,21 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
   };
 
   const floating = engineDerived.floatRpm < engineDerived.redline;
+
+  // The pistons and rods (bottomEnd.js): a catalogue engine keeps its maker's assembly,
+  // rated to its own limiter, until the player fits something else.
+  const factoryRatedRpm = engineConfig.bottomEndRatedRpm
+    || (activePreset ? (activePreset.bottomEndRatedRpm ?? activePreset.engine.redline) : null);
+  const bottomEndOpts = [
+    ...(factoryRatedRpm ? [{ id: 'factory', label: 'Factory' }] : []),
+    ...BOTTOM_END_OPTS.map((o) => ({ id: o.id, label: o.label.split(' (')[0] })),
+  ];
+  const bottomEndLimit = engineDerived.bottomEnd;
+  const pistonAtRedline = pistonMotion(engineConfig.stroke, engineDerived.redline);
+  const pastBottomEnd = engineDerived.redline > bottomEndLimit.ratedRpm;
+  const chooseBottomEnd = (id) => setCfg(id === 'factory'
+    ? { bottomEnd: undefined, bottomEndRatedRpm: factoryRatedRpm }
+    : { bottomEnd: id, bottomEndRatedRpm: undefined });
 
   return (
     <BuildSection
@@ -296,6 +313,30 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b className={styles.em}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
         <br /><br />Bigger cams open valves further and faster, so they need stiffer springs. That is why "cam and springs" are sold together: fit an aggressive cam on stock springs and you will make <i>less</i> power than stock up top, because you float before you reach the RPM the cam was designed for.
         <br /><br />Stiffness is not free either — every cycle the engine compresses those springs, and that parasitic loss shows up in FMEP. Over-spring a mild cam and you simply lose a little power for nothing.
+      </ExpandableInfo>
+
+      <div className={styles.labelSpaced}>
+        Pistons and rods: {bottomEndLimit.label} <span className={styles.floatCaption} data-float={pastBottomEnd ? 'true' : 'false'}>· rated to {bottomEndLimit.ratedRpm.toLocaleString('en-US')} RPM</span>
+      </div>
+      <Seg label="Pistons and rods" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
+      <div className={styles.floatCaption} data-testid="bottom-end-readout">
+        At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
+        (this assembly is good for about {bottomEndLimit.limitMs.toFixed(1)} m/s) and pull {Math.round(pistonAtRedline.peakAccelMs2 / 9.81).toLocaleString('en-US')} g at top dead centre.
+      </div>
+      {pastBottomEnd && (
+        <div className={styles.floatWarning}>
+          The redline is past what these pistons and rods are built for. The dyno will still show the power; the rod
+          bearings, pins and rings wear out of proportion, and the inertia load that throws a rod grows with the square
+          of engine speed. Fit a stronger assembly, or keep the limiter at or below {bottomEndLimit.ratedRpm.toLocaleString('en-US')} RPM.
+        </div>
+      )}
+      <ExpandableInfo title="Why the bottom end sets how far an engine can rev">
+        Every revolution the piston stops dead twice and starts again, and the rod carries all of it. Engine designers rate an
+        assembly by its <b className={styles.em}>mean piston speed</b>, twice the stroke times revs per second: medium-speed car
+        engines run about 16 m/s, sports engines 20-25, Formula One and NASCAR about 25, and the Audi R8 V10 at 26.9 m/s is the
+        highest production figure. A longer stroke reaches the same speed at lower RPM, which is why a big-stroke V8 cannot rev
+        like a short-stroke motorcycle engine even with the same parts. Past the band nothing breaks at once; the parts simply
+        stop lasting, and the risk climbs with the square of the speed.
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Valvetrain</div>

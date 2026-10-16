@@ -18,6 +18,15 @@ export const RPM = [800, 1500, 2500, 3500, 4500, 5500, 6500, 7500];
  */
 export const LOAD = [200, 150, 100, 70, 40, 20];
 
+/**
+ * The RPM axis per-RPM curves are written on: the boost target, and the airflow the
+ * bolt-ons add. The table grid's own columns, then on to 11,500 RPM, so an engine that
+ * revs past 7500 has a boost target and bolt-on gains of its own up there instead of
+ * the 7500 column's held flat. A curve may still be written on the 8 table columns
+ * alone (every factory curve below 7500 is): `curveAt` reads either.
+ */
+export const CURVE_RPM = [...RPM, 8500, 9500, 10500, 11500];
+
 /** Stock volumetric efficiency table, percent. */
 export const DEFAULT_VE = [
   [60, 70, 84, 95, 104, 101, 94, 84],

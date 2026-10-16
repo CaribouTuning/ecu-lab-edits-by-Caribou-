@@ -88,6 +88,8 @@ export const quantise = (v) => (
  * prepared. One rename here is not worth a landmine there.
  */
 const r6 = quantise;
+/** Six significant figures, for the wear figures (see their call site). */
+const w6 = (v) => (typeof v === 'number' && Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(6)) : v);
 
 
 const roundAll = (obj) => Object.fromEntries(
@@ -257,7 +259,11 @@ export function buildFingerprint(S) {
               out.simulateSweep[key] = {
                 peakHp: r.peakHp,
                 peakTq: r.peakTq,
-                wear: { piston: r6(r.wear.piston), bearing: r6(r.wear.bearing), valve: r6(r.wear.valve) },
+                // Wear at 6 figures: a game figure, and with the rich-flame chemistry one
+                // piston-wear value (8.3268815 on turboI6|mild|all|100) sat on a 7-figure
+                // rounding boundary, so 16 ULP of noise flipped its last digit. Checked
+                // directly: it was the only value in the matrix that moved.
+                wear: { piston: w6(r.wear.piston), bearing: w6(r.wear.bearing), valve: w6(r.wear.valve) },
                 needsMafRecal: r.needsMafRecal,
                 nPoints: r.points.length,
                 events: r.events.map((e) => ({ type: e.type, severity: e.severity, impact: e.impact, msg: e.msg })),
@@ -310,7 +316,7 @@ export function buildFingerprint(S) {
     const p = S.applyPreset(preset);
     const fuel = S.OCTANE_OPTS[p.octaneIdx];
     const advice = S.calibrationAdvice({
-      ve: p.ve, veTruth: p.ve, timing: p.timing, afr: p.afr,
+      ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
       derived: S.deriveEngine(p.engineConfig), fuel,
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.presetCompressor(preset),
