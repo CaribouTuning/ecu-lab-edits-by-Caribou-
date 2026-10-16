@@ -43,8 +43,9 @@
  * WHAT IT IS NOT. Not CFD. No flame-front geometry, so how much of the burned zone's heat
  * the end gas feels is one coefficient rather than a radiation view factor. Both zones are
  * well stirred — no boundary layer, no profile within either. Composition is frozen apart
- * from the two gammas, so dissociation is an effective gamma plus a ceiling rather than an
- * equilibrium solve. No cycle-to-cycle variation.
+ * from the two gammas; dissociation enters the burned zone's temperature as a heat-capacity
+ * rise and a ceiling, and the pressure as an equilibrium solve (CO2, water, hydroxyl) of the
+ * energy it holds back. No cycle-to-cycle variation.
  */
 
 import { COEFF } from './coefficients.js';
@@ -52,7 +53,7 @@ import { BARO_KPA, KPA_PER_BAR, R_AIR } from './constants.js';
 import { clamp } from './math.js';
 import { N2O } from './nitrous.js';
 import {
-  burnedGammaShift, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, residualFraction, trappedChargeK,
+  burnedGammaShift, dissociatedEnergyFast, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, productsPerKgCharge, residualFraction, trappedChargeK,
 } from './thermo.js';
 
 /**
@@ -160,6 +161,9 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  *   (`octaneIndex`): what the ignition-delay correlation reads
  * @property {number} [gammaBurned] ratio of specific heats of the burned gas; defaults to
  *   COEFF.GAMMA_BURNED, the stoichiometric products' value
+ * @property {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi?: number, stoich?: number}|null} [products]
+ *   the burned gas's composition, moles per kg (thermo.js productsPerKgCharge), for its
+ *   dissociation; none, none charged
  * @property {number} [lambda] delivered lambda; sets how hot the flame behind the
  *   front runs, which heats the end gas on top of compression
  * @property {number} [evoAtdc] exhaust valve open, degrees after TDC firing. A retarded
@@ -188,6 +192,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} peakPressurePa highest cylinder pressure reached
  * @property {number} peakPressureDeg crank angle of that peak, degrees ATDC
  * @property {number} peakEndGasK hottest the unburned end gas got
+ * @property {number} evoPressurePa cylinder pressure when the exhaust valve opens, Pa
  * @property {number} peakBurnedK hottest the burned zone got — the flame temperature
  * @property {number} exhaustK gas temperature at the port, after blowdown
  * @property {number} blowbyFrac charge lost past the rings over the closed period
@@ -205,7 +210,7 @@ export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
-  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED,
+  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED, products = null,
   trace = null,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
@@ -252,6 +257,8 @@ export function runCycle({
   let knockIntegral = 0;
   let mfb50Deg = burnStart + burnDeg / 2;
   let prevBurned = 0;
+  // Energy held in dissociated products so far, J (see the pressure step below).
+  let heldJ = 0;
   let crossed50 = false;
   // The two zones. Unburned starts as the whole charge at the trapped state; burned
   // starts empty and is seeded at the first step that burns anything.
@@ -311,7 +318,19 @@ export function runCycle({
     // volume grows, and falls again with whatever the walls took. Gas hiding in the
     // crevices is at wall temperature and out of the working volume.
     const workingV = Math.max(v - creviceM3, clearanceM3 * 0.1);
-    const dp = ((gamma - 1) / workingV) * (dQ - dQwall) - (gamma * p * (vNext - v)) / workingV;
+    // DISSOCIATION. Near peak temperature part of the CO2 and water comes apart and holds
+    // back energy the flame would have released (thermo.js, dissociatedEnergyJPerKg); it
+    // comes back as the gas cools on expansion and they recombine, later in the stroke,
+    // where it does less work. So the pressure sees the flame's heat less the change in
+    // what is held. The burned zone's temperature already carries dissociation through its
+    // heat capacity rise (COEFF.CP_BURNED_TEMP_RISE), so it is not charged a second time.
+    let dHeld = 0;
+    if (products && burned > 0) {
+      const heldNext = burned * trappedMassKg * dissociatedEnergyFast(products, tB, p);
+      dHeld = heldNext - heldJ;
+      heldJ = heldNext;
+    }
+    const dp = ((gamma - 1) / workingV) * (dQ - dHeld - dQwall) - (gamma * p * (vNext - v)) / workingV;
     const pNext = Math.max(1, p + dp);
 
     // Work on the piston, trapezoidal.
@@ -454,6 +473,8 @@ export function runCycle({
 
   return {
     imepGrossPa: work / sweptM3,
+    // Cylinder pressure when the exhaust valve opens: what the blowdown pulse starts from.
+    evoPressurePa: p,
     peakPressurePa,
     peakPressureDeg,
     peakEndGasK,
@@ -784,6 +805,8 @@ export function cycleInputsFor({
     // The products' own gamma at this mixture (burnedGammaShift): exactly the constant at
     // stoichiometric, a little higher rich or lean.
     gammaBurned: COEFF.GAMMA_BURNED + burnedGammaShift(lambda > 0 ? 1 / lambda : 1, fuel),
+    // What the burned gas is made of, for its dissociation (runCycle).
+    products: productsPerKgCharge(lambda > 0 ? 1 / lambda : 1, fuel),
     residualFrac,
     effectiveCr: vIvc / clearanceM3,
     // Only carried when a phaser has moved the exhaust cam, so a fixed-cam engine's

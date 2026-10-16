@@ -86,7 +86,7 @@ describe('the known approximations are the size the pages say', () => {
     expect(ahi).toBeLessThan(10.75);
   });
 
-  it('turbo spool: 16-54% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
+  it('turbo spool: 5-26% under the rated torque at 1500-2000 RPM, where the real engine makes it', () => {
     // Each maker publishes a flat torque plateau from a stated RPM; below 2000 RPM that is
     // the real engine's torque wherever the plateau has begun.
     const plateauFrom = { n54: 1400, 'b58-m0': 1380, 'b58-m1': 1800, 'ea888-gti': 1500, 'ea888-r': 1800 };
@@ -100,8 +100,8 @@ describe('the known approximations are the size the pages say', () => {
       }
     }
     const [lo, hi] = span(deficits);
-    expect(lo).toBeGreaterThanOrEqual(0.155);
-    expect(hi).toBeLessThanOrEqual(0.545);
+    expect(lo).toBeGreaterThanOrEqual(0.045);
+    expect(hi).toBeLessThanOrEqual(0.27);
   });
 
   it('peak torque: the turbo presets within 0-5% of their rating, the GTI about 10% under', () => {

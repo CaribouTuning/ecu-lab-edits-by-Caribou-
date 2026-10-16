@@ -161,11 +161,31 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
   // intake valve. A short factory cam is genuinely less exposed than a long one, and
   // that ordering is load-bearing — flattening it over-charges every production engine
   // in the app by more than 20% of peak power.
+  const camOverlapExtra = Math.max(0, camOverlapDeg(camDuration) + intakeCamAdvanceDeg + exhaustCamRetardDeg);
   const overlapFactor = Math.max(0, camOverlapDeg(camDuration) + intakeCamAdvanceDeg + exhaustCamRetardDeg)
     / COEFF.VE_BACKPRESSURE_OVERLAP_REF;
 
   // Where this engine's breathing peaks: the reference curve's peak, moved by the cam.
   const peakRpm = BASE_PEAK_RPM + camShift;
+
+  // LATE INTAKE CLOSING AT LOW SPEED. Between bottom dead centre and intake valve close
+  // the piston is already rising; at low speed the incoming charge has too little momentum
+  // to keep filling against it, and the piston pushes charge back out until the valve
+  // shuts. So at low speed the cylinder keeps what its volume at IVC holds, and a long cam,
+  // closing later, keeps less: the bottom end a big cam gives away. At the speed the intake
+  // and cam are tuned to, ram fills the cylinder past that and the loss is gone. The
+  // reference curve is the reference cam's (IVC 45 deg ABDC), so this is that volume
+  // against the reference's: slider-crank geometry with the cycle's own rod ratio and the
+  // cycle's IVC (cycle.js, ivcAfterBdcDeg; a phaser moves it by its own angle). No fitted
+  // number: the loss fades linearly from full at standstill to none at the VE peak.
+  const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG
+    - intakeCamAdvanceDeg;
+  const cylVolumeAt = (abdc) => {
+    const th = ((180 + abdc) * Math.PI) / 180;
+    const R = COEFF.ROD_RATIO;
+    return 1 / (cfg.compression - 1) + 0.5 * (R + 1 - Math.cos(th) - Math.sqrt(R * R - Math.sin(th) ** 2));
+  };
+  const ivcTrapRatio = cylVolumeAt(ivcAbdc) / cylVolumeAt(COEFF.IVC_BASE_ABDC);
 
   return (rpm, mapKpa) => {
     const norm = (rpm - 4500) / 3000;      // -1 at 1500, +1 at 7500
@@ -204,6 +224,7 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     // limiter (#15). Keyed on stroke, so a long-stroke engine runs out of breath at
     // fewer revolutions than a short-stroke one, which is the real reason it cannot rev.
     val *= machVeMultiplier(cfg.bore, cfg.stroke, rpm, machChargeK, valveAreaRatio);
+    val *= 1 + (ivcTrapRatio - 1) * clamp(1 - rpm / peakRpm, 0, 1);
 
     if (rpm > floatRpm) {
       val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
@@ -211,6 +232,19 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     val *= 1 + cylBreathing * Math.max(0, cylBreathing > 0 ? gainNorm : norm);
     val *= crFactor * headFactor * fuelFactor * injectionFactor;
     val *= partLoadVeFactor(mapKpa, cfg.compression);
+    // OVERLAP BACKFLOW AT LOW SPEED AND VACUUM. With both valves open and the intake below
+    // the exhaust, burned gas flows back into the intake port, and the slower the engine
+    // turns the longer it has to do it. The gas-exchange law above counts only the residual
+    // left in the clearance volume, so at low speed and part throttle the model filled the
+    // cylinder better than real engines do: against 7 stock GM Gen III calibrations it read
+    // 8-10% high at 800 RPM and 30-50 kPa, 4-6% at 1200, 2-4% at 1600-2000 and agreed
+    // from 2400 up and at full throttle (Pro's GM benchmark). Scaled by the cam's own
+    // overlap, so a long cam idles on less vacuum as a real one does.
+    if (mapKpa < BARO_KPA) {
+      const vacuum = Math.sqrt(1 - mapKpa / BARO_KPA);
+      const slow = clamp((COEFF.OVERLAP_BACKFLOW_FADE_RPM - rpm) / (COEFF.OVERLAP_BACKFLOW_FADE_RPM - 800), 0, 1.25);
+      val *= 1 - COEFF.OVERLAP_BACKFLOW_LOSS * vacuum * slow * (1 + camOverlapExtra / COEFF.VE_BACKPRESSURE_OVERLAP_REF);
+    }
 
     // Bolt-ons: measured airflow gains, weighted toward the RPM where they work.
     if (mods.intake) val += curveAt(MOD_BONUS.intake, rpm) * loadScale;

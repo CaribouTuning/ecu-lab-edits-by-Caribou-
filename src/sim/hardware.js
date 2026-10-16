@@ -165,6 +165,11 @@ export const FUEL_CHOICES = [
  *
  * Duty cycle is computed from actual required pulse width against the time available
  * per engine cycle, not from a capacity index.
+ *
+ * 1050 and 1300 cc are the sizes ethanol builds actually run: E85 needs about 40% more
+ * fuel by volume than gasoline for the same air (stoichiometric 9.8:1 against 14.7, and a
+ * lower density), so a V6 making 400 wheel hp on E85 needs about 1000 cc at 80% duty.
+ * Appended, so a saved build's injector index means what it did.
  */
 export const INJECTOR_OPTS = [
   { label: '315cc (stock)', cc: 315 },
@@ -172,6 +177,8 @@ export const INJECTOR_OPTS = [
   { label: '550cc', cc: 550 },
   { label: '650cc', cc: 650 },
   { label: '850cc', cc: 850 },
+  { label: '1050cc', cc: 1050 },
+  { label: '1300cc', cc: 1300 },
 ];
 
 /**

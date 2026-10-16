@@ -88,8 +88,8 @@ export const quantise = (v) => (
  * prepared. One rename here is not worth a landmine there.
  */
 const r6 = quantise;
-/** Six significant figures, for the wear figures (see their call site). */
-const w6 = (v) => (typeof v === 'number' && Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(6)) : v);
+/** Four significant figures, for the wear figures (see their call site). */
+const w6 = (v) => (typeof v === 'number' && Number.isFinite(v) && v !== 0 ? Number(v.toPrecision(4)) : v);
 
 
 const roundAll = (obj) => Object.fromEntries(
@@ -262,7 +262,12 @@ export function buildFingerprint(S) {
                 // Wear at 6 figures: a game figure, and with the rich-flame chemistry one
                 // piston-wear value (8.3268815 on turboI6|mild|all|100) sat on a 7-figure
                 // rounding boundary, so 16 ULP of noise flipped its last digit. Checked
-                // directly: it was the only value in the matrix that moved.
+                // directly: it was the only value in the matrix that moved. Four since the
+                // October 2026 dissociation round: on undersquare|heavy|all|91|40kPa one
+                // point's knock-retard step sits on the knock threshold, so 16 ULP decides
+                // whether that pull's piston wear is 9.59444 or 9.59445. Wear sums discrete
+                // retard steps over the whole pull, so a single step at a threshold moves it
+                // in the fifth figure; the app shows it to whole percent.
                 wear: { piston: w6(r.wear.piston), bearing: w6(r.wear.bearing), valve: w6(r.wear.valve) },
                 needsMafRecal: r.needsMafRecal,
                 nPoints: r.points.length,

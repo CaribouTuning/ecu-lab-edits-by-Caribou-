@@ -36,29 +36,31 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 273 hp / 246 lb-ft | 6400 / 6500 | 0.874 | 29.2° | 0.451 | 10.4 | 751 | 61 | 12.0 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 291 hp / 253 lb-ft | 6800 / 6900 | 0.874 | 29.6° | 0.449 | 10.4 | 748 | 65 | 12.3 |
-| BMW N54 | 302 hp / 295 lb-ft | 288 hp / 309 lb-ft | 5800 / 5500 | 0.841 | 17.8° | 0.466 | 10.4 | 757 | 73 | 17.7 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 306 hp / 331 lb-ft | 5500–6500 / 5700 | 0.833 | 15.6° | 0.475 | 10.3 | 761 | 74 | 18.8 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 354 hp / 368 lb-ft | 5800 / 5500 | 0.830 | 10.6° | 0.482 | 10.2 | 779 | 79 | 20.9 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 212 hp / 231 lb-ft | 4700–6200 / 5500 | 0.830 | 14.7° | 0.496 | 9.9 | 784 | 72 | 19.8 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 281 hp / 279 lb-ft | 5400–6500 / 6000 | 0.830 | 13.7° | 0.474 | 10.4 | 777 | 86 | 23.9 |
-| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 346 hp / 366 lb-ft | 5600 / 5500 | 0.874 | 29.1° | 0.487 | 9.6 | 757 | 59 | 11.0 |
-| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 381 hp / 374 lb-ft | 6000 / 5900 | 0.874 | 29.9° | 0.485 | 9.6 | 752 | 62 | 11.2 |
-| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 322 hp / 371 lb-ft | 5200 / 5000 | 0.874 | 29.6° | 0.495 | 9.4 | 768 | 54 | 10.6 |
-| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 293 hp / 334 lb-ft | 5200 / 5000 | 0.874 | 28.1° | 0.489 | 9.5 | 760 | 57 | 10.7 |
-| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 284 hp / 300 lb-ft | 5200 / 5700 | 0.874 | 29.1° | 0.503 | 9.3 | 765 | 55 | 10.7 |
-| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 473 hp / 460 lb-ft | 6000 / 6000 | 0.874 | 22.1° | 0.437 | 10.7 | 755 | 67 | 12.2 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 273 hp / 246 lb-ft | 6400 / 6600 | 0.874 | 29.3° | 0.453 | 10.3 | 753 | 60 | 11.9 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 291 hp / 253 lb-ft | 6800 / 7000 | 0.874 | 29.7° | 0.451 | 10.4 | 749 | 65 | 12.3 |
+| BMW N54 | 302 hp / 295 lb-ft | 288 hp / 308 lb-ft | 5800 / 5500 | 0.841 | 17.8° | 0.466 | 10.4 | 757 | 73 | 17.6 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 306 hp / 332 lb-ft | 5500–6500 / 5500 | 0.832 | 14.4° | 0.475 | 10.3 | 761 | 75 | 18.8 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 355 hp / 368 lb-ft | 5800 / 5600 | 0.830 | 11.3° | 0.480 | 10.3 | 777 | 79 | 20.9 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 212 hp / 232 lb-ft | 4700–6200 / 5500 | 0.830 | 14.7° | 0.495 | 9.9 | 783 | 73 | 19.9 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 282 hp / 279 lb-ft | 5400–6500 / 6200 | 0.830 | 14.6° | 0.473 | 10.4 | 777 | 85 | 23.9 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 346 hp / 366 lb-ft | 5600 / 5500 | 0.874 | 29.4° | 0.488 | 9.6 | 757 | 59 | 11.0 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 380 hp / 373 lb-ft | 6000 / 5900 | 0.874 | 29.9° | 0.486 | 9.6 | 752 | 62 | 11.2 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 322 hp / 371 lb-ft | 5200 / 5000 | 0.874 | 29.9° | 0.495 | 9.4 | 767 | 55 | 10.6 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 293 hp / 334 lb-ft | 5200 / 5000 | 0.874 | 28.2° | 0.490 | 9.5 | 760 | 57 | 10.7 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 278 hp / 300 lb-ft | 5200 / 5500 | 0.874 | 28.8° | 0.502 | 9.3 | 765 | 55 | 10.6 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 472 hp / 460 lb-ft | 6000 / 6000 | 0.874 | 22.1° | 0.438 | 10.7 | 755 | 67 | 12.2 |
 
 Each engine's one fitted input is its cam duration, set where peak power lands on the
 rating; torque and the peak speeds are predictions. The cams were refitted after the
 rich-flame chemistry below, which took about 4% of the heat out of every full-throttle
 point: the pushrod V8s, the HEMI and the Golf R now land within 0–4% of their ratings again.
-Four cannot be refitted onto theirs and are recorded as known gaps in
+Five cannot be refitted onto theirs and are recorded as known gaps in
 `tests/presets.test.js`: the VQ35DE Rev-Up (−9%; a longer cam runs its power flat into the
 7000 limiter, which the real engine does not do), the VQ35HR (−5%; the cam that lands it
-inside the band makes its stock spark knock once an intake and headers are fitted), the
-B58B30M1 (−7%) and the GTI's torque
+inside the band makes its stock spark knock once an intake and headers are fitted), the LS6
+(−5%; its cam is held at 228 by the overlap advisory, and its real heads out-flow the LS1's on
+the same valve size, which a breathing model built on valve diameter cannot see), the
+B58B30M1 (−8%) and the GTI's torque
 (−10%), both held far from MBT by the knock limit at full boost, where cam duration does
 not move peak output. The twin-plug HEMI runs about 22° of spark at peak power where
 one-plug engines run 28–30°: two flames burn the charge faster (engine.js), so best torque
@@ -96,13 +98,13 @@ What it changed, measured:
 | BSFC at peak power, presets | 0.42–0.48 | 0.44–0.50 | 0.45–0.50 NA, 0.50–0.60 turbo |
 | Crank hp per lb/min of air | 9.8–11.2 | 9.3–10.7 | about 10–11 |
 | Power from λ 0.88 to 0.70 | about the same | −11% | falls away |
-| Mixture for best power (MBT, fixed air) | flat from 14:1 to 11:1 | λ ≈ 0.95 | λ 0.86–0.91 |
+| Mixture for best power (MBT, fixed air) | flat from 14:1 to 11:1 | λ ≈ 0.94 (stoichiometric 2% under) | λ 0.86–0.91 (stoichiometric 3–5% under) |
 | Exhaust temperature peak | exactly stoichiometric | λ ≈ 0.95–0.97 | near stoichiometric, slightly lean |
 | A 100-shot wet nitrous kit | 1.0–1.35 × its rating | 0.89–0.98 × | about its rating |
 
 Two of those still disagree with real engines and are listed below: best power sits a little
-leaner than a real engine's (the model does not have the dissociation at stoichiometric flame
-temperatures that pushes real best power rich), and the exhaust still peaks a little rich of
+leaner than a real engine's (dissociation is now computed, but only for CO₂, water and
+hydroxyl, which is the lower bound of it), and the exhaust still peaks a little rich of
 stoichiometric rather than a little lean of it.
 
 ## Engines past 7500 RPM
@@ -174,11 +176,31 @@ Learn article 39. None of them changes the direction of any lesson.
    and it went with it. Friction before October 2026 was the rest (src/sim/friction.js).
    Generic builds: 0.56–0.71 on a 9:1 turbo build on pump fuel, the upper end without an
    intercooler.
-2. **Turbos spool late.** Turbine power comes from steady exhaust flow; the pulse energy a
-   twin-scroll housing harvests is not modelled. At 1500–2000 RPM the turbo presets
-   make 16–54% less torque than the real engines, and nothing holds their torque flat the
-   way a factory torque limit does. Peak torque lands within 0–5% of the rating on four of
-   the five turbo presets; the GTI peaks about 10% under it.
+2. **Turbos still come in a little late.** At 1500–2000 RPM the turbo presets make 5–26%
+   less torque than the makers' published plateaus (the B58 M0 5% at 2000, the N54 11%, the
+   EA888s 21–26%); before October 2026 it was 16–54%. Two fixes closed most of it, each
+   from measured data:
+   - **Low-speed breathing.** The reference breathing curve kept 0.57 of its peak VE at a
+     sixth of its peak speed and 0.68 at a third; seven stock GM Gen III calibrations
+     (LS1, LS6, LQ4, LM7, LR4) keep 0.76 and 0.81, and the model read 10–20 VE points low
+     below 2000 RPM on every one. The curve's low end is now GM's (tables.js, DEFAULT_VE),
+     and those engines' full-load VE below 2000 RPM is within −4 to +2 points of GM's on
+     the truck engines. A long cam still gives its bottom end away: the charge a late
+     intake valve lets the piston push back out at low speed is now computed from the
+     slider-crank volume at its closing angle (airflow.js), where the steep old curve had
+     stood in for it.
+   - **Blowdown pulse energy at the turbine.** The turbine only saw the steady expansion
+     from the mean manifold pressure, which at low flow is barely above one. The pulse
+     each cylinder releases at exhaust valve opening, at 3.5–6 x manifold pressure in the
+     cycle, is now credited at a recovery of 0.35 (turbo.js; Watson & Janota put practical
+     pulse systems at a third to a half). It is the one fitted number, set on the N54;
+     the B58s and EA888s were not fitted to.
+   What is left is spark: under full boost below 2000 RPM the model's knock limit holds
+   the B58 near TDC. Against GM's own spark tables the knock model is within about 3°
+   below 2000 RPM, so it was not loosened without data that says it should be (a datalog
+   of a stock B58 or EA888 with spark and knock retard would settle it). Nothing holds the
+   torque flat the way a factory torque limit does. Peak torque lands within 0–5% of the
+   rating on four of the five turbo presets; the GTI peaks about 10% under it.
 3. **Exhaust temperature reads low at full throttle.** The gauge reads about 750–770 °C (NA)
    and 755–785 °C (boosted) at peak power. Production turbo engines run up to about 950 °C
    at the turbine inlet before enrichment holds them there (ASME source above). The
@@ -192,11 +214,18 @@ Learn article 39. None of them changes the direction of any lesson.
    enrichment effect is smaller; the physics-invariant test asserts the cooling from 85 kPa
    up.
 4. **Best power sits a little lean.** With fixed air and spark at MBT, the model makes its
-   most power near λ 0.95, about 1% more than at λ 0.88 and 5% more than at λ 0.75. A real
-   engine makes its best power at λ 0.86–0.91: its stoichiometric flame is hot enough to
-   dissociate CO₂ and water, which costs a stoichiometric mixture more than a rich one, and
-   the model does not have that dissociation. The difference near best power is a percent or
-   two; the factory tables still command the published full-load λ.
+   most power near λ 0.94, about 1% more than at λ 0.88, 7% more than at λ 0.75, and 2% more
+   than at stoichiometric. A real engine makes its best power at λ 0.86–0.91, and loses 3–5% at
+   stoichiometric: its flame is hot enough to dissociate CO₂ and water, which holds back
+   energy until the gas recombines late in expansion, and that costs a stoichiometric mixture
+   more than a rich one, whose surplus CO and H₂ hold the equilibria back. Since October 2026
+   the cycle computes that (thermo.js, `dissociatedEnergyJPerKg`: the CO₂, water and hydroxyl
+   equilibria from the JANAF constants, solved at the burned gas's temperature and pressure
+   at every crank step), which moved best power from λ 0.95 and doubled the stoichiometric
+   loss from 1% to 2%. Atomic H and O and NO are not carried, so what is left of the gap is
+   the lower-bound side of that equilibrium; the rich side's chemistry itself checks against
+   measured exhaust (CO 3.7% at λ 0.9 and 7.6% at λ 0.8, against about 3% and 6–7%,
+   Heywood §4.9). The factory tables still command the published full-load λ.
 5. **Best-torque timing.** The advisors aim for the textbook MBT. The model's own cycle
    makes its best torque a median 3° later than that, within 11° for 95% of operating
    points and up to about 15° at the rare extreme (mostly low RPM); following the advice
@@ -272,8 +301,28 @@ src/sim/airflow.js): the residual in the clearance volume expands from exhaust t
 pressure before fresh charge enters, so VE / VE(full load) = (rc − (Pe/Pi)^(1/γ)) / (rc − 1).
 Nothing in it is fitted. On GM's own LM7 VE tables (2400 rpm, intake-air basis) it gives
 0.71/0.82/0.88/0.92/0.96 of full load at 20/30/40/50/70 kPa against GM's 0.73/0.81/0.86/0.90/0.95;
-the hand-shaped rows it replaced gave 0.54/0.62/0.70/0.77/0.90. Not in it: overlap pushing
-exhaust back into a vacuum manifold, which lowers light-load VE further on long cams.
+the hand-shaped rows it replaced gave 0.54/0.62/0.70/0.77/0.90.
+
+**Overlap backflow at low speed** (October 2026). The law counts only the residual left in
+the clearance volume; with both valves open and the intake below the exhaust, burned gas
+also flows back into the intake port, and the slower the engine turns the longer it has to.
+Once the breathing curve's low end was corrected to GM's (below), the model read 8–10% high
+at 800 RPM and 30–50 kPa against the stock LM7, LQ4 and LR4 tables, 4–6% at 1200 and
+2–4% at 1600–2000, and agreed from 2400 up and at full throttle. That loss is now carried
+(airflow.js; `OVERLAP_BACKFLOW_LOSS`, fitted to those tables, scaled by the cam's own
+overlap so a long cam idles on less vacuum): at 30 kPa the truck engines and the LS6 sit
+within ±4 VE points of GM's from 800 to 2400 RPM. The LS1 reads 5–9 high there, on a cam
+Pro's benchmark fits longer than its preset's. The default engine idles near 800 RPM on
+about 27 kPa, as a real V6 does.
+
+**Low-speed breathing at full load** (October 2026). Against the full-load VE rows of seven
+distinct stock GM Gen III calibrations, a real engine keeps 0.76 of its peak VE at a sixth of
+its peak speed, 0.81 at a third and 0.83 at a little over half; the reference curve had
+0.57, 0.68 and 0.81 and read 10–20 VE points low below 2000 RPM on every engine. Its low end
+is now GM's (tables.js, `DEFAULT_VE`): the truck engines' full-load VE below 2000 RPM is
+within −4 to +2 points of GM's. The bottom end a long cam gives away is computed from the
+slider-crank volume at its own intake valve close (no fitted number), where the old steep
+curve had stood in for it.
 
 **Table layouts** (src/sim/layouts.js). TUNE can put the VE, spark and mixture tables on
 the breakpoints an engine's own computer uses, where those were read from real

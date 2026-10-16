@@ -57,6 +57,19 @@ export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2
 }
 
 /**
+ * Cylinder pressure when the exhaust valve opens at full load, kPa: what the blowdown pulse
+ * starts from. A line through what the crank-angle cycle itself gives on the factory turbo
+ * engines at full load (cycle.js, `evoPressurePa`): about 4.1 x manifold pressure at 1500
+ * RPM, 4.6 x at 2000 and 5.5 x at 3000, levelling near 6 x as the burn runs later.
+ *
+ * @param {number} mapKpa
+ * @param {number} rpm
+ */
+export function exhaustPulsePressureKpa(mapKpa, rpm) {
+  return mapKpa * clamp(COEFF.EVO_PRESSURE_RATIO_AT_0 + COEFF.EVO_PRESSURE_RATIO_PER_RPM * rpm, 3.5, 6.2);
+}
+
+/**
  * Boost the hardware can actually make, from the turbine/compressor power balance.
  *
  * @param {object} input
@@ -69,17 +82,38 @@ export function turbineBackPressureKpa(exhaustFlowKgS, exhaustK, effectiveAreaM2
  * @param {object} input.compressor a COMPRESSOR_OPTS entry, read through {@link compressorMap}
  * @param {number} [input.currentPr] pressure ratio to evaluate the map at
  * @param {number} [input.baroKpa] ambient pressure both wheels work against
+ * @param {number|null} [input.rpm] engine speed, for the blowdown pulse; without it the
+ *   turbine sees steady flow only
  * @returns {{boostPsi: number, map: ReturnType<typeof compressorMap>}}
  */
 export function achievableBoostPsi({
   airFlowKgS, fuelFlowKgS, exhaustK, intakeK, empKpa, turbine, compressor, currentPr = 1,
-  baroKpa = BARO_KPA,
+  baroKpa = BARO_KPA, rpm = null,
 }) {
   const exhaustFlowKgS = airFlowKgS + fuelFlowKgS;
   const expansionRatio = Math.max(1, empKpa / baroKpa);
-  // Work the turbine can pull out of that expansion.
+  // Work the turbine can pull out of that expansion, as if the exhaust arrived steadily.
+  const steadyShare = 1 - Math.pow(expansionRatio, -GAMMA_EXP);
+  // ...plus what the BLOWDOWN PULSE brings. It does not arrive steadily: when the exhaust
+  // valve opens the cylinder is at several bar (the cycle gives 3.5-6 x manifold pressure,
+  // `exhaustPulsePressureKpa`), and the share of the charge that escapes on that pressure
+  // reaches the turbine as a pulse carrying far more than the mean manifold pressure says.
+  // A close-coupled, divided or twin-scroll manifold keeps part of it (Watson & Janota,
+  // Turbocharging the Internal Combustion Engine, 1982, ch. 7; Heywood 1988, section 6.8).
+  // At low speed, where the mean expansion ratio is barely above one, that is most of what
+  // spins the turbine; at high flow the manifold pressure rises toward the pulse and the
+  // extra shrinks of its own accord.
+  let pulseShare = 0;
+  if (rpm != null && COEFF.TURBINE_PULSE_RECOVERY > 0) {
+    const pEvo = exhaustPulsePressureKpa(currentPr * baroKpa, rpm);
+    if (pEvo > empKpa) {
+      const blowdownMass = 1 - Math.pow(empKpa / pEvo, 1 / COEFF.GAMMA_BURNED);
+      const pulseExpansion = 1 - Math.pow(baroKpa / pEvo, GAMMA_EXP);
+      pulseShare = COEFF.TURBINE_PULSE_RECOVERY * blowdownMass * Math.max(0, pulseExpansion - steadyShare);
+    }
+  }
   const turbineW = exhaustFlowKgS * COEFF.CP_EXHAUST * exhaustK
-    * (1 - Math.pow(expansionRatio, -GAMMA_EXP)) * turbine.turbineEff
+    * (steadyShare + pulseShare) * turbine.turbineEff
     * COEFF.TURBO_MECH_EFF;
   if (turbineW <= 0 || airFlowKgS <= 0) return { boostPsi: 0, map: compressorMap(compressor, airFlowKgS, currentPr) };
   // Efficiency comes off the MAP at where this point actually sits, not from a constant.
@@ -187,7 +221,7 @@ export function solveInduction({
     const empKpa = turbineBackPressureKpa(airFlowKgS + fuelFlowKgS, exhaustK, turbine.effectiveAreaM2, baroKpa);
     const solved = achievableBoostPsi({
       airFlowKgS, fuelFlowKgS, exhaustK, intakeK: intakeKAt(boostPsi),
-      empKpa, turbine, compressor, currentPr: mapKpa / baroKpa, baroKpa,
+      empKpa, turbine, compressor, currentPr: mapKpa / baroKpa, baroKpa, rpm,
     });
     // CHOKE IS A MASS FLOW LIMIT, not merely an efficiency penalty. Once the inducer is
     // at Mach 1 no more air goes through it at any shaft speed, so a boost that would
