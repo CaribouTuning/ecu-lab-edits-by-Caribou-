@@ -474,7 +474,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       <Labels labels={labels} />
       <Toasts toasts={toasts} />
       {!drawer && !sheet && !racing && <PromptButton prompt={prompt} onUse={() => world?.interact()} />}
-      {(driving || racing) && <Dash world={world} units={settings.units} />}
+      {(driving || racing) && <Dash world={world} units={settings.units} touch={touch} />}
       {touch && !drawer && !sheet && <TouchControls world={world} driving={driving} />}
 
       <aside ref={drawerRef} className={styles.drawer} data-open={drawer ? 'true' : 'false'} aria-hidden={drawer ? undefined : 'true'} aria-label="Phone">

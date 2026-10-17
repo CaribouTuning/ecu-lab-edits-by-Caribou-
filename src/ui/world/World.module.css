@@ -259,7 +259,7 @@
 .padAct { width: 76px; height: 76px; border-color: var(--acc); font-size: 24px; color: var(--acc-ink); border-radius: 50%; }
 .padGas { width: 86px; height: 112px; border-color: var(--ok); color: var(--ok-ink); }
 .padBrake { width: 76px; height: 86px; border-color: var(--danger); color: var(--danger-ink); }
-.touch[data-driving='true'] .dash { right: 50%; }
+.dash[data-touch='true'] { bottom: calc(var(--edge-b) + 126px); transform: scale(0.6); transform-origin: bottom right; }
 
 /* ---- drawer ---- */
 .drawer {

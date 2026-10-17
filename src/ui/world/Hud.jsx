@@ -90,9 +90,9 @@ export function Objective({ text }) {
  * The dash: speed, a tachometer with its redline, the gear, the traction-control light,
  * and the g-forces. Drawn once; the needle and numbers move through refs.
  *
- * @param {{world: any, units: 'mph'|'kph'}} p
+ * @param {{world: any, units: 'mph'|'kph', touch?: boolean}} p
  */
-export function Dash({ world, units }) {
+export function Dash({ world, units, touch = false }) {
   const speed = useRef(null);
   const gear = useRef(null);
   const needle = useRef(null);
@@ -134,7 +134,7 @@ export function Dash({ world, units }) {
   }, [world, units]);
   // Redline arc: from 0.9 of the way round to the end.
   return (
-    <div className={styles.dash} aria-label="Dashboard">
+    <div className={styles.dash} data-touch={touch ? 'true' : 'false'} aria-label="Dashboard">
       <div className={styles.pedals} aria-hidden="true"><span className={styles.pedal}><i ref={brake} data-kind="brake" /></span><span className={styles.pedal}><i ref={throttle} data-kind="gas" /></span></div>
       <div className={styles.tach}>
         <svg viewBox="-60 -60 120 120" aria-hidden="true">

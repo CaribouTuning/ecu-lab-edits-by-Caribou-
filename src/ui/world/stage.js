@@ -78,6 +78,8 @@ export function createStage(canvas, opts = {}) {
         // Positive when the neighbours are nearer: this pixel is the far side of the edge, so the
         // line sits on the farther surface and a model keeps its full silhouette.
         float edge = smoothstep(thresh, thresh * 2.0, lap / max(w, 1e-5));
+        // Far scenery sits in the haze: no ink on it, or the hills turn to wire.
+        edge *= 1.0 - smoothstep(60.0, 105.0, 1.0 / max(w, 1e-5));
         c.rgb *= 1.0 - edge * strength;
         gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
       }`,

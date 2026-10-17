@@ -34,6 +34,18 @@ changes a physics number. The fingerprint is unchanged.
 | Caribou Motors | 25 | Buy a car of your own |
 | Car meet | 40, night | Build + tune + style judging |
 
+## How it looks and plays
+
+- **Walking** is a fixed three-quarter top-down view, like a handheld creature-collecting RPG:
+  steep enough to see the street, shallow enough to see shop fronts. Narrow lens, so people
+  stay upright at the screen edge.
+- **Driving** is a chase camera behind the car: it swings round with the heading, looks a
+  little way down the road, and pulls back and widens with speed.
+- **Look.** Pixel art in 3D, not blocks: soft rounded characters and props, brick, siding and
+  shingle textures at true scale, leafy round trees, flower boxes, car bodies with shoulder
+  lines and door cuts. One full-screen pass draws a one-pixel ink line wherever depth jumps
+  or folds, so everything is outlined the same way; far scenery fades out of it.
+
 ## What teaches what
 
 Every place carries a `learn` line (`src/ui/world/locations.js`); the idea behind each:

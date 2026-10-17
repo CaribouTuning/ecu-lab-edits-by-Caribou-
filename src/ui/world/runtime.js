@@ -238,9 +238,10 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     person.group.rotation.set(0, 0, 0);
     person.group.visible = false;
     rig.mode = 'chase';
-    rig.pitch = 0.27;
-    rig.dist = 8.6;
-    rig.height = 1.5;
+    rig.pitch = 0.3;
+    rig.dist = 9.4;
+    rig.height = 1.7;
+    rig.fov = 46;
     rig.snap();
     tele.driving = true;
     tele.redline = drive.pt.redline;
@@ -267,6 +268,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     rig.pitch = level.camera?.pitch ?? 0.85;
     rig.dist = level.camera?.dist ?? 16;
     rig.height = 1.2;
+    rig.fov = level.camera?.fov ?? 34;
     rig.snap();
     tele.driving = false;
     s.vx = s.vy = s.yawRate = 0; s.wR = s.wF = 0;
