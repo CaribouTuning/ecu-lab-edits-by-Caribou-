@@ -258,7 +258,7 @@ export function interiorLevel(id) {
     mergeStatic(root);
     return {
       root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
-      camera: { pitch: 0.8, dist: 17, yaw: 0, fov: 30 },
+      camera: { pitch: 1.0, dist: 22, yaw: 0, fov: 22 },
       focus: (x, z) => ({ x: x * 0.4, z: z * 0.5 }),
       bounds: [{ minX: -w / 2 + 0.6, maxX: w / 2 - 0.6, minZ: -d / 2 + 0.8, maxZ: d / 2 - 0.4 }, { minX: -1.4, maxX: 1.4, minZ: d / 2 - 1, maxZ: d / 2 + 3.2 }],
       spawn: () => ({ x: inner.spawn.x, z: d / 2 - 1.4, yaw: Math.PI }),

@@ -48,6 +48,45 @@ export function createStage(canvas, opts = {}) {
   scene.add(sun, sun.target);
   const sunDir = new THREE.Vector3(-0.5, 1, 0.65).normalize();
 
+  // The picture is drawn into a small target first, then a full-screen pass puts a one-pixel
+  // dark line wherever the depth jumps or folds: the outline every model of a pixel-art game
+  // has, on everything at once, without a line mesh per box.
+  const target = new THREE.WebGLRenderTarget(8, 8, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+  target.depthTexture = new THREE.DepthTexture(8, 8);
+  target.depthTexture.minFilter = THREE.NearestFilter;
+  target.depthTexture.magFilter = THREE.NearestFilter;
+  target.texture.colorSpace = THREE.SRGBColorSpace;
+  const post = new THREE.ShaderMaterial({
+    uniforms: {
+      tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
+      texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
+      strength: { value: 0.62 }, thresh: { value: 0.035 },
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh;
+      varying vec2 vUv;
+      // Inverse view depth is linear across a flat surface at any angle, so its second difference is
+      // zero on a floor or a wall and spikes only on a silhouette or a fold.
+      float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
+      void main(){
+        vec4 c = texture2D(tColor, vUv);
+        float w = invZ(vUv);
+        float l = invZ(vUv - vec2(texel.x, 0.0)); float r = invZ(vUv + vec2(texel.x, 0.0));
+        float u = invZ(vUv - vec2(0.0, texel.y)); float d = invZ(vUv + vec2(0.0, texel.y));
+        float lap = max((l + r) - 2.0 * w, (u + d) - 2.0 * w);
+        // Positive when the neighbours are nearer: this pixel is the far side of the edge, so the
+        // line sits on the farther surface and a model keeps its full silhouette.
+        float edge = smoothstep(thresh, thresh * 2.0, lap / max(w, 1e-5));
+        c.rgb *= 1.0 - edge * strength;
+        gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const postScene = new THREE.Scene();
+  postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
+  const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
   let quality = opts.quality ?? 'normal';
   let cssW = 0;
   let cssH = 0;
@@ -68,10 +107,14 @@ export function createStage(canvas, opts = {}) {
       factor = Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
       const { w: iw, h: ih } = stage.size;
       renderer.setSize(iw, ih, false);
+      target.setSize(iw, ih);
+      post.uniforms.texel.value.set(1 / iw, 1 / ih);
       canvas.style.width = `${cssW}px`;
       canvas.style.height = `${cssH}px`;
       camera.aspect = iw / ih;
       camera.updateProjectionMatrix();
+      post.uniforms.near.value = camera.near;
+      post.uniforms.far.value = camera.far;
     },
 
     /** @param {keyof typeof PIXEL_ROWS} q */
@@ -111,11 +154,11 @@ export function createStage(canvas, opts = {}) {
       sun.target.updateMatrixWorld();
     },
 
-    render() { renderer.render(scene, camera); },
+    render() { drawOutlined(); },
 
     /** A PNG of what is on screen, scaled up to the display size, for photo mode. @returns {Promise<Blob|null>} */
     snapshot() {
-      renderer.render(scene, camera);
+      drawOutlined();
       const out = document.createElement('canvas');
       out.width = cssW;
       out.height = cssH;
@@ -127,9 +170,17 @@ export function createStage(canvas, opts = {}) {
 
     dispose() {
       scene.traverse((o) => { const m = /** @type {THREE.Mesh} */ (o); if (m.geometry) m.geometry.dispose(); });
+      target.dispose();
+      post.dispose();
       renderer.dispose();
     },
   };
+  function drawOutlined() {
+    renderer.setRenderTarget(target);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    renderer.render(postScene, postCam);
+  }
   stage.setTime(0);
   stage.resize();
   return stage;
@@ -145,7 +196,7 @@ export function createRig(camera) {
   const rig = {
     /** 'follow' keeps a fixed bearing; 'chase' turns to sit behind the target's heading. */
     mode: 'follow',
-    yaw: 0, pitch: 0.82, dist: 15, fov: 34, height: 1.2,
+    yaw: 0, pitch: 1.0, dist: 15, fov: 34, height: 1.2,
     pos: new THREE.Vector3(),
     shake: 0,
     /** Slide the whole picture sideways (metres along the camera's right) to make room for a panel. */
@@ -165,7 +216,7 @@ export function createRig(camera) {
      */
     update(dt, target, heading = 0, speed = 0) {
       const snapping = rig._snap;
-      const k = snapping ? 1 : 1 - Math.exp(-dt * (rig.mode === 'chase' ? 3.2 : 6));
+      const k = snapping ? 1 : 1 - Math.exp(-dt * (rig.mode === 'chase' ? 7 : 6));
       rig._snap = false;
       if (rig.mode === 'chase') {
         // Shortest way round to sit behind the heading.
@@ -174,9 +225,10 @@ export function createRig(camera) {
         let d = want - cur;
         d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
         want = cur + d;
-        rig._yaw = cur + (want - cur) * (snapping ? 1 : 1 - Math.exp(-dt * 2.4));
+        rig._yaw = cur + (want - cur) * (snapping ? 1 : 1 - Math.exp(-dt * (1.8 + Math.min(2.2, speed * 0.08))));
       } else rig._yaw = rig.yaw;
-      const dist = rig.dist + Math.min(6, speed * 0.12);
+      const chase = rig.mode === 'chase';
+      const dist = rig.dist + Math.min(5, speed * 0.1);
       const horiz = Math.cos(rig.pitch) * dist;
       const want = new THREE.Vector3(
         target.x + Math.sin(rig._yaw) * horiz,
@@ -188,7 +240,9 @@ export function createRig(camera) {
       const rz = -Math.sin(rig._yaw) * rig._shift;
       want.x += rx; want.z += rz;
       rig.pos.lerp(want, k);
-      rig._look.lerp(new THREE.Vector3(target.x + rx, target.y + rig.height * 0.6, target.z + rz), k);
+      // Chasing, look a little way down the road, so the car sits low and the corner you are about to take is in view.
+      const lead = chase ? Math.min(7, 1.5 + speed * 0.18) : 0;
+      rig._look.lerp(new THREE.Vector3(target.x + rx + Math.sin(heading) * lead, target.y + rig.height * 0.6, target.z + rz + Math.cos(heading) * lead), k);
       camera.position.copy(rig.pos);
       if (rig.shake > 0.001) {
         camera.position.x += (Math.random() - 0.5) * rig.shake;

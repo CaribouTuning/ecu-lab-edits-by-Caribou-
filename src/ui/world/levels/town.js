@@ -15,7 +15,7 @@ import { makeCar } from '../models/car.js';
 import { closedBecause, PLACES, placeById } from '../locations.js';
 import { PHASE_TIME } from './garage.js';
 import {
-  makeBarrel, makeBench, makeCone, makeCrate, makeFence, makePlant, makeRoundTree, makeStreetLamp, makeTree, makeTyreStack,
+  makeBarrel, makeBench, makeBush, makeCone, makeCrate, makeFence, makePlant, makeRoundTree, makeStreetLamp, makeTree, makeTyreStack,
 } from '../models/props.js';
 
 import { dealerStock } from '../../career/ownedCars.js';
@@ -66,7 +66,7 @@ export function buildTown(api, entry = {}) {
   const spanners = [];
 
   // ---- ground ----
-  const grass = groundPlane(260, 220, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3 });
+  const grass = groundPlane(260, 220, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3, flowers: [W.flowerA, W.flowerB, W.white] });
   grass.position.set(0, -0.06, 0);
   root.add(grass);
   const addRoad = (r) => {
@@ -235,6 +235,7 @@ export function buildTown(api, entry = {}) {
       t.position.set(x, 0, z);
       root.add(t);
       colliders.push({ x, z, r: 0.55 });
+      if (rand() < 0.5) { const bsh = makeBush(trees); bsh.position.set(x + 1.6 + rand(), 0, z + rand() * 2 - 1); root.add(bsh); }
       trees += 1;
     }
   }
@@ -246,7 +247,7 @@ export function buildTown(api, entry = {}) {
     const rx = 120 + (i % 3) * 12;
     const rz = 96 + (i % 4) * 8;
     const h = 10 + (i % 5) * 4;
-    const m = cone(14 + (i % 3) * 3, h, i % 2 ? W.rock : W.grassDark, { x: Math.cos(a) * rx, y: h / 2 - 0.5, z: Math.sin(a) * rz, seg: 5, edge: false });
+    const m = cone(14 + (i % 3) * 3, h, i % 2 ? W.rock : W.grassDark, { x: Math.cos(a) * rx, y: h / 2 - 0.5, z: Math.sin(a) * rz, seg: 9, edge: false });
     m.castShadow = false;
     root.add(m);
   }
@@ -379,7 +380,7 @@ export function buildTown(api, entry = {}) {
   };
   const level = {
     root, colliders, interactables, time: PHASE_TIME[phase],
-    camera: { pitch: 0.95, dist: 30, yaw: 0, fov: 30 },
+    camera: { pitch: 0.9, dist: 44, yaw: 0, fov: 22 },
     bounds: [{ minX: TOWN.minX + 1, maxX: TOWN.maxX - 1, minZ: TOWN.minZ + 1, maxZ: TOWN.maxZ - 1 }],
     spawn: (e) => {
       const p = e.from && e.from !== 'drive' ? placeById(e.from) : null;

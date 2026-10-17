@@ -4,7 +4,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cone, cyl, edged, glow, pixelTexture, sign, toon } from '../gfx.js';
+import { THREE, ball, box, cone, cyl, edged, glow, pixelTexture, rbox, sign, toon } from '../gfx.js';
 
 const G = () => new THREE.Group();
 
@@ -358,35 +358,47 @@ export function makeRollupDoor(width = 7.5) {
   return g;
 }
 
-/** A tree, trunk and cones. @param {number} seed */
+/** A tree: a trunk and tiers of soft pine. @param {number} seed */
 export function makeTree(seed = 0, autumn = false) {
   const g = G();
   const s = 0.85 + ((seed * 37) % 10) / 25;
-  g.add(cyl(0.18 * s, 0.24 * s, 1.5 * s, W.trunk, { y: 0.75 * s, seg: 6, edge: false }));
+  g.add(cyl(0.18 * s, 0.26 * s, 1.5 * s, W.trunk, { y: 0.75 * s, seg: 7, edge: false }));
   const cols = autumn ? [W.leafAutumn, W.leaf] : [W.leaf, W.leafDark];
-  g.add(cone(1.2 * s, 2.0 * s, cols[0], { y: 2.1 * s, seg: 7, edge: false }));
-  g.add(cone(0.9 * s, 1.6 * s, cols[1], { y: 3.0 * s, seg: 7, edge: false }));
-  g.add(cone(0.55 * s, 1.1 * s, cols[0], { y: 3.8 * s, seg: 7, edge: false }));
+  const tiers = [[1.35, 1.8, 2.0], [1.05, 1.5, 2.9], [0.72, 1.2, 3.7], [0.4, 0.9, 4.4]];
+  tiers.forEach(([r, h, y], i) => g.add(cone(r * s, h * s, cols[i % 2], { y: y * s, seg: 10, edge: false })));
   return g;
 }
 
-/** A round deciduous tree. @param {number} seed */
+/** A round deciduous tree: a clump of leaf balls on a trunk. @param {number} seed */
 export function makeRoundTree(seed = 0) {
   const g = G();
   const s = 0.9 + ((seed * 53) % 10) / 20;
-  g.add(cyl(0.2 * s, 0.26 * s, 1.8 * s, W.trunk, { y: 0.9 * s, seg: 6, edge: false }));
+  g.add(cyl(0.2 * s, 0.28 * s, 1.9 * s, W.trunk, { y: 0.95 * s, seg: 7, edge: false }));
   const c = [W.leaf, W.leafDark, W.grassLight][seed % 3];
-  g.add(box(2.0 * s, 1.6 * s, 2.0 * s, c, { y: 2.5 * s, edge: false }));
-  g.add(box(1.4 * s, s, 1.4 * s, c, { y: 3.5 * s, edge: false }));
+  const hi = [W.grassLight, W.leaf, W.leaf][seed % 3];
+  g.add(ball(1.25 * s, c, { y: 2.8 * s, sy: 0.9 }));
+  g.add(ball(0.95 * s, hi, { x: 0.55 * s, y: 3.35 * s, z: 0.2 * s }));
+  g.add(ball(0.85 * s, c, { x: -0.6 * s, y: 3.1 * s, z: -0.3 * s }));
+  g.add(ball(0.7 * s, hi, { x: 0.05 * s, y: 3.75 * s, z: -0.25 * s }));
+  return g;
+}
+
+/** A bush, now and then with flowers. @param {number} seed */
+export function makeBush(seed = 0) {
+  const g = G();
+  const s = 0.8 + ((seed * 29) % 10) / 20;
+  g.add(ball(0.75 * s, W.leafDark, { y: 0.5 * s, sy: 0.75 }));
+  g.add(ball(0.55 * s, W.leaf, { x: 0.5 * s, y: 0.42 * s, z: 0.1, sy: 0.8 }));
+  g.add(ball(0.5 * s, W.leaf, { x: -0.45 * s, y: 0.4 * s, z: -0.15, sy: 0.8 }));
+  if (seed % 3 === 0) for (let i = 0; i < 5; i += 1) g.add(ball(0.1, i % 2 ? W.flowerA : W.flowerB, { x: Math.sin(i * 2.4) * 0.6 * s, y: 0.7 * s + (i % 2) * 0.08, z: Math.cos(i * 2.4) * 0.5 * s, seg: 5 }));
   return g;
 }
 
 export function makeStreetLamp(on = false) {
   const g = G();
   g.add(cyl(0.07, 0.1, 4.6, W.metalDark, { y: 2.3, seg: 6, edge: false }));
-  g.add(box(0.9, 0.08, 0.16, W.metalDark, { x: 0.35, y: 4.6, edge: false }));
-  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.2), glow(on ? W.lampWarm : W.cloth.silver)));
-  g.children[g.children.length - 1].position.set(0.65, 4.52, 0);
+  g.add(rbox(0.9, 0.1, 0.14, W.metalDark, { x: 0.35, y: 4.6, r: 0.04 }));
+  g.add(ball(0.2, on ? W.lampWarm : W.cloth.silver, { x: 0.7, y: 4.5, sy: 0.7, seg: 8, mat: glow(on ? W.lampWarm : W.cloth.silver) }));
   return g;
 }
 

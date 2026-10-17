@@ -172,8 +172,8 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const sp = entry.at ?? level.spawn(entry);
     player.x = sp.x; player.z = sp.z; player.yaw = sp.yaw ?? 0;
     player.vx = player.vz = 0;
-    rig.pitch = level.camera?.pitch ?? 0.85;
-    rig.dist = level.camera?.dist ?? 16;
+    rig.pitch = level.camera?.pitch ?? 1.0;
+    rig.dist = level.camera?.dist ?? 22;
     rig.yaw = level.camera?.yaw ?? 0;
     rig.fov = level.camera?.fov ?? 34;
     camOffset.yaw = 0;
@@ -238,9 +238,9 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     person.group.rotation.set(0, 0, 0);
     person.group.visible = false;
     rig.mode = 'chase';
-    rig.pitch = 0.32;
-    rig.dist = 7.2;
-    rig.height = 1.0;
+    rig.pitch = 0.27;
+    rig.dist = 8.6;
+    rig.height = 1.5;
     rig.snap();
     tele.driving = true;
     tele.redline = drive.pt.redline;

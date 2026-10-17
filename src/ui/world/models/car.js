@@ -10,7 +10,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, sign, toon } from '../gfx.js';
+import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, shade, sign, toon } from '../gfx.js';
 
 /**
  * Body shapes. Dimensions in metres; z is along the car, front positive. `belt` is the
@@ -149,7 +149,7 @@ export function makeCar(spec = {}) {
     [-nz, y0 + 0.06], [-nz, S.tail + lift - drop - 0.02], [-nz + 0.3, S.tail + lift - drop], [S.cab[0], S.belt + lift - drop],
     [hoodZ0, S.belt + lift - drop], [hoodZ0, trayY], [nz - 0.1, trayY], [nz, trayY - 0.04], [nz, y0 + 0.1], [nz - 0.1, y0], [-nz + 0.1, y0],
   ];
-  const body = profileMesh(trayPts, Wd, paint);
+  const body = profileMesh(trayPts, Wd, paint, { bevel: 0.13 });
   body.material = paintMat;
   car.add(body);
 
@@ -281,6 +281,21 @@ export function makeCar(spec = {}) {
     for (const s of [-1, 1]) car.add(box(0.06, 0.28, zr0 + nz - 0.1, paint, { x: s * (Wd / 2 - 0.05), y: belt + 0.12, z: bedZ, mat: paintMat }));
     car.add(box(Wd - 0.04, 0.28, 0.06, paint, { y: belt + 0.12, z: -nz + 0.03, mat: paintMat }));
     car.add(box(Wd - 0.04, 0.3, 0.06, paint, { y: belt + 0.14, z: zr0 - 0.04, mat: paintMat }));
+  }
+
+  // ---- body lines: the detail that stops a flank being one flat colour ----
+  const lite = toon(shade(paint, 0.12));
+  const deep = toon(shade(paint, -0.16));
+  const doorFront = zf0 - 0.12;
+  const doorMid = (zr0 + zf0) / 2 - 0.1;
+  const doorRear = zr0 + 0.1;
+  for (const sd of [-1, 1]) {
+    const x = sd * (Wd / 2 + 0.004);
+    // A shoulder highlight along the belt, a darker sill below, and the door cuts.
+    car.add(box(0.02, 0.035, L - 0.9, paint, { x, y: belt - 0.14, mat: lite, edge: false, cast: false }));
+    car.add(box(0.03, 0.11, wheelbase - 0.5, paint, { x, y: y0 + 0.13, mat: deep, edge: false, cast: false }));
+    for (const z of [doorFront, doorMid, doorRear]) if (z > -nz + 0.5 && z < hoodZ0 + 0.4) car.add(box(0.012, belt - y0 - 0.38, 0.018, W.black, { x, y: (belt + y0) / 2 + 0.02, z, edge: false, cast: false }));
+    car.add(box(0.03, 0.035, 0.16, W.metalLight, { x: x + sd * 0.01, y: belt - 0.08, z: doorMid + 0.32, edge: false, cast: false }));
   }
 
   // ---- wheels ----

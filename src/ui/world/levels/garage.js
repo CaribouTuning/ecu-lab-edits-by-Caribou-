@@ -614,7 +614,7 @@ export function buildGarage(api, entry = {}) {
 
   const level = {
     root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
-    camera: { pitch: 0.74, dist: 25, yaw: 0, fov: 28 },
+    camera: { pitch: 0.98, dist: 32, yaw: 0, fov: 22 },
     focus: (x, z) => ({ x: Math.max(-5, Math.min(5, x * 0.7)), z: z > 7 ? 2 + (z - 7) * 0.9 : Math.max(-1, Math.min(2, z * 0.3)) }),
     bounds: [
       { minX: ROOM.minX + 0.5, maxX: ROOM.maxX - 0.5, minZ: ROOM.minZ + 0.7, maxZ: ROOM.maxZ - 0.5 },

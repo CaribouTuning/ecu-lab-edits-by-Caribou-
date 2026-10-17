@@ -6,12 +6,13 @@
 
 import { world as W } from '../../tokens.js';
 import { itemById } from '../appearance.js';
-import { THREE, box, cyl, edged, mergeStatic, pixelTexture, toon } from '../gfx.js';
+import { THREE, cyl, mergeStatic, pixelTexture, rbox as box, toon } from '../gfx.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-const LEG = 0.74;
-const TORSO = 0.6;
+const LEG = 0.62;
+const TORSO = 0.56;
 const SHOULDER = LEG + TORSO;
-const HEAD = 0.36;
+const HEAD = 0.5;
 const HEAD_Y = SHOULDER + 0.03 + HEAD / 2;
 
 const cloth = (key) => W.cloth[key] ?? W.cloth.grey;
@@ -53,11 +54,15 @@ function faceTexture(skin, mood) {
 function makeHead(skin, mood) {
   const mats = [0, 1, 2, 3, 4, 5].map((i) => (i === 4 ? new THREE.MeshToonMaterial({ map: faceTexture(skin, mood) }) : toon(skin)));
   // BoxGeometry face order: +x, -x, +y, -y, +z, -z. The front is +z.
-  const m = new THREE.Mesh(new THREE.BoxGeometry(HEAD, HEAD, HEAD), mats);
+  // Nearly a ball: the face is painted on the front, the rest is skin and, soon, hair.
+  const m = new THREE.Mesh(new RoundedBoxGeometry(HEAD, HEAD * 0.92, HEAD, 4, HEAD * 0.42), mats);
   m.castShadow = true;
   m.receiveShadow = true;
-  return edged(m);
+  return m;
 }
+
+/** A rounded cap that wraps the top of the head, so hair and hats read as domes, not plates. */
+const dome = (head, color, extra = 0.04, thick = 0.2, y = HEAD * 0.4, z = 0) => head.add(box(HEAD + extra, thick, HEAD + extra, color, { y, z, r: HEAD * 0.4 }));
 
 /** @param {THREE.Group} head @param {string} style @param {string} color */
 function addHair(head, style, color) {
@@ -66,22 +71,22 @@ function addHair(head, style, color) {
   const add = (w, ht, d, x, y, z) => head.add(box(w, ht, d, c, { x, y, z, edge: false }));
   switch (style) {
     case 'bald': break;
-    case 'buzz': add(HEAD + 0.02, 0.05, HEAD + 0.02, 0, h + 0.01, 0); add(HEAD + 0.02, 0.1, 0.03, 0, h - 0.03, -h - 0.005); break;
+    case 'buzz': dome(head, c, 0.015, 0.16, 0.2); break;
     case 'spiky':
-      add(HEAD + 0.03, 0.08, HEAD + 0.03, 0, h + 0.03, 0);
-      for (let i = 0; i < 5; i += 1) head.add(cone2(c, -0.14 + i * 0.07, h + 0.12, (i % 2) * 0.06 - 0.03));
+      dome(head, c, 0.03);
+      for (let i = 0; i < 5; i += 1) head.add(cone2(c, -0.14 + i * 0.07, h + 0.14, (i % 2) * 0.06 - 0.03));
       break;
-    case 'long': add(HEAD + 0.04, 0.1, HEAD + 0.04, 0, h + 0.04, 0); add(HEAD + 0.04, 0.4, 0.07, 0, -0.04, -h - 0.02); add(0.06, 0.34, HEAD * 0.8, h + 0.02, -0.04, -0.03); add(0.06, 0.34, HEAD * 0.8, -h - 0.02, -0.04, -0.03); break;
-    case 'ponytail': add(HEAD + 0.03, 0.09, HEAD + 0.03, 0, h + 0.035, 0); add(0.1, 0.1, 0.1, 0, 0.04, -h - 0.06); add(0.08, 0.26, 0.08, 0, -0.08, -h - 0.1); break;
-    case 'mohawk': add(0.08, 0.14, HEAD, 0, h + 0.06, -0.01); add(0.08, 0.09, 0.08, 0, 0.02, -h - 0.03); break;
-    case 'afro': add(HEAD + 0.22, 0.26, HEAD + 0.22, 0, h + 0.07, -0.03); break;
-    case 'bun': add(HEAD + 0.03, 0.09, HEAD + 0.03, 0, h + 0.035, 0); add(0.16, 0.16, 0.16, 0, h + 0.14, -0.04); break;
-    case 'slick': add(HEAD + 0.03, 0.08, HEAD + 0.03, 0, h + 0.03, -0.01); add(HEAD + 0.03, 0.2, 0.06, 0, h - 0.07, -h - 0.015); break;
+    case 'long': dome(head, c, 0.05); add(HEAD + 0.05, 0.52, 0.1, 0, -0.08, -h - 0.02); add(0.08, 0.4, HEAD * 0.7, h + 0.02, -0.08, -0.05); add(0.08, 0.4, HEAD * 0.7, -h - 0.02, -0.08, -0.05); break;
+    case 'ponytail': dome(head, c, 0.04); add(0.14, 0.14, 0.14, 0, 0.06, -h - 0.06); add(0.1, 0.3, 0.1, 0, -0.1, -h - 0.1); break;
+    case 'mohawk': add(0.1, 0.2, HEAD * 0.95, 0, h + 0.06, -0.01); add(0.1, 0.12, 0.1, 0, 0.04, -h - 0.03); break;
+    case 'afro': head.add(box(HEAD + 0.26, 0.42, HEAD + 0.26, c, { y: h * 0.45, z: -0.03, r: 0.19, seg: 3 })); break;
+    case 'bun': dome(head, c, 0.04); add(0.2, 0.2, 0.2, 0, h + 0.16, -0.04); break;
+    case 'slick': dome(head, c, 0.03, 0.2, 0.2, -0.01); add(HEAD + 0.03, 0.28, 0.08, 0, 0.06, -h - 0.015); break;
     case 'curly':
-      add(HEAD + 0.03, 0.08, HEAD + 0.03, 0, h + 0.03, 0);
-      for (let i = 0; i < 8; i += 1) add(0.1, 0.1, 0.1, ((i % 4) - 1.5) * 0.1, h + 0.1, (Math.floor(i / 4) - 0.5) * 0.14);
+      dome(head, c, 0.04);
+      for (let i = 0; i < 8; i += 1) add(0.14, 0.14, 0.14, ((i % 4) - 1.5) * 0.13, h + 0.1, (Math.floor(i / 4) - 0.5) * 0.18);
       break;
-    default: add(HEAD + 0.03, 0.09, HEAD + 0.03, 0, h + 0.035, 0); add(HEAD + 0.03, 0.12, 0.04, 0, h - 0.06, -h - 0.01); add(0.04, 0.1, HEAD * 0.6, h + 0.01, h - 0.07, -0.05); add(0.04, 0.1, HEAD * 0.6, -h - 0.01, h - 0.07, -0.05);
+    default: dome(head, c, 0.04); add(HEAD + 0.04, 0.2, 0.08, 0, 0.1, -h - 0.01); add(0.06, 0.16, HEAD * 0.6, h + 0.01, 0.12, -0.05); add(0.06, 0.16, HEAD * 0.6, -h - 0.01, 0.12, -0.05);
   }
 }
 
@@ -102,15 +107,15 @@ function addHat(head, it) {
   const h = HEAD / 2;
   const add = (w, ht, d, x, y, z, col = c) => head.add(box(w, ht, d, col, { x, y, z, edge: false }));
   switch (it.style) {
-    case 'cap': add(HEAD + 0.05, 0.12, HEAD + 0.05, 0, h + 0.04, 0); add(HEAD, 0.03, 0.2, 0, h - 0.01, h + 0.12, a === c ? W.cloth.black : a); break;
-    case 'beanie': add(HEAD + 0.06, 0.2, HEAD + 0.06, 0, h + 0.07, 0); add(HEAD + 0.08, 0.06, HEAD + 0.08, 0, h - 0.03, 0, a); break;
-    case 'bucket': add(HEAD + 0.06, 0.13, HEAD + 0.06, 0, h + 0.05, 0); add(HEAD + 0.3, 0.025, HEAD + 0.3, 0, h - 0.01, 0); break;
-    case 'hardhat': add(HEAD + 0.07, 0.15, HEAD + 0.07, 0, h + 0.06, 0); add(HEAD + 0.1, 0.025, HEAD + 0.1, 0, h - 0.01, 0.02); add(0.06, 0.04, HEAD + 0.07, 0, h + 0.15, 0); break;
+    case 'cap': dome(head, c, 0.07, 0.22, 0.21); add(HEAD * 0.9, 0.04, 0.24, 0, 0.12, h + 0.12, a === c ? W.cloth.black : a); break;
+    case 'beanie': dome(head, c, 0.08, 0.3, 0.24); add(HEAD + 0.1, 0.08, HEAD + 0.1, 0, 0.1, 0, a); break;
+    case 'bucket': dome(head, c, 0.07, 0.22, 0.21); add(HEAD + 0.34, 0.04, HEAD + 0.34, 0, 0.1, 0); break;
+    case 'hardhat': dome(head, c, 0.09, 0.26, 0.22); add(HEAD + 0.14, 0.04, HEAD + 0.16, 0, 0.1, 0.03); add(0.08, 0.06, HEAD + 0.08, 0, h + 0.17, 0); break;
     case 'bandana': add(HEAD + 0.04, 0.09, HEAD + 0.04, 0, h - 0.02, 0); add(0.12, 0.12, 0.05, 0.1, h - 0.06, -h - 0.05); break;
     case 'headband': add(HEAD + 0.03, 0.05, HEAD + 0.03, 0, h - 0.06, 0); break;
-    case 'helmet': add(HEAD + 0.1, 0.2, HEAD + 0.1, 0, h + 0.03, -0.03); add(HEAD + 0.1, 0.2, 0.08, 0, -0.06, -h - 0.04); add(0.04, 0.1, HEAD + 0.12, 0, h + 0.15, -0.02, a); break;
+    case 'helmet': dome(head, c, 0.12, 0.3, 0.2, -0.03); add(HEAD + 0.12, 0.26, 0.1, 0, -0.04, -h - 0.04); add(0.06, 0.1, HEAD + 0.14, 0, h + 0.18, -0.02, a); break;
     case 'fullhelmet': add(HEAD + 0.12, HEAD + 0.12, HEAD + 0.1, 0, 0.0, -0.02); add(HEAD, 0.12, 0.04, 0, 0.03, h + 0.04, W.cloth.black); add(HEAD + 0.12, 0.04, 0.04, 0, 0.1, h + 0.03, a); break;
-    case 'tophat': add(HEAD + 0.22, 0.03, HEAD + 0.22, 0, h + 0.01, 0); add(HEAD, 0.3, HEAD, 0, h + 0.17, 0); add(HEAD + 0.02, 0.05, HEAD + 0.02, 0, h + 0.06, 0, a); break;
+    case 'tophat': add(HEAD + 0.26, 0.05, HEAD + 0.26, 0, h + 0.0, 0); add(HEAD * 0.82, 0.36, HEAD * 0.82, 0, h + 0.19, 0); add(HEAD * 0.84, 0.07, HEAD * 0.84, 0, h + 0.08, 0, a); break;
     default: break;
   }
 }
@@ -154,7 +159,7 @@ function dressTop(parts, it, skin) {
   const { torso, armL, armR } = parts;
   const longSleeve = !['tee', 'tank', 'polo', 'vest'].includes(it.style);
   const torsoCol = it.style === 'vest' ? W.cloth.white : c;
-  torso.add(box(0.46, TORSO, 0.26, torsoCol, { y: 0, edge: true }));
+  torso.add(box(0.46, TORSO, 0.26, torsoCol, { y: 0, edge: false }));
   const add = (w, h, d, x, y, z, col = a) => torso.add(box(w, h, d, col, { x, y, z, edge: false }));
   switch (it.style) {
     case 'polo': add(0.2, 0.06, 0.28, 0, TORSO / 2 - 0.03, 0.01); add(0.04, 0.12, 0.02, 0, TORSO / 2 - 0.1, 0.14, W.cloth.white); break;
@@ -186,7 +191,7 @@ function dressBottom(parts, it, skin) {
   const a = it.accent ? cloth(it.accent) : null;
   for (const [leg, side] of [[parts.legL, 1], [parts.legR, -1]]) {
     const len = it.style === 'short' ? 0.34 : LEG - 0.08;
-    leg.add(box(0.19, len, 0.2, c, { y: -len / 2, edge: true }));
+    leg.add(box(0.19, len, 0.2, c, { y: -len / 2, edge: false }));
     if (it.style === 'short') leg.add(box(0.15, LEG - 0.08 - len, 0.15, skin, { y: -len - (LEG - 0.08 - len) / 2, edge: false }));
     if (a) leg.add(box(0.02, len, 0.05, a, { x: 0.1 * side, y: -len / 2, edge: false }));
   }
@@ -200,7 +205,7 @@ function dressShoes(parts, it) {
     const bootH = it.style === 'boot' ? 0.2 : it.style === 'hightop' ? 0.16 : 0;
     if (bootH) leg.add(box(0.2, bootH, 0.21, c, { y: -LEG + 0.08 + bootH / 2, edge: false }));
     if (it.style === 'slide') { leg.add(box(0.19, 0.04, 0.34, c, { y: -LEG + 0.02, z: 0.06, edge: false })); continue; }
-    leg.add(box(0.2, 0.1, 0.34, c, { y: -LEG + 0.05, z: 0.06, edge: true }));
+    leg.add(box(0.2, 0.1, 0.34, c, { y: -LEG + 0.05, z: 0.06, edge: false }));
     leg.add(box(0.205, 0.03, 0.345, a, { y: -LEG + 0.015, z: 0.06, edge: false }));
   }
 }

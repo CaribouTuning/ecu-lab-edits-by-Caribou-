@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 import { world as W } from '../tokens.js';
 
@@ -39,7 +40,7 @@ export function toon(color, o = {}) {
   if (!m) {
     m = new THREE.MeshToonMaterial({
       color, gradientMap: RAMP,
-      emissive: o.emissive ?? '#000000', emissiveIntensity: o.emissiveIntensity ?? 1,
+      emissive: o.emissive ?? W.black, emissiveIntensity: o.emissiveIntensity ?? 1,
       transparent: (o.opacity ?? 1) < 1, opacity: o.opacity ?? 1,
       side: o.side ?? THREE.FrontSide,
       // Pushes the surface back a hair so the edge lines drawn on top never z-fight.
@@ -61,6 +62,9 @@ export function glow(color, opacity = 1) {
   return m;
 }
 
+/** Per-mesh crease lines: off, since the stage outlines the picture as a whole. */
+const EDGE_MESHES = false;
+
 const edgeMat = new THREE.LineBasicMaterial({ color: W.outline, transparent: true, opacity: 0.85 });
 
 /**
@@ -70,6 +74,8 @@ const edgeMat = new THREE.LineBasicMaterial({ color: W.outline, transparent: tru
  * @returns {THREE.Mesh} the same mesh
  */
 export function edged(mesh, angle = 35) {
+  // The stage's outline pass draws every edge; a line mesh per box is no longer needed.
+  if (!EDGE_MESHES) return mesh;
   const lines = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), edgeMat);
   lines.userData.edge = true;
   mesh.add(lines);
@@ -88,6 +94,22 @@ export function box(w, h, d, color, o = {}) {
   m.castShadow = o.cast !== false;
   m.receiveShadow = o.receive !== false;
   return o.edge === false ? m : edged(m);
+}
+
+/**
+ * A box with its corners and edges rounded off: people, cushions, tyres' shoulders, anything
+ * that should read as a soft toy rather than a crate. `r` defaults to a gentle bevel.
+ * @param {number} w @param {number} h @param {number} d size
+ * @param {string} color
+ * @param {{x?: number, y?: number, z?: number, r?: number, seg?: number, edge?: boolean, cast?: boolean, receive?: boolean, mat?: THREE.Material|THREE.Material[]}} [o] (edge is accepted and ignored: the stage outlines everything)
+ */
+export function rbox(w, h, d, color, o = {}) {
+  const r = Math.min(o.r ?? Math.min(w, h, d) * 0.32, Math.min(w, h, d) / 2 - 0.001);
+  const m = new THREE.Mesh(new RoundedBoxGeometry(w, h, d, o.seg ?? 2, r), o.mat ?? toon(color));
+  m.position.set(o.x ?? 0, o.y ?? 0, o.z ?? 0);
+  m.castShadow = o.cast !== false;
+  m.receiveShadow = o.receive !== false;
+  return m;
 }
 
 /** A cylinder standing up, or lying on its X axis. @param {number} rTop @param {number} rBot @param {number} h @param {string} color */
@@ -151,6 +173,10 @@ export function loft(bottom, top) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  // Plan-view texture coordinates, a metre to half a tile: a roof's shingles line up along its slope.
+  const uv = [];
+  for (let i = 0; i < pos.length; i += 3) uv.push(pos[i] / 2, (pos[i + 2] + pos[i + 1] * 1.4) / 2);
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.computeVertexNormals();
   return g;
 }
@@ -173,12 +199,16 @@ export function loftMesh(bottom, top, color, o = {}) {
  * @param {number[][]} pts polygon points [z, y]
  * @param {number} width
  * @param {string} color
+ * @param {{mat?: THREE.Material, bevel?: number}} [o] `bevel` rounds the panel's edges by that many metres
  */
 export function profileMesh(pts, width, color, o = {}) {
   const shape = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y)));
-  const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false, steps: 1 });
+  // A bevel rounds every edge of the panel: a car body with soft shoulders, not a slab.
+  const bv = o.bevel ?? 0;
+  const g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(0.01, width - 2 * bv), bevelEnabled: bv > 0, bevelThickness: bv, bevelSize: bv * 0.8, bevelOffset: -bv * 0.8, bevelSegments: 3, steps: 1 });
+  g.translate(0, 0, bv > 0 ? 0 : 0);
   g.rotateY(-Math.PI / 2);
-  g.translate(width / 2, 0, 0);
+  g.translate(width / 2 - bv, 0, 0);
   g.computeVertexNormals();
   const m = new THREE.Mesh(g, o.mat ?? toon(color));
   m.castShadow = true;
@@ -209,6 +239,127 @@ export function pixelTexture(w, h, draw) {
   return t;
 }
 
+/** A palette colour a little lighter (+) or darker (-), as a CSS string. @param {string} c @param {number} dl */
+export function shade(c, dl) {
+  return new THREE.Color(c).offsetHSL(0, 0, dl).getStyle();
+}
+
+const patternCache = new Map();
+
+/**
+ * Little repeating pixel patterns for walls and roofs: what takes a flat wall from "a coloured
+ * box" to "a brick wall". 16 by 16, drawn whole-pixel, repeating every `tile` metres.
+ *
+ * @param {'brick'|'siding'|'shingle'|'tile'|'plank'|'stucco'|'slate'} kind
+ * @param {string} base a palette colour
+ * @param {number} [tile] metres per repeat
+ * @returns {THREE.MeshToonMaterial}
+ */
+export function patternMaterial(kind, base, tile = 2) {
+  const key = `${kind}|${base}|${tile}`;
+  let m = patternCache.get(key);
+  if (m) return m;
+  const dark = shade(base, -0.09);
+  const darker = shade(base, -0.17);
+  const light = shade(base, 0.06);
+  let seed = kind.length * 977 + base.length * 31;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const tex = pixelTexture(16, 16, (g) => {
+    g.fillStyle = base;
+    g.fillRect(0, 0, 16, 16);
+    if (kind === 'brick') {
+      g.fillStyle = darker;
+      for (let r = 0; r < 4; r += 1) {
+        g.fillRect(0, r * 4 + 3, 16, 1);
+        const off = r % 2 ? 4 : 0;
+        g.fillRect((off + 0) % 16, r * 4, 1, 3);
+        g.fillRect((off + 8) % 16, r * 4, 1, 3);
+      }
+      g.fillStyle = light;
+      for (let i = 0; i < 10; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 4) * 4 + 1, 2, 1);
+      g.fillStyle = dark;
+      for (let i = 0; i < 8; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 4) * 4 + 2, 2, 1);
+    } else if (kind === 'siding') {
+      for (let r = 0; r < 4; r += 1) {
+        g.fillStyle = light; g.fillRect(0, r * 4, 16, 1);
+        g.fillStyle = darker; g.fillRect(0, r * 4 + 3, 16, 1);
+        g.fillStyle = dark; g.fillRect(0, r * 4 + 2, 16, 1);
+      }
+    } else if (kind === 'shingle' || kind === 'slate') {
+      for (let r = 0; r < 4; r += 1) {
+        const off = r % 2 ? 2 : 0;
+        g.fillStyle = darker; g.fillRect(0, r * 4 + 3, 16, 1);
+        g.fillStyle = dark;
+        for (let x = 0; x < 16; x += 4) g.fillRect((x + off) % 16, r * 4, 1, 3);
+        g.fillStyle = light;
+        for (let x = 0; x < 16; x += 4) g.fillRect((x + off + 1) % 16, r * 4, 2, 1);
+      }
+    } else if (kind === 'tile') {
+      for (let x = 0; x < 16; x += 4) {
+        g.fillStyle = dark; g.fillRect(x, 0, 1, 16);
+        g.fillStyle = light; g.fillRect(x + 1, 0, 1, 16);
+        g.fillStyle = darker; g.fillRect(x + 3, 0, 1, 16);
+      }
+    } else if (kind === 'plank') {
+      for (let x = 0; x < 16; x += 8) { g.fillStyle = darker; g.fillRect(x, 0, 1, 16); g.fillStyle = light; g.fillRect(x + 1, 0, 1, 16); }
+      g.fillStyle = dark;
+      for (let i = 0; i < 6; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 15), 1, 2);
+    } else {
+      g.fillStyle = dark;
+      for (let i = 0; i < 26; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), 1, 1);
+      g.fillStyle = light;
+      for (let i = 0; i < 14; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), 1, 1);
+    }
+  });
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  m = new THREE.MeshToonMaterial({ map: tex, gradientMap: RAMP, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  m.userData.tile = tile;
+  patternCache.set(key, m);
+  return m;
+}
+
+/**
+ * A box covered in a pattern at true scale: the texture repeats every `tile` metres on every
+ * face however big the box is, so a long wall gets more bricks, not bigger ones.
+ *
+ * @param {number} w @param {number} h @param {number} d
+ * @param {Parameters<typeof patternMaterial>[0]} kind @param {string} base
+ * @param {{x?: number, y?: number, z?: number, tile?: number, cast?: boolean}} [o]
+ */
+export function texBox(w, h, d, kind, base, o = {}) {
+  const tile = o.tile ?? 2;
+  const g = new THREE.BoxGeometry(w, h, d);
+  const uv = g.attributes.uv;
+  // BoxGeometry builds four vertices per face in this order: +x, -x, +y, -y, +z, -z.
+  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f += 1) {
+    for (let v = 0; v < 4; v += 1) {
+      const i = f * 4 + v;
+      uv.setXY(i, (uv.getX(i) * dims[f][0]) / tile, (uv.getY(i) * dims[f][1]) / tile);
+    }
+  }
+  const m = new THREE.Mesh(g, patternMaterial(kind, base, tile));
+  m.position.set(o.x ?? 0, o.y ?? 0, o.z ?? 0);
+  m.castShadow = o.cast !== false;
+  m.receiveShadow = true;
+  return m;
+}
+
+/**
+ * A soft ball of leaves, a bush, a lamp globe: smooth-shaded, a handful of segments.
+ * @param {number} r @param {string} color
+ * @param {{x?: number, y?: number, z?: number, sy?: number, seg?: number, mat?: THREE.Material}} [o]
+ */
+export function ball(r, color, o = {}) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, o.seg ?? 10, Math.max(5, Math.round((o.seg ?? 10) * 0.7))), o.mat ?? toon(color));
+  m.position.set(o.x ?? 0, o.y ?? 0, o.z ?? 0);
+  m.scale.y = o.sy ?? 1;
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
+
 const groundCache = new Map();
 
 /**
@@ -216,11 +367,11 @@ const groundCache = new Map();
  * asphalt, grass. One mesh however big it is.
  *
  * @param {number} w @param {number} d metres
- * @param {{base: string, alt?: string, line?: string, kind?: 'tile'|'speckle'|'blades', tile?: number, seed?: number}} o
+ * @param {{base: string, alt?: string, line?: string, kind?: 'tile'|'speckle'|'blades', tile?: number, seed?: number, flowers?: string[]}} o
  */
 export function groundPlane(w, d, o) {
   const tile = o.tile ?? 2;
-  const key = `${o.base}|${o.alt}|${o.line}|${o.kind}`;
+  const key = `${o.base}|${o.alt}|${o.line}|${o.kind}|${o.flowers ?? ''}`;
   let tex = groundCache.get(key);
   if (!tex) {
     let seed = o.seed ?? 7;
@@ -241,6 +392,8 @@ export function groundPlane(w, d, o) {
         g.fillStyle = o.alt ?? o.base;
         const n = o.kind === 'blades' ? 22 : 30;
         for (let i = 0; i < n; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), o.kind === 'blades' ? 1 : 1 + Math.floor(rnd() * 2), o.kind === 'blades' ? 2 : 1);
+        // Flowers, a few: the dot of colour that makes a lawn look cared for.
+        if (o.flowers) for (let i = 0; i < 3; i += 1) { g.fillStyle = o.flowers[i % o.flowers.length]; g.fillRect(Math.floor(rnd() * 15), Math.floor(rnd() * 15), 1, 1); }
       }
     });
     tex.wrapS = THREE.RepeatWrapping;

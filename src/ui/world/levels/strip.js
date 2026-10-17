@@ -250,7 +250,7 @@ export function buildStrip(api) {
 
   const level = {
     root, colliders, interactables, time: night ? PHASE_TIME[phase] : 0.1,
-    camera: { pitch: 0.7, dist: 20, yaw: 0, fov: 32 },
+    camera: { pitch: 0.92, dist: 27, yaw: 0, fov: 24 },
     bounds: [{ minX: -164, maxX: QUARTER_M + 60, minZ: -30, maxZ: 30 }],
     spawn: () => ({ x: -56, z: 4, yaw: -Math.PI / 2 }),
     surfaceAt: () => ({ grip: 1, roll: 1, kind: 'road' }),
