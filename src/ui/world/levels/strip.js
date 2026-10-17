@@ -54,7 +54,7 @@ export function buildStrip(api) {
   const interactables = [];
 
   // ---- ground ----
-  const grass = groundPlane(700, 160, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3 });
+  const grass = groundPlane(700, 160, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3, flowers: [W.flowerA, W.flowerB, W.white] });
   grass.position.set(200, -0.06, 0);
   root.add(grass);
   const strip = groundPlane(QUARTER_M + 160, 13, { base: W.asphalt, alt: W.asphaltDark, kind: 'speckle', tile: 3 });
@@ -69,6 +69,19 @@ export function buildStrip(api) {
   for (const z of [-6.4, 0, 6.4]) root.add(box(QUARTER_M + 160, 0.012, 0.18, W.roadEdge, { x: QUARTER_M / 2 + 20, y: 0.012, z, edge: false, cast: false }));
   root.add(box(0.5, 0.014, 13, W.white, { x: 0, y: 0.015, z: 0, edge: false, cast: false }));
   for (let i = 0; i < 12; i += 1) for (let j = 0; j < 2; j += 1) root.add(box(0.7, 0.016, 0.7, (i + j) % 2 ? W.black : W.white, { x: QUARTER_M + j * 0.7, y: 0.016, z: -6 + i * 1.09, edge: false, cast: false }));
+  // Rubber laid down off the line in both lanes, and the burnout box behind it: where
+  // every run starts, the track is black.
+  const rubber = new THREE.MeshBasicMaterial({ color: W.black, transparent: true, opacity: 0.32, depthWrite: false });
+  for (const z of [-3.2, 3.2]) for (const dz of [-0.8, 0.8]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(70, 0.32).rotateX(-Math.PI / 2), rubber);
+    m.position.set(32, 0.008, z + dz);
+    root.add(m);
+    const m2 = new THREE.Mesh(new THREE.PlaneGeometry(14, 0.42).rotateX(-Math.PI / 2), rubber);
+    m2.position.set(4, 0.009, z + dz);
+    root.add(m2);
+  }
+  for (const z of [-3.2, 3.2]) root.add(box(10, 0.012, 3.4, W.asphaltDark, { x: -12, y: 0.005, z, edge: false, cast: false }));
+  root.add(box(0.2, 0.016, 13, W.hazard, { x: -17, y: 0.016, z: 0, edge: false, cast: false }));
   // Distance boards every 100 m, and the eighth-mile.
   for (const [x, label] of /** @type {[number, string][]} */ ([[201, '1/8'], [QUARTER_M, '1/4']])) {
     const s = sign(label, { w: 1.6, h: 0.6, bg: W.black, fg: W.hazard });

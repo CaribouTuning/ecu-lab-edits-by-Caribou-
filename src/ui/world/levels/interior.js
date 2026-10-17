@@ -258,8 +258,10 @@ export function interiorLevel(id) {
     mergeStatic(root);
     return {
       root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0], indoor: true,
-      camera: { pitch: 1.0, dist: 26, yaw: 0, fov: 22 },
-      focus: (x, z) => ({ x: x * 0.4, z: z * 0.5 }),
+      camera: { pitch: 1.0, dist: Math.max(26, d * 2.3), yaw: 0, fov: 22 },
+      // Rooms are small: the camera mostly holds the room, drifting a little with the tuner,
+      // and sits a metre toward the counter so whoever is behind it is always in view.
+      focus: (x, z) => ({ x: x * 0.3, z: z * 0.3 - 1.0 }),
       bounds: [{ minX: -w / 2 + 0.6, maxX: w / 2 - 0.6, minZ: -d / 2 + 0.8, maxZ: d / 2 - 0.4 }, { minX: -1.4, maxX: 1.4, minZ: d / 2 - 1, maxZ: d / 2 + 3.2 }],
       spawn: () => ({ x: inner.spawn.x, z: d / 2 - 1.4, yaw: Math.PI }),
       surfaceAt: () => ({ grip: 1, roll: 1, kind: 'road' }),
