@@ -112,6 +112,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   let spin = false;
   /** Share of the screen a side panel covers: the picture slides over to keep the action in view. */
   let panelFrac = 0;
+  let cinematicOn = false;
   /** @type {any} */ let level = null;
   /** @type {any} */ let drive = null;
   let paused = false;
@@ -412,7 +413,19 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
       const visible = 2 * rig.dist * Math.tan((rig.fov * Math.PI) / 360) * stage.camera.aspect;
       rig.shiftX = (panelFrac / 2) * visible;
     }
-    if (!paused) {
+    const cin = level.cinematic?.() ?? null;
+    if (cin) {
+      cinematicOn = true;
+      rig.mode = 'follow'; rig.yaw = cin.yaw; rig.pitch = cin.pitch; rig.dist = cin.dist; rig.fov = cin.fov;
+      rig.update(dt, new THREE.Vector3(cin.x, 0, cin.z), cin.heading, cin.speed);
+      person.update(dt, 0);
+    } else if (cinematicOn) {
+      cinematicOn = false;
+      rig.pitch = level.camera?.pitch ?? 0.85; rig.dist = level.camera?.dist ?? 16; rig.fov = level.camera?.fov ?? 34;
+      rig.yaw = (level.camera?.yaw ?? 0) + camOffset.yaw;
+      rig.snap();
+    }
+    if (!paused && !cin) {
       if (drive?.inside) driveFrame(dt);
       else {
         walk(dt);

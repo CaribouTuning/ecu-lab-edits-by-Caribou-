@@ -60,6 +60,8 @@ export const START_MONEY = 1000;
  * @property {number[]} [found] golden spanners found in town
  * @property {import('./ownedCars.js').OwnedCar[]} [cars] the tuner's own cars
  * @property {string[]} [looks] paints, wheels and trim bought, by `kind:id`
+ * @property {{won: string[], best: Record<string, number>}} [races] rivals beaten, and each car's best ET
+ * @property {{day: number, n: number}} [raceDay] races run today
  */
 
 /**
@@ -84,7 +86,7 @@ export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [],
+    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [], races: { won: [], best: {} },
   });
 }
 
@@ -135,6 +137,7 @@ export function reviveCareer(raw) {
     cars: Array.isArray(c.cars) ? c.cars : [],
     looks: Array.isArray(c.looks) ? c.looks : [],
     found: Array.isArray(c.found) ? c.found : [],
+    races: c.races && Array.isArray(c.races.won) ? c.races : { won: [], best: {} },
   };
   registerCars(revived);
   // The cars have to be known before the lifts can be checked: an owned car's job is theirs.

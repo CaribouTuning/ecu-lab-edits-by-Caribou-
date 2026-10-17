@@ -395,3 +395,9 @@
 .places span { font-size: var(--fs-xs); color: var(--ink2); line-height: 1.4; }
 .places li[data-closed='true'] { opacity: 0.6; }
 .places li[data-here='true'] { border-color: var(--acc); }
+
+.slip { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-sm); }
+.slip th, .slip td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+.slip th:first-child, .slip td:first-child { text-align: left; font-family: var(--sans); color: var(--ink2); }
+.slip th { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--ink3); }
+.facts2 { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-soft); }
