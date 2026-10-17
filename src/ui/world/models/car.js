@@ -200,6 +200,18 @@ export function makeCar(spec = {}) {
   if (!S.open) {
     car.add(loftMesh({ y: belt, z0: zr0, z1: zf0, w: gw0 }, { y: top - 0.04, z0: zr1, z1: zf1, w: gw1 }, W.glassDark, { mat: toon(W.glassDark, { opacity: 0.9 }) }));
     car.add(loftMesh({ y: top - 0.045, z0: zr1 - 0.08, z1: zf1 + 0.04, w: gw1 + 0.04 }, { y: top, z0: zr1 - 0.06, z1: zf1 + 0.02, w: gw1 + 0.02 }, paint, { mat: paintMat }));
+    // Light on the roof and a glint on the screen: what makes a car read as glossy from above.
+    if (!spec.stripes) car.add(box(gw1 * 0.62, 0.012, Math.max(0.2, zf1 - zr1 - 0.3), paint, { y: top + 0.004, z: (zr1 + zf1) / 2, mat: toon(shade(paint, 0.1)), edge: false, cast: false }));
+    const glint = toon(W.white, { opacity: 0.55 });
+    const wsMid = (zf0 + zf1) / 2;
+    const wsY = (belt + top) / 2;
+    const tilt = Math.atan2(zf0 - zf1, top - belt);
+    for (const [dx, w] of [[-0.18, 0.09], [0.02, 0.05]]) {
+      const g = box(w, Math.hypot(zf0 - zf1, top - belt) * 0.8, 0.01, W.white, { x: dx * Wd, y: wsY, z: wsMid + 0.02, mat: glint, edge: false, cast: false });
+      g.rotation.x = -tilt;
+      g.rotation.z = 0.5;
+      car.add(g);
+    }
     // Pillars: body-coloured cross-slabs that tie the roof to the shoulder line, so the
     // roof reads as part of the car rather than a lid floating over a hole.
     const slab = (f0, f1, w) => {

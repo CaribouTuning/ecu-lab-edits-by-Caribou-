@@ -148,9 +148,23 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [talk, setTalk] = useState(/** @type {{lines: import('./Hud.jsx').TalkLine[], onDone?: () => void}|null} */ (null));
   const talkRef = useRef(talk);
   talkRef.current = talk;
-  const endTalk = useCallback(() => { const t = talkRef.current; setTalk(null); t?.onDone?.(); }, []);
+  /** Conversations waiting their turn: a second one never talks over the first. */
+  const talkQueue = useRef(/** @type {{lines: any[], onDone?: () => void}[]} */ ([]));
+  const endTalk = useCallback(() => {
+    const t = talkRef.current;
+    const next = talkQueue.current.shift() ?? null;
+    talkRef.current = next;
+    setTalk(next);
+    t?.onDone?.();
+  }, []);
   /** Say something in the text box. @param {import('./Hud.jsx').TalkLine[]} lines @param {() => void} [onDone] */
-  const say = useCallback((lines, onDone) => { setSheet(null); setDrawer(null); setTalk({ lines, onDone }); }, []);
+  const say = useCallback((lines, onDone) => {
+    setSheet(null);
+    setDrawer(null);
+    if (talkRef.current) { talkQueue.current.push({ lines, onDone }); return; }
+    talkRef.current = { lines, onDone };
+    setTalk(talkRef.current);
+  }, []);
   const [driving, setDriving] = useState(false);
   const [place, setPlace] = useState('garage');
   const [outJob, setOutJob] = useState(/** @type {string|null} */ (null));
@@ -315,8 +329,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     if (!clerk) { open(); return; }
     const lines = clerk.lines(c);
     const last = lines[lines.length - 1];
-    say([...lines.slice(0, -1), { ...last, choices: [{ label: clerk.yes, run: () => { setTalk(null); open(); } }, { label: 'NOT NOW', run: () => setTalk(null) }] }]);
-  }, [goPhone, say, update]);
+    say([...lines.slice(0, -1), { ...last, choices: [{ label: clerk.yes, run: () => { endTalk(); open(); } }, { label: 'NOT NOW', run: () => endTalk() }] }]);
+  }, [endTalk, goPhone, say, update]);
 
   const onAct = useCallback((e) => {
     const c = careerRef.current;
@@ -495,10 +509,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   // The welcome, once.
   useEffect(() => {
     if (!world || careerRef.current.introDone) return;
-    setTalk({
-      lines: INTRO.map((l) => ({ who: 'Pops', text: l.text })),
-      onDone: () => { update({ ...careerRef.current, introDone: true }); },
-    });
+    say(INTRO.map((l) => ({ who: 'Pops', text: l.text })), () => { update({ ...careerRef.current, introDone: true }); });
     // Once, when the world first opens on a new career.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [world]);

@@ -543,8 +543,8 @@ export function buildGarage(api, entry = {}) {
       p: cust, path: [{ x: 0, z: 13 }, { x: 0, z: 7 }, { x: dest.x, z: 6 }, dest], t: 0, i: 0,
       done: () => {
         cust.setPose(happy ? 'cheer' : 'think');
-        api.say(`react:${e.id}`, last?.line ?? 'Thanks!', new THREE.Vector3(dest.x, 2.2, dest.z), 3.2, happy ? 'say' : 'grumble');
-        setTimeout(() => {
+        cust.group.rotation.y = Math.atan2(api.player.x - dest.x, api.player.z - dest.z);
+        const drive = () => {
           cust.group.visible = false;
           const out = [{ x: b.x, z: b.z }, { x: b.x, z: b.z + 5 }, { x: b.x * 0.4, z: 12 }, { x: 4, z: 19.5 }, { x: 30, z: 19.5 }];
           e.liftTarget = 0;
@@ -554,7 +554,26 @@ export function buildGarage(api, entry = {}) {
             cars.delete(e.id);
           });
           e.anim.holdY = true;
-        }, 1800);
+        };
+        // The customer says how it went, and the money changes hands, in the text box.
+        const who = e.job?.customer?.name ?? 'Customer';
+        if (last && !e.job?.own) {
+          const passed = last.results.filter((x) => x.pass).length;
+          const missed = last.results.find((x) => !x.pass);
+          const money = last.paid >= 0 ? `They pay $${last.paid}.` : `The comeback costs you $${-last.paid}.`;
+          const rep = last.repChange ? ` Reputation ${last.repChange > 0 ? '+' : ''}${last.repChange}.` : '';
+          api.emit({
+            type: 'talk',
+            lines: [
+              { who, text: last.line ?? (happy ? 'Thanks!' : 'Hm.') },
+              { text: `${passed} of ${last.results.length} checks passed.${missed ? ` Still wrong: ${missed.label.toLowerCase()}.` : ''} ${money}${rep}` },
+            ],
+            onDone: drive,
+          });
+        } else {
+          api.say(`react:${e.id}`, last?.line ?? 'Thanks!', new THREE.Vector3(dest.x, 2.2, dest.z), 3.2, happy ? 'say' : 'grumble');
+          setTimeout(drive, 1800);
+        }
       },
     });
     // Drives into the bay carries its own y: bring a raised car down before it goes.

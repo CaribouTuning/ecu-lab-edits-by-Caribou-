@@ -300,7 +300,7 @@ export const world = Object.freeze({
   sky: Object.freeze({
     day: Object.freeze({ top: '#5aa0e6', horizon: '#cfe6f7', sun: '#fff1d6', ambient: '#9fb7d8', ground: '#6b7a58', sunPower: 2.4, ambientPower: 1.15 }),
     dusk: Object.freeze({ top: '#4a3f8f', horizon: '#ff9a62', sun: '#ffb27a', ambient: '#8a78b8', ground: '#4a3d4f', sunPower: 1.25, ambientPower: 0.8 }),
-    night: Object.freeze({ top: '#070b1f', horizon: '#1a2447', sun: '#7f9bd6', ambient: '#37456f', ground: '#1c2233', sunPower: 0.3, ambientPower: 0.5 }),
+    night: Object.freeze({ top: '#070b1f', horizon: '#22305c', sun: '#8fa8e0', ambient: '#556aa6', ground: '#262e46', sunPower: 0.45, ambientPower: 0.95 }),
   }),
   // The ground and what is built on it.
   asphalt: '#3a3f4a',
