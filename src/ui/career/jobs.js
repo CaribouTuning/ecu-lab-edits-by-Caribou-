@@ -27,6 +27,7 @@
 
 import { IDLES, SAFE, withMods } from './criteria.js';
 import { generatedJob } from './generate.js';
+import { lookupOwnJob } from './ownRegistry.js';
 
 /**
  * @typedef {object} Criterion
@@ -260,4 +261,4 @@ export const JOBS = [
 ];
 
 /** @param {string} id */
-export const jobById = (id) => (typeof id === 'string' && id.startsWith('g:') ? generatedJob(id) : JOBS.find((j) => j.id === id));
+export const jobById = (id) => (typeof id === 'string' && id.startsWith('g:') ? generatedJob(id) : typeof id === 'string' && id.startsWith('own:') ? lookupOwnJob(id) : JOBS.find((j) => j.id === id));

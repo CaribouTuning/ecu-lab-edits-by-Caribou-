@@ -5,10 +5,13 @@
  * another.
  */
 
+import { defaultLook, STARTING_WARDROBE } from '../world/appearance.js';
+
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
+import { registerCars } from './ownRegistry.js';
 
 export const SAVE_VERSION = 1;
 export const START_MONEY = 1000;
@@ -50,6 +53,23 @@ export const START_MONEY = 1000;
  * @property {number} [lastSeen] the `seq` of the last hand-back the player has read
  * @property {number} seed this career's own random seed: its customers are its own
  * @property {string[]} offers today's walk-in customers (generated job ids)
+ * @property {number} [phase] how far through the day it is, 0 morning to 3 night; each
+ *   hand-back moves it on, and closing up starts the next morning
+ * @property {import('../world/appearance.js').Look} [look] what the tuner wears
+ * @property {string[]} [wardrobe] the clothes the tuner owns
+ * @property {number[]} [found] golden spanners found in town
+ * @property {import('./ownedCars.js').OwnedCar[]} [cars] the tuner's own cars
+ * @property {string[]} [looks] paints, wheels and trim bought, by `kind:id`
+ * @property {{won: string[], best: Record<string, number>}} [races] rivals beaten, and each car's best ET
+ * @property {{day: number, n: number}} [raceDay] races run today
+ * @property {number} [meetDay] the day a car was last shown at the meet
+ * @property {number} [meets] cars shown at the meet
+ * @property {{day: number, n: number}} [junk] digs in the scrapyard today
+ * @property {{day: number, p: Record<string, number>, claimed: string[]}} [daily] progress on today's goals
+ * @property {number} [streak] days in a row all three goals were done
+ * @property {{wall: string, floor: string, neon: string, extras: string[]}} [decor] how the shop is dressed
+ * @property {string[]} [ach] achievements earned
+ * @property {boolean} [introDone] the welcome has been read
  */
 
 /**
@@ -74,7 +94,7 @@ export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [],
+    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [], races: { won: [], best: {} },
   });
 }
 
@@ -119,10 +139,17 @@ export function reviveCareer(raw) {
     seed: fresh.seed,
     owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
-    lifts: Array.isArray(c.lifts) ? c.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune) : [],
+    lifts: Array.isArray(c.lifts) ? c.lifts : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
+    cars: Array.isArray(c.cars) ? c.cars : [],
+    looks: Array.isArray(c.looks) ? c.looks : [],
+    found: Array.isArray(c.found) ? c.found : [],
+    races: c.races && Array.isArray(c.races.won) ? c.races : { won: [], best: {} },
   };
+  registerCars(revived);
+  // The cars have to be known before the lifts can be checked: an owned car's job is theirs.
+  revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 
@@ -142,7 +169,10 @@ export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
   + (c.owned.includes('expansion') ? 120 : 0);
 
 /** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */
-const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
+const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, phase: 0, money: c.money - overhead(c) });
+
+/** A job is done and time has passed: the light moves from morning toward night. @param {Career} c */
+export const advancePhase = (c) => ({ ...c, phase: Math.min(3, (c.phase ?? 0) + 1) });
 
 /** How many customers wait on the board. @param {Career} c */
 export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
