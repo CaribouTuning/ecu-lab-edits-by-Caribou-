@@ -49,7 +49,7 @@ function faceTexture(skin, mood) {
   return t;
 }
 
-/** A head: skin on every face, the face texture on the front. @param {string} skin @param {string} mood */
+/** A head: skin on every face, the face texture on the front. @param {string} skin @param {'neutral'|'smile'|'shout'|'worry'} mood */
 function makeHead(skin, mood) {
   const mats = [0, 1, 2, 3, 4, 5].map((i) => (i === 4 ? new THREE.MeshToonMaterial({ map: faceTexture(skin, mood) }) : toon(skin)));
   // BoxGeometry face order: +x, -x, +y, -y, +z, -z. The front is +z.
@@ -120,7 +120,7 @@ function addGlasses(head, it) {
   const c = cloth(it.color);
   const h = HEAD / 2;
   const z = h + 0.01;
-  const lens = (x, w = 0.12, col = W.glassDark, y = 0.02) => head.add(box(w, 0.08, 0.02, col, { x, y, z, edge: false }));
+  const lens = (x, w = 0.12, col = /** @type {string} */ (W.glassDark), y = 0.02) => head.add(box(w, 0.08, 0.02, col, { x, y, z, edge: false }));
   switch (it.style) {
     case 'shades': lens(-0.085, 0.13, W.cloth.black); lens(0.085, 0.13, W.cloth.black); head.add(box(0.05, 0.02, 0.02, W.cloth.black, { y: 0.045, z, edge: false })); break;
     case 'aviator': lens(-0.085, 0.13, W.glassDark); lens(0.085, 0.13, W.glassDark); head.add(box(0.36, 0.015, 0.02, c, { y: 0.065, z, edge: false })); break;

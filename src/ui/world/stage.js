@@ -19,7 +19,7 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean}} [opts]
  */
 export function createStage(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });

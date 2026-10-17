@@ -7,21 +7,28 @@
  * functions: the world only asks for them.
  */
 
-import { BookOpen, Car, Check, ClipboardList, Cog, Hammer, MapPin, Shirt, Users, Wallet, X } from 'lucide-react';
+import { BookOpen, Car, Check, ClipboardList, Cog, Hammer, MapPin, Paintbrush, Shirt, Users, Wallet, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { repTier } from '../career/catalog.js';
+import { ACHIEVEMENTS, collect } from '../career/achievements.js';
 import { findSpanner, SPANNER_COUNT } from '../career/collectibles.js';
+import { bump, claim, claimed, goalsFor, progressOf } from '../career/daily.js';
+import { DIG_COST, PILES, cannotDig, digsLeft, dig } from '../career/junk.js';
 import { inspectCar } from '../career/inspect.js';
 import { jobById } from '../career/jobs.js';
-import { accept, nextDay, overhead } from '../career/shop.js';
+import { accept, advancePhase, nextDay, overhead } from '../career/shop.js';
+import { lookOf } from '../career/wardrobe.js';
+import { computeTuningScore } from '../../sim/index.js';
 import { FUELS, cannotFill, carState, ownJobId, refuel } from '../career/ownedCars.js';
+import { cannotEnter, entrants, judge, placing, settleMeet } from '../career/meet.js';
 import { RIVALS, cannotRace, decide, playerReaction, rivalById, rivalState, settleRace, sliptalk } from '../career/races.js';
 import { LessonDialog, ShopPanel } from '../career/ShopPanels.jsx';
 import { Button } from '../primitives/Button.jsx';
 
 import { driveSoundFrame, silenceDriveSound } from './driveSound.js';
 import { CarsPanel } from './CarsPanel.jsx';
+import { DecorPanel } from './DecorPanel.jsx';
 import { Dash, Labels, Objective, PromptButton, Toasts, TopBar, TouchControls } from './Hud.jsx';
 import { engineBayOf } from './models/car.js';
 import { bodyFor, carFor, specForJob } from './levels/common.js';
@@ -48,6 +55,7 @@ const TABS = [
   { id: 'cars', label: 'CARS', icon: Car, at: null },
   { id: 'parts', label: 'PARTS', icon: Cog, at: null },
   { id: 'wardrobe', label: 'WARDROBE', icon: Shirt, at: null },
+  { id: 'decor', label: 'SHOP DECOR', icon: Paintbrush, at: null },
   { id: 'books', label: 'BOOKS', icon: Wallet, at: null },
 ];
 
@@ -197,11 +205,39 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         player: { rig: prig, run: prun, rt: prt, setup: psetup },
         rival: { rig: rrig, run: rrun, rt: rival.rt },
         onDone: () => {
-          const after = settleRace(careerRef.current, rival, carId, { won: res.won, et: prun.et });
+          let after = settleRace(careerRef.current, rival, carId, { won: res.won, et: prun.et });
+          if (res.won) after = bump(after, 'race');
           update(after);
           setSheet({ type: 'raceResult', rival, own, res, prun, rrun, prt, paid: after.money - c.money, repGain: after.rep - c.rep, talk: sliptalk(prun, own.drag, psetup.car.gearCount) });
         },
       });
+    }, 80);
+  }, [toast, update]);
+
+  /** Show a car at the meet: measure it, put it on the turntable, and let the crowd judge. */
+  const startMeet = useCallback((carId) => {
+    const w = worldRef.current;
+    const c = careerRef.current;
+    const why = cannotEnter(c, carId);
+    if (!w || why) { if (why) toast(why, 'warn'); return; }
+    setSheet(null);
+    toast('Rolling it onto the turntable\u2026');
+    setTimeout(() => {
+      const own = c.cars.find((x) => x.id === carId);
+      const state = carState(c, carId);
+      const job = jobById(ownJobId(carId));
+      const setup = driveSetup(state, { body: bodyFor(job), drag: { ...own.drag, lowered: own.look.lowered } });
+      const wear = setup.result.wear ?? {};
+      const health = Math.max(0, 100 - Math.max(wear.piston ?? 0, wear.bearing ?? 0, wear.valve ?? 0));
+      const score = judge({ peakHp: setup.peakHp, massKg: setup.car.massKg, tuningScore: computeTuningScore(setup.result).score, health }, own.look, lookOf(c));
+      const others = entrants(c);
+      const place = placing(score.total, others);
+      const rig = carFor({ ...specForJob(job, state.build), lowered: own.look.lowered });
+      w.cmd('present', rig);
+      setTimeout(() => {
+        update(place.place <= 3 ? bump(settleMeet(careerRef.current, place), 'meet') : settleMeet(careerRef.current, place));
+        setSheet({ type: 'meetResult', own, score, others, place });
+      }, 3200);
     }, 80);
   }, [toast, update]);
 
@@ -236,6 +272,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       case 'parkCar': {
         if (!w?.drive) break;
         const id = w.drive.id;
+        const km = (w.drive.state.odo ?? 0) / 1000;
+        if (km > 0.05) update(bump(c, 'drive', km));
         w.exitCar();
         w.dropCar();
         w.away.delete(id);
@@ -247,12 +285,13 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       }
       case 'locker': goPhone('wardrobe'); break;
       case 'bell': setSheet({ type: 'close' }); break;
-      case 'coffee': setSheet({ type: 'tip', tip: tipFor(c.day * 7 + c.history.length) }); break;
+      case 'coffee': update(bump(c, 'tip')); setSheet({ type: 'tip', tip: tipFor(c.day * 7 + c.history.length) }); break;
       case 'dog': toast('Torque wags his whole back end. Good boy.', 'ok'); break;
       case 'trophies': setSheet({ type: 'trophies' }); break;
       case 'door': travel('town', { from: 'garage' }); break;
       case 'go':
         if (e.place === 'town') travel('town', { from: e.from ?? 'garage' });
+        else if (e.place === 'junk') setSheet({ type: 'junk', result: null });
         else if (e.place === 'garage') travel('garage', { from: 'town' });
         else if (LEVELS[e.place]) travel(e.place, {});
         break;
@@ -260,17 +299,17 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         if (e.place === 'supply') goPhone('upgrades');
         else if (e.place === 'academy') goPhone('training');
         else if (e.place === 'boutique') goPhone('wardrobe');
-        else if (e.place === 'diner') setSheet({ type: 'tip', tip: tipFor(c.day * 13 + c.history.length * 3 + c.rep), diner: true });
+        else if (e.place === 'diner') { update(bump(c, 'tip')); setSheet({ type: 'diner', tip: tipFor(c.day * 13 + c.history.length * 3 + c.rep) }); }
         else if (e.place === 'dealer') { setFocusCar(null); goPhone('cars'); }
         else if (e.place === 'strip') setSheet({ type: 'race' });
         break;
       case 'found': {
         const r = findSpanner(c, e.n);
-        if (r) { update(r.career); toast(r.text, 'ok'); }
+        if (r) { update(bump(r.career, 'spanner')); toast(r.text, 'ok'); }
         break;
       }
       case 'pump': setSheet({ type: 'pump', carId: w?.drive?.id?.startsWith('own:') ? w.drive.id.slice(4) : null }); break;
-      case 'meet': setSheet({ type: 'soon', title: 'Car meet', text: 'The crowd is gathering. The meet opens in the next update.' }); break;
+      case 'meet': setSheet({ type: 'meet' }); break;
       case 'bench': toast(BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length]); break;
       default: break;
     }
@@ -346,6 +385,16 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Medals: noticed whenever the save changes, paid once.
+  useEffect(() => {
+    const { career: next, earned } = collect(career);
+    if (!earned.length) return;
+    update(next);
+    for (const a of earned) toast(`Achievement: ${a.title}${a.reward ? ` (+$${a.reward})` : ''}`, 'ok');
+  }, [career, toast, update]);
+  // The welcome, once.
+  useEffect(() => { if (world && !career.introDone) setSheet({ type: 'intro', step: 0 }); }, [world, career.introDone]);
 
   // The car's sound, while you drive it.
   useEffect(() => {
@@ -436,6 +485,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
             <CarsPanel career={career} update={update} place={place} focus={focusCar} onDrive={(id) => { setDrawer(null); startDrive({ ownId: id }); }} onGo={fastTravel} onTab={setDrawer} />
           ) : drawer === 'parts' ? (
             <PartsPanel career={career} update={update} canBuy={place === 'supply'} onGo={() => fastTravel('supply')} />
+          ) : drawer === 'decor' ? (
+            <DecorPanel career={career} update={update} canBuy={place === 'supply'} onGo={() => fastTravel('supply')} />
           ) : drawer === 'wardrobe' ? (
             <WardrobePanel career={career} update={update} canBuy={place === 'boutique'} onGo={() => fastTravel('boutique')} />
           ) : drawer ? (
@@ -451,8 +502,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
 
       {sheet && (
         <Sheet
-          sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); setSheet(null); }}
-          onTravel={fastTravel} place={place} update={update} onRace={startRace}
+          sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent'); setSheet(null); }}
+          onTravel={fastTravel} place={place} update={update} onRace={startRace} onStep={(n) => setSheet({ type: 'intro', step: n })} onMeet={startMeet} onWait={() => { update(advancePhase(career)); setSheet(null); toast('A few hours pass.'); }}
           onNextDay={() => { update(nextDay(career)); setSheet(null); toast('A new day. Customers are on the board.', 'ok'); }}
         />
       )}
@@ -471,7 +522,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
  * Cards that fill the middle of the screen: the car's spec sheet, closing up, the
  * trophies, the map and the settings.
  */
-function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace }) {
+function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait, onStep }) {
   if (sheet.type === 'inspect') {
     const job = jobById(sheet.jobId);
     return (
@@ -493,8 +544,10 @@ function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTra
         <p className={styles.lede}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait overnight. Opening costs the running costs of ${overhead(career).toLocaleString('en-US')}: rent, and what the shop has grown into.</p>
         <div className={styles.sheetRow}>
           <Button size="sm" onClick={onNextDay}>OPEN TOMORROW</Button>
+          {(career.phase ?? 0) < 3 && <Button size="sm" variant="ghost" onClick={onWait}>WAIT A FEW HOURS</Button>}
           <Button size="sm" variant="ghost" onClick={onClose}>NOT YET</Button>
         </div>
+        <p className={styles.lede}>{['It is morning.', 'It is afternoon.', 'It is evening: the car meet is on.', 'It is night.'][Math.min(3, career.phase ?? 0)]} Handing a car back moves the day along; so does waiting.</p>
       </div>
     );
   }
@@ -508,10 +561,17 @@ function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTra
     );
   }
   if (sheet.type === 'trophies') {
+    const have = new Set(career.ach ?? []);
     return (
       <div className={styles.sheet} role="dialog" aria-label="Trophies">
-        <div className={styles.sheetTag}>TROPHIES · {career.milestones.length}</div>
-        <p className={styles.lede}>Each cup on the shelf is a milestone: a first customer paid, the first dyno, a boosted car handed back well.</p>
+        <div className={styles.sheetTag}>TROPHIES · {career.milestones.length} milestones · {have.size} of {ACHIEVEMENTS.length} medals</div>
+        <ul className={styles.places}>
+          {ACHIEVEMENTS.map((a) => (
+            <li key={a.id} data-closed={have.has(a.id) ? 'false' : 'true'}>
+              <div><b>{have.has(a.id) ? '\u2605' : '\u2606'} {a.title}</b><span>{a.text}{a.reward ? ` $${a.reward}` : ''}</span></div>
+            </li>
+          ))}
+        </ul>
         <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>NICE</Button></div>
       </div>
     );
@@ -549,6 +609,11 @@ function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTra
       </div>
     );
   }
+  if (sheet.type === 'intro') return <IntroSheet step={sheet.step} onNext={onStep} onDone={() => { update({ ...career, introDone: true }); onClose(); }} />;
+  if (sheet.type === 'diner') return <DinerSheet career={career} tip={sheet.tip} update={update} onClose={onClose} />;
+  if (sheet.type === 'junk') return <JunkSheet career={career} update={update} onClose={onClose} />;
+  if (sheet.type === 'meet') return <MeetSheet career={career} onClose={onClose} onMeet={onMeet} />;
+  if (sheet.type === 'meetResult') return <MeetResult r={sheet} onClose={onClose} />;
   if (sheet.type === 'race') return <RaceSheet career={career} onClose={onClose} onRace={onRace} />;
   if (sheet.type === 'raceResult') return <RaceResult r={sheet} onClose={onClose} />;
   if (sheet.type === 'soon') {
@@ -673,6 +738,125 @@ function RaceResult({ r, onClose }) {
       <p className={styles.lede}>{paid >= 0 ? 'Won' : 'Lost'} <b>${Math.abs(paid).toLocaleString('en-US')}</b>{repGain > 0 ? `, and reputation +${repGain} for beating ${rival.name} for the first time` : ''}.</p>
       <ul className={styles.facts2}>{talk.map((t) => <li key={t}>{t}</li>)}</ul>
       <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>BACK TO THE PITS</Button></div>
+    </div>
+  );
+}
+
+/** Choose a car for the meet. @param {{career: import('../career/shop.js').Career, onClose: () => void, onMeet: (car: string) => void}} p */
+function MeetSheet({ career, onClose, onMeet }) {
+  const cars = career.cars ?? [];
+  const [carId, setCarId] = useState(cars.find((c) => !career.lifts.some((l) => l.jobId === ownJobId(c.id)))?.id ?? null);
+  const why = cannotEnter(career, carId);
+  return (
+    <div className={styles.sheet} role="dialog" aria-label="Car meet">
+      <div className={styles.sheetTag}>CAR MEET · {career.meets ?? 0} shown so far</div>
+      <p className={styles.lede}>The crowd judges three things, and each is yours to change: <b>build</b> (power for the weight, on the dyno), <b>tune</b> (how clean the pull log is) and <b>style</b> (the car&rsquo;s looks and your own outfit). First place pays $800 and a name.</p>
+      {cars.length === 0 ? <p className={styles.lede}>You need a car of your own to show.</p> : (
+        <div className={styles.sheetRow}>
+          {cars.map((c) => <Button key={c.id} size="sm" variant={carId === c.id ? 'primary' : 'ghost'} onClick={() => setCarId(c.id)}>{c.name}</Button>)}
+        </div>
+      )}
+      {why && <p className={styles.lede}>{why}</p>}
+      <div className={styles.sheetRow}>
+        <Button size="sm" disabled={!!why} onClick={() => onMeet(carId)}>SHOW THE CAR</Button>
+        <Button size="sm" variant="ghost" onClick={onClose}>CLOSE</Button>
+      </div>
+    </div>
+  );
+}
+
+/** The scoreboard. @param {{r: any, onClose: () => void}} p */
+function MeetResult({ r, onClose }) {
+  const { own, score, others, place } = r;
+  const ORD = ['1st', '2nd', '3rd', '4th'];
+  return (
+    <div className={styles.sheet} role="dialog" aria-label="Meet results">
+      <div className={styles.sheetTag}>{own.name.toUpperCase()} · {ORD[place.place - 1] ?? `${place.place}th`} PLACE</div>
+      <table className={styles.slip}>
+        <thead><tr><th /><th>SCORE</th></tr></thead>
+        <tbody>
+          <tr><td>Build</td><td>{score.build}</td></tr>
+          <tr><td>Tune</td><td>{score.tune}</td></tr>
+          <tr><td>Style</td><td>{score.style}</td></tr>
+          <tr><td><b>Total</b></td><td><b>{score.total}</b></td></tr>
+          {others.map((o) => <tr key={o.name + o.car}><td>{o.name}&rsquo;s {o.car}</td><td>{o.total}</td></tr>)}
+        </tbody>
+      </table>
+      <p className={styles.lede}>{place.prize > 0 ? `Prize $${place.prize.toLocaleString('en-US')}${place.rep ? `, reputation +${place.rep}` : ''}.` : 'No prize tonight.'}</p>
+      <ul className={styles.facts2}>{score.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>DONE</Button></div>
+    </div>
+  );
+}
+
+const INTRO = [
+  { title: 'Welcome to the shop', text: 'I am Pops. I ran this garage for thirty years and I am handing you the keys. Customers will bring cars that do not run right. Your job is to work out why, and fix it properly: the real way, with real physics.' },
+  { title: 'How it works', text: 'Walk with WASD or the arrows (or the stick on a phone). Press E near something to use it. Take a customer from the board on the left wall, look under their bonnet, open the laptop and tune. When it is right, hand the car back and get paid.' },
+  { title: 'Then spend it', text: 'Money buys instruments, courses, a car of your own, parts for it, and a look. The town has a parts counter, a school, a boutique, a scrapyard, a drag strip and a car meet. Nothing you buy adds power by magic: every part changes the air, the fuel, the grip or the weight, and the tune has to catch up.' },
+];
+
+/** The welcome. @param {{step: number, onNext: (n: number) => void, onDone: () => void}} p */
+function IntroSheet({ step, onNext, onDone }) {
+  const s = INTRO[step];
+  return (
+    <div className={styles.sheet} role="dialog" aria-label="Welcome">
+      <div className={styles.sheetTag}>POPS · {step + 1} OF {INTRO.length}</div>
+      <h2 className={styles.sheetTitle}>{s.title}</h2>
+      <p className={styles.lede}>{s.text}</p>
+      <div className={styles.sheetRow}>
+        {step < INTRO.length - 1 ? <Button size="sm" onClick={() => onNext(step + 1)}>NEXT</Button> : <Button size="sm" onClick={onDone}>OPEN THE SHOP</Button>}
+        {step < INTRO.length - 1 && <Button size="sm" variant="quiet" onClick={onDone}>SKIP</Button>}
+      </div>
+    </div>
+  );
+}
+
+/** Pops at the counter: a tip and the day's goals. @param {{career: import('../career/shop.js').Career, tip: {topic: string, text: string}, update: (c: any) => void, onClose: () => void}} p */
+function DinerSheet({ career, tip, update, onClose }) {
+  const goals = goalsFor(career);
+  return (
+    <div className={styles.sheet} role="dialog" aria-label="Pops' Diner">
+      <div className={styles.sheetTag}>POPS · {tip.topic.toUpperCase()}</div>
+      <p className={styles.lede}>&ldquo;{tip.text}&rdquo;</p>
+      <div className={styles.sheetTag}>TODAY&rsquo;S GOALS{career.streak ? ` · ${career.streak}-day streak` : ''}</div>
+      <ul className={styles.places}>
+        {goals.map((g) => {
+          const n = progressOf(career, g);
+          const done = n >= g.target;
+          const got = claimed(career, g.id);
+          return (
+            <li key={g.id} data-closed={got ? 'true' : 'false'}>
+              <div><b>{g.text}</b><span>{g.kind === 'earn' ? `$${n} of $${g.target}` : g.kind === 'drive' ? `${n} of ${g.target} km` : `${n} of ${g.target}`} · ${g.reward}</span></div>
+              <Button size="sm" variant={done && !got ? 'primary' : 'ghost'} disabled={!done || got} onClick={() => update(claim(career, g.id))}>{got ? 'PAID' : 'CLAIM'}</Button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className={styles.lede}>All three in one day pays a bonus of $150 and a point of reputation.</p>
+      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>THANKS, POPS</Button></div>
+    </div>
+  );
+}
+
+/** Sparky's yard. @param {{career: import('../career/shop.js').Career, update: (c: any) => void, onClose: () => void}} p */
+function JunkSheet({ career, update, onClose }) {
+  const [found, setFound] = useState(/** @type {any} */ (null));
+  const why = cannotDig(career);
+  return (
+    <div className={styles.sheet} role="dialog" aria-label="Scrapyard">
+      <div className={styles.sheetTag}>SPARKY&rsquo;S SCRAPYARD · {digsLeft(career)} digs left today</div>
+      <p className={styles.lede}>A dig costs ${DIG_COST}. Pick a pile: what is in it depends on what the pile is.</p>
+      {found && <p className={styles.lede}><b>{found.text}</b></p>}
+      <ul className={styles.places}>
+        {PILES.map((p) => (
+          <li key={p.id}>
+            <div><b>{p.name}</b><span>{p.hint}</span></div>
+            <Button size="sm" disabled={!!why} onClick={() => { const r = dig(career, p.id); update(bump(r.career, 'junk')); setFound(r.find); }}>DIG</Button>
+          </li>
+        ))}
+      </ul>
+      {why && <p className={styles.lede}>{why}</p>}
+      <div className={styles.sheetRow}><Button size="sm" variant="ghost" onClick={onClose}>LEAVE</Button></div>
     </div>
   );
 }

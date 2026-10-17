@@ -43,16 +43,16 @@ export const WHEEL_STYLES = {
 
 /**
  * @typedef {object} CarSpec
- * @property {keyof typeof BODY_STYLES} [body]
+ * @property {string} [body] one of BODY_STYLES
  * @property {string} [color] a `world.paint` key
- * @property {keyof typeof WHEEL_STYLES} [wheels]
+ * @property {string} [wheels] one of WHEEL_STYLES
  * @property {string} [wheelColor] a `world.paint` key or 'chrome'/'black'
  * @property {string|null} [stripes] a `world.paint` key for racing stripes
- * @property {'none'|'lip'|'wing'|'gt'} [spoiler]
+ * @property {string} [spoiler] none, lip, wing or gt
  * @property {boolean} [scoop]
  * @property {number} [lowered] 0..1
  * @property {boolean} [wide]
- * @property {'single'|'dual'|'big'} [exhaust]
+ * @property {string} [exhaust] single, dual or big
  * @property {string|null} [underglow] a `world` neon key
  * @property {string} [plate]
  * @property {EngineBay} [engine]
@@ -60,7 +60,7 @@ export const WHEEL_STYLES = {
 
 /**
  * @typedef {object} EngineBay
- * @property {'I4'|'I6'|'V6'|'V8'|'flat'} [layout]
+ * @property {string} [layout] I4, I6, V6, V8 or flat
  * @property {boolean} [turbo]
  * @property {boolean} [supercharger]
  * @property {boolean} [intercooler]
@@ -289,9 +289,11 @@ export function makeCar(spec = {}) {
   const wheels = [];
   const track = Wd - tw + 0.04;
   const spokeGeom = new THREE.BoxGeometry(0.03, wr * 0.85, 0.04);
-  for (const [sx, sz, front] of [[1, 1, true], [-1, 1, true], [1, -1, false], [-1, -1, false]]) {
+  /** @type {[number, number, boolean][]} */
+  const corners = [[1, 1, true], [-1, 1, true], [1, -1, false], [-1, -1, false]];
+  for (const [sx, sz, front] of corners) {
     const hub = new THREE.Group();
-    hub.position.set(sx * track / 2, wr, sz * wheelbase / 2 - (S.cab[1] > 0.9 ? 0 : 0));
+    hub.position.set(sx * track / 2, wr, sz * wheelbase / 2);
     const steer = new THREE.Group();
     const spin = new THREE.Group();
     const tyre = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, tw, 14).rotateZ(Math.PI / 2), toon(W.tyre));

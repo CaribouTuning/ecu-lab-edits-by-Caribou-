@@ -28,7 +28,7 @@ export { ownIdOf, ownJob, ownJobId, registerCars };
  * @property {string} color a `world.paint` key
  * @property {string} wheels a models/car.js wheel style
  * @property {string} wheelColor
- * @property {'none'|'lip'|'wing'|'gt'} spoiler
+ * @property {string} spoiler none, lip, wing or gt
  * @property {string|null} stripes
  * @property {number} lowered 0..1
  * @property {string|null} underglow a `world` neon key

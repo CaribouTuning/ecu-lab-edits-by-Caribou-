@@ -18,7 +18,7 @@ function rnd(seed) {
 /**
  * Pedestrians that stroll between random points inside rectangles, stopping now and then.
  *
- * @param {THREE.Group} root
+ * @param {import('three').Group} root
  * @param {{minX: number, maxX: number, minZ: number, maxZ: number}[]} areas where they may walk
  * @param {number} count
  * @param {number} seed
@@ -87,7 +87,7 @@ export function loopPath(cx, cz, hw, hd, radius, ccw = true, segs = 6) {
 /**
  * Cars that drive a closed loop forever. `colliders` get one circle per car, kept on the car.
  *
- * @param {THREE.Group} root
+ * @param {import('three').Group} root
  * @param {{x: number, z: number}[]} pts the loop
  * @param {number} count
  * @param {number} seed

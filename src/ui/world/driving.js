@@ -100,6 +100,7 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {boolean} manual the player is choosing the gear
  * @property {number} tcCut share of engine torque traction control is taking away, 0..1
  * @property {boolean} reverse
+ * @property {number} _stopT seconds held at a stop with the brake, before reverse is chosen
  * @property {number} t seconds driven
  */
 

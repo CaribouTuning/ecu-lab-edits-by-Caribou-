@@ -30,8 +30,8 @@ export const VERDICT = {
 /**
  * One tab of the shop's paperwork.
  *
- * @param {
- *   tab: 'today'|'customers'|'upgrades'|'training'|'books',
+ * @param {{
+ *   tab: string,
  *   career: import('./shop.js').Career,
  *   update: (next: import('./shop.js').Career) => void,
  *   onWork: () => void,
@@ -41,7 +41,8 @@ export const VERDICT = {
  *   confirmReset: boolean,
  *   setConfirmReset: (v: boolean) => void,
  *   unseen: boolean,
- * } props
+ *   variant?: 'page'|'drawer',
+ * }} props
  */
 export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLesson, confirmReset, setConfirmReset, unseen, variant = 'page' }) {
   const last = career.last;

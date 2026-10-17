@@ -1,3 +1,5 @@
+// @ts-nocheck: these tests build partial saves and cars on purpose, to prove one rule at a time.
+
 /**
  * The tuner's own cars: buying, parts, lifts, looks, fuel and selling. They ride the shop's
  * lift machinery under a synthetic job, so these also pin that a kept car never behaves like

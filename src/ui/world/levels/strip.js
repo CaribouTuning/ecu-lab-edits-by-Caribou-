@@ -44,7 +44,7 @@ export function sampleTrace(trace, t) {
   return { x: lerp(a.x, b.x), v: lerp(a.v, b.v), rpm: lerp(a.rpm, b.rpm), gear: a.gear, throttle: lerp(a.throttle, b.throttle), spinning: a.spinning, limiter: a.limiter };
 }
 
-/** @param {any} api @param {any} [entry] */
+/** @param {any} api */
 export function buildStrip(api) {
   const career = api.career();
   const phase = career.phase ?? 0;
@@ -70,7 +70,7 @@ export function buildStrip(api) {
   root.add(box(0.5, 0.014, 13, W.white, { x: 0, y: 0.015, z: 0, edge: false, cast: false }));
   for (let i = 0; i < 12; i += 1) for (let j = 0; j < 2; j += 1) root.add(box(0.7, 0.016, 0.7, (i + j) % 2 ? W.black : W.white, { x: QUARTER_M + j * 0.7, y: 0.016, z: -6 + i * 1.09, edge: false, cast: false }));
   // Distance boards every 100 m, and the eighth-mile.
-  for (const [x, label] of [[201, '1/8'], [QUARTER_M, '1/4']]) {
+  for (const [x, label] of /** @type {[number, string][]} */ ([[201, '1/8'], [QUARTER_M, '1/4']])) {
     const s = sign(label, { w: 1.6, h: 0.6, bg: W.black, fg: W.hazard });
     s.position.set(x, 1.6, -8.2);
     root.add(s);

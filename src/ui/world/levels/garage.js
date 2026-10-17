@@ -20,8 +20,10 @@ import {
   makeDyno, makeFloorLamp, makeJobBoard, makeLift, makeLocker, makeNeon, makePlant, makePoster, makeRollupDoor, makeShelf, makeToolChest,
   makeTrophyShelf, makeTyreStack, makeWorkbench,
 } from '../models/props.js';
+import { pixelTexture } from '../gfx.js';
 
 import { hash, pathFollower, specForJob } from './common.js';
+import { decorOf } from '../../career/decor.js';
 import { jobById } from '../../career/jobs.js';
 import { ownJobId } from '../../career/ownRegistry.js';
 import { capacity } from '../../career/shop.js';
@@ -42,6 +44,15 @@ export const APRON = [{ x: -16, z: 11.2 }, { x: -12, z: 11.2 }, { x: -8, z: 11.2
 /** What the day's light looks like for a phase of the day. */
 export const PHASE_TIME = [0, 0.7, 1.5, 2.6];
 
+let bannerTex = null;
+/** A chequered banner, drawn once. */
+function bannerTexture() {
+  bannerTex ??= pixelTexture(32, 4, (g) => {
+    for (let x = 0; x < 32; x += 1) for (let y = 0; y < 4; y += 1) { g.fillStyle = (x + y) % 2 ? W.black : W.white; g.fillRect(x, y, 1, 1); }
+  });
+  return bannerTex;
+}
+
 /** @param {THREE.Object3D} o @param {number} x @param {number} z @param {number} [ry] @param {number} [y] */
 function at(o, x, z, ry = 0, y = 0) {
   o.position.set(x, y, z);
@@ -56,6 +67,14 @@ function at(o, x, z, ry = 0, y = 0) {
 export function buildGarage(api, entry = {}) {
   const career = api.career();
   const owned = new Set(career.owned);
+  const decor = decorOf(career);
+  const wallCol = W[decor.wall] ?? W.wallShop;
+  const FLOOR_STYLE = {
+    epoxy: { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase },
+    checker: { base: W.white, alt: W.black, line: W.black },
+    wood: { base: W.woodLight, alt: W.wood, line: W.woodDark },
+    red: { base: W.brick, alt: W.brickDark, line: W.black },
+  }[decor.floor] ?? { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase };
   const root = new THREE.Group();
   const colliders = [];
   const interactables = [];
@@ -66,7 +85,7 @@ export function buildGarage(api, entry = {}) {
 
   // ---- shell ----
   root.add(floorPlane(40, 24, W.concreteDark, { x: 0, z: 0, y: -0.02 }));
-  const floor = groundPlane(ROOM.maxX - ROOM.minX, ROOM.maxZ - ROOM.minZ, { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase, kind: 'tile', tile: 2 });
+  const floor = groundPlane(ROOM.maxX - ROOM.minX, ROOM.maxZ - ROOM.minZ, { ...FLOOR_STYLE, kind: 'tile', tile: 2 });
   floor.position.y = 0.001;
   root.add(floor);
   // Painted floor: a walkway down the middle and an outline round each bay.
@@ -76,9 +95,9 @@ export function buildGarage(api, entry = {}) {
   }
   const wallH = 5.2;
   const addWall = (x, z, w, d, h, color, collide = true) => { const m = box(w, h, d, color, { x, y: h / 2, z }); root.add(m); if (collide) colliders.push({ x, z, hw: w / 2, hd: d / 2 }); return m; };
-  addWall(0, ROOM.minZ - 0.2, 22.8, 0.4, wallH, W.wallShop);
-  addWall(ROOM.minX - 0.2, 0, 0.4, 15.4, wallH, W.wallShop);
-  addWall(ROOM.maxX + 0.2, 0, 0.4, 15.4, wallH, W.wallShop);
+  addWall(0, ROOM.minZ - 0.2, 22.8, 0.4, wallH, wallCol);
+  addWall(ROOM.minX - 0.2, 0, 0.4, 15.4, wallH, wallCol);
+  addWall(ROOM.maxX + 0.2, 0, 0.4, 15.4, wallH, wallCol);
   // The lower skirting in a darker colour.
   root.add(box(22, 1.2, 0.1, W.wallBase, { x: 0, y: 0.6, z: ROOM.minZ + 0.05, edge: false }));
   root.add(box(0.1, 1.2, 15, W.wallBase, { x: ROOM.minX + 0.05, y: 0.6, z: 0, edge: false }));
@@ -106,7 +125,7 @@ export function buildGarage(api, entry = {}) {
   root.add(box(60, 0.18, 0.4, W.curb, { x: 0, y: 0.09, z: 15.1, edge: false }));
   for (let i = -5; i <= 5; i += 1) root.add(box(2.2, 0.012, 0.18, W.roadLine, { x: i * 5, y: -0.005, z: 20.5, edge: false, cast: false }));
   // Neighbours either side: plain shop fronts, so the street feels like a street.
-  for (const [x, c] of [[-21, W.brick], [21, W.plasterDark]]) {
+  for (const [x, c] of /** @type {[number, string][]} */ ([[-21, W.brick], [21, W.plasterDark]])) {
     root.add(box(18, 6, 12, c, { x, y: 3, z: -1 }));
     colliders.push({ x, z: -1, hw: 9, hd: 6 });
   }
@@ -143,12 +162,9 @@ export function buildGarage(api, entry = {}) {
   if (dynoOwned) {
     colliders.push({ x: DYNO_AT.x - 2.05, z: DYNO_AT.z + 1.6, hw: 0.25, hd: 0.25 });
     animators.push((dt) => {
-      const fanSpeed = hasCarOn('dyno') ? 14 : 2;
-      dyno.userData.fan.rotation.z += dt * fanSpeed;
-      for (const r of dyno.userData.rollers) r.rotation.x += dt * (hasCarOn('dyno') ? 18 : 0);
+      dyno.userData.fan.rotation.z += dt * 2;
     });
   }
-  const hasCarOn = () => false;
 
   // ---- the desk, board, locker, bell ----
   const desk = makeDesk({ lit: true });
@@ -179,11 +195,29 @@ export function buildGarage(api, entry = {}) {
   colliders.push({ x: 5.4, z: 6.0, hw: 0.3, hd: 0.3 });
 
   // ---- decoration and clutter ----
-  const neon = makeNeon(owned.has('sign') ? 'TUNING' : 'tuning shop', owned.has('sign') ? W.neonPink : W.cloth.silver, 5);
+  const neon = makeNeon(owned.has('sign') ? 'TUNING' : 'tuning shop', owned.has('sign') ? W[decor.neon] ?? W.neonPink : W.cloth.silver, 5);
   at(neon, 0, ROOM.minZ + 0.25, 0, 4.1);
   root.add(neon);
   const posters = [-9.8, -6.3, 0.1, 5.2];
   posters.forEach((x, i) => { const p = makePoster(i + career.day); at(p, x, ROOM.minZ + 0.07, 0, 3.7); if (i === 2) p.position.y = 2.5; root.add(p); });
+  // Things the tuner has put up.
+  if (decor.extras.includes('plants')) for (const [x, z] of [[-10.3, -6.7], [10.3, -6.8], [-10.3, 1.0]]) { const p = makePlant(true); at(p, x, z); root.add(p); }
+  if (decor.extras.includes('flags')) {
+    const cols = [W.toolRed, W.toolYellow, W.toolBlue, W.cloth.white, W.paint.green];
+    for (let i = 0; i < 22; i += 1) {
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 3), new THREE.MeshToonMaterial({ color: cols[i % cols.length] }));
+      fl.position.set(-10.5 + i, 4.5 - Math.sin((i / 21) * Math.PI) * 0.3, ROOM.minZ + 1.1);
+      fl.rotation.x = Math.PI;
+      root.add(fl);
+    }
+    root.add(box(22, 0.03, 0.03, W.black, { y: 4.72, z: ROOM.minZ + 1.1, edge: false, cast: false }));
+  }
+  if (decor.extras.includes('tyrewall')) for (let i = 0; i < 4; i += 1) { const t = makeTyreStack(6 - (i % 2)); at(t, ROOM.maxX - 0.7, -1.2 + i * 0.75); root.add(t); colliders.push({ x: ROOM.maxX - 0.7, z: -1.2 + i * 0.75, r: 0.38 }); }
+  if (decor.extras.includes('banner')) {
+    const tex = new THREE.Mesh(new THREE.PlaneGeometry(8, 1.1), new THREE.MeshToonMaterial({ map: bannerTexture() }));
+    tex.position.set(-3.6, 3.6, ROOM.minZ + 0.08);
+    root.add(tex);
+  }
   const shelf = makeShelf(career.seed);
   at(shelf, -9.3, ROOM.minZ + 0.6, 0);
   root.add(shelf);
@@ -201,7 +235,9 @@ export function buildGarage(api, entry = {}) {
   root.add(bench);
   colliders.push({ x: 6.0, z: ROOM.minZ + 0.7, hw: 1.25, hd: 0.5 });
   for (const [x, z, n] of [[10.1, -6.1, 5], [9.3, -6.4, 3]]) { const t = makeTyreStack(n); at(t, x, z); root.add(t); colliders.push({ x, z, r: 0.4 }); }
-  for (const [x, z, c] of [[-10.3, -5.8, W.barrel], [-10.3, -5.0, W.barrelRed]]) { const b = makeBarrel(c); at(b, x, z); root.add(b); colliders.push({ x, z, r: 0.35 }); }
+  /** @type {[number, number, string][]} */
+  const barrels = [[-10.3, -5.8, W.barrel], [-10.3, -5.0, W.barrelRed]];
+  for (const [x, z, c] of barrels) { const b = makeBarrel(c); at(b, x, z); root.add(b); colliders.push({ x, z, r: 0.35 }); }
   const crate = makeCrate();
   at(crate, -10.0, 6.0);
   root.add(crate);

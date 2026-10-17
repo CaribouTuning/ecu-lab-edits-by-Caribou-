@@ -21,6 +21,8 @@ import {
 import { dealerStock } from '../../career/ownedCars.js';
 import { hash, pickBy } from './common.js';
 import { loopPath, makeTraffic, makeWalkers } from './crowd.js';
+import { npcLook } from '../appearance.js';
+import { makePerson } from '../models/person.js';
 
 export const TOWN = { minX: -86, maxX: 86, minZ: -56, maxZ: 58 };
 
@@ -144,6 +146,7 @@ export function buildTown(api, entry = {}) {
   colliders.push({ x: 8, z: 9, hw: 6, hd: 0.3 }, { x: 24.5, z: 9, hw: 5.5, hd: 0.3 }, { x: 16, z: 36, hw: 14, hd: 0.3 }, { x: 2, z: 22.5, hw: 0.3, hd: 13.5 }, { x: 30, z: 22.5, hw: 0.3, hd: 13.5 });
   root.add(box(3.4, 0.2, 0.2, W.hazard, { x: 16, y: 1.3, z: 9, edge: false }));
   root.add(yard);
+  /** @type {[number, number, number, string, string][]} */
   const wrecks = [[6, 14, 0.5, 'sedan', 'grey'], [11, 24, 2.4, 'hatch', 'orange'], [20, 15, -0.4, 'coupe', 'blue'], [24, 28, 1.3, 'pickup', 'green'], [8, 31, 0.1, 'wagon', 'pewter'], [26, 18, 3.0, 'muscle', 'red']];
   for (const [x, z, ry, body, color] of wrecks) {
     const c = makeCar({ body, color, wheels: 'steel', engine: { layout: 'V6' } });
@@ -155,7 +158,7 @@ export function buildTown(api, entry = {}) {
     colliders.push({ x, z, r: 1.9 });
   }
   for (const [x, z] of [[14, 12], [18, 31], [5, 22], [27, 34], [13, 33]]) { const t = makeTyreStack(5); t.position.set(x, 0, z); root.add(t); colliders.push({ x, z, r: 0.5 }); }
-  for (const [x, z, c] of [[4, 10.5, W.barrel], [28, 11, W.barrelRed], [28, 33, W.barrel]]) { const b = makeBarrel(c); b.position.set(x, 0, z); root.add(b); colliders.push({ x, z, r: 0.4 }); }
+  for (const [x, z, c] of /** @type {[number, number, string][]} */ ([[4, 10.5, W.barrel], [28, 11, W.barrelRed], [28, 33, W.barrel]])) { const b = makeBarrel(c); b.position.set(x, 0, z); root.add(b); colliders.push({ x, z, r: 0.4 }); }
   for (const [x, z] of [[9, 17], [22, 21], [15, 27]]) { const c = makeCrate(); c.position.set(x, 0, z); root.add(c); colliders.push({ x, z, r: 0.5 }); }
   const junkSign = sign('SPARKYS SCRAPYARD', { w: 6, h: 0.9, bg: W.wallBase, fg: W.hazard });
   junkSign.position.set(16, 3.4, 9.2);
@@ -177,6 +180,33 @@ export function buildTown(api, entry = {}) {
     }
   }
   for (const [x, z] of [[40, 34], [66, 34], [40, 9], [66, 9]]) { const c = makeCone(); c.position.set(x, 0, z); root.add(c); }
+  // The show spot: a turntable under a spotlight, where a car is presented to the judges.
+  const PODIUM = { x: 52, z: 26 };
+  const podium = new THREE.Group();
+  podium.position.set(PODIUM.x, 0, PODIUM.z);
+  podium.add(cyl(3.3, 3.5, 0.25, W.cloth.charcoal, { y: 0.125, seg: 20, edge: false }));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.07, 6, 28), glow(W.neonPink));
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.27;
+  podium.add(ring);
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(3.6, 9, 20, 1, true), glow(W.white, night ? 0.08 : 0.03));
+  beam.position.y = 4.7;
+  beam.material.depthWrite = false;
+  podium.add(beam);
+  root.add(podium);
+  const spectators = [];
+  if (night) {
+    for (let i = 0; i < 9; i += 1) {
+      const a = (i / 9) * Math.PI * 2;
+      const p = makePerson(npcLook(hash(`meetfan${i}`)), { mood: 'smile' });
+      p.group.position.set(PODIUM.x + Math.cos(a) * 6.2, 0, PODIUM.z + Math.sin(a) * 6.2);
+      p.group.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+      root.add(p.group);
+      spectators.push(p);
+    }
+  }
+  /** @type {null|{rig: any, t: number}} */
+  let presenting = null;
 
   // ---- the park ----
   const pond = floorPlane(22, 12, W.water, { x: -35, z: -33, y: 0.0 });
@@ -290,7 +320,7 @@ export function buildTown(api, entry = {}) {
   });
   // The meet.
   interactables.push({
-    id: 'meet', x: 52, z: 22, r: 12, maxSpeed: 12,
+    id: 'meet', x: 52, z: 22, r: 11, maxSpeed: 12,
     label: () => { const why = closedBecause(api.career(), placeById('meet')); return why ? 'Car meet: closed' : 'Join the car meet'; },
     hint: () => closedBecause(api.career(), placeById('meet')) ?? 'Show your car and your look.',
     run: () => {
@@ -357,8 +387,30 @@ export function buildTown(api, entry = {}) {
     },
     surfaceAt,
     sync() { /* nothing in the town depends on the shop's save while you are in it */ },
+    cinematic: () => (presenting ? { x: PODIUM.x, z: PODIUM.z, heading: 0, speed: 0, mode: 'follow', yaw: presenting.t * 0.45 + 0.4, pitch: 0.36, dist: 12, fov: 34 } : null),
+    cmd(name, ...args) {
+      if (name === 'present') {
+        const rig = args[0];
+        root.add(rig.group);
+        rig.group.position.set(PODIUM.x, 0.25, PODIUM.z);
+        presenting = { rig, t: 0 };
+        api.player.locked = true;
+        api.person.group.visible = false;
+        for (const p of spectators) p.setPose('cheer');
+      } else if (name === 'endPresent' && presenting) {
+        root.remove(presenting.rig.group);
+        presenting = null;
+        api.player.locked = false;
+        api.person.group.visible = true;
+        for (const p of spectators) p.setPose('idle');
+      }
+      return undefined;
+    },
     update(dt, t) {
       for (const u of updaters) u(dt);
+      for (const p of spectators) p.update(dt, 0);
+      if (presenting) { presenting.t += dt; presenting.rig.group.rotation.y = presenting.t * 0.45; presenting.rig.update(dt); }
+      ring.rotation.z = t * 0.5;
       const px = api.drive?.inside ? api.drive.state.x : api.player.x;
       const pz = api.drive?.inside ? api.drive.state.z : api.player.z;
       for (const s of spanners) {

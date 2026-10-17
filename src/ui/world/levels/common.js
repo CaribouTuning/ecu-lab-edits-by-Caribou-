@@ -17,6 +17,7 @@ export function hash(s) {
 /** Pick from a list by hash. @template T @param {T[]} xs @param {number} h @param {number} [salt] @returns {T} */
 export const pickBy = (xs, h, salt = 0) => xs[(Math.imul(h ^ (salt * 2654435761), 2246822519) >>> 0) % xs.length];
 
+/** @type {[RegExp, string][]} */
 const BODY_BY_NAME = [
   [/gti|golf|hatch|civic|focus|mini/i, 'hatch'],
   [/corvette|z06|c5|ls1|camaro|mustang|challenger|charger|hemi/i, 'muscle'],
@@ -27,7 +28,7 @@ const BODY_BY_NAME = [
   [/350z|370z|coupe|track|vq/i, 'coupe'],
 ];
 
-/** The body a customer's car is drawn with: by what it is called, then the job's own say. @param {{customer: {car: string, body?: string}}} job */
+/** The body a customer's car is drawn with: by what it is called, then the job's own say. @param {any} job */
 export function bodyFor(job) {
   if (job.own) return job.customer.body ?? 'coupe';
   for (const [re, body] of BODY_BY_NAME) if (re.test(job.customer.car)) return body;
@@ -38,7 +39,7 @@ export function bodyFor(job) {
  * The spec a customer's car is drawn from: its paint and body from the job, a stable
  * choice of wheels and trim from the job's id, and its engine bay from what is really
  * fitted.
- * @param {{id: string, customer: {car: string, color: string, body?: string}}} job
+ * @param {any} job
  * @param {object} build the store's build slice for that car
  */
 export function specForJob(job, build) {

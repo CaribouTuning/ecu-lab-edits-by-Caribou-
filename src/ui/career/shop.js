@@ -62,6 +62,14 @@ export const START_MONEY = 1000;
  * @property {string[]} [looks] paints, wheels and trim bought, by `kind:id`
  * @property {{won: string[], best: Record<string, number>}} [races] rivals beaten, and each car's best ET
  * @property {{day: number, n: number}} [raceDay] races run today
+ * @property {number} [meetDay] the day a car was last shown at the meet
+ * @property {number} [meets] cars shown at the meet
+ * @property {{day: number, n: number}} [junk] digs in the scrapyard today
+ * @property {{day: number, p: Record<string, number>, claimed: string[]}} [daily] progress on today's goals
+ * @property {number} [streak] days in a row all three goals were done
+ * @property {{wall: string, floor: string, neon: string, extras: string[]}} [decor] how the shop is dressed
+ * @property {string[]} [ach] achievements earned
+ * @property {boolean} [introDone] the welcome has been read
  */
 
 /**

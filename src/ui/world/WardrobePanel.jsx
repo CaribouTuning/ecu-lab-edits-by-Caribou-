@@ -25,7 +25,7 @@ const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
  * @param {{career: import('../career/shop.js').Career, update: (c: any) => void, canBuy: boolean, onGo?: () => void}} p
  */
 export function WardrobePanel({ career, update, canBuy, onGo }) {
-  const [slot, setSlot] = useState('top');
+  const [slot, setSlot] = useState(/** @type {any} */ ('top'));
   const look = lookOf(career);
   const owned = wardrobeOf(career);
   const score = styleScore(look);
