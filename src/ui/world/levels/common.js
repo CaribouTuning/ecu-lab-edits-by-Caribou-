@@ -5,6 +5,7 @@
 
 import { world as W } from '../../tokens.js';
 import { THREE, box, floorPlane, toon } from '../gfx.js';
+import { npcLook } from '../appearance.js';
 import { engineBayOf, makeCar } from '../models/car.js';
 
 /** A small stable hash of a string, 0..2^32. @param {string} s */
@@ -13,6 +14,9 @@ export function hash(s) {
   for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
 }
+
+/** Pops: white hair, red cap, thick glasses. The same man in the garage and behind the diner counter. */
+export const popsLook = () => ({ ...npcLook(hash('pops')), top: 'polo-shop', bottom: 'slacks', hat: 'cap-red', hair: 'short', hairColor: 'white', glasses: 'nerd', skin: 1 });
 
 /** Pick from a list by hash. @template T @param {T[]} xs @param {number} h @param {number} [salt] @returns {T} */
 export const pickBy = (xs, h, salt = 0) => xs[(Math.imul(h ^ (salt * 2654435761), 2246822519) >>> 0) % xs.length];

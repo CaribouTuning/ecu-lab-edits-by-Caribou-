@@ -401,3 +401,87 @@
 .slip th:first-child, .slip td:first-child { text-align: left; font-family: var(--sans); color: var(--ink2); }
 .slip th { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--ink3); }
 .facts2 { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-soft); }
+
+/* ---- the text box: a handheld RPG's, along the bottom ---- */
+.talk {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 6px);
+  transform: translateX(-50%);
+  width: min(780px, calc(100% - 2 * var(--edge) - 12px));
+  z-index: 26;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 8px;
+  font-family: var(--mono);
+}
+.talkName {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-bottom: -10px;
+  margin-left: 14px;
+  padding: 3px 12px 4px;
+  background: var(--talk-name);
+  color: var(--talk-paper);
+  border: 3px solid var(--talk-frame);
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: var(--fs-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  z-index: 1;
+}
+.talkBox {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-height: 92px;
+  padding: 16px 22px 18px;
+  background: var(--talk-paper);
+  color: var(--talk-ink);
+  border: 4px solid var(--talk-frame);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 3px var(--talk-frame-hi), 0 4px 0 var(--talk-frame);
+  font: inherit;
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  white-space: pre-wrap;
+}
+.talkText { display: block; min-height: 3.1em; }
+.talkMore { position: absolute; right: 16px; bottom: 8px; color: var(--talk-name); animation: talkBlink 0.9s steps(2) infinite; font-size: 14px; }
+@keyframes talkBlink { 50% { opacity: 0; } }
+.talkChoices {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  background: var(--talk-paper);
+  border: 4px solid var(--talk-frame);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 3px var(--talk-frame-hi);
+  min-width: 150px;
+}
+.talkChoice {
+  text-align: left;
+  padding: 8px 12px 8px 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--talk-ink);
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  position: relative;
+}
+.talkChoice[data-on='true'] { background: var(--talk-choice); }
+.talkChoice[data-on='true']::before { content: '\25B6'; position: absolute; left: 9px; color: var(--talk-name); }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-height: 460px) {
+  .talkBox { min-height: 70px; padding: 10px 16px 12px; font-size: var(--fs-sm); }
+  .talk { width: min(640px, calc(100% - 260px)); }
+}
+@media (prefers-reduced-motion: reduce) { .talkMore { animation: none; } }

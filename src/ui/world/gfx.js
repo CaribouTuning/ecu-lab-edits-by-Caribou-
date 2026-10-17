@@ -29,6 +29,12 @@ const RAMP = (() => {
 const materialCache = new Map();
 
 /**
+ * The light on sprites (people), which are drawn unlit: white by day, warm at dusk, blue
+ * at night. The stage sets it with the time of day; every sprite multiplies by it.
+ */
+export const SPRITE_LIGHT = new THREE.Color(1, 1, 1);
+
+/**
  * A flat toon material in one colour, shared by everything that asks for the same one.
  * @param {string} color a CSS colour (always a palette value)
  * @param {{emissive?: string, emissiveIntensity?: number, opacity?: number, side?: number, flat?: boolean, depthWrite?: boolean}} [o]

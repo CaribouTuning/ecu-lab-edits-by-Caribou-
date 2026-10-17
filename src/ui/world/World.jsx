@@ -25,11 +25,12 @@ import { cannotEnter, entrants, judge, placing, settleMeet } from '../career/mee
 import { RIVALS, cannotRace, decide, playerReaction, rivalById, rivalState, settleRace, sliptalk } from '../career/races.js';
 import { LessonDialog, ShopPanel } from '../career/ShopPanels.jsx';
 import { Button } from '../primitives/Button.jsx';
+import { world as W } from '../tokens.js';
 
 import { driveSoundFrame, silenceDriveSound } from './driveSound.js';
 import { CarsPanel } from './CarsPanel.jsx';
 import { DecorPanel } from './DecorPanel.jsx';
-import { Dash, Labels, Objective, PromptButton, Toasts, TopBar, TouchControls } from './Hud.jsx';
+import { Dash, Dialogue, Labels, Objective, PromptButton, Toasts, TopBar, TouchControls } from './Hud.jsx';
 import { engineBayOf } from './models/car.js';
 import { bodyFor, carFor, specForJob } from './levels/common.js';
 import { buildGarage } from './levels/garage.js';
@@ -59,6 +60,53 @@ const TABS = [
   { id: 'decor', label: 'SHOP DECOR', icon: Paintbrush, at: null },
   { id: 'books', label: 'BOOKS', icon: Wallet, at: null },
 ];
+
+/** The text box's colours, from the world palette, for the stylesheet. */
+const TALK_VARS = /** @type {React.CSSProperties} */ ({
+  '--talk-paper': W.talk.paper, '--talk-ink': W.talk.ink, '--talk-frame': W.talk.frame,
+  '--talk-frame-hi': W.talk.frameHi, '--talk-name': W.talk.name, '--talk-choice': W.talk.choice,
+});
+
+/**
+ * Who stands behind each counter, what they say when you walk up, and the answer that
+ * opens the counter. Every line is something true about the trade.
+ * @type {Record<string, {yes: string, lines: (c: any) => import('./Hud.jsx').TalkLine[]}>}
+ */
+const CLERKS = {
+  supply: {
+    yes: 'SHOW ME',
+    lines: (c) => [
+      { who: 'Gus', text: c.rep < 10 ? 'New shop on Main Street, huh? Welcome. Lifts, a dyno, a wideband: tools first, then the clever stuff.' : 'Back again. Kit is restocked.' },
+      { who: 'Gus', text: 'A tuner is only as good as what they can measure. A wideband reads the real air-fuel ratio. Guessing does not.' },
+    ],
+  },
+  academy: {
+    yes: 'ENROL',
+    lines: () => [
+      { who: 'Prof. Okoye', text: 'Every course here is one page of a real engine computer: fuel, spark, boost, protection.' },
+      { who: 'Prof. Okoye', text: 'Learn why a cell does what it does, and the car will tell you the rest on the dyno.' },
+    ],
+  },
+  boutique: {
+    yes: 'BROWSE',
+    lines: () => [{ who: 'Mina', text: 'Welcome to Threads! Nothing here adds a single horsepower. It does win car meets.' }],
+  },
+  diner: {
+    yes: 'TODAY\u2019S GOALS',
+    lines: (c) => {
+      const tip = tipFor(c.day * 13 + c.history.length * 3 + c.rep);
+      return [{ who: 'Pops', text: 'Sit down, kid. Coffee is on me.' }, { who: `Pops \u00b7 ${tip.topic}`, text: tip.text }];
+    },
+  },
+  dealer: {
+    yes: 'SEE THE CARS',
+    lines: () => [{ who: 'Rita', text: 'Every car on this lot is a real engine with real numbers. Pick one you want to learn, not just one that is fast.' }],
+  },
+  strip: {
+    yes: 'RACE',
+    lines: () => [{ who: 'Marshal', text: 'Quarter mile, two lanes, one tree. Launch, gearing and grip decide it, not just power. Want to run?' }],
+  },
+};
 
 /** Where the tuner was when the screen last closed, so coming back from the laptop puts them by it. */
 let lastSpot = null;
@@ -96,6 +144,13 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [toasts, setToasts] = useState(/** @type {{id: number, text: string, tone?: string}[]} */ ([]));
   const [drawer, setDrawer] = useState(/** @type {string|null} */ (null));
   const [sheet, setSheet] = useState(/** @type {any} */ (null));
+  /** A conversation in the text box: lines, and what to do when it ends. */
+  const [talk, setTalk] = useState(/** @type {{lines: import('./Hud.jsx').TalkLine[], onDone?: () => void}|null} */ (null));
+  const talkRef = useRef(talk);
+  talkRef.current = talk;
+  const endTalk = useCallback(() => { const t = talkRef.current; setTalk(null); t?.onDone?.(); }, []);
+  /** Say something in the text box. @param {import('./Hud.jsx').TalkLine[]} lines @param {() => void} [onDone] */
+  const say = useCallback((lines, onDone) => { setSheet(null); setDrawer(null); setTalk({ lines, onDone }); }, []);
   const [driving, setDriving] = useState(false);
   const [place, setPlace] = useState('garage');
   const [outJob, setOutJob] = useState(/** @type {string|null} */ (null));
@@ -244,6 +299,25 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     }, 80);
   }, [toast, update]);
 
+  /** The person behind a counter says hello, then the counter opens. @param {string} id */
+  const greet = useCallback((id) => {
+    const c = careerRef.current;
+    const open = {
+      supply: () => goPhone('upgrades'),
+      academy: () => goPhone('training'),
+      boutique: () => goPhone('wardrobe'),
+      diner: () => { update(bump(careerRef.current, 'tip')); setSheet({ type: 'diner' }); },
+      dealer: () => { setFocusCar(null); goPhone('cars'); },
+      strip: () => setSheet({ type: 'race' }),
+    }[id];
+    const clerk = CLERKS[id];
+    if (!open) return;
+    if (!clerk) { open(); return; }
+    const lines = clerk.lines(c);
+    const last = lines[lines.length - 1];
+    say([...lines.slice(0, -1), { ...last, choices: [{ label: clerk.yes, run: () => { setTalk(null); open(); } }, { label: 'NOT NOW', run: () => setTalk(null) }] }]);
+  }, [goPhone, say, update]);
+
   const onAct = useCallback((e) => {
     const c = careerRef.current;
     const w = worldRef.current;
@@ -288,8 +362,13 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       }
       case 'locker': goPhone('wardrobe'); break;
       case 'bell': setSheet({ type: 'close' }); break;
-      case 'coffee': update(bump(c, 'tip')); setSheet({ type: 'tip', tip: tipFor(c.day * 7 + c.history.length) }); break;
-      case 'dog': toast('Torque wags his whole back end. Good boy.', 'ok'); break;
+      case 'coffee': {
+        update(bump(c, 'tip'));
+        const tip = tipFor(c.day * 7 + c.history.length);
+        say([{ text: 'You pour a coffee. Pops left a note taped to the machine.' }, { who: `Pops \u00b7 ${tip.topic}`, text: tip.text }]);
+        break;
+      }
+      case 'dog': say([{ who: 'Torque', text: 'Woof!' }, { text: 'Torque wags his whole back end. He has never once asked about boost.' }]); break;
       case 'trophies': setSheet({ type: 'trophies' }); break;
       case 'door': travel('town', { from: 'garage' }); break;
       case 'go':
@@ -299,12 +378,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         else if (LEVELS[e.place]) travel(e.place, {});
         break;
       case 'shop':
-        if (e.place === 'supply') goPhone('upgrades');
-        else if (e.place === 'academy') goPhone('training');
-        else if (e.place === 'boutique') goPhone('wardrobe');
-        else if (e.place === 'diner') { update(bump(c, 'tip')); setSheet({ type: 'diner', tip: tipFor(c.day * 13 + c.history.length * 3 + c.rep) }); }
-        else if (e.place === 'dealer') { setFocusCar(null); goPhone('cars'); }
-        else if (e.place === 'strip') setSheet({ type: 'race' });
+        greet(e.place);
         break;
       case 'found': {
         const r = findSpanner(c, e.n);
@@ -313,21 +387,21 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       }
       case 'pump': setSheet({ type: 'pump', carId: w?.drive?.id?.startsWith('own:') ? w.drive.id.slice(4) : null }); break;
       case 'meet': setSheet({ type: 'meet' }); break;
-      case 'bench': toast(BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length]); break;
+      case 'bench': say([{ text: BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length] }]); break;
       default: break;
     }
-  }, [goPhone, onDyno, onWork, startDrive, toast, travel, update]);
+  }, [goPhone, greet, onDyno, onWork, say, startDrive, toast, travel, update]);
 
   const onEvent = useCallback((e) => {
     if (e.type === 'prompt') setPrompt(e.prompt);
     else if (e.type === 'labels') setLabels(e.labels.filter((l) => !l.gone));
     else if (e.type === 'act') onAct(e);
+    else if (e.type === 'talk') say(e.lines, e.onDone);
     else if (e.type === 'toast') toast(e.text, e.tone);
     else if (e.type === 'level') setPlace(e.id);
     else if (e.type === 'drive') setDriving(e.on);
     else if (e.type === 'race') setRacing(e.on);
     else if (e.type === 'bump') { if (e.force > 5) toast('Easy! That cost you a bumper’s worth of pride.', 'warn'); }
-    else if (e.type === 'menu') setDrawer((d) => (d ? null : 'today'));
     else if (e.type === 'map') setSheet((s) => (s?.type === 'map' ? null : { type: 'map' }));
     else if (e.type === 'photo') {
       worldRef.current?.snapshot().then((blob) => {
@@ -340,7 +414,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         toast('Photo saved.', 'ok');
       });
     }
-  }, [onAct, toast]);
+  }, [onAct, say, toast]);
   const onFlatRef = useRef(onFlat);
   onFlatRef.current = onFlat;
   const onEventRef = useRef(onEvent);
@@ -385,7 +459,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
 
   useEffect(() => { world?.setQuality(settings.quality); saveSettings(settings); }, [world, settings]);
   useEffect(() => { world?.setShake(settings.shake); }, [world, settings.shake]);
-  useEffect(() => { world?.setPaused(!!drawer || !!sheet); }, [world, drawer, sheet]);
+  useEffect(() => { world?.setPaused(!!drawer || !!sheet || !!talk); }, [world, drawer, sheet, talk]);
   useEffect(() => { world?.sync(career); }, [world, career]);
   useEffect(() => { world?.setLook(career.look ?? {}); }, [world, career.look]);
   // The wardrobe frames the tuner; everything else puts the camera back.
@@ -398,10 +472,18 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     return () => window.removeEventListener('resize', measure);
   }, [world, drawer]);
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { setDrawer(null); setSheet(null); } };
+    // Escape is one key with one meaning: close whatever is open, or open the phone when
+    // nothing is. (The runtime also reports it, but only this handler acts on it, so the two
+    // never fight over the same press.)
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      const open = drawerRef.current?.dataset.open === 'true' || !!document.querySelector('[data-world-sheet]');
+      if (talkRef.current) { endTalk(); return; }
+      if (open) { setDrawer(null); setSheet(null); } else setDrawer('today');
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [endTalk]);
 
   // Medals: noticed whenever the save changes, paid once.
   useEffect(() => {
@@ -411,7 +493,15 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     for (const a of earned) toast(`Achievement: ${a.title}${a.reward ? ` (+$${a.reward})` : ''}`, 'ok');
   }, [career, toast, update]);
   // The welcome, once.
-  useEffect(() => { if (world && !career.introDone) setSheet({ type: 'intro', step: 0 }); }, [world, career.introDone]);
+  useEffect(() => {
+    if (!world || careerRef.current.introDone) return;
+    setTalk({
+      lines: INTRO.map((l) => ({ who: 'Pops', text: l.text })),
+      onDone: () => { update({ ...careerRef.current, introDone: true }); },
+    });
+    // Once, when the world first opens on a new career.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [world]);
 
   // The car's sound, while you drive it.
   useEffect(() => {
@@ -456,7 +546,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const gated = tabInfo?.at && place !== tabInfo.at;
 
   return (
-    <div className={styles.root} data-testid="career-world">
+    <div className={styles.root} data-testid="career-world" style={TALK_VARS}>
       <div className={styles.canvasWrap}>
         <canvas ref={canvasRef} className={styles.canvas} aria-label="Your shop and the town, in 3D. Walk with the arrow keys or WASD, press E to use what is in reach." role="img" />
       </div>
@@ -473,6 +563,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       <Objective text={objective} />
       <Labels labels={labels} />
       <Toasts toasts={toasts} />
+      {talk && <Dialogue talk={talk} onDone={endTalk} sound={settings.sound} />}
       {!drawer && !sheet && !racing && <PromptButton prompt={prompt} onUse={() => world?.interact()} />}
       {(driving || racing) && <Dash world={world} units={settings.units} touch={touch} />}
       {touch && !drawer && !sheet && <TouchControls world={world} driving={driving} />}
@@ -520,7 +611,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       {sheet && (
         <Sheet
           onFlat={onFlat} sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent'); setSheet(null); }}
-          onTravel={fastTravel} place={place} update={update} onRace={startRace} onStep={(n) => setSheet({ type: 'intro', step: n })} onMeet={startMeet} onWait={() => { update(advancePhase(career)); setSheet(null); toast('A few hours pass.'); }}
+          onTravel={fastTravel} place={place} update={update} onRace={startRace} onMeet={startMeet} onWait={() => { update(advancePhase(career)); setSheet(null); toast('A few hours pass.'); }}
           onNextDay={() => { update(nextDay(career)); setSheet(null); toast('A new day. Customers are on the board.', 'ok'); }}
         />
       )}
@@ -539,11 +630,11 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
  * Cards that fill the middle of the screen: the car's spec sheet, closing up, the
  * trophies, the map and the settings.
  */
-function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait, onStep }) {
+function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait }) {
   if (sheet.type === 'inspect') {
     const job = jobById(sheet.jobId);
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Under the bonnet">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Under the bonnet">
         <div className={styles.sheetTag}>UNDER THE BONNET · {job.customer.car}</div>
         <p className={styles.lede}>You lift the bonnet and write down what is fitted. A fact is not a diagnosis: work out what each one does to the air and the fuel.</p>
         <dl className={styles.facts}>
@@ -555,7 +646,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   }
   if (sheet.type === 'close') {
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Close up">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Close up">
         <div className={styles.sheetTag}>DAY {career.day} · CLOSING UP</div>
         <h2 className={styles.sheetTitle}>Open tomorrow?</h2>
         <p className={styles.lede}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait overnight. Opening costs the running costs of ${overhead(career).toLocaleString('en-US')}: rent, and what the shop has grown into.</p>
@@ -568,19 +659,10 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
       </div>
     );
   }
-  if (sheet.type === 'tip') {
-    return (
-      <div className={styles.sheet} role="dialog" aria-label="A tip from Pops">
-        <div className={styles.sheetTag}>POPS · {sheet.tip.topic.toUpperCase()}</div>
-        <p className={styles.lede}>&ldquo;{sheet.tip.text}&rdquo;</p>
-        <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>THANKS, POPS</Button></div>
-      </div>
-    );
-  }
   if (sheet.type === 'trophies') {
     const have = new Set(career.ach ?? []);
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Trophies">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Trophies">
         <div className={styles.sheetTag}>TROPHIES · {career.milestones.length} milestones · {have.size} of {ACHIEVEMENTS.length} medals</div>
         <ul className={styles.places}>
           {ACHIEVEMENTS.map((a) => (
@@ -596,7 +678,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   if (sheet.type === 'pump') {
     if (!sheet.carId) {
       return (
-        <div className={styles.sheet} role="dialog" aria-label="Fuel">
+        <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Fuel">
           <div className={styles.sheetTag}>FUEL STOP</div>
           <h2 className={styles.sheetTitle}>Not your tank to fill</h2>
           <p className={styles.lede}>This is a customer&rsquo;s car, and the fuel in it is part of the job: octane is knock resistance, and a car running on the wrong grade is a car running on a tune it was not made for. Your own cars can be filled with any grade here.</p>
@@ -607,7 +689,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const st = carState(career, sheet.carId);
     const car = career.cars.find((x) => x.id === sheet.carId);
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Fuel">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Fuel">
         <div className={styles.sheetTag}>FUEL STOP · {car?.name}</div>
         <p className={styles.lede}>Pick what goes in the tank. The calibration does not change when the fuel does: a different grade moves the knock limit and the mixture the car wants, so retune after switching.</p>
         <ul className={styles.places}>
@@ -626,8 +708,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
       </div>
     );
   }
-  if (sheet.type === 'intro') return <IntroSheet step={sheet.step} onNext={onStep} onDone={() => { update({ ...career, introDone: true }); onClose(); }} />;
-  if (sheet.type === 'diner') return <DinerSheet career={career} tip={sheet.tip} update={update} onClose={onClose} />;
+  if (sheet.type === 'diner') return <DinerSheet career={career} update={update} onClose={onClose} />;
   if (sheet.type === 'junk') return <JunkSheet career={career} update={update} onClose={onClose} />;
   if (sheet.type === 'meet') return <MeetSheet career={career} onClose={onClose} onMeet={onMeet} />;
   if (sheet.type === 'meetResult') return <MeetResult r={sheet} onClose={onClose} />;
@@ -635,7 +716,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   if (sheet.type === 'raceResult') return <RaceResult r={sheet} onClose={onClose} />;
   if (sheet.type === 'soon') {
     return (
-      <div className={styles.sheet} role="dialog" aria-label={sheet.title}>
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label={sheet.title}>
         <div className={styles.sheetTag}>{sheet.title.toUpperCase()}</div>
         <p className={styles.lede}>{sheet.text}</p>
         <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>OK</Button></div>
@@ -645,7 +726,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   if (sheet.type === 'settings') {
     const set = (patch) => setSettings({ ...settings, ...patch });
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Settings">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Settings">
         <div className={styles.sheetTag}>SETTINGS</div>
         <div className={styles.sheetRow}>
           <span className={styles.lede}>Pixel size</span>
@@ -685,7 +766,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   if (sheet.type === 'map') {
     const open = openPlaces(career);
     return (
-      <div className={styles.sheet} role="dialog" aria-label="Map">
+      <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Map">
         <div className={styles.sheetTag}>MAP · {open.length} of {PLACES.length} places open</div>
         <ul className={styles.places}>
           {PLACES.map((p) => {
@@ -715,7 +796,7 @@ function RaceSheet({ career, onClose, onRace }) {
   const [carId, setCarId] = useState(cars.find((c) => !career.lifts.some((l) => l.jobId === ownJobId(c.id)))?.id ?? null);
   const best = (id) => career.races?.best?.[id];
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Race">
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Race">
       <div className={styles.sheetTag}>THE DRAG STRIP · {career.raceDay?.day === career.day ? career.raceDay.n : 0} of 3 races today</div>
       <p className={styles.lede}>Races are run on the strip&rsquo;s own physics, the same quarter-mile model as the DRAG screen. Your car goes down the strip as you tuned it; a rival goes down as it was built. Elapsed time from the green light decides it.</p>
       {cars.length === 0 ? <p className={styles.lede}>You need a car of your own to race. Caribou Motors has them from $2,400.</p> : (
@@ -749,7 +830,7 @@ function RaceResult({ r, onClose }) {
   const { rival, res, prun, rrun, prt, paid, repGain, talk } = r;
   const f = (n) => (n == null ? '--' : n.toFixed(3));
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Time slip">
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Time slip">
       <div className={styles.sheetTag}>TIME SLIP · {res.won ? 'YOU WIN' : 'YOU LOSE'} BY {Math.abs(res.margin).toFixed(3)} s</div>
       <p className={styles.lede}>&ldquo;{res.won ? rival.loses : rival.wins}&rdquo; &mdash; {rival.name}</p>
       <table className={styles.slip}>
@@ -775,7 +856,7 @@ function MeetSheet({ career, onClose, onMeet }) {
   const [carId, setCarId] = useState(cars.find((c) => !career.lifts.some((l) => l.jobId === ownJobId(c.id)))?.id ?? null);
   const why = cannotEnter(career, carId);
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Car meet">
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Car meet">
       <div className={styles.sheetTag}>CAR MEET · {career.meets ?? 0} shown so far</div>
       <p className={styles.lede}>The crowd judges three things, and each is yours to change: <b>build</b> (power for the weight, on the dyno), <b>tune</b> (how clean the pull log is) and <b>style</b> (the car&rsquo;s looks and your own outfit). First place pays $800 and a name.</p>
       {cars.length === 0 ? <p className={styles.lede}>You need a car of your own to show.</p> : (
@@ -797,7 +878,7 @@ function MeetResult({ r, onClose }) {
   const { own, score, others, place } = r;
   const ORD = ['1st', '2nd', '3rd', '4th'];
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Meet results">
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Meet results">
       <div className={styles.sheetTag}>{own.name.toUpperCase()} · {ORD[place.place - 1] ?? `${place.place}th`} PLACE</div>
       <table className={styles.slip}>
         <thead><tr><th /><th>SCORE</th></tr></thead>
@@ -816,35 +897,18 @@ function MeetResult({ r, onClose }) {
   );
 }
 
+/** What Pops says on the first morning. */
 const INTRO = [
   { title: 'Welcome to the shop', text: 'I am Pops. I ran this garage for thirty years and I am handing you the keys. Customers will bring cars that do not run right. Your job is to work out why, and fix it properly: the real way, with real physics.' },
   { title: 'How it works', text: 'Walk with WASD or the arrows (or the stick on a phone). Press E near something to use it. Take a customer from the board on the left wall, look under their bonnet, open the laptop and tune. When it is right, hand the car back and get paid.' },
   { title: 'Then spend it', text: 'Money buys instruments, courses, a car of your own, parts for it, and a look. The town has a parts counter, a school, a boutique, a scrapyard, a drag strip and a car meet. Nothing you buy adds power by magic: every part changes the air, the fuel, the grip or the weight, and the tune has to catch up.' },
 ];
 
-/** The welcome. @param {{step: number, onNext: (n: number) => void, onDone: () => void}} p */
-function IntroSheet({ step, onNext, onDone }) {
-  const s = INTRO[step];
-  return (
-    <div className={styles.sheet} role="dialog" aria-label="Welcome">
-      <div className={styles.sheetTag}>POPS · {step + 1} OF {INTRO.length}</div>
-      <h2 className={styles.sheetTitle}>{s.title}</h2>
-      <p className={styles.lede}>{s.text}</p>
-      <div className={styles.sheetRow}>
-        {step < INTRO.length - 1 ? <Button size="sm" onClick={() => onNext(step + 1)}>NEXT</Button> : <Button size="sm" onClick={onDone}>OPEN THE SHOP</Button>}
-        {step < INTRO.length - 1 && <Button size="sm" variant="quiet" onClick={onDone}>SKIP</Button>}
-      </div>
-    </div>
-  );
-}
-
-/** Pops at the counter: a tip and the day's goals. @param {{career: import('../career/shop.js').Career, tip: {topic: string, text: string}, update: (c: any) => void, onClose: () => void}} p */
-function DinerSheet({ career, tip, update, onClose }) {
+/** Pops at the counter: the day's goals. @param {{career: import('../career/shop.js').Career, update: (c: any) => void, onClose: () => void}} p */
+function DinerSheet({ career, update, onClose }) {
   const goals = goalsFor(career);
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Pops' Diner">
-      <div className={styles.sheetTag}>POPS · {tip.topic.toUpperCase()}</div>
-      <p className={styles.lede}>&ldquo;{tip.text}&rdquo;</p>
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Pops' Diner">
       <div className={styles.sheetTag}>TODAY&rsquo;S GOALS{career.streak ? ` · ${career.streak}-day streak` : ''}</div>
       <ul className={styles.places}>
         {goals.map((g) => {
@@ -870,7 +934,7 @@ function JunkSheet({ career, update, onClose }) {
   const [found, setFound] = useState(/** @type {any} */ (null));
   const why = cannotDig(career);
   return (
-    <div className={styles.sheet} role="dialog" aria-label="Scrapyard">
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Scrapyard">
       <div className={styles.sheetTag}>SPARKY&rsquo;S SCRAPYARD · {digsLeft(career)} digs left today</div>
       <p className={styles.lede}>A dig costs ${DIG_COST}. Pick a pile: what is in it depends on what the pile is.</p>
       {found && <p className={styles.lede}><b>{found.text}</b></p>}

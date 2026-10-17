@@ -13,7 +13,7 @@
 
 import { world as W } from '../../tokens.js';
 import { npcLook } from '../appearance.js';
-import { THREE, box, cyl, floorPlane, glow, groundPlane, mergeStatic, sign } from '../gfx.js';
+import { THREE, box, cyl, floorPlane, glow, groundPlane, mergeStatic, rbox, sign, texBox } from '../gfx.js';
 import { makePerson } from '../models/person.js';
 import {
   makeArcade, makeBarrel, makeBuildSite, makeCalendar, makeCoffeeMachine, makeCone, makeCouch, makeCrate, makeDesk, makeDog,
@@ -22,7 +22,7 @@ import {
 } from '../models/props.js';
 import { pixelTexture } from '../gfx.js';
 
-import { hash, pathFollower, specForJob } from './common.js';
+import { hash, pathFollower, popsLook, specForJob } from './common.js';
 import { decorOf } from '../../career/decor.js';
 import { jobById } from '../../career/jobs.js';
 import { ownJobId } from '../../career/ownRegistry.js';
@@ -70,11 +70,11 @@ export function buildGarage(api, entry = {}) {
   const decor = decorOf(career);
   const wallCol = W[decor.wall] ?? W.wallShop;
   const FLOOR_STYLE = {
-    epoxy: { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase },
+    epoxy: { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.floorGrout },
     checker: { base: W.cloth.silver, alt: W.cloth.charcoal, line: W.cloth.charcoal },
     wood: { base: W.woodLight, alt: W.wood, line: W.woodDark },
     red: { base: W.brick, alt: W.brickDark, line: W.black },
-  }[decor.floor] ?? { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase };
+  }[decor.floor] ?? { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.floorGrout };
   const root = new THREE.Group();
   const colliders = [];
   const interactables = [];
@@ -93,8 +93,19 @@ export function buildGarage(api, entry = {}) {
   for (const b of BAYS) for (const s of [-1, 1]) {
     root.add(box(0.1, 0.012, 5.8, W.floorStripe, { x: b.x + s * 1.65, y: 0.012, z: b.z, edge: false, cast: false }));
   }
+  // Oil where cars have stood, and a drain: a floor that has been worked on.
+  const stain = new THREE.MeshBasicMaterial({ color: W.black, transparent: true, opacity: 0.16, depthWrite: false });
+  for (const [x, z, r] of [[-5, 1.4, 0.7], [-4.2, -1.2, 0.45], [0.3, 0.6, 0.6], [5.6, 1.8, 0.5], [6.1, -0.8, 0.35], [-1.2, 5.6, 0.4]]) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 12).rotateX(-Math.PI / 2), stain);
+    m.position.set(x, 0.006, z);
+    m.scale.set(1, 1, 0.7);
+    root.add(m);
+  }
+  root.add(box(1.2, 0.01, 0.5, W.metalDark, { x: 0, y: 0.008, z: 3.2, edge: false, cast: false }));
+  for (let i = 0; i < 5; i += 1) root.add(box(0.06, 0.012, 0.42, W.black, { x: -0.48 + i * 0.24, y: 0.012, z: 3.2, edge: false, cast: false }));
   const wallH = 5.2;
-  const addWall = (x, z, w, d, h, color, collide = true) => { const m = box(w, h, d, color, { x, y: h / 2, z }); root.add(m); if (collide) colliders.push({ x, z, hw: w / 2, hd: d / 2 }); return m; };
+  // Painted cinder block: big blocks, a running bond, the shop colour.
+  const addWall = (x, z, w, d, h, color, collide = true) => { const m = texBox(w, h, d, 'brick', color, { x, y: h / 2, z, tile: 3.2 }); root.add(m); if (collide) colliders.push({ x, z, hw: w / 2, hd: d / 2 }); return m; };
   addWall(0, ROOM.minZ - 0.2, 22.8, 0.4, wallH, wallCol);
   addWall(ROOM.minX - 0.2, 0, 0.4, 15.4, wallH, wallCol);
   addWall(ROOM.maxX + 0.2, 0, 0.4, 15.4, wallH, wallCol);
@@ -115,6 +126,12 @@ export function buildGarage(api, entry = {}) {
     root.add(box(2.0, 1.0, 0.05, W.glass, { x, y: 3.3, z: ROOM.minZ + 0.13, edge: false }));
     root.add(box(0.06, 1.0, 0.06, W.metalDark, { x, y: 3.3, z: ROOM.minZ + 0.16, edge: false }));
   }
+  // Pegboards with the tools outlined on them, between the windows.
+  for (const x of [-6, 6]) {
+    root.add(rbox(1.8, 1.3, 0.06, W.woodLight, { x, y: 2.1, z: ROOM.minZ + 0.1, r: 0.02 }));
+    const tools = /** @type {[string, number, number][]} */ ([[W.toolRed, 0.12, 0.5], [W.metalLight, 0.08, 0.6], [W.toolBlue, 0.1, 0.45], [W.toolYellow, 0.14, 0.35], [W.metal, 0.06, 0.55]]);
+    tools.forEach(([c, w, h], k) => root.add(box(w, h, 0.05, c, { x: x - 0.7 + k * 0.35, y: 2.15, z: ROOM.minZ + 0.15, edge: false })));
+  }
   // Outside: apron, kerb and the road with its markings.
   const apron = groundPlane(40, 7, { base: W.concrete, alt: W.concreteLight, kind: 'speckle', tile: 2 });
   apron.position.set(0, -0.01, 11.5);
@@ -125,8 +142,8 @@ export function buildGarage(api, entry = {}) {
   root.add(box(60, 0.18, 0.4, W.curb, { x: 0, y: 0.09, z: 15.1, edge: false }));
   for (let i = -5; i <= 5; i += 1) root.add(box(2.2, 0.012, 0.18, W.roadLine, { x: i * 5, y: -0.005, z: 20.5, edge: false, cast: false }));
   // Neighbours either side: plain shop fronts, so the street feels like a street.
-  for (const [x, c] of /** @type {[number, string][]} */ ([[-21, W.brick], [21, W.plasterDark]])) {
-    root.add(box(18, 6, 12, c, { x, y: 3, z: -1 }));
+  for (const [x, c, k] of /** @type {[number, string, any][]} */ ([[-21, W.brick, 'brick'], [21, W.plasterDark, 'siding']])) {
+    root.add(texBox(18, 6, 12, k, c, { x, y: 3, z: -1, tile: 2 }));
     colliders.push({ x, z: -1, hw: 9, hd: 6 });
   }
 
@@ -410,19 +427,54 @@ export function buildGarage(api, entry = {}) {
       // The customer gets out on the driver's side.
       const cust = makePerson(npcLook(hash(jobId), {}), { mood: 'worry' });
       cust.group.position.set(b.x + 1.6, 0, b.z + 2.5);
-      cust.group.rotation.y = Math.PI * 0.7;
+      // Turn to the tuner, and tell them what is wrong.
+      const pl = api.player;
+      cust.group.rotation.y = Math.atan2(pl.x - (b.x + 1.6), pl.z - (b.z + 2.5));
       cust.setPose('think');
       root.add(cust.group);
       e.customer = cust;
-      api.say(`say:${jobId}`, opts.says ?? jobById(jobId).says, new THREE.Vector3(b.x + 1.6, 2.2, b.z + 2.5), 6.5, 'say');
-      setTimeout(() => customerLeaves(e), 6800);
+      const job = jobById(jobId);
+      if (job && !job.own && !opts.says) {
+        api.emit({
+          type: 'talk',
+          lines: [
+            { who: job.customer.name, text: job.says },
+            { who: job.customer.name, text: `${job.wants} The keys are in it. It is on your lift.` },
+            { text: 'Look under the bonnet, then open the laptop. Work out why before you change a thing.' },
+          ],
+          onDone: () => customerLeaves(e),
+        });
+      } else {
+        api.say(`say:${jobId}`, opts.says ?? job?.says ?? '', new THREE.Vector3(b.x + 1.6, 2.2, b.z + 2.5), 6.5, 'say');
+        setTimeout(() => customerLeaves(e), 6800);
+      }
     });
     e.anim = follower;
     e.rig.group.position.set(path[0].x, 0, path[0].z);
   }
 
+  // On the first morning Pops is here to hand over the keys; when he has said his piece he
+  // walks out to the diner, where he lives from then on.
+  let pops = null;
+  if (!career.introDone) {
+    pops = makePerson(popsLook(), { mood: 'smile' });
+    pops.group.position.set(-0.4, 0, 3.5);
+    pops.group.rotation.y = Math.atan2(-2 - -0.4, 5 - 3.5);
+    pops.setPose('wave');
+    root.add(pops.group);
+    npcs.set('pops', { p: pops, path: [{ x: -0.4, z: 3.5 }, { x: -0.4, z: 3.5 }], i: 1, stay: true });
+  }
+
   /** Make the model of a car for a lift entry, parked, with no animation. */
   function sync(c) {
+    if (pops && c.introDone) {
+      const p = pops;
+      pops = null;
+      p.setPose('idle');
+      npcs.delete('pops');
+      npcs.set('pops:walkout', { p, path: [{ x: p.group.position.x, z: p.group.position.z }, { x: 0, z: 6.5 }, { x: 0, z: 13 }], t: 0, i: 0, remove: true });
+      api.say('pops', 'See you at the diner, kid.', new THREE.Vector3(p.group.position.x, 2.3, p.group.position.z), 3, 'say');
+    }
     const lifts2 = c.lifts;
     // Add cars that appeared without being driven in (a loaded save).
     lifts2.forEach((l, i) => {
@@ -613,7 +665,7 @@ export function buildGarage(api, entry = {}) {
   }
 
   const level = {
-    root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
+    root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0], indoor: true,
     camera: { pitch: 0.98, dist: 32, yaw: 0, fov: 22 },
     focus: (x, z) => ({ x: Math.max(-5, Math.min(5, x * 0.7)), z: z > 7 ? 2 + (z - 7) * 0.9 : Math.max(-1, Math.min(2, z * 0.3)) }),
     bounds: [
@@ -621,7 +673,7 @@ export function buildGarage(api, entry = {}) {
       { minX: DOOR.x - DOOR.half + 0.6, maxX: DOOR.x + DOOR.half - 0.6, minZ: ROOM.maxZ - 1, maxZ: ROOM.maxZ + 1.2 },
       { minX: -19, maxX: 19, minZ: ROOM.maxZ + 0.7, maxZ: 14.6 },
     ],
-    spawn: (e) => (e.from === 'town' ? { x: 0, z: ROOM.maxZ - 1.6, yaw: Math.PI } : { x: -2, z: 5.0, yaw: Math.PI }),
+    spawn: (e) => (e.from === 'town' ? { x: 0, z: ROOM.maxZ - 1.6, yaw: Math.PI } : { x: -2, z: 5.0, yaw: pops ? Math.atan2(1.6, -1.5) : Math.PI }),
     update,
     sync,
     leaving: false,

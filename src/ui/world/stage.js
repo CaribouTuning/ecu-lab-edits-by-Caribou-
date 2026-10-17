@@ -9,7 +9,7 @@
 
 import { world as W } from '../tokens.js';
 
-import { THREE } from './gfx.js';
+import { SPRITE_LIGHT, THREE } from './gfx.js';
 
 /** Internal rows of pixels each quality aims for. */
 export const PIXEL_ROWS = { chunky: 200, normal: 280, fine: 420 };
@@ -126,8 +126,9 @@ export function createStage(canvas, opts = {}) {
      * Light and sky for a time of day. `t` runs 0 (noon) to 3 (the dead of night) and
      * blends day, dusk and night.
      * @param {number} t
+     * @param {boolean} [indoor] a room: brighter fill, fainter shadows
      */
-    setTime(t) {
+    setTime(t, indoor = false) {
       const k = Math.max(0, Math.min(3, t));
       const [a, b, f] = k < 1 ? [SKY.day, SKY.dusk, k] : k < 2 ? [SKY.dusk, SKY.night, k - 1] : [SKY.night, SKY.night, 0];
       const horizon = mix(a.horizon, b.horizon, f);
@@ -135,14 +136,23 @@ export function createStage(canvas, opts = {}) {
       if (scene.fog) { /** @type {THREE.Fog} */ (scene.fog).color.copy(horizon); }
       hemi.color.copy(mix(a.ambient, b.ambient, f));
       hemi.groundColor.copy(mix(a.ground, b.ground, f));
-      hemi.intensity = a.ambientPower + (b.ambientPower - a.ambientPower) * f;
+      hemi.intensity = (a.ambientPower + (b.ambientPower - a.ambientPower) * f) * (indoor ? 1.45 : 1);
       sun.color.copy(mix(a.sun, b.sun, f));
-      sun.intensity = a.sunPower + (b.sunPower - a.sunPower) * f;
+      // Indoors the sun only gets in through the open roof the camera looks through: soft
+      // light from everywhere, faint shadows, the way a handheld game lights a room.
+      sun.intensity = (a.sunPower + (b.sunPower - a.sunPower) * f) * (indoor ? 0.5 : 1);
       // The sun swings low at dusk and the long shadows go with it.
       const low = Math.min(1, k / 2);
       sunDir.set(-0.5 - low * 0.8, 1 - low * 0.55, 0.65);
       sunDir.normalize();
       stage.night = k >= 1.5;
+      // Sprites are unlit: give them the scene's light as one tint, scaled so midday is white.
+      const lit = (c, i) => new THREE.Color(c).multiplyScalar(i);
+      const sunP = a.sunPower + (b.sunPower - a.sunPower) * f;
+      const ambP = a.ambientPower + (b.ambientPower - a.ambientPower) * f;
+      const now = lit(sun.color, sunP * 0.5).add(lit(hemi.color, ambP * 0.6));
+      const noon = lit(SKY.day.sun, SKY.day.sunPower * 0.5).add(lit(SKY.day.ambient, SKY.day.ambientPower * 0.6));
+      SPRITE_LIGHT.setRGB(Math.min(1.1, now.r / noon.r), Math.min(1.1, now.g / noon.g), Math.min(1.1, now.b / noon.b));
     },
     night: false,
 

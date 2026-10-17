@@ -8,7 +8,9 @@
  */
 
 import { Camera, Gauge, Map as MapIcon, Menu, Moon, Settings, Smartphone, Sun, Sunset, Zap } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+import { sfx } from './sfx.js';
 
 import styles from './World.module.css';
 
@@ -224,6 +226,86 @@ export function TouchControls({ world, driving }) {
         <div className={styles.pads}>
           <button type="button" className={`${styles.pad} ${styles.padSmall}`} {...holdProps('run')} aria-label="Run"><Gauge size={16} aria-hidden="true" /></button>
           <button type="button" className={`${styles.pad} ${styles.padAct}`} onPointerDown={() => press('interact')} aria-label="Action">E</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * @typedef {object} TalkLine
+ * @property {string} [who] the speaker's name; none for a narrator line
+ * @property {string} text
+ * @property {{label: string, run: () => void}[]} [choices] answers offered on this line (the last one only)
+ */
+
+/**
+ * The text box along the bottom of the screen, the way a handheld RPG talks: the speaker's
+ * name on a tab, the words typed out a letter at a time with a blip, and a blinking arrow
+ * when the line is done. E, Space, Enter or a tap finishes the line, then goes to the next.
+ * A last line can offer choices.
+ *
+ * @param {{talk: {lines: TalkLine[]}, onDone: () => void, sound?: boolean}} p
+ */
+export function Dialogue({ talk, onDone, sound = true }) {
+  const [at, setAt] = useState(0);
+  const [shown, setShown] = useState(0);
+  const [pick, setPick] = useState(0);
+  const line = talk.lines[Math.min(at, talk.lines.length - 1)];
+  const full = line.text.length;
+  const done = shown >= full;
+  const choices = done && at === talk.lines.length - 1 ? line.choices ?? [] : [];
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+
+  // A new conversation starts at its first line.
+  useEffect(() => { setAt(0); setShown(0); setPick(0); }, [talk]);
+
+  // Type the line out: about fifty letters a second, a blip every few.
+  useEffect(() => {
+    if (shown >= full) return undefined;
+    const id = setTimeout(() => {
+      setShown((n) => Math.min(full, n + 2));
+      if (shown % 6 === 0) sfx('tap', soundRef.current);
+    }, 36);
+    return () => clearTimeout(id);
+  }, [shown, full]);
+
+  const advance = () => {
+    if (!done) { setShown(full); return; }
+    if (choices.length) { choices[pick]?.run(); return; }
+    if (at < talk.lines.length - 1) { setAt(at + 1); setShown(0); return; }
+    onDone();
+  };
+  const advanceRef = useRef(advance);
+  advanceRef.current = advance;
+  const choicesRef = useRef(choices);
+  choicesRef.current = choices;
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const n = choicesRef.current.length;
+      if (n && (e.code === 'ArrowUp' || e.code === 'KeyW')) { setPick((k) => (k + n - 1) % n); e.preventDefault(); return; }
+      if (n && (e.code === 'ArrowDown' || e.code === 'KeyS')) { setPick((k) => (k + 1) % n); e.preventDefault(); return; }
+      if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) advanceRef.current(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  return (
+    <div className={styles.talk} role="dialog" aria-label={line.who ? `${line.who} says` : 'Message'} aria-live="polite" data-world-sheet="">
+      {line.who && <div className={styles.talkName}>{line.who}</div>}
+      <button type="button" className={styles.talkBox} onClick={advance} aria-label={done ? 'Continue' : 'Show the whole line'}>
+        <span className={styles.talkText} aria-hidden="true">{line.text.slice(0, shown)}</span>
+        <span className={styles.srOnly}>{line.text}</span>
+        {done && !choices.length && <span className={styles.talkMore} aria-hidden="true">{at < talk.lines.length - 1 ? '\u25BC' : '\u25A0'}</span>}
+      </button>
+      {choices.length > 0 && (
+        <div className={styles.talkChoices} role="menu">
+          {choices.map((c, i) => (
+            <button key={c.label} type="button" role="menuitem" className={styles.talkChoice} data-on={i === pick ? 'true' : 'false'} onMouseEnter={() => setPick(i)} onClick={c.run}>{c.label}</button>
+          ))}
         </div>
       )}
     </div>

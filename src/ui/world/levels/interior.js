@@ -15,7 +15,7 @@ import {
 } from '../models/props.js';
 import { PHASE_TIME } from './garage.js';
 import { dealerStock } from '../../career/ownedCars.js';
-import { hash } from './common.js';
+import { hash, popsLook } from './common.js';
 
 /** @typedef {{id: string, name: string, w: number, d: number}} InteriorDef */
 
@@ -188,7 +188,7 @@ const BUILDERS = {
     // The long counter with stools.
     counter(root, colliders, 0, -d / 2 + 3, 8, W.toolRed, W.cloth.white);
     for (let i = 0; i < 6; i += 1) { const x = -3.3 + i * 1.32; root.add(cyl(0.22, 0.22, 0.1, W.toolRed, { x, y: 0.75, z: -d / 2 + 4.1, seg: 10 }), cyl(0.04, 0.04, 0.7, W.metalLight, { x, y: 0.38, z: -d / 2 + 4.1, edge: false, seg: 6 })); }
-    const pops = makePerson({ ...npcLook(hash('pops')), top: 'polo-shop', bottom: 'slacks', hat: 'cap-red', hair: 'short', hairColor: 'white', glasses: 'nerd', skin: 1 }, { mood: 'smile' });
+    const pops = makePerson(popsLook(), { mood: 'smile' });
     at(pops.group, 0, -d / 2 + 1.9, 0);
     root.add(pops.group);
     root.add(makeCoffeeMachine().translateX(2.6).translateZ(-d / 2 + 0.9));
@@ -257,8 +257,8 @@ export function interiorLevel(id) {
     void entry;
     mergeStatic(root);
     return {
-      root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
-      camera: { pitch: 1.0, dist: 22, yaw: 0, fov: 22 },
+      root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0], indoor: true,
+      camera: { pitch: 1.0, dist: 26, yaw: 0, fov: 22 },
       focus: (x, z) => ({ x: x * 0.4, z: z * 0.5 }),
       bounds: [{ minX: -w / 2 + 0.6, maxX: w / 2 - 0.6, minZ: -d / 2 + 0.8, maxZ: d / 2 - 0.4 }, { minX: -1.4, maxX: 1.4, minZ: d / 2 - 1, maxZ: d / 2 + 3.2 }],
       spawn: () => ({ x: inner.spawn.x, z: d / 2 - 1.4, yaw: Math.PI }),

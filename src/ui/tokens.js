@@ -344,8 +344,9 @@ export const world = Object.freeze({
   black: '#14161b',
   white: '#f2f4f7',
   // Shop interior.
-  floorEpoxy: '#6e7681',
-  floorEpoxyAlt: '#626a75',
+  floorEpoxy: '#8b9a95',
+  floorEpoxyAlt: '#829089',
+  floorGrout: '#6b7873',
   floorStripe: '#e8b230',
   wallShop: '#c9c2b4',
   wallShopDark: '#a79f90',
@@ -411,6 +412,8 @@ export const world = Object.freeze({
     tan: '#c9a77a', cream: '#efe4c8', denim: '#3f5f94', denimDark: '#2b405f', gold: '#d6a92b', silver: '#b8c0cc',
     neon: '#33e0a0', hivis: '#d7f23a',
   }),
+  // The text box: paper, ink and a two-tone frame, as a handheld RPG draws one.
+  talk: Object.freeze({ paper: '#f7f3e8', ink: '#262a33', frame: '#34405e', frameHi: '#9cc1ee', name: '#2f5fb8', choice: '#e2ecfa' }),
   eye: '#1a1c22',
   mouth: '#7a3a3a',
   cheek: '#e89a8a',

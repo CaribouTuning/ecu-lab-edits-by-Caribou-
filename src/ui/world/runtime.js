@@ -168,7 +168,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     level = build(api, entry);
     level.id = id;
     stage.scene.add(level.root);
-    stage.setTime(level.time ?? 0);
+    stage.setTime(level.time ?? 0, !!level.indoor);
     const sp = entry.at ?? level.spawn(entry);
     player.x = sp.x; player.z = sp.z; player.yaw = sp.yaw ?? 0;
     player.vx = player.vz = 0;
