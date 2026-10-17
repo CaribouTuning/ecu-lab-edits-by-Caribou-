@@ -5,6 +5,8 @@
  * another.
  */
 
+import { defaultLook, STARTING_WARDROBE } from '../world/appearance.js';
+
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
@@ -50,6 +52,11 @@ export const START_MONEY = 1000;
  * @property {number} [lastSeen] the `seq` of the last hand-back the player has read
  * @property {number} seed this career's own random seed: its customers are its own
  * @property {string[]} offers today's walk-in customers (generated job ids)
+ * @property {number} [phase] how far through the day it is, 0 morning to 3 night; each
+ *   hand-back moves it on, and closing up starts the next morning
+ * @property {import('../world/appearance.js').Look} [look] what the tuner wears
+ * @property {string[]} [wardrobe] the clothes the tuner owns
+ * @property {number[]} [found] golden spanners found in town
  */
 
 /**
@@ -74,7 +81,7 @@ export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [],
+    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE],
   });
 }
 
@@ -142,7 +149,10 @@ export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
   + (c.owned.includes('expansion') ? 120 : 0);
 
 /** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */
-const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
+const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, phase: 0, money: c.money - overhead(c) });
+
+/** A job is done and time has passed: the light moves from morning toward night. @param {Career} c */
+export const advancePhase = (c) => ({ ...c, phase: Math.min(3, (c.phase ?? 0) + 1) });
 
 /** How many customers wait on the board. @param {Career} c */
 export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);

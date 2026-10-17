@@ -49,7 +49,7 @@ import { AppShell } from './AppShell.jsx';
 import { CareerBar } from './career/CareerBar.jsx';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
-import { deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
+import { advancePhase, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { ShopScreen } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -568,7 +568,9 @@ export function EcuLabApp() {
     if (!job || running) return;
     const v = evaluateJob(job, { build, tune, session });
     const boosted = build.turboOn || !!build.blowerId || !!build.nitrous;
-    const next = deliver(storeCar(career, job.id, { build, tune }), job.id, v, { boosted });
+    const delivered = deliver(storeCar(career, job.id, { build, tune }), job.id, v, { boosted });
+    // A job that leaves the shop takes time: the light moves on toward evening.
+    const next = delivered.lifts.length < career.lifts.length ? advancePhase(delivered) : delivered;
     dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
     navigate({ view: 'shop', tab: null, section: null });
   };
@@ -1456,6 +1458,7 @@ export function EcuLabApp() {
     return (
       <ShopScreen
         onWork={() => goTab('tune')}
+        onDyno={() => goTab('dyno')}
         onMenu={goMenu}
         onLearn={goCourse}
       />

@@ -363,7 +363,7 @@ export function makeCar(spec = {}) {
   rig.roll = (distance) => { for (const w of wheels) w.spin.rotation.x += distance / wr; };
   rig.update = (dt) => {
     hoodOpen += (hoodTarget - hoodOpen) * Math.min(1, dt * 5);
-    hoodHinge.rotation.x = -hoodOpen * 1.0;
+    hoodHinge.rotation.x = -hoodOpen;
   };
   rig.hoodHinge = hoodHinge;
 

@@ -78,6 +78,10 @@
   padding: var(--sp-md) var(--sp-xl) var(--sp-xxl);
 }
 
+/* The same cards inside the 3-D world's drawer: one column, no page margins. */
+.drawerPanel { display: flex; flex-direction: column; gap: var(--sp-md); padding: var(--sp-md); }
+.drawerPanel .card[data-tone] { grid-column: auto; }
+
 .intro { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink2); }
 
 .card {
@@ -158,3 +162,5 @@
   .top, .sceneWrap, .tabs, .panel { padding-left: var(--sp-lg); padding-right: var(--sp-lg); }
   .panel { grid-template-columns: 1fr; }
 }
+
+.loading { display: grid; place-items: center; min-height: 100dvh; background: var(--bg); color: var(--ink2); font-size: var(--fs-sm); letter-spacing: 0.1em; }

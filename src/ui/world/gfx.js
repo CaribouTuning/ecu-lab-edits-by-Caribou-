@@ -255,38 +255,67 @@ export function groundPlane(w, d, o) {
   return m;
 }
 
+/**
+ * The classic 5x7 bitmap font, one byte per column with the top row in bit 0. Drawn with
+ * whole pixels so a sign stays crisp however far away it is; anti-aliased canvas text
+ * turns to mush once it is scaled up with nearest-neighbour filtering.
+ */
+const FONT = {
+  ' ': [0, 0, 0, 0, 0], '!': [0, 0, 0x5f, 0, 0], '"': [0, 7, 0, 7, 0], '#': [0x14, 0x7f, 0x14, 0x7f, 0x14], '$': [0x24, 0x2a, 0x7f, 0x2a, 0x12],
+  '%': [0x23, 0x13, 8, 0x64, 0x62], '&': [0x36, 0x49, 0x55, 0x22, 0x50], "'": [0, 5, 3, 0, 0], '(': [0, 0x1c, 0x22, 0x41, 0], ')': [0, 0x41, 0x22, 0x1c, 0],
+  '*': [0x14, 8, 0x3e, 8, 0x14], '+': [8, 8, 0x3e, 8, 8], ',': [0, 0x50, 0x30, 0, 0], '-': [8, 8, 8, 8, 8], '.': [0, 0x60, 0x60, 0, 0], '/': [0x20, 0x10, 8, 4, 2],
+  0: [0x3e, 0x51, 0x49, 0x45, 0x3e], 1: [0, 0x42, 0x7f, 0x40, 0], 2: [0x42, 0x61, 0x51, 0x49, 0x46], 3: [0x21, 0x41, 0x45, 0x4b, 0x31], 4: [0x18, 0x14, 0x12, 0x7f, 0x10],
+  5: [0x27, 0x45, 0x45, 0x45, 0x39], 6: [0x3c, 0x4a, 0x49, 0x49, 0x30], 7: [1, 0x71, 9, 5, 3], 8: [0x36, 0x49, 0x49, 0x49, 0x36], 9: [6, 0x49, 0x49, 0x29, 0x1e],
+  ':': [0, 0x36, 0x36, 0, 0], '=': [0x14, 0x14, 0x14, 0x14, 0x14], '?': [2, 1, 0x51, 9, 6],
+  A: [0x7e, 0x11, 0x11, 0x11, 0x7e], B: [0x7f, 0x49, 0x49, 0x49, 0x36], C: [0x3e, 0x41, 0x41, 0x41, 0x22], D: [0x7f, 0x41, 0x41, 0x22, 0x1c], E: [0x7f, 0x49, 0x49, 0x49, 0x41],
+  F: [0x7f, 9, 9, 9, 1], G: [0x3e, 0x41, 0x49, 0x49, 0x7a], H: [0x7f, 8, 8, 8, 0x7f], I: [0, 0x41, 0x7f, 0x41, 0], J: [0x20, 0x40, 0x41, 0x3f, 1], K: [0x7f, 8, 0x14, 0x22, 0x41],
+  L: [0x7f, 0x40, 0x40, 0x40, 0x40], M: [0x7f, 2, 0x0c, 2, 0x7f], N: [0x7f, 4, 8, 0x10, 0x7f], O: [0x3e, 0x41, 0x41, 0x41, 0x3e], P: [0x7f, 9, 9, 9, 6], Q: [0x3e, 0x41, 0x51, 0x21, 0x5e],
+  R: [0x7f, 9, 0x19, 0x29, 0x46], S: [0x46, 0x49, 0x49, 0x49, 0x31], T: [1, 1, 0x7f, 1, 1], U: [0x3f, 0x40, 0x40, 0x40, 0x3f], V: [0x1f, 0x20, 0x40, 0x20, 0x1f], W: [0x3f, 0x40, 0x38, 0x40, 0x3f],
+  X: [0x63, 0x14, 8, 0x14, 0x63], Y: [7, 8, 0x70, 8, 7], Z: [0x61, 0x51, 0x49, 0x45, 0x43],
+};
+
+/** The pixel width a string takes in the bitmap font. @param {string} text */
+const fontWidth = (text) => Math.max(1, text.length * 6 - 1);
+
 const signCache = new Map();
 
 /**
- * A sign: text on a coloured board, drawn as a pixel-textured plane facing +z.
+ * A sign: text on a coloured board, drawn in the bitmap font as a pixel-textured plane
+ * facing +z.
  *
  * @param {string} text
- * @param {{w?: number, h?: number, bg?: string, fg?: string, px?: number, glowing?: boolean}} [o]
+ * @param {{w?: number, h?: number, bg?: string, fg?: string, glowing?: boolean}} [o]
  */
 export function sign(text, o = {}) {
   const w = o.w ?? 3;
   const h = o.h ?? 0.8;
   const bg = o.bg ?? W.wallBlack;
   const fg = o.fg ?? W.white;
-  const key = `${text}|${w}|${h}|${bg}|${fg}|${o.px ?? 0}`;
+  const t = text.toUpperCase();
+  const key = `${t}|${bg}|${fg}`;
   let tex = signCache.get(key);
   if (!tex) {
-    const pw = Math.round(w * 24);
-    const ph = Math.round(h * 24);
-    tex = pixelTexture(pw, ph, (g) => {
+    const tw = fontWidth(t) + 4;
+    const th = 11;
+    tex = pixelTexture(tw, th, (g) => {
       g.fillStyle = bg;
-      g.fillRect(0, 0, pw, ph);
+      g.fillRect(0, 0, tw, th);
       g.fillStyle = fg;
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      const size = o.px ?? Math.max(6, Math.min(ph - 5, Math.floor((pw - 4) / Math.max(4, text.length) * 1.6)));
-      g.font = `bold ${size}px monospace`;
-      g.fillText(text, pw / 2, ph / 2 + 1);
+      [...t].forEach((ch, i) => {
+        const cols = FONT[ch] ?? FONT['?'];
+        cols.forEach((bits, cx) => {
+          for (let ry = 0; ry < 7; ry += 1) if (bits & (1 << ry)) g.fillRect(2 + i * 6 + cx, 2 + ry, 1, 1);
+        });
+      });
     });
     signCache.set(key, tex);
   }
+  // Keep the letters square: shrink the plane to the text's own shape if the board is wider.
+  const aspect = (fontWidth(t) + 4) / 11;
+  const pw = Math.min(w, h * aspect);
+  const ph = pw / aspect;
   const mat = o.glowing ? new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }) : new THREE.MeshToonMaterial({ map: tex, gradientMap: RAMP });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   m.castShadow = false;
   return m;
 }

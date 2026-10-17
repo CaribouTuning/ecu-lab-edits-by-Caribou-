@@ -14,16 +14,6 @@ import { THREE } from './gfx.js';
 /** Internal rows of pixels each quality aims for. */
 export const PIXEL_ROWS = { chunky: 200, normal: 280, fine: 420 };
 
-/** Whether this browser can draw the world at all. */
-export function webglAvailable() {
-  try {
-    const c = document.createElement('canvas');
-    return !!(c.getContext('webgl2') || c.getContext('webgl'));
-  } catch {
-    return false;
-  }
-}
-
 const SKY = W.sky;
 const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
@@ -158,6 +148,9 @@ export function createRig(camera) {
     yaw: 0, pitch: 0.82, dist: 15, fov: 34, height: 1.2,
     pos: new THREE.Vector3(),
     shake: 0,
+    /** Slide the whole picture sideways (metres along the camera's right) to make room for a panel. */
+    shiftX: 0,
+    _shift: 0,
     _yaw: 0,
     _look: new THREE.Vector3(),
     /** Drops the camera straight onto its target, no gliding. */
@@ -190,8 +183,12 @@ export function createRig(camera) {
         target.y + rig.height + Math.sin(rig.pitch) * dist,
         target.z + Math.cos(rig._yaw) * horiz,
       );
+      rig._shift += (rig.shiftX - rig._shift) * (snapping ? 1 : 1 - Math.exp(-dt * 5));
+      const rx = Math.cos(rig._yaw) * rig._shift;
+      const rz = -Math.sin(rig._yaw) * rig._shift;
+      want.x += rx; want.z += rz;
       rig.pos.lerp(want, k);
-      rig._look.lerp(new THREE.Vector3(target.x, target.y + rig.height * 0.6, target.z), k);
+      rig._look.lerp(new THREE.Vector3(target.x + rx, target.y + rig.height * 0.6, target.z + rz), k);
       camera.position.copy(rig.pos);
       if (rig.shake > 0.001) {
         camera.position.x += (Math.random() - 0.5) * rig.shake;

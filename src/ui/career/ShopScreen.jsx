@@ -8,11 +8,12 @@
  */
 
 import { BookOpen, ClipboardList, Hammer, Menu, Users, Wallet } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '../primitives/Button.jsx';
 import { ACTIONS } from '../state/reducer.js';
 import { useCareer } from '../state/StoreProvider.jsx';
+import { webglAvailable } from '../world/support.js';
 
 import { repTier } from './catalog.js';
 import { jobById } from './jobs.js';
@@ -28,7 +29,7 @@ import styles from './ShopScreen.module.css';
  * @param {() => void} [props.onLearn] opens the Tuning Course
  * @returns {React.ReactElement|null}
  */
-export function ShopScreen({ onWork, onMenu, onLearn }) {
+export function LegacyShop({ onWork, onMenu, onLearn }) {
   const [career, dispatch] = useCareer();
   const [tab, setTab] = useState('today');
   const [arriving, setArriving] = useState(/** @type {string|null} */ (null));
@@ -113,5 +114,32 @@ export function ShopScreen({ onWork, onMenu, onLearn }) {
 
       <LessonDialog lesson={lesson} onClose={() => setLesson(null)} onLearn={onLearn} />
     </div>
+  );
+}
+
+/** The 3-D world, loaded on demand: three.js is not part of the tuning app's first download. */
+const World = lazy(() => import('../world/World.jsx'));
+
+/**
+ * @param {object} props
+ * @param {() => void} props.onWork opens the game on the car on the bay
+ * @param {() => void} [props.onDyno] opens the dyno on the car on the bay
+ * @param {() => void} props.onMenu back to the start screen
+ * @param {() => void} [props.onLearn] opens the Tuning Course
+ * @param {boolean} [props.flat] draw the old flat shop even where 3-D works
+ * @returns {React.ReactElement|null}
+ */
+export function ShopScreen({ onWork, onDyno, onMenu, onLearn, flat = false }) {
+  const [career, dispatch] = useCareer();
+  const solid = useMemo(() => !flat && webglAvailable(), [flat]);
+  if (!solid) return <LegacyShop onWork={onWork} onMenu={onMenu} onLearn={onLearn} />;
+  if (!career) return null;
+  return (
+    <Suspense fallback={<div className={styles.loading}>Opening the shop&hellip;</div>}>
+      <World
+        career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })}
+        onWork={onWork} onDyno={onDyno} onMenu={onMenu} onLearn={onLearn}
+      />
+    </Suspense>
   );
 }

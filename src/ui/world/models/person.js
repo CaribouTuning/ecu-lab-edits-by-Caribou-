@@ -186,7 +186,7 @@ function dressBottom(parts, it, skin) {
   const a = it.accent ? cloth(it.accent) : null;
   for (const [leg, side] of [[parts.legL, 1], [parts.legR, -1]]) {
     const len = it.style === 'short' ? 0.34 : LEG - 0.08;
-    leg.add(box(0.19, len, 0.2, c, { y: -len / 2 - 0.0, edge: true }));
+    leg.add(box(0.19, len, 0.2, c, { y: -len / 2, edge: true }));
     if (it.style === 'short') leg.add(box(0.15, LEG - 0.08 - len, 0.15, skin, { y: -len - (LEG - 0.08 - len) / 2, edge: false }));
     if (a) leg.add(box(0.02, len, 0.05, a, { x: 0.1 * side, y: -len / 2, edge: false }));
   }

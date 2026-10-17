@@ -280,7 +280,7 @@ export function makePlant(big = false) {
   g.add(cyl(0.22, 0.17, 0.3, W.brick, { y: 0.15, seg: 8 }));
   const s = big ? 1.4 : 1;
   g.add(cone(0.35 * s, 0.9 * s, W.leaf, { y: 0.6 * s + 0.3, seg: 6 }));
-  g.add(cone(0.26 * s, 0.7 * s, W.leafDark, { y: 1.0 * s + 0.3, seg: 6 }));
+  g.add(cone(0.26 * s, 0.7 * s, W.leafDark, { y: s + 0.3, seg: 6 }));
   return g;
 }
 
@@ -314,10 +314,21 @@ export function makeCalendar(day = 1) {
 /** A ceiling lamp that is drawn as a hanging fitting. */
 export function makeLamp(color = W.lampWarm) {
   const g = G();
-  g.add(cyl(0.02, 0.02, 0.6, W.black, { y: 0.3, edge: false }));
-  g.add(cyl(0.45, 0.2, 0.2, W.metalDark, { y: -0.05, seg: 8, edge: false }));
+  g.add(cyl(0.02, 0.02, 0.6, W.black, { y: 0.3, edge: false, cast: false }));
+  g.add(cyl(0.45, 0.2, 0.2, W.metalDark, { y: -0.05, seg: 8, edge: false, cast: false }));
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.04, 8), glow(color)));
   g.children[g.children.length - 1].position.y = -0.17;
+  return g;
+}
+
+/** A floor lamp: a pole and a warm shade. */
+export function makeFloorLamp() {
+  const g = G();
+  g.add(cyl(0.18, 0.2, 0.05, W.metalDark, { y: 0.025, seg: 8, edge: false }));
+  g.add(cyl(0.025, 0.025, 1.5, W.metalDark, { y: 0.8, seg: 6, edge: false }));
+  g.add(cyl(0.2, 0.28, 0.32, W.cloth.cream, { y: 1.6, seg: 8, edge: false }));
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.05, 8), glow(W.lampWarm)));
+  g.children[g.children.length - 1].position.y = 1.44;
   return g;
 }
 
@@ -362,7 +373,7 @@ export function makeRoundTree(seed = 0) {
   g.add(cyl(0.2 * s, 0.26 * s, 1.8 * s, W.trunk, { y: 0.9 * s, seg: 6, edge: false }));
   const c = [W.leaf, W.leafDark, W.grassLight][seed % 3];
   g.add(box(2.0 * s, 1.6 * s, 2.0 * s, c, { y: 2.5 * s, edge: false }));
-  g.add(box(1.4 * s, 1.0 * s, 1.4 * s, c, { y: 3.5 * s, edge: false }));
+  g.add(box(1.4 * s, s, 1.4 * s, c, { y: 3.5 * s, edge: false }));
   return g;
 }
 

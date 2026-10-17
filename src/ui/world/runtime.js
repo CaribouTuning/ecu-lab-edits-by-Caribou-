@@ -107,6 +107,11 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   stage.scene.add(person.group);
 
   const player = { x: 0, z: 0, yaw: 0, speed: 0, vx: 0, vz: 0, busy: 0, locked: false };
+  /** @type {null|{pitch: number, dist: number, height: number, shiftX: number, fov: number}} */
+  let saved = null;
+  let spin = false;
+  /** Share of the screen a side panel covers: the picture slides over to keep the action in view. */
+  let panelFrac = 0;
   /** @type {any} */ let level = null;
   /** @type {any} */ let drive = null;
   let paused = false;
@@ -116,7 +121,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   let promptKey = '';
   let clock = 0;
   const camOffset = { yaw: 0 };
-  const tele = { driving: false, speedKph: 0, speedMph: 0, rpm: 0, redline: 8000, gear: 1, throttle: 0, brake: 0, boost: 0, limiter: false, shifting: false, tcCut: 0, slip: 0, odoKm: 0, manual: false, g: 0, reverse: false, level: '', lat: 0, hp: 0 };
+  const tele = { knock: false, lean: false, surface: 'road', driving: false, speedKph: 0, speedMph: 0, rpm: 0, redline: 8000, gear: 1, throttle: 0, brake: 0, boost: 0, limiter: false, shifting: false, tcCut: 0, slip: 0, odoKm: 0, manual: false, g: 0, reverse: false, level: '', lat: 0, hp: 0 };
   /** Transient things the screen draws over the picture: speech, nameplates. */
   const labels = new Map();
   let labelTimer = 0;
@@ -127,6 +132,9 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     get drive() { return drive; },
     career: getCareer,
     look: getLook,
+    /** Jobs whose cars are about to drive in, and jobs whose cars are out on the road. */
+    arrivals: new Set(),
+    away: new Set(),
     emit: (e) => onEvent(e),
     /** Show a speech bubble over a world position for a while. */
     say(id, text, at, seconds = 4, tone = 'say') { labels.set(id, { id, text, at: at.clone ? at.clone() : new THREE.Vector3(at.x, at.y, at.z), until: clock + seconds, tone, dirty: true }); },
@@ -152,7 +160,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const build = levels[id];
     if (!build) throw new Error(`no level ${id}`);
     const driving = drive;
-    if (driving) stage.scene.remove(driving.rig.group);
+    if (driving) { stage.scene.remove(driving.rig.group); if (driving.inside) { driving.rig.group.remove(person.group); driving.inside = false; stage.scene.add(person.group); person.group.visible = true; person.group.scale.setScalar(1); person.group.rotation.set(0, 0, 0); person.setPose('idle'); tele.driving = false; } }
     disposeLevel();
     labels.clear();
     level = build(api, entry);
@@ -169,16 +177,16 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     camOffset.yaw = 0;
     rig.mode = 'follow';
     rig.snap();
-    if (driving) {
-      // The car you were driving comes with you.
+    if (driving && !level.noCars) {
+      // The car you were driving is where you left it.
       stage.scene.add(driving.rig.group);
       if (entry.car) {
         driving.state.x = entry.car.x; driving.state.z = entry.car.z; driving.state.heading = entry.car.heading ?? 0;
         driving.state.vx = driving.state.vy = driving.state.yawRate = 0; driving.state.wR = driving.state.wF = 0;
         syncCar(driving);
       }
-      rig.mode = driving.inside ? 'chase' : 'follow';
     }
+    onEvent({ type: 'drive', on: false });
     tele.level = id;
     onEvent({ type: 'level', id });
     prompt = null; promptKey = '';
@@ -198,7 +206,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   /**
    * Take over a car as the vehicle. `car` carries its rig (a models/car.js car), a
    * powertrain (driving.js) and where it stands.
-   * @param {{rig: any, pt: any, x: number, z: number, heading: number, id?: string, name?: string, source?: any}} car
+   * @param {{rig: any, pt: any, x: number, z: number, heading: number, id?: string, name?: string, source?: any, setup?: any, boostAt?: any, hpAt?: any}} car
    */
   function setCar(car) {
     if (drive) stage.scene.remove(drive.rig.group);
@@ -226,7 +234,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     person.group.position.copy(drive.rig.seat);
     person.group.position.y -= 0.25;
     person.group.rotation.set(0, 0, 0);
-    person.group.scale.setScalar(0.82);
+    person.group.visible = false;
     rig.mode = 'chase';
     rig.pitch = 0.32;
     rig.dist = 7.2;
@@ -243,6 +251,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     drive.inside = false;
     drive.rig.group.remove(person.group);
     stage.scene.add(person.group);
+    person.group.visible = true;
     person.group.scale.setScalar(1);
     person.group.rotation.set(0, 0, 0);
     person.setPose('idle');
@@ -276,6 +285,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     let tx = (fx * a.y + rx * a.x) * speed;
     let tz = (fz * a.y + rz * a.x) * speed;
     if (player.locked) { tx = 0; tz = 0; }
+    if (spin) player.yaw += dt * 0.7;
     const k = 1 - Math.exp(-dt * 14);
     player.vx += (tx - player.vx) * k;
     player.vz += (tz - player.vz) * k;
@@ -302,7 +312,9 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     if (input.pressed('lights')) { d.lights = !d.lights; d.rig.setLights?.(d.lights); }
     if (input.pressed('reset')) { s.heading = Math.round(s.heading / (Math.PI / 2)) * (Math.PI / 2); s.vx = s.vy = s.yawRate = 0; s.wR = s.wF = 0; }
     const before = { x: s.x, z: s.z };
-    d.carry = advance(s, d.pt, { throttle: p.throttle, brake: p.brake, steer: input.steer(), handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn }, dt, d.carry);
+    const surf = level.surfaceAt?.(s.x, s.z) ?? { grip: 1, roll: 1, kind: 'road' };
+    d.surface = surf.kind;
+    d.carry = advance(s, d.pt, { throttle: p.throttle, brake: p.brake, steer: input.steer(), handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn, gripScale: surf.grip, rollScale: surf.roll }, dt, d.carry);
     // Bumping into things: circles along the car's length.
     const cols = level.colliders;
     const h = s.heading;
@@ -359,6 +371,10 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     tele.lat = s.ay / 9.81;
     tele.reverse = s.reverse;
     tele.boost = d.boostAt ? d.boostAt(s.rpm, s.throttle) : 0;
+    const mp = d.setup?.pointAt?.(s.rpm);
+    tele.knock = !!mp?.knock && s.throttle > 0.55;
+    tele.lean = !!mp?.leanRisk && s.throttle > 0.55;
+    tele.surface = d.surface ?? 'road';
     tele.hp = d.hpAt ? d.hpAt(s.rpm) * s.throttle : 0;
     level.onDrive?.(d, dt);
     rig.update(dt, new THREE.Vector3(s.x, 0, s.z), s.heading, Math.abs(s.vx));
@@ -392,6 +408,10 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     if (input.pressed('map')) onEvent({ type: 'map' });
     if (input.pressed('photo')) onEvent({ type: 'photo' });
 
+    {
+      const visible = 2 * rig.dist * Math.tan((rig.fov * Math.PI) / 360) * stage.camera.aspect;
+      rig.shiftX = (panelFrac / 2) * visible;
+    }
     if (!paused) {
       if (drive?.inside) driveFrame(dt);
       else {
@@ -445,7 +465,26 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   return Object.assign(api, {
     loadLevel, setCar, dropCar, enterCar, exitCar, resize,
     setLook(look) { person.setLook(look); },
+    /**
+     * Frame the tuner for the wardrobe: close, low, turning slowly, off to one side to make
+     * room for the panel. Turning it off puts the camera back.
+     * @param {boolean} on
+     */
+    showcase(on) {
+      if (on && !saved) {
+        saved = { pitch: rig.pitch, dist: rig.dist, height: rig.height, shiftX: rig.shiftX, fov: rig.fov };
+        rig.pitch = 0.18; rig.dist = 6.4; rig.height = 1.15; rig.fov = 30;
+        spin = true;
+        player.yaw = rig.yaw;
+      } else if (!on && saved) {
+        Object.assign(rig, { ...saved, shiftX: rig.shiftX });
+        saved = null;
+        spin = false;
+      }
+    },
     setQuality(q) { stage.setQuality(q); },
+    /** Tell the camera how much of the screen a panel covers (0 to 1). @param {number} frac */
+    setPanel(frac) { panelFrac = frac; },
     snapshot: () => stage.snapshot(),
     sync(career) { level?.sync?.(career, api); },
     /** Run a level-specific command (arrive, depart). */

@@ -150,7 +150,7 @@ function autoGear(pt, s, throttle) {
  *
  * @param {VehicleState} s state, mutated
  * @param {Powertrain} pt
- * @param {{throttle: number, brake: number, steer: number, handbrake?: boolean, shift?: -1|0|1, manual?: boolean, tc?: boolean}} input
+ * @param {{throttle: number, brake: number, steer: number, handbrake?: boolean, shift?: -1|0|1, manual?: boolean, tc?: boolean, gripScale?: number, rollScale?: number}} input
  * @param {number} [dt]
  */
 export function stepVehicle(s, pt, input, dt = STEP_S) {
@@ -159,7 +159,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const grip = TIRE_GRIP[car.gripIdx] ?? TIRE_GRIP[0];
   const drive = DRIVETRAIN_OPTS[car.driveIdx] ?? DRIVETRAIN_OPTS[0];
   const box = GEARBOX_OPTS[car.boxIdx] ?? GEARBOX_OPTS[0];
-  const mu = grip.mu;
+  // Grass, gravel and wet paint grip less and drag more: the level says how much.
+  const mu = grip.mu * (input.gripScale ?? 1);
   const alphaPeak = ALPHA_PEAK[grip.grade] ?? 0.15;
   const m = car.massKg;
   const { L, a, b, r, h, Iz, Iw } = geo;
@@ -297,7 +298,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const Fxr = tR.Fx;
   const Fyr = tR.Fy;
   const drag = 0.5 * RHO_AIR * car.cd * car.frontalAreaM2 * s.vx * Math.abs(s.vx);
-  const roll = Math.abs(s.vx) > 0.2 ? car.crr * wTotal * Math.sign(s.vx) : car.crr * wTotal * (s.vx / 0.2);
+  const crr = car.crr * (input.rollScale ?? 1);
+  const roll = Math.abs(s.vx) > 0.2 ? crr * wTotal * Math.sign(s.vx) : crr * wTotal * (s.vx / 0.2);
   const Fx = Fxf + Fxr - drag - roll;
   const Fy = Fyf + Fyr;
   const Mz = a * Fyf - b * Fyr;

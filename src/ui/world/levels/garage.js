@@ -16,8 +16,8 @@ import { npcLook } from '../appearance.js';
 import { THREE, box, cyl, floorPlane, glow, groundPlane, sign } from '../gfx.js';
 import { makePerson } from '../models/person.js';
 import {
-  makeArcade, makeBarrel, makeBench, makeBuildSite, makeCalendar, makeCoffeeMachine, makeCone, makeCouch, makeCrate, makeDesk, makeDog,
-  makeDyno, makeJobBoard, makeLamp, makeLift, makeLocker, makeNeon, makePlant, makePoster, makeRollupDoor, makeShelf, makeToolChest,
+  makeArcade, makeBarrel, makeBuildSite, makeCalendar, makeCoffeeMachine, makeCone, makeCouch, makeCrate, makeDesk, makeDog,
+  makeDyno, makeFloorLamp, makeJobBoard, makeLift, makeLocker, makeNeon, makePlant, makePoster, makeRollupDoor, makeShelf, makeToolChest,
   makeTrophyShelf, makeTyreStack, makeWorkbench,
 } from '../models/props.js';
 
@@ -231,8 +231,8 @@ export function buildGarage(api, entry = {}) {
     arcade.rotation.y = Math.PI;
     root.add(arcade);
     colliders.push({ x: 6.2, z: 6.5, hw: 0.5, hd: 0.45 });
-    const lamp = makeLamp();
-    at(lamp, 8.0, 4.0, 0, 3.8);
+    const lamp = makeFloorLamp();
+    at(lamp, 10.2, 2.6);
     root.add(lamp);
     interactables.push({
       id: 'coffee', x: 9.7, z: 4.9, r: 2.0, label: 'Have a coffee', hint: 'A tip from Pops.',
@@ -254,11 +254,11 @@ export function buildGarage(api, entry = {}) {
   });
   const dogInteract = interactables[interactables.length - 1];
 
-  // ---- lighting: fittings, with real lights that come on at dusk ----
+  // ---- lighting: tube lights on the back wall, and real lights that come on at dusk ----
+  for (const x of [-7.4, -2.3, 2.8, 8]) {
+    root.add(box(2.4, 0.12, 0.12, W.neonCyan, { x, y: 4.45, z: ROOM.minZ + 0.2, mat: glow(W.white), edge: false, cast: false }));
+  }
   for (const [x, z] of [[-7.4, -3], [-2.3, -3], [2.8, -3], [-6, 3], [2, 3], [8, -2]]) {
-    const l = makeLamp();
-    at(l, x, z, 0, 4.6);
-    root.add(l);
     const pl = new THREE.PointLight(W.lampWarm, 0, 14, 1.6);
     pl.position.set(x, 4.2, z);
     root.add(pl);
@@ -302,7 +302,7 @@ export function buildGarage(api, entry = {}) {
   BAYS.forEach((b, i) => {
     interactables.push({
       id: `bay${i}:tune`, x: b.x, z: b.z + 2.9, r: 2.0, onFoot: true,
-      enabled: () => !!api.career().lifts[i],
+      enabled: () => !!api.career().lifts[i] && !api.away?.has(api.career().lifts[i].jobId),
       label: () => { const l = api.career().lifts[i]; return l ? `Tune ${jobById(l.jobId)?.customer.name ?? 'this'}'s car` : ''; },
       hint: 'Put it on the bay and open the laptop.',
       run: () => api.emit({ type: 'act', id: 'tune', bay: i }),
@@ -387,7 +387,9 @@ export function buildGarage(api, entry = {}) {
     // Add cars that appeared without being driven in (a loaded save).
     lifts2.forEach((l, i) => {
       const e = cars.get(l.jobId);
-      if (!e) makeEntry(l, i);
+      if (!e && api.away?.has(l.jobId)) { /* out on a road test */ }
+      else if (!e && api.arrivals?.has(l.jobId)) { api.arrivals.delete(l.jobId); arrive(l.jobId); }
+      else if (!e) makeEntry(l, i);
       else if (e.bay !== i && !e.anim) {
         e.bay = i;
         e.rig.group.position.set(BAYS[i].x, 0, BAYS[i].z);
@@ -522,7 +524,7 @@ export function buildGarage(api, entry = {}) {
   const level = {
     root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
     camera: { pitch: 0.74, dist: 25, yaw: 0, fov: 28 },
-    focus: (x, z) => ({ x: Math.max(-4, Math.min(4, x * 0.5)), z: Math.max(-1, Math.min(2, z * 0.3)) }),
+    focus: (x, z) => ({ x: Math.max(-5, Math.min(5, x * 0.7)), z: Math.max(-1, Math.min(2, z * 0.3)) }),
     bounds: [
       { minX: ROOM.minX + 0.5, maxX: ROOM.maxX - 0.5, minZ: ROOM.minZ + 0.7, maxZ: ROOM.maxZ - 0.5 },
       { minX: DOOR.x - DOOR.half + 0.6, maxX: DOOR.x + DOOR.half - 0.6, minZ: ROOM.maxZ - 1, maxZ: ROOM.maxZ + 5 },
@@ -538,6 +540,7 @@ export function buildGarage(api, entry = {}) {
       return undefined;
     },
     carEntry: carAt,
+    noCars: true,
     /** The pose and place for the tuner at the desk and so on. */
     spots: { desk: { x: -9.2, z: 3.9 } },
     dispose() { for (const e of cars.values()) e.anim = null; },
