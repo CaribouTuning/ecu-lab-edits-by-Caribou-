@@ -5,6 +5,7 @@
 
 import { world as W } from '../../tokens.js';
 import { THREE, ball, box, cone, cyl, edged, glow, pixelTexture, rbox, sign, toon } from '../gfx.js';
+import { bakeSheet, spriteCard, tone } from './sprite.js';
 
 const G = () => new THREE.Group();
 
@@ -439,40 +440,83 @@ export function makeFence(length = 4) {
   return g;
 }
 
-/** A small dog. Faces +z. @param {string} color */
+const DOG_FRAMES = ['stand', 'stepA', 'stepB', 'sit'];
+const dogSheets = new Map();
+
+/**
+ * Paints the shop dog: a short-legged mutt with dark ears and a pale muzzle.
+ * @param {ReturnType<typeof import('./sprite.js').raster>} r @param {number} row 0 front, 1 back, 2 side
+ * @param {string} frame @param {string} coat
+ */
+function paintDog(r, row, frame, coat) {
+  const ear = W.woodDark;
+  const pale = W.cloth.cream;
+  const step = frame === 'stepA' ? 1 : frame === 'stepB' ? -1 : 0;
+  const sit = frame === 'sit';
+  if (row === 2) {
+    // Side, facing right: tail up at the back, head forward.
+    r.rect(4, sit ? 8 : 7, 13, 11, coat);
+    r.rect(5, 12, 5 + (step > 0 ? 1 : 0), 14, coat); r.rect(7 - (step > 0 ? 1 : 0), 12, 7, 14, coat);
+    if (!sit) { r.rect(11 + (step < 0 ? 1 : 0), 12, 11 + (step < 0 ? 1 : 0), 14, coat); r.rect(13 - (step < 0 ? 1 : 0), 12, 13, 14, coat); }
+    else r.rect(11, 12, 14, 13, coat);
+    r.rect(2, 4, 3, 7, coat); r.set(1, 3, coat);
+    r.rect(12, 2, 17, 8, coat);
+    r.rect(16, 6, 19, 8, pale); r.set(19, 6, W.black);
+    r.rect(12, 1, 13, 4, ear);
+    r.set(15, 4, W.eye);
+    r.rect(8, 10, 11, 11, pale);
+    return;
+  }
+  // Front or back.
+  r.rect(6, 8, 13, 13, coat);
+  if (!sit) { r.rect(6, 13, 7, 15 - (step > 0 ? 1 : 0), coat); r.rect(12, 13, 13, 15 - (step < 0 ? 1 : 0), coat); }
+  else { r.rect(5, 13, 8, 14, coat); r.rect(11, 13, 14, 14, coat); }
+  r.rect(6, 1, 13, 8, coat);
+  r.rect(4, 1, 5, 6, ear); r.rect(14, 1, 15, 6, ear);
+  if (row === 0) {
+    r.rect(8, 5, 11, 8, pale);
+    r.rect(9, 5, 10, 5, W.black);
+    r.set(8, 3, W.eye); r.set(11, 3, W.eye);
+    r.rect(9, 7, 10, 7, W.mouth);
+    r.rect(8, 9, 11, 11, pale);
+  } else {
+    r.rect(9, 0, 10, 2, coat);
+    r.rect(9, -1, 10, 0, coat);
+    r.rect(9, 6, 10, 13, tone(coat, -0.08));
+  }
+}
+
+/** A small dog, drawn as a sprite like the people. Faces +z. @param {string} color */
 export function makeDog(color = W.paint.copper) {
   const g = G();
   g.userData.dynamic = true;
   const body = G();
-  body.add(box(0.28, 0.26, 0.6, color, { y: 0.38, edge: false }));
-  const head = G();
-  head.position.set(0, 0.55, 0.36);
-  head.add(box(0.22, 0.2, 0.24, color, { edge: false }));
-  head.add(box(0.14, 0.1, 0.12, W.cloth.cream, { y: -0.04, z: 0.15, edge: false }));
-  head.add(box(0.06, 0.08, 0.04, W.black, { y: -0.02, z: 0.22, edge: false }));
-  head.add(box(0.07, 0.14, 0.05, W.woodDark, { x: 0.1, y: 0.12, edge: false }), box(0.07, 0.14, 0.05, W.woodDark, { x: -0.1, y: 0.12, edge: false }));
-  body.add(head);
-  const tail = box(0.06, 0.06, 0.26, color, { y: 0.55, z: -0.4, edge: false });
-  tail.rotation.x = 0.7;
-  body.add(tail);
-  const legs = [];
-  for (const [x, z] of [[-0.09, 0.2], [0.09, 0.2], [-0.09, -0.2], [0.09, -0.2]]) {
-    const leg = G();
-    leg.position.set(x, 0.26, z);
-    leg.add(box(0.07, 0.26, 0.07, color, { y: -0.13, edge: false }));
-    body.add(leg);
-    legs.push(leg);
-  }
   g.add(body);
-  Object.assign(g.userData, { body, head, tail, legs, phase: 0 });
+  let sheet = dogSheets.get(color);
+  if (!sheet) {
+    sheet = bakeSheet({ cw: 20, ch: 16, cols: DOG_FRAMES.length, rows: 3, paint: (r, row, col) => paintDog(r, row, DOG_FRAMES[col], color) });
+    dogSheets.set(color, sheet);
+  }
+  const sprite = spriteCard({ cw: 20, ch: 16, cols: DOG_FRAMES.length, px: 0.055, foot: 1, blob: 0.34, owner: g });
+  sprite.setSheet(sheet);
+  body.add(sprite.card);
+  g.add(sprite.blob);
+  Object.assign(g.userData, { body, phase: 0, idle: 0 });
   /** @param {number} dt @param {number} speed */
   g.userData.update = (dt, speed) => {
     const u = g.userData;
     u.phase += dt * (6 + speed * 3);
-    const sw = speed > 0.1 ? Math.sin(u.phase) * 0.7 : 0;
-    legs[0].rotation.x = sw; legs[3].rotation.x = sw; legs[1].rotation.x = -sw; legs[2].rotation.x = -sw;
-    tail.rotation.z = Math.sin(u.phase * 0.8) * (speed > 0.1 ? 0.2 : 0.6);
-    body.position.y = speed > 0.1 ? Math.abs(Math.sin(u.phase)) * 0.03 : 0;
+    if (speed > 0.1) {
+      u.idle = 0;
+      const beat = Math.floor(u.phase) % 4;
+      sprite.frame = beat === 0 ? 1 : beat === 2 ? 2 : 0;
+      body.position.y = beat % 2 ? 0.03 : 0;
+    } else {
+      // Standing a while, he sits.
+      u.idle += dt;
+      sprite.frame = u.idle > 1.5 ? 3 : 0;
+      body.position.y = 0;
+    }
   };
   return g;
 }

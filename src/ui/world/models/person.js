@@ -13,7 +13,8 @@
 
 import { world as W } from '../../tokens.js';
 import { itemById } from '../appearance.js';
-import { SPRITE_LIGHT, THREE } from '../gfx.js';
+import { THREE } from '../gfx.js';
+import { bakeSheet, spriteCard, tone } from './sprite.js';
 
 /** One frame is CW by CH texels; the sheet is COLS frames by 3 rows (front, back, side). */
 const CW = 24;
@@ -26,33 +27,6 @@ const DIRS = ['front', 'back', 'side'];
 const PX = 0.066;
 
 const cloth = (key) => W.cloth[key] ?? W.cloth.grey;
-
-/** A tiny raster: a colour (or nothing) per texel, painted in layers. */
-function raster() {
-  /** @type {(string|null)[]} */
-  const px = new Array(CW * CH).fill(null);
-  const r = {
-    px,
-    /** @param {number} x @param {number} y @param {string|null} c */
-    set(x, y, c) { if (x >= 0 && y >= 0 && x < CW && y < CH) px[y * CW + x] = c; },
-    /** @param {number} x @param {number} y */
-    get(x, y) { return x >= 0 && y >= 0 && x < CW && y < CH ? px[y * CW + x] : null; },
-    /** Fill a rectangle, inclusive. @param {number} x0 @param {number} y0 @param {number} x1 @param {number} y1 @param {string|null} c */
-    rect(x0, y0, x1, y1, c) { for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) r.set(x, y, c); },
-    /** Paint only where something is already painted (shading, patterns). @param {number} x @param {number} y @param {string} c */
-    over(x, y, c) { if (r.get(x, y)) r.set(x, y, c); },
-  };
-  return r;
-}
-
-const colorCache = new Map();
-/** A palette colour a touch lighter or darker, as a CSS string. @param {string} c @param {number} dl */
-function tone(c, dl) {
-  const key = `${c}|${dl}`;
-  let v = colorCache.get(key);
-  if (!v) { v = new THREE.Color(c).offsetHSL(0, dl < 0 ? 0.04 : -0.02, dl).getStyle(); colorCache.set(key, v); }
-  return v;
-}
 
 /**
  * The body plan for one frame: where the arms and legs go. Everything else is painted
@@ -79,7 +53,7 @@ function planOf(dir, frame) {
 
 /**
  * Paints one frame of a look.
- * @param {ReturnType<typeof raster>} r
+ * @param {ReturnType<typeof import('./sprite.js').raster>} r
  * @param {import('../appearance.js').Look} look
  * @param {'front'|'back'|'side'} dir side faces +x (screen right)
  * @param {string} frame
@@ -306,7 +280,7 @@ function paint(r, look, dir, frame, mood) {
   }
 }
 
-/** @param {ReturnType<typeof raster>} r @param {string} style @param {string} c @param {'front'|'back'|'side'} dir @param {number} y @param {number} x0 @param {number} x1 */
+/** @param {ReturnType<typeof import('./sprite.js').raster>} r @param {string} style @param {string} c @param {'front'|'back'|'side'} dir @param {number} y @param {number} x0 @param {number} x1 */
 function paintHair(r, style, c, dir, y, x0, x1) {
   const hi = tone(c, 0.1);
   const side = dir === 'side';
@@ -352,7 +326,7 @@ function paintHair(r, style, c, dir, y, x0, x1) {
   }
 }
 
-/** @param {ReturnType<typeof raster>} r @param {import('../appearance.js').Item} it @param {'front'|'back'|'side'} dir @param {number} y @param {number} x0 @param {number} x1 */
+/** @param {ReturnType<typeof import('./sprite.js').raster>} r @param {import('../appearance.js').Item} it @param {'front'|'back'|'side'} dir @param {number} y @param {number} x0 @param {number} x1 */
 function paintHat(r, it, dir, y, x0, x1) {
   const c = cloth(it.color);
   const a = cloth(it.accent ?? it.color);
@@ -383,39 +357,6 @@ function paintHat(r, it, dir, y, x0, x1) {
   }
 }
 
-/**
- * Light from the top left: each colour run gets a darker right and bottom edge and a
- * brighter top-left texel, then the whole figure gets a one-texel dark outline. This is
- * what makes a flat drawing read as a rounded figure at a glance.
- * @param {ReturnType<typeof raster>} r
- */
-function finish(r) {
-  const src = r.px.slice();
-  const at = (x, y) => (x >= 0 && y >= 0 && x < CW && y < CH ? src[y * CW + x] : null);
-  for (let y = 0; y < CH; y += 1) {
-    for (let x = 0; x < CW; x += 1) {
-      const c = at(x, y);
-      if (!c) continue;
-      const rgt = at(x + 1, y);
-      const dn = at(x, y + 1);
-      const up = at(x, y - 1);
-      if (!rgt || !dn) r.set(x, y, tone(c, -0.1));
-      else if (!up && at(x - 1, y)) r.set(x, y, tone(c, 0.07));
-    }
-  }
-  const shaded = r.px.slice();
-  for (let y = 0; y < CH; y += 1) {
-    for (let x = 0; x < CW; x += 1) {
-      if (shaded[y * CW + x]) continue;
-      const near = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => {
-        const xx = x + dx; const yy = y + dy;
-        return xx >= 0 && yy >= 0 && xx < CW && yy < CH && shaded[yy * CW + xx];
-      });
-      if (near) r.set(x, y, W.outline);
-    }
-  }
-}
-
 const sheetCache = new Map();
 
 /**
@@ -427,49 +368,11 @@ function sheetFor(look, mood) {
   const key = `${JSON.stringify(look)}|${mood}`;
   let tex = sheetCache.get(key);
   if (tex) return tex;
-  const c = document.createElement('canvas');
-  c.width = CW * COLS;
-  c.height = CH * DIRS.length;
-  const g = c.getContext('2d');
-  const img = g.createImageData(c.width, c.height);
-  const rgb = new Map();
-  const srgb = { r: 0, g: 0, b: 0 };
-  const toRgb = (s) => { let v = rgb.get(s); if (!v) { new THREE.Color(s).getRGB(srgb, THREE.SRGBColorSpace); v = [srgb.r, srgb.g, srgb.b].map((k) => Math.round(Math.min(1, Math.max(0, k)) * 255)); rgb.set(s, v); } return v; };
-  DIRS.forEach((dir, row) => {
-    FRAMES.forEach((frame, col) => {
-      const r = raster();
-      paint(r, look, /** @type {any} */ (dir), frame, mood);
-      finish(r);
-      for (let y = 0; y < CH; y += 1) {
-        for (let x = 0; x < CW; x += 1) {
-          const s = r.px[y * CW + x];
-          if (!s) continue;
-          const [R, G, B] = toRgb(s);
-          const i = ((row * CH + y) * c.width + col * CW + x) * 4;
-          img.data[i] = R; img.data[i + 1] = G; img.data[i + 2] = B; img.data[i + 3] = 255;
-        }
-      }
-    });
-  });
-  g.putImageData(img, 0, 0);
-  tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex = bakeSheet({ cw: CW, ch: CH, cols: COLS, rows: DIRS.length, paint: (r, row, col) => paint(r, look, /** @type {any} */ (DIRS[row]), FRAMES[col], mood) });
   if (sheetCache.size > 160) sheetCache.clear();
   sheetCache.set(key, tex);
   return tex;
 }
-
-const blobGeo = new THREE.CircleGeometry(0.42, 14).rotateX(-Math.PI / 2);
-const blobMat = new THREE.MeshBasicMaterial({ color: W.shadow, transparent: true, opacity: 0.32, depthWrite: false });
-const cardGeo = new THREE.PlaneGeometry(CW * PX, CH * PX).translate(0, (CH * PX) / 2 - PX, 0);
-
-const _pos = new THREE.Vector3();
-const _dir = new THREE.Vector3();
-const _scale = new THREE.Vector3();
-const _q = new THREE.Quaternion();
 
 /**
  * Builds a person.
@@ -482,64 +385,17 @@ export function makePerson(look, opts = {}) {
   group.userData.dynamic = true;
   const body = new THREE.Group();
   group.add(body);
-  const mat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide });
-  mat.map = null;
-  const card = new THREE.Mesh(cardGeo, mat);
-  card.castShadow = false;
-  card.receiveShadow = false;
-  // Never culled by its own box: the card is turned to the camera at draw time.
-  card.frustumCulled = false;
-  body.add(card);
-  const blob = new THREE.Mesh(blobGeo, blobMat);
-  blob.position.y = 0.02;
-  blob.renderOrder = -1;
-  group.add(blob);
+  const sprite = spriteCard({ cw: CW, ch: CH, cols: COLS, px: PX, owner: group });
+  body.add(sprite.card);
+  group.add(sprite.blob);
 
   const rig = {
     group, body, look, mood: opts.mood ?? 'neutral', phase: Math.random() * 6, pose: 'idle', poseT: 0, speed: 0,
-    /** The frame column showing now. */
-    frame: 0,
   };
 
-  function build() {
-    const tex = sheetFor(rig.look, rig.mood);
-    // Each person gets their own copy of the sheet's sampling window; the pixels are shared.
-    const t = tex.clone();
-    t.needsUpdate = true;
-    t.repeat.set(1 / COLS, 1 / DIRS.length);
-    if (mat.map) mat.map.dispose();
-    mat.map = t;
-    mat.needsUpdate = true;
-  }
+  function build() { sprite.setSheet(sheetFor(rig.look, rig.mood)); }
   build();
   group.scale.setScalar(opts.scale ?? 1);
-
-  // At draw time: face the card to the camera, and pick the row (front, back, side) from
-  // where the camera stands relative to the way the person faces.
-  card.onBeforeRender = (_r, _s, camera) => {
-    card.getWorldPosition(_pos);
-    group.getWorldDirection(_dir);
-    group.getWorldScale(_scale);
-    const facing = Math.atan2(_dir.x, _dir.z);
-    const toCam = Math.atan2(camera.position.x - _pos.x, camera.position.z - _pos.z);
-    let rel = facing - toCam;
-    rel = ((rel + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-    let row = 0;
-    let flip = false;
-    if (Math.abs(rel) > (Math.PI * 3) / 4) row = 1;
-    else if (rel > Math.PI / 4) { row = 2; flip = false; }
-    else if (rel < -Math.PI / 4) { row = 2; flip = true; }
-    const t = mat.map;
-    if (t) {
-      const u = rig.frame / COLS;
-      t.repeat.x = flip ? -1 / COLS : 1 / COLS;
-      t.offset.x = flip ? u + 1 / COLS : u;
-      t.offset.y = 1 - (row + 1) / DIRS.length;
-    }
-    mat.color.copy(SPRITE_LIGHT);
-    _q.copy(camera.quaternion);
-    card.matrixWorld.compose(_pos, _q, _scale);
-  };
 
   /** Re-dress the same character. @param {import('../appearance.js').Look} next */
   rig.setLook = (next) => { rig.look = next; look = next; build(); };
@@ -582,8 +438,8 @@ export function makePerson(look, opts = {}) {
       // Idle: a breath every couple of seconds, one texel up and down.
       body.position.y = Math.sin(t * 2.2 + rig.phase) > 0.6 ? PX * 0.5 : 0;
     }
-    rig.frame = FRAMES.indexOf(f);
-    blob.visible = pose !== 'sit';
+    sprite.frame = FRAMES.indexOf(f);
+    sprite.blob.visible = pose !== 'sit';
   };
 
   rig.update(0, 0);

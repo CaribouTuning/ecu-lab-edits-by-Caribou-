@@ -36,15 +36,32 @@ changes a physics number. The fingerprint is unchanged.
 
 ## How it looks and plays
 
-- **Walking** is a fixed three-quarter top-down view, like a handheld creature-collecting RPG:
-  steep enough to see the street, shallow enough to see shop fronts. Narrow lens, so people
-  stay upright at the screen edge.
-- **Driving** is a chase camera behind the car: it swings round with the heading, looks a
-  little way down the road, and pulls back and widens with speed.
-- **Look.** Pixel art in 3D, not blocks: soft rounded characters and props, brick, siding and
-  shingle textures at true scale, leafy round trees, flower boxes, car bodies with shoulder
-  lines and door cuts. One full-screen pass draws a one-pixel ink line wherever depth jumps
-  or folds, so everything is outlined the same way; far scenery fades out of it.
+The reference is the handheld RPGs of the DS era: a 3-D world of simple textured shapes
+seen from a fixed three-quarter camera, with the people drawn as 2-D pixel-art sprites.
+That is what keeps it reading as pixel art rather than a world of blocks.
+
+- **People and the dog are sprites** (`models/sprite.js`, `models/person.js`). Each look
+  (hair, hat, top, trousers, shoes, glasses, extras, skin, mood) is painted texel by texel
+  into a sheet: front, back and side views; standing, two walking steps, cheer, wave, sit,
+  think and point. The card always faces the camera, and the view (front, back, side or
+  mirrored side) follows where the camera is relative to the way the person faces, so a
+  character turns as they walk. A blob of shadow sits under the feet; the time of day tints
+  them, so night is blue for them too.
+- **Walking** is a fixed three-quarter top-down view. **Driving** is a chase camera behind
+  the car that swings with the heading, looks down the road and widens with speed.
+- **Talking** happens in a text box along the bottom: the speaker's name on a tab, the line
+  typed out with a blip, an arrow when it is done, and choices on the last line. Pops
+  greets you in the garage on day one and walks out to his diner; a customer explains
+  what the car does when it is on the lift, and says how it went when they collect it (the
+  box tallies the checks and the money); every clerk says hello before their counter
+  opens. Conversations queue; E, Space, Enter or a tap moves them on; Escape ends one.
+- **The phone** (customers, upgrades, wardrobe, cars...) stays a modern phone screen on
+  purpose: it is the tuner's phone, and the tuning screens behind it are the real tool.
+- **Look.** Brick, cinder block, siding, stucco and shingle textures at true scale; leafy
+  round trees, flower boxes, oil stains and pegboards. Rooms are lit softly with faint
+  shadows; outdoors has a sun. One full-screen pass outlines every edge with a single
+  pixel of ink, fading out in the distance. Cars get door cuts, shoulder lines, a lit
+  roof panel and windscreen glints.
 
 ## What teaches what
 
