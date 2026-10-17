@@ -284,3 +284,136 @@ export const smokeAlpha = (alpha) => `rgba(214, 222, 230, ${alpha})`;
 
 /** The low sun behind the treeline, at a given opacity. */
 export const horizonGlowAlpha = (alpha) => `rgba(255, 150, 60, ${alpha})`;
+
+/**
+ * The career WORLD's art palette: the 3-D shop, town and cars the player walks and drives
+ * through. Scenery, like `shop` and `strip` above, and for the same reason: a red car or
+ * a green lawn is not a status colour. Not mirrored into `tokens.css` because the scene
+ * is drawn by WebGL, not styled by CSS.
+ *
+ * Everything the world draws names a key from here, so the no-hard-coded-colours rule
+ * holds for the models and levels too. Clothing and hair are keyed by NAME (`cloth.red`)
+ * so the wardrobe catalogue stays plain data a screen can print without WebGL.
+ */
+export const world = Object.freeze({
+  // Sky and light, by time of day: the top of the sky, the horizon, the sun, the ambient.
+  sky: Object.freeze({
+    day: Object.freeze({ top: '#5aa0e6', horizon: '#cfe6f7', sun: '#fff1d6', ambient: '#9fb7d8', ground: '#6b7a58', sunPower: 2.4, ambientPower: 1.15 }),
+    dusk: Object.freeze({ top: '#4a3f8f', horizon: '#ff9a62', sun: '#ffb27a', ambient: '#8a78b8', ground: '#4a3d4f', sunPower: 1.7, ambientPower: 0.95 }),
+    night: Object.freeze({ top: '#070b1f', horizon: '#1a2447', sun: '#7f9bd6', ambient: '#37456f', ground: '#1c2233', sunPower: 0.55, ambientPower: 0.75 }),
+  }),
+  // The ground and what is built on it.
+  asphalt: '#3a3f4a',
+  asphaltDark: '#2c3039',
+  roadLine: '#e8dfb0',
+  roadEdge: '#d8d8d8',
+  concrete: '#8c9199',
+  concreteDark: '#6a6f78',
+  concreteLight: '#aab0b8',
+  curb: '#b4b8bf',
+  grass: '#5a8f45',
+  grassDark: '#477a38',
+  grassLight: '#78a85a',
+  dirt: '#8a6a47',
+  dirtDark: '#6e5238',
+  sand: '#d9c58d',
+  water: '#3f86c9',
+  waterDeep: '#2d65a3',
+  rock: '#7d7770',
+  rockDark: '#5b5650',
+  brick: '#a8553a',
+  brickDark: '#8a4430',
+  plaster: '#ddd2bd',
+  plasterDark: '#bfb49d',
+  roof: '#5a4a52',
+  roofRed: '#9c3b32',
+  roofGreen: '#3f6b57',
+  glass: '#7fb7de',
+  glassDark: '#2f4a63',
+  glassNight: '#ffe29a',
+  door: '#7a5232',
+  doorGlass: '#a5d3ec',
+  woodLight: '#c9a26b',
+  wood: '#8c6a44',
+  woodDark: '#5e4429',
+  metal: '#8b94a1',
+  metalDark: '#586070',
+  metalLight: '#c4ccd6',
+  steel: '#5b6576',
+  corrugated: '#7d8896',
+  black: '#14161b',
+  white: '#f2f4f7',
+  // Shop interior.
+  floorEpoxy: '#6e7681',
+  floorEpoxyAlt: '#626a75',
+  floorStripe: '#e8b230',
+  wallShop: '#c9c2b4',
+  wallShopDark: '#a79f90',
+  wallBase: '#4a5463',
+  wallRed: '#b4503e',
+  wallBlue: '#456a9c',
+  wallGreen: '#4f7d5e',
+  wallPurple: '#6d5391',
+  wallCream: '#ece1c8',
+  wallBlack: '#2a2d36',
+  tyre: '#16181d',
+  tyreWall: '#262a31',
+  rim: '#c8ced8',
+  rimDark: '#6b7482',
+  brake: '#b5b9c2',
+  toolRed: '#c0392b',
+  toolBlue: '#2d6cb5',
+  toolYellow: '#f0b400',
+  crate: '#a4784a',
+  barrel: '#3c78b4',
+  barrelRed: '#b4382c',
+  cone: '#ee7a1c',
+  hazard: '#f2c200',
+  rubber: '#23262c',
+  screen: '#3be0b0',
+  screenOff: '#10151c',
+  screenAmber: '#f0b020',
+  neonPink: '#ff4fa3',
+  neonCyan: '#33e0ff',
+  neonGreen: '#5dff8a',
+  neonAmber: '#ffb020',
+  lampWarm: '#ffe0a0',
+  headlight: '#fff3c4',
+  taillight: '#e0313b',
+  indicator: '#ffa500',
+  plate: '#f4efe0',
+  fire: '#ff7a1a',
+  leaf: '#4a8a3c',
+  leafDark: '#376e2e',
+  leafAutumn: '#c9772e',
+  trunk: '#6a4a2e',
+  flowerA: '#f06a8a',
+  flowerB: '#f5d349',
+  // Customers' cars, by the name a job gives its paint, plus the extra finishes the
+  // dealer and the paint shop add.
+  paint: Object.freeze({
+    silver: '#9aa4b2', red: '#c0392b', blue: '#2e6fd8', white: '#f2f2f2', orange: '#e67e22',
+    green: '#27ae60', black: '#1c1f24', purple: '#8e44ad', teal: '#16a085', copper: '#d35400',
+    yellow: '#f1c40f', grey: '#7f8c8d', pewter: '#95a5a6', pearl: '#bdc3c7',
+    candy: '#9c1c3a', midnight: '#1b2a52', lime: '#9acd32', pink: '#e85d9b', sunset: '#ff6a3d',
+    gold: '#c9a227', bronze: '#8a5a2b', mint: '#5fd1a4', sky: '#5aaee8', graphite: '#3c4350',
+  }),
+  // People.
+  skin: Object.freeze(['#f2cfae', '#e0b48c', '#c68b5f', '#a06a42', '#7a4a2c', '#53321f']),
+  hair: Object.freeze({
+    black: '#1b1a1c', brown: '#4a3222', chestnut: '#6e4528', blonde: '#d8b45a', ginger: '#b4521f',
+    grey: '#9aa0a8', white: '#e6e8ec', red: '#a9262e', blue: '#2f6fd0', pink: '#e86aa8', green: '#3fb06a', purple: '#8a4ad0',
+  }),
+  cloth: Object.freeze({
+    white: '#f1f3f6', black: '#1d2026', grey: '#6d7684', charcoal: '#383e48', navy: '#23386b', blue: '#2e6fd8',
+    sky: '#6fb2e8', teal: '#1f9d8c', green: '#2f9d58', olive: '#6b7a3a', lime: '#9ccf3c', yellow: '#f0c419',
+    orange: '#ee7d22', red: '#c8372f', maroon: '#7c2430', pink: '#ec78a8', purple: '#7d4fb3', brown: '#6a4a33',
+    tan: '#c9a77a', cream: '#efe4c8', denim: '#3f5f94', denimDark: '#2b405f', gold: '#d6a92b', silver: '#b8c0cc',
+    neon: '#33e0a0', hivis: '#d7f23a',
+  }),
+  eye: '#1a1c22',
+  mouth: '#7a3a3a',
+  cheek: '#e89a8a',
+  outline: '#0b0d12',
+  shadow: '#05070c',
+});
