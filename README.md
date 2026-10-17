@@ -128,6 +128,8 @@ src/
   ui/            presentation only — no physics below this line
     career/        CAREER: the shop, its customers and jobs, and the grading, which
                    runs the real simulator on the car handed back
+    world/         CAREER's 3D town (three.js, lazy-loaded): walk, drive, race, shop;
+                   see docs/career-world.md
   storage.js     persistence adapter (artifact host / localStorage / memory)
 tests/           physics intent tests + the behavioural fingerprint
 ```

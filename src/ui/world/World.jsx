@@ -39,6 +39,7 @@ import { buildTown } from './levels/town.js';
 import { PLACES, closedBecause, placeById } from './locations.js';
 import { createWorld } from './runtime.js';
 import { loadSettings, saveSettings } from './settings.js';
+import { sfx, toastSound } from './sfx.js';
 import { tipFor } from './tips.js';
 import { driveSetup } from './vehicle.js';
 import { PartsPanel } from './PartsPanel.jsx';
@@ -80,9 +81,10 @@ const openPlaces = (c) => PLACES.filter((p) => !closedBecause(c, p));
  * @param {() => void} [props.onDyno]
  * @param {() => void} props.onMenu
  * @param {() => void} [props.onLearn]
+ * @param {() => void} [props.onFlat] fall back to the flat shop (no WebGL, or the user asked)
  * @param {boolean} [props.preserve] keep the drawing buffer (screenshots in tests)
  */
-export default function World({ career, update, onWork, onDyno, onMenu, onLearn, preserve = false }) {
+export default function World({ career, update, onWork, onDyno, onMenu, onLearn, onFlat, preserve = false }) {
   const canvasRef = useRef(null);
   const worldRef = useRef(/** @type {any} */ (null));
   const careerRef = useRef(career);
@@ -115,6 +117,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const toast = useCallback((text, tone) => {
     const id = (toastId.current += 1);
     setToasts((t) => [...t.slice(-2), { id, text, tone }]);
+    sfx(toastSound(tone), settingsRef.current.sound);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4600);
   }, []);
 
@@ -338,6 +341,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       });
     }
   }, [onAct, toast]);
+  const onFlatRef = useRef(onFlat);
+  onFlatRef.current = onFlat;
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
@@ -345,18 +350,29 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return undefined;
-    const w = createWorld({
+    /** @type {any} */
+    let w;
+    try {
+      w = createWorld({
       canvas, preserve, quality: settingsRef.current.quality,
       onEvent: (e) => onEventRef.current(e),
       getCareer: () => careerRef.current,
       getLook: () => ({ ...(careerRef.current.look ?? {}) }),
       levels: LEVELS,
-    });
+      });
+    } catch {
+      // No usable WebGL after all: fall back to the flat shop rather than a blank screen.
+      onFlatRef.current?.();
+      return undefined;
+    }
+    const lost = (/** @type {Event} */ ev) => { ev.preventDefault(); onFlatRef.current?.(); };
+    canvas.addEventListener('webglcontextlost', lost);
     worldRef.current = w;
     if (window.__ECU_E2E__) window.__ecuWorld = w;
     w.loadLevel('garage', lastSpot ? { from: 'work', at: lastSpot } : { from: 'start' });
     setWorld(w);
     return () => {
+      canvas.removeEventListener('webglcontextlost', lost);
       if (w.level?.id === 'garage') lastSpot = { x: w.player.x, z: w.player.z, yaw: w.player.yaw };
       silenceDriveSound();
       w.dispose();
@@ -368,6 +384,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   }, []);
 
   useEffect(() => { world?.setQuality(settings.quality); saveSettings(settings); }, [world, settings]);
+  useEffect(() => { world?.setShake(settings.shake); }, [world, settings.shake]);
   useEffect(() => { world?.setPaused(!!drawer || !!sheet); }, [world, drawer, sheet]);
   useEffect(() => { world?.sync(career); }, [world, career]);
   useEffect(() => { world?.setLook(career.look ?? {}); }, [world, career.look]);
@@ -502,7 +519,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
 
       {sheet && (
         <Sheet
-          sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent'); setSheet(null); }}
+          onFlat={onFlat} sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent'); setSheet(null); }}
           onTravel={fastTravel} place={place} update={update} onRace={startRace} onStep={(n) => setSheet({ type: 'intro', step: n })} onMeet={startMeet} onWait={() => { update(advancePhase(career)); setSheet(null); toast('A few hours pass.'); }}
           onNextDay={() => { update(nextDay(career)); setSheet(null); toast('A new day. Customers are on the board.', 'ok'); }}
         />
@@ -522,7 +539,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
  * Cards that fill the middle of the screen: the car's spec sheet, closing up, the
  * trophies, the map and the settings.
  */
-function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait, onStep }) {
+function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait, onStep }) {
   if (sheet.type === 'inspect') {
     const job = jobById(sheet.jobId);
     return (
@@ -650,6 +667,16 @@ function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTra
           <span className={styles.lede}>Hints</span>
           <Button size="sm" variant={settings.hints ? 'primary' : 'ghost'} onClick={() => set({ hints: !settings.hints })}>{settings.hints ? <><Check size={13} aria-hidden="true" /> ON</> : 'OFF'}</Button>
         </div>
+        <div className={styles.sheetRow}>
+          <span className={styles.lede}>Camera shake</span>
+          <Button size="sm" variant={settings.shake ? 'primary' : 'ghost'} onClick={() => set({ shake: !settings.shake })}>{settings.shake ? <><Check size={13} aria-hidden="true" /> ON</> : 'OFF'}</Button>
+        </div>
+        {onFlat && (
+          <div className={styles.sheetRow}>
+            <span className={styles.lede}>Shop view</span>
+            <Button size="sm" variant="ghost" onClick={() => { setSettings({ ...settings, view: 'flat' }); onFlat(); }}>USE THE FLAT SHOP</Button>
+          </div>
+        )}
         <p className={styles.lede}>Keys: WASD or arrows to walk, SHIFT to run, E to use, Q and R to turn the view, P for a photo. Driving: W/S gas and brake, A/D steer, SPACE handbrake, Z/X shift, L lights, BACKSPACE to straighten up.</p>
         <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>DONE</Button></div>
       </div>

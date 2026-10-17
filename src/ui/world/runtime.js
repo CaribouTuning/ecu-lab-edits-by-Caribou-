@@ -128,6 +128,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   let labelTimer = 0;
 
   const api = {
+    shakeOn: true,
     stage, rig, input, player, person, tele,
     get level() { return level; },
     get drive() { return drive; },
@@ -345,7 +346,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
         }
       }
     }
-    if (hit > 2) { rig.shake = Math.min(0.4, hit * 0.03); onEvent({ type: 'bump', force: hit }); }
+    if (hit > 2) { if (api.shakeOn !== false) rig.shake = Math.min(0.4, hit * 0.03); onEvent({ type: 'bump', force: hit }); }
     const [cx, cz] = clampToBounds(s.x, s.z, level.bounds);
     if (cx !== s.x || cz !== s.z) { s.x = cx; s.z = cz; s.vx *= 0.5; s.vy *= 0.5; }
     d.rig.steer(-s.steer);
@@ -508,6 +509,8 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
       }
     },
     setQuality(q) { stage.setQuality(q); },
+    /** Camera shake on bumps. @param {boolean} on */
+    setShake(on) { api.shakeOn = on; },
     /** Tell the camera how much of the screen a panel covers (0 to 1). @param {number} frac */
     setPanel(frac) { panelFrac = frac; },
     snapshot: () => stage.snapshot(),

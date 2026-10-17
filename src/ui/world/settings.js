@@ -5,18 +5,25 @@
 
 const KEY = 'ecu-lab-world-settings';
 
-/** @typedef {{quality: 'chunky'|'normal'|'fine', units: 'mph'|'kph', sound: boolean, touch: 'auto'|'on'|'off', shake: boolean, hints: boolean}} WorldSettings */
+/** @typedef {{quality: 'chunky'|'normal'|'fine', units: 'mph'|'kph', sound: boolean, touch: 'auto'|'on'|'off', shake: boolean, hints: boolean, view: '3d'|'flat'}} WorldSettings */
 
 /** @type {WorldSettings} */
-export const DEFAULT_SETTINGS = { quality: 'normal', units: 'mph', sound: true, touch: 'auto', shake: true, hints: true };
+export const DEFAULT_SETTINGS = { quality: 'normal', units: 'mph', sound: true, touch: 'auto', shake: true, hints: true, view: '3d' };
+
+/** Camera shake starts off for anyone who asked their device for less motion. @returns {WorldSettings} */
+function defaults() {
+  let calm = false;
+  try { calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* no media queries */ }
+  return { ...DEFAULT_SETTINGS, shake: !calm };
+}
 
 /** @returns {WorldSettings} */
 export function loadSettings() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (raw && typeof raw === 'object') return { ...DEFAULT_SETTINGS, ...raw };
+    if (raw && typeof raw === 'object') return { ...defaults(), ...raw };
   } catch { /* storage blocked or corrupt: use the defaults */ }
-  return { ...DEFAULT_SETTINGS };
+  return defaults();
 }
 
 /** @param {WorldSettings} s */

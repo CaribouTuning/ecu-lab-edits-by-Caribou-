@@ -13,6 +13,7 @@ import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Button } from '../primitives/Button.jsx';
 import { ACTIONS } from '../state/reducer.js';
 import { useCareer } from '../state/StoreProvider.jsx';
+import { loadSettings } from '../world/settings.js';
 import { webglAvailable } from '../world/support.js';
 
 import { repTier } from './catalog.js';
@@ -131,14 +132,15 @@ const World = lazy(() => import('../world/World.jsx'));
  */
 export function ShopScreen({ onWork, onDyno, onMenu, onLearn, flat = false }) {
   const [career, dispatch] = useCareer();
-  const solid = useMemo(() => !flat && webglAvailable(), [flat]);
+  const [fellBack, setFellBack] = useState(false);
+  const solid = useMemo(() => !flat && !fellBack && loadSettings().view !== 'flat' && webglAvailable(), [flat, fellBack]);
   if (!solid) return <LegacyShop onWork={onWork} onMenu={onMenu} onLearn={onLearn} />;
   if (!career) return null;
   return (
     <Suspense fallback={<div className={styles.loading}>Opening the shop&hellip;</div>}>
       <World
         career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })}
-        onWork={onWork} onDyno={onDyno} onMenu={onMenu} onLearn={onLearn}
+        onWork={onWork} onDyno={onDyno} onMenu={onMenu} onLearn={onLearn} onFlat={() => setFellBack(true)}
       />
     </Suspense>
   );
