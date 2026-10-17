@@ -156,6 +156,7 @@ export function spriteCard(o) {
     },
   };
 
+  let last = 0;
   card.onBeforeRender = (_r, _s, camera) => {
     card.getWorldPosition(_pos);
     o.owner.getWorldDirection(_dir);
@@ -164,11 +165,15 @@ export function spriteCard(o) {
     const toCam = Math.atan2(camera.position.x - _pos.x, camera.position.z - _pos.z);
     let rel = facing - toCam;
     rel = ((rel + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
-    let row = 0;
-    let flip = false;
-    if (Math.abs(rel) > (Math.PI * 3) / 4) row = 1;
-    else if (rel > Math.PI / 4) row = 2;
-    else if (rel < -Math.PI / 4) { row = 2; flip = true; }
+    // Eight ways to walk, three ways to draw: on a diagonal, keep the view already showing
+    // until the angle is clearly past it, so a sprite walking at 45 degrees does not flicker.
+    const view = (x) => (Math.abs(x) > (Math.PI * 3) / 4 ? 1 : x > Math.PI / 4 ? 2 : x < -Math.PI / 4 ? 3 : 0);
+    let v = view(rel);
+    if (v !== last && view(rel + 0.14) === last) v = last;
+    else if (v !== last && view(rel - 0.14) === last) v = last;
+    last = v;
+    const row = v === 3 ? 2 : v;
+    const flip = v === 3;
     const t = mat.map;
     if (t) {
       const u = api.frame / o.cols;
