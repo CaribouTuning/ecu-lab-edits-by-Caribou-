@@ -15,6 +15,7 @@ import { jobById } from './jobs.js';
 import {
   blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, overhead, train,
 } from './shop.js';
+import { stowFromLift } from './ownedCars.js';
 import styles from './ShopScreen.module.css';
 
 export const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
@@ -78,12 +79,20 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
         )}
         {working ? (
           <section className={styles.card} aria-label="On the bay">
-            <div className={styles.cardTag}>ON THE BAY · {working.customer.car}</div>
-            <p className={styles.quote}>&ldquo;{working.says}&rdquo;</p>
-            <p className={styles.small}><b>{working.customer.name} wants:</b> {working.wants}</p>
+            <div className={styles.cardTag}>ON THE BAY · {working.own ? 'YOUR CAR · ' : ''}{working.customer.car}</div>
+            {working.own ? (
+              <p className={styles.small}>Your own car. New hardware leaves the old calibration behind: after every part, retune.</p>
+            ) : (
+              <>
+                <p className={styles.quote}>&ldquo;{working.says}&rdquo;</p>
+                <p className={styles.small}><b>{working.customer.name} wants:</b> {working.wants}</p>
+              </>
+            )}
             <div className={styles.row}>
               <Button onClick={onWork}><Wrench size={15} aria-hidden="true" /> WORK ON THE CAR</Button>
-              <Button variant="quiet" size="sm" onClick={() => update(giveUp(career, working.id))}>SEND IT BACK UNFINISHED</Button>
+              {working.own
+                ? <Button variant="quiet" size="sm" onClick={() => update(stowFromLift(career, working.ownId))}>PUT IT AWAY</Button>
+                : <Button variant="quiet" size="sm" onClick={() => update(giveUp(career, working.id))}>SEND IT BACK UNFINISHED</Button>}
             </div>
           </section>
         ) : (
@@ -98,7 +107,7 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
           return (
             <section key={l.jobId} className={styles.card} aria-label={`${job.customer.name}'s car`}>
               <div className={styles.cardTag}>ON A LIFT · {job.customer.car}</div>
-              <p className={styles.small}>{job.customer.name}: {job.wants}</p>
+              <p className={styles.small}>{job.own ? 'Your own car.' : `${job.customer.name}: ${job.wants}`}</p>
               <Button size="sm" variant="ghost" onClick={() => update({ ...career, working: l.jobId })}>PUT IT ON THE BAY</Button>
             </section>
           );

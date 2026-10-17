@@ -49,6 +49,7 @@ import { AppShell } from './AppShell.jsx';
 import { CareerBar } from './career/CareerBar.jsx';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
+import { stowFromLift } from './career/ownedCars.js';
 import { advancePhase, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { ShopScreen } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
@@ -566,6 +567,12 @@ export function EcuLabApp() {
   const handBack = () => {
     const job = career?.working ? jobById(career.working) : null;
     if (!job || running) return;
+    // Your own car has no customer and no checks: handing it back puts it away.
+    if (job.own) {
+      dispatch({ type: ACTIONS.CAREER_UPDATE, career: stowFromLift(storeCar(career, job.id, { build, tune }), job.ownId) });
+      navigate({ view: 'shop', tab: null, section: null });
+      return;
+    }
     const v = evaluateJob(job, { build, tune, session });
     const boosted = build.turboOn || !!build.blowerId || !!build.nitrous;
     const delivered = deliver(storeCar(career, job.id, { build, tune }), job.id, v, { boosted });

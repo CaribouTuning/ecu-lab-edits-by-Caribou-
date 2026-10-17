@@ -18,6 +18,7 @@ import {
   makeBarrel, makeBench, makeCone, makeCrate, makeFence, makePlant, makeRoundTree, makeStreetLamp, makeTree, makeTyreStack,
 } from '../models/props.js';
 
+import { dealerStock } from '../../career/ownedCars.js';
 import { hash, pickBy } from './common.js';
 import { loopPath, makeTraffic, makeWalkers } from './crowd.js';
 
@@ -328,7 +329,7 @@ export function buildTown(api, entry = {}) {
 
   // The dealer's lot: cars on show. They are drawn by the dealership panel's list, so the
   // lot shows what is for sale today.
-  const forSale = (career.stock ?? []).slice(0, 4);
+  const forSale = dealerStock(career).slice(0, 4);
   forSale.forEach((s, i) => {
     const c = makeCar({ body: s.body, color: s.color, wheels: s.wheels ?? 'alloy5', engine: s.engine ?? { layout: 'V6' }, plate: s.plate });
     c.group.position.set(-56 + i * 8.6, 0.0, 12);

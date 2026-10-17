@@ -7,7 +7,7 @@
  * functions: the world only asks for them.
  */
 
-import { BookOpen, Check, ClipboardList, Hammer, MapPin, Shirt, Users, Wallet, X } from 'lucide-react';
+import { BookOpen, Car, Check, ClipboardList, Cog, Hammer, MapPin, Shirt, Users, Wallet, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { repTier } from '../career/catalog.js';
@@ -15,10 +15,12 @@ import { findSpanner, SPANNER_COUNT } from '../career/collectibles.js';
 import { inspectCar } from '../career/inspect.js';
 import { jobById } from '../career/jobs.js';
 import { accept, nextDay, overhead } from '../career/shop.js';
+import { FUELS, cannotFill, carState, ownJobId, refuel } from '../career/ownedCars.js';
 import { LessonDialog, ShopPanel } from '../career/ShopPanels.jsx';
 import { Button } from '../primitives/Button.jsx';
 
 import { driveSoundFrame, silenceDriveSound } from './driveSound.js';
+import { CarsPanel } from './CarsPanel.jsx';
 import { Dash, Labels, Objective, PromptButton, Toasts, TopBar, TouchControls } from './Hud.jsx';
 import { bodyFor, carFor, specForJob } from './levels/common.js';
 import { buildGarage } from './levels/garage.js';
@@ -29,6 +31,7 @@ import { createWorld } from './runtime.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { tipFor } from './tips.js';
 import { driveSetup } from './vehicle.js';
+import { PartsPanel } from './PartsPanel.jsx';
 import { WardrobePanel } from './WardrobePanel.jsx';
 import styles from './World.module.css';
 
@@ -39,6 +42,8 @@ const TABS = [
   { id: 'customers', label: 'CUSTOMERS', icon: Users, at: 'garage' },
   { id: 'upgrades', label: 'UPGRADES', icon: Hammer, at: 'supply' },
   { id: 'training', label: 'TRAINING', icon: BookOpen, at: 'academy' },
+  { id: 'cars', label: 'CARS', icon: Car, at: null },
+  { id: 'parts', label: 'PARTS', icon: Cog, at: null },
   { id: 'wardrobe', label: 'WARDROBE', icon: Shirt, at: null },
   { id: 'books', label: 'BOOKS', icon: Wallet, at: null },
 ];
@@ -81,6 +86,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [driving, setDriving] = useState(false);
   const [place, setPlace] = useState('garage');
   const [outJob, setOutJob] = useState(/** @type {string|null} */ (null));
+  const [focusCar, setFocusCar] = useState(/** @type {string|null} */ (null));
   const [lesson, setLesson] = useState(/** @type {string|null} */ (null));
   const [confirmReset, setConfirmReset] = useState(false);
   const [touch, setTouch] = useState(false);
@@ -90,6 +96,9 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const drawerRef = useRef(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+
+  // Test hook: a browser test can read and change the save.
+  useEffect(() => { if (window.__ECU_E2E__) { window.__ecuUpdate = update; window.__ecuCareer = career; } });
 
   const toast = useCallback((text, tone) => {
     const id = (toastId.current += 1);
@@ -135,19 +144,25 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     else travel('town', { from: id });
   }, [toast, travel]);
 
-  const startDrive = useCallback((bay) => {
+  /** Take a car out for a drive: a customer's from its lift, or one of your own from the apron. @param {{bay?: number, ownId?: string}} what */
+  const startDrive = useCallback((what) => {
     const w = worldRef.current;
     const c = careerRef.current;
-    const lift = c.lifts[bay];
-    if (!w || !lift) return;
-    toast('Warming it up…');
+    const lift = what.ownId ? null : c.lifts[what.bay ?? 0];
+    const ownId = what.ownId;
+    if (!w || (!lift && !ownId)) return;
+    toast('Warming it up\u2026');
     setTimeout(() => {
-      const job = jobById(lift.jobId);
-      const setup = driveSetup(lift.car, { body: bodyFor(job) });
-      const rig = carFor({ ...specForJob(job, lift.car.build), lowered: 0.3 });
-      w.away.add(lift.jobId);
-      setOutJob(lift.jobId);
-      w.setCar({ rig, pt: setup.pt, setup, boostAt: setup.boostAt, hpAt: setup.hpAt, x: -37, z: -2.4, heading: Math.PI / 2, id: lift.jobId, name: job.customer.car });
+      const jobId = ownId ? ownJobId(ownId) : lift.jobId;
+      const job = jobById(jobId);
+      const state = ownId ? carState(c, ownId) : lift.car;
+      if (!job || !state) return;
+      const own = ownId ? c.cars.find((x) => x.id === ownId) : null;
+      const setup = driveSetup(state, { body: bodyFor(job), drag: own ? { ...own.drag, lowered: own.look.lowered } : { lowered: 0.3 } });
+      const rig = carFor({ ...specForJob(job, state.build), ...(own ? {} : { lowered: 0.3 }) });
+      w.away.add(jobId);
+      setOutJob(jobId);
+      w.setCar({ rig, pt: setup.pt, setup, boostAt: setup.boostAt, hpAt: setup.hpAt, x: -37, z: -2.4, heading: Math.PI / 2, id: jobId, name: job.customer.car });
       travel('town', { from: 'garage', car: { x: -37, z: -2.4, heading: Math.PI / 2 }, enterCar: true });
     }, 60);
   }, [toast, travel]);
@@ -178,7 +193,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         else setSheet(null);
         break;
       }
-      case 'drive': startDrive(e.bay); break;
+      case 'drive': startDrive({ bay: e.bay }); break;
+      case 'ownCar': setFocusCar(e.car); goPhone('cars'); break;
       case 'parkCar': {
         if (!w?.drive) break;
         const id = w.drive.id;
@@ -208,14 +224,14 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         else if (e.place === 'academy') goPhone('training');
         else if (e.place === 'boutique') goPhone('wardrobe');
         else if (e.place === 'diner') setSheet({ type: 'tip', tip: tipFor(c.day * 13 + c.history.length * 3 + c.rep), diner: true });
-        else if (e.place === 'dealer') setSheet({ type: 'soon', title: 'Caribou Motors', text: 'Rita is still unpacking the first cars. The showroom opens in the next update.' });
+        else if (e.place === 'dealer') { setFocusCar(null); goPhone('cars'); }
         break;
       case 'found': {
         const r = findSpanner(c, e.n);
         if (r) { update(r.career); toast(r.text, 'ok'); }
         break;
       }
-      case 'pump': setSheet({ type: 'pump' }); break;
+      case 'pump': setSheet({ type: 'pump', carId: w?.drive?.id?.startsWith('own:') ? w.drive.id.slice(4) : null }); break;
       case 'meet': setSheet({ type: 'soon', title: 'Car meet', text: 'The crowd is gathering. The meet opens in the next update.' }); break;
       case 'bench': toast(BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length]); break;
       default: break;
@@ -375,6 +391,10 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
               <p>{placeById(tabInfo.at).blurb} {placeById(tabInfo.at).learn}</p>
               <Button size="sm" onClick={() => fastTravel(tabInfo.at)}>TRAVEL THERE</Button>
             </div>
+          ) : drawer === 'cars' ? (
+            <CarsPanel career={career} update={update} place={place} focus={focusCar} onDrive={(id) => { setDrawer(null); startDrive({ ownId: id }); }} onGo={fastTravel} onTab={setDrawer} />
+          ) : drawer === 'parts' ? (
+            <PartsPanel career={career} update={update} canBuy={place === 'supply'} onGo={() => fastTravel('supply')} />
           ) : drawer === 'wardrobe' ? (
             <WardrobePanel career={career} update={update} canBuy={place === 'boutique'} onGo={() => fastTravel('boutique')} />
           ) : drawer ? (
@@ -391,7 +411,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       {sheet && (
         <Sheet
           sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => setSheet(null)}
-          onTravel={fastTravel} place={place}
+          onTravel={fastTravel} place={place} update={update}
           onNextDay={() => { update(nextDay(career)); setSheet(null); toast('A new day. Customers are on the board.', 'ok'); }}
         />
       )}
@@ -410,7 +430,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
  * Cards that fill the middle of the screen: the car's spec sheet, closing up, the
  * trophies, the map and the settings.
  */
-function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place }) {
+function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update }) {
   if (sheet.type === 'inspect') {
     const job = jobById(sheet.jobId);
     return (
@@ -456,12 +476,35 @@ function Sheet({ sheet, career, settings, setSettings, onClose, onNextDay, onTra
     );
   }
   if (sheet.type === 'pump') {
+    if (!sheet.carId) {
+      return (
+        <div className={styles.sheet} role="dialog" aria-label="Fuel">
+          <div className={styles.sheetTag}>FUEL STOP</div>
+          <h2 className={styles.sheetTitle}>Not your tank to fill</h2>
+          <p className={styles.lede}>This is a customer&rsquo;s car, and the fuel in it is part of the job: octane is knock resistance, and a car running on the wrong grade is a car running on a tune it was not made for. Your own cars can be filled with any grade here.</p>
+          <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>OK</Button></div>
+        </div>
+      );
+    }
+    const st = carState(career, sheet.carId);
+    const car = career.cars.find((x) => x.id === sheet.carId);
     return (
       <div className={styles.sheet} role="dialog" aria-label="Fuel">
-        <div className={styles.sheetTag}>FUEL STOP</div>
-        <h2 className={styles.sheetTitle}>Not your tank to fill</h2>
-        <p className={styles.lede}>This is a customer&rsquo;s car, and the fuel in it is part of the job: octane is knock resistance, and a car running on the wrong grade is a car running on a tune it was not made for. Your own cars can be filled with any grade here once you have one.</p>
-        <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>OK</Button></div>
+        <div className={styles.sheetTag}>FUEL STOP · {car?.name}</div>
+        <p className={styles.lede}>Pick what goes in the tank. The calibration does not change when the fuel does: a different grade moves the knock limit and the mixture the car wants, so retune after switching.</p>
+        <ul className={styles.places}>
+          {FUELS.map((f) => {
+            const why = cannotFill(career, f.idx);
+            const here = st?.build.octaneIdx === f.idx;
+            return (
+              <li key={f.idx} data-closed={why ? 'true' : 'false'} data-here={here ? 'true' : 'false'}>
+                <div><b>{f.label} · ${f.price}</b><span>{why ?? f.note}</span></div>
+                <Button size="sm" variant={here ? 'ghost' : 'primary'} disabled={!!why || here} onClick={() => update(refuel(career, sheet.carId, f.idx))}>{here ? 'IN THE TANK' : 'FILL'}</Button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>DONE</Button></div>
       </div>
     );
   }

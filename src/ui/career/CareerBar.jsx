@@ -44,27 +44,35 @@ export function CareerBar({ career, onShop, onHandBack }) {
       <div className={styles.row}>
         <button type="button" className={styles.head} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           <span className={styles.tag}>JOB</span>
-          <span className={styles.title}>{job.customer.name} · {job.customer.car}</span>
+          <span className={styles.title}>{job.own ? 'Your car' : job.customer.name} · {job.customer.car}</span>
           <ChevronDown size={15} aria-hidden="true" className={styles.chevron} />
         </button>
         <Button size="sm" variant="ghost" onClick={onShop}><Store size={14} aria-hidden="true" /> SHOP</Button>
       </div>
       {open && (
         <div className={styles.body}>
-          <p className={styles.says}>&ldquo;{job.says}&rdquo;</p>
-          <p className={styles.wants}><b>They want:</b> {job.wants}</p>
-          <div className={styles.sub}>WORK ORDER</div>
-          <ul className={styles.list}>{job.work.map((w) => <li key={w}>{w}</li>)}</ul>
-          <div className={styles.sub}>WHEN IT GOES HOME, IT HAS TO</div>
-          <ul className={styles.list}>
-            {job.checks.map((c) => (
-              <li key={c.label}>{c.label}{HOW_TO_SEE[c.type] && <span className={styles.how}>{HOW_TO_SEE[c.type]}</span>}</li>
-            ))}
-          </ul>
+          {job.own ? <p className={styles.wants}>Your own car. Nobody is paying for it and nobody is waiting: the work is yours to decide. New hardware leaves the old calibration behind, so retune after every part.</p> : (
+            <>
+              <p className={styles.says}>&ldquo;{job.says}&rdquo;</p>
+              <p className={styles.wants}><b>They want:</b> {job.wants}</p>
+            </>
+          )}
+          {!job.own && (
+            <>
+              <div className={styles.sub}>WORK ORDER</div>
+              <ul className={styles.list}>{job.work.map((w) => <li key={w}>{w}</li>)}</ul>
+              <div className={styles.sub}>WHEN IT GOES HOME, IT HAS TO</div>
+              <ul className={styles.list}>
+                {job.checks.map((c) => (
+                  <li key={c.label}>{c.label}{HOW_TO_SEE[c.type] && <span className={styles.how}>{HOW_TO_SEE[c.type]}</span>}</li>
+                ))}
+              </ul>
+            </>
+          )}
           {job.build && <p className={styles.note}>An engine-building job: BUILD is open, and every part you choose is on the customer. Build to their list, then log and tune what you built.</p>}
           {roadOnly && <p className={styles.note}>No dyno yet: pulls are road tests. They log everything a wideband and the ECU see, but not horsepower.</p>}
           <div className={styles.actions}>
-            <Button size="sm" onClick={onHandBack}>HAND BACK THE CAR</Button>
+            <Button size="sm" onClick={onHandBack}>{job.own ? 'PUT THE CAR AWAY' : 'HAND BACK THE CAR'}</Button>
           </div>
         </div>
       )}

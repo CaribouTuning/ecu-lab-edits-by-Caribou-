@@ -29,6 +29,7 @@ const BODY_BY_NAME = [
 
 /** The body a customer's car is drawn with: by what it is called, then the job's own say. @param {{customer: {car: string, body?: string}}} job */
 export function bodyFor(job) {
+  if (job.own) return job.customer.body ?? 'coupe';
   for (const [re, body] of BODY_BY_NAME) if (re.test(job.customer.car)) return body;
   return job.customer.body ?? 'coupe';
 }
@@ -43,6 +44,7 @@ export function bodyFor(job) {
 export function specForJob(job, build) {
   const h = hash(job.id);
   const bay = engineBayOf(build);
+  if (job.own) return { body: bodyFor(job), ...job.look, plate: job.plate, exhaust: build?.mods?.exhaust ? 'big' : 'single', engine: bay };
   return {
     body: bodyFor(job),
     color: job.customer.color,

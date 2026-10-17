@@ -11,6 +11,7 @@ import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } fr
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
+import { registerCars } from './ownRegistry.js';
 
 export const SAVE_VERSION = 1;
 export const START_MONEY = 1000;
@@ -57,6 +58,8 @@ export const START_MONEY = 1000;
  * @property {import('../world/appearance.js').Look} [look] what the tuner wears
  * @property {string[]} [wardrobe] the clothes the tuner owns
  * @property {number[]} [found] golden spanners found in town
+ * @property {import('./ownedCars.js').OwnedCar[]} [cars] the tuner's own cars
+ * @property {string[]} [looks] paints, wheels and trim bought, by `kind:id`
  */
 
 /**
@@ -81,7 +84,7 @@ export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE],
+    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [],
   });
 }
 
@@ -126,10 +129,16 @@ export function reviveCareer(raw) {
     seed: fresh.seed,
     owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
-    lifts: Array.isArray(c.lifts) ? c.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune) : [],
+    lifts: Array.isArray(c.lifts) ? c.lifts : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
+    cars: Array.isArray(c.cars) ? c.cars : [],
+    looks: Array.isArray(c.looks) ? c.looks : [],
+    found: Array.isArray(c.found) ? c.found : [],
   };
+  registerCars(revived);
+  // The cars have to be known before the lifts can be checked: an owned car's job is theirs.
+  revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 

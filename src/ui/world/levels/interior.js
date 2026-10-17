@@ -14,6 +14,7 @@ import {
   makeTyreStack,
 } from '../models/props.js';
 import { PHASE_TIME } from './garage.js';
+import { dealerStock } from '../../career/ownedCars.js';
 import { hash } from './common.js';
 
 /** @typedef {{id: string, name: string, w: number, d: number}} InteriorDef */
@@ -159,7 +160,7 @@ const BUILDERS = {
       for (const id of o.items) { const it = itemById(id); look[it.slot] = id; }
       const m = makePerson(look, { mood: 'neutral' });
       const x = -w / 2 + 2 + i * ((w - 4) / (OUTFITS.length - 1));
-      at(m.group, x, 1.7 - d / 2 + 3.5, Math.PI + (i % 2 ? 0.2 : -0.2));
+      at(m.group, x, 1.7 - d / 2 + 3.5, i % 2 ? 0.25 : -0.25);
       m.group.position.z = -d / 2 + 5.4;
       root.add(m.group);
       root.add(cyl(0.5, 0.5, 0.15, W.wallBlack, { x, y: 0.075, z: -d / 2 + 5.4, seg: 12 }));
@@ -218,7 +219,7 @@ const BUILDERS = {
     const rita = makePerson({ ...npcLook(hash('rita'), { formal: true }), top: 'blazer', bottom: 'slacks', hat: null, hair: 'bun', hairColor: 'chestnut', skin: 3 }, { mood: 'smile' });
     at(rita.group, w / 2 - 3, -d / 2 + 1.2, 0);
     root.add(rita.group);
-    const stock = api.career().stock ?? [];
+    const stock = dealerStock(api.career());
     const spots = [[-5.2, -0.5], [0, -0.5], [5.2, -0.5], [-2.6, 3.0], [2.6, 3.0]];
     const turntables = [];
     stock.slice(0, 5).forEach((car, i) => {
@@ -229,7 +230,7 @@ const BUILDERS = {
       root.add(c.group);
       turntables.push(c);
       colliders.push({ x, z, r: 2.3 });
-      interactables.push({ id: `car${i}`, x, z: z + 3.2, r: 2.2, onFoot: true, label: car.name, hint: car.pitch, run: () => api.emit({ type: 'act', id: 'shop', place: 'dealer', focus: i }) });
+      interactables.push({ id: `car${i}`, x, z: z + 3.2, r: 2.2, onFoot: true, label: `${car.name} · $${car.price.toLocaleString('en-US')}`, hint: car.pitch, run: () => api.emit({ type: 'act', id: 'shop', place: 'dealer', focus: i }) });
     });
     interactables.push({ id: 'counter', x: w / 2 - 3, z: -d / 2 + 3.4, r: 2.6, onFoot: true, label: 'Talk to Rita', hint: 'All the cars for sale, and what yours is worth.', run: () => api.emit({ type: 'act', id: 'shop', place: 'dealer' }) });
     return { update: (dt, t) => { rita.update(dt, 0); turntables.forEach((c, i) => { c.group.rotation.y = t * 0.35 + i; }); }, spawn: { x: 0, z: d / 2 - 1 } };
@@ -257,9 +258,9 @@ export function interiorLevel(id) {
     return {
       root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
       camera: { pitch: 0.8, dist: 17, yaw: 0, fov: 30 },
-      focus: (x, z) => ({ x: x * 0.4, z: z * 0.2 }),
+      focus: (x, z) => ({ x: x * 0.4, z: z * 0.5 }),
       bounds: [{ minX: -w / 2 + 0.6, maxX: w / 2 - 0.6, minZ: -d / 2 + 0.8, maxZ: d / 2 - 0.4 }, { minX: -1.4, maxX: 1.4, minZ: d / 2 - 1, maxZ: d / 2 + 3.2 }],
-      spawn: () => ({ x: inner.spawn.x, z: d / 2 + 0.3, yaw: Math.PI }),
+      spawn: () => ({ x: inner.spawn.x, z: d / 2 - 1.4, yaw: Math.PI }),
       surfaceAt: () => ({ grip: 1, roll: 1, kind: 'road' }),
       noCars: true,
       sync() {},

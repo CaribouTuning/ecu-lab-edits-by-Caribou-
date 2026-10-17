@@ -23,6 +23,7 @@ import {
 
 import { hash, pathFollower, specForJob } from './common.js';
 import { jobById } from '../../career/jobs.js';
+import { ownJobId } from '../../career/ownRegistry.js';
 import { capacity } from '../../career/shop.js';
 import { carFor } from './common.js';
 
@@ -34,6 +35,9 @@ export const DYNO_AT = { x: 8.3, z: -2.4 };
 /** Door in the front wall. */
 export const DOOR = { x: 0, half: 3 };
 const LIFT_UP = 1.05;
+
+/** Where the tuner's own cars park, on the apron outside the door. */
+export const APRON = [{ x: -16, z: 11.2 }, { x: -12, z: 11.2 }, { x: -8, z: 11.2 }, { x: 8, z: 11.2 }, { x: 12, z: 11.2 }];
 
 /** What the day's light looks like for a phase of the day. */
 export const PHASE_TIME = [0, 0.7, 1.5, 2.6];
@@ -397,8 +401,17 @@ export function buildGarage(api, entry = {}) {
     });
     // Cars that are gone leave.
     for (const e of cars.values()) {
-      if (!e.leaving && !lifts2.some((l) => l.jobId === e.id)) leave(e, c);
+      if (e.leaving || lifts2.some((l) => l.jobId === e.id)) continue;
+      if (e.job.own) {
+        // Your own car lowered off its lift just parks outside.
+        root.remove(e.rig.group);
+        colliders.splice(0, colliders.length, ...colliders.filter((k) => !e.colliders?.includes(k)));
+        const lf = lifts[e.bay];
+        lf?.userData.setHeight(0);
+        cars.delete(e.id);
+      } else leave(e, c);
     }
+    syncApron(c);
     // The working car rides up.
     for (const e of cars.values()) {
       e.liftTarget = !e.leaving && c.working === e.id ? LIFT_UP : 0;
@@ -460,6 +473,46 @@ export function buildGarage(api, entry = {}) {
     void c;
   }
 
+  // ---- the tuner's own cars, parked on the apron ----
+  const apronCars = new Map();
+  const syncApron = (c) => {
+    const want = (c.cars ?? []).filter((car) => !c.lifts.some((l) => l.jobId === ownJobId(car.id)) && !api.away?.has(ownJobId(car.id)));
+    for (const [id, e] of apronCars) {
+      if (!want.some((car) => car.id === id)) { root.remove(e.rig.group); colliders.splice(0, colliders.length, ...colliders.filter((k) => k !== e.col)); apronCars.delete(id); }
+    }
+    want.forEach((car, i) => {
+      const spot = APRON[Math.min(i, APRON.length - 1)];
+      let e = apronCars.get(car.id);
+      const st = car.car ?? c.lifts.find((l) => l.jobId === ownJobId(car.id))?.car;
+      const sig = JSON.stringify([car.look, st?.build?.turboOn, st?.build?.mods]);
+      if (e && e.sig !== sig) { root.remove(e.rig.group); colliders.splice(0, colliders.length, ...colliders.filter((k) => k !== e.col)); apronCars.delete(car.id); e = undefined; }
+      if (!e) {
+        const job = jobById(ownJobId(car.id));
+        const rig = carFor(specForJob(job, st.build));
+        rig.group.position.set(spot.x, 0, spot.z);
+        rig.group.rotation.y = Math.PI + (i % 2 ? 0.15 : -0.15);
+        root.add(rig.group);
+        const col = { x: spot.x, z: spot.z, hw: 1.1, hd: 2.3 };
+        colliders.push(col);
+        e = { rig, col, sig, spot };
+        apronCars.set(car.id, e);
+      }
+      e.spot = spot;
+      e.id = car.id;
+      e.name = car.name;
+    });
+  };
+  const apronOpen = (id) => api.emit({ type: 'act', id: 'ownCar', car: id });
+  interactables.push({
+    id: 'ownCars', x: 0, z: 0, r: 2.8, onFoot: true,
+    enabled: () => [...apronCars.values()].some((e) => Math.hypot(e.spot.x - api.player.x, e.spot.z - api.player.z) < 3.4),
+    label: () => { const e = [...apronCars.values()].find((x) => Math.hypot(x.spot.x - api.player.x, x.spot.z - api.player.z) < 3.4); return e ? `Your ${e.name}` : ''; },
+    hint: 'Drive it, tune it, dress it up.',
+    run: () => { const e = [...apronCars.values()].find((x) => Math.hypot(x.spot.x - api.player.x, x.spot.z - api.player.z) < 3.4); if (e) apronOpen(e.id); },
+  });
+  // The prompt follows the player: this one is "near a parked car" rather than a place.
+  const ownPrompt = interactables[interactables.length - 1];
+
   // ---- animation ----
   function update(dt, t) {
     const night = api.stage.night;
@@ -515,10 +568,12 @@ export function buildGarage(api, entry = {}) {
     dog.userData.update(dt, ds > 0 ? 1.7 : 0);
     dogInteract.x = dogState.x;
     dogInteract.z = dogState.z;
+    ownPrompt.x = api.player.x;
+    ownPrompt.z = api.player.z;
     for (const a of animators) a(dt);
     // Walking out of the door into town.
-    if (api.player.z > ROOM.maxZ + 3.2 && !api.drive?.inside && !level.leaving) { level.leaving = true; api.emit({ type: 'act', id: 'door' }); }
-    if (api.player.z < ROOM.maxZ + 2.5) level.leaving = false;
+    if (api.player.z > 14.0 && !api.drive?.inside && !level.leaving) { level.leaving = true; api.emit({ type: 'act', id: 'door' }); }
+    if (api.player.z < 13.0) level.leaving = false;
   }
 
   const level = {
@@ -527,7 +582,8 @@ export function buildGarage(api, entry = {}) {
     focus: (x, z) => ({ x: Math.max(-5, Math.min(5, x * 0.7)), z: Math.max(-1, Math.min(2, z * 0.3)) }),
     bounds: [
       { minX: ROOM.minX + 0.5, maxX: ROOM.maxX - 0.5, minZ: ROOM.minZ + 0.7, maxZ: ROOM.maxZ - 0.5 },
-      { minX: DOOR.x - DOOR.half + 0.6, maxX: DOOR.x + DOOR.half - 0.6, minZ: ROOM.maxZ - 1, maxZ: ROOM.maxZ + 5 },
+      { minX: DOOR.x - DOOR.half + 0.6, maxX: DOOR.x + DOOR.half - 0.6, minZ: ROOM.maxZ - 1, maxZ: ROOM.maxZ + 1.2 },
+      { minX: -19, maxX: 19, minZ: ROOM.maxZ + 0.7, maxZ: 14.6 },
     ],
     spawn: (e) => (e.from === 'town' ? { x: 0, z: ROOM.maxZ - 1.6, yaw: Math.PI } : { x: -2, z: 5.0, yaw: Math.PI }),
     update,

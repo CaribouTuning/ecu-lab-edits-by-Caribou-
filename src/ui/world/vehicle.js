@@ -9,7 +9,7 @@
  */
 
 import {
-  CAR_BODIES, COMPRESSOR_OPTS, DEFAULT_CAR, EXHAUST_DIA_OPTS, acousticDrive, exhaustGeometry, simulateSweep, torqueCurveFromSweep,
+  CAR_BODIES, COMPRESSOR_OPTS, DEFAULT_CAR, EXHAUST_DIA_OPTS, acousticDrive, exhaustGeometry, simulateDragRun, simulateSweep, torqueCurveFromSweep,
 } from '../../sim/index.js';
 import { makeInitialState } from '../state/initialState.js';
 import { pullInputs } from '../state/pullInputs.js';
@@ -34,17 +34,19 @@ const FROM_STRIP = { coupe: 0, supercar: 1, sedan: 2, van: 3, pickup: 4 };
 /**
  * The strip's description of a car, for a body the world draws.
  * @param {string} body a models/car.js body key
- * @param {Partial<import('../../sim/index.js').DragCar>} [over] changes to gearing, tyres and so on
+ * @param {Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number}} [over] changes to gearing, tyres, weight and ride height
  * @returns {import('../../sim/index.js').DragCar}
  */
 export function dragCarFor(body, over = {}) {
   const i = FROM_STRIP[body];
   const b = i != null ? CAR_BODIES[i] : EXTRA_BODIES[body] ?? CAR_BODIES[0];
+  const { massDelta = 0, lowered = 0, ...rest } = over;
   return {
     ...DEFAULT_CAR,
     bodyIdx: i ?? 0,
-    massKg: b.massKg, cd: b.cd, frontalAreaM2: b.frontalAreaM2, cgHeightM: b.cgHeightM, wheelbaseM: b.wheelbaseM, rearFrac: b.rearFrac,
-    ...over,
+    // Lowering a car brings its centre of gravity down: less weight transfer, a little more grip in turns.
+    massKg: b.massKg + massDelta, cd: b.cd, frontalAreaM2: b.frontalAreaM2, cgHeightM: b.cgHeightM - 0.05 * lowered, wheelbaseM: b.wheelbaseM, rearFrac: b.rearFrac,
+    ...rest,
   };
 }
 
@@ -60,6 +62,8 @@ export function dragCarFor(body, over = {}) {
  * @property {(rpm: number) => number} hpAt
  * @property {(rpm: number, load: number, cut: boolean) => object} soundFrame for engineAudio
  * @property {object} result the dyno pull
+ * @property {(rpm: number) => number} torqueNm crank torque from the pull
+ * @property {() => import('../../sim/index.js').DragResult} strip the quarter mile on the strip's own model, run once and kept
  */
 
 const cache = new Map();
@@ -73,7 +77,7 @@ function signature(build, tune, body, over) {
  * Measure a car and set it up to drive.
  *
  * @param {{build: any, tune: any}} car the car as it stands on the lift or in the garage
- * @param {{body: string, drag?: Partial<import('../../sim/index.js').DragCar>}} opts
+ * @param {{body: string, drag?: Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number}}} opts
  * @returns {DriveSetup}
  */
 export function driveSetup(car, { body, drag }) {
@@ -99,8 +103,13 @@ export function driveSetup(car, { body, drag }) {
   };
   const b = car.build;
   const cfg = b.engineConfig;
+  let stripResult = null;
   const setup = {
-    pt, car: dragCar, peakHp: result.peakHp, peakTq: result.peakTq, redline, result,
+    pt, car: dragCar, peakHp: result.peakHp, peakTq: result.peakTq, redline, result, torqueNm: torque,
+    strip: () => {
+      stripResult ??= simulateDragRun({ car: dragCar, torqueCurveNm: torque, redline, displacementL: d.displacementL, peakHp: result.peakHp });
+      return stripResult;
+    },
     pointAt,
     hpAt: (rpm) => pointAt(rpm).hp,
     boostAt: (rpm, thr) => (b.turboOn || b.blowerId ? pointAt(rpm).boostPsi * Math.max(0, Math.min(1, thr)) : 0),
