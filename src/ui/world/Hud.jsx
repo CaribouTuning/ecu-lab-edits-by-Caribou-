@@ -36,7 +36,7 @@ export function TopBar({ career, tierTitle, where, onPhone, onMap, onPhoto, onSe
         <span className={styles.chip} data-testid="shop-rep"><span className={styles.key}>REP</span><b>{career.rep}</b><i>{tierTitle}</i></span>
       </div>
       <div className={styles.buttons}>
-        <button type="button" className={styles.round} onClick={onPhone} aria-label="Phone: jobs, shop, wardrobe, books"><Smartphone size={18} aria-hidden="true" /></button>
+        <button type="button" className={styles.round} onClick={onPhone} aria-label="Open the phone"><Smartphone size={18} aria-hidden="true" /></button>
         <button type="button" className={styles.round} onClick={onMap} aria-label="Map"><MapIcon size={18} aria-hidden="true" /></button>
         <button type="button" className={styles.round} onClick={onPhoto} aria-label="Photo"><Camera size={18} aria-hidden="true" /></button>
         <button type="button" className={styles.round} onClick={onSettings} aria-label="Settings"><Settings size={18} aria-hidden="true" /></button>

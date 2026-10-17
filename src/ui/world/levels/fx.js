@@ -12,6 +12,7 @@ export function makeSmoke(root, size = 36) {
   for (let i = 0; i < size; i += 1) {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: W.white, transparent: true, opacity: 0, depthWrite: false }));
     m.visible = false;
+    m.userData.dynamic = true;
     root.add(m);
     puffs.push({ m, age: 1, life: 1, vx: 0, vz: 0 });
   }

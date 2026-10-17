@@ -11,6 +11,7 @@ const G = () => new THREE.Group();
 /** A two-post car lift. Posts either side of a car along z; the carriage rides up and down. */
 export function makeLift() {
   const g = G();
+  g.userData.dynamic = true;
   const gap = 2.15;
   for (const s of [-1, 1]) {
     g.add(box(0.5, 0.1, 0.9, W.metalDark, { x: s * gap, y: 0.05 }));
@@ -35,6 +36,7 @@ export function makeLift() {
 /** A chassis dyno: rollers in a pit, a big fan, and a monitor on a stand. */
 export function makeDyno(owned = true) {
   const g = G();
+  g.userData.dynamic = true;
   if (!owned) {
     g.add(box(2.6, 0.04, 4.0, W.floorStripe, { y: 0.02, edge: false, receive: true }));
     g.add(box(2.4, 0.045, 3.8, W.floorEpoxyAlt, { y: 0.022, edge: false }));
@@ -80,6 +82,7 @@ export function makeDyno(owned = true) {
 /** Desk with two monitors and a laptop. Faces +z (the chair is on the +z side). */
 export function makeDesk({ lit = true } = {}) {
   const g = G();
+  g.userData.dynamic = true;
   g.add(box(3.4, 0.08, 1.1, W.woodLight, { y: 0.78 }));
   for (const x of [-1.6, 1.6]) g.add(box(0.1, 0.78, 0.9, W.woodDark, { x, y: 0.39, edge: false }));
   g.add(box(3.2, 0.5, 0.05, W.woodDark, { y: 0.55, z: -0.5, edge: false }));
@@ -218,6 +221,7 @@ export function makeCoffeeMachine() {
 
 export function makeArcade() {
   const g = G();
+  g.userData.dynamic = true;
   g.add(box(0.9, 1.9, 0.8, W.paint.purple, { y: 0.95 }));
   g.add(box(0.8, 0.5, 0.05, W.screenOff, { y: 1.5, z: 0.4 }));
   const s = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.4), glow(W.neonCyan));
@@ -426,6 +430,7 @@ export function makeFence(length = 4) {
 /** A small dog. Faces +z. @param {string} color */
 export function makeDog(color = W.paint.copper) {
   const g = G();
+  g.userData.dynamic = true;
   const body = G();
   body.add(box(0.28, 0.26, 0.6, color, { y: 0.38, edge: false }));
   const head = G();
@@ -447,7 +452,7 @@ export function makeDog(color = W.paint.copper) {
     legs.push(leg);
   }
   g.add(body);
-  g.userData = { body, head, tail, legs, phase: 0 };
+  Object.assign(g.userData, { body, head, tail, legs, phase: 0 });
   /** @param {number} dt @param {number} speed */
   g.userData.update = (dt, speed) => {
     const u = g.userData;

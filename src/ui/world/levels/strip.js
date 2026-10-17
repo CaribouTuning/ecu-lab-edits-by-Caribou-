@@ -9,7 +9,7 @@
 
 import { world as W } from '../../tokens.js';
 import { npcLook } from '../appearance.js';
-import { THREE, box, groundPlane, sign } from '../gfx.js';
+import { THREE, box, groundPlane, mergeStatic, sign } from '../gfx.js';
 import { makeBuilding } from '../models/buildings.js';
 import { makePerson } from '../models/person.js';
 import { makeBench, makeFence, makeRoundTree, makeStreetLamp, makeTree } from '../models/props.js';
@@ -82,6 +82,7 @@ export function buildStrip(api) {
   // ---- the tree ----
   const tree = new THREE.Group();
   tree.position.set(13, 0, 0);
+  tree.userData.dynamic = true;
   tree.rotation.y = -Math.PI / 2;
   tree.add(box(0.6, 3.8, 3.0, W.black, { y: 1.9 }));
   const bulbs = { player: [], rival: [] };
@@ -271,6 +272,7 @@ export function buildStrip(api) {
     },
     dispose() {},
   };
+  mergeStatic(root);
   return level;
 }
 

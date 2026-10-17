@@ -13,7 +13,7 @@
 
 import { world as W } from '../../tokens.js';
 import { npcLook } from '../appearance.js';
-import { THREE, box, cyl, floorPlane, glow, groundPlane, sign } from '../gfx.js';
+import { THREE, box, cyl, floorPlane, glow, groundPlane, mergeStatic, sign } from '../gfx.js';
 import { makePerson } from '../models/person.js';
 import {
   makeArcade, makeBarrel, makeBuildSite, makeCalendar, makeCoffeeMachine, makeCone, makeCouch, makeCrate, makeDesk, makeDog,
@@ -39,7 +39,7 @@ export const DOOR = { x: 0, half: 3 };
 const LIFT_UP = 1.05;
 
 /** Where the tuner's own cars park, on the apron outside the door. */
-export const APRON = [{ x: -16, z: 11.2 }, { x: -12, z: 11.2 }, { x: -8, z: 11.2 }, { x: 8, z: 11.2 }, { x: 12, z: 11.2 }];
+export const APRON = [{ x: -7, z: 11.4 }, { x: 7, z: 11.4 }, { x: -11.5, z: 11.4 }, { x: 11.5, z: 11.4 }, { x: -16, z: 11.4 }];
 
 /** What the day's light looks like for a phase of the day. */
 export const PHASE_TIME = [0, 0.7, 1.5, 2.6];
@@ -71,7 +71,7 @@ export function buildGarage(api, entry = {}) {
   const wallCol = W[decor.wall] ?? W.wallShop;
   const FLOOR_STYLE = {
     epoxy: { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase },
-    checker: { base: W.white, alt: W.black, line: W.black },
+    checker: { base: W.cloth.silver, alt: W.cloth.charcoal, line: W.cloth.charcoal },
     wood: { base: W.woodLight, alt: W.wood, line: W.woodDark },
     red: { base: W.brick, alt: W.brickDark, line: W.black },
   }[decor.floor] ?? { base: W.floorEpoxy, alt: W.floorEpoxyAlt, line: W.wallBase };
@@ -642,5 +642,6 @@ export function buildGarage(api, entry = {}) {
   for (const e of cars.values()) { const l = e.lift; e.lift = e.liftTarget ?? 0; void l; }
   // A first-time visit starts with the tuner at the door; a car that came with us stays outside.
   void entry;
+  mergeStatic(root);
   return level;
 }

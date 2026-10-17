@@ -6,7 +6,7 @@
 
 import { world as W } from '../../tokens.js';
 import { OUTFITS, defaultLook, itemById, npcLook } from '../appearance.js';
-import { THREE, box, cyl, floorPlane, glow, groundPlane, pixelTexture, sign } from '../gfx.js';
+import { THREE, box, cyl, floorPlane, glow, groundPlane, mergeStatic, pixelTexture, sign } from '../gfx.js';
 import { makeCar } from '../models/car.js';
 import { makePerson } from '../models/person.js';
 import {
@@ -255,6 +255,7 @@ export function interiorLevel(id) {
     interactables.push({ id: 'leave', x: 0, z: d / 2 + 1.0, r: 2.6, onFoot: true, label: 'Leave', hint: 'Back to the street.', run: () => api.emit({ type: 'act', id: 'go', place: 'town', from: id }) });
     let leaving = false;
     void entry;
+    mergeStatic(root);
     return {
       root, colliders, interactables, time: PHASE_TIME[career.phase ?? 0],
       camera: { pitch: 0.8, dist: 17, yaw: 0, fov: 30 },

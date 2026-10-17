@@ -10,6 +10,7 @@
  */
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { world as W } from '../tokens.js';
 
@@ -338,6 +339,63 @@ export function shadowAll(root, cast = true, receive = true) {
     const m = /** @type {THREE.Mesh} */ (o);
     if (m.isMesh) { m.castShadow = cast; m.receiveShadow = receive; }
   });
+}
+
+/**
+ * Merge a group of scenery that never moves into a handful of meshes: one per material (and
+ * shadow setting), and one line set for every edge. A town of a thousand boxes becomes a few
+ * dozen draw calls, which is the difference between a phone keeping up and not.
+ *
+ * Only meshes and edge lines directly or indirectly under `root` are touched; give it a group
+ * that holds nothing that animates, is removed later, or is looked at through a hit test.
+ *
+ * @param {THREE.Object3D} root
+ * @returns {number} how many meshes were merged away
+ */
+export function mergeStatic(root) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  /** @type {Map<string, {material: THREE.Material, cast: boolean, receive: boolean, geoms: THREE.BufferGeometry[], lines: boolean}>} */
+  const groups = new Map();
+  /** @type {THREE.Object3D[]} */
+  const doomed = [];
+  /** @param {THREE.Object3D} o */
+  const visit = (o) => {
+    // Anything marked dynamic (a car, a person, a lift, a smoke puff) keeps its own meshes.
+    if (o !== root && o.userData?.dynamic) return;
+    for (const child of o.children) visit(child);
+    const m = /** @type {THREE.Mesh} */ (o);
+    const isLine = /** @type {any} */ (o).isLineSegments;
+    if (!(m.isMesh || isLine) || Array.isArray(m.material) || !m.geometry || /** @type {any} */ (m.geometry).isInstancedBufferGeometry) return;
+    if (!m.visible) return;
+    const key = `${m.material.uuid}|${m.castShadow ? 1 : 0}${m.receiveShadow ? 1 : 0}|${isLine ? 'L' : 'M'}`;
+    let g = groups.get(key);
+    if (!g) { g = { material: m.material, cast: m.castShadow, receive: m.receiveShadow, geoms: [], lines: !!isLine }; groups.set(key, g); }
+    const geo = m.geometry.clone();
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+    g.geoms.push(geo);
+    doomed.push(o);
+  };
+  visit(root);
+  for (const o of doomed) o.removeFromParent();
+  let merged = 0;
+  for (const g of groups.values()) {
+    // Every geometry in a merge must carry the same attributes, so keep only what they all share.
+    const common = [...Object.keys(g.geoms[0].attributes)].filter((k) => g.geoms.every((x) => x.attributes[k]));
+    for (const geo of g.geoms) for (const k of Object.keys(geo.attributes)) if (!common.includes(k)) geo.deleteAttribute(k);
+    const flat = g.geoms.map((x) => (x.index ? x.toNonIndexed() : x));
+    const geo = mergeGeometries(flat, false);
+    if (!geo) continue;
+    const mesh = g.lines ? new THREE.LineSegments(geo, g.material) : new THREE.Mesh(geo, g.material);
+    mesh.castShadow = g.cast;
+    mesh.receiveShadow = g.receive;
+    mesh.matrixAutoUpdate = false;
+    mesh.frustumCulled = false;
+    root.add(mesh);
+    merged += g.geoms.length - 1;
+    for (const x of g.geoms) x.dispose();
+  }
+  return merged;
 }
 
 export { THREE };

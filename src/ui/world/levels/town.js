@@ -9,7 +9,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cone, cyl, floorPlane, glow, groundPlane, sign } from '../gfx.js';
+import { THREE, box, cone, cyl, floorPlane, glow, groundPlane, mergeStatic, sign } from '../gfx.js';
 import { makeBuilding, makeGasStation, makePylon } from '../models/buildings.js';
 import { makeCar } from '../models/car.js';
 import { closedBecause, PLACES, placeById } from '../locations.js';
@@ -184,6 +184,7 @@ export function buildTown(api, entry = {}) {
   const PODIUM = { x: 52, z: 26 };
   const podium = new THREE.Group();
   podium.position.set(PODIUM.x, 0, PODIUM.z);
+  podium.userData.dynamic = true;
   podium.add(cyl(3.3, 3.5, 0.25, W.cloth.charcoal, { y: 0.125, seg: 20, edge: false }));
   const ring = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.07, 6, 28), glow(W.neonPink));
   ring.rotation.x = Math.PI / 2;
@@ -344,7 +345,7 @@ export function buildTown(api, entry = {}) {
     glowRing.position.y = 0.15;
     g.add(head, handle, glowRing);
     g.position.set(x, 0, z);
-    g.userData = { id: i, x, z, glowRing };
+    g.userData = { id: i, x, z, glowRing, dynamic: true };
     root.add(g);
     spanners.push(g);
   });
@@ -430,5 +431,6 @@ export function buildTown(api, entry = {}) {
   };
   void entry;
   void lamps;
+  mergeStatic(root);
   return level;
 }

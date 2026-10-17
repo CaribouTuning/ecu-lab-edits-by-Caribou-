@@ -6,7 +6,7 @@
 
 import { world as W } from '../../tokens.js';
 import { itemById } from '../appearance.js';
-import { THREE, box, cyl, edged, pixelTexture, toon } from '../gfx.js';
+import { THREE, box, cyl, edged, mergeStatic, pixelTexture, toon } from '../gfx.js';
 
 const LEG = 0.74;
 const TORSO = 0.6;
@@ -213,6 +213,7 @@ function dressShoes(parts, it) {
  */
 export function makePerson(look, opts = {}) {
   const group = new THREE.Group();
+  group.userData.dynamic = true;
   const body = new THREE.Group();
   group.add(body);
   const rig = {
@@ -270,6 +271,8 @@ export function makePerson(look, opts = {}) {
     }
     rig.parts = parts;
     body.traverse((o) => { const m = /** @type {THREE.Mesh} */ (o); if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+    // The limbs swing, but what is on each limb does not: one mesh per material per limb.
+    for (const limb of [hips, legL, legR, torso, armL, armR, head]) mergeStatic(limb);
   }
 
   build();

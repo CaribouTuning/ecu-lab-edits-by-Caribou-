@@ -425,15 +425,27 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
       rig.yaw = (level.camera?.yaw ?? 0) + camOffset.yaw;
       rig.snap();
     }
-    if (!paused && !cin) {
-      if (drive?.inside) driveFrame(dt);
-      else {
-        walk(dt);
-        const yawIn = input.camera() * dt * 1.8 + input.consumeDrag();
-        if (yawIn) { camOffset.yaw += yawIn; rig.yaw = (level.camera?.yaw ?? 0) + camOffset.yaw; }
-        const f = level.focus ? level.focus(player.x, player.z) : player;
+    if (!cin) {
+      if (!paused && drive?.inside) driveFrame(dt);
+      else if (!drive?.inside) {
+        if (!paused) {
+          walk(dt);
+          const yawIn = input.camera() * dt * 1.8 + input.consumeDrag();
+          if (yawIn) { camOffset.yaw += yawIn; rig.yaw = (level.camera?.yaw ?? 0) + camOffset.yaw; }
+        } else {
+          // Paused behind a panel: the tuner still breathes, and the wardrobe's camera still turns.
+          if (spin) player.yaw += dt * 0.7;
+          person.group.rotation.y = player.yaw;
+          person.update(dt, 0);
+        }
+        const f = level.focus && !saved ? level.focus(player.x, player.z) : player;
         rig.update(dt, new THREE.Vector3(f.x, 0, f.z));
+      } else {
+        const sv = drive.state;
+        rig.update(dt, new THREE.Vector3(sv.x, 0, sv.z), sv.heading, Math.abs(sv.vx));
       }
+    }
+    if (!paused) {
       const pr = findPrompt();
       const key = pr ? pr.id : '';
       if (key !== promptKey) {

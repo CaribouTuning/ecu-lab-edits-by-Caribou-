@@ -10,7 +10,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cyl, edged, glow, loftMesh, profileMesh, sign, toon } from '../gfx.js';
+import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, sign, toon } from '../gfx.js';
 
 /**
  * Body shapes. Dimensions in metres; z is along the car, front positive. `belt` is the
@@ -135,6 +135,7 @@ export function makeCar(spec = {}) {
   const rig = { group: new THREE.Group(), spec, dims: { len: L, wid: Wd, height: S.top + lift - drop, wheelbase, wheelR: wr } };
   const car = rig.group;
   car.userData.kind = 'car';
+  car.userData.dynamic = true;
 
   // ---- body ----
   const hoodZ0 = S.cab[1];
@@ -370,6 +371,13 @@ export function makeCar(spec = {}) {
   rig.hoodHinge = hoodHinge;
 
   car.traverse((o) => { const m = /** @type {THREE.Mesh} */ (o); if (m.isMesh) { m.castShadow = true; } });
+  // One mesh per material for everything that moves with the body, and one per wheel: a car
+  // is a hundred little boxes, and a town has a dozen cars.
+  for (const w of wheels) mergeStatic(w.spin);
+  for (const w of wheels) w.hub.userData.dynamic = true;
+  hoodHinge.userData.dynamic = true;
+  if (rig.underglow) rig.underglow.userData.dynamic = true;
+  mergeStatic(car);
   void sign;
   return rig;
 }
