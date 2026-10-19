@@ -15,6 +15,7 @@
 import { INJECTOR_OPTS, presetById } from '../../sim/index.js';
 
 import { customerCar } from './cars.js';
+import { ENGINES, engineById, engineForPreset, engineState } from './engines.js';
 import { rng, mix } from './generate.js';
 import { ownIdOf, ownJob, ownJobId, registerCars } from './ownRegistry.js';
 import { capacity } from './shop.js';
@@ -44,30 +45,40 @@ export { ownIdOf, ownJob, ownJobId, registerCars };
  * @property {Look} look
  * @property {string} plate
  * @property {{build: any, tune: any}} car hardware and calibration, when parked
- * @property {{gripIdx?: number, finalDrive?: number, massDelta?: number}} drag what the strip and the road see
+ * @property {{gripIdx?: number, finalDrive?: number, massDelta?: number, engineKg?: number}} drag what the strip and the road see
  * @property {number} paid
  * @property {number} bought the day
  * @property {number} km
  * @property {string[]} parts installed part ids
  * @property {boolean} [onLift] the hardware lives on its lift, in `lifts`
+ * @property {string|null} [engine] the swap-catalogue engine in it now (engines.js)
  */
 
-/** The cars the dealer sells: a factory engine in a body, with the reputation it takes to be offered it. */
+/**
+ * The cars the dealer sells: an engine in a body, with the reputation it takes to be offered
+ * it. The cheap end is cheap on purpose: a project car is how a tuner learns, and the
+ * first few should be within reach of a week of customers.
+ */
 export const MODELS = [
+  { preset: null, engine: 'i4-16', name: 'City car', body: 'kei', years: [1994, 2001], minRep: 0, price: 900, blurb: 'Tiny, light and slow: a 1.6 four in a car that weighs nothing. Every part you fit shows.' },
+  { preset: null, engine: 'i4-20', name: 'Hot hatch project', body: 'hatch', years: [1996, 2003], minRep: 0, price: 1900, blurb: 'The 2.0 sixteen-valve hatch, before anyone tuned it.' },
   { preset: null, name: 'Project V6 coupe', body: 'coupe', years: [1999, 2004], minRep: 0, price: 2400, blurb: 'A tired 3.5 V6. Cheap, honest and unloved.' },
-  { preset: 'lr4', name: 'Chevrolet Silverado 1500', body: 'pickup', years: [2003, 2006], minRep: 10, price: 4200, blurb: 'A 4.8 L pushrod V8 in a work truck.' },
-  { preset: 'vq35de-revup', name: 'Nissan 350Z', body: 'coupe', years: [2003, 2006], minRep: 20, price: 7800, blurb: 'The VQ35DE Rev-Up: a high-revving V6 in a rear-drive coupe.' },
-  { preset: 'ea888-gti', name: 'Volkswagen GTI', body: 'hatch', years: [2015, 2019], minRep: 30, price: 9800, blurb: 'Turbocharged four from the factory. Learn what boost already does.' },
-  { preset: 'lm7', name: 'Chevrolet Tahoe', body: 'suv', years: [2003, 2006], minRep: 30, price: 6500, blurb: 'A 5.3 L Vortec in a big SUV. Heavy, torquey, patient.' },
-  { preset: 'ls1', name: 'Chevrolet Corvette (C5)', body: 'coupe', years: [1997, 2004], minRep: 40, price: 11500, blurb: 'The LS1 small-block in a light, low coupe.' },
-  { preset: 'vq35hr', name: 'Nissan 350Z (HR)', body: 'coupe', years: [2007, 2009], minRep: 45, price: 10500, blurb: 'The revised VQ with the later head and cam.' },
-  { preset: 'ls6', name: 'Cadillac CTS-V', body: 'sedan', years: [2004, 2005], minRep: 55, price: 12500, blurb: 'LS6 power in a four-door.' },
-  { preset: 'n54', name: 'BMW 335i', body: 'sedan', years: [2007, 2010], minRep: 60, price: 13500, blurb: 'The twin-turbo straight six every tuner wants to understand.' },
-  { preset: 'b58-m0', name: 'BMW 340i', body: 'sedan', years: [2016, 2019], minRep: 80, price: 18500, blurb: 'The B58 in its first calibration.' },
-  { preset: 'ea888-r', name: 'Volkswagen Golf R', body: 'hatch', years: [2015, 2019], minRep: 85, price: 19500, blurb: 'A harder-worked EA888 with all-wheel drive underneath.' },
-  { preset: 'hemi-392', name: 'Dodge Challenger 392', body: 'muscle', years: [2015, 2022], minRep: 100, price: 28000, blurb: 'A 6.4 L Hemi. The loudest answer to any question.' },
-  { preset: 'b58-m1', name: 'BMW M340i', body: 'sedan', years: [2020, 2023], minRep: 120, price: 29500, blurb: 'The B58 in its second calibration, hotter and pickier.' },
+  { preset: null, engine: 'i6-30', name: 'Straight-six roadster', body: 'roadster', years: [1998, 2004], minRep: 3, price: 3400, blurb: 'Two seats, no roof and a smooth three-litre six.' },
+  { preset: 'lr4', name: 'Chevrolet Silverado 1500', body: 'pickup', years: [2003, 2006], minRep: 3, price: 4200, blurb: 'A 4.8 L pushrod V8 in a work truck.' },
+  { preset: 'vq35de-revup', name: 'Nissan 350Z', body: 'coupe', years: [2003, 2006], minRep: 8, price: 7800, blurb: 'The VQ35DE Rev-Up: a high-revving V6 in a rear-drive coupe.' },
+  { preset: 'ea888-gti', name: 'Volkswagen GTI', body: 'hatch', years: [2015, 2019], minRep: 10, price: 9800, blurb: 'Turbocharged four from the factory. Learn what boost already does.' },
+  { preset: 'lm7', name: 'Chevrolet Tahoe', body: 'suv', years: [2003, 2006], minRep: 10, price: 6500, blurb: 'A 5.3 L Vortec in a big SUV. Heavy, torquey, patient.' },
+  { preset: 'ls1', name: 'Chevrolet Corvette (C5)', body: 'coupe', years: [1997, 2004], minRep: 15, price: 11500, blurb: 'The LS1 small-block in a light, low coupe.' },
+  { preset: 'vq35hr', name: 'Nissan 350Z (HR)', body: 'coupe', years: [2007, 2009], minRep: 18, price: 10500, blurb: 'The revised VQ with the later head and cam.' },
+  { preset: 'ls6', name: 'Cadillac CTS-V', body: 'sedan', years: [2004, 2005], minRep: 22, price: 12500, blurb: 'LS6 power in a four-door.' },
+  { preset: 'n54', name: 'BMW 335i', body: 'sedan', years: [2007, 2010], minRep: 25, price: 13500, blurb: 'The twin-turbo straight six every tuner wants to understand.' },
+  { preset: 'b58-m0', name: 'BMW 340i', body: 'sedan', years: [2016, 2019], minRep: 32, price: 18500, blurb: 'The B58 in its first calibration.' },
+  { preset: 'ea888-r', name: 'Volkswagen Golf R', body: 'hatch', years: [2015, 2019], minRep: 35, price: 19500, blurb: 'A harder-worked EA888 with all-wheel drive underneath.' },
+  { preset: 'hemi-392', name: 'Dodge Challenger 392', body: 'muscle', years: [2015, 2022], minRep: 45, price: 28000, blurb: 'A 6.4 L Hemi. The loudest answer to any question.' },
+  { preset: 'b58-m1', name: 'BMW M340i', body: 'sedan', years: [2020, 2023], minRep: 50, price: 29500, blurb: 'The B58 in its second calibration, hotter and pickier.' },
 ];
+
+export { STARTER, withStarter } from './starter.js';
 
 const COLORS = ['silver', 'red', 'blue', 'white', 'orange', 'green', 'black', 'purple', 'teal', 'copper', 'yellow', 'grey', 'pewter', 'pearl'];
 
@@ -90,14 +101,15 @@ export function dealerStock(c) {
       id: `s${c.day}-${i}`, model: m.name, preset: m.preset, body: m.body, year, name: `${year} ${m.name}`,
       color: r.pick(COLORS), price, worn, minRep: m.minRep, pitch: worn ? `${m.blurb} Tired: a bargain if you can tune it.` : m.blurb,
       wheels: r.pick(['steel', 'alloy5', 'mesh', 'deep']),
-      engine: { layout: engineLayout(m.preset) },
+      engine: { layout: m.engine ? engineById(m.engine)?.spec?.configuration ?? 'I4' : engineLayout(m.preset) },
+      engineId: m.engine ?? engineForPreset(m.preset),
       plate: `${m.name.slice(0, 3).toUpperCase()} ${r.int(100, 999)}`,
     });
   }
   return stock;
 }
 
-/** @typedef {{id: string, model: string, preset: string|null, body: string, year: number, name: string, color: string, price: number, worn: boolean, minRep: number, pitch: string, wheels: string, engine: {layout: string}, plate: string}} StockCar */
+/** @typedef {{id: string, model: string, preset: string|null, body: string, year: number, name: string, color: string, price: number, worn: boolean, minRep: number, pitch: string, wheels: string, engine: {layout: string}, plate: string, engineId?: string|null}} StockCar */
 
 /** @param {string|null} preset */
 function engineLayout(preset) {
@@ -127,7 +139,8 @@ const plateFor = (id) => `ECU ${String(mix(...[...id].map((ch) => ch.charCodeAt(
  */
 export function buyCar(c, s) {
   if (cannotBuyCar(c, s)) return c;
-  const st = customerCar({ preset: s.preset });
+  const eng = s.engineId && engineById(s.engineId);
+  const st = eng && !eng.preset ? engineState(eng.id) : customerCar({ preset: s.preset });
   let build = st.build;
   if (s.worn) build = { ...build, mafScalar: 1.08, octaneIdx: 0 };
   const id = `${s.id}`;
@@ -136,7 +149,7 @@ export function buyCar(c, s) {
     id, name: s.name, preset: s.preset, body: s.body,
     look: { color: s.color, wheels: s.wheels, wheelColor: 'chrome', spoiler: 'none', stripes: null, lowered: 0, underglow: null, scoop: false },
     plate: s.plate ?? plateFor(id),
-    car: { build, tune: st.tune }, drag: {}, paid: s.price, bought: c.day, km: 0, parts: [],
+    car: { build, tune: st.tune }, drag: {}, paid: s.price, bought: c.day, km: 0, parts: [], engine: s.engineId ?? engineForPreset(s.preset),
   };
   const next = { ...c, money: c.money - s.price, cars: [...(c.cars ?? []), car] };
   registerCars(next);
@@ -294,6 +307,55 @@ export function fitPart(c, carId, partId) {
   registerCars(next);
   return next;
 }
+
+// ---- engine swaps ----
+
+/**
+ * Why an engine cannot go in a car now, or null.
+ * @param {Career} c @param {string} carId @param {string} engineId
+ */
+export function cannotSwap(c, carId, engineId) {
+  const car = ownedCar(c, carId);
+  const e = engineById(engineId);
+  if (!car || !e) return 'No such car or engine.';
+  if ((car.engine ?? engineForPreset(car.preset)) === engineId) return 'That is the engine in it now.';
+  if (c.rep < e.minRep) return `Needs reputation ${e.minRep}.`;
+  if (c.money < e.price) return `Costs $${e.price.toLocaleString('en-US')}.`;
+  return null;
+}
+
+/** Parts that belong to the engine and leave with it. */
+const ENGINE_GROUPS = new Set(['air', 'exhaust', 'fuel', 'boost', 'engine']);
+
+/**
+ * Swap the engine. The new one comes from its donor with its own ECU and factory
+ * calibration; the old engine's bolt-ons go with it; the car keeps its tyres, gearing and
+ * weight, and gains or loses what the new engine weighs.
+ * @param {Career} c @param {string} carId @param {string} engineId @returns {Career}
+ */
+export function swapEngine(c, carId, engineId) {
+  if (cannotSwap(c, carId, engineId)) return c;
+  const car = ownedCar(c, carId);
+  const st = carState(c, carId);
+  const e = engineById(engineId);
+  const donor = engineState(engineId);
+  const oldKg = engineById(car.engine ?? engineForPreset(car.preset) ?? '')?.kg ?? 0;
+  // The fuel in the tank stays in the tank.
+  const build = { ...donor.build, octaneIdx: st.build.octaneIdx, ethanolPct: st.build.ethanolPct };
+  let next = setCarState(c, carId, { build, tune: donor.tune });
+  next = {
+    ...next, money: next.money - e.price,
+    cars: next.cars.map((x) => (x.id === carId ? {
+      ...x, engine: engineId, preset: e.preset ?? null,
+      parts: x.parts.filter((id) => !ENGINE_GROUPS.has(partById(id)?.group ?? '')),
+      drag: { ...x.drag, engineKg: (x.drag.engineKg ?? 0) + e.kg - oldKg },
+    } : x)),
+  };
+  registerCars(next);
+  return next;
+}
+
+export { ENGINES };
 
 // ---- looks ----
 

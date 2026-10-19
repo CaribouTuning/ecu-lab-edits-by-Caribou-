@@ -108,6 +108,14 @@ const CLERKS = {
   },
 };
 
+/** What the things on the shelves and benches have to say: each one a true thing about the trade. */
+const LOOK_LINES = {
+  chest: [{ text: 'A red tool chest, every drawer labelled. The torque wrench lives in the top one, in its case.' }, { who: 'Pops (a note in the drawer)', text: 'Head bolts and wheel nuts go to a number, not a feeling. Look it up, every time.' }],
+  shelf: [{ text: 'Oil, coolant, brake fluid, a box of spark plugs gapped and waiting.' }, { who: 'Pops (a note on the shelf)', text: 'A plug tells you what the cylinder has been doing. White and blistered is too lean or too much timing. Sooty black is rich.' }],
+  tyres: [{ text: 'Part-worn tyres, stacked by size.' }, { who: 'Pops (chalk on the wall)', text: 'Every horsepower reaches the road through four patches of rubber the size of your hand. Grip first, then power.' }],
+  bay: [{ text: 'Tape on the floor where a lift will go. Gearhead Supply sells them: two lifts means two customers at once.' }],
+};
+
 /** Where the tuner was when the screen last closed, so coming back from the laptop puts them by it. */
 let lastSpot = null;
 
@@ -337,10 +345,19 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     const w = worldRef.current;
     switch (e.id) {
       case 'board': goPhone('customers'); break;
-      case 'desk':
-        if (c.working) onWork();
-        else { toast('Take a customer’s car in first: the board is on the left wall.'); goPhone('customers'); }
+      case 'desk': {
+        // The laptop works on the car on the bay. With more than one car in, ask which.
+        const name = (l) => { const j = jobById(l.jobId); return j?.own ? j.customer.car : `${j?.customer.name ?? 'Customer'}'s ${j?.customer.car ?? 'car'}`; };
+        const open = (l) => { if (careerRef.current.working !== l.jobId) update({ ...careerRef.current, working: l.jobId }); onWork(); };
+        const here = c.lifts.filter((l) => !w?.away?.has(l.jobId));
+        if (!here.length) { say([{ text: 'The laptop is on, but there is no car on a lift to plug it into. Take a customer from the board by the door, or put one of your own cars up.' }]); break; }
+        if (here.length === 1) { open(here[0]); break; }
+        say([{ text: 'Which car do you plug the laptop into?', choices: [...here.map((l) => ({ label: name(l).toUpperCase(), run: () => { endTalk(); open(l); } })), { label: 'NOT NOW', run: () => endTalk() }] }]);
         break;
+      }
+      case 'calendar': goPhone('today'); break;
+      case 'partsBench': setFocusCar(null); goPhone('parts'); break;
+      case 'lookAt': say(LOOK_LINES[e.what] ?? [{ text: 'Nothing to see here.' }]); break;
       case 'tune': {
         const lift = c.lifts[e.bay];
         if (!lift) break;
@@ -404,7 +421,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       case 'bench': say([{ text: BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length] }]); break;
       default: break;
     }
-  }, [goPhone, greet, onDyno, onWork, say, startDrive, toast, travel, update]);
+  }, [endTalk, goPhone, greet, onDyno, onWork, say, startDrive, toast, travel, update]);
 
   const onEvent = useCallback((e) => {
     if (e.type === 'prompt') setPrompt(e.prompt);
@@ -539,10 +556,9 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     if (outJob) return 'The customer’s car is parked outside: walk to it and press E, or drive it back to the shop.';
     if (career.last && career.last.seq !== career.lastSeen) return 'Read what the customer said: open the phone, then TODAY.';
     if (place !== 'garage' && place !== 'town') return null;
-    if (career.lifts.length === 0) return place === 'garage' ? 'Walk to the board on the left wall and take a customer’s car.' : 'Head back to your shop on the north side of the main street.';
-    if (!career.working) return 'Walk up to the car and open the laptop to start work.';
-    return 'Open the laptop at the desk (or at the car) and work out what is wrong.';
-  }, [career.last, career.lastSeen, career.lifts.length, career.working, settings.hints, driving, outJob, place]);
+    if (career.lifts.length === 0) return place === 'garage' ? 'Walk to the board by the door and take a customer, or take your own car out from the apron.' : 'Head back to your shop on the main street.';
+    return 'Look under the bonnet, then open the laptop at the desk and work out what is wrong.';
+  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, outJob, place]);
 
   const takeJob = (id) => {
     const job = jobById(id);

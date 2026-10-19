@@ -18,7 +18,7 @@ import { EXTRAS, buyExtra, cannotBuyExtra, decorOf, setDecor } from '../src/ui/c
 import { inspectCar } from '../src/ui/career/inspect.js';
 import { DIGS_PER_DAY, DIG_COST, dig, digsLeft } from '../src/ui/career/junk.js';
 import { carStyle, cannotEnter, entrants, judge, placing, settleMeet } from '../src/ui/career/meet.js';
-import { RIVALS, cannotRace, decide, playerReaction, rivalState, settleRace, sliptalk } from '../src/ui/career/races.js';
+import { RIVALS, TRACK_RIVALS, cannotRace, decide, nextRival, playerReaction, prizeFor, recordTime, rivalState, settleRace, sliptalk } from '../src/ui/career/races.js';
 import { advancePhase, newCareer, nextDay, reviveCareer } from '../src/ui/career/shop.js';
 import { buyItem, buyOutfit, restyle, wear, wearOutfit, lookOf, wardrobeOf } from '../src/ui/career/wardrobe.js';
 import { ITEMS, OUTFITS, STARTING_WARDROBE, cannotBuyItem, defaultLook, itemById, npcLook, outfitPrice, styleScore } from '../src/ui/world/appearance.js';
@@ -27,7 +27,8 @@ import { TIPS, tipFor } from '../src/ui/world/tips.js';
 import { driveSetup } from '../src/ui/world/vehicle.js';
 import { world as W } from '../src/ui/tokens.js';
 
-const rich = (extra = {}) => ({ ...newCareer(5), money: 100000, rep: 200, ...extra });
+// Without the starter car, so a test counts only the cars it buys.
+const rich = (extra = {}) => ({ ...newCareer(5), cars: [], money: 100000, rep: 200, ...extra });
 
 describe('the wardrobe', () => {
   it('starts with everything that is free, and wears a complete outfit', () => {
@@ -283,31 +284,53 @@ describe('the strip’s rivals', () => {
     expect(playerReaction(7, 3)).toBeLessThan(0.27);
   });
 
-  it('cost an entry fee that comes back with the prize, and pay reputation only the first time', () => {
+  it('cost an entry fee that comes back with the prize, and pay in full and with reputation only the first time', () => {
     const r = RIVALS[1];
-    const c = rich({ cars: [{ id: 'a', parts: [], drag: {}, look: {} }], money: 1000, rep: 40 });
+    const c = rich({ cars: [{ id: 'a', parts: [], drag: {}, look: {} }], money: 1000, rep: 40, races: { won: [RIVALS[0].id], best: {} } });
     expect(cannotRace(c, r, 'a')).toBeNull();
     const won = settleRace(c, r, 'a', { won: true, et: 14.2 });
     expect(won.money).toBe(1000 + r.prize);
     expect(won.rep).toBeGreaterThan(40);
-    expect(won.races.won).toEqual([r.id]);
+    expect(won.races.won).toEqual([RIVALS[0].id, r.id]);
     expect(won.races.best.a).toBe(14.2);
     const again = settleRace(won, r, 'a', { won: true, et: 14.5 });
     expect(again.rep).toBe(won.rep);
+    expect(again.money - won.money).toBe(prizeFor(won, r));
+    expect(prizeFor(won, r)).toBeLessThan(r.prize / 3);
     expect(again.races.best.a).toBe(14.2);
     const lost = settleRace(c, r, 'a', { won: false, et: 15 });
     expect(lost.money).toBe(1000 - r.fee);
     expect(lost.rep).toBe(40);
   });
 
-  it('are closed to the under-qualified, the broke, the car-less and the over-keen', () => {
+  it('are climbed in order, and closed to the under-qualified, the broke and the car-less', () => {
     const r = RIVALS[2];
-    const c = rich({ cars: [{ id: 'a' }], money: 1000, rep: 60 });
-    expect(cannotRace({ ...c, rep: 10 }, r, 'a')).toMatch(/reputation/);
+    const c = rich({ cars: [{ id: 'a' }], money: 1000, rep: 60, races: { won: [RIVALS[0].id, RIVALS[1].id], best: {} } });
+    expect(cannotRace(c, r, 'a')).toBeNull();
+    expect(cannotRace({ ...c, races: { won: [RIVALS[0].id], best: {} } }, r, 'a')).toMatch(/Beat Bo first/);
+    expect(cannotRace({ ...c, rep: 0 }, r, 'a')).toMatch(/reputation/);
     expect(cannotRace({ ...c, money: 1 }, r, 'a')).toMatch(/Entry/);
     expect(cannotRace(c, r, null)).toMatch(/own cars/);
-    expect(cannotRace({ ...c, raceDay: { day: c.day, n: 3 } }, r, 'a')).toMatch(/Three races/);
-    expect(cannotRace({ ...c, raceDay: { day: c.day - 1, n: 3 } }, r, 'a')).toBeNull();
+    // No daily limit: a rematch pays a quarter, so there is nothing to farm.
+    expect(cannotRace({ ...c, raceDay: { day: c.day, n: 9 } }, r, 'a')).toBeNull();
+    // The first rung is open to a brand-new shop in its starter car.
+    const fresh = newCareer(3);
+    expect(cannotRace(fresh, RIVALS[0], fresh.cars[0].id)).toBeNull();
+    expect(cannotRace(fresh, TRACK_RIVALS[0], fresh.cars[0].id)).toBeNull();
+    expect(nextRival(fresh, 'drag')).toBe(RIVALS[0]);
+  });
+
+  it('on the circuit, climb their own ladder and keep their own record', () => {
+    const c = rich({ cars: [{ id: 'a' }], money: 5000, rep: 60 });
+    const won = settleRace(c, TRACK_RIVALS[0], 'a', { won: true, lap: 41.2 });
+    expect(won.track.won).toEqual([TRACK_RIVALS[0].id]);
+    expect(won.track.best.a).toBe(41.2);
+    expect(won.races).toEqual(c.races);
+    expect(cannotRace(won, TRACK_RIVALS[1], 'a')).toBeNull();
+    expect(recordTime(won, 'track', 'a', 40.5).track.best.a).toBe(40.5);
+    expect(recordTime(won, 'track', 'a', 45).track.best.a).toBe(41.2);
+    expect(TRACK_RIVALS.map((r) => r.skill)).toEqual([...TRACK_RIVALS.map((r) => r.skill)].sort((a, b) => a - b));
+    expect(TRACK_RIVALS.map((r) => r.prize)).toEqual([...TRACK_RIVALS.map((r) => r.prize)].sort((a, b) => a - b));
   });
 
   it('explain the run from what really happened', () => {

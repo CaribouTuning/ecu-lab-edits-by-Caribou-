@@ -34,18 +34,18 @@ const FROM_STRIP = { coupe: 0, supercar: 1, sedan: 2, van: 3, pickup: 4 };
 /**
  * The strip's description of a car, for a body the world draws.
  * @param {string} body a models/car.js body key
- * @param {Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number}} [over] changes to gearing, tyres, weight and ride height
+ * @param {Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number, engineKg?: number}} [over] changes to gearing, tyres, weight (parts taken out, an engine swapped in) and ride height
  * @returns {import('../../sim/index.js').DragCar}
  */
 export function dragCarFor(body, over = {}) {
   const i = FROM_STRIP[body];
   const b = i != null ? CAR_BODIES[i] : EXTRA_BODIES[body] ?? CAR_BODIES[0];
-  const { massDelta = 0, lowered = 0, ...rest } = over;
+  const { massDelta = 0, lowered = 0, engineKg = 0, ...rest } = over;
   return {
     ...DEFAULT_CAR,
     bodyIdx: i ?? 0,
     // Lowering a car brings its centre of gravity down: less weight transfer, a little more grip in turns.
-    massKg: b.massKg + massDelta, cd: b.cd, frontalAreaM2: b.frontalAreaM2, cgHeightM: b.cgHeightM - 0.05 * lowered, wheelbaseM: b.wheelbaseM, rearFrac: b.rearFrac,
+    massKg: b.massKg + massDelta + engineKg, cd: b.cd, frontalAreaM2: b.frontalAreaM2, cgHeightM: b.cgHeightM - 0.05 * lowered, wheelbaseM: b.wheelbaseM, rearFrac: b.rearFrac,
     ...rest,
   };
 }
@@ -77,7 +77,7 @@ function signature(build, tune, body, over) {
  * Measure a car and set it up to drive.
  *
  * @param {{build: any, tune: any}} car the car as it stands on the lift or in the garage
- * @param {{body: string, drag?: Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number}}} opts
+ * @param {{body: string, drag?: Partial<import('../../sim/index.js').DragCar> & {massDelta?: number, lowered?: number, engineKg?: number}}} opts
  * @returns {DriveSetup}
  */
 export function driveSetup(car, { body, drag }) {

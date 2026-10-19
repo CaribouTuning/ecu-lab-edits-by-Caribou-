@@ -377,6 +377,36 @@ const groundCache = new Map();
  */
 export function groundPlane(w, d, o) {
   const tile = o.tile ?? 2;
+  const tex = groundTexture(o);
+  const t = tex.clone();
+  t.needsUpdate = true;
+  t.repeat.set(w / tile, d / tile);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }));
+  m.rotation.x = -Math.PI / 2;
+  m.receiveShadow = true;
+  return m;
+}
+
+const groundMats = new Map();
+
+/**
+ * The same pixel ground as `groundPlane`, as one shared material for geometry whose UVs are
+ * world metres divided by the tile: roads laid as ribbons all share it, so a town of roads
+ * is one draw call, and two pieces that overlap show the same texels and never flicker.
+ * @param {Parameters<typeof groundPlane>[2]} o
+ */
+export function groundMaterial(o) {
+  const key = `${o.base}|${o.alt}|${o.line}|${o.kind}|${o.flowers ?? ''}`;
+  let m = groundMats.get(key);
+  if (!m) {
+    m = new THREE.MeshToonMaterial({ map: groundTexture(o), gradientMap: RAMP });
+    groundMats.set(key, m);
+  }
+  return m;
+}
+
+/** @param {Parameters<typeof groundPlane>[2]} o */
+function groundTexture(o) {
   const key = `${o.base}|${o.alt}|${o.line}|${o.kind}|${o.flowers ?? ''}`;
   let tex = groundCache.get(key);
   if (!tex) {
@@ -406,13 +436,7 @@ export function groundPlane(w, d, o) {
     tex.wrapT = THREE.RepeatWrapping;
     groundCache.set(key, tex);
   }
-  const t = tex.clone();
-  t.needsUpdate = true;
-  t.repeat.set(w / tile, d / tile);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }));
-  m.rotation.x = -Math.PI / 2;
-  m.receiveShadow = true;
-  return m;
+  return tex;
 }
 
 /**

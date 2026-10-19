@@ -39,6 +39,8 @@ const SHAPE_C = 1.5;
 const SHAPE_B = Math.tan(Math.PI / (2 * SHAPE_C));
 /** Brakes: peak deceleration torque as a multiple of what the front tyres can hold. */
 const BRAKE_FRONT_BIAS = 0.65;
+/** The share of the rear tyres' grip the rear brakes may use. */
+const EBD_REAR_SHARE = 0.7;
 /** Mass of one wheel assembly and the share that is rim and tyre (what spins). kg, fraction. */
 const WHEEL_MASS_KG = 20;
 const WHEEL_RING = 0.7;
@@ -54,10 +56,41 @@ const TC_MAX_CUT = 0.95;
 /** Reverse gear ratio and speed ceiling. */
 const REVERSE_RATIO = 3.4;
 const REVERSE_MAX_MS = 6;
-/** Steering lock at a standstill, radians, and the speed it halves at, m/s. */
+/** Steering lock at a standstill, radians, and how fast the wheels turn, rad/s. */
 const STEER_LOCK = 0.5;
-const STEER_HALF_MS = 22;
 const STEER_RATE = 3.2;
+/**
+ * The most lock a driver uses at speed, as a multiple of the tyre's peak slip angle on top
+ * of the geometric angle for the tightest turn the grip allows (L / R, R = v^2 / mu g).
+ * A driver on a keyboard cannot feel a front tyre go past its peak; a real one stops adding
+ * lock when it does, and this is that hand on the wheel.
+ */
+const STEER_PEAK_MARGIN = 0.85;
+/**
+ * The rear tyres peak at a smaller slip angle than the fronts. Every road car is set up to
+ * understeer (wider rear tyres, rear toe-in, a softer front bar), because a car that
+ * pushes wide at the limit is one a driver can save and a car that spins is not.
+ */
+const REAR_ALPHA_SCALE = 0.75;
+/**
+ * Lateral load transfer costs the more heavily rolled axle some grip (a tyre's grip grows
+ * slower than its load). Road cars carry the stiffer anti-roll bar at the front, so it is
+ * the front that loses: at the limit the nose runs wide and the tail stays behind it.
+ */
+const FRONT_LATERAL_SHARE = 0.92;
+/** Stability control cuts the engine while the rear tyres are sliding sideways (combined slip past this). */
+const ESC_REAR_SLIP = 1.05;
+/**
+ * Stability control: with the aids on, the ECU brakes single wheels to hold the yaw rate
+ * to what the tyres can sustain (mu g / v) and to catch the slide before the rear passes
+ * its peak. It is the same box of electronics as traction control, and switches off with it.
+ */
+const ESC_YAW_MARGIN = 1.08;
+const ESC_RATE = 9;
+/** The speed at which the reference car's understeer halves its yaw response, m/s. */
+const ESC_CHAR_SPEED = 28;
+/** How far the yaw rate may stray from the reference before the system acts, rad/s. */
+const ESC_DEADBAND = 0.06;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -103,6 +136,28 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {number} _stopT seconds held at a stop with the brake, before reverse is chosen
  * @property {number} t seconds driven
  */
+
+/**
+ * The most front-wheel angle the driver uses at a speed: the tightest turn the grip allows,
+ * plus the tyre's peak slip angle, never more than the rack's lock.
+ * @param {number} speed m/s @param {number} L wheelbase @param {number} mu @param {number} alphaPeak
+ */
+function steerLock(speed, L, mu, alphaPeak) {
+  return Math.min(STEER_LOCK, (L * mu * G) / Math.max(1, speed * speed) + alphaPeak * STEER_PEAK_MARGIN);
+}
+
+/**
+ * The same for a car as it stands, for a driver (the AI) who wants to know what a full
+ * turn of the wheel means right now.
+ * @param {VehicleState} s @param {Powertrain} pt @param {number} [gripScale]
+ */
+export function lockFor(s, pt, gripScale = 1) {
+  const grip = TIRE_GRIP[pt.car.gripIdx] ?? TIRE_GRIP[0];
+  return steerLock(Math.hypot(s.vx, s.vy), pt.car.wheelbaseM, grip.mu * gripScale, ALPHA_PEAK[grip.grade] ?? 0.15);
+}
+
+/** Grip of a car's tyres on tarmac, for planning a corner. @param {Powertrain} pt */
+export const tyreMu = (pt) => (TIRE_GRIP[pt.car.gripIdx] ?? TIRE_GRIP[0]).mu;
 
 /** A car at rest. @param {{x?: number, z?: number, heading?: number}} [at] @returns {VehicleState} */
 export function makeVehicle(at = {}) {
@@ -179,7 +234,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
 
   // ---- steering: the lock closes up with speed, and the wheels take a moment to turn ----
   const speedAbs = Math.hypot(s.vx, s.vy);
-  const lock = STEER_LOCK / (1 + (speedAbs / STEER_HALF_MS) ** 2);
+  const lock = steerLock(speedAbs, L, mu, alphaPeak);
   const wantSteer = -clamp(input.steer, -1, 1) * lock;
   const dSteer = clamp(wantSteer - s.steer, -STEER_RATE * dt, STEER_RATE * dt);
   s.steer += dSteer;
@@ -239,6 +294,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   if (input.tc !== false && tqWheelIn > 0 && !input.handbrake) {
     const kap = (Math.abs(s.wR) * r - Math.abs(s.vx)) / Math.max(Math.abs(s.vx), 1.2);
     s.tcCut = clamp(((kap - TC_ONSET) / TC_BAND), 0, 1) * TC_MAX_CUT;
+    // The tail is already sliding: power would only spin it further.
+    if (s.slipR > ESC_REAR_SLIP && Math.abs(s.vx) > 1.5) s.tcCut = Math.max(s.tcCut, clamp((s.slipR - ESC_REAR_SLIP) * 2, 0, 1) * TC_MAX_CUT);
     tqWheelIn *= 1 - s.tcCut;
   } else s.tcCut = 0;
   if (reversing && (s.vx < -REVERSE_MAX_MS || s.wR * r < -REVERSE_MAX_MS * 1.05)) tqWheelIn = Math.max(0, tqWheelIn);
@@ -246,22 +303,25 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // ---- brakes ----
   const brakeTq = brk * mu * wTotal * r;
   const tqBrakeF = brakeTq * BRAKE_FRONT_BIAS;
-  const tqBrakeR = brakeTq * (1 - BRAKE_FRONT_BIAS) + (input.handbrake ? mu * FzR * r * 1.2 : 0);
+  // Brake-force distribution (a proportioning valve on an old car, EBD on a new one): the
+  // rear brakes never ask more of the rear tyres than their load, lightened by the
+  // braking itself, lets them give, so they keep some grip for cornering.
+  const tqBrakeR = Math.min(brakeTq * (1 - BRAKE_FRONT_BIAS), EBD_REAR_SHARE * mu * FzR * r) + (input.handbrake ? mu * FzR * r * 1.2 : 0);
 
   // ---- tyre forces ----
-  const sub = (Fz, u, v, w) => {
+  const sub = (Fz, u, v, w, aPeak = alphaPeak, latShare = 1) => {
     const wheelV = w * r;
     const ref = Math.max(Math.abs(u), 1.2);
     const kappa = (wheelV - u) / ref;
     const alpha = Math.atan2(v, Math.max(Math.abs(u), 1.2)) * (u >= 0 ? 1 : -1);
     const sx = kappa / KAPPA_PEAK;
-    const sy = Math.tan(alpha) / alphaPeak;
+    const sy = Math.tan(alpha) / aPeak;
     const sig = Math.hypot(sx, sy);
     const f = sig < 1e-6 ? 0 : (mu * Fz * shape(sig)) / sig;
-    return { Fx: f * sx, Fy: -f * sy, sig, kappa };
+    return { Fx: f * sx, Fy: -f * sy * latShare, sig, kappa };
   };
-  const tF = sub(FzF, uF, vF, s.wF);
-  const tR = sub(FzR, uR, vR, s.wR);
+  const tF = sub(FzF, uF, vF, s.wF, alphaPeak, FRONT_LATERAL_SHARE);
+  const tR = sub(FzR, uR, vR, s.wR, alphaPeak * REAR_ALPHA_SCALE);
 
   // ---- wheel spin: engine torque on the driven wheel(s), tyre force and brakes against it ----
   const drivenFront = drive.drive === 'awd' ? 0.4 : 0;
@@ -310,6 +370,22 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   s.vx += (ax + s.yawRate * s.vy) * dt;
   s.vy += (ay - s.yawRate * s.vx) * dt;
   s.yawRate += (Mz / Iz) * dt;
+  // Stability control. The ECU knows what the driver asked for: the yaw rate of a car
+  // following its front wheels on a gently understeering line, r = v delta / (L (1 + v^2 / vch^2)),
+  // never more than the grip can hold (mu g / v). Braking single wheels it pulls the car's
+  // real yaw rate back toward that, and catches a sideways slide before the rear lets go.
+  if (input.tc !== false && !input.handbrake && s.vx > 1.5) {
+    const maxYaw = (mu * G * ESC_YAW_MARGIN) / s.vx;
+    const ref = clamp((s.vx * s.steer) / (L * (1 + (s.vx / ESC_CHAR_SPEED) ** 2)), -maxYaw, maxYaw);
+    const err = s.yawRate - ref;
+    const k = Math.min(1, dt * ESC_RATE);
+    // Only ever taking yaw away: turning a car harder than its tyres allow is not a thing brakes can do.
+    const oversteer = Math.abs(s.yawRate) > Math.abs(ref) || Math.sign(s.yawRate) !== Math.sign(ref);
+    if (oversteer && Math.abs(err) > ESC_DEADBAND) s.yawRate -= (err - Math.sign(err) * ESC_DEADBAND) * k;
+    const beta = Math.atan2(s.vy, s.vx);
+    const betaMax = alphaPeak * REAR_ALPHA_SCALE * 1.2;
+    if (Math.abs(beta) > betaMax) s.vy -= (s.vy - Math.tan(Math.sign(beta) * betaMax) * s.vx) * k * 0.5;
+  }
   // Parked: a car at rest with no input stays put (the stiction a bicycle model lacks).
   if (Math.abs(s.vx) < 0.15 && Math.abs(s.vy) < 0.15 && thr < 0.02) {
     s.vx *= 1 - Math.min(1, dt * 6); s.vy *= 1 - Math.min(1, dt * 6); s.yawRate *= 1 - Math.min(1, dt * 8);

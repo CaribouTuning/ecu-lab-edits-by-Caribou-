@@ -34,6 +34,21 @@ const angleTo = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (M
 export function pushOut(x, z, r, colliders) {
   let px = x;
   let pz = z;
+  // Two things close together can push a walker from one into the other: go round until
+  // nothing moves (three passes is plenty for anything a room holds).
+  for (let pass = 0; pass < 3; pass += 1) {
+    const bx = px;
+    const bz = pz;
+    [px, pz] = pushOnce(px, pz, r, colliders);
+    if (Math.abs(px - bx) < 1e-5 && Math.abs(pz - bz) < 1e-5) break;
+  }
+  return [px, pz];
+}
+
+/** @param {number} x @param {number} z @param {number} r @param {any[]} colliders */
+function pushOnce(x, z, r, colliders) {
+  let px = x;
+  let pz = z;
   for (const c of colliders) {
     if (c.off) continue;
     if (c.r != null) {
@@ -101,6 +116,8 @@ function clampToBounds(x, z, rects) {
  */
 export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quality = 'normal', preserve = false }) {
   const stage = createStage(canvas, { quality, preserve });
+  // Test hook: a browser test can draw debug shapes with the same three.js the scene uses.
+  if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__THREE = THREE;
   const rig = createRig(stage.camera);
   const input = createInput();
   const person = makePerson(getLook());
@@ -275,6 +292,14 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     onEvent({ type: 'drive', on: false });
   }
 
+  /** Circles that cover a car's footprint. @param {any} d */
+  function carCircles(d) {
+    const s = d.state;
+    const half = d.rig.dims.len / 2 - d.rig.dims.wid / 2;
+    const r = d.rig.dims.wid / 2;
+    return [-half, 0, half].map((off) => ({ x: s.x + Math.sin(s.heading) * off, z: s.z + Math.cos(s.heading) * off, r }));
+  }
+
   // ---- per-frame ----
   function walk(dt) {
     const a = input.axes();
@@ -298,9 +323,11 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     if (sp > 0.2) player.yaw += angleTo(player.yaw, Math.atan2(player.vx, player.vz)) * (1 - Math.exp(-dt * 16));
     let nx = player.x + player.vx * dt;
     let nz = player.z + player.vz * dt;
-    [nx, nz] = pushOut(nx, nz, PLAYER_R, level.colliders);
+    // A parked car is solid too: the one you got out of has no place in the level's list.
+    const cols = drive && !drive.inside && !level.noCars ? [...level.colliders, ...carCircles(drive)] : level.colliders;
+    [nx, nz] = pushOut(nx, nz, PLAYER_R, cols);
     [nx, nz] = clampToBounds(nx, nz, level.bounds);
-    [nx, nz] = pushOut(nx, nz, PLAYER_R, level.colliders);
+    [nx, nz] = pushOut(nx, nz, PLAYER_R, cols);
     player.x = nx; player.z = nz;
     person.group.position.set(player.x, level.groundAt?.(player.x, player.z) ?? 0, player.z);
     person.group.rotation.y = player.yaw;
@@ -351,7 +378,8 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     if (hit > 2) { if (api.shakeOn !== false) rig.shake = Math.min(0.4, hit * 0.03); onEvent({ type: 'bump', force: hit }); }
     const [cx, cz] = clampToBounds(s.x, s.z, level.bounds);
     if (cx !== s.x || cz !== s.z) { s.x = cx; s.z = cz; s.vx *= 0.5; s.vy *= 0.5; }
-    d.rig.steer(-s.steer);
+    // The model's steer is positive to the left, and so is a turn of the wheel's group about y.
+    d.rig.steer(s.steer);
     d.rig.roll(s.vx * dt);
     d.rig.setBrake(p.brake > 0.1 && s.vx > 0);
     d.rig.update(dt);
@@ -391,15 +419,19 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const sp = drive?.inside ? Math.abs(drive.state.vx) : 0;
     let best = null;
     let bd = Infinity;
+    let lowBest = null;
+    let lowD = Infinity;
     for (const it of level.interactables) {
       if (it.enabled && !it.enabled(api)) continue;
       if (it.carOnly && !drive?.inside) continue;
       if (it.onFoot && drive?.inside) continue;
       if (drive?.inside && sp > (it.maxSpeed ?? 6)) continue;
       const d = Math.hypot(it.x - px, it.z - pz);
-      if (d < (it.r ?? 1.6) && d < bd) { bd = d; best = it; }
+      if (d >= (it.r ?? 1.6)) continue;
+      // Something that wanders (the dog) never takes the button from something that stays put.
+      if (it.low) { if (d < lowD) { lowD = d; lowBest = it; } } else if (d < bd) { bd = d; best = it; }
     }
-    return best;
+    return best ?? lowBest;
   }
 
   function frame(ms) {

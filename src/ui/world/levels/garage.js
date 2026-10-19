@@ -22,7 +22,7 @@ import {
 } from '../models/props.js';
 import { pixelTexture } from '../gfx.js';
 
-import { hash, pathFollower, popsLook, specForJob } from './common.js';
+import { hash, pathFollower, popsLook, smoothPath, specForJob } from './common.js';
 import { decorOf } from '../../career/decor.js';
 import { jobById } from '../../career/jobs.js';
 import { ownJobId } from '../../career/ownRegistry.js';
@@ -37,6 +37,22 @@ export const DYNO_AT = { x: 8.3, z: -2.4 };
 /** Door in the front wall. */
 export const DOOR = { x: 0, half: 3 };
 const LIFT_UP = 1.05;
+/**
+ * Where you stand to use each thing in the shop. Each is at least two and a half metres
+ * from the next, so one press of E only ever means one thing.
+ */
+export const SPOT = {
+  board: { x: ROOM.minX + 1.5, z: 5.4 },
+  desk: { x: -6.6, z: 2.8 },
+  trophies: { x: ROOM.minX + 1.3, z: 2.0 },
+  calendar: { x: ROOM.minX + 1.2, z: -3.4 + 0.0 },
+  locker: { x: ROOM.maxX - 1.5, z: 1.4 },
+  bell: { x: 3.6, z: 5.4 },
+  bench: { x: 6.0, z: ROOM.minZ + 1.8 },
+  chest: { x: -5.0, z: ROOM.minZ + 1.7 },
+  shelf: { x: -9.3, z: ROOM.minZ + 1.7 },
+  tyres: { x: 9.6, z: ROOM.minZ + 2.4 },
+};
 
 /** Where the tuner's own cars park, on the apron outside the door. */
 export const APRON = [{ x: -7, z: 11.4 }, { x: 7, z: 11.4 }, { x: -11.5, z: 11.4 }, { x: 11.5, z: 11.4 }, { x: -16, z: 11.4 }];
@@ -161,6 +177,7 @@ export function buildGarage(api, entry = {}) {
       const site = makeBuildSite(4.4, 6);
       at(site, b.x, b.z);
       root.add(site);
+      for (const sx of [-2.2, 2.2]) for (const sz of [-3, 3]) colliders.push({ x: b.x + sx, z: b.z + sz, r: 0.3 });
       lifts.push(null);
       const hint = sign(i === 1 ? 'SECOND LIFT: COMING SOON' : 'ROOM TO GROW', { w: 3.4, h: 0.5, bg: W.black, fg: W.hazard });
       at(hint, b.x, b.z - 2.4 + 0.0);
@@ -188,16 +205,18 @@ export function buildGarage(api, entry = {}) {
   at(desk, -6.6, 4.1, Math.PI);
   root.add(desk);
   colliders.push({ x: -6.6, z: 4.1, hw: 1.75, hd: 0.55 });
+  // Everything you use stands on its own, a few steps from the next thing: the board by
+  // the door, the desk in front of it, the cars in their bays.
   const board = makeJobBoard(career.lifts.length + 3);
-  at(board, ROOM.minX + 0.1, 0.4, Math.PI / 2);
+  at(board, ROOM.minX + 0.1, SPOT.board.z, Math.PI / 2);
   root.add(board);
   const calendar = makeCalendar(career.day);
   at(calendar, ROOM.minX + 0.08, -3.4, Math.PI / 2);
   root.add(calendar);
   const locker = makeLocker();
-  at(locker, ROOM.maxX - 0.35, 3.4, -Math.PI / 2);
+  at(locker, ROOM.maxX - 0.35, SPOT.locker.z, -Math.PI / 2);
   root.add(locker);
-  colliders.push({ x: ROOM.maxX - 0.35, z: 3.4, hw: 0.4, hd: 0.8 });
+  colliders.push({ x: ROOM.maxX - 0.35, z: SPOT.locker.z, hw: 0.4, hd: 0.8 });
 
   // The closing bell: a pedestal by the door.
   const bell = new THREE.Group();
@@ -207,9 +226,9 @@ export function buildGarage(api, entry = {}) {
   const bellSign = sign('CLOSE UP', { w: 1.0, h: 0.3, bg: W.toolRed, fg: W.white });
   bellSign.position.set(0, 1.5, 0);
   bell.add(bellSign);
-  at(bell, 5.4, 6.0);
+  at(bell, SPOT.bell.x, SPOT.bell.z + 0.9);
   root.add(bell);
-  colliders.push({ x: 5.4, z: 6.0, hw: 0.3, hd: 0.3 });
+  colliders.push({ x: SPOT.bell.x, z: SPOT.bell.z + 0.9, hw: 0.3, hd: 0.3 });
 
   // ---- decoration and clutter ----
   const neon = makeNeon(owned.has('sign') ? 'TUNING' : 'tuning shop', owned.has('sign') ? W[decor.neon] ?? W.neonPink : W.cloth.silver, 5);
@@ -256,16 +275,17 @@ export function buildGarage(api, entry = {}) {
   const barrels = [[-10.3, -5.8, W.barrel], [-10.3, -5.0, W.barrelRed]];
   for (const [x, z, c] of barrels) { const b = makeBarrel(c); at(b, x, z); root.add(b); colliders.push({ x, z, r: 0.35 }); }
   const crate = makeCrate();
-  at(crate, -10.0, 6.0);
+  at(crate, -4.4, 6.8);
   root.add(crate);
-  colliders.push({ x: -10.0, z: 6.0, r: 0.5 });
+  colliders.push({ x: -4.4, z: 6.8, r: 0.5 });
   const cone = makeCone();
-  at(cone, 2.4, 6.4);
+  at(cone, 1.9, 6.9);
   root.add(cone);
+  colliders.push({ x: 1.9, z: 6.9, r: 0.25 });
   const trophyCount = career.milestones.length;
   if (trophyCount > 0 || owned.has('lounge')) {
     const ts = makeTrophyShelf(trophyCount);
-    at(ts, -1.8, ROOM.minZ + 0.2, 0, 0);
+    at(ts, ROOM.minX + 0.22, SPOT.trophies.z, Math.PI / 2, 0);
     ts.position.y = 0.3;
     root.add(ts);
   }
@@ -281,8 +301,9 @@ export function buildGarage(api, entry = {}) {
     root.add(coffee);
     colliders.push({ x: 10.4, z: 4.9, hw: 0.3, hd: 0.55 });
     const plant = makePlant(true);
-    at(plant, 10.3, 1.4);
+    at(plant, 10.3, 6.6);
     root.add(plant);
+    colliders.push({ x: 10.3, z: 6.6, r: 0.35 });
     const arcade = makeArcade();
     at(arcade, 6.2, 6.5, Math.PI);
     arcade.rotation.y = Math.PI;
@@ -292,11 +313,11 @@ export function buildGarage(api, entry = {}) {
     at(lamp, 10.2, 2.6);
     root.add(lamp);
     interactables.push({
-      id: 'coffee', x: 9.7, z: 4.9, r: 2.0, label: 'Have a coffee', hint: 'A tip from Pops.',
+      id: 'coffee', x: 9.6, z: 4.9, r: 1.1, label: 'Have a coffee', hint: 'A tip from Pops.',
       run: () => api.emit({ type: 'act', id: 'coffee' }),
     });
     interactables.push({
-      id: 'arcade', x: 6.2, z: 5.7, r: 1.8, label: 'Play the arcade', hint: 'Rev-limiter reaction game.',
+      id: 'arcade', x: 6.2, z: 5.7, r: 1.1, label: 'Play the arcade', hint: 'Rev-limiter reaction game.',
       run: () => api.emit({ type: 'act', id: 'arcade' }),
     });
   }
@@ -306,7 +327,7 @@ export function buildGarage(api, entry = {}) {
   root.add(dog);
   const dogState = { x: 2, z: 4, tx: 2, tz: 4, wait: 1, speed: 0 };
   interactables.push({
-    id: 'dog', x: 0, z: 0, r: 1.4, label: 'Pet Torque', hint: 'Good boy.',
+    id: 'dog', x: 0, z: 0, r: 1.0, low: true, label: 'Pet Torque', hint: 'Good boy.',
     run: () => { api.emit({ type: 'act', id: 'dog' }); api.say('dog', 'Woof!', new THREE.Vector3(dogState.x, 1.0, dogState.z), 2, 'bark'); },
   });
   const dogInteract = interactables[interactables.length - 1];
@@ -322,61 +343,73 @@ export function buildGarage(api, entry = {}) {
     lights.push(pl);
   }
 
-  // ---- interactables ----
+  // ---- interactables: one thing, one job, each where you would reach for it ----
   interactables.push({
-    id: 'board', x: ROOM.minX + 1.6, z: 0.4, r: 2.4, label: 'Customers', hint: 'See who is waiting.',
+    id: 'board', x: SPOT.board.x, z: SPOT.board.z, r: 1.3, label: 'Customers', hint: 'See who is waiting.',
     run: () => api.emit({ type: 'act', id: 'board' }),
   });
   interactables.push({
-    id: 'desk', x: -6.6, z: 2.8, r: 2.0,
-    label: (a) => (a.career().working ? 'Open the laptop' : 'Laptop (no car on the bay)'),
-    hint: 'Work on the customer car.',
+    id: 'desk', x: SPOT.desk.x, z: SPOT.desk.z, r: 1.3,
+    label: (a) => (a.career().lifts.length ? 'Open the laptop' : 'Laptop (no car in yet)'),
+    hint: 'Read, change and flash the car on the bay.',
     run: () => api.emit({ type: 'act', id: 'desk' }),
   });
   interactables.push({
-    id: 'locker', x: ROOM.maxX - 1.8, z: 3.4, r: 2.0, label: 'Change clothes', hint: 'Your locker and mirror.',
+    id: 'locker', x: SPOT.locker.x, z: SPOT.locker.z, r: 1.2, label: 'Change clothes', hint: 'Your locker and mirror.',
     run: () => api.emit({ type: 'act', id: 'locker' }),
   });
   interactables.push({
-    id: 'bell', x: 5.4, z: 5.0, r: 1.8, label: (a) => `Close up for the day ${a.career().day}`, hint: 'Pay the running costs and open tomorrow.',
+    id: 'bell', x: SPOT.bell.x, z: SPOT.bell.z, r: 1.1, label: (a) => `Close up for the day ${a.career().day}`, hint: 'Pay the running costs and open tomorrow.',
     run: () => api.emit({ type: 'act', id: 'bell' }),
   });
   interactables.push({
-    id: 'door', x: 0, z: ROOM.maxZ + 1.0, r: 2.4, label: 'Head into town', hint: 'Walk or drive.',
+    id: 'door', x: 0, z: ROOM.maxZ + 1.0, r: 1.8, label: 'Head into town', hint: 'Walk, or take your car from the apron.',
     onFoot: true, run: () => api.emit({ type: 'act', id: 'door' }),
   });
   interactables.push({
-    id: 'trophies', x: -1.8, z: ROOM.minZ + 1.6, r: 2.0, label: 'Look at the trophies', hint: `${career.milestones.length} milestones so far.`,
+    id: 'trophies', x: SPOT.trophies.x, z: SPOT.trophies.z, r: 1.1, label: 'Look at the trophies', hint: `${career.milestones.length} milestones so far.`,
     enabled: () => career.milestones.length > 0, run: () => api.emit({ type: 'act', id: 'trophies' }),
   });
+  interactables.push({
+    id: 'calendar', x: SPOT.calendar.x, z: SPOT.calendar.z, r: 1.0, label: `Calendar: day ${career.day}`, hint: 'Today, and what is still to do.',
+    run: () => api.emit({ type: 'act', id: 'calendar' }),
+  });
+  interactables.push({
+    id: 'bench', x: SPOT.bench.x, z: SPOT.bench.z, r: 1.2, label: 'Parts bench', hint: 'Bolt parts on your own cars.',
+    run: () => api.emit({ type: 'act', id: 'partsBench' }),
+  });
+  for (const [id, sp, label] of /** @type {[string, {x: number, z: number}, string][]} */ ([['chest', SPOT.chest, 'Tool chest'], ['shelf', SPOT.shelf, 'Fluids shelf'], ['tyres', SPOT.tyres, 'Tyre rack']])) {
+    interactables.push({ id, x: sp.x, z: sp.z, r: 1.0, label, hint: 'Take a look.', run: () => api.emit({ type: 'act', id: 'lookAt', what: id }) });
+  }
   if (dynoOwned) {
     interactables.push({
-      id: 'dyno', x: DYNO_AT.x, z: DYNO_AT.z + 2.9, r: 2.4, label: (a) => (a.career().working ? 'Use the dyno' : 'Dyno (no car on the bay)'), hint: 'Put the car on the rollers and pull.',
+      id: 'dyno', x: DYNO_AT.x, z: DYNO_AT.z + 2.9, r: 1.4, label: (a) => (a.career().working ? 'Use the dyno' : 'Dyno (no car on the bay)'), hint: 'Put the car on the rollers and pull.',
       run: () => api.emit({ type: 'act', id: 'dyno' }),
     });
   }
-  // Each bay has three things to do with the car on its lift.
+  // A car on a lift is two things: its bonnet, at the nose, and its driver's door, on the
+  // left. The laptop at the desk works on whichever car is on the bay.
   BAYS.forEach((b, i) => {
     interactables.push({
-      id: `bay${i}:tune`, x: b.x, z: b.z + 2.9, r: 2.0, onFoot: true,
-      enabled: () => !!api.career().lifts[i] && !api.away?.has(api.career().lifts[i].jobId),
-      label: () => { const l = api.career().lifts[i]; return l ? `Tune ${jobById(l.jobId)?.customer.name ?? 'this'}'s car` : ''; },
-      hint: 'Put it on the bay and open the laptop.',
-      run: () => api.emit({ type: 'act', id: 'tune', bay: i }),
-    });
-    interactables.push({
-      id: `bay${i}:look`, x: b.x - 1.2, z: b.z + 2.9, r: 1.3, onFoot: true,
-      enabled: () => !!api.career().lifts[i],
-      label: () => { const e = carAt(i); return e?.rig.hoodOpen() ? 'Close the bonnet' : 'Look under the bonnet'; },
+      id: `bay${i}:look`, x: b.x, z: b.z + 3.25, r: 1.2, onFoot: true,
+      enabled: () => !!api.career().lifts[i] && !!carAt(i) && !carAt(i).anim,
+      label: () => { const e = carAt(i); const who = jobById(api.career().lifts[i]?.jobId ?? '')?.customer.name; return e?.rig.hoodOpen() ? 'Close the bonnet' : `Look under ${who ? `${who}'s` : 'the'} bonnet`; },
       hint: 'What is actually fitted?',
       run: () => { const e = carAt(i); if (!e) return; const open = !e.rig.hoodOpen(); e.rig.setHood(open); api.emit({ type: 'act', id: 'inspect', bay: i, open }); },
     });
     interactables.push({
-      id: `bay${i}:drive`, x: b.x + 1.2, z: b.z + 2.9, r: 1.3, onFoot: true,
-      enabled: () => !!api.career().lifts[i] && carAt(i) && !carAt(i).anim,
-      label: 'Take it for a road test', hint: 'Drive it round town.',
+      id: `bay${i}:drive`, x: b.x + 1.6, z: b.z + 0.5, r: 1.0, onFoot: true,
+      enabled: () => !!api.career().lifts[i] && !!carAt(i) && !carAt(i).anim && !api.away?.has(api.career().lifts[i].jobId),
+      label: 'Road test', hint: 'Get in and drive it round town.',
       run: () => api.emit({ type: 'act', id: 'drive', bay: i }),
     });
+    if (i >= bayCount) {
+      interactables.push({
+        id: `bay${i}:empty`, x: b.x, z: b.z + 3.25, r: 1.2, onFoot: true,
+        label: i === 1 ? 'Room for a second lift' : 'Room to grow', hint: 'Gearhead Supply sells lifts.',
+        run: () => api.emit({ type: 'act', id: 'lookAt', what: 'bay' }),
+      });
+    }
   });
 
   // ---- customer cars ----
@@ -403,7 +436,7 @@ export function buildGarage(api, entry = {}) {
     if (!p) return;
     e.customer = null;
     const from = { x: p.group.position.x, z: p.group.position.z };
-    npcs.set(`${e.id}:walkout`, { p, path: [from, { x: 0, z: 6 }, { x: 0, z: 13 }], t: 0, i: 0, remove: true });
+    npcs.set(`${e.id}:walkout`, { p, path: [from, { x: from.x, z: 1.6 }, { x: 0, z: 2.2 }, { x: 0, z: 13 }], t: 0, i: 0, remove: true });
   }
 
   /** Car backs in off the street; the customer gets out and speaks. @param {string} jobId @param {{says?: string}} [opts] */
@@ -415,12 +448,12 @@ export function buildGarage(api, entry = {}) {
     const bay = api.career().lifts.indexOf(lift);
     if (!e) e = makeEntry(lift, bay);
     const b = BAYS[bay];
-    const start = { x: -2, z: 19.5 };
+    // Along the street past the door, then back in through it, straight up the middle and
+    // round into the bay, clear of the desk and the cars already in.
     const path = [
-      { x: -28, z: 19.5 }, { x: start.x, z: 19.5 },
-      { x: start.x, z: 19.5, rev: true }, { x: b.x * 0.3, z: 12.5, rev: true }, { x: b.x, z: 6.2, rev: true }, { x: b.x, z: b.z, rev: true },
+      { x: -28, z: 19.5 }, { x: 7, z: 19.5 },
+      ...smoothPath([{ x: 7, z: 19.5 }, { x: 1.5, z: 15.5 }, { x: 0, z: 11 }, { x: 0, z: 4.2 }, { x: b.x * 0.55, z: 1.6 }, { x: b.x, z: 0.6 }, { x: b.x, z: b.z }]).map((q) => ({ ...q, rev: true })),
     ];
-    // The first leg is driven forward; the rest is reversed into the bay.
     path[1].rev = false;
     const follower = pathFollower(e.rig, path, 7.5, () => {
       e.anim = null;
@@ -538,15 +571,15 @@ export function buildGarage(api, entry = {}) {
     const cust = makePerson(npcLook(hash(e.id), {}), { mood: happy ? 'smile' : 'worry' });
     cust.group.position.set(0, 0, 13);
     root.add(cust.group);
-    const dest = { x: b.x + 1.8, z: b.z + 2.6 };
+    const dest = { x: b.x + 1.7, z: b.z + 2.4 };
     npcs.set(`${e.id}:in`, {
-      p: cust, path: [{ x: 0, z: 13 }, { x: 0, z: 7 }, { x: dest.x, z: 6 }, dest], t: 0, i: 0,
+      p: cust, path: [{ x: 0, z: 13 }, { x: 0, z: 2.2 }, { x: dest.x, z: 1.6 }, dest], t: 0, i: 0,
       done: () => {
         cust.setPose(happy ? 'cheer' : 'think');
         cust.group.rotation.y = Math.atan2(api.player.x - dest.x, api.player.z - dest.z);
         const drive = () => {
           cust.group.visible = false;
-          const out = [{ x: b.x, z: b.z }, { x: b.x, z: b.z + 5 }, { x: b.x * 0.4, z: 12 }, { x: 4, z: 19.5 }, { x: 30, z: 19.5 }];
+          const out = smoothPath([{ x: b.x, z: b.z }, { x: b.x, z: 0.2 }, { x: b.x * 0.5, z: 2.4 }, { x: 0, z: 5 }, { x: 0, z: 11 }, { x: 2.5, z: 16.5 }, { x: 9, z: 19.5 }, { x: 30, z: 19.5 }]);
           e.liftTarget = 0;
           e.anim = pathFollower(e.rig, out, 6.5, () => {
             root.remove(e.rig.group);
@@ -693,6 +726,7 @@ export function buildGarage(api, entry = {}) {
       { minX: -19, maxX: 19, minZ: ROOM.maxZ + 0.7, maxZ: 14.6 },
     ],
     spawn: (e) => (e.from === 'town' ? { x: 0, z: ROOM.maxZ - 1.6, yaw: Math.PI } : { x: -2, z: 5.0, yaw: pops ? Math.atan2(1.6, -1.5) : Math.PI }),
+    spots: SPOT,
     update,
     sync,
     leaving: false,
@@ -704,8 +738,6 @@ export function buildGarage(api, entry = {}) {
     },
     carEntry: carAt,
     noCars: true,
-    /** The pose and place for the tuner at the desk and so on. */
-    spots: { desk: { x: -9.2, z: 3.9 } },
     dispose() { for (const e of cars.values()) e.anim = null; },
   };
   // Cars already on the lifts when the shop opens.

@@ -15,7 +15,8 @@ import {
 } from '../src/ui/career/ownedCars.js';
 import { newCareer, reviveCareer, train } from '../src/ui/career/shop.js';
 
-const rich = (extra = {}) => ({ ...newCareer(11), money: 200000, rep: 200, ...extra });
+// Without the starter car, so a test counts only the cars it buys.
+const rich = (extra = {}) => ({ ...newCareer(11), cars: [], money: 200000, rep: 200, ...extra });
 const first = (c, pred = () => true) => dealerStock(c).find(pred);
 
 describe('the dealer', () => {

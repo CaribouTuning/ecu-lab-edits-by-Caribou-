@@ -118,10 +118,45 @@ export function pathFollower(car, pts, speed, done) {
       d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
       heading += d * Math.min(1, dt * 5);
       car.group.rotation.y = heading;
-      car.steer(Math.max(-0.5, Math.min(0.5, -d * 1.5)) * (a.rev ? -1 : 1));
+      // A heading that grows is a turn to the left, and a positive wheel angle points left;
+      // backing up, the wheels point the other way to swing the nose the same way.
+      car.steer(Math.max(-0.5, Math.min(0.5, d * 1.5)) * (a.rev ? -1 : 1));
       car.roll((a.rev ? -speed : speed) * dt);
     },
   };
+}
+
+/**
+ * Rounds the corners of a polyline, so a car driven along it turns through an arc instead
+ * of pivoting on the spot. Each corner is replaced by a quadratic curve that starts and
+ * ends up to `radius` metres either side of it.
+ *
+ * @param {{x: number, z: number}[]} pts
+ * @param {number} [radius]
+ * @param {number} [steps] points per corner
+ */
+export function smoothPath(pts, radius = 3, steps = 5) {
+  if (pts.length < 3) return pts.map((p) => ({ x: p.x, z: p.z }));
+  const out = [{ x: pts[0].x, z: pts[0].z }];
+  for (let i = 1; i < pts.length - 1; i += 1) {
+    const a = pts[i - 1];
+    const c = pts[i];
+    const b = pts[i + 1];
+    const la = Math.hypot(c.x - a.x, c.z - a.z);
+    const lb = Math.hypot(b.x - c.x, b.z - c.z);
+    const ra = Math.min(radius, la / 2);
+    const rb = Math.min(radius, lb / 2);
+    const p0 = { x: c.x + ((a.x - c.x) / la) * ra, z: c.z + ((a.z - c.z) / la) * ra };
+    const p2 = { x: c.x + ((b.x - c.x) / lb) * rb, z: c.z + ((b.z - c.z) / lb) * rb };
+    for (let k = 0; k <= steps; k += 1) {
+      const t = k / steps;
+      const u = 1 - t;
+      out.push({ x: u * u * p0.x + 2 * u * t * c.x + t * t * p2.x, z: u * u * p0.z + 2 * u * t * c.z + t * t * p2.z });
+    }
+  }
+  const end = pts[pts.length - 1];
+  out.push({ x: end.x, z: end.z });
+  return out;
 }
 
 /**

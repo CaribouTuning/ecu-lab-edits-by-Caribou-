@@ -113,6 +113,49 @@ describe('the tyres are the limit', () => {
   });
 });
 
+describe('it drives like a road car, not a car on ice', () => {
+  const moving = (speed) => { const v = makeVehicle(); v.vx = speed; v.wR = v.wF = speed / tireRadiusM(car); v.gear = 3; return v; };
+
+  it('holding full lock at any speed pushes wide; it never spins with the aids on', () => {
+    for (const speed of [8, 15, 25, 35]) {
+      let worstRear = 0;
+      const { v } = run(pt(), { throttle: 0.4, brake: 0, steer: -1 }, (s, t) => { worstRear = Math.max(worstRear, s.slipR); return t > 4; }, 5, moving(speed));
+      // The tail stays inside its grip, and the car is still going forwards.
+      expect(worstRear, `${speed} m/s`).toBeLessThan(1.1);
+      expect(v.vx, `${speed} m/s`).toBeGreaterThan(Math.abs(v.vy) * 3);
+    }
+  });
+
+  it('brakes hard into a turn and slides wide at worst: it never swaps ends', () => {
+    // Braking at most of the grip while turning asks more of the tyres than they have, so the
+    // car runs wide; what it must not do is rotate past the way it is going.
+    let worstBeta = 0;
+    run(pt(), (s, t) => ({ throttle: 0, brake: t < 2 ? 0.8 : 0, steer: t > 0.3 ? 0.6 : 0 }), (s, t) => { worstBeta = Math.max(worstBeta, Math.abs(Math.atan2(s.vy, Math.max(0.1, s.vx)))); return t > 3; }, 4, moving(30));
+    expect(worstBeta).toBeLessThan(0.3);
+  });
+
+  it('lets go of the wheel and the car straightens up by itself', () => {
+    const { v } = run(pt(), (s, t) => ({ throttle: 0.3, brake: 0, steer: t < 1.5 ? 1 : 0 }), (s, t) => t > 4, 5, moving(22));
+    expect(Math.abs(v.yawRate)).toBeLessThan(0.02);
+    expect(Math.abs(v.vy)).toBeLessThan(0.1);
+  });
+
+  it('with the aids off and the handbrake up, the tail can still be thrown out: a slide is the driver’s choice', () => {
+    let worstRear = 0;
+    run(pt(), (s, t) => ({ throttle: 0.3, brake: 0, steer: t > 0.2 ? 1 : 0, handbrake: t > 0.2 && t < 1.2, tc: false }), (s, t) => { worstRear = Math.max(worstRear, s.slipR); return t > 2; }, 3, moving(18));
+    expect(worstRear).toBeGreaterThan(1.2);
+  });
+
+  it('stickier tyres corner harder: grip is the speed limit in a turn', () => {
+    const peakG = (gripIdx) => {
+      let peak = 0;
+      run(pt({ gripIdx }), (s) => ({ throttle: s.vx < 18 ? 0.5 : 0.1, brake: 0, steer: 0.7 }), (s, t) => { if (t > 2) peak = Math.max(peak, Math.abs(s.ay)); return t > 5; }, 6, moving(18));
+      return peak;
+    };
+    expect(peakG(1)).toBeGreaterThan(peakG(0) * 1.1);
+  });
+});
+
 describe('the car is what the tuner made', () => {
   const sixty = (p) => run(p, flat, (v) => toMph(v.vx) >= 60, 40).t;
   it('more torque is quicker, less is slower', () => {

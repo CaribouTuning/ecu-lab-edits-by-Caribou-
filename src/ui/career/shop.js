@@ -12,6 +12,7 @@ import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
 import { registerCars } from './ownRegistry.js';
+import { withStarter } from './starter.js';
 
 export const SAVE_VERSION = 1;
 export const START_MONEY = 1000;
@@ -70,6 +71,8 @@ export const START_MONEY = 1000;
  * @property {{wall: string, floor: string, neon: string, extras: string[]}} [decor] how the shop is dressed
  * @property {string[]} [ach] achievements earned
  * @property {boolean} [introDone] the welcome has been read
+ * @property {boolean} [starterGiven] the first car has been handed over (once, ever)
+ * @property {{won: string[], best: Record<string, number>}} [track] circuit rivals beaten, and each car's best lap
  */
 
 /**
@@ -90,12 +93,12 @@ export const START_MONEY = 1000;
  * @returns {Career}
  */
 export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
-  return withOffers({
+  return withOffers(withStarter({
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
     owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
     seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [], races: { won: [], best: {} },
-  });
+  }));
 }
 
 /** Whether the shop has the training and equipment a template needs. @param {Career} c */
@@ -147,6 +150,9 @@ export function reviveCareer(raw) {
     found: Array.isArray(c.found) ? c.found : [],
     races: c.races && Array.isArray(c.races.won) ? c.races : { won: [], best: {} },
   };
+  // A shop from before the starter car gets it now, unless it already has cars.
+  const withCar = withStarter(revived);
+  Object.assign(revived, withCar);
   registerCars(revived);
   // The cars have to be known before the lifts can be checked: an owned car's job is theirs.
   revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
