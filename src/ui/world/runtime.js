@@ -475,12 +475,13 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const g = d.rig.group;
     g.updateMatrixWorld(true);
     const seat = d.rig.seat;
-    eye.set(seat.x, seat.y + 0.22, seat.z + 0.05);
+    if (d.rig.eye) eye.copy(d.rig.eye); else eye.set(seat.x, seat.y + 0.22, seat.z + 0.05);
     stage.camera.position.copy(g.localToWorld(eye));
     // Look a little into the turn, and lift the gaze under braking.
     const lead = THREE.MathUtils.clamp(-s.yawRate * 0.18, -0.35, 0.35);
     const nod = THREE.MathUtils.clamp(s.ax * 0.004, -0.04, 0.04);
-    eLook.set(-0.05 + nod, Math.PI + lead, 0);
+    // A touch below level: the road over the bonnet, as a driver looks.
+    eLook.set(-0.09 + nod, Math.PI + lead, 0);
     qLook.setFromEuler(eLook);
     stage.camera.quaternion.copy(g.quaternion).multiply(qLook);
     const fov = 74 + Math.min(10, Math.abs(s.vx) * 0.2);

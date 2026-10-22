@@ -417,7 +417,7 @@ export const world = Object.freeze({
   // The driver's seat, painted pixel by pixel (world/cockpitArt.js): dash, pillars, a wheel with
   // hands on it, and amber dials.
   cockpit: Object.freeze({
-    outline: '#07080b', roof: '#0e1014', pillar: '#16181f', pillarHi: '#262a36', glassEdge: '#3b4252',
+    outline: '#07080b', roof: '#8a8f99', roofShade: '#6c717c', pillar: '#16181f', carpet: '#191b21', pillarHi: '#262a36', glassEdge: '#3b4252',
     dash: '#1d2029', dashHi: '#323847', dashLow: '#101217',
     mirror: '#6f93b8', mirrorDark: '#46617f', mirrorHi: '#b9d4ee',
     wheel: '#262a33', wheelHi: '#4c5364', wheelDark: '#14161c', marker: '#e0b54a',

@@ -4,7 +4,7 @@
  * holding it, the A-pillars and roof lining seen from the seat, a rear-view mirror and door cards.
  *
  * It is built only for the car you drive (a town of cars with full interiors would cost draw
- * calls for nothing). The first-person camera sits at `rig.seat` plus a head's height; the
+ * calls for nothing). The first-person camera sits at the interior's `eye`, high in the glass; the
  * body's roof, glass and pillars are hidden then (`setCockpit`), and these panels, drawn
  * double-sided, are what you see of the cabin.
  *
@@ -47,7 +47,11 @@ function dialTexture(ticks, red) {
 export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
   const group = new THREE.Group();
   const x = seat.x;
-  const wheelAt = new THREE.Vector3(x, belt + 0.1, zf0 - 0.43);
+  // Everything is placed from the foot of the windscreen (zf0) and the beltline, so the view
+  // works in every body: the eye sits well up in the glass, the dash and the dials stay under
+  // the line from the eye to the road a few car lengths ahead, and the wheel is in the lap.
+  const eye = new THREE.Vector3(x, Math.max(belt + 0.24, Math.min(top - 0.12, belt + 0.52 * (top - belt))), zf0 - 0.95);
+  const wheelAt = new THREE.Vector3(x, belt - 0.05, zf0 - 0.52);
   const TILT = 0.62;
 
   // ---- the shell you see from the seat ----
@@ -71,22 +75,30 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
     group.add(box(0.07, 0.04, 1.1, C.dashHi, { x: s * (Wd / 2 - 0.11), y: belt + 0.03, z: (zr1 + zf0) / 2 - 0.1, mat: dbl(C.dashHi), edge: false }));
   }
   // The header over the screen, and the mirror hung from it.
-  group.add(box(gw1 * 0.98, 0.07, 0.07, C.pillar, { y: top - 0.07, z: zf1 - 0.01, mat: dbl(C.pillar), edge: false }));
+  group.add(box(gw1 * 0.98, 0.035, 0.05, C.roofShade, { y: top - 0.075, z: zf1 - 0.01, mat: dbl(C.roofShade), edge: false }));
   group.add(box(0.02, 0.07, 0.02, C.dashLow, { y: top - 0.13, z: zf1 + 0.04, edge: false }));
   group.add(box(0.26, 0.075, 0.025, C.mirror, { y: top - 0.19, z: zf1 + 0.05, mat: new THREE.MeshBasicMaterial({ color: C.mirror }), edge: false }));
 
+
+  // ---- the cabin floor ----
+  // The body's beltline deck runs across the cabin; carpet covers it, so the car reads as a
+  // cabin around you and not a lid under you. (The driver's legs are under the dash, out of view.)
+  group.add(box(Wd - 0.24, 0.012, zf0 - zr1 + 0.2, C.carpet, { y: belt + 0.004, z: (zr1 + zf0) / 2 - 0.15, edge: false }));
+
   // ---- the dash ----
-  group.add(box(Wd * 0.86, 0.17, 0.46, C.dash, { y: belt + 0.03, z: zf0 - 0.24, mat: dbl(C.dash), edge: false }));
+  // Its face, toward the driver, down to the footwell.
+  group.add(box(Wd * 0.86, 0.32, 0.03, C.dashLow, { y: belt - 0.16, z: zf0 - 0.4, mat: dbl(C.dashLow), edge: false }));
+  group.add(box(Wd * 0.86, 0.17, 0.4, C.dash, { y: belt - 0.1, z: zf0 - 0.2, mat: dbl(C.dash), edge: false }));
   // A lit lip along the top, and a darker lower panel with the vents.
-  group.add(box(Wd * 0.86, 0.02, 0.1, C.dashHi, { y: belt + 0.125, z: zf0 - 0.06, mat: dbl(C.dashHi), edge: false }));
-  group.add(box(Wd * 0.84, 0.15, 0.34, C.dashLow, { y: belt - 0.1, z: zf0 - 0.3, mat: dbl(C.dashLow), edge: false }));
+  group.add(box(Wd * 0.86, 0.02, 0.1, C.dashHi, { y: belt - 0.005, z: zf0 - 0.06, mat: dbl(C.dashHi), edge: false }));
+  group.add(box(Wd * 0.84, 0.15, 0.3, C.dashLow, { y: belt - 0.25, z: zf0 - 0.25, mat: dbl(C.dashLow), edge: false }));
   for (const vx of [-0.42, -0.26]) {
-    group.add(box(0.12, 0.05, 0.02, C.dashLow, { x: vx, y: belt + 0.075, z: zf0 - 0.04, edge: false }));
-    group.add(box(0.1, 0.01, 0.022, C.dashHi, { x: vx, y: belt + 0.078, z: zf0 - 0.039, edge: false }));
+    group.add(box(0.12, 0.05, 0.02, C.dashLow, { x: vx, y: belt - 0.06, z: zf0 - 0.41, edge: false }));
+    group.add(box(0.1, 0.01, 0.022, C.dashHi, { x: vx, y: belt - 0.057, z: zf0 - 0.411, edge: false }));
   }
   // The binnacle: a hood over the dials, facing the driver.
   const cluster = new THREE.Group();
-  cluster.position.set(x, belt + 0.2, zf0 - 0.33);
+  cluster.position.set(x, belt + 0.02, zf0 - 0.36);
   cluster.rotation.x = 0.42;
   cluster.add(box(0.44, 0.17, 0.05, C.outline, { y: 0, z: 0.01, mat: dbl(C.outline), edge: false }));
   cluster.add(box(0.45, 0.02, 0.07, C.dashHi, { y: 0.09, z: 0.02, edge: false }));
@@ -117,7 +129,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
   group.add(cluster);
 
   // ---- the steering column and wheel ----
-  const column = box(0.07, 0.07, 0.3, C.dashLow, { x, y: belt + 0.04, z: zf0 - 0.3, edge: false });
+  const column = box(0.07, 0.07, 0.24, C.dashLow, { x, y: belt - 0.1, z: zf0 - 0.42, edge: false });
   column.rotation.x = 0.55;
   group.add(column);
   const pivot = new THREE.Group();
@@ -151,7 +163,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
     group.add(upper, fore, elbow, cuff);
     return { side, hand, upper, fore, elbow, cuff };
   });
-  const shoulder = (/** @type {number} */ side) => new THREE.Vector3(x + side * 0.22, seat.y - 0.12, seat.z - 0.12);
+  const shoulder = (/** @type {number} */ side) => new THREE.Vector3(x + side * 0.2, eye.y - 0.3, eye.z - 0.08);
   /** Where a hand sits round the rim, radians from the top: it turns with the rim, within its side. */
   const grip = (/** @type {number} */ side, /** @type {number} */ wheel) => (side > 0
     ? Math.max(0.25, Math.min(2.4, 1.0 - wheel)) : Math.max(-2.4, Math.min(-0.25, -1.0 - wheel)));
@@ -172,6 +184,8 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
 
   const api = {
     group,
+    /** Where the driver's eyes are, car-local: the first-person camera goes here. */
+    eye,
     /** Turn the wheel: radians, clockwise as the driver sees it. @param {number} angle */
     setWheel(angle) {
       spin.rotation.z = angle;
@@ -185,7 +199,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
         const d = Math.min(to.length(), BONE * 2 - 1e-3);
         to.normalize();
         // The elbow: out to the side and down, as far off the shoulder-wrist line as the bones need.
-        const pole = new THREE.Vector3(h.side, -1.2, 0).addScaledVector(to, -new THREE.Vector3(h.side, -1.2, 0).dot(to)).normalize();
+        const pole = new THREE.Vector3(h.side * 0.45, -1, 0).addScaledVector(to, -new THREE.Vector3(h.side * 0.45, -1, 0).dot(to)).normalize();
         const off = Math.sqrt(Math.max(0, BONE * BONE - (d / 2) ** 2));
         const elbow = s.clone().addScaledVector(to, d / 2).addScaledVector(pole, off);
         span(h.upper, s, elbow);

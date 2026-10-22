@@ -258,6 +258,8 @@ export function makeCar(spec = {}) {
   rig.setCockpit = (on) => { if (spec.interior) shell.visible = !on; };
   /** Turn the steering wheel inside, radians. @param {number} a */
   rig.setWheel = (a) => inside?.setWheel(a);
+  /** The driver's eye, car-local, for the first-person camera. */
+  rig.eye = inside?.eye ?? null;
   /** Move the dial needles inside. @param {number} speed @param {number} rpm @param {boolean[]} [lamps] */
   rig.setGauges = (speed, rpm, lamps) => inside?.setGauges(speed, rpm, lamps);
 

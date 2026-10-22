@@ -263,7 +263,7 @@ describe('it stays a physical thing', () => {
     expect(v.pitchA).toBeCloseTo(v.ax, 0);
     // Stiffer springs settle sooner.
     const soft = makeVehicle(); const stiff = makeVehicle();
-    for (const [st, hz] of [[soft, 1], [stiff, 1.4]]) {
+    for (const [st, hz] of /** @type {[typeof soft, number][]} */ ([[soft, 1], [stiff, 1.4]])) {
       const q = pt({ chassis: { ...NEUTRAL, bodyHz: hz } });
       Object.assign(st, { vx: 25, wR: 25 / tireRadiusM(car), wF: 25 / tireRadiusM(car), gear: 4 });
       for (let i = 0; i < 24; i += 1) stepVehicle(st, q, { throttle: 0, brake: 0.8, steer: 0 });
