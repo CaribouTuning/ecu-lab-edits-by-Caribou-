@@ -5,8 +5,8 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  border: 2px solid var(--ink);
+  border-radius: var(--hand-a);
   font-family: var(--sans);
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -40,16 +40,18 @@
 
 /* --- variants --- */
 
+/* The action: inked round twice over a watercolour wash, not a flat machine fill. */
 .primary {
-  background: var(--acc);
-  color: var(--acc-on);
+  background: var(--acc-bg);
+  color: var(--acc-ink);
+  box-shadow: var(--pencil-twice);
 }
-.primary:hover:not(:disabled) { background: var(--acc-ink); }
+.primary:hover:not(:disabled) { background: var(--warn-bg); color: var(--ink); }
 
 .ghost {
-  background: transparent;
-  border-color: var(--line);
-  color: var(--ink2);
+  background: var(--panel);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .ghost:hover:not(:disabled) {
   border-color: var(--line-hi);
@@ -74,6 +76,7 @@
 .quiet {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--ink2);
 }
 .quiet:hover:not(:disabled) { color: var(--ink); }

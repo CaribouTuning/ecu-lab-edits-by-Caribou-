@@ -86,7 +86,7 @@ export function ShopBackdrop({ mode, engineSpec, rpm, onPick, onLook }) {
               title={h.hint}
             >
               <span className={styles.spotRing} aria-hidden="true" />
-              <span className={styles.spotLabel}>{h.label}</span>
+              <span className={`${styles.spotLabel} ink-frame`}>{h.label}</span>
             </button>
           ))}
         </div>

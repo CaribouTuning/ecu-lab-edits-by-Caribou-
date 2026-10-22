@@ -3,8 +3,8 @@
   gap: 9px;
   margin: 10px 0;
   padding: var(--sp-md) var(--sp-lg);
-  border: 1px solid;
-  border-radius: var(--r-md);
+  border: 1.5px solid;
+  border-radius: var(--hand-a);
   font-family: var(--sans);
   font-size: var(--fs-sm);
   line-height: 1.55;

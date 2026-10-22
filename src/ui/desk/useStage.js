@@ -29,7 +29,7 @@ export function useStage(setup, opts = {}) {
     let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     try {
-      stage = createStage(canvas, { shadows: opts.shadows ?? false });
+      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true });
     } catch {
       setFailed(true);
       return undefined;

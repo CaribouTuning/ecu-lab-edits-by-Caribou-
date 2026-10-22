@@ -7,8 +7,8 @@
   padding: var(--sp-md) 34px var(--sp-md) var(--sp-lg);
   appearance: none;
   -webkit-appearance: none;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border: 1.5px solid var(--line-hi);
+  border-radius: var(--hand-c);
   background: var(--panel2);
   color: var(--ink);
   font-family: var(--sans);

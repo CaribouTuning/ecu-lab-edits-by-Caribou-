@@ -18,7 +18,7 @@ import { THREE, box, cyl, floorPlane, groundPlane } from '../world/gfx.js';
 import { tiledFloor } from '../world/levels/common.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
-import { makeDyno, makeLamp, makeLift, makeRollupDoor, makeRoundTree, makeShelf, makeShopSign, makeToolChest, makeTree, makeTyreStack } from '../world/models/props.js';
+import { makeDyno, makeLamp, makeLift, makeRollupDoor, makeRoundTree, makeShelf, makeToolChest, makeTree, makeTyreStack } from '../world/models/props.js';
 import { makeBuilding } from '../world/models/buildings.js';
 
 const POSES = {
@@ -33,6 +33,48 @@ const AT = {
   stand: new THREE.Vector3(-1.4, 0, 2.2),
   desk: new THREE.Vector3(0, 0, 5.2),
 };
+
+/**
+ * A sign board lettered by hand: the shop's name in the interface's handwriting, inked on
+ * paper with a wash underline, rather than the career town's pixel lettering. The texture
+ * is redrawn once the handwriting font has loaded, so it never keeps a fallback face.
+ * @param {string} text @param {number} w metres @param {number} h metres
+ */
+function handSign(text, w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = Math.round(640 * (h / w));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const draw = () => {
+    const g = canvas.getContext('2d');
+    if (!g) return;
+    const { width: cw, height: ch } = canvas;
+    g.fillStyle = W.sketch.paper;
+    g.fillRect(0, 0, cw, ch);
+    g.strokeStyle = W.sketch.ink;
+    g.lineWidth = 5;
+    g.strokeRect(8, 8, cw - 16, ch - 16);
+    g.fillStyle = W.toolBlue;
+    g.globalAlpha = 0.35;
+    g.fillRect(40, ch * 0.7, cw - 80, ch * 0.12);
+    g.globalAlpha = 1;
+    g.fillStyle = W.sketch.ink;
+    g.font = `${Math.round(ch * 0.58)}px 'Patrick Hand', cursive`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(text, cw / 2, ch * 0.5);
+    tex.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load(`40px 'Patrick Hand'`).then(draw, () => {});
+  const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), [
+    ...Array(4).fill(new THREE.MeshToonMaterial({ color: W.sketch.ink })),
+    new THREE.MeshBasicMaterial({ map: tex }),
+    new THREE.MeshToonMaterial({ color: W.sketch.ink }),
+  ]);
+  return board;
+}
 
 /**
  * @param {any} stage from createStage
@@ -57,7 +99,7 @@ export function buildShopScene(stage, init) {
   const door = makeRollupDoor(6.5);
   door.position.set(1.6, 0, -7.2);
   root.add(door);
-  const sign = makeShopSign('CARIBOU TUNING', W.toolBlue, 5.4);
+  const sign = handSign('Caribou Tuning', 5.4, 1.1);
   sign.position.set(-4.85, 3.3, -6.95);
   root.add(sign);
   // Lamps over the work, forward of the door so none hangs in front of the sign.

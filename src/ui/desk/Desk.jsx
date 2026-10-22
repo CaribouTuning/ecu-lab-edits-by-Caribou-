@@ -33,48 +33,51 @@ export const DESK_APPS = [
 /** The shop's pages, opened from the shop floor rather than the laptop. */
 export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor' };
 
-/** Pixel pictures for the four apps, on a 16-unit grid. */
+/**
+ * The four apps' pictures, doodled in pen the way they were drawn on the pad, each over a
+ * pale watercolour wash. Drawn on a 48-unit square with `DOODLE` stroke settings.
+ */
 const APP_ICONS = {
-  // A power curve on axes: horsepower against rpm.
+  // A power curve on its axes, labelled HP and RPM.
   tune: (
     <>
-      <rect x="1" y="2" width="1" height="13" />
-      <rect x="1" y="14" width="14" height="1" />
-      <path d="M3 12l2-3 2-2 2-1h2l2 1 1 2v1h-1v-1l-1-1-1-1h-2l-2 1-2 2-1 2-1 1z" />
+      <path className="wash" d="M10 36c2-12 10-22 20-20s12 12 10 20z" />
+      <path d="M9 6c0 10 .5 22 0 33 9 .3 22-.4 33 .2" />
+      <path d="M11 36c4-9 8-19 15-21 6-2 10 5 12 13" />
+      <text x="1" y="24" className="label">HP</text>
+      <text x="28" y="47" className="label">RPM</text>
     </>
   ),
-  // An open book.
+  // A sheet of notes, its corner curling.
   learn: (
     <>
-      <path d="M1 3h6l1 1 1-1h6v10H9l-1 1-1-1H1z" />
-      <rect x="7.5" y="4" width="1" height="9" fill="var(--panel)" />
-      <rect x="2.5" y="5" width="3.5" height="1" fill="var(--panel)" />
-      <rect x="2.5" y="8" width="3.5" height="1" fill="var(--panel)" />
-      <rect x="10" y="5" width="3.5" height="1" fill="var(--panel)" />
-      <rect x="10" y="8" width="3.5" height="1" fill="var(--panel)" />
+      <path className="wash" d="M12 10h22l4 30H14z" />
+      <path d="M11 6c7 .4 17-.3 26 .3.4 10-.3 24 .5 34-4-3-7 1-10-1s-6 2-9 0-5 1-7-.4C11 28 11.5 16 11 6z" />
+      <path d="M15 14c3-2 5 2 8 0s5 2 8 0M15 21c3-2 5 2 8 0s5 2 8 0M15 28c3-2 5 2 8 0" />
     </>
   ),
-  // A piston and rod, and a spanner.
+  // Two pistons on their rods, meeting at the crank.
   build: (
     <>
-      <rect x="7" y="1" width="6" height="6" />
-      <rect x="7" y="2" width="6" height="1" fill="var(--panel)" />
-      <rect x="9" y="7" width="2" height="5" />
-      <rect x="8" y="11" width="4" height="3" />
-      <path d="M1 14l5-5 1 1-5 5z" />
-      <path d="M0 13h3v3H0z" />
+      <path className="wash" d="M8 12l12-6 6 12-12 6zM28 8l12 4-4 12-12-4z" />
+      <path d="M7 12.5l12.5-6.5 6 12-12.5 6.3z M9.5 16l11-5.5" />
+      <path d="M28.5 7.5l12 4.5-4.5 12-12-4.6z M27 11.5l11.5 4" />
+      <path d="M19 21l5 15M30 22l-4 14" />
+      <circle cx="25" cy="38" r="5" />
+      <circle cx="25" cy="38" r="1.5" />
     </>
   ),
-  // An atom: a nucleus and two orbits.
+  // An atom: a nucleus and three crossed orbits, an electron on each.
   physics: (
     <>
-      {/* An atom: a nucleus and three crossed orbits. */}
-      <circle cx="8" cy="8" r="1.6" />
-      <g fill="none" stroke="currentColor" strokeWidth="1.1">
-        <ellipse cx="8" cy="8" rx="7" ry="2.6" />
-        <ellipse cx="8" cy="8" rx="7" ry="2.6" transform="rotate(60 8 8)" />
-        <ellipse cx="8" cy="8" rx="7" ry="2.6" transform="rotate(-60 8 8)" />
-      </g>
+      <circle className="wash" cx="24" cy="24" r="15" />
+      <ellipse cx="24" cy="24" rx="20" ry="7.5" />
+      <ellipse cx="24" cy="24" rx="20" ry="7.5" transform="rotate(60 24 24)" />
+      <ellipse cx="24" cy="24" rx="20" ry="7.5" transform="rotate(-60 24 24)" />
+      <circle cx="24" cy="24" r="3" className="dot" />
+      <circle cx="44" cy="24" r="1.8" className="dot" />
+      <circle cx="14" cy="7" r="1.8" className="dot" />
+      <circle cx="14" cy="41" r="1.8" className="dot" />
     </>
   ),
 };
@@ -130,17 +133,17 @@ export function Desk({
 
       {mode !== 'page' && (
         <div className={styles.laptop} data-state={open ? 'open' : 'shut'} aria-hidden={!open}>
-          <div className={styles.lid}>
+          <div className={`${styles.lid} ink-frame-lg`}>
             <div className={styles.screen}>
               <div className={styles.workspace}>
                 {mode === 'app' && appInfo ? (
                   <section className={styles.window} aria-label={appInfo.label}>
                     <header className={styles.titleBar}>
                       <span className={styles.titleIcon} aria-hidden="true">
-                        <svg viewBox="0 0 16 16" shapeRendering="crispEdges" fill="currentColor">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (appInfo.id)]}</svg>
+                        <svg viewBox="0 0 48 48" className={styles.doodle}>{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (appInfo.id)]}</svg>
                       </span>
-                      <span className={styles.title}>{appInfo.label}</span>
-                      <button type="button" className={styles.close} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
+                      <span className={`${styles.title} ink-frame`}>{appInfo.label}</span>
+                      <button type="button" className={`${styles.close} ink-frame`} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
                         <X size={15} aria-hidden="true" />
                       </button>
                     </header>
@@ -152,8 +155,8 @@ export function Desk({
                     <div className={styles.icons}>
                       {DESK_APPS.map((a) => (
                         <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} tabIndex={open ? 0 : -1}>
-                          <svg viewBox="0 0 16 16" shapeRendering="crispEdges" fill="currentColor" aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (a.id)]}</svg>
-                          <span className={styles.iconLabel}>{a.label}</span>
+                          <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (a.id)]}</svg>
+                          <span className={`${styles.iconLabel} ink-frame`}>{a.label}</span>
                         </button>
                       ))}
                     </div>
@@ -166,7 +169,7 @@ export function Desk({
                   <Home size={16} aria-hidden="true" />
                 </button>
                 <button
-                  type="button" className={styles.search} onClick={onSearch} tabIndex={open ? 0 : -1}
+                  type="button" className={`${styles.search} ink-frame`} onClick={onSearch} tabIndex={open ? 0 : -1}
                   aria-label="Search pages and actions" title={`Search (${apple ? '⌘K' : 'Ctrl+K'})`} aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}
                 >
                   <Search size={14} aria-hidden="true" /><span>Search</span>
@@ -182,7 +185,7 @@ export function Desk({
                   </button>
                 </div>
                 {menu === 'settings' && (
-                  <div className={styles.flyout} data-side="right" role="menu" aria-label="Settings">
+                  <div className={`${styles.flyout} ink-frame-lg`} data-side="right" role="menu" aria-label="Settings">
                     <button type="button" role="menuitem" onClick={() => { setMenu(null); onMenu?.(); }} aria-label="Main menu">Main menu</button>
                     <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
                     <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
@@ -190,7 +193,7 @@ export function Desk({
                   </div>
                 )}
                 {menu === 'notices' && (
-                  <div className={styles.flyout} data-side="right" data-wide="true" aria-label="Notifications">
+                  <div className={`${styles.flyout} ink-frame-lg`} data-side="right" data-wide="true" aria-label="Notifications">
                     {status && <div className={styles.status}>{status}</div>}
                     {notices.length === 0 && <div className={styles.notice}>Nothing needs you right now.</div>}
                     {notices.map((n) => (
@@ -204,7 +207,7 @@ export function Desk({
               </nav>
             </div>
           </div>
-          <div className={styles.base} aria-hidden="true" />
+          <div className={`${styles.base} ink-frame-lg`} aria-hidden="true" />
         </div>
       )}
 

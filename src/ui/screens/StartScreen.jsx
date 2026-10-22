@@ -20,37 +20,32 @@ const WAYS_IN = [
   { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];
 
-/** Pixel pictures for the three ways in, drawn on a 16-unit grid in the text colour. */
+/** The three ways in, doodled in pen over a watercolour wash (48-unit square). */
 const ICONS = {
-  // A car side-on: roof, body, two wheels.
+  // A car side-on, as drawn on the pad.
   career: (
     <>
-      <path d="M4 6h6l2 3h2v4H2v-4h1z" />
-      <rect x="5" y="7" width="2" height="2" fill="var(--bg)" />
-      <rect x="8" y="7" width="2" height="2" fill="var(--bg)" />
-      <rect x="3" y="12" width="3" height="3" />
-      <rect x="10" y="12" width="3" height="3" />
+      <path className="wash" d="M6 30c2-6 8-8 14-8l6-8h12l5 9c3 1 4 4 4 7z" />
+      <path d="M3 33c0-4 1-8 5-9 4-1 9-1 12-2 2-3 4-7 7-8h11c2 3 4 6 5 9 3 1 4 5 4 9-2 .5-4 .3-6 .4M18 33.4h12" />
+      <path d="M27 15l-2 7h16" />
+      <circle cx="12" cy="34" r="5" /><circle cx="36" cy="34" r="5" />
     </>
   ),
-  // A spanner across a piston: the parts of an engine.
+  // The laptop, open, with a spanner across it.
   sandbox: (
     <>
-      <rect x="6" y="2" width="6" height="7" />
-      <rect x="6" y="3" width="6" height="1" fill="var(--bg)" />
-      <rect x="8" y="9" width="2" height="5" />
-      <path d="M2 13l6-6 1 1-6 6z" />
-      <path d="M1 12h3v3H1z" />
+      <path className="wash" d="M10 10h28v20H10z" />
+      <path d="M9 9.5c9-.3 21 .3 30 0 .3 7-.2 14 .2 21-10 .3-20-.3-30 0-.2-7 .3-14-.2-21z" />
+      <path d="M4 35c13-.6 27 .4 40-.2l-3 4c-11 .3-23-.2-34 .2z" />
+      <path d="M16 26l12-12m-2-2c2-2 6-1 6 2l-3 1 1 2 3-1c1 3-3 5-5 3" />
     </>
   ),
-  // An open book.
+  // A sheet of notes.
   tutorial: (
     <>
-      <path d="M1 3h6l1 1 1-1h6v10H9l-1 1-1-1H1z" />
-      <rect x="7.5" y="4" width="1" height="9" fill="var(--bg)" />
-      <rect x="2.5" y="5" width="3.5" height="1" fill="var(--bg)" />
-      <rect x="2.5" y="7" width="3.5" height="1" fill="var(--bg)" />
-      <rect x="10" y="5" width="3.5" height="1" fill="var(--bg)" />
-      <rect x="10" y="7" width="3.5" height="1" fill="var(--bg)" />
+      <path className="wash" d="M12 9h22l3 31H14z" />
+      <path d="M11 6c7 .4 17-.3 26 .3.4 10-.3 24 .5 34-4-3-7 1-10-1s-6 2-9 0-5 1-7-.4C11 28 11.5 16 11 6z" />
+      <path d="M15 14c3-2 5 2 8 0s5 2 8 0M15 21c3-2 5 2 8 0s5 2 8 0M15 28c3-2 5 2 8 0" />
     </>
   ),
 };
@@ -64,7 +59,7 @@ function LogoMark({ src }) {
   return (
     <svg className={styles.logo} viewBox={CARIBOU_VIEWBOX} role="img" aria-label="Caribou Tuning">
       <path d={CARIBOU_FILL} fill="var(--acc-bg)" fillRule="evenodd" />
-      <path d={CARIBOU_INK} fill="var(--acc)" fillRule="evenodd" />
+      <path d={CARIBOU_INK} fill="var(--ink)" fillRule="evenodd" />
     </svg>
   );
 }
@@ -92,7 +87,7 @@ export function StartScreen({ onCareer, onStart, onTutorial, version, logo = nul
         <div className={styles.actions}>
           {WAYS_IN.map((way) => (
             <div key={way.key} className={styles.way}>
-              <svg className={styles.icon} viewBox="0 0 16 16" aria-hidden="true" shapeRendering="crispEdges" fill="currentColor">
+              <svg className={styles.icon} viewBox="0 0 48 48" aria-hidden="true">
                 {ICONS[/** @type {keyof typeof ICONS} */ (way.key)]}
               </svg>
               <Button

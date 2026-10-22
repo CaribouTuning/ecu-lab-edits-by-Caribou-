@@ -1,0 +1,84 @@
+/*
+ * The hand-drawn layer: everything is pencil and ink on graph paper.
+ *
+ * The interface was designed on a gridded sketch pad, and it is drawn to look like
+ * one: paper with a faint grid, wobbly inked outlines instead of smooth machine
+ * curves, handwritten lettering, and flat watercolour washes instead of gradients
+ * and glows. Colours stay in tokens.css; this file only shapes how they are drawn.
+ *
+ * The wobble is the classic hand-drawn border-radius: unequal elliptical corners,
+ * so no two sides of a box bend the same way. Three variants, so neighbouring boxes
+ * do not share one wobble.
+ */
+
+:root {
+  --hand-a: 255px 12px 225px 12px / 12px 225px 12px 255px;
+  --hand-b: 12px 225px 12px 255px / 225px 12px 255px 12px;
+  --hand-c: 225px 14px 255px 10px / 14px 255px 10px 225px;
+  /* A wobbly circle, for anything round. */
+  --hand-round: 255px 225px 240px 215px / 215px 240px 225px 255px;
+  /* The pad's graph paper, for any surface that is a sheet. */
+  --graph:
+    linear-gradient(var(--paper-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-grid) 1px, transparent 1px);
+  --graph-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  /* A second, offset pencil stroke behind a drawn box: the line went round twice. */
+  --pencil-twice: 3px 4px 0 -1px var(--line-hi);
+}
+
+html, body {
+  background-color: var(--bg);
+  background-image: var(--graph);
+  background-size: var(--graph-size);
+}
+
+body {
+  font-family: var(--sans);
+  /* Handwriting runs small for its size; this sets every face to the same x-height,
+     inline font sizes included, so the hand stays as legible as the old type. */
+  font-size-adjust: 0.53;
+  -webkit-font-smoothing: auto;
+}
+
+/* Ink outlines with a wobble. */
+button, select, input, textarea, summary {
+  border-radius: var(--hand-a);
+}
+button:nth-of-type(2n), select:nth-of-type(2n) { border-radius: var(--hand-b); }
+button:nth-of-type(3n) { border-radius: var(--hand-c); }
+
+/* Inline-styled boxes and the screens' cards: the same wobble. */
+[style*='border-radius'], [class*='panel' i], [class*='card' i], [class*='window' i], [class*='note' i] {
+  border-radius: var(--hand-b) !important;
+}
+
+/* No machine polish: no glows, no soft drop shadows, no frosted glass. */
+[class*='glow' i] { display: none; }
+* { backdrop-filter: none !important; text-shadow: none !important; }
+
+/* Icons get a slightly shaky pen. */
+svg.lucide { stroke-width: 2.2; filter: url(#hand-jitter); }
+
+/*
+ * An inked frame drawn as its own stroke, so the pen can shake on the line without
+ * shaking the words inside: the box keeps its border's width for layout but paints it
+ * clear, and ::after draws the line through the jitter filter. Used by the laptop and
+ * the primitives (`ink-frame` / `ink-frame-lg` in their stylesheets).
+ */
+.ink-frame, .ink-frame-lg { position: relative; border-color: transparent !important; }
+.ink-frame::after, .ink-frame-lg::after {
+  content: ''; position: absolute; inset: -2px; pointer-events: none;
+  border: 2px solid var(--ink); border-radius: inherit; filter: url(#hand-jitter);
+}
+.ink-frame-lg::after { inset: -3px; border-width: 3px; filter: url(#hand-jitter-lg); }
+
+/* Sliders and ticks in ink rather than the browser's own blue. */
+input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--ink); }
+
+/* Diagrams size their own lettering in their own units. */
+svg { font-size-adjust: none; }
+
+/* Chart lines drawn freehand. */
+.recharts-curve { filter: url(#hand-jitter); }

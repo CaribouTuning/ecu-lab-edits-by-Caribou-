@@ -22,7 +22,10 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean}} [opts]
+ *   `sketch` draws the scene as ink and watercolour on paper instead of pixel art: full
+ *   resolution, wobbly ink outlines, pencil hatching in the shade and paper grain. The
+ *   sandbox's shop is drawn this way; the career's town stays pixel art.
  */
 export function createStage(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });
@@ -66,27 +69,62 @@ export function createStage(canvas, opts = {}) {
       tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
       strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
+      sketch: { value: opts.sketch ? 1 : 0 },
+      paper: { value: new THREE.Color(W.sketch.paper) }, inkCol: { value: new THREE.Color(W.sketch.ink) },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
       uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
+      uniform float sketch; uniform vec3 paper; uniform vec3 inkCol;
       varying vec2 vUv;
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
       // Inverse view depth is linear across a flat surface at any angle, so its second difference is
       // zero on a floor or a wall and spikes only on a silhouette or a fold.
       float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
       void main(){
+        // SKETCH: the pen shakes. Every lookup is nudged along a slow wave, so a straight
+        // edge comes out as a hand-drawn line rather than a ruled one.
+        vec2 shake = sketch * texel * 1.6 * vec2(sin(vUv.y * 61.0 + vUv.x * 7.0), cos(vUv.x * 53.0 - vUv.y * 9.0));
+        vec2 uv = vUv + shake;
         vec4 c = texture2D(tColor, vUv);
-        float w = invZ(vUv);
-        float l = invZ(vUv - vec2(texel.x, 0.0)); float r = invZ(vUv + vec2(texel.x, 0.0));
-        float u = invZ(vUv - vec2(0.0, texel.y)); float d = invZ(vUv + vec2(0.0, texel.y));
+        vec2 tx = texel * (1.0 + sketch * 0.6);
+        float w = invZ(uv);
+        float l = invZ(uv - vec2(tx.x, 0.0)); float r = invZ(uv + vec2(tx.x, 0.0));
+        float u = invZ(uv - vec2(0.0, tx.y)); float d = invZ(uv + vec2(0.0, tx.y));
         float lap = max((l + r) - 2.0 * w, (u + d) - 2.0 * w);
         // Positive when the neighbours are nearer: this pixel is the far side of the edge, so the
         // line sits on the farther surface and a model keeps its full silhouette.
         float edge = smoothstep(thresh, thresh * 2.0, lap / max(w, 1e-5));
         // Far scenery sits in the haze: no ink on it, or the hills turn to wire.
         edge *= 1.0 - smoothstep(inkNear, inkFar, 1.0 / max(w, 1e-5));
-        c.rgb *= 1.0 - edge * strength;
-        gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
+        if (sketch < 0.5) {
+          c.rgb *= 1.0 - edge * strength;
+          gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
+          return;
+        }
+        // Ink also goes where the colour changes sharply: panel lines, a stripe, a window.
+        float cl = lum(texture2D(tColor, uv - vec2(tx.x, 0.0)).rgb); float cr = lum(texture2D(tColor, uv + vec2(tx.x, 0.0)).rgb);
+        float cu = lum(texture2D(tColor, uv - vec2(0.0, tx.y)).rgb); float cd = lum(texture2D(tColor, uv + vec2(0.0, tx.y)).rgb);
+        edge = max(edge, smoothstep(0.10, 0.22, abs(cl - cr) + abs(cu - cd)) * 0.8);
+        // Watercolour: the colour thinned out towards the paper, flat and pale.
+        float L = pow(max(lum(c.rgb), 0.0), 1.0 / 2.2); // as the eye sees it, not linear light
+        // Grey surfaces (walls, floor, concrete) go almost to paper; coloured things keep
+        // their wash, the way a sketch is coloured in only where it matters.
+        vec3 sc = pow(max(c.rgb, vec3(0.0)), vec3(1.0 / 2.2));
+        float sat = max(sc.r, max(sc.g, sc.b)) - min(sc.r, min(sc.g, sc.b));
+        vec3 wash = mix(c.rgb, paper, 0.40 + 0.38 * (1.0 - smoothstep(0.06, 0.28, sat)));
+        // Pencil hatching in the shade, and cross-hatching where it is darkest.
+        vec2 f = gl_FragCoord.xy;
+        float h1 = step(0.7, fract((f.x + f.y) / 7.0));
+        float h2 = step(0.7, fract((f.x - f.y) / 7.0));
+        float shade = smoothstep(0.30, 0.16, L);
+        float deep = smoothstep(0.14, 0.05, L);
+        wash = mix(wash, inkCol, h1 * shade * 0.35 + h2 * deep * 0.35);
+        // Paper grain, then the ink line on top.
+        wash *= 0.97 + 0.05 * hash(floor(f / 2.0));
+        wash = mix(wash, inkCol, clamp(edge, 0.0, 1.0) * 0.92);
+        gl_FragColor = linearToOutputTexel(vec4(wash, 1.0));
       }`,
     depthTest: false, depthWrite: false,
   });
@@ -111,7 +149,8 @@ export function createStage(canvas, opts = {}) {
       const rect = canvas.parentElement?.getBoundingClientRect();
       cssW = w ?? Math.max(2, Math.floor(rect?.width ?? canvas.clientWidth ?? 800));
       cssH = h ?? Math.max(2, Math.floor(rect?.height ?? canvas.clientHeight ?? 450));
-      factor = Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
+      // A sketch is drawn at full resolution: pen lines, not pixels.
+      factor = opts.sketch ? 1 : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
       const { w: iw, h: ih } = stage.size;
       renderer.setSize(iw, ih, false);
       target.setSize(iw, ih);

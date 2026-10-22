@@ -4,8 +4,8 @@
   gap: 4px;
   padding: var(--sp-xs);
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border: 1.5px solid var(--line-hi);
+  border-radius: var(--hand-a);
 }
 
 .item {
@@ -14,7 +14,7 @@
   gap: 5px;
   padding: var(--sp-sm) var(--sp-lg);
   border: none;
-  border-radius: var(--r-sm);
+  border-radius: var(--hand-c);
   background: transparent;
   color: var(--ink2);
   font-family: var(--sans);

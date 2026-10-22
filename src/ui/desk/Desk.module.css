@@ -11,12 +11,12 @@
 
 /* ---------- the shop behind ---------- */
 .backdrop { position: absolute; inset: 0; }
-.backdropCanvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
-.backdropFallback { width: 100%; height: 100%; background: linear-gradient(180deg, var(--panel2) 0%, var(--bg) 70%); }
+.backdropCanvas { display: block; width: 100%; height: 100%; }
+.backdropFallback { width: 100%; height: 100%; background-color: var(--bg); background-image: var(--graph); background-size: var(--graph-size); }
 /* With the laptop open the shop is set back: dimmed, so the screen is what you read. */
 .backdrop[data-mode='desk']::after, .backdrop[data-mode='page']::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(ellipse at 50% 55%, rgba(var(--shadow-rgb), 0.15) 0%, rgba(var(--shadow-rgb), 0.55) 100%);
+  background: var(--bg); opacity: 0.35;
 }
 /* The whole backdrop is the button that stands you up to look at the shop. */
 .lookUp { position: absolute; inset: 0; border: 0; background: transparent; cursor: zoom-out; }
@@ -30,15 +30,18 @@
 }
 .spotRow .spot { position: static; transform: none; }
 .spotRing {
-  width: 46px; height: 46px; border-radius: 50%;
-  border: 3px solid var(--acc); background: rgba(var(--acc-rgb), 0.18);
+  width: 46px; height: 46px; border-radius: var(--hand-round);
+  border: 3px solid var(--ink); background: var(--panel); box-shadow: var(--pencil-twice);
+  display: grid; place-items: center; filter: url(#hand-jitter);
   animation: spotPulse 1.6s ease-in-out infinite;
 }
 .spotLabel {
-  padding: 4px 10px; border-radius: var(--r-sm); border: 1px solid var(--line-hi);
-  background: var(--panel); font-size: var(--fs-sm); font-weight: 800; letter-spacing: 0.06em; white-space: nowrap;
+  padding: 2px 12px; border-radius: var(--hand-a); border: 2px solid var(--ink);
+  background: var(--panel); font-size: var(--fs-md); letter-spacing: 0.04em; white-space: nowrap;
 }
-.spot:hover .spotRing, .spot:focus-visible .spotRing { background: rgba(var(--acc-rgb), 0.4); }
+.spot:hover .spotRing, .spot:focus-visible .spotRing { background: var(--warn-bg); }
+/* A '!' in a speech bubble: something to do here. */
+.spotRing::before { content: '!'; font-size: 28px; line-height: 1; color: var(--danger); font-family: var(--sans); }
 @keyframes spotPulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .spotRing { animation: none; } }
 
@@ -53,16 +56,16 @@
 }
 .lid {
   width: 100%; flex: 1; min-height: 0;
-  padding: 12px 12px 14px; border-radius: 14px 14px 4px 4px;
-  background: var(--panel3); border: 2px solid var(--line-hi);
-  box-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.55);
+  padding: 12px 12px 14px; border-radius: var(--hand-a);
+  background: var(--panel3); border: 3px solid var(--ink);
+  box-shadow: var(--pencil-twice);
   transform-origin: 50% 100%;
   transition: transform 0.55s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.45s ease 0.1s;
   pointer-events: auto;
 }
 .base {
-  width: 106%; height: 16px; border-radius: 0 0 14px 14px;
-  background: var(--panel2); border: 2px solid var(--line-hi); border-top: 0;
+  width: 106%; height: 16px; border-radius: var(--hand-b);
+  background: var(--panel2); border: 3px solid var(--ink);
   transition: opacity 0.45s ease 0.1s;
 }
 /* Shut: the lid folds down onto the base, and the shop comes forward. */
@@ -72,22 +75,20 @@
 .screen {
   position: relative; height: 100%;
   display: flex; flex-direction: column;
-  border-radius: 6px; overflow: hidden;
-  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--hand-c); overflow: hidden;
+  background: var(--bg); border: 2px solid var(--ink);
 }
 .workspace { flex: 1; min-height: 0; position: relative; display: flex; }
 
 /* ---------- the desktop ---------- */
 .desktop {
   flex: 1; position: relative;
-  background:
-    radial-gradient(ellipse at 70% 30%, rgba(var(--acc-rgb), 0.16) 0%, transparent 60%),
-    linear-gradient(160deg, var(--panel2) 0%, var(--bg) 75%);
+  background-color: var(--bg); background-image: var(--graph); background-size: var(--graph-size);
 }
 .wallpaperMark {
   position: absolute; right: 28px; bottom: 22px;
-  font-size: 30px; font-weight: 900; letter-spacing: 0.24em; color: var(--ink);
-  opacity: 0.08; user-select: none;
+  font-size: 34px; letter-spacing: 0.12em; color: var(--ink);
+  opacity: 0.18; user-select: none; transform: rotate(-3deg);
 }
 .icons {
   position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%);
@@ -95,30 +96,31 @@
 }
 .icon {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 14px 8px 10px; border-radius: var(--r-md);
+  padding: 14px 8px 10px; border-radius: var(--hand-b);
   border: 1px solid transparent; background: transparent; color: var(--ink); cursor: pointer;
 }
 .icon svg {
-  width: 64px; height: 64px; padding: 10px; border-radius: 14px;
-  background: var(--panel); border: 2px solid var(--line-hi); color: var(--acc);
+  width: 72px; height: 72px; padding: 8px; border-radius: var(--hand-a);
+  background: var(--panel); border: 2.5px solid var(--ink); color: var(--ink); box-shadow: var(--pencil-twice);
 }
-.icon:hover, .icon:focus-visible { background: rgba(var(--acc-rgb), 0.12); border-color: var(--acc); }
+.icon:hover, .icon:focus-visible { background: var(--acc-bg); border-color: var(--ink); }
 .iconLabel {
-  padding: 2px 10px; border-radius: var(--r-xs); border: 1px solid var(--line-hi);
-  background: var(--panel); font-size: var(--fs-sm); font-weight: 800; letter-spacing: 0.04em;
+  padding: 1px 12px; border-radius: var(--hand-c); border: 2px solid var(--ink);
+  background: var(--panel); font-size: var(--fs-md); letter-spacing: 0.03em;
 }
 
 /* ---------- a window ---------- */
 .window { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
 .titleBar {
-  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 6px 0 10px; flex: none;
-  background: var(--panel2); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 10px; flex: none;
+  background: var(--panel2); border-bottom: 2px solid var(--ink);
 }
-.titleIcon svg { width: 18px; height: 18px; color: var(--acc); display: block; }
-.title { flex: 1; font-size: var(--fs-sm); font-weight: 800; letter-spacing: 0.06em; }
+.titleIcon svg { width: 22px; height: 22px; color: var(--ink); display: block; }
+/* The window's name in a box, as drawn. */
+.title { flex: none; margin-right: auto; padding: 0 12px; font-size: var(--fs-lg); border: 2px solid var(--ink); border-radius: var(--hand-b); background: var(--panel); }
 .close {
   width: 30px; height: 26px; display: grid; place-items: center;
-  border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--ink2); cursor: pointer;
+  border: 2px solid var(--ink); border-radius: var(--hand-c); background: var(--panel); color: var(--ink); cursor: pointer;
 }
 .close:hover { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
 .windowBody {
@@ -135,7 +137,7 @@
 .taskbar {
   position: relative; flex: none; height: 44px;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 0 8px;
-  background: var(--panel); border-top: 1px solid var(--line-hi);
+  background: var(--panel); border-top: 2px solid var(--ink);
 }
 .taskBtn {
   position: relative; height: 32px; min-width: 34px; padding: 0 8px; display: inline-grid; place-items: center;
@@ -145,8 +147,8 @@
 .taskbar > .taskBtn { justify-self: start; }
 .search {
   display: inline-flex; align-items: center; gap: 8px; height: 30px; width: min(320px, 34vw); padding: 0 12px;
-  border-radius: 15px; border: 1px solid var(--line); background: var(--bg); color: var(--ink3); cursor: text;
-  font-size: var(--fs-sm);
+  border-radius: var(--hand-a); border: 2px solid var(--ink); background: var(--bg); color: var(--ink2); cursor: text;
+  font-size: var(--fs-md);
 }
 .tray { justify-self: end; display: flex; align-items: center; gap: 4px; }
 .clock { padding: 0 6px; font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); white-space: nowrap; }
@@ -159,8 +161,8 @@
 .flyout {
   position: absolute; bottom: 50px; right: 8px; z-index: 5; min-width: 200px; max-height: 60vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px; padding: 8px;
-  background: var(--panel); border: 1px solid var(--line-hi); border-radius: var(--r-md);
-  box-shadow: 0 12px 30px rgba(var(--shadow-rgb), 0.5);
+  background: var(--panel); border: 2px solid var(--ink); border-radius: var(--hand-b);
+  box-shadow: var(--pencil-twice);
 }
 .flyout[data-wide='true'] { width: min(440px, 80vw); }
 .flyout > button {
@@ -185,9 +187,9 @@
 .page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
 .pageBar {
   flex: none; height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
-  background: var(--panel); border-bottom: 1px solid var(--line-hi);
+  background: var(--panel); border-bottom: 2px solid var(--ink);
 }
-.pageTitle { flex: 1; text-align: center; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: var(--fs-sm); }
+.pageTitle { flex: 1; text-align: center; letter-spacing: 0.06em; font-size: var(--fs-lg); }
 .back {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
   border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--panel2); color: var(--ink); cursor: pointer;
@@ -202,7 +204,7 @@
   position: relative; height: clamp(150px, 28vh, 260px); border-radius: var(--r-md); overflow: hidden;
   border: 1px solid var(--line); background: var(--panel2); cursor: grab; touch-action: pan-y;
 }
-.viewer canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.viewer canvas { display: block; width: 100%; height: 100%; }
 .viewerFallback { display: grid; place-items: center; height: 100%; color: var(--ink3); font-size: var(--fs-sm); }
 
 /* A phone: the laptop is the whole screen, and the icons come closer together. */
@@ -215,3 +217,12 @@
   .search span { display: none; }
   .search { width: auto; }
 }
+
+/* ---------- the app doodles ---------- */
+.doodle {
+  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  filter: url(#hand-jitter); overflow: visible;
+}
+.doodle :global(.wash) { fill: var(--acc-bg); stroke: none; }
+.doodle :global(.dot) { fill: currentColor; stroke: none; }
+.doodle :global(.label) { fill: currentColor; stroke: none; font-family: var(--sans); font-size: 9px; }

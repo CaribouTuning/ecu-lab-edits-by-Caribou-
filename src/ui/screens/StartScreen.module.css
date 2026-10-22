@@ -7,7 +7,7 @@
   padding: var(--sp-xxl);
   position: relative;
   overflow: hidden;
-  background: var(--bg);
+  background-color: var(--bg); background-image: var(--graph); background-size: var(--graph-size);
   color: var(--ink);
   font-family: var(--sans);
   text-align: center;
@@ -27,7 +27,7 @@
 
 .inner { position: relative; display: flex; flex-direction: column; align-items: center; }
 
-.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; filter: drop-shadow(0 0 18px rgba(var(--acc-rgb), 0.25)); }
+.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; transform: rotate(-2deg); }
 @media (max-height: 700px) { .logo { width: 120px; height: 128px; } }
 
 .subtitle {
@@ -38,8 +38,13 @@
   color: var(--ink2);
 }
 
-/* The picture above each way in: a pixel drawing, not an icon-font glyph. */
-.icon { width: 56px; height: 56px; margin: 0 auto 4px; color: var(--ink2); }
+/* The picture above each way in: a pen doodle, as on the pad. */
+.icon {
+  width: 64px; height: 64px; margin: 0 auto 4px; color: var(--ink);
+  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  filter: url(#hand-jitter); overflow: visible;
+}
+.icon :global(.wash) { fill: var(--acc-bg); stroke: none; }
 
 .eyebrow {
   margin-bottom: 7px;
@@ -76,7 +81,7 @@
 
 /* Each way in says what it is for. Three unlabelled buttons make a newcomer guess
    which one is the game, and the answer is not obvious from "SANDBOX". */
-.caption { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink3); }
+.caption { font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
 
 .version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink3); }
 
@@ -85,7 +90,7 @@
    560px is the project's one breakpoint — see the note beside the scale in
    tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
 @media (min-width: 560px) {
-  .title { font-size: 46px; }
+  .title { font-size: 64px; }
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }

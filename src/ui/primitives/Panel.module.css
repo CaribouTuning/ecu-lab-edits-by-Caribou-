@@ -1,7 +1,7 @@
 .panel {
   background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+  border: 1.5px solid var(--line-hi);
+  border-radius: var(--hand-b);
   padding: var(--sp-lg);
 }
 

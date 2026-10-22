@@ -26,6 +26,7 @@
 /* ---------- Physics: the curve and the stages ---------- */
 .curve { margin-bottom: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
 .curveSvg { display: block; width: 100%; height: auto; max-height: 220px; }
+.curveSvg path, .curveSvg polyline, .art path, .art rect, .art line { filter: url(#hand-jitter); }
 .rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
 .curveNums { font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); }
 .stage {
