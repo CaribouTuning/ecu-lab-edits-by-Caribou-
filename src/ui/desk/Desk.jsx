@@ -68,10 +68,13 @@ const APP_ICONS = {
   // An atom: a nucleus and two orbits.
   physics: (
     <>
-      <rect x="7" y="7" width="2" height="2" />
-      <path d="M2 6h1V5h2V4h6v1h2v1h1v4h-1v1h-2v1H5v-1H3v-1H2zm2 1v2h1v1h6V9h1V7h-1V6H5v1z" />
-      <rect x="6" y="1" width="1" height="3" />
-      <rect x="9" y="12" width="1" height="3" />
+      {/* An atom: a nucleus and three crossed orbits. */}
+      <circle cx="8" cy="8" r="1.6" />
+      <g fill="none" stroke="currentColor" strokeWidth="1.1">
+        <ellipse cx="8" cy="8" rx="7" ry="2.6" />
+        <ellipse cx="8" cy="8" rx="7" ry="2.6" transform="rotate(60 8 8)" />
+        <ellipse cx="8" cy="8" rx="7" ry="2.6" transform="rotate(-60 8 8)" />
+      </g>
     </>
   ),
 };

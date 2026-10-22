@@ -46,6 +46,7 @@ import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { AppShell, StatusStrip } from './AppShell.jsx';
+import deskApps from './desk/Apps.module.css';
 import { BuildTop } from './desk/BuildTop.jsx';
 import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
@@ -1130,7 +1131,7 @@ export function EcuLabApp() {
   // TUNE's own sub-view switcher below is unrelated: it is a second level of
   // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 'airflow', label: 'AIRFLOW', icon: Grid3x3, row: 0 },
+    { id: 'airflow', label: 'AIRFLOW', tab: 'VE · AIRFLOW', icon: Grid3x3, row: 0 },
     { id: 'spark', label: 'SPARK', icon: Zap, row: 0 },
     { id: 'fuel', label: 'FUEL', icon: Droplets, row: 0 },
     { id: 'injectors', label: 'INJECTORS', icon: Fuel, row: 0 },
@@ -1404,14 +1405,35 @@ export function EcuLabApp() {
           // overflowing the column. No media query needed, so this doesn't
           // touch the hand-maintained breakpoint list in tokens.css.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
-            <MapSlots />
+            {inCareer && <MapSlots />}
             {/* Grouped rows, each named for what its pages are: the base tables and the
                 parts they are scaled for, the ECU's control strategies, and a power
                 adder's own controller. Five to a row at 60px basis so each row stays one
                 row on a phone. A number on a page is how many of the last pull's log
                 entries send you there — shown only while that pull still describes this
                 setup. */}
-            {[0, 1, 2].filter((rowIdx) => tuneViews.some((v) => v.row === rowIdx)).map((rowIdx) => (
+            {!inCareer ? (
+              // SANDBOX: one row of tabs across the Tune window, as drawn — VE first,
+              // then every other ECU page. The rows below are the career's.
+              <>
+              <div className={deskApps.tuneTabs}>
+                {tuneViews.map((v) => {
+                  const on = tuneView === v.id;
+                  const flagged = attention[v.id] ?? 0;
+                  const Icon = v.icon;
+                  return (
+                    <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
+                      onClick={() => { goSection('tune', v.id); setSelection(null); }}
+                      aria-label={flagged ? `${v.tab ?? v.label}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
+                      <Icon size={14} aria-hidden="true" />{v.tab ?? v.label}
+                      {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <MapSlots />
+              </>
+            ) : [0, 1, 2].filter((rowIdx) => tuneViews.some((v) => v.row === rowIdx)).map((rowIdx) => (
               <div key={rowIdx}>
                 <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.ink3, margin: '4px 0 5px' }}>
                   {TUNE_GROUPS[rowIdx]}

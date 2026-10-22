@@ -96,7 +96,7 @@ async function sweep() {
   collect();
   // INJECTORS visited last: the scaling-mismatch step right after this loop needs
   // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
-  for (const view of ['AIRFLOW', 'SPARK', 'FUEL', 'SENSORS', 'INJECTORS']) {
+  for (const view of ['VE · AIRFLOW', 'SPARK', 'FUEL', 'SENSORS', 'INJECTORS']) {
     clickButton(view);
     collect();
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
@@ -144,7 +144,7 @@ async function sweep() {
   // only once there is a log to apply.
   // The pull's log also badges the TUNE pages it points at, so the name gains a count.
   goTo('TUNE');
-  clickButton(/^AIRFLOW/);
+  clickButton(/^VE · AIRFLOW/);
   collect();
 
   return [...seen];

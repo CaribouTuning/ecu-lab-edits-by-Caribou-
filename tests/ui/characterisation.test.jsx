@@ -100,7 +100,7 @@ describe('navigation', () => {
     // the button that was clicked: the button proves nothing about whether the click
     // actually switched screens.
     const marker = {
-      TUNE: () => screen.getByRole('button', { name: 'AIRFLOW' }), // TUNE_VIEWS sub-tab
+      TUNE: () => screen.getByRole('button', { name: 'VE · AIRFLOW' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
       DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
       // The live engine is its own tab now. HOME in free play has no jobs board — that
       // is CAREER's — so its marker is the stats section it opens on.

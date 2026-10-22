@@ -4,7 +4,7 @@
  * Seen from your desk, the garage door at the far end is open and the street goes past
  * outside (cars, trees, the houses opposite). The dyno is on the left with a car on its
  * rollers, a car is up on the lift on the right, and between them, nearer, the engine you
- * are building runs on its stand. The CARIBOU TUNING sign hangs over the door.
+ * are building runs on its stand. The CARIBOU TUNING sign is on the back wall, left of the door.
  *
  * Two camera poses: `desk`, sitting at the desk looking over the laptop, and `bay`, stood
  * up looking at the whole shop with the laptop shut. The scene glides between them.
@@ -50,14 +50,15 @@ export function buildShopScene(stage, init) {
   const wallC = W.wallBase;
   // Side walls, and the back wall either side of the door and above it.
   for (const s of [-1, 1]) root.add(box(0.3, 5, 14, wallC, { x: s * 8.15, y: 2.5 }));
-  root.add(box(4.25, 5, 0.3, wallC, { x: -5.875, y: 2.5, z: -7.15 }));
-  root.add(box(4.25, 5, 0.3, wallC, { x: 5.875, y: 2.5, z: -7.15 }));
-  root.add(box(7.5, 1.4, 0.3, wallC, { y: 4.3, z: -7.15 }));
-  const door = makeRollupDoor(7.5);
-  door.position.set(0, 0, -7.2);
+  // As drawn: the door right of centre, the sign on the wall to its left.
+  root.add(box(6.35, 5, 0.3, wallC, { x: -4.825, y: 2.5, z: -7.15 }));
+  root.add(box(3.15, 5, 0.3, wallC, { x: 6.425, y: 2.5, z: -7.15 }));
+  root.add(box(6.5, 1.4, 0.3, wallC, { x: 1.6, y: 4.3, z: -7.15 }));
+  const door = makeRollupDoor(6.5);
+  door.position.set(1.6, 0, -7.2);
   root.add(door);
-  const sign = makeShopSign('CARIBOU TUNING', W.toolBlue, 6.2);
-  sign.position.set(0, 4.3, -6.95);
+  const sign = makeShopSign('CARIBOU TUNING', W.toolBlue, 5.4);
+  sign.position.set(-4.85, 3.3, -6.95);
   root.add(sign);
   // Lamps over the work, forward of the door so none hangs in front of the sign.
   for (const x of [-4.6, 0, 4.6]) {

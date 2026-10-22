@@ -146,7 +146,7 @@ describe('clicking a tab', () => {
     launch();
     goTo('TUNE');
     const views = {
-      AIRFLOW: 'Volumetric Efficiency',
+      'VE · AIRFLOW': 'Volumetric Efficiency',
       SPARK: 'Ignition Timing',
       FUEL: 'Air-Fuel Ratio Target',
       INJECTORS: 'Injectors',
