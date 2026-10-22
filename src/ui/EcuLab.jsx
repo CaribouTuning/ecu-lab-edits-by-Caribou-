@@ -45,7 +45,12 @@ import {
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
-import { AppShell } from './AppShell.jsx';
+import { AppShell, StatusStrip } from './AppShell.jsx';
+import { BuildTop } from './desk/BuildTop.jsx';
+import { Desk } from './desk/Desk.jsx';
+import { LearnApp } from './desk/LearnApp.jsx';
+import { PhysicsApp } from './desk/PhysicsApp.jsx';
+import { engineSpecOf } from './world/models/engine.js';
 import { CareerBar } from './career/CareerBar.jsx';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
@@ -81,11 +86,7 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { HealthScreen } from './screens/dash/HealthScreen.jsx';
-import { LearnScreen } from './screens/dash/LearnScreen.jsx';
-import { RealCarScreen } from './screens/dash/RealCarScreen.jsx';
 import { LiveScreen } from './screens/dash/LiveScreen.jsx';
-import { StatsScreen } from './screens/dash/StatsScreen.jsx';
 import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
 import { FuelScreen } from './screens/tune/FuelScreen.jsx';
 import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
@@ -273,7 +274,6 @@ export function EcuLabApp() {
   const buildSection = tab === 'build' ? route.section : null;
   const tuneView = tab === 'tune' ? route.section : null;
   const dynoView = tab === 'dyno' ? route.section : null;
-  const dashSection = tab === 'dash' ? route.section : null;
   const revealTimer = useRef(null);
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
@@ -484,7 +484,6 @@ export function EcuLabApp() {
     }
     return toggleCacheRef.current[t];
   }, [navigate]);
-  const toggleDashSection = makeToggleSection('dash');
   const toggleBuildSection = makeToggleSection('build');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   const goCourse = () => navigate({ view: 'course', tab: null, section: null });
@@ -864,7 +863,8 @@ export function EcuLabApp() {
       })();
       return () => { cancelled = true; };
     }
-    if (appView === 'app' && mode === 'career' && tab === 'dash') {
+    // SANDBOX's laptop and its two reading apps are SANDBOX's: CAREER goes to its shop.
+    if (mode === 'career' && (appView === 'desk' || appView === 'bay' || (appView === 'app' && (tab === 'learn' || tab === 'physics')))) {
       navigate({ view: 'shop', tab: null, section: null });
     }
     return undefined;
@@ -1004,7 +1004,7 @@ export function EcuLabApp() {
   // True when the setup has moved since the pull those scores came from. The evidence
   // stays on screen and is labelled, rather than being deleted: erasing the previous
   // pull would hide the exact before/after comparison the player is in the middle of
-  // making. See ScoreScreen and StatsScreen for how each says so.
+  // making. See ScoreScreen for how it says so.
   const scoresStale = !!scores && scores.signature !== buildSignature;
 
   // Drive the audio from whichever engine is actually turning — and only while the
@@ -1121,7 +1121,7 @@ export function EcuLabApp() {
   // gone with them — `StatusStrip` in AppShell.jsx now derives the same figures from
   // the store itself rather than being handed them from here (see that file's header
   // for why it reads the store directly instead of taking props). `overallHealth`
-  // stays: HealthScreen below still reads it as a prop.
+  // stays: the laptop's notifications read it.
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   const activePreset = presetId ? presetById(presetId) : null;
 
@@ -1243,7 +1243,7 @@ export function EcuLabApp() {
         // back on its lift and SANDBOX's own car back on the bench.
         onStart={() => {
           dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          goTab('build');
+          navigate({ view: 'desk', tab: null, section: null });
         }}
         onTutorial={goTutorial}
         version={BUILD_VERSION}
@@ -1282,7 +1282,7 @@ export function EcuLabApp() {
       <TutorialScreen
         key="course"
         book={COURSE}
-        onDone={() => goSection('dash', 'learn')}
+        onDone={() => (inCareer ? changeTab('shop') : goSection('learn', 'how'))}
         onPractice={(id) => {
           // Practice is SANDBOX's: from CAREER, the customer's car goes back on its lift
           // first (a no-op in SANDBOX).
@@ -1306,18 +1306,9 @@ export function EcuLabApp() {
     );
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
-      {/* The nav, the status strip and the capped content column are all `AppShell`'s
-          now — see AppShell.jsx for what each owns and why. This outer div stays: it
-          is the 100dvh/overflow:hidden frame the shell's own `flex: 1` needs to fill,
-          not chrome AppShell has any opinion about. */}
-      <PullTraceContext.Provider value={advisorPull.points}>
-      <AppShell
-        route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine} onSearch={openPalette} onMenu={goMenu}
-        career={inCareer}
-        banner={inCareer ? <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} /> : null}
-      >
+  // The screen for this route: the same whether CAREER's shell or SANDBOX's laptop frames it.
+  const screen = (
+    <>
         {!inCareer && <MissionCoach route={route} onCourse={goCourse} />}
         {inCareer && !career.working && tab !== 'shop' && (
           <div style={{ padding: 16 }}>
@@ -1330,23 +1321,12 @@ export function EcuLabApp() {
             </Panel>
           </div>
         )}
-        {/* ---------- HOME: stats, health, learning (SANDBOX; CAREER's home is the shop) ---------- */}
-        {/* One component per section, each reading the store for itself. `live` is read
-            ONLY inside LiveScreen: the 20 Hz LIVE_STEP re-render stops there rather than
-            passing through a HOME-level parent that would drag the other three with it. */}
-        {tab === 'dash' && !inCareer && (
-          <div style={{ padding: 16 }}>
-            <StatsScreen
-              active={dashSection === 'stats'} onToggle={toggleDashSection}
-              scores={scores} scoresStale={scoresStale}
-            />
-            <HealthScreen
-              active={dashSection === 'health'} onToggle={toggleDashSection}
-              overallHealth={overallHealth} needsMafRecal={needsMafRecal}
-            />
-            <LearnScreen active={dashSection === 'learn'} onToggle={toggleDashSection} />
-            <RealCarScreen active={dashSection === 'realcar'} onToggle={toggleDashSection} />
-          </div>
+        {/* ---------- LEARN and PHYSICS: the laptop's two reading apps (SANDBOX) ---------- */}
+        {tab === 'learn' && !inCareer && (
+          <LearnApp shelf={route.section} onShelf={(id) => goSection('learn', id)} />
+        )}
+        {tab === 'physics' && !inCareer && !engineMissing && (
+          <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}
@@ -1377,6 +1357,7 @@ export function EcuLabApp() {
             `exhaustDiaError`, which the score breakdown and the dyno payload also read. */}
         {tab === 'build' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
+            {!inCareer && <BuildTop onAsk={() => goSection('build', 'engine')} />}
             {inCareer && (
               <Panel tight style={{ marginBottom: 14, fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>
                 {buildOpen ? (
@@ -1684,9 +1665,69 @@ export function EcuLabApp() {
         )}
 
 
-        {/* In the top layer when open, so where it sits in the tree does not matter. */}
-        <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
-      </AppShell>
+    </>
+  );
+
+  // SANDBOX's laptop: where it is open to, and what its notifications hold.
+  // Moving round the laptop and the shop is moving between screens, so it costs what a nav
+  // tap does (`changeTab`): the tuning grid's cursor does not come back with you.
+  const deskOpen = (t) => {
+    if (t !== 'learn') { changeTab(t); return; }
+    goSection('learn', 'how');
+    dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
+  };
+  const deskGo = (view) => {
+    navigate({ view, tab: null, section: null });
+    dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
+  };
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  /** @type {import('./desk/Desk.jsx').Notice[]} */
+  const deskNotices = [];
+  if (!inCareer) {
+    if (engineMissing) deskNotices.push({ id: 'engine', text: 'No engine yet: choose one in Build.', tone: 'warn', action: 'Build', go: () => goTab('build') });
+    else {
+      if (overallHealth < 60) deskNotices.push({ id: 'health', text: `Engine health is down to ${Math.round(overallHealth)}%.`, tone: overallHealth < 30 ? 'danger' : 'warn', action: 'Repair', go: repairEngine });
+      for (const [page, n] of Object.entries(attention)) {
+        const v = tuneViews.find((t) => t.id === page);
+        deskNotices.push({ id: `att-${page}`, text: `The last pull's log points ${n} ${n === 1 ? 'time' : 'times'} at ${v?.label ?? page}.`, tone: 'warn', action: 'Open', go: () => goSection('tune', page) });
+      }
+      if (result && !scoresStale) deskNotices.push({ id: 'pull', text: `Last pull: ${Math.round(result.peakHp)} whp.`, tone: 'ok', action: 'Dyno', go: () => goTab('dyno') });
+      // The sandbox's record, kept across sessions (saveCareer).
+      if (pullCount > 0) deskNotices.push({ id: 'record', text: `Your record: best pull ${bestScore}, total score ${totalScore}, ${pullCount} ${pullCount === 1 ? 'pull' : 'pulls'} logged.`, tone: 'ok' });
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
+      {/* CAREER: the nav, the status strip and the capped content column are `AppShell`'s.
+          SANDBOX: a laptop on the desk in your shop (desk/Desk.jsx). This outer div is the
+          100dvh/overflow:hidden frame either fills. */}
+      <PullTraceContext.Provider value={advisorPull.points}>
+      {inCareer ? (
+        <AppShell
+          route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine} onSearch={openPalette} onMenu={goMenu}
+          career={inCareer}
+          banner={<CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />}
+        >
+          {screen}
+        </AppShell>
+      ) : (
+        <Desk
+          mode={deskMode} app={tab}
+          onOpen={deskOpen}
+          onDesktop={() => deskGo('desk')}
+          onBay={() => deskGo('bay')}
+          onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
+          notices={deskNotices}
+          engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
+          status={<StatusStrip actions={false} />}
+        >
+          {deskMode === 'app' || deskMode === 'page' ? <StatusStrip actions={false} /> : null}
+          {screen}
+        </Desk>
+      )}
+      {/* In the top layer when open, so where it sits in the tree does not matter. */}
+      <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
       </PullTraceContext.Provider>
     </div>
   );

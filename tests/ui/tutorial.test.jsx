@@ -16,6 +16,7 @@ import { COURSE, TUTORIAL } from '../../src/ui/tutorial/books.js';
 import { MISSIONS, advance, markOf } from '../../src/ui/tutorial/missions.js';
 import { intakeFitted, intakeRetuned, overAdvanced, stock } from '../../src/ui/tutorial/scenarios.js';
 import { LOAD } from '../../src/sim/index.js';
+import { enterSandbox, goTo } from './nav.js';
 
 // recharts' <ResponsiveContainer> needs a ResizeObserver, which jsdom lacks.
 class ResizeObserverStub {
@@ -176,8 +177,8 @@ describe('the numbers are the game’s', () => {
   it('the stock pull the tutorial quotes is the pull the app makes on the engine it names', async () => {
     // As a player does it: SANDBOX opens with no engine, and the lessons name the Rev-Up.
     render(<EcuLab blankStart />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' }));
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(), { timeout: 10000 });
@@ -274,15 +275,15 @@ describe('practice missions', () => {
 
   it('starts from the course, follows the player into the game, and ticks the first step', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    // HOME › Learn is where the course lives.
-    fireEvent.click(screen.getByRole('button', { name: /HOME/ }));
-    fireEvent.click(screen.getByText('Learn How It Works'));
+    enterSandbox();
+    // The laptop's Learn app is where the course lives.
+    goTo('LEARN');
     act(() => { window.location.hash = screen.getByRole('link', { name: /OPEN THE COURSE/ }).getAttribute('href'); window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
     fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
     const coach = screen.getByRole('region', { name: 'Practice mission' });
     expect(within(coach).getByText('0/4')).toBeTruthy();
-    act(() => { fireEvent.click(screen.getByRole('button', { name: /DYNO/ })); });
+    // Each click inside `goTo` is its own act(): the route has to land between them.
+    goTo('DYNO');
     expect(within(screen.getByRole('region', { name: 'Practice mission' })).getByText('1/4')).toBeTruthy();
     fireEvent.click(within(screen.getByRole('region', { name: 'Practice mission' })).getByRole('button', { name: 'STOP PRACTICE' }));
     expect(screen.queryByRole('region', { name: 'Practice mission' })).toBeNull();

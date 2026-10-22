@@ -1,8 +1,7 @@
 /**
  * DYNO > SCORE (the scorecard for the last pull).
  *
- * `scores` is the shell's — DASH's StatsScreen renders the same object, so it stays a
- * shell-level read rather than being repeated per screen. It is what the last pull
+ * `scores` is the shell's, a shell-level read rather than one this screen repeats. It is what the last pull
  * MEASURED, banked at pull time (BANK_PULL) and never recomputed; `stale` is the
  * shell's answer to whether the setup has moved since, which needs the live store
  * state this screen deliberately does not reach for.

@@ -416,6 +416,13 @@ export const world = Object.freeze({
   }),
   // The text box: paper, ink and a two-tone frame, as a handheld RPG draws one.
   talk: Object.freeze({ paper: '#f7f3e8', ink: '#262a33', frame: '#34405e', frameHi: '#9cc1ee', name: '#2f5fb8', choice: '#e2ecfa' }),
+  // An engine out of its car (world/models/engine.js): the Build app's model and the stand in the shop.
+  engine: Object.freeze({
+    block: '#7d838c', blockDark: '#5c6169', head: '#a9b0b9', cover: '#c8322c', coverDark: '#8e221e', coverOhv: '#2a2d33',
+    plenum: '#b9c0c8', pipe: '#8a6a52', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
+    pulley: '#3a3e46', plug: '#2c6fd0', hose: '#22252b', filter: '#d23a3a', cooler: '#5d6470', bottle: '#3a7ad8',
+    stand: '#d8a12c', standDark: '#8a6a1c', flywheel: '#4a4f57', backdrop: '#1c2029', floor: '#2a2f3a',
+  }),
   // The cabins of the car you drive (world/models/interior.js), one palette per kind of car.
   // Each names its plastics, its trim, its seats, its wheel and its dials.
   interiors: Object.freeze({

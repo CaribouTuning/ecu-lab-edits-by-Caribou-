@@ -28,6 +28,7 @@ import React from 'react';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
 // results panel) needs one to mount at all, so without this stub any test that
@@ -52,7 +53,7 @@ function launch() {
   const view = render(<EcuLab />);
   // The start screen offers CAREER, SANDBOX and TUTORIAL on this branch rather than a
   // single START. SANDBOX is the free-play entry the old button was.
-  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+  enterSandbox();
   return view;
 }
 
@@ -76,7 +77,8 @@ describe('entry', () => {
 
   it('enters the app on SANDBOX and lands on BUILD', () => {
     launch();
-    expect(screen.getByRole('button', { name: /BUILD/ })).toBeTruthy();
+    // SANDBOX is a laptop on your desk; BUILD is its app, open in a window.
+    expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();
   });
 
   it('opens the tutorial and comes back', () => {
@@ -87,29 +89,28 @@ describe('entry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
     expect(screen.getByText(/TUTORIAL · 1\//)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
-    expect(screen.getByRole('button', { name: /BUILD/ })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();
   });
 });
 
 describe('navigation', () => {
-  it('moves between the five tabs', () => {
+  it('moves between the laptop\'s apps and the shop\'s pages', () => {
     launch();
-    // The bottom-nav buttons (HOME/BUILD/TUNE/LIVE/DYNO) are rendered unconditionally —
-    // only their active styling changes — so re-querying for the clicked button by
-    // name proves nothing about whether the click actually switched tabs; it would
-    // pass even if the tab body never moved. Assert on a marker that only exists
-    // while that tab's body is mounted instead.
+    // Assert on a marker that only exists while that screen's body is mounted, not on
+    // the button that was clicked: the button proves nothing about whether the click
+    // actually switched screens.
     const marker = {
       TUNE: () => screen.getByRole('button', { name: 'AIRFLOW' }), // TUNE_VIEWS sub-tab
       DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
       // The live engine is its own tab now. HOME in free play has no jobs board — that
       // is CAREER's — so its marker is the stats section it opens on.
       LIVE: () => screen.getByText('Live Engine'),
-      HOME: () => screen.getByText('Sandbox Stats & Last Pull'),
+      LEARN: () => screen.getByRole('navigation', { name: 'Learn shelves' }),
+      PHYSICS: () => screen.getByText('Air in'),
       BUILD: () => screen.getByText('Garage'),
     };
-    for (const tab of ['TUNE', 'DYNO', 'LIVE', 'HOME', 'BUILD']) {
-      fireEvent.click(screen.getByRole('button', { name: tab }));
+    for (const tab of ['TUNE', 'DYNO', 'LIVE', 'LEARN', 'PHYSICS', 'BUILD']) {
+      goTo(tab);
       expect(marker[tab]()).toBeTruthy();
     }
   });
@@ -161,7 +162,7 @@ describe('editing a calibration table', () => {
       .find((v) => v && v !== picker.value);
     fireEvent.change(picker, { target: { value: target } });
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     // Scope to the tuning grid itself: unscoped queries also match the BUILD tab's
     // boost-curve editor, so if tab navigation broke and the app never left BUILD,
     // an unscoped query would still find cells there and the test would pass for
@@ -187,7 +188,7 @@ describe('editing a calibration table', () => {
 describe('running a dyno pull', () => {
   it('produces a result', async () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     // doRun() calls setResult(r) synchronously (before the reveal interval even
     // starts), so the PEAK WHP tile mounts immediately — no need to wait for the

@@ -1,0 +1,76 @@
+/* The laptop's apps: Learn's shelves, Physics' stages, Build's engine and its OEM list. */
+
+.pad { padding: 16px; }
+.lead { margin: 0 0 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); max-width: 70ch; }
+
+/* ---------- Learn: shelves down the side ---------- */
+.split { display: flex; min-height: 100%; }
+.side {
+  flex: none; width: 168px; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border-right: 1px solid var(--line);
+  position: sticky; top: 0; align-self: flex-start; height: 100%;
+}
+.sideBtn {
+  padding: 12px 10px; border-radius: var(--r-sm); text-align: left;
+  border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); cursor: pointer;
+  font-size: var(--fs-sm); font-weight: 800; letter-spacing: 0.03em;
+}
+.sideBtn[aria-current='page'] { border-color: var(--acc); background: var(--acc-bg); color: var(--acc-ink); }
+.sideBody { flex: 1; min-width: 0; padding: 14px 16px; }
+@media (max-width: 560px) {
+  .split { flex-direction: column; }
+  .side { width: auto; flex-direction: row; overflow-x: auto; position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .sideBtn { flex: none; }
+}
+
+/* ---------- Physics: the curve and the stages ---------- */
+.curve { margin-bottom: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
+.curveSvg { display: block; width: 100%; height: auto; max-height: 220px; }
+.rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
+.curveNums { font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); }
+.stage {
+  display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 16px; align-items: start;
+  margin-bottom: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel);
+}
+@media (max-width: 560px) { .stage { grid-template-columns: 1fr; } }
+.stageArt { padding: 8px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
+.art { display: block; width: 100%; height: auto; }
+.stageTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--fs-md); font-weight: 800; }
+.stageNum {
+  width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;
+  background: var(--acc-bg); color: var(--acc-ink); border: 1px solid var(--acc); font-size: var(--fs-xs);
+}
+.stageWhat { margin: 0 0 8px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); }
+.eq {
+  margin-bottom: 10px; padding: 8px 10px; border-radius: var(--r-sm); border-left: 3px solid var(--acc);
+  background: var(--panel2); font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink); overflow-x: auto;
+}
+.nums { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); }
+.nums dt { color: var(--ink3); }
+.nums dd { margin: 0; font-family: var(--mono); color: var(--ink); }
+/* The pictures' strokes and fills, from the theme. */
+.artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
+.artLine2 { fill: none; stroke: var(--cyan); stroke-width: 2.2; }
+.artWarn { fill: none; stroke: var(--warn); stroke-width: 2; }
+.artGrid { stroke: var(--line-hi); stroke-width: 1; stroke-dasharray: 3 3; }
+.artAxis { stroke: var(--ink3); stroke-width: 1; }
+.artText { fill: var(--ink2); font-size: 9px; font-family: var(--sans); }
+.artText2 { fill: var(--cyan); font-size: 9px; font-family: var(--sans); }
+.curveText { fill: var(--ink2); font-size: 14px; font-family: var(--sans); }
+.curveText2 { fill: var(--cyan); font-size: 14px; font-family: var(--sans); }
+.artBox { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.5; }
+.artBox2 { fill: var(--panel3); stroke: var(--ink3); stroke-width: 1.5; }
+.artFill { fill: var(--acc); opacity: 0.75; }
+.artFill2 { fill: var(--ok); opacity: 0.8; }
+.artDanger { fill: var(--danger); opacity: 0.8; }
+
+/* ---------- Build: the engine on its turntable, the OEM list ---------- */
+.buildTop { padding: 16px 16px 0; }
+.buildRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; }
+.oem {
+  padding: 10px 14px; border-radius: var(--r-sm); border: 2px solid var(--acc); background: var(--acc-bg);
+  color: var(--acc-ink); font-weight: 800; letter-spacing: 0.05em; font-size: var(--fs-sm); cursor: pointer;
+}
+.oem[aria-expanded='true'] { background: var(--acc); color: var(--acc-on); }
+.buildNote { font-size: var(--fs-sm); color: var(--ink2); }
+.oemList { margin-top: 10px; padding: 12px; border: 1px solid var(--line-hi); border-radius: var(--r-md); background: var(--panel); }

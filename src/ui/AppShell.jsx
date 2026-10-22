@@ -44,7 +44,7 @@
  */
 
 import {
-  Activity, Flame, Gauge, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
+  Activity, Flame, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
@@ -79,7 +79,6 @@ import styles from './AppShell.module.css';
 // measure it. LIVE used to be a collapsed section on HOME, several taps down and easy
 // never to find — a poor place for the one screen that shows a calibration running.
 const NAV_ITEMS = [
-  { id: 'dash', label: TAB_NAMES.dash, icon: Gauge },
   { id: 'build', label: TAB_NAMES.build, icon: Settings },
   { id: 'tune', label: TAB_NAMES.tune, icon: Grid3x3 },
   { id: 'live', label: TAB_NAMES.live, icon: Flame },
@@ -92,7 +91,7 @@ const NAV_ITEMS = [
  */
 const CAREER_NAV_ITEMS = [
   { id: 'shop', label: 'SHOP', icon: Store },
-  ...NAV_ITEMS.filter((n) => n.id !== 'dash'),
+  ...NAV_ITEMS,
 ];
 
 /**
@@ -233,9 +232,10 @@ function fuelLabel(fuel, ethanolPct) {
  * @param {() => void} [props.onRepair]
  * @param {() => void} [props.onSearch] opens the command palette
  * @param {() => void} [props.onMenu] back to the start screen
+ * @param {boolean} [props.actions] the icon buttons; SANDBOX's laptop has them on its taskbar instead
  * @returns {React.ReactElement}
  */
-export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
+export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true }) {
   const [build] = useBuild();
   const [session] = useSession();
   const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
@@ -304,7 +304,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
             here verbatim from the header this strip replaced; Search came with the
             command palette (issue 63), its tooltip naming the shortcut this platform
             uses (see the Cmd-K handler in EcuLab.jsx). */}
-        <div className={styles.actions}>
+        {actions && <div className={styles.actions}>
           {onMenu && (
             <Button variant="ghost" size="sm" title="Main menu" aria-label="Main menu" onClick={onMenu}>
               <Home size={16} aria-hidden="true" />
@@ -323,7 +323,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu }) {
           <Button variant="ghost" size="sm" title="Repair engine" aria-label="Repair engine" onClick={onRepair}>
             <Wrench size={16} aria-hidden="true" />
           </Button>
-        </div>
+        </div>}
       </div>
     </div>
   );

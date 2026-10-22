@@ -17,8 +17,11 @@ and run a quarter mile with it.
 
 It is a teaching tool, not a game with a horsepower slider.
 
-Three ways in: **SANDBOX** is free play; **TUTORIAL** is five minutes on the basics, with
-the full Tuning Course under HOME › Learn; **CAREER** is a tuning shop of your own.
+Three ways in: **SANDBOX** is free play, on a laptop in your own shop: its desktop has
+Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide
+and the Tuning Course) and Physics (the engine model laid open, stage by stage, on your own
+engine); shut the laptop and the dyno and the engine stand (LIVE) are in the shop behind it.
+**TUTORIAL** is five minutes on the basics. **CAREER** is a tuning shop of your own.
 Customers bring cars with real faults and describe what the car does, never what is wrong
 with it: a cast of named customers, and new walk-ins every day without end, generated
 from faults the simulator genuinely produces and harder as the shop's name grows. Every

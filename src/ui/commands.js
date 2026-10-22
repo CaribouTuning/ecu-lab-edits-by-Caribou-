@@ -26,11 +26,12 @@ import { ROUTES, TAB_NAMES } from './routing.js';
  * nav's, so the palette prints exactly what the nav does.
  */
 export const TAB_KEYWORDS = {
-  dash: ['dashboard'],
-  build: ['garage', 'hardware'],
+  build: ['garage', 'hardware', 'engine model'],
   tune: ['calibration', 'tables'],
-  live: ['engine', 'sound', 'rev'],
+  live: ['engine', 'sound', 'rev', 'stand'],
   dyno: ['pull', 'power'],
+  learn: ['guide', 'articles', 'course'],
+  physics: ['model', 'equations', 'how it works'],
 };
 
 /**
@@ -38,10 +39,10 @@ export const TAB_KEYWORDS = {
  * headings. A tab with one section (LIVE) has no entry: its tab command is the page.
  */
 export const SECTION_LABELS = {
-  'dash/stats': { label: 'Sandbox Stats & Last Pull', keywords: ['stats', 'best'] },
-  'dash/health': { label: 'Engine Health', keywords: ['wear', 'repair'] },
-  'dash/learn': { label: 'Learn How It Works', keywords: ['guide', 'articles'] },
-  'dash/realcar': { label: 'Taking It To A Real Car', keywords: ['software', 'real'] },
+  'learn/sources': { label: 'Sources', keywords: ['references', 'reading', 'papers'] },
+  'learn/ecu': { label: 'The ECU', keywords: ['engine computer', 'fuel', 'tables'] },
+  'learn/engine': { label: 'The Engine', keywords: ['ve', 'lambda', 'knock', 'timing'] },
+  'learn/how': { label: 'How It Works', keywords: ['guide', 'simulator', 'model'] },
   'build/engine': { label: 'Engine Architecture', keywords: ['preset', 'cam', 'bore', 'stroke'] },
   'build/induction': { label: 'Induction', keywords: ['turbo', 'boost', 'intake'] },
   'build/fuel': { label: 'Fuel System', keywords: ['octane', 'pump'] },
@@ -113,7 +114,8 @@ export function pageCommands(flags, go) {
     out.push({ id: 'page:shop', label: 'SHOP', kind: 'page', keywords: ['career', 'customers', 'garage', 'jobs'], run: () => go('shop', null) });
   }
   for (const [tab, sections] of Object.entries(ROUTES)) {
-    if (flags.career && tab === 'dash') continue;
+    // LEARN and PHYSICS are SANDBOX's laptop apps; CAREER's nav does not have them.
+    if (flags.career && (tab === 'learn' || tab === 'physics')) continue;
     const name = TAB_NAMES[tab];
     out.push({ id: `page:${tab}`, label: name, kind: 'page', keywords: TAB_KEYWORDS[tab], run: () => go(tab, null) });
     if (sections.length < 2) continue;

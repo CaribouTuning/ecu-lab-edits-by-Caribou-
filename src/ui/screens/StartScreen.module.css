@@ -27,7 +27,18 @@
 
 .inner { position: relative; display: flex; flex-direction: column; align-items: center; }
 
-.dial { margin-bottom: 22px; }
+.logo { width: 112px; height: 112px; margin-bottom: 16px; image-rendering: pixelated; object-fit: contain; }
+
+.subtitle {
+  margin-bottom: 30px;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink2);
+}
+
+/* The picture above each way in: a pixel drawing, not an icon-font glyph. */
+.icon { width: 56px; height: 56px; margin: 0 auto 4px; color: var(--ink2); }
 
 .eyebrow {
   margin-bottom: 7px;
@@ -43,8 +54,8 @@
    one-off, not systematising a repeated value. */
 .title {
   max-width: 22ch;
-  margin-bottom: 15px;
-  font-size: 25px;
+  margin-bottom: 6px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -73,7 +84,7 @@
    560px is the project's one breakpoint — see the note beside the scale in
    tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
 @media (min-width: 560px) {
-  .title { font-size: 34px; }
+  .title { font-size: 46px; }
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }

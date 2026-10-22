@@ -31,6 +31,7 @@ import EcuLab, { DYNO_PULL_MS, EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 import { installStubAudio } from './audioStub.js';
+import { chrome, enterSandbox, goTo } from './nav.js';
 
 // Records every saveCareer call (arguments, not return value) while keeping the real
 // implementation, so the guard test below can assert on what was WRITTEN and not just
@@ -74,14 +75,15 @@ function launch() {
   const view = render(<EcuLab />);
   // The start screen offers CAREER, SANDBOX and TUTORIAL on this branch rather than a
   // single START. SANDBOX is the free-play entry the old button was.
-  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+  enterSandbox();
   return view;
 }
 
 /** Renders the app and clicks past the start screen onto HOME. */
-function launchOnHome() {
+/** Renders the app and opens the laptop's notifications, where the sandbox's record is. */
+function launchOnNotices() {
   const view = launch();
-  fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
+  fireEvent.click(screen.getByRole('button', { name: /notifications$/ }));
   return view;
 }
 
@@ -91,7 +93,7 @@ function launchOnHome() {
  */
 function launchOnLive() {
   const view = launch();
-  fireEvent.click(screen.getByRole('button', { name: 'LIVE' }));
+  goTo('LIVE');
   return view;
 }
 
@@ -111,8 +113,10 @@ function DispatchProbe({ onReady }) {
 }
 
 /** The Engine Health accordion's subtitle, which reads "<n>% overall" while collapsed. */
+/** The status strip's health readout: the worst of the three components. */
 function overallHealth() {
-  return Number(screen.getByText(/% overall$/).textContent.match(/^(\d+)%/)[1]);
+  const field = /** @type {HTMLElement} */ (document.querySelector('[data-tour="strip-health"]'));
+  return Number(field.textContent.match(/(\d+)%/)[1]);
 }
 
 describe('the REPAIR button', () => {
@@ -130,8 +134,7 @@ describe('the REPAIR button', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
+    enterSandbox();
 
     // Wear the engine directly rather than by running pulls: how much damage a given
     // build takes is the sim's business and would make this test a physics test.
@@ -146,7 +149,7 @@ describe('the REPAIR button', () => {
     // reason.
     expect(overallHealth()).toBe(42);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Repair engine' }));
+    chrome('Repair engine');
 
     expect(overallHealth()).toBe(100);
   });
@@ -241,7 +244,7 @@ describe('the live engine', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
     // Let the mount settle first — the career-restore effect resolves asynchronously
     // and dispatches three writes of its own, which are legitimate re-renders.
@@ -268,7 +271,7 @@ describe('running a dyno pull', () => {
     // stub that dispatch and the needle sits at the sweep's first point (1500 RPM) for
     // the whole pull and forever afterwards.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    goTo('DYNO');
     expect(tachReading()).toBe(1500);
 
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
@@ -294,7 +297,7 @@ describe('running a dyno pull', () => {
 
     it('holds idle before the sweep and comes back down after it, because it can be heard', async () => {
       launch();
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       // A pull opens by holding idle before it loads, so this is the first phase label.
       expect(screen.getByRole('button', { name: 'IDLING…' })).toBeTruthy();
@@ -318,7 +321,7 @@ describe('running a dyno pull', () => {
     it('skips the bookends when sound is switched off, because nobody can hear them', async () => {
       launchOnLive();
       fireEvent.click(screen.getByTitle('Engine sound'));
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
       await waitFor(
@@ -359,7 +362,7 @@ describe('running a dyno pull', () => {
       // The exhaust model is sample-rate JavaScript. Left running, a stopped engine
       // costs a noticeable share of a core for the life of the page.
       launch();
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       const [ctx] = audio.contexts;
       expect(ctx).toBeTruthy();
@@ -378,7 +381,7 @@ describe('running a dyno pull', () => {
     // correction to the same table over and over. build-store.test.jsx covers the VE
     // write itself but stops before the clear.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -406,7 +409,7 @@ describe('running a dyno pull', () => {
     // back to the sweep's first point and re-animates a beat later — a visible flash
     // on a core screen, every time a player runs back-to-back pulls.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    goTo('DYNO');
 
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(
@@ -453,7 +456,7 @@ describe('the dyno load selector', () => {
     // quietly measured the wrong thing — but the Seg's own highlight reads the value
     // back out of the store, which makes the round trip testable in one click.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    goTo('DYNO');
     expect(selectedLoad()).toBe('100 kPa');
 
     fireEvent.click(screen.getByRole('button', { name: '40 kPa' }));
@@ -498,7 +501,7 @@ describe('banking a pull', () => {
     // is no longer a hazard this test needs to dodge; it exercises the actual
     // ordering a real fast-clicking player can produce instead of avoiding it.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+    goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -530,7 +533,7 @@ describe('banking a pull', () => {
   describe('and then changing the setup without running another', () => {
     it('leaves the banked scores exactly as measured, and says they are last pull\'s', async () => {
       launch();
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       await waitFor(
         () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -566,7 +569,7 @@ describe('banking a pull', () => {
       // rule for the stock engine, and a "fit a turbo" version of this test passes with
       // the bug fully in place. Verified by running it against the old memo.
       launch();
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       await waitFor(
         () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -581,13 +584,13 @@ describe('banking a pull', () => {
       expect(Number(measured.pull)).toBeGreaterThan(0);
 
       // BUILD > EXHAUST > fit a 4.0" pipe, then back to the scorecard.
-      fireEvent.click(screen.getByRole('button', { name: 'BUILD' }));
+      goTo('BUILD');
       fireEvent.click(screen.getByText('Exhaust'));
       fireEvent.click(screen.getByRole('button', { name: '4.0"' }));
       // Guard the interaction, not just the outcome: an equality assertion passes
       // trivially if the pipe was never actually changed.
       expect(screen.getByRole('button', { name: '4.0"' }).getAttribute('aria-pressed')).toBe('true');
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
 
       expect({
@@ -604,7 +607,7 @@ describe('banking a pull', () => {
       // on screen again — so the warning has to clear itself, or it becomes noise the
       // player learns to ignore.
       launch();
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
       await waitFor(
         () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
@@ -617,13 +620,13 @@ describe('banking a pull', () => {
       // records, and the tables are the inputs a tuner changes most between pulls.
       // Same route into the grid as characterisation.test.jsx — a cell has to be
       // selected before the dock that edits it exists.
-      fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+      goTo('TUNE');
       const grid = within(screen.getByTestId('tuning-grid'));
       const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
       fireEvent.click(cells[Math.floor(cells.length / 2)]);
       const dock = within(screen.getByTestId('selection-dock'));
       fireEvent.click(dock.getByRole('button', { name: '+1' }));
-      fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
+      goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
       expect(statTile('PULL SCORE')).toBe(measured);
@@ -644,16 +647,10 @@ describe('career stats saved from a previous session', () => {
     // the failure is not just cosmetic, it destroys the data. tests/storage.test.js
     // covers the adapter and never touches this wiring.
     localStorage.setItem('career', JSON.stringify({ best: 812, total: 3405, pulls: 7 }));
-    launchOnHome();
+    launchOnNotices();
 
     // The load is async, so the first paint legitimately shows a zeroed career.
-    await waitFor(() => expect(screen.getByText('7 pulls logged')).toBeTruthy());
-
-    // Open the panel for the other two figures: the collapsed subtitle only names the
-    // pull count while no pull has been run this session.
-    fireEvent.click(screen.getByText('Sandbox Stats & Last Pull'));
-    expect(statTile('BEST PULL')).toBe('812');
-    expect(statTile('TOTAL SCORE')).toBe('3405');
+    await waitFor(() => expect(screen.getByText('Your record: best pull 812, total score 3405, 7 pulls logged.')).toBeTruthy());
   });
 
   it('does not overwrite a saved career before the load completes', async () => {

@@ -16,6 +16,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { loadShop } from '../../src/storage.js';
+import { chrome, enterSandbox, goTo } from './nav.js';
 
 class ResizeObserverStub {
   observe() {}
@@ -95,13 +96,13 @@ describe('CAREER in the app', () => {
   it('never lets one mode see the other’s car, and keeps both across the switch', async () => {
     render(<EcuLab />);
     // A SANDBOX car with something distinctive about it: a MAF scalar nobody else uses.
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    enterSandbox();
+    goTo('TUNE');
     fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '0.8' } });
 
     // To the shop by the main-menu button, and a customer's car onto the bay.
-    fireEvent.click(screen.getByRole('button', { name: 'Main menu' }));
+    chrome('Main menu');
     await openShop();
     tab('CUSTOMERS');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
@@ -111,14 +112,14 @@ describe('CAREER in the app', () => {
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '1.05' } });
 
     // Back to SANDBOX: its own car, exactly as it was.
-    fireEvent.click(screen.getByRole('button', { name: 'Main menu' }));
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    chrome('Main menu');
+    enterSandbox();
+    goTo('TUNE');
     fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('0.8');
 
     // And CAREER again: the customer's car still on its lift, half-done work and all.
-    fireEvent.click(screen.getByRole('button', { name: 'Main menu' }));
+    chrome('Main menu');
     await openShop();
     fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
     fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
@@ -131,7 +132,7 @@ describe('CAREER in the app', () => {
     tab('CUSTOMERS');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
     fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'BUILD' }));
+    goTo('BUILD');
     expect(screen.getByText(/The customer.s car\./)).toBeTruthy();
     const body = screen.getByText('Engine Architecture').closest('button').nextElementSibling;
     expect(body.querySelector('fieldset[disabled]')).not.toBeNull();

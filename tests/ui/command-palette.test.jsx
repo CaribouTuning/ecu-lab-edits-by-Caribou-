@@ -12,6 +12,7 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CommandPalette } from '../../src/ui/components/CommandPalette.jsx';
 import EcuLab from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -246,7 +247,7 @@ describe('the palette', () => {
 describe('the palette in the app', () => {
   const launch = () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
   };
   const cmdK = (init = {}) => fireEvent.keyDown(window, { key: 'k', code: 'KeyK', metaKey: true, ...init });
   const isOpen = () => Boolean(dialog()?.open);
@@ -284,7 +285,7 @@ describe('the palette in the app', () => {
     render(<EcuLab />);
     cmdK();
     expect(isOpen()).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     cmdK({ altKey: true });
     expect(isOpen()).toBe(false);
   });
@@ -297,10 +298,13 @@ describe('the palette in the app', () => {
     // Browser back to the start screen the palette was opened from. CommandPalette
     // unmounts with the view, but `paletteOpen` must not survive the round trip, or
     // re-entering the app reopens it at once.
+    // Two steps: BUILD was opened from the laptop's desktop, and the desktop from the start.
+    window.history.back();
+    await waitFor(() => expect(window.location.hash).toBe('#/desk'));
     window.history.back();
     await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
     expect(isOpen()).toBe(false);
   });
 
@@ -399,7 +403,7 @@ describe('the palette in the app', () => {
     expect(screen.getByText('No matches')).toBeTruthy();
     key('Escape');
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const cell = within(screen.getByTestId('tuning-grid')).getByRole('button', { name: '3500 RPM, 100 kPa' });
     fireEvent.click(cell);
     const before = cell.textContent;
@@ -451,7 +455,7 @@ describe('the palette in the app', () => {
 
   it('offers Stop engine once the engine is started, and running it stops it', () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'LIVE' }));
+    goTo('LIVE');
     fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
 
     cmdK();
@@ -463,7 +467,7 @@ describe('the palette in the app', () => {
 
   it('offers Redo after an undo, and running it redoes the edit', () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const cell = within(screen.getByTestId('tuning-grid')).getByRole('button', { name: '3500 RPM, 100 kPa' });
     fireEvent.click(cell);
     const before = cell.textContent;

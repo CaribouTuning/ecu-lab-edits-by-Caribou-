@@ -31,6 +31,7 @@ import { ACTIONS } from '../../src/ui/state/reducer.js';
 import { makeRunRecord } from '../../src/ui/state/runLog.js';
 import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import EcuLab, { EcuLabApp } from '../../src/ui/EcuLab.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (ResultScreen's two
 // charts) needs one to mount at all. Same stub as characterisation.test.jsx.
@@ -741,8 +742,8 @@ describe('DYNO while a pull is running', () => {
     render(<EcuLab />);
     // The start screen offers CAREER, SANDBOX and TUTORIAL rather than a single START.
     // SANDBOX is the free-play entry the old button was.
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
     // First pull, run to completion, so the switcher and a result both exist.
     fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
@@ -800,8 +801,8 @@ describe('DYNO body gating — HISTORY outlives result', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
     // Seed a restored run directly, the way RESTORE_CAREER would on a cold start —
     // `result` stays at its initial `null`, exactly as it is after a page reload.
@@ -829,8 +830,8 @@ describe('DYNO body gating — HISTORY outlives result', () => {
     // The converse: a brand-new career has neither `runs` nor `result`, and the
     // switcher — HISTORY included — must not appear for it to click into.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
 
     expect(screen.queryByRole('button', { name: 'HISTORY' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
@@ -1230,8 +1231,8 @@ describe('DYNO event bands during the reveal', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /DYNO/ }));
+    enterSandbox();
+    goTo('DYNO');
     act(() => {
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'result', value: RESULT_WITH_EVENTS });
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });

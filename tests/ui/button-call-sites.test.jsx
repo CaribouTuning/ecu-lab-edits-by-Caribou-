@@ -27,6 +27,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
 import styles from '../../src/ui/primitives/Button.module.css';
+import { enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver, and the sweep runs a dyno pull — whose result panel
 // mounts recharts' <ResponsiveContainer>, which throws without one. Same stub as
@@ -51,7 +52,7 @@ function launch() {
   render(<EcuLab />);
   // The start screen offers CAREER, SANDBOX and TUTORIAL on this branch rather than a
   // single START. SANDBOX is the free-play entry the old button was.
-  clickButton('SANDBOX');
+  enterSandbox();
 }
 
 /** @param {string|RegExp} name */
@@ -91,7 +92,7 @@ async function sweep() {
   fireEvent.click(uninstalled[0]);
   collect();
 
-  clickButton(/TUNE/);
+  goTo('TUNE');
   collect();
   // INJECTORS visited last: the scaling-mismatch step right after this loop needs
   // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
@@ -112,15 +113,18 @@ async function sweep() {
   fireEvent.click(scaling.find((b) => b.getAttribute('aria-pressed') === 'false'));
   collect();
 
-  clickButton(/HOME/);
+  // The laptop's two reading apps.
+  goTo('LEARN');
+  collect();
+  goTo('PHYSICS');
   collect();
   // The live engine is its own tab on this branch, not a section of HOME.
-  clickButton(/^LIVE$/);
+  goTo('LIVE');
   collect();
   clickButton('START ENGINE'); // mounts STOP, the other branch of that variant
   collect();
 
-  clickButton(/DYNO/);
+  goTo('DYNO');
   collect();
   clickButton('RUN DYNO PULL');
   collect();
@@ -139,7 +143,7 @@ async function sweep() {
   // The pull is what TUNE > AIRFLOW corrects VE from: APPLY HALF / APPLY ALL mount
   // only once there is a log to apply.
   // The pull's log also badges the TUNE pages it points at, so the name gains a count.
-  clickButton(/TUNE/);
+  goTo('TUNE');
   clickButton(/^AIRFLOW/);
   collect();
 
@@ -208,12 +212,12 @@ describe('the danger variant', () => {
     // exactly why the confirm is destructive: reaching it means there is hand-edited
     // calibration work for it to overwrite.
     launch();
-    clickButton(/TUNE/);
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
-    clickButton(/BUILD/);
+    goTo('BUILD');
 
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));

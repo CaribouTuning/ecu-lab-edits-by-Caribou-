@@ -14,17 +14,13 @@
  * create, and the one a later extraction is most likely to erode.
  */
 
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { HealthScreen } from '../../src/ui/screens/dash/HealthScreen.jsx';
 import { LearnScreen } from '../../src/ui/screens/dash/LearnScreen.jsx';
 import { LiveScreen } from '../../src/ui/screens/dash/LiveScreen.jsx';
-import { RealCarScreen } from '../../src/ui/screens/dash/RealCarScreen.jsx';
-import { StatsScreen } from '../../src/ui/screens/dash/StatsScreen.jsx';
-import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { StoreProvider, useSession } from '../../src/ui/state/StoreProvider.jsx';
+import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
 
@@ -40,30 +36,6 @@ function mount(node) {
 
 const noop = () => {};
 
-/**
- * Mounts a screen inside a store that already holds a dyno result — StatsScreen's
- * last-pull tiles are gated on `session.result`, which no prop can stand in for.
- * Same probe-then-rerender shape as `mountWithResult` in dyno-screens.test.jsx.
- * @param {React.ReactElement} node
- * @returns {ReturnType<typeof render>}
- */
-function mountWithResult(node) {
-  /** @type {Function} */
-  let dispatch;
-  const Capture = () => {
-    const [, d] = useSession();
-    dispatch = d;
-    return null;
-  };
-  const utils = render(<StoreProvider><Capture /></StoreProvider>);
-  act(() => dispatch({
-    type: ACTIONS.SET_SESSION_FIELD,
-    field: 'result',
-    value: { points: [], events: [], peakHp: 111, peakTq: 222 },
-  }));
-  utils.rerender(<StoreProvider><Capture />{node}</StoreProvider>);
-  return utils;
-}
 
 describe('LiveScreen', () => {
   it('reads the live engine off the store rather than off a prop', () => {
@@ -109,63 +81,6 @@ describe('LiveScreen', () => {
   });
 });
 
-describe('StatsScreen', () => {
-  it('shows the career off the store, and says so when there is no pull to report', () => {
-    mount(<StatsScreen active onToggle={noop} scores={null} />);
-    expect(screen.getByText('BEST PULL')).toBeTruthy();
-    expect(screen.getByText('TOTAL SCORE')).toBeTruthy();
-    expect(screen.getByText(/No dyno pull logged yet/)).toBeTruthy();
-  });
-
-  it('reports which section it is when its header is clicked', () => {
-    const onToggle = vi.fn();
-    mount(<StatsScreen active={false} onToggle={onToggle} scores={null} />);
-    fireEvent.click(screen.getByText('Sandbox Stats & Last Pull'));
-    expect(onToggle).toHaveBeenCalledWith('stats');
-  });
-
-  // Fabricated figures, as in dyno-screens.test.jsx: no real scoring output for the
-  // default engine lands on these.
-  const scores = { pull: 4321, wasBest: true, tuning: { score: 91 }, engineer: { score: 12 } };
-
-  it('heads the last-pull tiles plainly while they are still about the car on screen', () => {
-    mountWithResult(<StatsScreen active onToggle={noop} scores={scores} />);
-    expect(screen.getByText('LAST PULL')).toBeTruthy();
-    expect(screen.queryByText(/HAS CHANGED/)).toBeNull();
-  });
-
-  it('says the build has changed rather than dropping the tiles or re-grading them', () => {
-    // HOME has no room for a paragraph, so the heading IS the disclosure here. The
-    // figures stay: they are the previous pull, which is the thing the player is
-    // comparing against. What must never happen is showing them under a bare "LAST
-    // PULL" as though they described the build now selected.
-    mountWithResult(<StatsScreen active onToggle={noop} scores={scores} scoresStale />);
-    expect(screen.getByText('LAST PULL · SETUP HAS CHANGED SINCE')).toBeTruthy();
-    expect(screen.getByText('4321')).toBeTruthy();
-  });
-});
-
-describe('HealthScreen', () => {
-  it('meters the three components off the store', () => {
-    mount(<HealthScreen active onToggle={noop} overallHealth={100} needsMafRecal={false} />);
-    expect(screen.getAllByRole('meter')).toHaveLength(3);
-    // The MAF warning belongs to the build, not to wear, so it is absent on a stock one.
-    expect(screen.queryByRole('note')).toBeNull();
-  });
-
-  it('raises the MAF warning when the shell says the plumbing moved', () => {
-    mount(<HealthScreen active onToggle={noop} overallHealth={100} needsMafRecal />);
-    expect(within(screen.getByRole('note')).getByText('FUEL')).toBeTruthy();
-  });
-
-  it('reports which section it is when its header is clicked', () => {
-    const onToggle = vi.fn();
-    mount(<HealthScreen active={false} onToggle={onToggle} overallHealth={100} needsMafRecal={false} />);
-    fireEvent.click(screen.getByText('Engine Health'));
-    expect(onToggle).toHaveBeenCalledWith('health');
-  });
-});
-
 describe('LearnScreen', () => {
   it('renders the guide with no store read at all', () => {
     // Deliberately NOT wrapped in a store: this screen is constant, and a store read
@@ -192,21 +107,6 @@ describe('LearnScreen', () => {
     render(<LearnScreen active={false} onToggle={onToggle} />);
     fireEvent.click(screen.getByText('Learn How It Works'));
     expect(onToggle).toHaveBeenCalledWith('learn');
-  });
-});
-
-describe('RealCarScreen', () => {
-  it('carries the reference build\'s real-world articles and names its own section', () => {
-    const onToggle = vi.fn();
-    render(<RealCarScreen active onToggle={onToggle} />);
-    for (const title of [
-      'What the tables are called on real software',
-      'A real tuning session, in order',
-      'Reading a real log — it is messier than this one',
-      'What this simulator cannot teach you',
-    ]) expect(screen.getByText(title)).toBeTruthy();
-    fireEvent.click(screen.getByText('Taking It To A Real Car'));
-    expect(onToggle).toHaveBeenCalledWith('realcar');
   });
 });
 

@@ -20,6 +20,34 @@ import styles from './EngineStart.module.css';
 /**
  * @returns {React.ReactElement}
  */
+/**
+ * The factory engines, by maker, as cards: the start screen's first choice and the Build
+ * app's PRE-BUILT OEM MOTORS list.
+ * @param {{onPick: (preset: any) => void}} props
+ */
+export function PrebuiltEngines({ onPick }) {
+  return (
+    <>
+      {PRESET_GROUPS.map((g) => (
+        <div key={g.manufacturer} className={styles.group}>
+          <div className={styles.maker}>{g.manufacturer}</div>
+          <div className={styles.cards}>
+            {g.presets.map((p) => (
+              <button key={p.id} type="button" className={styles.card} onClick={() => onPick(p)} aria-label={`Use ${p.name}`}>
+                <span className={styles.name}>{p.name}</span>
+                <span className={styles.spec}>
+                  {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
+                  {p.induction.turboOn ? ' turbo' : ''} · {p.factory.crankHp} hp · {p.years}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 export function EngineStart() {
   const [, dispatch] = useBuild();
   const load = (preset) => dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) });
@@ -35,22 +63,7 @@ export function EngineStart() {
 
       <section aria-labelledby="start-prebuilt" className={styles.section}>
         <h3 className={styles.h3} id="start-prebuilt">A prebuilt engine</h3>
-        {PRESET_GROUPS.map((g) => (
-          <div key={g.manufacturer} className={styles.group}>
-            <div className={styles.maker}>{g.manufacturer}</div>
-            <div className={styles.cards}>
-              {g.presets.map((p) => (
-                <button key={p.id} type="button" className={styles.card} onClick={() => load(p)} aria-label={`Use ${p.name}`}>
-                  <span className={styles.name}>{p.name}</span>
-                  <span className={styles.spec}>
-                    {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
-                    {p.induction.turboOn ? ' turbo' : ''} · {p.factory.crankHp} hp · {p.years}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+        <PrebuiltEngines onPick={load} />
       </section>
 
       <section aria-labelledby="start-own" className={styles.section}>
