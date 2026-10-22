@@ -371,8 +371,8 @@ describe('the palette in the app', () => {
   it('goes to a tab the way the nav does', () => {
     launch();
     cmdK();
-    run('drag');
-    expect(window.location.hash).toBe('#/drag/body');
+    run('dyno');
+    expect(window.location.hash).toBe('#/dyno/result');
   });
 
   it('offers no DYNO result pages and no History before the first pull', () => {

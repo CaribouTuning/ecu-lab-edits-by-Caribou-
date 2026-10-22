@@ -242,7 +242,7 @@ function LearnScreenInner({ active, onToggle }) {
         <br /><br /><b className={styles.em}>Weight transfer is what rescues it.</b> Accelerating shifts load rearward by ΔN = m·a·h ÷ L, so grip grows with the very acceleration it enables. That is why a rear-drive car out-launches its static weight distribution, why a taller centre of gravity genuinely helps at the strip even though it hurts everywhere else, and why all-wheel drive wins anyway — it starts with every kilogram already over a driven wheel.
         <br /><br /><b className={styles.em}>One result surprises people.</b> When the tyre is the limit, every term carries the mass and it cancels:
         <br /><br /><span className={styles.formula}>a = μ·g·f ÷ (1 − μ·h/L)</span>
-        <br /><br />Adding weight to a car that is already spinning its tyres does not slow the launch at all. It slows everything after it, once grip stops being what is holding the car back. You can watch this on the DRAG page: put a huge engine on street tyres, then change the body, and the 60-foot time barely moves while the ET does.
+        <br /><br />Adding weight to a car that is already spinning its tyres does not slow the launch at all. It slows everything after it, once grip stops being what is holding the car back. You can watch this at the drag strip in CAREER: put a huge engine on street tyres, add weight, and the 60-foot time barely moves while the ET does.
       </ExpandableInfo>
 
       <ExpandableInfo title="20. What actually slows the car down">

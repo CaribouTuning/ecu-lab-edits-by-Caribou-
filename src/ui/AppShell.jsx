@@ -44,7 +44,7 @@
  */
 
 import {
-  Activity, Flag, Flame, Gauge, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
+  Activity, Flame, Gauge, Grid3x3, Home, Info, Search, Settings, Store, Wrench,
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
@@ -68,12 +68,10 @@ import styles from './AppShell.module.css';
  * much bigger touch targets.
  *
  * These are the tabs that exist today, and every one of them has a screen behind it:
- * DRAG is the fifth, added with the strip itself rather than ahead of it. Keep that
- * rule — an item here with nothing behind it is a destination that goes nowhere.
+ * Keep that rule: an item here with nothing behind it is a destination that goes nowhere.
  *
  * The order is the order the guided first run walks: design it, calibrate it, hear
- * it, measure it, then race it. DRAG last is not decoration — it is the only tab that
- * requires a completed dyno pull, so it reads as the end of the loop.
+ * it, measure it. The racing is in CAREER's 3D town.
  *
  * @type {Array<{id: string, label: string, icon: React.ElementType}>}
  */
@@ -86,16 +84,15 @@ const NAV_ITEMS = [
   { id: 'tune', label: TAB_NAMES.tune, icon: Grid3x3 },
   { id: 'live', label: TAB_NAMES.live, icon: Flame },
   { id: 'dyno', label: TAB_NAMES.dyno, icon: Activity },
-  { id: 'drag', label: TAB_NAMES.drag, icon: Flag },
 ];
 
 /**
- * CAREER's nav: the shop is home, and there is no drag strip. The customer's car is
+ * CAREER's nav: the shop is home. The customer's car is
  * the one on the bay, so the working screens are the same ones Sandbox uses.
  */
 const CAREER_NAV_ITEMS = [
   { id: 'shop', label: 'SHOP', icon: Store },
-  ...NAV_ITEMS.filter((n) => n.id !== 'dash' && n.id !== 'drag'),
+  ...NAV_ITEMS.filter((n) => n.id !== 'dash'),
 ];
 
 /**
