@@ -149,6 +149,8 @@ export function reviveCareer(raw) {
     looks: Array.isArray(c.looks) ? c.looks : [],
     found: Array.isArray(c.found) ? c.found : [],
     races: c.races && Array.isArray(c.races.won) ? c.races : { won: [], best: {} },
+    // A save from before the starter car has no flag: it has not been given one.
+    starterGiven: !!c.starterGiven,
   };
   // A shop from before the starter car gets it now, unless it already has cars.
   const withCar = withStarter(revived);

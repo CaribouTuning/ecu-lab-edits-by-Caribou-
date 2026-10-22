@@ -7,32 +7,81 @@ changes a physics number. The fingerprint is unchanged.
 
 ## The loop
 
-1. **Morning.** Customers pull into the shop. Walk to a car, open the hood, inspect it,
-   roll it onto a lift and open the laptop: the real ECU Lab screens, graded as before.
+1. **Morning.** Customers pull into the shop. Walk to a car, look under its bonnet, and open
+   the laptop at the desk: the real ECU Lab screens, graded as before.
 2. **Hand it back.** Each hand-back moves the clock on (morning, midday, evening, night)
    and the light with it. Night opens the car meet.
-3. **Spend.** Cash and reputation open the town (see below): instruments at Gearhead
-   Supply, courses at the Academy, clothes at Threads, a project car of your own at the
-   dealer, parts from the scrapyard, decor for the shop.
-4. **Prove it.** Take your own car to the drag strip: rivals are real preset cars run
-   through the same quarter-mile model as the DRAG screen. Or show it at the meet, judged on
-   build, tune and style.
+3. **Your own car.** Every new shop is handed Pops's old hatchback: a 1.6 two-valve four that
+   makes whatever the simulator says such an engine makes (not much). Fit parts at the shop's
+   bench or Gearhead Supply, swap engines, dress it up, buy more cars at Caribou Motors (from
+   $900).
+4. **Prove it.** Drive to the drag strip (north, off the highway) or Caribou Raceway (south).
+   Each has a ladder of rivals with a short story: beat them in order. Rematches pay a quarter.
 5. **Next day.** Goals, stock and customers reset from the save and the day number.
 
 ## The town
 
+A real town to drive round, not a square: downtown's main street with the shops, a grid of
+avenues and streets, two winding residential drives lined with houses, an industrial estate,
+and a ring highway with traffic. Its plan is data (`levels/townPlan.js`): the roads, the strip
+and the circuit are centre lines with widths, which the level draws as ribbons (one mesh of
+tarmac for the whole town), the race logic drives on, and the minimap draws again small.
+
 | Place | Opens at rep | What it is for |
 |---|---|---|
-| Your shop | 0 | Customers, laptop, dyno |
-| Gearhead Supply | 0 | Lifts, dyno, wideband, ethanol analyser |
+| Your shop | 0 | Customers, laptop, dyno, the parts bench |
+| Gearhead Supply | 0 | Lifts, dyno, wideband, ethanol analyser; parts |
 | Tuning Academy | 0 | Courses that unlock ECU pages |
 | Pops' Diner | 0 | A real fact with every cup |
+| Caribou Motors | 0 | Project cars from $900 |
+| Threads | 0 | Clothes (looks only) |
 | Fuel stop | 0 | 91, 93, 100 or E85 for your own cars |
-| Threads | 5 | Clothes (looks only) |
-| Sparky's Scrapyard | 10 | Dig for parts and cash |
-| Drag strip | 15 | Race rivals with your own car |
-| Caribou Motors | 25 | Buy a car of your own |
-| Car meet | 40, night | Build + tune + style judging |
+| Main Street Drags | 0 | The quarter mile: ten rivals, the Main Street Kings |
+| Caribou Raceway | 0 | A kilometre of corners: seven rivals, the club ladder |
+| Sparky's Scrapyard | 3 | Dig for parts and cash |
+| Car meet | 10, night | Build + tune + style judging |
+
+## Racing
+
+Races are driven, live, on the same vehicle model as the rest of the world. Nothing is
+replayed and nobody is handed a time.
+
+- **Rivals** (`career/races.js`) are real cars: an engine from the swap catalogue or a factory
+  preset, in a body, perhaps with tyres or gearing changed. Their torque is measured on the
+  simulator like yours. The ladders are ordered by what the cars really do: the starter car
+  beats the first drag rival and not the second (`tests/race.test.js`).
+- **AI** (`world/race.js`) steers by pure pursuit along the racing line and sets its speed
+  from the corners: v = sqrt(mu g R), with braking zones worked back from each corner. A
+  rival's skill is the share of the grip they dare use.
+- **The drag strip** is a pro tree: the ambers, then green 0.4 s later. Hold the throttle past
+  half before the green and the car leaves: red light, race lost. Reaction is timed from the
+  green; ET from when the car leaves the line to when its nose crosses the quarter. The time
+  slip explains the run (`sliptalk`).
+- **The circuit** is two laps from a standing start: five reds, then lights out. A lap only
+  counts if the car went all the way round. Drive onto the circuit on your own and the
+  practice clock times every lap.
+- **Engine swaps** (`career/engines.js`) come with their donor's ECU, on its factory
+  calibration; the old engine's bolt-ons go with the old engine, and a heavier engine makes
+  a heavier car. Engines described by their figures are calibrated from the physics
+  (`customEnginePatch`), exactly as the BUILD screen does for a player's own engine.
+
+## Driving
+
+The car model is the same bicycle model with a tyre friction circle, plus what keeps a road
+car on the road:
+
+- the rear tyres peak at a smaller slip angle and the front loses a little lateral grip to load
+  transfer, so at the limit the nose runs wide (understeer) instead of the tail coming round;
+- brake-force distribution: the rear brakes never ask more of the rear tyres than their load,
+  lightened by the braking, lets them give;
+- stability control, switched off with traction control: it compares the yaw rate with the
+  one the steering asks for and takes away any excess, and cuts the engine while the rear is
+  sliding;
+- a steering lock that tracks the tightest turn the grip allows, as a driver's hands would.
+
+Full lock at any speed pushes wide; braking hard into a turn slides wide at worst; let go of
+the wheel and the car straightens. With the aids off and the handbrake up the tail can still
+be thrown out (`tests/driving.test.js`).
 
 ## How it looks and plays
 
@@ -47,6 +96,11 @@ That is what keeps it reading as pixel art rather than a world of blocks.
   mirrored side) follows where the camera is relative to the way the person faces, so a
   character turns as they walk. A blob of shadow sits under the feet; the time of day tints
   them, so night is blue for them too.
+- **Every object does one thing.** In the shop: the board by the door (customers), the desk
+  (the laptop, which asks which car when more than one is in), a car's bonnet at its nose and
+  its driver's door on its left (inspect, road test), the bench (parts), the calendar, the
+  locker, the bell. Each spot is a few steps from the next, so one press of E only ever means
+  one thing. Customers' cars come and go through the door, round the desk.
 - **Walking** is a fixed three-quarter top-down view. **Driving** is a chase camera behind
   the car that swings with the heading, looks down the road and widens with speed.
 - **Talking** happens in a text box along the bottom: the speaker's name on a tab, the line
@@ -73,6 +127,10 @@ Every place carries a `learn` line (`src/ui/world/locations.js`); the idea behin
 - **Own cars** have real specs: wheel hp from the sweep, 0-60 and quarter mile from the
   drag model. Swap tyres, gearing, weight, fuel and watch the numbers move.
 - **Race slips** explain the run: reaction, 60 ft, traction, gearing.
+- **Lap charts** explain a circuit race: grip sets the corner speed, consistency beats one
+  heroic corner, and grass has about half the grip of tarmac.
+- **Engine swaps** teach the oldest lesson in the trade, more air through a bigger engine,
+  and its cost: weight, and a calibration that came from somebody else's car.
 - **Scrapyard** teaches salvage: what can be reused and what has been cooked.
 - **Meet** judging is build (power per tonne), tune (`computeTuningScore` and engine
   health) and style (looks and outfit). A sloppy tune cannot be saved by clothes.
@@ -81,7 +139,9 @@ Every place carries a `learn` line (`src/ui/world/locations.js`); the idea behin
 ## Code map
 
 - `src/ui/world/`: the 3D world. `runtime.js` owns stage, input, player, level and
-  driven car; `levels/` build the garage, town, interiors and strip; `models/` hold
+  driven car; `levels/` build the garage, town and interiors (`townPlan.js` and `roadNet.js`
+  are the town as data, `venue.js` the strip's tree, the circuit's lights and live races);
+  `race.js` is the AI and the race clocks; `models/` hold
   procedural people, cars, props and buildings; `driving.js` and `vehicle.js` are the car
   physics glue; `sfx.js` and `driveSound.js` are sound.
 - `src/ui/career/`: pure functions of the save (owned cars, races, meet, daily goals,

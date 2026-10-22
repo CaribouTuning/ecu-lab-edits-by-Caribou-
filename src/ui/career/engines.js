@@ -77,7 +77,7 @@ export function engineState(id) {
     st = customerCar({ preset: e.preset });
   } else {
     const v = validateCustomEngine(e.spec);
-    if (!v.ok) throw new Error(`engine ${id}: ${JSON.stringify(v.errors)}`);
+    if (!v.ok) throw new Error(`engine ${id}: ${JSON.stringify('errors' in v ? v.errors : {})}`);
     st = customerCar({ custom: customEnginePatch(v.engine, v.assumed) });
   }
   const out = { build: st.build, tune: st.tune };

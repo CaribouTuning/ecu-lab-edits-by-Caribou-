@@ -34,6 +34,7 @@ export { ownIdOf, ownJob, ownJobId, registerCars };
  * @property {number} lowered 0..1
  * @property {string|null} underglow a `world` neon key
  * @property {boolean} scoop
+ * @property {boolean} [wide] wide-body arches
  */
 
 /**
@@ -369,6 +370,12 @@ export const WHEEL_SETS = [
 ];
 export const SPOILERS = [{ id: 'none', price: 0 }, { id: 'lip', price: 200 }, { id: 'wing', price: 500 }, { id: 'gt', price: 900 }];
 export const UNDERGLOWS = [{ id: null, price: 0 }, { id: 'neonCyan', price: 400 }, { id: 'neonPink', price: 400 }, { id: 'neonGreen', price: 400 }, { id: 'neonAmber', price: 400 }];
+/** Wheel finishes: the rim's colour, free once you have the wheels. */
+export const WHEEL_FINISHES = ['chrome', 'silver', 'black', 'gold', 'white', 'red'];
+/** Stripe colours, `null` for none. */
+export const STRIPES = [null, 'white', 'black', 'red', 'gold', 'blue'];
+/** Body kits: bought once, fitted to any car after. Cosmetic: the drag figures do not move. */
+export const KITS = [{ id: 'wide', name: 'Wide-body arches', price: 1200 }, { id: 'scoop', name: 'Bonnet scoop', price: 300 }];
 
 /**
  * Change a car's looks. Things bought once stay bought: a colour or a set of wheels is paid
@@ -393,6 +400,9 @@ export function restyleCar(c, carId, patch) {
     if (k === 'wheels' && !priced('wheels', WHEEL_SETS, k, v)) return c;
     if (k === 'spoiler' && !priced('spoiler', SPOILERS, k, v)) return c;
     if (k === 'underglow' && !priced('glow', UNDERGLOWS, k, v)) return c;
+    if ((k === 'wide' || k === 'scoop') && v && !priced('kit', KITS, k, k)) return c;
+    if (k === 'wheelColor' && !WHEEL_FINISHES.includes(/** @type {string} */ (v))) return c;
+    if (k === 'stripes' && !STRIPES.includes(/** @type {any} */ (v))) return c;
   }
   if (c.money < cost) return c;
   const next = { ...c, money: c.money - cost, looks: [...(c.looks ?? []), ...bought], cars: c.cars.map((x) => (x.id === carId ? { ...x, look: { ...x.look, ...patch } } : x)) };

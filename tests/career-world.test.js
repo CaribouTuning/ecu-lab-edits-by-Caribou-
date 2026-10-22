@@ -101,7 +101,9 @@ describe('the town', () => {
   it('has a door for every place, and opens them by reputation and the hour', () => {
     expect(new Set(PLACES.map((p) => p.id)).size).toBe(PLACES.length);
     for (const p of PLACES) { expect(p.door.x).toBeTypeOf('number'); expect(p.learn.length).toBeGreaterThan(10); }
-    expect(closedBecause({ rep: 0 }, placeById('dealer'))).toMatch(/reputation/);
+    expect(closedBecause({ rep: 0 }, placeById('junk'))).toMatch(/reputation/);
+    // Everything a new shop needs to get going is open on the first morning, the venues included.
+    for (const id of ['dealer', 'supply', 'strip', 'track']) expect(closedBecause({ rep: 0 }, placeById(id))).toBeNull();
     expect(closedBecause({ rep: 500, phase: 0 }, placeById('meet'))).toMatch(/evening/);
     expect(closedBecause({ rep: 500, phase: 2 }, placeById('meet'))).toBeNull();
     expect(closedBecause({ rep: 0 }, placeById('garage'))).toBeNull();

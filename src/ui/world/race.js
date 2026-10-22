@@ -202,7 +202,7 @@ export function makeDragClock(startX, finishX, halfLen) {
  * @param {import('./driving.js').VehicleState} st @param {import('./driving.js').Powertrain} pt @param {number} laneZ @param {boolean} go
  */
 export function dragDrive(st, pt, laneZ, go) {
-  if (!go) return { throttle: 0, brake: 1, steer: 0 };
+  if (!go) return { throttle: 0.4, brake: 1, steer: 0, hold: true };
   // Drifted south (z too big) or yawed left of east: steer right is +1, left is -1.
   const drift = st.z - laneZ;
   const yaw = st.heading - Math.PI / 2;

@@ -20,9 +20,9 @@ import { jobById } from '../career/jobs.js';
 import { accept, advancePhase, nextDay, overhead } from '../career/shop.js';
 import { lookOf } from '../career/wardrobe.js';
 import { computeTuningScore } from '../../sim/index.js';
-import { FUELS, cannotFill, carState, ownJobId, refuel } from '../career/ownedCars.js';
+import { FUELS, cannotFill, carState, ownIdOf, ownJobId, refuel } from '../career/ownedCars.js';
 import { cannotEnter, entrants, judge, placing, settleMeet } from '../career/meet.js';
-import { RIVALS, cannotRace, decide, playerReaction, rivalById, rivalState, settleRace, sliptalk } from '../career/races.js';
+import { beaten, cannotRace, ladder, laptalk, nextRival, prizeFor, recordTime, rivalById, rivalState, settleRace, sliptalk } from '../career/races.js';
 import { LessonDialog, ShopPanel } from '../career/ShopPanels.jsx';
 import { Button } from '../primitives/Button.jsx';
 import { world as W } from '../tokens.js';
@@ -30,13 +30,13 @@ import { world as W } from '../tokens.js';
 import { driveSoundFrame, silenceDriveSound } from './driveSound.js';
 import { CarsPanel } from './CarsPanel.jsx';
 import { DecorPanel } from './DecorPanel.jsx';
-import { Dash, Dialogue, Labels, Objective, PromptButton, Toasts, TopBar, TouchControls } from './Hud.jsx';
+import { Dash, Dialogue, Labels, MiniMap, Objective, PromptButton, RaceHud, Toasts, TopBar, TouchControls } from './Hud.jsx';
 import { engineBayOf } from './models/car.js';
 import { bodyFor, carFor, specForJob } from './levels/common.js';
 import { buildGarage } from './levels/garage.js';
 import { INTERIORS } from './levels/interior.js';
-import { buildStrip } from './levels/strip.js';
 import { buildTown } from './levels/town.js';
+import { ARRIVE } from './levels/townPlan.js';
 import { PLACES, closedBecause, placeById } from './locations.js';
 import { createWorld } from './runtime.js';
 import { loadSettings, saveSettings } from './settings.js';
@@ -47,7 +47,7 @@ import { PartsPanel } from './PartsPanel.jsx';
 import { WardrobePanel } from './WardrobePanel.jsx';
 import styles from './World.module.css';
 
-const LEVELS = { garage: buildGarage, town: buildTown, strip: buildStrip, ...INTERIORS };
+const LEVELS = { garage: buildGarage, town: buildTown, ...INTERIORS };
 
 const TABS = [
   { id: 'today', label: 'TODAY', icon: ClipboardList, at: null },
@@ -101,10 +101,6 @@ const CLERKS = {
   dealer: {
     yes: 'SEE THE CARS',
     lines: () => [{ who: 'Rita', text: 'Every car on this lot is a real engine with real numbers. Pick one you want to learn, not just one that is fast.' }],
-  },
-  strip: {
-    yes: 'RACE',
-    lines: () => [{ who: 'Marshal', text: 'Quarter mile, two lanes, one tree. Launch, gearing and grip decide it, not just power. Want to run?' }],
   },
 };
 
@@ -178,6 +174,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [outJob, setOutJob] = useState(/** @type {string|null} */ (null));
   const [focusCar, setFocusCar] = useState(/** @type {string|null} */ (null));
   const [racing, setRacing] = useState(false);
+  const [raceHud, setRaceHud] = useState(/** @type {any} */ (null));
   const [lesson, setLesson] = useState(/** @type {string|null} */ (null));
   const [confirmReset, setConfirmReset] = useState(false);
   const [touch, setTouch] = useState(false);
@@ -222,6 +219,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       w.loadLevel(id, entry);
       setFade(false);
       if (entry.enterCar) w.enterCar();
+      entry.then?.();
     }, 340);
   }, []);
 
@@ -231,12 +229,19 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     const p = placeById(id);
     const why = p && closedBecause(c, p);
     if (why) { toast(`${p.name} is closed. ${why}`, 'warn'); return; }
+    const w = worldRef.current;
     if (id === 'garage') travel('garage', { from: 'town' });
-    else if (INTERIORS[id] || id === 'strip') travel(id, {});
+    else if (INTERIORS[id]) travel(id, {});
+    // Heading for a venue in a car: the car goes too, to the venue's access road.
+    else if (ARRIVE[id] && w?.drive?.inside) travel('town', { from: id, car: ARRIVE[id], enterCar: true });
     else travel('town', { from: id });
   }, [toast, travel]);
 
-  /** Take a car out for a drive: a customer's from its lift, or one of your own from the apron. @param {{bay?: number, ownId?: string}} what */
+  /**
+   * Take a car out for a drive: a customer's from its lift, or one of your own from the
+   * apron (or straight to a venue's access road, with `at`).
+   * @param {{bay?: number, ownId?: string, at?: {x: number, z: number, heading: number}, from?: string}} what
+   */
   const startDrive = useCallback((what) => {
     const w = worldRef.current;
     const c = careerRef.current;
@@ -254,45 +259,72 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       const rig = carFor({ ...specForJob(job, state.build), ...(own ? {} : { lowered: 0.3 }) });
       w.away.add(jobId);
       setOutJob(jobId);
-      w.setCar({ rig, pt: setup.pt, setup, boostAt: setup.boostAt, hpAt: setup.hpAt, x: -37, z: -2.4, heading: Math.PI / 2, id: jobId, name: job.customer.car });
-      travel('town', { from: 'garage', car: { x: -37, z: -2.4, heading: Math.PI / 2 }, enterCar: true });
+      const at = what.at ?? { x: -37, z: -2.4, heading: Math.PI / 2 };
+      w.setCar({ rig, pt: setup.pt, setup, boostAt: setup.boostAt, hpAt: setup.hpAt, ...at, id: jobId, name: job.customer.car });
+      travel('town', { from: what.from ?? 'garage', car: at, enterCar: true });
     }, 60);
   }, [toast, travel]);
 
-  /** Run a race: measure both cars on the simulator, replay both runs on the strip, then settle up. */
-  const startRace = useCallback((rivalId, carId) => {
+  /** The race on now: who against whom, for the result to settle. */
+  const raceRef = useRef(/** @type {null|{series: 'drag'|'track', rival: any, carId: string, gears: number, drag: any}} */ (null));
+
+  /**
+   * Race at a venue, in the car you are driving: against a rival from the ladder, or on your
+   * own against the clock. The rival says their piece first; the race starts when they are done.
+   * @param {'drag'|'track'} series @param {string|null} rivalId
+   */
+  const startRace = useCallback((series, rivalId) => {
     const w = worldRef.current;
     const c = careerRef.current;
-    const rival = rivalById(rivalId);
-    const why = rival && cannotRace(c, rival, carId);
-    if (!w || !rival || why) { if (why) toast(why, 'warn'); return; }
+    const d = w?.drive;
+    if (!w || !d?.inside) { toast('Drive one of your own cars here first.', 'warn'); return; }
+    const carId = ownIdOf(d.id);
+    if (!carId) { toast('Races are for your own cars: a customer would not thank you for racing theirs.', 'warn'); return; }
+    const rival = rivalId ? rivalById(rivalId) : null;
+    const why = rival ? cannotRace(c, rival, carId) : null;
+    if (why) { toast(why, 'warn'); return; }
     setSheet(null);
-    toast('Staging\u2026');
-    setTimeout(() => {
-      const own = c.cars.find((x) => x.id === carId);
-      const state = carState(c, carId);
-      const job = jobById(ownJobId(carId));
-      const psetup = driveSetup(state, { body: bodyFor(job), drag: { ...own.drag, lowered: own.look.lowered } });
-      const prun = psetup.strip();
-      const rstate = rivalState(rival);
-      const rsetup = driveSetup(rstate, { body: rival.body, drag: rival.drag });
-      const rrun = rsetup.strip();
-      const prt = playerReaction(c.seed, c.day);
-      const res = decide(prun, rrun, { playerRt: prt, rivalRt: rival.rt });
-      const prig = carFor({ ...specForJob(job, state.build), lowered: own.look.lowered });
-      const rrig = carFor({ body: rival.body, color: rival.color, wheels: 'mesh', plate: rival.name.slice(0, 7).toUpperCase(), engine: engineBayOf(rstate.build) });
-      w.cmd('race', {
-        player: { rig: prig, run: prun, rt: prt, setup: psetup },
-        rival: { rig: rrig, run: rrun, rt: rival.rt },
-        onDone: () => {
-          let after = settleRace(careerRef.current, rival, carId, { won: res.won, et: prun.et });
-          if (res.won) after = bump(after, 'race');
-          update(after);
-          setSheet({ type: 'raceResult', rival, own, res, prun, rrun, prt, paid: after.money - c.money, repGain: after.rep - c.rep, talk: sliptalk(prun, own.drag, psetup.car.gearCount) });
-        },
-      });
-    }, 80);
-  }, [toast, update]);
+    const own = c.cars.find((x) => x.id === carId);
+    const go = () => {
+      let rv = null;
+      if (rival) {
+        const rstate = rivalState(rival);
+        const rsetup = driveSetup(rstate, { body: rival.body, drag: rival.drag });
+        const rig = carFor({ body: rival.body, color: rival.color, wheels: (rival.drag?.gripIdx ?? 0) >= 2 ? 'race' : 'mesh', spoiler: (rival.drag?.gripIdx ?? 0) >= 1 ? 'wing' : 'lip', plate: rival.name.slice(0, 7).toUpperCase(), engine: engineBayOf(rstate.build) });
+        rv = { rig, pt: rsetup.pt, rt: rival.rt, id: rival.id, name: rival.name, skill: rival.skill ?? 0.9 };
+      }
+      raceRef.current = { series, rival, carId, gears: d.pt.car.gearCount, drag: own?.drag ?? {} };
+      w.cmd(series === 'drag' ? 'dragRace' : 'circuitRace', { rival: rv, carId });
+    };
+    const how = series === 'drag'
+      ? 'You are staged at the line. The ambers light, then the green: go on the green, not before. Leave early and your light goes red.'
+      : 'Two laps. The five red lights come on one by one, then all go out together: that is the start.';
+    say(rival ? [{ who: rival.name, text: rival.says }, { text: how }] : [{ text: how }], go);
+  }, [say, toast]);
+
+  /** A race has finished: pay out, record the time, show the slip. */
+  const finishRace = useCallback((r) => {
+    const ctx = raceRef.current;
+    raceRef.current = null;
+    const c = careerRef.current;
+    if (!ctx) return;
+    const own = c.cars.find((x) => x.id === ctx.carId);
+    const time = r.kind === 'drag' ? r.player?.et : r.best;
+    const ok = Number.isFinite(time) && !r.foul;
+    const talk = r.kind === 'drag'
+      ? (r.player?.et ? sliptalk({ et: r.player.et, trapMph: r.player.trapMph, sixtyFootT: r.player.sixtyFootT, wheelspun: r.player.wheelspun, topGearUsed: r.player.topGearUsed }, ctx.drag, ctx.gears) : [])
+      : (r.laps?.length ? laptalk({ laps: r.laps, best: r.best, offTrack: r.offTrack, topMph: r.topMph }, ctx.drag) : []);
+    if (ctx.rival) {
+      const first = !!r.won && !beaten(c, ctx.series).includes(ctx.rival.id);
+      let after = settleRace(c, ctx.rival, ctx.carId, ctx.series === 'drag' ? { won: !!r.won, et: ok ? time : undefined } : { won: !!r.won, lap: ok ? time : undefined });
+      if (r.won) after = bump(after, 'race');
+      update(after);
+      setSheet({ type: 'raceResult', r, rival: ctx.rival, own, paid: after.money - c.money, repGain: after.rep - c.rep, first, talk });
+    } else {
+      if (ok) update(recordTime(c, ctx.series, ctx.carId, time));
+      setSheet({ type: 'raceResult', r, rival: null, own, paid: 0, repGain: 0, first: false, talk, best: ok && time < ((ctx.series === 'track' ? c.track : c.races)?.best?.[ctx.carId] ?? Infinity) });
+    }
+  }, [update]);
 
   /** Show a car at the meet: measure it, put it on the turntable, and let the crowd judge. */
   const startMeet = useCallback((carId) => {
@@ -330,7 +362,6 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       boutique: () => goPhone('wardrobe'),
       diner: () => { update(bump(careerRef.current, 'tip')); setSheet({ type: 'diner' }); },
       dealer: () => { setFocusCar(null); goPhone('cars'); },
-      strip: () => setSheet({ type: 'race' }),
     }[id];
     const clerk = CLERKS[id];
     if (!open) return;
@@ -388,7 +419,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         setOutJob(null);
         silenceDriveSound();
         travel('garage', { from: 'town' });
-        toast('Back on its lift.', 'ok');
+        toast(id.startsWith('own:') ? 'Parked on the apron.' : 'Back on its lift.', 'ok');
         break;
       }
       case 'locker': goPhone('wardrobe'); break;
@@ -418,6 +449,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       }
       case 'pump': setSheet({ type: 'pump', carId: w?.drive?.id?.startsWith('own:') ? w.drive.id.slice(4) : null }); break;
       case 'meet': setSheet({ type: 'meet' }); break;
+      case 'raceMenu': setSheet({ type: 'raceMenu', series: e.series }); break;
       case 'bench': say([{ text: BENCH_LINES[(c.day + c.history.length) % BENCH_LINES.length] }]); break;
       default: break;
     }
@@ -431,7 +463,16 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     else if (e.type === 'toast') toast(e.text, e.tone);
     else if (e.type === 'level') setPlace(e.id);
     else if (e.type === 'drive') setDriving(e.on);
-    else if (e.type === 'race') setRacing(e.on);
+    else if (e.type === 'race') { setRacing(e.on); if (!e.on) setRaceHud(null); }
+    else if (e.type === 'raceHud') setRaceHud(e.hud);
+    else if (e.type === 'raceEnd') finishRace(e.result);
+    else if (e.type === 'lap') {
+      const carId = ownIdOf(e.carId);
+      const c = careerRef.current;
+      const prev = c.track?.best?.[carId ?? ''];
+      if (carId) update(recordTime(c, 'track', carId, e.time));
+      toast(`Lap ${e.time.toFixed(2)} s${prev ? (e.time < prev ? `: a new best by ${(prev - e.time).toFixed(2)} s` : ` (best ${prev.toFixed(2)})`) : ''}`, 'ok');
+    }
     else if (e.type === 'bump') { if (e.force > 5) toast('Easy! That cost you a bumper’s worth of pride.', 'warn'); }
     else if (e.type === 'map') setSheet((s) => (s?.type === 'map' ? null : { type: 'map' }));
     else if (e.type === 'photo') {
@@ -445,7 +486,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         toast('Photo saved.', 'ok');
       });
     }
-  }, [onAct, say, toast]);
+  }, [finishRace, onAct, say, toast, update]);
   const onFlatRef = useRef(onFlat);
   onFlatRef.current = onFlat;
   const onEventRef = useRef(onEvent);
@@ -552,13 +593,15 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const where = place === 'garage' ? 'Your shop' : place === 'town' ? 'Town' : placeById(place)?.name ?? place;
   const objective = useMemo(() => {
     if (!settings.hints) return null;
+    if (racing) return null;
+    if (driving && outJob?.startsWith('own:')) return 'Your car, your town. The drag strip is off the highway to the north, the Raceway to the south: drive to the start and press E. The map shows the way.';
     if (driving) return 'Feel what your tune did. When you are done, drive to the shop and park it.';
     if (outJob) return 'The customer’s car is parked outside: walk to it and press E, or drive it back to the shop.';
     if (career.last && career.last.seq !== career.lastSeen) return 'Read what the customer said: open the phone, then TODAY.';
     if (place !== 'garage' && place !== 'town') return null;
     if (career.lifts.length === 0) return place === 'garage' ? 'Walk to the board by the door and take a customer, or take your own car out from the apron.' : 'Head back to your shop on the main street.';
     return 'Look under the bonnet, then open the laptop at the desk and work out what is wrong.';
-  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, outJob, place]);
+  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, racing, outJob, place]);
 
   const takeJob = (id) => {
     const job = jobById(id);
@@ -588,6 +631,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         onMenu={onMenu}
       />
       <Objective text={objective} />
+      {place === 'town' && !drawer && !sheet && <MiniMap world={world} />}
+      {racing && <RaceHud hud={raceHud} onRetire={() => worldRef.current?.cmd('retire')} />}
       <Labels labels={labels} />
       <Toasts toasts={toasts} />
       {talk && <Dialogue talk={talk} onDone={endTalk} sound={settings.sound} />}
@@ -619,7 +664,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
           ) : drawer === 'cars' ? (
             <CarsPanel career={career} update={update} place={place} focus={focusCar} onDrive={(id) => { setDrawer(null); startDrive({ ownId: id }); }} onGo={fastTravel} onTab={setDrawer} />
           ) : drawer === 'parts' ? (
-            <PartsPanel career={career} update={update} canBuy={place === 'supply'} onGo={() => fastTravel('supply')} />
+            <PartsPanel career={career} update={update} canBuy={place === 'supply' || place === 'garage'} onGo={() => fastTravel('supply')} />
           ) : drawer === 'decor' ? (
             <DecorPanel career={career} update={update} canBuy={place === 'supply'} onGo={() => fastTravel('supply')} />
           ) : drawer === 'wardrobe' ? (
@@ -637,7 +682,15 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
 
       {sheet && (
         <Sheet
-          onFlat={onFlat} sheet={sheet} career={career} settings={settings} setSettings={setSettings} onClose={() => { if (sheet.type === 'raceResult') worldRef.current?.cmd('endRace'); if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent'); setSheet(null); }}
+          onFlat={onFlat} sheet={sheet} career={career} settings={settings} setSettings={setSettings}
+          onClose={() => {
+            if (sheet.type === 'meetResult') worldRef.current?.cmd('endPresent');
+            setSheet(null);
+            // Beat a rival for the first time and the story moves on.
+            if (sheet.type === 'raceResult' && sheet.first && sheet.rival?.next) say([{ who: 'Word gets round', text: sheet.rival.next }]);
+          }}
+          drivingId={driving ? world?.drive?.id ?? null : null} world={world}
+          onBring={(carId, series) => { setSheet(null); startDrive({ ownId: carId, at: ARRIVE[series], from: series === 'drag' ? 'strip' : 'track' }); }}
           onTravel={fastTravel} place={place} update={update} onRace={startRace} onMeet={startMeet} onWait={() => { update(advancePhase(career)); setSheet(null); toast('A few hours pass.'); }}
           onNextDay={() => { update(nextDay(career)); setSheet(null); toast('A new day. Customers are on the board.', 'ok'); }}
         />
@@ -657,7 +710,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
  * Cards that fill the middle of the screen: the car's spec sheet, closing up, the
  * trophies, the map and the settings.
  */
-function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait }) {
+function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDay, onTravel, place, update, onRace, onMeet, onWait, drivingId, onBring, world }) {
   if (sheet.type === 'inspect') {
     const job = jobById(sheet.jobId);
     return (
@@ -739,7 +792,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   if (sheet.type === 'junk') return <JunkSheet career={career} update={update} onClose={onClose} />;
   if (sheet.type === 'meet') return <MeetSheet career={career} onClose={onClose} onMeet={onMeet} />;
   if (sheet.type === 'meetResult') return <MeetResult r={sheet} onClose={onClose} />;
-  if (sheet.type === 'race') return <RaceSheet career={career} onClose={onClose} onRace={onRace} />;
+  if (sheet.type === 'raceMenu') return <RaceMenu career={career} series={sheet.series} drivingId={drivingId} onClose={onClose} onRace={onRace} onBring={onBring} />;
   if (sheet.type === 'raceResult') return <RaceResult r={sheet} onClose={onClose} />;
   if (sheet.type === 'soon') {
     return (
@@ -795,6 +848,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Map">
         <div className={styles.sheetTag}>MAP · {open.length} of {PLACES.length} places open</div>
+        {place === 'town' && <MiniMap world={world} big onPick={(id) => { if (!closedBecause(career, placeById(id))) { onClose(); onTravel(id); } }} />}
         <ul className={styles.places}>
           {PLACES.map((p) => {
             const why = closedBecause(career, p);
@@ -817,32 +871,55 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
   return null;
 }
 
-/** Choose a rival and a car. @param {{career: import('../career/shop.js').Career, onClose: () => void, onRace: (rival: string, car: string) => void}} p */
-function RaceSheet({ career, onClose, onRace }) {
-  const cars = career.cars ?? [];
-  const [carId, setCarId] = useState(cars.find((c) => !career.lifts.some((l) => l.jobId === ownJobId(c.id)))?.id ?? null);
-  const best = (id) => career.races?.best?.[id];
+const SERIES_INTRO = {
+  drag: { title: 'MAIN STREET DRAGS', text: 'The Main Street Kings run this strip, and the Champ runs the Kings. Beat them one at a time, in order. Each rival drives a real car on the same physics as yours: to beat a faster car, make yours faster, or launch better.' },
+  track: { title: 'CARIBOU RACEWAY', text: 'The club ladder: two laps, one rival at a time. On a circuit power only helps on the straights; in the corners grip is the speed limit, and the brakes decide who gets there first.' },
+};
+
+/**
+ * A venue's ladder: who is next, who is beaten, and a race against the clock.
+ * @param {{career: import('../career/shop.js').Career, series: 'drag'|'track', drivingId: string|null, onClose: () => void, onRace: (series: 'drag'|'track', rival: string|null) => void, onBring: (car: string, series: 'drag'|'track') => void}} p
+ */
+function RaceMenu({ career, series, drivingId, onClose, onRace, onBring }) {
+  const intro = SERIES_INTRO[series];
+  const carId = ownIdOf(drivingId ?? '');
+  const car = career.cars?.find((x) => x.id === carId);
+  const next = nextRival(career, series);
+  const won = beaten(career, series);
+  const rec = (series === 'track' ? career.track : career.races) ?? { best: {} };
+  const best = carId ? rec.best?.[carId] : null;
+  const list = ladder(series);
+  const idle = (career.cars ?? []).filter((x) => !career.lifts.some((l) => l.jobId === ownJobId(x.id)));
   return (
-    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Race">
-      <div className={styles.sheetTag}>THE DRAG STRIP · {career.raceDay?.day === career.day ? career.raceDay.n : 0} of 3 races today</div>
-      <p className={styles.lede}>Races are run on the strip&rsquo;s own physics, the same quarter-mile model as the DRAG screen. Your car goes down the strip as you tuned it; a rival goes down as it was built. Elapsed time from the green light decides it.</p>
-      {cars.length === 0 ? <p className={styles.lede}>You need a car of your own to race. Caribou Motors has them from $2,400.</p> : (
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label={intro.title}>
+      <div className={styles.sheetTag}>{intro.title} · {won.length} of {list.length} beaten</div>
+      <p className={styles.lede}>{intro.text}</p>
+      {!car ? (
+        <>
+          <p className={styles.lede}><b>{drivingId ? 'This is a customer’s car.' : 'You are on foot.'}</b> Races are for your own cars. Bring one here:</p>
+          <div className={styles.sheetRow}>
+            {idle.length ? idle.map((x) => <Button key={x.id} size="sm" onClick={() => onBring(x.id, series)}>BRING THE {x.name.toUpperCase()}</Button>) : <span className={styles.lede}>All your cars are on lifts.</span>}
+          </div>
+        </>
+      ) : (
         <div className={styles.sheetRow}>
-          <span className={styles.lede}>Your car</span>
-          {cars.map((c) => <Button key={c.id} size="sm" variant={carId === c.id ? 'primary' : 'ghost'} onClick={() => setCarId(c.id)}>{c.name}{best(c.id) ? ` · best ${best(c.id).toFixed(2)}s` : ''}</Button>)}
+          <span className={styles.lede}>In the {car.name}{best ? ` · best ${best.toFixed(2)} s` : ''}</span>
+          <Button size="sm" variant="ghost" onClick={() => onRace(series, null)}>{series === 'drag' ? 'SOLO PASS' : 'TIMED LAPS'}</Button>
         </div>
       )}
       <ul className={styles.places}>
-        {RIVALS.map((r) => {
-          const why = cars.length ? cannotRace(career, r, carId) : 'Needs a car of your own.';
-          const beaten = career.races?.won?.includes(r.id);
+        {list.map((r) => {
+          const isNext = next === r;
+          const done = won.includes(r.id);
+          const why = car ? cannotRace(career, r, car.id) : null;
+          const locked = !done && !isNext;
           return (
-            <li key={r.id} data-closed={why ? 'true' : 'false'}>
+            <li key={r.id} data-closed={locked ? 'true' : 'false'} data-here={isNext ? 'true' : 'false'}>
               <div>
-                <b>{r.name} · {r.car}{beaten ? ' ✓' : ''}</b>
-                <span>{why ?? `\u201c${r.says}\u201d Entry $${r.fee}, prize $${r.prize.toLocaleString('en-US')}.`}</span>
+                <b>{done ? '\u2713 ' : isNext ? '\u25b6 ' : ''}{r.name} · {r.car}</b>
+                <span>{locked ? (why ?? 'Locked: climb the ladder.') : `${isNext ? `\u201c${r.says}\u201d ` : ''}Entry $${r.fee}, ${done ? 'rematch pays' : 'prize'} $${prizeFor(career, r).toLocaleString('en-US')}.${why ? ` ${why}` : ''}`}</span>
               </div>
-              <Button size="sm" disabled={!!why} onClick={() => onRace(r.id, carId)}>RACE</Button>
+              {!locked && <Button size="sm" disabled={!car || !!why} onClick={() => onRace(series, r.id)}>{done ? 'REMATCH' : 'RACE'}</Button>}
             </li>
           );
         })}
@@ -852,27 +929,40 @@ function RaceSheet({ career, onClose, onRace }) {
   );
 }
 
-/** The time slip. @param {{r: any, onClose: () => void}} p */
-function RaceResult({ r, onClose }) {
-  const { rival, res, prun, rrun, prt, paid, repGain, talk } = r;
-  const f = (n) => (n == null ? '--' : n.toFixed(3));
+/** The time slip, or the lap chart. @param {{r: any, onClose: () => void}} p */
+function RaceResult({ r: sheet, onClose }) {
+  const { r, rival, paid, repGain, talk } = sheet;
+  const f = (n) => (n == null || !Number.isFinite(n) ? '--' : n.toFixed(3));
+  const verdict = r.solo ? (r.foul ? 'RED LIGHT' : r.finished ? 'YOUR TIME' : 'DID NOT FINISH') : r.foul ? 'RED LIGHT: YOU LOSE' : r.won ? 'YOU WIN' : 'YOU LOSE';
   return (
-    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Time slip">
-      <div className={styles.sheetTag}>TIME SLIP · {res.won ? 'YOU WIN' : 'YOU LOSE'} BY {Math.abs(res.margin).toFixed(3)} s</div>
-      <p className={styles.lede}>&ldquo;{res.won ? rival.loses : rival.wins}&rdquo; &mdash; {rival.name}</p>
-      <table className={styles.slip}>
-        <thead><tr><th /><th>YOU</th><th>{rival.name.toUpperCase()}</th></tr></thead>
-        <tbody>
-          <tr><td>Reaction</td><td>{f(prt)}</td><td>{f(rival.rt)}</td></tr>
-          <tr><td>60 ft</td><td>{f(prun.sixtyFootT)}</td><td>{f(rrun.sixtyFootT)}</td></tr>
-          <tr><td>1/8 mile</td><td>{f(prun.eighthET)}</td><td>{f(rrun.eighthET)}</td></tr>
-          <tr><td>1/4 mile</td><td>{f(prun.et)}</td><td>{f(rrun.et)}</td></tr>
-          <tr><td>Trap speed</td><td>{prun.trapMph.toFixed(1)} mph</td><td>{rrun.trapMph.toFixed(1)} mph</td></tr>
-        </tbody>
-      </table>
-      <p className={styles.lede}>{paid >= 0 ? 'Won' : 'Lost'} <b>${Math.abs(paid).toLocaleString('en-US')}</b>{repGain > 0 ? `, and reputation +${repGain} for beating ${rival.name} for the first time` : ''}.</p>
-      <ul className={styles.facts2}>{talk.map((t) => <li key={t}>{t}</li>)}</ul>
-      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>BACK TO THE PITS</Button></div>
+    <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Result">
+      <div className={styles.sheetTag}>{r.kind === 'drag' ? 'TIME SLIP' : 'LAP CHART'} · {verdict}{r.margin != null && !r.foul && rival ? ` BY ${Math.abs(r.margin).toFixed(3)} s` : ''}</div>
+      {rival && <p className={styles.lede}>&ldquo;{r.won ? rival.loses : rival.wins}&rdquo; &mdash; {rival.name}</p>}
+      {r.foul && <p className={styles.lede}>You left before the green. On a real tree that is a red light, and the race is lost before it starts: launch on the green, and the reaction time is yours to shave.</p>}
+      {r.kind === 'drag' ? (
+        <table className={styles.slip}>
+          <thead><tr><th /><th>YOU</th>{rival && <th>{rival.name.toUpperCase()}</th>}</tr></thead>
+          <tbody>
+            <tr><td>Reaction</td><td>{f(r.player?.rt)}</td>{rival && <td>{f(r.rival?.rt)}</td>}</tr>
+            <tr><td>60 ft</td><td>{f(r.player?.sixtyFootT)}</td>{rival && <td>{f(r.rival?.sixtyFootT)}</td>}</tr>
+            <tr><td>1/8 mile</td><td>{f(r.player?.eighthET)}</td>{rival && <td>{f(r.rival?.eighthET)}</td>}</tr>
+            <tr><td>1/4 mile</td><td>{f(r.player?.et)}</td>{rival && <td>{f(r.rival?.et)}</td>}</tr>
+            <tr><td>Trap speed</td><td>{r.player?.trapMph ? `${r.player.trapMph.toFixed(1)} mph` : '--'}</td>{rival && <td>{r.rival?.trapMph ? `${r.rival.trapMph.toFixed(1)} mph` : '--'}</td>}</tr>
+          </tbody>
+        </table>
+      ) : (
+        <table className={styles.slip}>
+          <thead><tr><th /><th>YOU</th>{rival && <th>{rival.name.toUpperCase()}</th>}</tr></thead>
+          <tbody>
+            {(r.laps ?? []).map((t, i) => <tr key={i}><td>Lap {i + 1}</td><td>{f(t)}</td>{rival && <td>{f(r.rival?.laps?.[i])}</td>}</tr>)}
+            <tr><td>Best lap</td><td>{f(r.best)}</td>{rival && <td>{f(r.rival?.best)}</td>}</tr>
+          </tbody>
+        </table>
+      )}
+      {rival && <p className={styles.lede}>{paid >= 0 ? 'Won' : 'Lost'} <b>${Math.abs(paid).toLocaleString('en-US')}</b>{repGain > 0 ? `, and reputation +${repGain} for beating ${rival.name} for the first time` : ''}.</p>}
+      {!rival && sheet.best && <p className={styles.lede}><b>A new best for this car.</b></p>}
+      <ul className={styles.facts2}>{(talk ?? []).map((t) => <li key={t}>{t}</li>)}</ul>
+      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>CARRY ON</Button></div>
     </div>
   );
 }
@@ -927,8 +1017,9 @@ function MeetResult({ r, onClose }) {
 /** What Pops says on the first morning. */
 const INTRO = [
   { title: 'Welcome to the shop', text: 'I am Pops. I ran this garage for thirty years and I am handing you the keys. Customers will bring cars that do not run right. Your job is to work out why, and fix it properly: the real way, with real physics.' },
-  { title: 'How it works', text: 'Walk with WASD or the arrows (or the stick on a phone). Press E near something to use it. Take a customer from the board on the left wall, look under their bonnet, open the laptop and tune. When it is right, hand the car back and get paid.' },
-  { title: 'Then spend it', text: 'Money buys instruments, courses, a car of your own, parts for it, and a look. The town has a parts counter, a school, a boutique, a scrapyard, a drag strip and a car meet. Nothing you buy adds power by magic: every part changes the air, the fuel, the grip or the weight, and the tune has to catch up.' },
+  { title: 'How it works', text: 'Walk with WASD or the arrows (or the stick on a phone). Press E near something to use it. Take a customer from the board by the door, look under their bonnet, open the laptop at the desk and tune. When it is right, hand the car back and get paid.' },
+  { title: 'Your own car', text: 'And my old hatchback is on the apron outside. It is yours. It is slow, it is tired, and it is the best teacher you will ever have: every part you fit, every engine you swap in, you will feel. The drag strip is north off the highway and the Raceway is south. Go and lose a few races.' },
+  { title: 'Then spend it', text: 'Money buys instruments, courses, parts, engines and a look. Nothing you buy adds power by magic: every part changes the air, the fuel, the grip or the weight, and the tune has to catch up.' },
 ];
 
 /** Pops at the counter: the day's goals. @param {{career: import('../career/shop.js').Career, update: (c: any) => void, onClose: () => void}} p */

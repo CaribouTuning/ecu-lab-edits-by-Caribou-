@@ -450,6 +450,7 @@ export function buildGarage(api, entry = {}) {
     const b = BAYS[bay];
     // Along the street past the door, then back in through it, straight up the middle and
     // round into the bay, clear of the desk and the cars already in.
+    /** @type {{x: number, z: number, rev?: boolean}[]} */
     const path = [
       { x: -28, z: 19.5 }, { x: 7, z: 19.5 },
       ...smoothPath([{ x: 7, z: 19.5 }, { x: 1.5, z: 15.5 }, { x: 0, z: 11 }, { x: 0, z: 4.2 }, { x: b.x * 0.55, z: 1.6 }, { x: b.x, z: 0.6 }, { x: b.x, z: b.z }]).map((q) => ({ ...q, rev: true })),

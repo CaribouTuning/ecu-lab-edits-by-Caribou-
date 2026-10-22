@@ -7,9 +7,10 @@
 import { Gauge, Paintbrush, Wrench } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
+import { engineById, engineForPreset } from '../career/engines.js';
 import {
-  PAINTS, SPOILERS, UNDERGLOWS, WHEEL_SETS, buyCar, cannotBuyCar, carLimit, carState, dealerStock, ownJobId, parkOnLift, restyleCar, sellCar, stowFromLift,
-  valueOf, partById,
+  ENGINES, KITS, PAINTS, SPOILERS, STRIPES, UNDERGLOWS, WHEEL_FINISHES, WHEEL_SETS, buyCar, cannotBuyCar, cannotSwap, carLimit, carState, dealerStock, ownJobId, parkOnLift,
+  restyleCar, sellCar, stowFromLift, swapEngine, valueOf, partById,
 } from '../career/ownedCars.js';
 import { capacity } from '../career/shop.js';
 import { Button } from '../primitives/Button.jsx';
@@ -70,19 +71,21 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
   const sel = cars.find((x) => x.id === open) ?? null;
   const owned = new Set(career.looks ?? []);
   const free = capacity(career) - career.lifts.length;
+  const canSwap = place === 'garage' || place === 'supply';
 
   return (
     <div className={styles.panel}>
       <div className={styles.slotTabs} role="tablist" aria-label="Cars">
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'cars'} onClick={() => setMode('cars')}>MY CARS {cars.length}/{carLimit(career)}</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'looks'} onClick={() => setMode('looks')} disabled={!sel}>LOOKS</button>
+        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'engine'} onClick={() => setMode('engine')} disabled={!sel}>ENGINE</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'lot'} onClick={() => setMode('lot')}>FOR SALE</button>
       </div>
 
       {mode === 'cars' && (cars.length === 0 ? (
         <section className={styles.card}>
           <div className={styles.tag}>NO CARS OF YOUR OWN YET</div>
-          <p className={styles.small}>Customers&rsquo; cars go home. Yours stay. Caribou Motors sells project cars from $2,400, each one of the factory engines the simulator knows, ready to be tuned and raced.</p>
+          <p className={styles.small}>Customers&rsquo; cars go home. Yours stay. Caribou Motors sells project cars from $900, ready to be tuned and raced.</p>
           <Button size="sm" onClick={() => (atDealer ? setMode('lot') : onGo('dealer'))}>{atDealer ? 'SEE THE LOT' : 'GO TO CARIBOU MOTORS'}</Button>
         </section>
       ) : cars.map((car) => {
@@ -99,7 +102,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             {isOpen && st && (
               <>
                 <Specs car={car} state={st} />
-                <p className={styles.small}>Parts fitted: {car.parts.length ? car.parts.map((id) => partById(id)?.name ?? id).join(', ') : 'none: it is as it left the factory.'}</p>
+                <p className={styles.small}>Engine: {engineById(car.engine ?? engineForPreset(car.preset) ?? '')?.name ?? 'factory'}. Parts fitted: {car.parts.length ? car.parts.map((id) => partById(id)?.name ?? id).join(', ') : 'none: it is as it left the factory.'}</p>
                 <div className={styles.row}>
                   {!onLift && <Button size="sm" onClick={() => onDrive(car.id)}><Gauge size={13} aria-hidden="true" /> DRIVE</Button>}
                   {onLift ? <Button size="sm" variant="ghost" onClick={() => update(stowFromLift(career, car.id))}>LOWER IT OFF THE LIFT</Button> : (
@@ -142,16 +145,57 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>STRIPES, STANCE, GLOW</div>
+            <div className={styles.tag}>WHEEL FINISH</div>
             <div className={styles.chips}>
-              <button type="button" className={styles.chip} aria-pressed={!sel.look.stripes} onClick={() => update(restyleCar(career, sel.id, { stripes: null }))}>no stripes</button>
-              <button type="button" className={styles.chip} aria-pressed={sel.look.stripes === 'white'} onClick={() => update(restyleCar(career, sel.id, { stripes: 'white' }))}>white stripes</button>
-              <button type="button" className={styles.chip} aria-pressed={sel.look.stripes === 'black'} onClick={() => update(restyleCar(career, sel.id, { stripes: 'black' }))}>black stripes</button>
+              {WHEEL_FINISHES.map((f) => <button key={f} type="button" className={styles.chip} aria-pressed={(sel.look.wheelColor ?? 'chrome') === f} onClick={() => update(restyleCar(career, sel.id, { wheelColor: f }))}>{f}</button>)}
+            </div>
+          </section>
+          <section className={styles.card}>
+            <div className={styles.tag}>STRIPES</div>
+            <div className={styles.chips}>
+              {STRIPES.map((c) => <button key={String(c)} type="button" className={styles.chip} aria-pressed={(sel.look.stripes ?? null) === c} onClick={() => update(restyleCar(career, sel.id, { stripes: c }))}>{c ? `${c} stripes` : 'no stripes'}</button>)}
+            </div>
+          </section>
+          <section className={styles.card}>
+            <div className={styles.tag}>BODY KIT</div>
+            <div className={styles.chips}>
+              {KITS.map((k) => {
+                const bought = owned.has(`kit:${k.id}`);
+                const on = !!sel.look[k.id];
+                return <button key={k.id} type="button" className={styles.chip} aria-pressed={on} disabled={!on && !bought && career.money < k.price} onClick={() => update(restyleCar(career, sel.id, { [k.id]: !on }))}>{k.name.toLowerCase()}{bought ? '' : ` ${money(k.price)}`}</button>;
+              })}
+            </div>
+            <p className={styles.dim}>Arches and scoops change how a car looks, not how it goes: the car meet scores them, the strip does not.</p>
+          </section>
+          <section className={styles.card}>
+            <div className={styles.tag}>STANCE, GLOW</div>
+            <div className={styles.chips}>
               {[0, 0.4, 0.8].map((v) => <button key={v} type="button" className={styles.chip} aria-pressed={sel.look.lowered === v} onClick={() => update(restyleCar(career, sel.id, { lowered: v }))}>{v === 0 ? 'stock height' : v < 0.5 ? 'lowered' : 'slammed'}</button>)}
               {UNDERGLOWS.map((u) => { const bought = u.price === 0 || owned.has(`glow:${u.id}`); return <button key={String(u.id)} type="button" className={styles.chip} aria-pressed={sel.look.underglow === u.id} disabled={!bought && career.money < u.price} onClick={() => update(restyleCar(career, sel.id, { underglow: u.id }))}>{u.id ? `${u.id.replace('neon', '').toLowerCase()} glow${bought ? '' : ` ${money(u.price)}`}` : 'no glow'}</button>; })}
             </div>
             <p className={styles.dim}>Lowering a car really does bring its centre of gravity down, so it shifts less weight under braking and cornering. The rest is for the car meet.</p>
           </section>
+        </div>
+      )}
+
+      {mode === 'engine' && sel && (
+        <div className={styles.grid1}>
+          <section className={styles.card}>
+            <div className={styles.tag}>ENGINE SWAP · {sel.name}</div>
+            <p className={styles.small}>A swapped engine comes out of its donor with its own ECU, on its factory calibration. The old engine&rsquo;s intake, exhaust, injectors and boost go with it; the tyres, gearing and weight work stay with the car. A heavier engine is a heavier car.{!canSwap && ' Swaps are done at your shop or at Gearhead Supply.'}</p>
+          </section>
+          {ENGINES.map((e) => {
+            const why = cannotSwap(career, sel.id, e.id);
+            const fitted = (sel.engine ?? engineForPreset(sel.preset)) === e.id;
+            return (
+              <section key={e.id} className={styles.card} data-active={fitted} aria-label={e.name}>
+                <div className={styles.itemHead}><b>{e.name}</b>{fitted && <i>FITTED</i>}</div>
+                <p className={styles.small}>{e.blurb} {e.kg ? `About ${e.kg} kg more than the little 1.6.` : ''}</p>
+                {why && !fitted && <p className={styles.blocked}>{why}</p>}
+                {!fitted && <Button size="sm" disabled={!canSwap || !!why} onClick={() => { if (window.confirm(`Swap the ${e.name} into the ${sel.name} for ${money(e.price)}? The parts on the old engine go with it.`)) update(swapEngine(career, sel.id, e.id)); }}>SWAP IN · {money(e.price)}</Button>}
+              </section>
+            );
+          })}
         </div>
       )}
 

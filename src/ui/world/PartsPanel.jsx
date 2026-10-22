@@ -41,7 +41,7 @@ export function PartsPanel({ career, update, canBuy, onGo }) {
         <div className={styles.chips}>
           {cars.map((c) => <button key={c.id} type="button" className={styles.chip} aria-pressed={car?.id === c.id} onClick={() => setCarId(c.id)}>{c.name}</button>)}
         </div>
-        <span className={styles.dim}>{canBuy ? 'Fitting a part changes the hardware and leaves the calibration alone. Retune afterwards.' : 'Parts are sold at Gearhead Supply.'}</span>
+        <span className={styles.dim}>{canBuy ? 'Fitting a part changes the hardware and leaves the calibration alone. Retune afterwards.' : 'Parts are fitted at your shop’s bench, or at Gearhead Supply.'}</span>
         {!canBuy && <Button size="sm" variant="ghost" onClick={onGo}>GO TO GEARHEAD SUPPLY</Button>}
       </div>
       {GROUPS.map((g) => (
@@ -58,7 +58,7 @@ export function PartsPanel({ career, update, canBuy, onGo }) {
                 {fitted ? <span className={styles.small}><Check size={12} aria-hidden="true" /> Fitted</span> : (
                   <>
                     {why && <p className={styles.blocked}><Lock size={11} aria-hidden="true" /> {why}</p>}
-                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(fitPart(career, car.id, p.id))}>{canBuy ? `FIT ${money(p.price)}` : 'SOLD AT SUPPLY'}</Button>
+                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(fitPart(career, car.id, p.id))}>{canBuy ? `FIT ${money(p.price)}` : 'AT THE SHOP'}</Button>
                   </>
                 )}
               </section>

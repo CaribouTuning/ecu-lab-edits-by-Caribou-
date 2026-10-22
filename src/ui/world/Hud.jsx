@@ -311,3 +311,81 @@ export function Dialogue({ talk, onDone, sound = true }) {
     </div>
   );
 }
+
+/**
+ * The race overlay: the tree's state or the start lights, then the clock, the lap and the
+ * position. The tree and the gantry are in the world too; this is the same thing big
+ * enough to read on a phone.
+ * @param {{hud: any, onRetire: () => void}} p
+ */
+export function RaceHud({ hud, onRetire }) {
+  if (!hud) return null;
+  const t = (n) => (n == null ? '--' : n.toFixed(hud.kind === 'drag' ? 3 : 2));
+  if (hud.kind === 'drag') {
+    const call = hud.foul ? 'RED LIGHT' : hud.phase === 'stage' ? 'STAGED: WAIT FOR THE GREEN' : hud.phase === 'amber' ? 'AMBER…' : hud.phase === 'run' ? 'GO!' : 'FINISHED';
+    return (
+      <div className={styles.raceHud} data-testid="race-hud" aria-live="polite">
+        <div className={styles.raceCall} data-tone={hud.foul ? 'bad' : hud.phase === 'run' ? 'go' : hud.phase === 'amber' ? 'amber' : 'wait'}>{call}</div>
+        <div className={styles.raceRow}>
+          {hud.rival && <span>vs <b>{hud.rival}</b></span>}
+          <span>RT <b>{hud.rt == null ? '--' : hud.rt < 0 ? 'EARLY' : t(hud.rt)}</b></span>
+          <span>ET <b>{t(hud.et)}</b></span>
+          {hud.rivalEt != null && <span>{hud.rival} <b>{t(hud.rivalEt)}</b></span>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.raceHud} data-testid="race-hud" aria-live="polite">
+      {hud.phase === 'lights' ? (
+        <div className={styles.raceLights} aria-label={`${hud.lights} of 5 lights`}>{[0, 1, 2, 3, 4].map((i) => <i key={i} data-on={i < hud.lights ? 'true' : 'false'} />)}</div>
+      ) : <div className={styles.raceCall} data-tone="go">LAP {hud.lap}/{hud.laps}{hud.of > 1 ? ` · P${hud.pos}` : ''}</div>}
+      <div className={styles.raceRow}>
+        {hud.rival && <span>vs <b>{hud.rival}</b></span>}
+        <span>TIME <b>{t(hud.time)}</b></span>
+        <span>BEST <b>{t(hud.best)}</b></span>
+        {hud.gap != null && hud.phase === 'run' && <span>{hud.gap > 0 ? 'BEHIND' : 'AHEAD'} <b>{Math.abs(hud.gap).toFixed(0)} m</b></span>}
+        <button type="button" className={styles.raceRetire} onClick={onRetire}>RETIRE</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The town drawn small: its roads, the places, and you. Read from the level's plan, so it
+ * is always the town you are in.
+ * @param {{world: any, big?: boolean, onPick?: (place: string) => void}} p
+ */
+export function MiniMap({ world, big = false, onPick }) {
+  const map = world?.level?.map;
+  const [me, setMe] = useState({ x: 0, z: 0, h: 0 });
+  useEffect(() => {
+    if (!world) return undefined;
+    const id = setInterval(() => {
+      const d = world.drive;
+      const p = d?.inside ? { x: d.state.x, z: d.state.z, h: d.state.heading } : { x: world.player.x, z: world.player.z, h: world.player.yaw };
+      setMe((m) => (Math.abs(m.x - p.x) + Math.abs(m.z - p.z) + Math.abs(m.h - p.h) > 0.3 ? p : m));
+    }, 125);
+    return () => clearInterval(id);
+  }, [world]);
+  if (!map) return null;
+  const b = map.bounds;
+  const pts = (r) => (r.closed ? [...r.pts, r.pts[0]] : r.pts).map((q) => `${q.x.toFixed(0)},${q.z.toFixed(0)}`).join(' ');
+  // The small map follows you; the big one shows the whole town.
+  const view = big ? `${b.minX} ${b.minZ} ${b.maxX - b.minX} ${b.maxZ - b.minZ}` : `${me.x - 110} ${me.z - 110} 220 220`;
+  return (
+    <svg className={big ? styles.mapBig : styles.miniMap} viewBox={view} role="img" aria-label="Map of the town">
+      <rect x={b.minX - 400} y={b.minZ - 400} width={b.maxX - b.minX + 800} height={b.maxZ - b.minZ + 800} className={styles.mapGround} />
+      {map.roads.map((r) => <polyline key={r.name} points={pts(r)} className={styles.mapRoad} data-kind={r.kind} strokeWidth={Math.max(r.w, big ? 7 : 5)} fill="none" />)}
+      {map.places.map((p) => (
+        <g key={p.id} transform={`translate(${p.x} ${p.z})`} onClick={onPick ? () => onPick(p.id) : undefined} className={onPick ? styles.mapPick : undefined}>
+          <circle r={big ? 7 : 5} className={styles.mapPlace} data-id={p.id} />
+          {big && <text y={-11} className={styles.mapLabel}>{p.name}</text>}
+        </g>
+      ))}
+      <g transform={`translate(${me.x} ${me.z}) rotate(${(-me.h * 180) / Math.PI})`}>
+        <path d={big ? 'M 0 14 L 9 -9 L 0 -4 L -9 -9 Z' : 'M 0 10 L 6 -6 L 0 -3 L -6 -6 Z'} className={styles.mapMe} />
+      </g>
+    </svg>
+  );
+}

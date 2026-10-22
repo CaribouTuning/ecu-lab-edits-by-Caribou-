@@ -206,7 +206,8 @@ function autoGear(pt, s, throttle) {
  *
  * @param {VehicleState} s state, mutated
  * @param {Powertrain} pt
- * @param {{throttle: number, brake: number, steer: number, handbrake?: boolean, shift?: -1|0|1, manual?: boolean, tc?: boolean, gripScale?: number, rollScale?: number}} input
+ * @param {{throttle: number, brake: number, steer: number, handbrake?: boolean, shift?: -1|0|1, manual?: boolean, tc?: boolean, gripScale?: number, rollScale?: number, hold?: boolean}} input
+ *   `hold` is a car held on a start line: on the brakes with the clutch down, the engine free to rev
  * @param {number} [dt]
  */
 export function stepVehicle(s, pt, input, dt = STEP_S) {
@@ -220,6 +221,16 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const alphaPeak = ALPHA_PEAK[grip.grade] ?? 0.15;
   const m = car.massKg;
   const { L, a, b, r, h, Iz, Iw } = geo;
+
+  // ---- held on the line: nothing moves but the revs ----
+  if (input.hold) {
+    const t0 = clamp(input.throttle, 0, 1);
+    const free = IDLE_RPM + (pt.redline * 0.75 - IDLE_RPM) * t0;
+    s.rpm += (free - s.rpm) * Math.min(1, dt * 6);
+    Object.assign(s, { vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, ax: 0, ay: 0, throttle: t0, brake: 1, reverse: false, _stopT: 0, gear: 1, limiter: false, tcCut: 0 });
+    s.t += dt;
+    return;
+  }
 
   // ---- driver ----
   let thr = clamp(input.throttle, 0, 1);

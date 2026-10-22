@@ -10,9 +10,11 @@ import { describe, expect, it } from 'vitest';
 
 import { jobById } from '../src/ui/career/jobs.js';
 import {
-  MODELS, PARTS, buyCar, cannotBuyCar, cannotFit, carLimit, carState, dealerStock, fitPart, ownJobId, ownedCar, parkOnLift, refuel, restyleCar,
-  sellCar, stowFromLift, valueOf,
+  ENGINES, KITS, MODELS, PARTS, STARTER, buyCar, cannotBuyCar, cannotFit, cannotSwap, carLimit, carState, dealerStock, fitPart, ownJobId, ownedCar, parkOnLift, refuel, restyleCar,
+  sellCar, stowFromLift, swapEngine, valueOf,
 } from '../src/ui/career/ownedCars.js';
+import { engineState } from '../src/ui/career/engines.js';
+import { driveSetup } from '../src/ui/world/vehicle.js';
 import { newCareer, reviveCareer, train } from '../src/ui/career/shop.js';
 
 // Without the starter car, so a test counts only the cars it buys.
@@ -169,6 +171,77 @@ describe('looks and fuel', () => {
     expect(carState(c, id).build.octaneIdx).toBe(2);
     expect(carState(c, id).tune).toEqual(before.tune);
     expect(refuel({ ...c, owned: c.owned.filter((x) => x !== 'flex') }, id, 3).money).toBe(c.money);
+  });
+});
+
+describe('the first car', () => {
+  it('is handed to every new shop, once, and a revived save without one gets it too', () => {
+    const c = newCareer(21);
+    expect(c.cars.map((x) => x.id)).toEqual([STARTER.id]);
+    expect(c.cars[0].engine).toBe('i4-16');
+    expect(jobById(ownJobId(STARTER.id))?.own).toBe(true);
+    const sold = sellCar(c, STARTER.id);
+    expect(reviveCareer(JSON.parse(JSON.stringify(sold))).cars).toEqual([]);
+    const old = JSON.parse(JSON.stringify({ ...c, cars: [] }));
+    delete old.starterGiven;
+    expect(reviveCareer(old).cars.map((x) => x.id)).toEqual([STARTER.id]);
+  });
+
+  it('is slow, and the dealer sells cars a week of customers can pay for', () => {
+    const c = newCareer(21);
+    const set = driveSetup(carState(c, STARTER.id), { body: STARTER.body });
+    expect(set.strip().et).toBeGreaterThan(18);
+    expect(Math.min(...MODELS.map((m) => m.price))).toBeLessThan(1000);
+    expect(dealerStock({ ...c, rep: 0 }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('engine swaps', () => {
+  it('every engine in the catalogue builds, calibrates and runs', () => {
+    for (const e of ENGINES) {
+      const st = engineState(e.id);
+      const set = driveSetup(st, { body: 'coupe' });
+      expect(set.peakHp, e.id).toBeGreaterThan(50);
+      expect(Number.isFinite(set.strip().et), e.id).toBe(true);
+    }
+  }, 120000);
+
+  it('more engine is more power, from the physics: the 2.0 out-pulls the 1.6, the V8 out-pulls both', () => {
+    const hp = (id) => driveSetup(engineState(id), { body: 'coupe' }).peakHp;
+    expect(hp('i4-20')).toBeGreaterThan(hp('i4-16') * 1.2);
+    expect(hp('lr4')).toBeGreaterThan(hp('i4-20'));
+  });
+
+  it('put the donor engine and its calibration in, take the old bolt-ons out, keep the tyres, and add the weight', () => {
+    let c = { ...newCareer(22), money: 100000, rep: 100, trained: ['spark'] };
+    c = fitPart(c, STARTER.id, 'cai');
+    c = fitPart(c, STARTER.id, 'tyres-sport');
+    const before = ownedCar(c, STARTER.id);
+    const kgBefore = driveSetup(carState(c, STARTER.id), { body: 'hatch', drag: before.drag }).car.massKg;
+    const money = c.money;
+    const after = swapEngine(c, STARTER.id, 'lr4');
+    const car = ownedCar(after, STARTER.id);
+    expect(car.engine).toBe('lr4');
+    expect(after.money).toBe(money - ENGINES.find((e) => e.id === 'lr4').price);
+    expect(car.parts).toEqual(['tyres-sport']);
+    expect(car.drag.gripIdx).toBe(1);
+    expect(carState(after, STARTER.id).tune).toEqual(engineState('lr4').tune);
+    expect(carState(after, STARTER.id).build.mods.intake).toBe(false);
+    expect(driveSetup(carState(after, STARTER.id), { body: 'hatch', drag: car.drag }).car.massKg).toBeGreaterThan(kgBefore + 50);
+    expect(cannotSwap(after, STARTER.id, 'lr4')).toMatch(/engine in it now/);
+    expect(cannotSwap({ ...after, money: 5 }, STARTER.id, 'i4-20')).toMatch(/Costs/);
+    expect(cannotSwap({ ...after, rep: 0 }, STARTER.id, 'hemi-392')).toMatch(/reputation/);
+  }, 60000);
+
+  it('body kits are cosmetic, paid for once', () => {
+    let c = { ...newCareer(23), money: 5000 };
+    const price = KITS.find((k) => k.id === 'wide').price;
+    c = restyleCar(c, STARTER.id, { wide: true });
+    expect(c.money).toBe(5000 - price);
+    c = restyleCar(c, STARTER.id, { wide: false });
+    c = restyleCar(c, STARTER.id, { wide: true });
+    expect(c.money).toBe(5000 - price);
+    expect(restyleCar(c, STARTER.id, { wheelColor: 'plaid' })).toBe(c);
   });
 });
 

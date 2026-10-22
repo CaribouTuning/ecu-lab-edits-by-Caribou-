@@ -209,6 +209,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     tele.level = id;
     onEvent({ type: 'level', id });
     prompt = null; promptKey = '';
+    onEvent({ type: 'prompt', prompt: null });
   }
 
   // ---- the car ----
@@ -345,7 +346,10 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const before = { x: s.x, z: s.z };
     const surf = level.surfaceAt?.(s.x, s.z) ?? { grip: 1, roll: 1, kind: 'road' };
     d.surface = surf.kind;
-    d.carry = advance(s, d.pt, { throttle: p.throttle, brake: p.brake, steer: input.steer(), handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn, gripScale: surf.grip, rollScale: surf.roll }, dt, d.carry);
+    const want = { throttle: p.throttle, brake: p.brake, steer: input.steer(), handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn, gripScale: surf.grip, rollScale: surf.roll };
+    // A race holds the car on the line until it starts.
+    const inp = level.driveInput ? level.driveInput(want, d) : want;
+    d.carry = advance(s, d.pt, inp, dt, d.carry);
     // Bumping into things: circles along the car's length.
     const cols = level.colliders;
     const h = s.heading;
@@ -381,7 +385,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     // The model's steer is positive to the left, and so is a turn of the wheel's group about y.
     d.rig.steer(s.steer);
     d.rig.roll(s.vx * dt);
-    d.rig.setBrake(p.brake > 0.1 && s.vx > 0);
+    d.rig.setBrake(inp.brake > 0.1 && s.vx > 0);
     d.rig.update(dt);
     syncCar(d);
     d.moved = Math.hypot(s.x - before.x, s.z - before.z);

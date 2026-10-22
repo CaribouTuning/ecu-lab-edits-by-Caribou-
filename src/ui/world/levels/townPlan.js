@@ -9,6 +9,8 @@
  * Coordinates are metres: x east, z south.
  */
 
+import { QUARTER_MILE_M } from '../../../sim/index.js';
+
 import { makeNet, measuredPath, smoothLoop } from './roadNet.js';
 
 /** The town's edge. */
@@ -45,7 +47,7 @@ export const HIGHWAY = { cx: 0, cz: 0, hw: 260, hd: 200, r: 70 };
  * at `startX`; lanes run east.
  */
 export const STRIP = {
-  z: -250, startX: -200, finishX: -200 + 402.336, endX: 335,
+  z: -250, startX: -200, finishX: -200 + QUARTER_MILE_M, endX: 335,
   lanes: { player: -246.5, rival: -253.5 },
   treeX: -197,
 };
@@ -89,6 +91,12 @@ export const ROADS = [
   { name: 'Pit Road', kind: 'road', w: 9, pts: [{ x: 0, z: 200 }, { x: 0, z: 240 }] },
   { name: 'Caribou Raceway', kind: 'track', w: CIRCUIT.width, closed: true, pts: circuitPts },
 ];
+
+/** Where a car arrives when you head for a venue: on its access road, facing in. */
+export const ARRIVE = {
+  strip: { x: -150, z: -212, heading: Math.PI },
+  track: { x: 0, z: 214, heading: 0 },
+};
 
 /** Paved areas that are not roads: lots and forecourts, as rectangles. */
 export const LOTS = [
