@@ -133,6 +133,9 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   /** @type {any} */ let level = null;
   /** @type {any} */ let drive = null;
   let paused = false;
+  /** Where the camera sits while driving: behind the car, or in the driver's seat. */
+  /** @type {'chase'|'cockpit'} */
+  let view = 'chase';
   let raf = 0;
   let last = 0;
   let prompt = null;
@@ -261,13 +264,31 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     rig.height = 1.7;
     rig.fov = 46;
     rig.snap();
+    drive.steerIn = 0;
+    setView(view);
     tele.driving = true;
     tele.redline = drive.pt.redline;
     onEvent({ type: 'drive', on: true });
   }
 
+  /** Chase camera or the driver's seat. @param {'chase'|'cockpit'} v */
+  function setView(v) {
+    view = v;
+    const cam = stage.camera;
+    // Close to the eyes the dash is within a few centimetres of the lens.
+    cam.near = v === 'cockpit' ? 0.04 : 0.1;
+    cam.updateProjectionMatrix();
+    // From the seat the roof, glass and pillars are in the way: the cabin's inside is what you see.
+    drive?.rig.setCockpit?.(v === 'cockpit');
+    onEvent({ type: 'view', view: v });
+  }
+
   function exitCar() {
     if (!drive || !drive.inside) return;
+    stage.camera.near = 0.1;
+    stage.camera.updateProjectionMatrix();
+    drive.rig.setCockpit?.(false);
+    onEvent({ type: 'view', view: 'chase' });
     const s = drive.state;
     drive.inside = false;
     drive.rig.group.remove(person.group);
@@ -342,11 +363,22 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const shift = input.pressed('shiftUp') ? 1 : input.pressed('shiftDown') ? -1 : 0;
     if (shift) s.manual = true;
     if (input.pressed('lights')) { d.lights = !d.lights; d.rig.setLights?.(d.lights); }
+    if (input.pressed('view')) setView(view === 'chase' ? 'cockpit' : 'chase');
+    if (input.pressed('aids')) { d.tcOn = !d.tcOn; onEvent({ type: 'toast', text: d.tcOn ? 'Driver aids on: traction and stability control.' : 'Driver aids off. You are on your own.', tone: d.tcOn ? 'ok' : 'warn' }); }
+    // A keyboard steers in steps; a wheel is turned. Ease the input so a tap is a nudge and a hold is a turn,
+    // quicker to let go than to wind on, and slower to wind on the faster the car goes.
+    {
+      const raw = input.steer();
+      const sp = Math.abs(s.vx);
+      const rate = Math.abs(raw) > Math.abs(d.steerIn ?? 0) && Math.sign(raw) === Math.sign(d.steerIn ?? raw) ? 4.2 / (1 + sp / 22) : 7;
+      const dSt = raw - (d.steerIn ?? 0);
+      d.steerIn = (d.steerIn ?? 0) + Math.max(-rate * dt, Math.min(rate * dt, dSt));
+    }
     if (input.pressed('reset')) { s.heading = Math.round(s.heading / (Math.PI / 2)) * (Math.PI / 2); s.vx = s.vy = s.yawRate = 0; s.wR = s.wF = 0; }
     const before = { x: s.x, z: s.z };
     const surf = level.surfaceAt?.(s.x, s.z) ?? { grip: 1, roll: 1, kind: 'road' };
     d.surface = surf.kind;
-    const want = { throttle: p.throttle, brake: p.brake, steer: input.steer(), handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn, gripScale: surf.grip, rollScale: surf.roll };
+    const want = { throttle: p.throttle, brake: p.brake, steer: d.steerIn, handbrake: p.handbrake, shift, manual: s.manual && !d.autoOnly, tc: d.tcOn, gripScale: surf.grip, rollScale: surf.roll };
     // A race holds the car on the line until it starts.
     const inp = level.driveInput ? level.driveInput(want, d) : want;
     d.carry = advance(s, d.pt, inp, dt, d.carry);
@@ -412,8 +444,39 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     tele.lean = !!mp?.leanRisk && s.throttle > 0.55;
     tele.surface = d.surface ?? 'road';
     tele.hp = d.hpAt ? d.hpAt(s.rpm) * s.throttle : 0;
+    tele.steerIn = d.steerIn;
+    // The wheel and dials inside the car follow the driver and the engine.
+    d.rig.setWheel?.(d.steerIn * 2.6);
+    d.rig.setGauges?.(toMph(Math.abs(s.vx)) / 160, s.rpm / (d.pt.redline * 1.1), [s.tcCut > 0.05, s.limiter || s.rpm > d.pt.redline * 0.96, !!tele.knock, !!tele.lean]);
     level.onDrive?.(d, dt);
     rig.update(dt, new THREE.Vector3(s.x, 0, s.z), s.heading, Math.abs(s.vx));
+    if (view === 'cockpit') cockpitCamera(d);
+  }
+
+  const eye = new THREE.Vector3();
+  const qLook = new THREE.Quaternion();
+  const eLook = new THREE.Euler(0, 0, 0, 'YXZ');
+  /**
+   * The driver's eyes: where the head is in the car, looking where the car points, with the
+   * head leading into a turn and the body rolling and pitching with the car.
+   * @param {any} d
+   */
+  function cockpitCamera(d) {
+    const s = d.state;
+    const g = d.rig.group;
+    g.updateMatrixWorld(true);
+    const seat = d.rig.seat;
+    eye.set(seat.x, seat.y + 0.22, seat.z + 0.05);
+    stage.camera.position.copy(g.localToWorld(eye));
+    // Look a little into the turn, and lift the gaze under braking.
+    const lead = THREE.MathUtils.clamp(-s.yawRate * 0.18, -0.35, 0.35);
+    const nod = THREE.MathUtils.clamp(s.ax * 0.004, -0.04, 0.04);
+    eLook.set(-0.05 + nod, Math.PI + lead, 0);
+    qLook.setFromEuler(eLook);
+    stage.camera.quaternion.copy(g.quaternion).multiply(qLook);
+    const fov = 74 + Math.min(10, Math.abs(s.vx) * 0.2);
+    if (Math.abs(stage.camera.fov - fov) > 0.05) { stage.camera.fov = fov; stage.camera.updateProjectionMatrix(); }
+    if (rig.shake > 0.001) { stage.camera.position.x += (Math.random() - 0.5) * rig.shake * 0.3; stage.camera.position.y += (Math.random() - 0.5) * rig.shake * 0.3; }
   }
 
   function findPrompt() {
@@ -527,7 +590,8 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   raf = requestAnimationFrame(frame);
 
   return Object.assign(api, {
-    loadLevel, setCar, dropCar, enterCar, exitCar, resize,
+    loadLevel, setCar, dropCar, enterCar, exitCar, resize, setView,
+    get view() { return view; },
     setLook(look) { person.setLook(look); },
     /**
      * Frame the tuner for the wardrobe: close, low, turning slowly, off to one side to make

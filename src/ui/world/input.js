@@ -25,9 +25,11 @@ const KEYS = {
   horn: ['KeyH'],
   lights: ['KeyL'],
   reset: ['Backspace'],
+  view: ['KeyV'],
+  aids: ['KeyT'],
 };
 
-const PRESSED = new Set(['interact', 'shiftUp', 'shiftDown', 'photo', 'map', 'menu', 'horn', 'lights', 'reset']);
+const PRESSED = new Set(['interact', 'shiftUp', 'shiftDown', 'photo', 'map', 'menu', 'horn', 'lights', 'reset', 'view', 'aids']);
 
 /** True when a key press is for typing into a field rather than the game. @param {EventTarget|null} t */
 function typing(t) {

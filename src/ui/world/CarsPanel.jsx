@@ -14,6 +14,7 @@ import {
 } from '../career/ownedCars.js';
 import { capacity } from '../career/shop.js';
 import { Button } from '../primitives/Button.jsx';
+import { ChassisPanel } from './ChassisPanel.jsx';
 import { world as W } from '../tokens.js';
 
 import { bodyFor } from './levels/common.js';
@@ -79,6 +80,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'cars'} onClick={() => setMode('cars')}>MY CARS {cars.length}/{carLimit(career)}</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'looks'} onClick={() => setMode('looks')} disabled={!sel}>LOOKS</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'engine'} onClick={() => setMode('engine')} disabled={!sel}>ENGINE</button>
+        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'chassis'} onClick={() => setMode('chassis')} disabled={!sel}>CHASSIS</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'lot'} onClick={() => setMode('lot')}>FOR SALE</button>
       </div>
 
@@ -177,6 +179,8 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
           </section>
         </div>
       )}
+
+      {mode === 'chassis' && sel && <ChassisPanel career={career} update={update} car={sel} />}
 
       {mode === 'engine' && sel && (
         <div className={styles.grid1}>

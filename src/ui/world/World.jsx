@@ -175,6 +175,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [focusCar, setFocusCar] = useState(/** @type {string|null} */ (null));
   const [racing, setRacing] = useState(false);
   const [raceHud, setRaceHud] = useState(/** @type {any} */ (null));
+  const [camView, setCamView] = useState('chase');
   const [lesson, setLesson] = useState(/** @type {string|null} */ (null));
   const [confirmReset, setConfirmReset] = useState(false);
   const [touch, setTouch] = useState(false);
@@ -256,7 +257,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       if (!job || !state) return;
       const own = ownId ? c.cars.find((x) => x.id === ownId) : null;
       const setup = driveSetup(state, { body: bodyFor(job), drag: own ? { ...own.drag, lowered: own.look.lowered } : { lowered: 0.3 } });
-      const rig = carFor({ ...specForJob(job, state.build), ...(own ? {} : { lowered: 0.3 }) });
+      const rig = carFor({ ...specForJob(job, state.build), ...(own ? {} : { lowered: 0.3 }), interior: true });
       w.away.add(jobId);
       setOutJob(jobId);
       const at = what.at ?? { x: -37, z: -2.4, heading: Math.PI / 2 };
@@ -465,6 +466,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     else if (e.type === 'drive') setDriving(e.on);
     else if (e.type === 'race') { setRacing(e.on); if (!e.on) setRaceHud(null); }
     else if (e.type === 'raceHud') setRaceHud(e.hud);
+    else if (e.type === 'view') setCamView(e.view);
     else if (e.type === 'raceEnd') finishRace(e.result);
     else if (e.type === 'lap') {
       const carId = ownIdOf(e.carId);
@@ -637,7 +639,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       <Toasts toasts={toasts} />
       {talk && <Dialogue talk={talk} onDone={endTalk} sound={settings.sound} />}
       {!drawer && !sheet && !racing && <PromptButton prompt={prompt} onUse={() => world?.interact()} />}
-      {(driving || racing) && <Dash world={world} units={settings.units} touch={touch} />}
+      {(driving || racing) && !(camView === 'cockpit' && driving) && <Dash world={world} units={settings.units} touch={touch} />}
       {touch && !drawer && !sheet && <TouchControls world={world} driving={driving} />}
 
       <aside ref={drawerRef} className={styles.drawer} data-open={drawer ? 'true' : 'false'} aria-hidden={drawer ? undefined : 'true'} aria-label="Phone">
@@ -838,7 +840,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
             <Button size="sm" variant="ghost" onClick={() => { setSettings({ ...settings, view: 'flat' }); onFlat(); }}>USE THE FLAT SHOP</Button>
           </div>
         )}
-        <p className={styles.lede}>Keys: WASD or arrows to walk, SHIFT to run, E to use, Q and R to turn the view, P for a photo. Driving: W/S gas and brake, A/D steer, SPACE handbrake, Z/X shift, L lights, BACKSPACE to straighten up.</p>
+        <p className={styles.lede}>Keys: WASD or arrows to walk, SHIFT to run, E to use, Q and R to turn the view, P for a photo. Driving: W/S gas and brake, A/D steer, SPACE handbrake, Z/X shift, V first-person view, T driver aids, L lights, BACKSPACE to straighten up.</p>
         <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>DONE</Button></div>
       </div>
     );

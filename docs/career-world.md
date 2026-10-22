@@ -83,6 +83,35 @@ Full lock at any speed pushes wide; braking hard into a turn slides wide at wors
 the wheel and the car straightens. With the aids off and the handbrake up the tail can still
 be thrown out (`tests/driving.test.js`).
 
+## Chassis tuning
+
+Between the engine's torque and the road there is a chassis, and it is tuned like the engine:
+`career/chassis.js` lists every control, the part that opens it, and what it changes in the
+vehicle model. A stock car lets you set tyre pressure and brake bias; everything else opens with
+a part from Gearhead Supply or the shop bench.
+
+| Control | Part | What it moves |
+|---|---|---|
+| Spring rates, anti-roll bars | Coilovers, anti-roll bars | How lateral weight transfer is shared front to rear: the balance |
+| Ride height | Sport springs, coilovers | Centre-of-gravity height: weight transfer |
+| Tyre pressure | none | Peak grip (best near 32 psi), response, rolling drag |
+| Camber | Camber arms | Cornering grip against braking and traction grip |
+| Differential lock | Limited-slip diff | Traction on the driven axle through a corner |
+| Final drive, close ratios | Gear sets | Torque multiplication and gear spacing |
+| Sequential gearbox | Dog-box | Shift time |
+| Brake bias | none | How braking is shared between the axles |
+
+The CHASSIS tab measures the setup on the vehicle model (skidpad grip, which end lets go first,
+100-0 km/h) so a change shows in a number. None of it touches the simulator or the torque curve.
+
+## First person
+
+V in a car, or the CAM button, puts the camera at the driver's eyes. The car you drive is built
+with an interior (`models/interior.js`): a dash with a hooded binnacle and working dials, a
+three-spoke wheel that turns with the steering, arms and hands on it, A-pillars, a roof
+lining and a mirror. The roof, glass and body pillars are hidden from inside; the cabin's
+panels are drawn double-sided. Other cars are built without an interior, to keep draw calls down.
+
 ## How it looks and plays
 
 The reference is the handheld RPGs of the DS era: a 3-D world of simple textured shapes

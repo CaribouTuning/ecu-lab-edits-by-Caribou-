@@ -46,7 +46,7 @@ export { ownIdOf, ownJob, ownJobId, registerCars };
  * @property {Look} look
  * @property {string} plate
  * @property {{build: any, tune: any}} car hardware and calibration, when parked
- * @property {{gripIdx?: number, finalDrive?: number, massDelta?: number, engineKg?: number}} drag what the strip and the road see
+ * @property {{gripIdx?: number, finalDrive?: number, massDelta?: number, engineKg?: number, chassis?: {has: Record<string, boolean>, set: object}}} drag what the strip and the road see
  * @property {number} paid
  * @property {number} bought the day
  * @property {number} km
@@ -226,7 +226,7 @@ export function stowFromLift(c, id) {
  * @typedef {object} Part
  * @property {string} id
  * @property {string} name
- * @property {'air'|'exhaust'|'fuel'|'boost'|'engine'|'drive'} group
+ * @property {'air'|'exhaust'|'fuel'|'boost'|'engine'|'drive'|'chassis'} group
  * @property {number} price
  * @property {string} does the physics, in a sentence
  * @property {string} then what the tuner has to do about it
@@ -268,6 +268,21 @@ export const PARTS = [
   { id: 'gear-tall', name: 'Tall final drive (3.08)', group: 'drive', price: 450, does: 'A lower final drive: higher top speed and quieter cruising, slower off the line.', then: 'Check the car still pulls in top gear.', blocked: (b, c) => ((c.drag.finalDrive ?? 3.54) <= 3.08 ? 'Already fitted.' : null), drag: (d) => ({ ...d, finalDrive: 3.08 }) },
   { id: 'weight', name: 'Weight reduction pack', group: 'drive', price: 900, does: 'Rear seats, sound deadening and a lighter battery: 60 kg less to accelerate.', then: 'Mass is on both sides of every equation: faster, stops sooner, turns quicker.', blocked: (b, c) => ((c.drag.massDelta ?? 0) <= -60 ? 'Already stripped out.' : null), drag: (d) => ({ ...d, massDelta: -60 }) },
 ];
+
+/** A chassis part: it marks the control it opens as available, and changes nothing else. @param {string} name */
+const opens = (name) => (d) => ({ ...d, chassis: { has: { ...(d.chassis?.has ?? {}), [name]: true }, set: d.chassis?.set ?? {} } });
+const hasPart = (c, name) => !!c.drag.chassis?.has?.[name];
+
+PARTS.push(
+  { id: 'springs', name: 'Sport springs', group: 'chassis', price: 420, does: 'Shorter, stiffer springs: the car sits 25 mm lower and rolls less. The centre of gravity comes down, so it transfers less weight in a corner.', then: 'A lower, stiffer car grips better on smooth tarmac and worse on bumps. For adjustable height and rates, fit coilovers instead.', blocked: (b, c) => (hasPart(c, 'coilovers') ? 'Coilovers are fitted: they replace springs.' : hasPart(c, 'springs') ? 'Already fitted.' : null), drag: opens('springs') },
+  { id: 'coilovers', name: 'Coilover kit', group: 'chassis', price: 1250, does: 'Height-adjustable dampers with their own spring rates for each end. Opens ride height and both spring rates on the CHASSIS tab.', then: 'Stiffer at the front adds understeer, stiffer at the rear removes it. Change one thing and drive the skidpad again.', blocked: (b, c) => (hasPart(c, 'coilovers') ? 'Already fitted.' : null), drag: opens('coilovers') },
+  { id: 'arb', name: 'Adjustable anti-roll bars', group: 'chassis', price: 380, does: 'A bar at each end resists body roll. Opens both bar stiffnesses: the cheapest way to move the balance of the car.', then: 'Stiffen the front bar for more understeer; stiffen the rear for more oversteer.', blocked: (b, c) => (hasPart(c, 'arb') ? 'Already fitted.' : null), drag: opens('arb') },
+  { id: 'camber', name: 'Adjustable camber arms', group: 'chassis', price: 260, does: 'Lets you lean the tops of the tyres in. Opens front and rear camber.', then: 'Some negative camber keeps the tyre flat in a corner; too much loses grip braking and accelerating in a straight line.', blocked: (b, c) => (hasPart(c, 'camber') ? 'Already fitted.' : null), drag: opens('camber') },
+  { id: 'lsd', name: 'Limited-slip differential', group: 'drive', price: 950, does: 'An open differential gives the least-loaded wheel the power. A limited-slip keeps driving the outside tyre through a corner. Opens the lock setting.', then: 'More lock puts more power down on corner exit; too much makes the car push on the way in.', blocked: (b, c) => (hasPart(c, 'lsd') ? 'Already fitted.' : null), drag: opens('lsd') },
+  { id: 'fdkit', name: 'Final-drive gear set', group: 'drive', price: 700, does: 'A set of ring and pinion gears. Opens the final drive ratio from 2.8 to 4.8.', then: 'A higher number accelerates harder and tops out sooner; a lower one does the opposite. Match it to the track.', blocked: (b, c) => (hasPart(c, 'fdkit') ? 'Already fitted.' : null), drag: opens('fdkit') },
+  { id: 'closeratio', name: 'Close-ratio gear set', group: 'drive', price: 2200, does: 'Gears spaced closer together: each shift drops the revs less, so the engine stays near its power. First gear is a little taller for it.', then: 'Quicker on a track with a gearbox that has six ratios; a little slower off the line.', blocked: (b, c) => (hasPart(c, 'closeratio') ? 'Already fitted.' : null), drag: opens('closeratio') },
+  { id: 'sequential', name: 'Sequential dog-box', group: 'drive', price: 3200, does: 'A racing gearbox: you change gear with a flat shift in a fraction of the time, with no clutch.', then: 'Every shift costs less time. It is loud, and it is not for the street.', blocked: (b, c) => (hasPart(c, 'sequential') ? 'Already fitted.' : null), drag: opens('sequential') },
+);
 
 /** @param {string} id */
 export const partById = (id) => PARTS.find((p) => p.id === id);

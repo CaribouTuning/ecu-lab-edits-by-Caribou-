@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CAR, G, RHO_AIR, simulateDragRun, simulateSweep, tireRadiusM, torqueCurveFromSweep } from '../src/sim/index.js';
+import { DEFAULT_CAR, G, RHO_AIR, TIRE_GRIP, simulateDragRun, simulateSweep, tireRadiusM, torqueCurveFromSweep } from '../src/sim/index.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { pullInputs } from '../src/ui/state/pullInputs.js';
 import { STEP_S, makeVehicle, powertrainOf, stepVehicle, toMph } from '../src/ui/world/driving.js';
@@ -33,6 +33,7 @@ function run(p, input, stop, seconds = 60, v0 = makeVehicle()) {
   return { v, t };
 }
 const flat = { throttle: 1, brake: 0, steer: 0 };
+const TIRE_GRIP_MU = (c) => TIRE_GRIP[c.gripIdx].mu;
 
 describe('the world agrees with the strip', () => {
   const strip = simulateDragRun({ car, torqueCurveNm: torque, redline, displacementL: disp, peakHp: sweep.peakHp });
@@ -118,12 +119,29 @@ describe('it drives like a road car, not a car on ice', () => {
 
   it('holding full lock at any speed pushes wide; it never spins with the aids on', () => {
     for (const speed of [8, 15, 25, 35]) {
-      let worstRear = 0;
-      const { v } = run(pt(), { throttle: 0.4, brake: 0, steer: -1 }, (s, t) => { worstRear = Math.max(worstRear, s.slipR); return t > 4; }, 5, moving(speed));
-      // The tail stays inside its grip, and the car is still going forwards.
-      expect(worstRear, `${speed} m/s`).toBeLessThan(1.1);
+      let worstBeta = 0;
+      const { v } = run(pt(), { throttle: 0.4, brake: 0, steer: -1 }, (s, t) => { worstBeta = Math.max(worstBeta, Math.abs(Math.atan2(s.vy, Math.max(0.1, s.vx)))); return t > 4; }, 5, moving(speed));
+      // The nose runs wide and the tail may step out a little, but the car never rotates past its path.
+      expect(worstBeta, `${speed} m/s`).toBeLessThan(0.25);
       expect(v.vx, `${speed} m/s`).toBeGreaterThan(Math.abs(v.vy) * 3);
     }
+  });
+
+  it('the tyres take a moment to bite: yaw builds over a tenth of a second or more, not instantly', () => {
+    const v = moving(25);
+    let yaw100 = 0; let yawEnd = 0; let t = 0;
+    const p = pt();
+    while (t < 0.8) { stepVehicle(v, p, { throttle: 0.2, brake: 0, steer: -0.3 }); t += STEP_S; if (Math.abs(t - 0.1) < STEP_S / 2) yaw100 = Math.abs(v.yawRate); }
+    yawEnd = Math.abs(v.yawRate);
+    expect(yaw100).toBeLessThan(yawEnd * 0.6);
+    expect(yawEnd).toBeGreaterThan(0.05);
+  });
+
+  it('an axle that carries the weight transfer loses grip: a car loaded hard sideways corners at less than mu g', () => {
+    // On a flat plane the limit is mu g; load sensitivity and weight transfer keep a street car below it.
+    let peak = 0;
+    run(pt(), (s) => ({ throttle: s.vx < 20 ? 0.5 : 0.1, brake: 0, steer: 0.8 }), (s, t) => { if (t > 3) peak = Math.max(peak, Math.abs(s.ay)); return t > 6; }, 7, moving(20));
+    expect(peak / G).toBeLessThan(0.97 * TIRE_GRIP_MU(car));
   });
 
   it('brakes hard into a turn and slides wide at worst: it never swaps ends', () => {

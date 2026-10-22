@@ -414,6 +414,16 @@ export const world = Object.freeze({
   }),
   // The text box: paper, ink and a two-tone frame, as a handheld RPG draws one.
   talk: Object.freeze({ paper: '#f7f3e8', ink: '#262a33', frame: '#34405e', frameHi: '#9cc1ee', name: '#2f5fb8', choice: '#e2ecfa' }),
+  // The driver's seat, painted pixel by pixel (world/cockpitArt.js): dash, pillars, a wheel with
+  // hands on it, and amber dials.
+  cockpit: Object.freeze({
+    outline: '#07080b', roof: '#0e1014', pillar: '#16181f', pillarHi: '#262a36', glassEdge: '#3b4252',
+    dash: '#1d2029', dashHi: '#323847', dashLow: '#101217',
+    mirror: '#6f93b8', mirrorDark: '#46617f', mirrorHi: '#b9d4ee',
+    wheel: '#262a33', wheelHi: '#4c5364', wheelDark: '#14161c', marker: '#e0b54a',
+    skin: '#d9a47c', skinHi: '#efc7a2', skinShade: '#a8764f', sleeve: '#34415e', sleeveDark: '#232d44',
+    dial: '#0b0d12', dialRing: '#454c5c', ink: '#f0c75e', needle: '#ff5a3c', lampOff: '#2a2f3a', lampOn: '#ffb02e', lampBad: '#ff4a4a',
+  }),
   eye: '#1a1c22',
   mouth: '#7a3a3a',
   cheek: '#e89a8a',

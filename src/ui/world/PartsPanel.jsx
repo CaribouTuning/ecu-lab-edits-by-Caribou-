@@ -13,7 +13,7 @@ import styles from './Panels.module.css';
 
 const GROUPS = [
   { id: 'air', label: 'AIR IN' }, { id: 'exhaust', label: 'EXHAUST OUT' }, { id: 'fuel', label: 'FUEL' }, { id: 'engine', label: 'ENGINE' },
-  { id: 'boost', label: 'BOOST AND NITROUS' }, { id: 'drive', label: 'TYRES, GEARING, WEIGHT' },
+  { id: 'boost', label: 'BOOST AND NITROUS' }, { id: 'chassis', label: 'SUSPENSION' }, { id: 'drive', label: 'TYRES, GEARING, DIFF, WEIGHT' },
 ];
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 

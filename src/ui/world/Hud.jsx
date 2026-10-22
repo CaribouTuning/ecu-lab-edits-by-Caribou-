@@ -216,6 +216,7 @@ export function TouchControls({ world, driving }) {
       </div>
       {driving ? (
         <div className={styles.pads}>
+          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('view')} aria-label="Change camera">CAM</button>
           <button type="button" className={`${styles.pad} ${styles.padSmall}`} {...holdProps('handbrake')} aria-label="Handbrake">HB</button>
           <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftDown')} aria-label="Shift down">−</button>
           <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftUp')} aria-label="Shift up">+</button>

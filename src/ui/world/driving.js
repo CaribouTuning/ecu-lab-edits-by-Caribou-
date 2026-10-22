@@ -24,6 +24,7 @@
  * Plain numbers in and out; no WebGL, so it is testable and the same step runs on the strip.
  */
 
+import { NEUTRAL } from '../career/chassis.js';
 import {
   DRIVETRAIN_OPTS, GEARBOX_OPTS, TIRE_GRIP, G, RHO_AIR, tireRadiusM,
 } from '../../sim/index.js';
@@ -38,7 +39,7 @@ const ALPHA_PEAK = { street: 0.15, sport: 0.13, race: 0.1, drag: 0.1 };
 const SHAPE_C = 1.5;
 const SHAPE_B = Math.tan(Math.PI / (2 * SHAPE_C));
 /** Brakes: peak deceleration torque as a multiple of what the front tyres can hold. */
-const BRAKE_FRONT_BIAS = 0.65;
+
 /** The share of the rear tyres' grip the rear brakes may use. */
 const EBD_REAR_SHARE = 0.7;
 /** Mass of one wheel assembly and the share that is rim and tyre (what spins). kg, fraction. */
@@ -73,11 +74,21 @@ const STEER_PEAK_MARGIN = 0.85;
  */
 const REAR_ALPHA_SCALE = 0.75;
 /**
- * Lateral load transfer costs the more heavily rolled axle some grip (a tyre's grip grows
- * slower than its load). Road cars carry the stiffer anti-roll bar at the front, so it is
- * the front that loses: at the limit the nose runs wide and the tail stays behind it.
+ * Lateral load transfer and tyre load sensitivity. A cornering car loads its outside tyres
+ * and unloads its inside ones, and a tyre's grip grows more slowly than its load, so the axle
+ * that carries more of the roll gives up more grip. Road cars are set up with the stiffer
+ * roll resistance at the front (chassis.rollShareF), so at the limit the nose runs wide: the
+ * understeer is the physics, not a fudge.
  */
-const FRONT_LATERAL_SHARE = 0.92;
+const TRACK_M = 1.55;
+/** Grip lost per unit of extra load on a wheel (mu falls this much as load doubles). */
+const LOAD_SENSITIVITY = 0.14;
+/**
+ * Tyre relaxation length by grade, metres: a tyre needs to roll about this far before its
+ * sideways force catches up with a change of slip angle. It is what makes a car take a
+ * moment to bite after the wheel is turned, instead of reacting instantly like a toy.
+ */
+const RELAX_M = { street: 0.55, sport: 0.45, race: 0.35, drag: 0.5 };
 /** Stability control cuts the engine while the rear tyres are sliding sideways (combined slip past this). */
 const ESC_REAR_SLIP = 1.05;
 /**
@@ -133,6 +144,8 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {boolean} manual the player is choosing the gear
  * @property {number} tcCut share of engine torque traction control is taking away, 0..1
  * @property {boolean} reverse
+ * @property {number} aF front tyre slip angle (tangent) as the tyre has built it up
+ * @property {number} aR rear tyre slip angle (tangent)
  * @property {number} _stopT seconds held at a stop with the brake, before reverse is chosen
  * @property {number} t seconds driven
  */
@@ -164,7 +177,7 @@ export function makeVehicle(at = {}) {
   return {
     x: at.x ?? 0, z: at.z ?? 0, heading: at.heading ?? 0, vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, steer: 0, rpm: IDLE_RPM,
     gear: 1, shiftT: 0, limiter: false, throttle: 0, brake: 0, ax: 0, ay: 0, slipF: 0, slipR: 0, wheelspin: 0, shifting: false,
-    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0,
+    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0, aF: 0, aR: 0,
   };
 }
 
@@ -220,6 +233,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const mu = grip.mu * (input.gripScale ?? 1);
   const alphaPeak = ALPHA_PEAK[grip.grade] ?? 0.15;
   const m = car.massKg;
+  // Suspension, tyre and transmission settings (career/chassis.js); a car with none runs on the defaults.
+  const ch = /** @type {any} */ (car).chassis ?? NEUTRAL;
   const { L, a, b, r, h, Iz, Iw } = geo;
 
   // ---- held on the line: nothing moves but the revs ----
@@ -259,7 +274,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     else if (!s.manual) want = autoGear(pt, s, thr);
     if (want !== s.gear && s.shiftT <= 0) {
       s.gear = want;
-      s.shiftT = box.shiftSec;
+      s.shiftT = box.shiftSec * (ch.shiftScale ?? 1);
       s.shifting = true;
     }
   }
@@ -313,26 +328,45 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
 
   // ---- brakes ----
   const brakeTq = brk * mu * wTotal * r;
-  const tqBrakeF = brakeTq * BRAKE_FRONT_BIAS;
+  const tqBrakeF = brakeTq * ch.brakeFront;
   // Brake-force distribution (a proportioning valve on an old car, EBD on a new one): the
   // rear brakes never ask more of the rear tyres than their load, lightened by the
   // braking itself, lets them give, so they keep some grip for cornering.
-  const tqBrakeR = Math.min(brakeTq * (1 - BRAKE_FRONT_BIAS), EBD_REAR_SHARE * mu * FzR * r) + (input.handbrake ? mu * FzR * r * 1.2 : 0);
+  const tqBrakeR = Math.min(brakeTq * (1 - ch.brakeFront), EBD_REAR_SHARE * mu * FzR * r) + (input.handbrake ? mu * FzR * r * 1.2 : 0);
 
   // ---- tyre forces ----
-  const sub = (Fz, u, v, w, aPeak = alphaPeak, latShare = 1) => {
+  // Each axle's grip, with this moment's lateral weight transfer and load sensitivity.
+  const nominal = wTotal / 4;
+  const axleCap = (Fz, share) => {
+    const dF = Math.min(Fz / 2 * 0.95, (m * Math.abs(s.ay) * h * share) / TRACK_M);
+    const outer = Fz / 2 + dF;
+    const inner = Fz / 2 - dF;
+    const g = (F) => F * (1 - LOAD_SENSITIVITY * (F / nominal - 1));
+    return clamp((g(outer) + g(inner)) / (Fz * (1 - LOAD_SENSITIVITY * (Fz / 2 / nominal - 1))), 0.5, 1);
+  };
+  // A limited-slip diff keeps the driven axle's grip when the inside wheel unloads.
+  const lsdGain = (cap) => cap + (1 - cap) * ch.lsd * 0.7;
+  const rawF = axleCap(FzF, ch.rollShareF);
+  const rawR = axleCap(FzR, 1 - ch.rollShareF);
+  const capF = drive.drive === 'awd' ? lsdGain(rawF) : rawF;
+  const capR = lsdGain(rawR);
+  const relax = (RELAX_M[grip.grade] ?? 0.5) * ch.relaxScale;
+  /** @param {number} Fz @param {number} u @param {number} v @param {number} w @param {number} aPeak @param {number} cap @param {'aF'|'aR'} key */
+  const sub = (Fz, u, v, w, aPeak, cap, key, muAx, latSc, longSc) => {
     const wheelV = w * r;
     const ref = Math.max(Math.abs(u), 1.2);
     const kappa = (wheelV - u) / ref;
-    const alpha = Math.atan2(v, Math.max(Math.abs(u), 1.2)) * (u >= 0 ? 1 : -1);
+    const kin = Math.atan2(v, ref) * (u >= 0 ? 1 : -1);
+    // The tyre's slip angle follows the kinematic one with its relaxation length.
+    s[key] += (Math.tan(kin) - s[key]) * Math.min(1, (dt * Math.max(Math.abs(u), 1.5)) / relax);
     const sx = kappa / KAPPA_PEAK;
-    const sy = Math.tan(alpha) / aPeak;
+    const sy = s[key] / aPeak;
     const sig = Math.hypot(sx, sy);
-    const f = sig < 1e-6 ? 0 : (mu * Fz * shape(sig)) / sig;
-    return { Fx: f * sx, Fy: -f * sy * latShare, sig, kappa };
+    const f = sig < 1e-6 ? 0 : (mu * muAx * cap * Fz * shape(sig)) / sig;
+    return { Fx: f * sx * longSc, Fy: -f * sy * latSc, sig, kappa };
   };
-  const tF = sub(FzF, uF, vF, s.wF, alphaPeak, FRONT_LATERAL_SHARE);
-  const tR = sub(FzR, uR, vR, s.wR, alphaPeak * REAR_ALPHA_SCALE);
+  const tF = sub(FzF, uF, vF, s.wF, alphaPeak, capF, 'aF', ch.muF, ch.latF, ch.longF);
+  const tR = sub(FzR, uR, vR, s.wR, alphaPeak * REAR_ALPHA_SCALE, capR, 'aR', ch.muR, ch.latR, ch.longR);
 
   // ---- wheel spin: engine torque on the driven wheel(s), tyre force and brakes against it ----
   const drivenFront = drive.drive === 'awd' ? 0.4 : 0;
@@ -370,7 +404,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const Fxr = tR.Fx;
   const Fyr = tR.Fy;
   const drag = 0.5 * RHO_AIR * car.cd * car.frontalAreaM2 * s.vx * Math.abs(s.vx);
-  const crr = car.crr * (input.rollScale ?? 1);
+  const crr = car.crr * ch.crrScale * (input.rollScale ?? 1);
   const roll = Math.abs(s.vx) > 0.2 ? crr * wTotal * Math.sign(s.vx) : crr * wTotal * (s.vx / 0.2);
   const Fx = Fxf + Fxr - drag - roll;
   const Fy = Fyf + Fyr;
