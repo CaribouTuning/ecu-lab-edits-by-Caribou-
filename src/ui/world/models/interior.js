@@ -133,25 +133,42 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
   spin.add(box(0.03, 0.03, 0.01, C.marker, { z: -0.045, edge: false, mat: new THREE.MeshBasicMaterial({ color: C.marker }) }));
   group.add(pivot);
 
-  // ---- the driver's arms: shoulders to hands, hands on the rim at ten and two ----
+  // ---- the driver's arms: shoulder, elbow, wrist; hands gripping the rim at ten and two ----
+  // A hand turns with the wheel until it would cross the top or the bottom of the rim; then it
+  // lets go and slides, the way a driver feeds the wheel hand over hand.
+  const R = 0.15;
   const hands = [-1, 1].map((side) => {
     const hand = new THREE.Group();
-    hand.add(box(0.095, 0.085, 0.1, C.skin, { edge: false }));
-    hand.add(box(0.03, 0.06, 0.06, C.skinShade, { x: -side * 0.06, z: 0.02, edge: false }));
-    hand.add(box(0.1, 0.02, 0.1, C.skinHi, { y: 0.045, edge: false }));
-    spin.add(hand);
-    hand.position.set(Math.sin(1.0) * 0.15 * side, Math.cos(1.0) * 0.15, 0);
-    const arm = box(0.055, 0.055, 1, C.sleeve, { edge: false });
-    group.add(arm);
-    const cuff = box(0.07, 0.07, 0.03, C.sleeveDark, { edge: false });
-    group.add(cuff);
-    return { side, hand, arm, cuff };
+    // A fist wrapped round the rim: knuckles in front of it, the thumb hooked over the top.
+    hand.add(box(0.05, 0.075, 0.05, C.skin, { z: 0.03, edge: false }));
+    hand.add(box(0.05, 0.075, 0.035, C.skinShade, { z: -0.03, edge: false }));
+    hand.add(box(0.02, 0.03, 0.06, C.skinHi, { x: -side * 0.03, y: 0.04, edge: false }));
+    pivot.add(hand);
+    const upper = box(0.06, 0.06, 1, C.sleeve, { edge: false });
+    const fore = box(0.05, 0.05, 1, C.sleeve, { edge: false });
+    const elbow = box(0.065, 0.065, 0.065, C.sleeveDark, { edge: false });
+    const cuff = box(0.058, 0.058, 0.035, C.sleeveDark, { edge: false });
+    group.add(upper, fore, elbow, cuff);
+    return { side, hand, upper, fore, elbow, cuff };
   });
-  const shoulder = (/** @type {number} */ side) => new THREE.Vector3(x + side * 0.27, seat.y - 0.02, seat.z - 0.22);
-  const tmp = new THREE.Vector3();
-  const dir = new THREE.Vector3();
+  const shoulder = (/** @type {number} */ side) => new THREE.Vector3(x + side * 0.22, seat.y - 0.12, seat.z - 0.12);
+  /** Where a hand sits round the rim, radians from the top: it turns with the rim, within its side. */
+  const grip = (/** @type {number} */ side, /** @type {number} */ wheel) => (side > 0
+    ? Math.max(0.25, Math.min(2.4, 1.0 - wheel)) : Math.max(-2.4, Math.min(-0.25, -1.0 - wheel)));
+  const handAt = (/** @type {number} */ phi) => new THREE.Vector3(Math.sin(phi) * R, Math.cos(phi) * R, 0);
   const zAxis = new THREE.Vector3(0, 0, 1);
   const xAxis = new THREE.Vector3(1, 0, 0);
+  const inCar = (/** @type {THREE.Vector3} */ v) => v.clone().applyAxisAngle(xAxis, TILT).add(wheelAt);
+  // Bone lengths from the resting reach, so the elbows always keep a bend.
+  const reach = inCar(handAt(1.0)).distanceTo(shoulder(1));
+  const BONE = reach * 0.6;
+  /** Lay a unit-long box between two points. @param {THREE.Mesh} m @param {THREE.Vector3} a @param {THREE.Vector3} b */
+  const span = (m, a, b) => {
+    const d = new THREE.Vector3().subVectors(b, a);
+    m.scale.set(1, 1, d.length());
+    m.position.copy(a).addScaledVector(d, 0.5);
+    m.quaternion.setFromUnitVectors(zAxis, d.normalize());
+  };
 
   const api = {
     group,
@@ -159,17 +176,23 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
     setWheel(angle) {
       spin.rotation.z = angle;
       for (const h of hands) {
-        // Where the hand is in the car: round the wheel, tilted, then out to the wheel's place.
-        tmp.copy(h.hand.position).applyEuler(new THREE.Euler(0, 0, angle)).applyAxisAngle(xAxis, TILT).add(wheelAt);
-        const from = shoulder(h.side);
-        dir.subVectors(tmp, from);
-        const len = dir.length();
-        h.arm.scale.set(1, 1, len);
-        h.arm.position.copy(from).addScaledVector(dir, 0.5);
-        h.arm.quaternion.setFromUnitVectors(zAxis, dir.normalize());
-        h.cuff.position.copy(tmp).addScaledVector(dir, -0.05);
-        h.cuff.quaternion.copy(h.arm.quaternion);
-        h.hand.quaternion.identity();
+        const phi = grip(h.side, angle);
+        h.hand.position.copy(handAt(phi));
+        h.hand.rotation.z = -phi;
+        const wrist = inCar(handAt(phi));
+        const s = shoulder(h.side);
+        const to = new THREE.Vector3().subVectors(wrist, s);
+        const d = Math.min(to.length(), BONE * 2 - 1e-3);
+        to.normalize();
+        // The elbow: out to the side and down, as far off the shoulder-wrist line as the bones need.
+        const pole = new THREE.Vector3(h.side, -1.2, 0).addScaledVector(to, -new THREE.Vector3(h.side, -1.2, 0).dot(to)).normalize();
+        const off = Math.sqrt(Math.max(0, BONE * BONE - (d / 2) ** 2));
+        const elbow = s.clone().addScaledVector(to, d / 2).addScaledVector(pole, off);
+        span(h.upper, s, elbow);
+        span(h.fore, elbow, wrist);
+        h.elbow.position.copy(elbow);
+        h.cuff.position.copy(wrist).addScaledVector(new THREE.Vector3().subVectors(elbow, wrist).normalize(), 0.045);
+        h.cuff.quaternion.copy(h.fore.quaternion);
       }
     },
     /** @param {number} speed 0..1 of the sweep @param {number} rpm 0..1 of the sweep @param {boolean[]} [on] lamps lit */
