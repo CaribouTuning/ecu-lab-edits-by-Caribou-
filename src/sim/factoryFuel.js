@@ -33,6 +33,8 @@
  * better source. If one becomes available, it replaces the figures here.
  */
 
+import { interp1 } from './math.js';
+
 /**
  * @typedef {object} FuelStrategy
  * @property {boolean} [turbo] the plan is for a turbo engine (boost-relative pressures)
@@ -200,18 +202,6 @@ export function fuelStrategyFor(id, turbo) {
   return turbo ? GENERIC_TURBO : GENERIC_NA;
 }
 
-/** @param {[number, number][]} pts @param {number} x */
-function lerpTable(pts, x) {
-  if (x <= pts[0][0]) return pts[0][1];
-  for (let i = 1; i < pts.length; i++) {
-    if (x <= pts[i][0]) {
-      const [x0, y0] = pts[i - 1]; const [x1, y1] = pts[i];
-      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
-    }
-  }
-  return pts[pts.length - 1][1];
-}
-
 /**
  * The lambda the factory calibration asks for at a speed and manifold pressure.
  *
@@ -234,5 +224,5 @@ export function factoryLambda(s, rpm, kpa, turbo, baroKpa) {
   // Smoothstep, not a straight ramp: the change of slope at each end is what an ECU's
   // interpolated table cells give, not a kink.
   const k = t * t * (3 - 2 * t);
-  return 1 + (lerpTable(s.wot, rpm) - 1) * k;
+  return 1 + (interp1(s.wot.map((p) => p[0]), s.wot.map((p) => p[1]), rpm) - 1) * k;
 }

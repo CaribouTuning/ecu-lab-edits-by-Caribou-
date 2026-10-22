@@ -1,5 +1,5 @@
 /**
- * The numbers docs/accuracy.md and Learn article 39 tell people about the model.
+ * The numbers docs/accuracy.md and Learn article 34 tell people about the model.
  *
  * Those pages describe the model with measured figures — the presets' table, and the
  * size of each known approximation. A page like that goes stale silently: the physics
@@ -267,7 +267,7 @@ describe('the known approximations are the size the pages say', () => {
 describe('the pages say where their numbers are checked', () => {
   it('points readers at this test, so a stale page is a failing test and not a quiet one', () => {
     expect(DOC).toContain('tests/accuracy-claims.test.js');
-    expect(LEARN).toContain('39. What this simulator simplifies');
+    expect(LEARN).toContain('34. What this simulator simplifies');
   });
 });
 

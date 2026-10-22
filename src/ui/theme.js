@@ -8,7 +8,7 @@
 
 import { clamp } from '../sim/index.js';
 
-import { accAlpha, horizonGlowAlpha, shadowAlpha, smokeAlpha, strip, tokens } from './tokens.js';
+import { accAlpha, shadowAlpha, tokens } from './tokens.js';
 
 const T = {
   bg: tokens.bg,
@@ -157,4 +157,4 @@ function diffTint(delta, fullScale) {
   return `hsl(${delta > 0 ? DIFF_UP_HUE : DIFF_DOWN_HUE}, 55%, ${(20 + mag * 20).toFixed(0)}%)`;
 }
 
-export { T, accAlpha, deltaHeat, diffTint, heat, horizonGlowAlpha, shadowAlpha, smokeAlpha, strip };
+export { T, accAlpha, deltaHeat, diffTint, heat, shadowAlpha };

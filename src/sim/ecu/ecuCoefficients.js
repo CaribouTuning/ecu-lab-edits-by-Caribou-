@@ -237,19 +237,6 @@ export const ECU_COEFF = Object.freeze({
   WEAK_PUMP_HEALTH: 0.55,
   LOW_OIL_HEALTH: 0.25,
 
-  // ---- Drag strip.
-  /** How fast each traction-control actuator delivers its cut, s. */
-  TC_TAU_SPARK_S: 0.02,
-  TC_TAU_FUEL_S: 0.01,
-  TC_TAU_THROTTLE_S: 0.12,
-  TC_TAU_BOOST_S: 0.5,
-  /** Most torque traction control may take away. */
-  TC_MAX_CUT: 0.95,
-  /** How fast the cut is released once the tyre hooks up, per 100 ms. */
-  TC_RELEASE_RATE: 0.6,
-  /** Share of a manual shift a flat-foot shift still takes. */
-  FFS_SHIFT_SHARE: 0.55,
-
   // ---- Ethanol.
   /** Octane gained from E85 to pure ethanol. */
   ETHANOL_OCTANE_PAST_E85: 2,

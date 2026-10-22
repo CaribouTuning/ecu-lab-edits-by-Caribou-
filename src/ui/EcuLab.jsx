@@ -28,19 +28,19 @@ import {
 
 import {
   BARO_KPA, COMPRESSOR_OPTS, compressorWithCount,
-  EXHAUST_DIA_OPTS, GEARBOX_OPTS,
+  EXHAUST_DIA_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computePullScore, computeTuningScore,
   applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
-  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount, failedPart, FAILURE_MODES,
+  simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
-  veTruthByPhaseFor, read1, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
+  veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
 import {
-  beepEngineAudio, converterEngineAudio, createEngineAudio, setEngineAudioActive,
-  shiftEngineAudio, silenceEngineAudio, updateEngineAudio, wakeEngineAudio,
+  beepEngineAudio, createEngineAudio, setEngineAudioActive,
+  silenceEngineAudio, updateEngineAudio, wakeEngineAudio,
 } from './audio/engineAudio.js';
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
@@ -81,7 +81,6 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { DragScreen, dragSignature } from './screens/drag/DragScreen.jsx';
 import { HealthScreen } from './screens/dash/HealthScreen.jsx';
 import { LearnScreen } from './screens/dash/LearnScreen.jsx';
 import { RealCarScreen } from './screens/dash/RealCarScreen.jsx';
@@ -103,7 +102,7 @@ import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
 /** The tabs that need an engine; HOME (stats, health, Learn) does not. */
-const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'drag'];
+const ENGINE_TABS = ['build', 'tune', 'live', 'dyno'];
 
 /** The engine a practice mission is built around, put on the bench when the player has none yet. */
 const MISSION_ENGINE = 'vq35de-revup';
@@ -161,62 +160,6 @@ function Tach({ rpm, cylinders, running, fullScaleRpm }) {
   );
 }
 
-/**
- * How long the christmas tree takes to go green, ms.
- *
- * A real sportsman tree is staged, then three ambers half a second apart, then green.
- * The car does not move until it does — the tree is the one thing on DRAG with no
- * physics behind it, and it is honest about that.
- */
-const TREE_GREEN_MS = 1900;
-
-/** Playback frame interval, ms — 25 fps, matching the strip's own CSS transition. */
-const DRAG_FRAME_MS = 40;
-
-/** How long the finished run stays on screen before the strip resets, seconds. */
-const DRAG_HOLD_S = 1.2;
-
-/**
- * Ceiling on how long playback may take in WALL-CLOCK seconds.
- *
- * Almost every pass is under this and plays back in real time. A slow one does not:
- * `simulateDragRun` gives up at DRAG_TIMEOUT_S, so a 48 whp engine in a tall-geared
- * truck solves to a 40-second run that never reaches the stripe — and watching all
- * forty of them, with the RUN button disabled throughout, is not a thing to do to
- * somebody. Runs longer than this are played back fast-forwarded rather than
- * truncated, so the replay still shows the whole solved pass and the readouts still
- * carry the real speed, gear and RPM at each point in it.
- */
-const DRAG_PLAYBACK_MAX_S = 15;
-
-/**
- * How many run-seconds one wall-clock second of playback covers.
- *
- * Exported so the ceiling above is testable without watching fifteen real seconds of
- * a truck crawling: this is the whole of that rule.
- *
- * @param {number} etSeconds the solved run's elapsed time
- * @returns {number} 1 for a normal pass, more for one that has to be fast-forwarded
- */
-export function dragPlaybackRate(etSeconds) {
-  return Math.max(1, etSeconds / DRAG_PLAYBACK_MAX_S);
-}
-
-/**
- * The measured sweep point closest in engine speed to `rpm`.
- *
- * @template {{rpm: number}} P
- * @param {P[]} points a sweep, in ascending RPM
- * @param {number} rpm engine speed wanted
- * @returns {P} the nearest point
- */
-function nearestPoint(points, rpm) {
-  let best = points[0];
-  for (const p of points) {
-    if (Math.abs(p.rpm - rpm) < Math.abs(best.rpm - rpm)) best = p;
-  }
-  return best;
-}
 
 // ============================================================
 /**
@@ -291,7 +234,7 @@ export function EcuLabApp() {
   const {
     loadKpa, soundOn, volume, dynoPhase, dynoRpm, throttleInput, health,
     result, runs, pinnedRunId, pullScores, running, revealCount, bestScore, totalScore, pullCount,
-    live, car, dragResult, dragRunning, dragT, treePhase,
+    live,
     mode, env, liveAux, faults,
   } = session;
   // CAREER: the shop's save, and whether the bench holds a customer's car. The screens
@@ -322,21 +265,11 @@ export function EcuLabApp() {
   const tuneView = tab === 'tune' ? route.section : null;
   const dynoView = tab === 'dyno' ? route.section : null;
   const dashSection = tab === 'dash' ? route.section : null;
-  const dragSection = tab === 'drag' ? route.section : null;
   const revealTimer = useRef(null);
-  // The drag run's playback clock, and the christmas tree's four timers. Refs for the
-  // same reason `revealTimer` is one: both are cleared from a handler and from an
-  // unmount cleanup, neither is ever read during render.
-  const dragTimer = useRef(null);
-  const treeTimers = useRef(/** @type {ReturnType<typeof setTimeout>[]} */ ([]));
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
   const throttleRef = useRef(0);
   const audioRef = useRef(null);
-  // The drag pass's last gear, so a shift is heard once when it happens; and whether the
-  // converter whine was last left on, so it is switched off once rather than every frame.
-  const dragGearRef = useRef(0);
-  const converterOnRef = useRef(false);
   const setSession = (field, value) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field, value });
   // Guards the persistence effect below: nothing may be written until the saved career
   // has actually been read back, or a cold start overwrites it with zeroes.
@@ -454,23 +387,28 @@ export function EcuLabApp() {
   // (or the reverse) is a table read off the wrong breakpoints.
   const advisorTables = useMemo(() => ({ ve, timing, afr, layout }), [ve, timing, afr, layout]);
   const deferredTables = useDeferredValue(advisorTables);
+  // Judged on the engine as worn, to the whole percent: health moves every LIVE step,
+  // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
+  const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
+  const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
+    health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor, turbine, camAt,
-    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull,
+    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
+       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
@@ -535,7 +473,6 @@ export function EcuLabApp() {
   }, [navigate]);
   const toggleDashSection = makeToggleSection('dash');
   const toggleBuildSection = makeToggleSection('build');
-  const toggleDragSection = makeToggleSection('drag');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   const goCourse = () => navigate({ view: 'course', tab: null, section: null });
   const goMenu = () => navigate({ view: 'start', tab: null, section: null });
@@ -653,8 +590,7 @@ export function EcuLabApp() {
   );
 
   /**
-   * Everything a dyno pull is solved from, in one place, so the drag strip's per-gear
-   * pulls are the same pull at a different gear and nothing else.
+   * Everything a dyno pull is solved from, in one place.
    * @param {number} load
    * @param {object} ecu
    */
@@ -760,117 +696,6 @@ export function EcuLabApp() {
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
-
-  // ---- The quarter mile ---------------------------------------------------
-  // The crank-torque lookup the drag run is driven by. Derived from the LAST PULL and
-  // nothing else, which is the whole prerequisite: until the engine has been measured
-  // there is no torque curve to drive with, and DRAG says so rather than inventing one.
-  const torqueCurveNm = useMemo(() => (result ? torqueCurveFromSweep(result) : null), [result]);
-
-  /**
-   * A short tone, used for the tree's ambers and its green.
-   *
-   * Built and discarded per beep rather than added to the engine synth's graph: this
-   * is a timing light, not part of the engine's note, and it must sound while the car
-   * is still stationary and silent.
-   *
-   * @param {number} freq Hz
-   * @param {number} dur seconds
-   * @param {number} vol peak gain
-   */
-  const beep = (freq, dur, vol) => {
-    const au = audioRef.current;
-    if (!au || !soundOn) return;
-    // The tree lights before the car moves, while the engine audio may be asleep.
-    wakeEngineAudio(au, dur);
-    const t0 = au.ctx.currentTime;
-    const o = au.ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
-    const g = au.ctx.createGain(); g.gain.value = 0;
-    o.connect(g); g.connect(au.ctx.destination);
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.start(t0); o.stop(t0 + dur + 0.05);
-  };
-
-  /**
-   * Run the quarter mile: solve it in full, then start the tree and play it back.
-   *
-   * Solving first is the point. The strip animation scrubs a finished run rather than
-   * integrating alongside it, so what the player watches and what the time slip says
-   * cannot come apart. It also means an eight-second pass costs one solve, not eight
-   * seconds of physics running against a repaint.
-   */
-  const runDrag = () => {
-    if (engineMissing || !torqueCurveNm || dragRunning) return;
-    const a = ensureAudio();
-    if (a && a.ctx.state === 'suspended') a.ctx.resume();
-
-    // Boost limited by gear means a different engine in each gear: each gear that is
-    // limited below the curve gets its own full-throttle pull at that gear's boost.
-    const gearLimit = tune.ecu.boost.gearLimit;
-    const peakBoost = turboOn ? Math.max(...boostCurve) : 0;
-    const perGear = turboOn && car.gears.slice(0, car.gearCount).some((_, i) => read1(gearLimit, i + 1) < peakBoost);
-    const cache = new Map();
-    const torqueCurveForGear = perGear ? (g) => {
-      const cap = read1(gearLimit, g);
-      if (cap >= peakBoost) return torqueCurveNm;
-      if (!cache.has(cap)) {
-        cache.set(cap, torqueCurveFromSweep(simulateSweep(sweepArgs(100, { ...ecuBundle, cond: { ...ecuBundle.cond, gear: g } }))));
-      }
-      return cache.get(cap);
-    } : null;
-    const res = simulateDragRun({
-      car,
-      torqueCurveNm,
-      redline: engineDerived.redline,
-      displacementL: engineDerived.displacementL,
-      peakHp: result.peakHp,
-      ecu: { cal: tune.ecu, cyl: engineDerived.cyl },
-      torqueCurveForGear,
-    });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragResult', value: res });
-    // Recorded WITH the run, never re-derived afterwards: this is what lets the time
-    // slip say the car has changed underneath it. Same rule as `pullScores.signature`.
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragSetup', value: dragSignature(car, result, tune.ecu) });
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: 0 });
-
-    // A sportsman tree: staged, then three ambers half a second apart, then green.
-    // Clearing first matters — pressing RUN again during the countdown must replace
-    // the sequence, not race a second one against it.
-    treeTimers.current.forEach(clearTimeout);
-    clearInterval(dragTimer.current);
-    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 1 });
-    treeTimers.current = [
-      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 2 }); beep(660, 0.18, 0.08); }, 400),
-      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 3 }); beep(660, 0.18, 0.08); }, 900),
-      setTimeout(() => { dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 4 }); beep(660, 0.18, 0.08); }, 1400),
-      setTimeout(() => {
-        dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 5 });
-        beep(990, 0.35, 0.10);
-        dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragRunning', value: true });
-        const t0 = Date.now();
-        // 1 for anything that fits in the ceiling, which is very nearly everything.
-        const rate = dragPlaybackRate(res.et);
-        dragTimer.current = setInterval(() => {
-          const el = ((Date.now() - t0) / 1000) * rate;
-          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragT', value: el });
-          // Hold on the finish for a moment so the time slip is readable.
-          if (el > res.et + DRAG_HOLD_S * rate) {
-            clearInterval(dragTimer.current);
-            dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'dragRunning', value: false });
-            dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'treePhase', value: 0 });
-          }
-        }, DRAG_FRAME_MS);
-      }, TREE_GREEN_MS),
-    ];
-  };
-  // Both the tree and the playback clock outlive a single render, so both have to be
-  // torn down on unmount or a run continues against a component that is gone.
-  useEffect(() => () => {
-    clearInterval(dragTimer.current);
-    treeTimers.current.forEach(clearTimeout);
-  }, []);
 
   // Keep the live-engine config in a ref so the loop always uses current tuning
   // without needing to restart the interval every time a table changes.
@@ -1014,7 +839,7 @@ export function EcuLabApp() {
       })();
       return () => { cancelled = true; };
     }
-    if (appView === 'app' && mode === 'career' && (tab === 'dash' || tab === 'drag')) {
+    if (appView === 'app' && mode === 'career' && tab === 'dash') {
       navigate({ view: 'shop', tab: null, section: null });
     }
     return undefined;
@@ -1163,25 +988,17 @@ export function EcuLabApp() {
     const onDyno = tab === 'dyno' && running && result;
     // Which screen the running engine is heard on.
     const onLive = tab === 'live' && (live.running || live.cranking);
-    // The drag run drives the same engine: revs sweep within each gear and drop on every
-    // shift, so the whole pass is audible. The trace is the same one the strip is
-    // drawing, so what is heard and what is seen are one run.
-    const onDrag = tab === 'drag' && dragRunning && dragResult && result;
-    const dragPt = onDrag
-      ? (dragResult.trace.find((pt) => pt.t >= dragT) ?? dragResult.trace[dragResult.trace.length - 1])
-      : null;
     // And whether it is heard at all: one of those has to be on screen.
-    const audible = Boolean((onDyno || onLive || onDrag) && soundOn);
+    const audible = Boolean((onDyno || onLive) && soundOn);
 
-    const rpm = onDrag ? (dragPt?.rpm ?? 0) : onDyno ? currentRpm : live.rpm;
+    const rpm = onDyno ? currentRpm : live.rpm;
     const dynoPt = onDyno ? result.points[Math.min(revealCount, result.points.length - 1)] : null;
     // The operating point the note is rendered from. The drag trace carries no cylinder
     // pressure or gas temperature of its own, but its torque curve IS the last pull's, so
     // it borrows that pull's measured point nearest the engine speed it is at — the same
     // engine, measured at the same revs.
     const point = onDyno ? dynoPt
-      : onDrag ? nearestPoint(result.points, rpm)
-        : (live.running ? live.live : null);
+      : (live.running ? live.live : null);
     // Throttle position. A dyno sweep is wide open; the bookends are not, and the overrun
     // is a closed throttle — which is what makes the blow-off fire when the pull ends,
     // exactly where you would hear it on a real dyno. On the strip it is the DRIVER'S
@@ -1189,18 +1006,16 @@ export function EcuLabApp() {
     // from one that hooked.
     const load = onDyno
       ? (dynoPhase === 'sweep' ? 1 : dynoPhase === 'spooldown' ? 0.04 : 0.10)
-      : onDrag ? (dragPt?.throttle ?? 1)
-        : clamp((live.effThrottle ?? 0) / 100, 0, 1);
+      : clamp((live.effThrottle ?? 0) / 100, 0, 1);
     const cut = onLive ? live.fuelCut
-      : onDrag ? Boolean(dragPt?.limiter)
-        : Boolean(onDyno && dynoPhase === 'spooldown');
+      : Boolean(onDyno && dynoPhase === 'spooldown');
 
     const drive = acousticDrive({
       rpm, derived: engineDerived, point, turboOn,
       compressor,
       // The sweep only ever measures wide-open points, so the idle and overrun either
       // side of it — and every point of a drag pass — borrow one and scale it by throttle.
-      throttle: onDyno || onDrag ? load : 1,
+      throttle: onDyno ? load : 1,
       // No injectors, no combustion, so the cylinder reaches the exhaust valve at motored
       // pressure. The renderer does not need to know what a rev limiter is.
       fuelCut: cut,
@@ -1236,7 +1051,7 @@ export function EcuLabApp() {
       // the renderer watches for to vent. The drag model carries no boost trace of its
       // own, so the whistle and the blow-off sit out the pass rather than being given a
       // number nothing measured at that throttle.
-      boostPsi: (onDyno && dynoPhase !== 'sweep') || onDrag ? 0 : (point?.boostPsi ?? 0),
+      boostPsi: (onDyno && dynoPhase !== 'sweep') ? 0 : (point?.boostPsi ?? 0),
       volume,
     };
 
@@ -1244,37 +1059,19 @@ export function EcuLabApp() {
     // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
-    // The drivetrain, which only the strip has. A gearchange is heard as the gear in the
-    // trace steps up; an automatic's converter whines while it slips off the line and
-    // fades as road speed couples it up — both straight from the solved pass.
-    const box = GEARBOX_OPTS[car.boxIdx] ?? GEARBOX_OPTS[0];
-    const automatic = box.box === 'auto';
-    const gear = onDrag ? (dragPt?.gear ?? 0) : 0;
-    if (audible && gear > dragGearRef.current && dragGearRef.current > 0) {
-      shiftEngineAudio(a, { automatic });
-    }
-    dragGearRef.current = gear;
-    const slip = onDrag && automatic && box.couplingSpeedMs > 0
-      ? 1 - clamp((dragPt?.v ?? 0) / box.couplingSpeedMs, 0, 1)
-      : 0;
-    if (slip > 0 || converterOnRef.current) {
-      converterEngineAudio(a, { rpm, slip, audible });
-      converterOnRef.current = slip > 0;
-    }
   }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
       blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressor,
       mods.intake, mods.exhaust, mods.headers, turboOn, volume, dynoPhase,
-      running, currentRpm, revealCount, result, tab, dragRunning, dragResult, dragT, car.boxIdx]);
+      running, currentRpm, revealCount, result, tab]);
 
   // Whether anything should be making a sound right now. When nothing should, the graph
   // is silenced at once and the audio context suspended a moment later, so a stopped
   // engine costs no DSP at all — see `setEngineAudioActive`.
   const sounding = soundOn && (
     (tab === 'live' && (live.running || live.cranking))
-    || (tab === 'dyno' && running)
-    || (tab === 'drag' && (dragRunning || treePhase > 0)));
+    || (tab === 'dyno' && running));
   useEffect(() => {
     const a = audioRef.current;
     if (a) setEngineAudioActive(a, sounding);
@@ -1858,19 +1655,6 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {/* ---------- DRAG: put the engine in a car and run the quarter ---------- */}
-        {/* `torqueCurveNm`, `runDrag` and the playback clock are the shell's, for the
-            same reason the dyno reveal is: the run needs the audio context and a timer
-            that outlives a render. The screen reads the solved run back out of the
-            store and draws it. */}
-        {tab === 'drag' && !inCareer && !engineMissing && (
-          <div style={{ padding: 16 }}>
-            <DragScreen
-              section={dragSection} onToggle={toggleDragSection}
-              result={result} engineDerived={engineDerived} onRun={runDrag}
-            />
-          </div>
-        )}
 
         {/* In the top layer when open, so where it sits in the tree does not matter. */}
         <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />

@@ -40,7 +40,7 @@ describe('pageCommands', () => {
     ]);
     expect(list).toContain('page:live');
     expect(list.some((id) => id.startsWith('page:live/'))).toBe(false);
-    expect(list).toHaveLength(6 + 27);
+    expect(list).toHaveLength(6 + 23);
   });
 
   it('prints the tab before a section, and not before a tab', () => {

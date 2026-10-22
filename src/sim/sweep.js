@@ -207,44 +207,40 @@ export function simulateSweep({
     });
   }
 
+  const perPoint = points.map(pointWear);
   let pistonWear = 0, valveWear = 0;
-  points.forEach((p) => {
-    const w = pointWear(p);
+  perPoint.forEach((w) => {
     pistonWear += w.piston;
     valveWear += w.valve;
   });
-  const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
-  const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
+  const pullPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
   // Bearings are loaded by peak cylinder pressure on every firing stroke, so they are
   // charged for the pressure the whole pull averaged — not for boost, which was only
   // ever a proxy for it and one that ignored static compression entirely. Block
   // material still modulates it: an iron block holds its main bores rounder under load
   // than an aluminium one, which is `bearingWearMult`'s whole job.
-  const bearingWear = Math.max(0, avgPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
+  const bearingWear = Math.max(0, pullPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
     * COEFF.WEAR_BEARING_PER_BAR * derived.bearingWearMult;
   let wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
 
   // A part that runs out of life fails where it does: the pull ends at that point, and
   // the failed part is spent to nothing. What the others wore is what the pull to there
-  // cost them.
+  // cost them, charged the same way the failure was found.
   let failure = null;
   if (health) {
     const freeBar = derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR;
-    const at = sweepFailure(points, wear, health, freeBar);
+    const at = sweepFailure(points, wear, health, freeBar, perPoint);
     if (at) {
-      const n = at.index + 1;
-      const kept = points.slice(0, n);
-      const frac = n / points.length;
-      wear = {
-        piston: kept.reduce((a, p) => a + pointWear(p).piston, 0),
-        bearing: bearingWear * frac,
-        valve: kept.reduce((a, p) => a + pointWear(p).valve, 0),
-      };
+      wear = { ...at.spent };
       wear[at.part] = Math.max(wear[at.part], health[at.part]);
-      points.length = n;
+      points.length = at.index + 1;
       failure = { rpm: points[at.index].rpm, part: at.part, ...FAILURE_MODES[at.part] };
     }
   }
+  // Everything below reads the pull as it ran: to the failure, if there was one.
+  const reachedRpm = failure ? failure.rpm : endRpm;
+  const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
+  const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
 
   const events = [];
   const rangeLabel = (run) => (run[0].rpm === run[run.length - 1].rpm
@@ -503,7 +499,7 @@ export function simulateSweep({
       type: 'compressor', severity: 2, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
-      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 39).`,
+      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 34).`,
       fix: `On BUILD → INDUCTION, keep the boost target at or under this compressor's ~${compressor?.boostCeiling ?? peak.boostPsi} psi ceiling in this range, or fit a larger compressor.`,
     });
   });
@@ -540,11 +536,11 @@ export function simulateSweep({
   // Valve float is a hard mechanical limit — the springs cannot close the valves fast
   // enough, so cylinder filling collapses. No calibration change touches this.
   const floatRpm = derived.floatRpm || 99999;
-  if (floatRpm < endRpm) {
+  if (floatRpm < reachedRpm) {
     const lost = points.filter((p) => p.rpm > floatRpm);
     events.push({
-      type: 'float', severity: 3, impact: Math.round(clamp((endRpm - floatRpm) / 45, 8, 34)),
-      rpmStart: Math.round(floatRpm), rpmEnd: endRpm,
+      type: 'float', severity: 3, impact: Math.round(clamp((reachedRpm - floatRpm) / 45, 8, 34)),
+      rpmStart: Math.round(floatRpm), rpmEnd: reachedRpm,
       msg: `Valve float above ${Math.round(floatRpm)} RPM — cylinder filling collapsing over the last ${lost.length * SWEEP_STEP_RPM} RPM of the pull`,
       cause: `The camshaft opens the valves but only the springs close them. Above ${Math.round(floatRpm)} RPM the valves stop following the lobe, so the cylinder cannot fill and power falls off a cliff instead of tapering. A ${derived.camDuration}° cam opens further and faster, which is exactly why it demands stiffer springs than stock.`,
       fix: `On BUILD → ENGINE, raise the valve spring rate until float sits above your ${endRpm} RPM redline, or fit a milder cam. Or keep the engine under it: set the rev limiter below ${Math.round(floatRpm)} RPM on TUNE → PROTECT. No table change fixes valve float.`,
@@ -552,19 +548,19 @@ export function simulateSweep({
   }
 
   // The bottom end past what it is built for: mean piston speed over its rating
-  // (bottomEnd.js). A guideline crossed, not a failure modelled: power is unaffected,
-  // which is exactly why it has to be said.
+  // (bottomEnd.js). A pull's few seconds up there cost no power, which is exactly why it
+  // has to be said; held there on LIVE, it wears the bearings out (damage.js liveWear).
   const bottomEnd = derived.bottomEnd;
-  if (bottomEnd && endRpm > bottomEnd.ratedRpm) {
-    const peakMs = 2 * (derived.stroke / 1000) * (endRpm / 60);
+  if (bottomEnd && reachedRpm > bottomEnd.ratedRpm) {
+    const peakMs = 2 * (derived.stroke / 1000) * (reachedRpm / 60);
     const factory = bottomEnd.id === 'factory';
     events.push({
-      type: 'bottomEnd', severity: 3, impact: Math.round(clamp((endRpm - bottomEnd.ratedRpm) / 60, 6, 30)),
-      rpmStart: bottomEnd.ratedRpm, rpmEnd: endRpm,
+      type: 'bottomEnd', severity: 3, impact: Math.round(clamp((reachedRpm - bottomEnd.ratedRpm) / 60, 6, 30)),
+      rpmStart: bottomEnd.ratedRpm, rpmEnd: reachedRpm,
       msg: `Pistons and rods past their rating above ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM (${peakMs.toFixed(1)} m/s mean piston speed, rated ${bottomEnd.limitMs.toFixed(1)})`,
       cause: factory
-        ? `This engine's factory pistons and rods are rated to its own ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM limiter, ${bottomEnd.limitMs.toFixed(1)} m/s on its ${derived.stroke} mm stroke. The inertia load on each rod grows with the square of engine speed, so ${endRpm.toLocaleString('en-US')} RPM loads them ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% harder than the maker ever validated. The dyno shows the power; it does not show the rod bearing wearing out or the rod that lets go.`
-        : `${bottomEnd.label} are good for about ${bottomEnd.limitMs} m/s of mean piston speed, which this ${derived.stroke} mm stroke reaches at ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM. Rod inertia load grows with the square of engine speed: at ${endRpm.toLocaleString('en-US')} RPM it is ${Math.round(100 * ((endRpm / bottomEnd.ratedRpm) ** 2 - 1))}% past what these parts are built for. Production engines run about 16-21 m/s; 25 is NASCAR and Formula One. The simulator does not model the failure; it tells you the parts are past their band.`,
+        ? `This engine's factory pistons and rods are rated to its own ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM limiter, ${bottomEnd.limitMs.toFixed(1)} m/s on its ${derived.stroke} mm stroke. The inertia load on each rod grows with the square of engine speed, so ${reachedRpm.toLocaleString('en-US')} RPM loads them ${Math.round(100 * ((reachedRpm / bottomEnd.ratedRpm) ** 2 - 1))}% harder than the maker ever validated. A pull's few seconds up there show as power, not damage; held there on LIVE, the rod bearings wear out, and a worn-out bearing is how the rod lets go.`
+        : `${bottomEnd.label} are good for about ${bottomEnd.limitMs} m/s of mean piston speed, which this ${derived.stroke} mm stroke reaches at ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM. Rod inertia load grows with the square of engine speed: at ${reachedRpm.toLocaleString('en-US')} RPM it is ${Math.round(100 * ((reachedRpm / bottomEnd.ratedRpm) ** 2 - 1))}% past what these parts are built for. Production engines run about 16-21 m/s; 25 is NASCAR and Formula One. A pull's few seconds up there show as power, not damage; held there on LIVE, the rod bearings wear out until one spins.`,
       fix: `Keep the limiter at or below ${bottomEnd.ratedRpm.toLocaleString('en-US')} RPM on TUNE → PROTECT, or ${factory ? 'build the bottom end for the speed: forged pistons and rods' : 'fit stronger pistons and rods on BUILD → ENGINE'}, or a shorter stroke.`,
     });
   }

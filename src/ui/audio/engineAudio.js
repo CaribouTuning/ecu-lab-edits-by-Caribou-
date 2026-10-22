@@ -16,9 +16,8 @@
  * when that changes and the engine's state a few times a second.
  *
  * Around it sit the things the note does not make: induction noise, the turbo's whistle
- * and rush, the blow-off and compressor flutter, and the gearchange and converter noises
- * the drag strip uses. Each is a filtered noise band or a tone whose level comes from the
- * drive.
+ * and rush, the blow-off and compressor flutter. Each is a filtered noise band or a tone
+ * whose level comes from the drive.
  *
  * THE OUTPUT STAGE IS THE REFERENCE'S, WITHOUT ITS CLIPPING. Exhaust pulses are sharp
  * transients, so raw gain clips long before it sounds loud. The reference's fast limiter
@@ -170,25 +169,6 @@ export function createEngineAudio(ctx) {
     const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true; return src;
   };
 
-  // SHIFT CLUNK. A gear change is mechanical — dogs or synchros engaging make a short,
-  // low, woody knock. Without it a shift is just a dip in level, which reads as a glitch
-  // rather than as a gearchange. Straight to the output, so the limiter cannot duck it.
-  const clunkFilt = ctx.createBiquadFilter();
-  clunkFilt.type = 'bandpass'; clunkFilt.frequency.value = 190; clunkFilt.Q.value = 3.5;
-  const clunkG = ctx.createGain(); clunkG.gain.value = 0;
-  const clunkNoise = noiseSource();
-  clunkNoise.connect(clunkFilt); clunkFilt.connect(clunkG); clunkG.connect(outGain);
-
-  // TORQUE CONVERTER. A slipping converter has a fluid whine that rises with slip —
-  // loudest off the line where the engine is spinning far faster than the gearbox input,
-  // fading as it couples up. A manual has nothing equivalent, which is a large part of
-  // why the two sound so different from a standstill.
-  const convOsc = ctx.createOscillator(); convOsc.type = 'triangle'; convOsc.frequency.value = 320;
-  const convFilt = ctx.createBiquadFilter();
-  convFilt.type = 'bandpass'; convFilt.frequency.value = 500; convFilt.Q.value = 2.0;
-  const convG = ctx.createGain(); convG.gain.value = 0;
-  convOsc.connect(convFilt); convFilt.connect(convG); convG.connect(master);
-
   // Induction: air being dragged past a filter and down a runner.
   const indG = ctx.createGain(); indG.gain.value = 0;
   const indFilt = ctx.createBiquadFilter(); indFilt.type = 'bandpass'; indFilt.frequency.value = 1800; indFilt.Q.value = 1.2;
@@ -238,9 +218,9 @@ export function createEngineAudio(ctx) {
   flutNoise.connect(flutFilt); flutFilt.connect(flutGate); flutGate.connect(flutEnv);
   flutEnv.connect(outGain);
 
-  flutLfo.start(); convOsc.start();
+  flutLfo.start();
   indNoise.start(); bladeNoise.start(); rushNoise.start();
-  bovNoise.start(); flutNoise.start(); clunkNoise.start();
+  bovNoise.start(); flutNoise.start();
 
   // THE EXHAUST ITSELF, which is the whole note — see `pulseExhaust.js`. It also carries
   // the starter's grind and knock, as the reference's combustion noise did.
@@ -255,15 +235,12 @@ export function createEngineAudio(ctx) {
     ctx, limiter, outGain, softClip, satOut, master,
     indG, indFilt, whistle, whistleG, bladeFilt, bladeG, rushFilt, rushG,
     bovFilt, bovG, flutFilt, flutEnv, flutLfo,
-    clunkFilt, clunkG, convOsc, convFilt, convG,
     prevBoostPsi: 0,
     // Signature of the geometry last sent to the exhaust, so a build that has not changed
     // is not re-sent sixty times a second.
     geomKey: '',
     // Far enough in the past that the first frame is never throttled away.
     paramsAt: -1e9,
-    // Until this context time a gearchange owns the master gain; see `shiftEngineAudio`.
-    shiftUntil: 0,
     // Whether anything should be sounding, and the pending suspend when nothing is.
     // See `setEngineAudioActive`.
     active: false,
@@ -407,70 +384,11 @@ export function updateEngineAudio(a, frame) {
   // A gearchange schedules its own dip and swell on this gain. A target written on top
   // of it would be inserted INTO that schedule and pull the level straight back up
   // through the gap, so while one is playing it is left alone.
-  if (t >= a.shiftUntil) a.master.gain.setTargetAtTime(audible ? vol : 0, t, cut ? 0.015 : 0.06);
+  a.master.gain.setTargetAtTime(audible ? vol : 0, t, cut ? 0.015 : 0.06);
 }
 
 /**
- * Fires a gear-change noise.
- *
- * A manual disconnects completely: the note falls away, the dogs engage with a hard
- * mechanical knock, and it catches again as the clutch comes back out. An automatic never
- * disconnects at all — a converter is a fluid coupling, so the engine keeps driving the
- * car through the change and you get a soft dip and a swell instead of a gap, with no
- * engagement noise to hear.
- *
- * @param {object} a the graph from {@link createEngineAudio}
- * @param {{automatic: boolean}} opts
- */
-export function shiftEngineAudio(a, { automatic }) {
-  const t = a.ctx.currentTime;
-  const back = a.master.gain.value > 0.05 ? a.master.gain.value : 0.7;
-  a.master.gain.cancelScheduledValues(t);
-  a.master.gain.setValueAtTime(a.master.gain.value, t);
-  a.clunkG.gain.cancelScheduledValues(t);
-  a.clunkFilt.frequency.cancelScheduledValues(t);
-
-  a.shiftUntil = t + (automatic ? 0.26 : 0.30);
-
-  if (automatic) {
-    a.master.gain.linearRampToValueAtTime(back * 0.62, t + 0.05);   // slips, never releases
-    a.master.gain.linearRampToValueAtTime(back * 1.06, t + 0.15);   // clutch packs take up
-    a.master.gain.linearRampToValueAtTime(back, t + 0.26);
-    // A soft low swell rather than a knock — the shift you feel more than hear.
-    a.clunkG.gain.setValueAtTime(0.0001, t + 0.03);
-    a.clunkG.gain.linearRampToValueAtTime(EFFECT_TRIM * 0.13, t + 0.09);
-    a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-    a.clunkFilt.frequency.setValueAtTime(120, t + 0.03);
-    a.clunkFilt.Q.setValueAtTime(1.2, t + 0.03);
-  } else {
-    a.master.gain.linearRampToValueAtTime(0.03, t + 0.045);         // clutch in
-    a.master.gain.setValueAtTime(0.03, t + 0.13);                   // gap while shifting
-    a.master.gain.linearRampToValueAtTime(back * 1.12, t + 0.20);   // clutch out, flare
-    a.master.gain.linearRampToValueAtTime(back, t + 0.30);
-    a.clunkG.gain.setValueAtTime(0.0001, t + 0.10);
-    a.clunkG.gain.linearRampToValueAtTime(EFFECT_TRIM * 0.55, t + 0.118);
-    a.clunkG.gain.exponentialRampToValueAtTime(0.0001, t + 0.20);
-    a.clunkFilt.Q.setValueAtTime(3.5, t + 0.10);
-    a.clunkFilt.frequency.setValueAtTime(240, t + 0.10);
-    a.clunkFilt.frequency.exponentialRampToValueAtTime(140, t + 0.20);
-  }
-}
-
-/**
- * Sets the torque-converter whine.
- *
- * @param {object} a the graph from {@link createEngineAudio}
- * @param {{rpm: number, slip: number, audible: boolean}} opts slip is 0 (locked up) to 1
- */
-export function converterEngineAudio(a, { rpm, slip, audible }) {
-  const t = a.ctx.currentTime;
-  a.convOsc.frequency.setTargetAtTime(240 + rpm * 0.055, t, 0.08);
-  a.convFilt.frequency.setTargetAtTime(420 + rpm * 0.09, t, 0.08);
-  a.convG.gain.setTargetAtTime(audible ? Math.max(0, Math.min(1, slip)) * 0.055 : 0, t, 0.1);
-}
-
-/**
- * Plays a short tone. Used for the staging-tree lights, and as an audio self-test —
+ * Plays a short tone, as an audio self-test —
  * if this is silent the problem is the device or the browser, not the engine model.
  *
  * @param {object} a the graph from {@link createEngineAudio}
@@ -505,7 +423,6 @@ export function silenceEngineAudio(a) {
   };
   kill(a.master); kill(a.exhaustGain); kill(a.indG);
   kill(a.whistleG); kill(a.bladeG); kill(a.rushG); kill(a.bovG); kill(a.flutEnv);
-  kill(a.clunkG); kill(a.convG);
   // Pulses already handed to the clock cannot be unscheduled, so the exhaust needs telling
   // to stop rather than just being turned down — otherwise a stopped engine keeps firing
   // for the length of the scheduling horizon.

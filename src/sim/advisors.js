@@ -16,6 +16,7 @@ import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { clamp, curveAt, interp1 } from './math.js';
 import { evaluatePoint } from './point.js';
+import { wearEffects } from './damage.js';
 import { reachableKpa } from './manifold.js';
 import { inductionAtMap } from './turbo.js';
 import {
@@ -223,14 +224,19 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
  *    earlier as it advances, which raises effective compression and lowers the knock
  *    limit. `camAt` (`intakeCamAt`) says where the phaser sits; absent, the cam is parked.
  *
+ * 5. ON THE ENGINE AS WORN. `health` (damage.js) is the engine's condition: a worn engine
+ *    is judged with what its worn parts do, as the dyno pull it is compared with runs it.
+ *
  * @param {object} input includes `camAt`, the intake cam advance the VVT calibration holds
- *   at a speed and pressure (crank degrees), when the engine has an intake phaser
+ *   at a speed and pressure (crank degrees), when the engine has an intake phaser, and
+ *   `health`, the engine's condition (absent: as new)
  * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
-  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null, camAt = null,
+  compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null, camAt = null, health = null,
 }) {
+  const wear = wearEffects(health, derived.cyl);
   const spark = [], fuelAdv = [];
   // The breakpoints each table is on: an engine-sized layout, an engine computer's own,
   // or the old 8 × 6 grid when the tables carry none.
@@ -298,6 +304,7 @@ export function calibrationAdvice({
     fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
     injectorCc, ecuInjectorCc, derived, compressor,
     turbine: turboOn ? turbine : null,
+    ...(wear ? { wear } : {}),
   });
 
   /**

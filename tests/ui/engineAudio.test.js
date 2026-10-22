@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { acousticDrive, deriveEngine, exhaustGeometry, DEFAULT_ENGINE_CONFIG, DEFAULT_MODS,
   BARO_KPA, COMPRESSOR_OPTS, TURBINE_OPTS, OCTANE_OPTS, DEFAULT_VE, interp2,
   evaluatePoint } from '../../src/sim/index.js';
-import { createEngineAudio, geometryKey, setEngineAudioActive, shiftEngineAudio,
+import { createEngineAudio, geometryKey, setEngineAudioActive,
   silenceEngineAudio, updateEngineAudio, wakeEngineAudio } from '../../src/ui/audio/engineAudio.js';
 import { stubContext } from './audioStub.js';
 
@@ -180,25 +180,6 @@ describe('when the tube network is rebuilt', () => {
   it('does not rebuild for exhaust temperature wandering inside one step', () => {
     expect(key({ gasTempK: 1060 })).toBe(key({ gasTempK: 1050 }));
     expect(key({ gasTempK: 1150 })).not.toBe(key({ gasTempK: 1050 }));
-  });
-});
-
-describe('a gearchange', () => {
-  it('owns the master gain until it has finished, so a frame cannot fill in its gap', () => {
-    const ctx = stubContext();
-    const graph = createEngineAudio(ctx);
-    ctx.currentTime = 1;
-    updateEngineAudio(graph, frameFor());
-    const written = graph.master.gain.targets.length;
-
-    shiftEngineAudio(graph, { automatic: false });
-    ctx.currentTime = 1.1;
-    updateEngineAudio(graph, frameFor());
-    expect(graph.master.gain.targets.length).toBe(written);
-
-    ctx.currentTime = 1.4;
-    updateEngineAudio(graph, frameFor());
-    expect(graph.master.gain.targets.length).toBe(written + 1);
   });
 });
 

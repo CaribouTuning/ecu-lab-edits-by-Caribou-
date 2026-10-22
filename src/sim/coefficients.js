@@ -633,10 +633,15 @@ export const COEFF = {
   // clearance doubling roughly halves pressure at a fixed pump, which is what a worn
   // engine's oil light at hot idle is.
   DAMAGE_BEARING_OIL_LOSS: 0.5,
-  // The oil film a running bearing needs: the rule of thumb of ten psi a thousand RPM
-  // (69 kPa), and never less than what holds it at idle.
-  DAMAGE_OIL_FILM_KPA_PER_KRPM: 69,
-  DAMAGE_OIL_FILM_MIN_KPA: 70,
+  // The oil film a running bearing needs, as a share of what this engine's healthy pump
+  // gives at the same speed and oil temperature, and never less than an oil-pressure
+  // light's switch point (about 5 psi). The share sits under what a fully worn bottom end
+  // still makes on its own (1 − DAMAGE_BEARING_OIL_LOSS), so worn clearances lower the
+  // gauge without starving the bearings by themselves: starvation takes a failing pump
+  // or low oil on top. Judging against the healthy pump, not a fixed psi-per-RPM rule,
+  // keeps hot thin oil at idle, which every engine shows, from counting as starvation.
+  DAMAGE_OIL_FILM_SHARE: 0.45,
+  DAMAGE_OIL_FILM_MIN_KPA: 35,
   // Bearing life per second with no oil pressure at all. A dry bearing lasts seconds to
   // tens of seconds under load: 4% a second spends a whole bottom end in 25 s.
   DAMAGE_OIL_STARVE_PER_S: 4,
@@ -720,10 +725,8 @@ export const COEFF = {
   // you hear off a limiter, and the band is what sets how fast it stutters.
   // KNOWN DISCREPANCY: GM's stock calibrations restore 50 RPM under the cut in every
   // image Pro has read (B3303 "Fuel Cut-off Limiters in Gear": 6000/5950, 5600/5550,
-  // 6200/6150 RPM, 26 LM7, LR4, LQ4, LS1 and LS6 images). 320 has no source. Moving it
-  // to 50 changes the drag strip's wheelspin behaviour (a spinning street tyre on the
-  // limiter then out-runs a car that does not spin), so it waits for that model to be
-  // checked rather than going in blind.
+  // 6200/6150 RPM, 26 LM7, LR4, LQ4, LS1 and LS6 images). 320 has no source and is kept
+  // until the live engine's limiter bounce is checked against a recording at 50.
   LIMITER_RESTORE_BAND_RPM: 320,
 
   // --- Volumetric efficiency modifiers ---
@@ -885,38 +888,4 @@ export const COEFF = {
   // the flat penalty this rule replaced, so it is never harsher than its predecessor.
   COMPRESSION_PENALTY_PER_POINT: 10,
   COMPRESSION_PENALTY_CAP: 15,
-
-  // --- Drivetrain & drag strip (see drivetrain.js) ---
-  // Fraction of peak grip a tyre still transmits once it has broken loose. Sliding
-  // friction is always below static, which is exactly why a spinning tyre is slower
-  // than one held at the limit — and why the driver model below lifts rather than
-  // staying flat.
-  TIRE_SLIDING_FRACTION: 0.92,
-  // Mass of one wheel and tyre assembly, kg, and the fraction of `m·r²` its rotational
-  // inertia actually comes to. A wheel is not a thin ring — the rim's mass sits well
-  // inboard of the tread — so a radius of gyration around 0.74·r is representative,
-  // giving I ≈ 0.55·m·r². Because I/r² is then just a mass, the wheels contribute a
-  // fixed effective mass regardless of tyre size, which is the correct behaviour: a
-  // taller tyre is harder to spin up but also gears the car taller by the same factor.
-  WHEEL_ASSEMBLY_MASS_KG: 22,
-  WHEEL_RING_FRACTION: 0.55,
-  // Manifold pressure assumed while the throttle is shut mid-shift, kPa. Feeds the
-  // existing pumping-loss model so revs fall against real engine braking rather than
-  // at an invented rate.
-  SHIFT_MANIFOLD_KPA: 30,
-  // How far below the limiter's cut speed the driver takes the next gear. Shifting
-  // exactly at the cut wastes the last few hundred RPM bouncing off it.
-  UPSHIFT_MARGIN_RPM: 60,
-
-  // --- Driver model ---
-  // A real driver does not hold the throttle flat while the tyre is spinning: first
-  // gear runs past 40 mph, so that would be a burnout halfway down the strip. After a
-  // reaction delay they feather it to keep the tyre just at the limit, which is both
-  // what happens and what is fastest. Backing off is quick and getting back in is
-  // deliberate, so the loop settles instead of oscillating.
-  DRIVER_REACTION_S: 0.45,
-  DRIVER_LIFT_RATE: 3.2,        // throttle fraction shed per second while spinning
-  DRIVER_REAPPLY_RATE: 1.1,     // throttle fraction restored per second once hooked
-  DRIVER_MIN_THROTTLE: 0.30,    // how far the driver will lift before riding it out
-  DRIVER_REAPPLY_MARGIN: 0.94,  // fraction of the grip limit they wait to fall under
 };

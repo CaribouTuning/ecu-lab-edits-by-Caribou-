@@ -186,14 +186,12 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       throttleCutRpm: 0,
       coldLimitRpm: 0,
       coldBelowC: 60,
-      speedLimitKph: 0,
     },
     arc: {
       launchEnabled: false,
       launchRpm: 4500,
       launchRestoreRpm: 4300,
       launchTiming: -6,
-      ffsEnabled: false,
     },
     // Nitrous control, for a kit on BUILD. The window is where a real controller sprays:
     // not before the engine can take the hit (low RPM is where nitrous breaks parts and
@@ -259,10 +257,6 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       limitByGear: curve(GEAR_AXIS, () => 2000),
       limitByRpm: curve(rpmAx, () => 2000),
       method: 'spark',
-      tcEnabled: false,
-      tcSlipPct: 12,
-      tcGain: 2.5,
-      tcMethod: 'spark',
     },
   };
 }
@@ -524,8 +518,6 @@ export const ECU_META = [
     help: 'The electronic throttle starts closing this far below the fuel cut, so the engine eases onto the limit instead of bouncing off it. Zero leaves it off.' },
   { path: 'limiter.coldLimitRpm', section: 'protect', group: 'Rev limiter', label: 'Cold rev limit', kind: 'number', unit: 'RPM', min: 0, max: 8000, step: 100, pro: true,
     help: 'A lower limit until the engine is warm — cold oil is thick and piston clearances are wide. Zero leaves it off.' },
-  { path: 'limiter.speedLimitKph', section: 'protect', group: 'Rev limiter', label: 'Vehicle speed limit', kind: 'number', unit: 'km/h', min: 0, max: 350, step: 5,
-    help: 'Fuel is cut above this road speed. It is a real calibration value on most road cars, and the drag strip will find it. Zero leaves it off.' },
   { path: 'limiter.restoreBandRpm', section: 'protect', group: 'Rev limiter', label: 'Restore band', kind: 'number', unit: 'RPM', min: 50, max: 800, step: 10, pro: true,
     help: 'How far below the cut revs must fall before fuel comes back.' },
   { path: 'protect.fanOnC', section: 'protect', group: 'Temperatures', label: 'Cooling fan on', kind: 'number', unit: '°C', min: 80, max: 110, step: 1,
@@ -591,27 +583,16 @@ export const ECU_META = [
   { path: 'torque.method', section: 'torque', group: 'Torque limits', label: 'Reduce torque with', kind: 'enum',
     options: [{ id: 'spark', label: 'Spark retard' }, { id: 'throttle', label: 'Throttle' }, { id: 'boost', label: 'Boost' }, { id: 'fuel', label: 'Cylinder cut' }],
     help: 'Spark is instant but burns later and hotter. Throttle is clean but takes a few cycles to empty the manifold. Boost is slowest. Cutting cylinders is instant and coarse.' },
-  { path: 'torque.tcEnabled', section: 'torque', group: 'Traction control', label: 'Traction control', kind: 'bool', options: onOff,
-    help: 'Compare driven-wheel speed to vehicle speed and take torque out when the tyre is spinning. Used on DRAG.' },
-  { path: 'torque.tcSlipPct', section: 'torque', group: 'Traction control', label: 'Target slip', kind: 'number', unit: '%', min: 2, max: 40, step: 1,
-    help: 'A tyre makes the most force with a little slip — typically 8–15%. Past it, grip falls away.' },
-  { path: 'torque.tcGain', section: 'torque', group: 'Traction control', label: 'Intervention gain', kind: 'number', min: 0.1, max: 10, step: 0.1, decimals: 1,
-    help: 'Torque removed per percent of excess slip. Too little and it spins; too much and it bogs.' },
-  { path: 'torque.tcMethod', section: 'torque', group: 'Traction control', label: 'Reduce torque with', kind: 'enum',
-    options: [{ id: 'spark', label: 'Spark retard' }, { id: 'throttle', label: 'Throttle' }, { id: 'boost', label: 'Boost' }, { id: 'fuel', label: 'Cylinder cut' }],
-    help: 'How fast the reduction arrives is the difference between catching the spin and chasing it.' },
 
-  // ---- LAUNCH (drag strip and LIVE) ----
+  // ---- LAUNCH (LIVE) ----
   { path: 'arc.launchEnabled', section: 'torque', group: 'Launch control', label: 'Launch control (two-step)', kind: 'bool', options: onOff,
-    help: 'With the clutch in and the throttle pinned, a second rev limiter holds the engine at the launch speed by cutting spark, with timing pulled hard. On DRAG it sets the launch RPM; in LIVE, arm it with the clutch.' },
+    help: 'With the clutch in and the throttle pinned, a second rev limiter holds the engine at the launch speed by cutting spark, with timing pulled hard. In LIVE, arm it with the clutch.' },
   { path: 'arc.launchRpm', section: 'torque', group: 'Launch control', label: 'Launch RPM', kind: 'number', unit: 'RPM', min: 1500, max: 8000, step: 100,
     help: 'Where the two-step holds the engine. Too low and it bogs off the line; too high and the tyre goes up in smoke.' },
   { path: 'arc.launchRestoreRpm', section: 'torque', group: 'Launch control', label: 'Launch restore', kind: 'number', unit: 'RPM', min: 1000, max: 8000, step: 100, pro: true,
     help: 'Where spark comes back: the hysteresis that makes a two-step pop.' },
   { path: 'arc.launchTiming', section: 'torque', group: 'Launch control', label: 'Launch timing', kind: 'number', unit: '°', min: -20, max: 20, step: 1,
     help: 'Spark on the two-step. Retarded far enough the burn is still going when the exhaust valve opens, so the manifold runs hot — the energy an anti-lag strategy uses to spool a turbo on the line.' },
-  { path: 'arc.ffsEnabled', section: 'torque', group: 'Launch control', label: 'Flat-foot shifting', kind: 'bool', options: onOff,
-    help: 'Change gear without lifting: the ECU cuts spark while the clutch is in, so the shift takes the time the gearbox needs and no more. Manual gearboxes only.' },
 
   // ---- SENSORS ----
   { path: 'sensors.map', section: 'sensors', group: 'Scaling', label: 'MAP sensor scaling', kind: 'enum',

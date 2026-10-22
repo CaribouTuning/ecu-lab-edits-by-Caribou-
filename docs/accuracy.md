@@ -22,7 +22,7 @@ source, and the weaker sources are marked as such.
 | `tests/tuning-consistency.test.js` | The same, pinned on hand-picked engines, including LIVE at idle and on the rev limiter. |
 | `tests/ve-learn.test.js` | The VE table is corrected only from what a tuner could log: the wideband against the table's target, the fuel trims, and the MAF's own error kept out (a cold air intake on the stock tune logs its real 0–5% VE gain, not the MAF housing's 10%). Only logged cells move; half-steps converge; nitrous, maxed injectors, protection, cut, warm-up and transients are left out; a log already applied cannot be applied twice. |
 | `tests/ui/tutorial.test.jsx` | The tutorial stays within five minutes, and the tutorial and the Tuning Course quote the game's own numbers: its stock pull is the pull the app makes, every lesson scenario does what its lesson says (over-advanced spark knocks and gains nothing; the intake logs MAF and lean entries; the retune clears both), and every numbered callout still points at something on its live screen. |
-| `tests/accuracy-claims.test.js` | Every figure this page and Learn article 39 quote about the model. |
+| `tests/accuracy-claims.test.js` | Every figure this page and Learn article 34 quote about the model. |
 | `tests/blower.test.js` | Superchargers: boost from low down on a Roots or twin-screw and climbing with RPM on a centrifugal; the pulley sets boost; a positive-displacement blower's efficiency falls past its design ratio no faster than isochoric compression, so its boost always settles where the engine swallows it; the crank pays the compression work; efficiency ranks and heats the charge as the makers publish; no lag on LIVE; ~7 psi intercooled adds 35–50%; an over-spun blower is flagged with a pulley that fixes it. |
 | `tests/nitrous.test.js` | Nitrous: its oxygen and breakdown heat; bottle pressure against the racing charts; a 100 shot's 5–6 lb/min; gain in step with the shot; the knock limit falling a few degrees per 50 hp (3–4° on pump 93, where tuners start from 2°); a wet kit rich on a cold bottle; a speed-density ECU fuelling for the air the vapour displaced, the pull log's fuel correction clearing it in one step, closed loop standing down while spraying, and a weak pump starving the kit; the controller's window, ramp and lean cut, on the dyno and LIVE. |
 
@@ -182,14 +182,14 @@ rated low, so they read closer to their rating than a 15% loss predicts.
 ## Known approximations
 
 Each of these is measured, written down in the code where it arises, and taught in
-Learn article 39. None of them changes the direction of any lesson.
+Learn article 34. None of them changes the direction of any lesson.
 
 1. **Air per horsepower is close; fuel per horsepower now in the real band.** The presets
    burn 0.39–0.55 lb/hp·h at peak power and make 9.8–11.1 crank hp per lb/min of air,
    against 0.45–0.60 and about 10–11 for real engines of their kind. The spread is the
    factories' own mixtures: the GM trucks run GM's stock enrichment, lambda 0.76–0.81, and
    burn the most (the LM7 0.55); the direct-injection B58 and EA888 hold near stoichiometric
-   and burn the least (0.39–0.41). Learn article 39 used to say the
+   and burn the least (0.39–0.41). Learn article 34 used to say the
    model got 10–15% more power from each pound of air than a real engine; most of that was
    the rich flame credited with heat its CO and H₂ never release (see "Rich flames" above),
    and it went with it. Friction before October 2026 was the rest (src/sim/friction.js).
@@ -599,7 +599,7 @@ parts the app does not offer; the cylinder-count knock claim; the real-software 
 that the app folds corrections together (it no longer does); the README's Node
 requirement, fingerprint size and file map; stale figures in preset and coefficient
 comments. `tests/accuracy-claims.test.js` now fails if a screen name, a figure on this
-page or in Learn article 39 drifts from the model.
+page or in Learn article 34 drifts from the model.
 
 The tutorial and Learn pass that followed rebuilt the tutorial around the live game
 screens, and in doing so found and fixed: a pull-log MAF message that called a low-reading

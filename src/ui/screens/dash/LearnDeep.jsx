@@ -52,7 +52,7 @@ function VeFromLogs() {
       <br /><br /><span className={styles.formula}>VE new = VE × (λ measured ÷ λ target) × (1 + fuel trims) × MAF factor</span>
       <br /><br /><b className={styles.em}>λ measured ÷ λ target.</b> Over 1 is leaner than asked: the engine had more air than the ECU calculated, so the cell goes up by that ratio.
       <br /><br /><b className={styles.em}>The fuel trims.</b> At part throttle the ECU runs closed loop and trims the fuel to hit λ 1.00. The trims are then covering the table&apos;s error, so they are folded back in: a +5% trim means the table was 5% short even though the wideband reads perfect.
-      <br /><br /><b className={styles.em}>The MAF factor.</b> The game&apos;s default ECU blends a MAF reading into its fuel. A MAF that reads wrong moves the mixture too, and that part belongs to the MAF calibration (article 43). It is taken out, or correcting VE would build the MAF&apos;s error into the table.
+      <br /><br /><b className={styles.em}>The MAF factor.</b> The game&apos;s default ECU blends a MAF reading into its fuel. A MAF that reads wrong moves the mixture too, and that part belongs to the MAF calibration (article 38). It is taken out, or correcting VE would build the MAF&apos;s error into the table.
       <br /><br /><b className={styles.em}>Which cells.</b> Each logged point sits between four cells, and is shared among them by how close it sat to each. A share under a fifth says too little about a cell to count, and a cell needs the weight of about two points right on it before it changes. Cells with no data keep what they had.
       <br /><br /><b className={styles.em}>What is not data.</b> Acceleration enrichment, warm-up fuel below {'75 °C'} coolant, fuel cut, nitrous, protection enrichment, misfires (unburnt oxygen reads lean), injectors at their limit, and transients (manifold pressure moving more than 3 kPa between log rows). In each, something other than the VE table set the mixture.
       <ScreenSnippet
@@ -95,7 +95,7 @@ function MafAndSd() {
       <br /><br /><b className={styles.em}>A mass airflow sensor (MAF)</b> measures it: a heated wire in the intake, cooled by the air flowing past, read through a curve calibrated for the housing it sits in. It needs no VE table, but it is only as right as that curve.
       <br /><br />The default <b className={styles.em}>Air-mass strategy</b> on TUNE › AIRFLOW is <i>Speed-density + MAF trim</i>: fuel from VE, with the MAF&apos;s error feeding the trims. You can switch it to either one alone. Real tuning splits the same way: HP Tuners on a GM speed-density setup works through a VE table, and UpRev on a Nissan MAF ECU through the MAF curve.
       <br /><br /><b className={styles.em}>Telling the two errors apart.</b> A housing change scales the MAF&apos;s reading by one factor across the whole rev range: the cold air intake here reads {Math.abs(p.trimPct).toFixed(0)}% low at 5500 RPM and about the same everywhere. A VE error is different in every cell, because the part changes how the engine breathes at each speed. So a flat error across the pull is the MAF&apos;s, and a shaped one is VE&apos;s.
-      <br /><br /><b className={styles.em}>The fix for each.</b> The MAF scalar on TUNE › SENSORS undoes a flat MAF error: a MAF reading 90% of the air needs 1 ÷ 0.90 ≈ {INTAKE_MAF_SCALAR.toFixed(2)}. The shaped part goes into VE from the log (article 42). Do the MAF first when you can: then the VE log is not also carrying the MAF&apos;s error, although the correction takes it out either way.
+      <br /><br /><b className={styles.em}>The fix for each.</b> The MAF scalar on TUNE › SENSORS undoes a flat MAF error: a MAF reading 90% of the air needs 1 ÷ 0.90 ≈ {INTAKE_MAF_SCALAR.toFixed(2)}. The shaped part goes into VE from the log (article 37). Do the MAF first when you can: then the VE log is not also carrying the MAF&apos;s error, although the correction takes it out either way.
       <br /><br /><TryIt href="#/tune/sensors">TUNE › SENSORS</TryIt>
     </>
   );
@@ -160,7 +160,7 @@ function HowItRuns() {
   return (
     <>
       A simulation moves in steps. It works out the state of things at one moment, uses the laws of physics to work out the next, and repeats. Physics engines separate that step from the screen: the simulation keeps its own clock, whatever the display is doing. This one works the same way, at three scales.
-      <br /><br /><b className={styles.em}>Inside one engine cycle: every {COEFF.CYCLE_STEP_DEG} crank degrees.</b> The pressure, temperature and burned fraction in one cylinder are followed through intake, compression, burn and exhaust, {COEFF.CYCLE_STEP_DEG}° at a time: {720 / COEFF.CYCLE_STEP_DEG} steps per four-stroke cycle. At 4500 RPM on the stock engine the burn takes about {p.burnDeg}°, so it is followed over roughly {Math.round(p.burnDeg / COEFF.CYCLE_STEP_DEG)} steps. Work on the piston is added up step by step, and that sum, less friction and pumping, is the torque (article 26).
+      <br /><br /><b className={styles.em}>Inside one engine cycle: every {COEFF.CYCLE_STEP_DEG} crank degrees.</b> The pressure, temperature and burned fraction in one cylinder are followed through intake, compression, burn and exhaust, {COEFF.CYCLE_STEP_DEG}° at a time: {720 / COEFF.CYCLE_STEP_DEG} steps per four-stroke cycle. At 4500 RPM on the stock engine the burn takes about {p.burnDeg}°, so it is followed over roughly {Math.round(p.burnDeg / COEFF.CYCLE_STEP_DEG)} steps. Work on the piston is added up step by step, and that sum, less friction and pumping, is the torque (article 21).
       <br /><br /><b className={styles.em}>Across the dyno pull: every 100 RPM.</b> A pull is the cycle above solved at each speed from 1500 RPM to the redline, with the ECU deciding each point&apos;s fuel and spark from your tables. Each point is steady running at that speed; the dyno&apos;s sweep animation is drawn from them afterwards.
       <br /><br /><b className={styles.em}>On LIVE: every 50 milliseconds.</b> The engine advances in fixed 50 ms steps, 20 a second, and the screen shows the latest one. Throttle, idle control, fuel trims, warm-up and the protections all run on that clock.
       <br /><br /><b className={styles.em}>Why fixed steps.</b> The same inputs always give the same answer, to the last digit. That is what lets the game check itself: a test re-runs a large set of engines and compares every number with a stored fingerprint, so a change to the physics can never slip in unnoticed. Smaller steps cost more time for a result that has stopped changing; bigger ones start to miss the fast parts of the burn.
@@ -178,11 +178,11 @@ export function LearnDeep() {
     <>
       <div className={styles.part}>PART 6 · TUNING IN DEPTH</div>
       <div className={styles.partGoal}>After this part you can run the VE-from-logs method by hand, tell a MAF error from a VE error, diagnose a pull from its symptoms, and say how the simulator gets its answers.</div>
-      <ExpandableInfo lazy title="42. Correcting VE from logs, step by step"><VeFromLogs /></ExpandableInfo>
-      <ExpandableInfo lazy title="43. MAF, speed-density, and telling their errors apart"><MafAndSd /></ExpandableInfo>
-      <ExpandableInfo lazy title="44. Troubleshooting by symptom"><Troubleshooting /></ExpandableInfo>
-      <ExpandableInfo lazy title="45. A whole session, worked through"><WorkedSession /></ExpandableInfo>
-      <ExpandableInfo lazy title="46. How the simulator runs: steps in time and crank angle"><HowItRuns /></ExpandableInfo>
+      <ExpandableInfo lazy title="37. Correcting VE from logs, step by step"><VeFromLogs /></ExpandableInfo>
+      <ExpandableInfo lazy title="38. MAF, speed-density, and telling their errors apart"><MafAndSd /></ExpandableInfo>
+      <ExpandableInfo lazy title="39. Troubleshooting by symptom"><Troubleshooting /></ExpandableInfo>
+      <ExpandableInfo lazy title="40. A whole session, worked through"><WorkedSession /></ExpandableInfo>
+      <ExpandableInfo lazy title="41. How the simulator runs: steps in time and crank angle"><HowItRuns /></ExpandableInfo>
     </>
   );
 }

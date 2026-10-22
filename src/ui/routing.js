@@ -29,7 +29,6 @@ export const ROUTES = {
   // it, and a tab absent from here is not addressable at all.
   live: ['engine'],
   dyno: ['result', 'data', 'log', 'score', 'history'],
-  drag: ['body', 'gearing', 'tyres'],
 };
 
 /**
@@ -45,7 +44,6 @@ export const TAB_NAMES = {
   tune: 'TUNE',
   live: 'LIVE',
   dyno: 'DYNO',
-  drag: 'DRAG',
 };
 
 /**

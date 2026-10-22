@@ -22,6 +22,10 @@ import { customerCar, idleTest } from './cars.js';
  */
 const DAMAGING_WEAR = 3;
 
+/** What the shop pays when the car's engine failed in its care: a rebuild, at the same
+ *  rate per health point as any other damage it sends home. */
+const REBUILD_COST = 100 * 60;
+
 /** Reference pulls (a healthy stock car) are the same every time: worked out once. */
 const referenceCache = new Map();
 /** @param {import('./cars.js').CarSpec} spec */
@@ -137,7 +141,8 @@ function check(c, ctx) {
  * @property {number} rep reputation change
  * @property {number} peakHp
  * @property {number} score Tuning Score
- * @property {number} health what one hard pull on the handed-back tune leaves of a healthy engine, 0-100
+ * @property {number} health what one hard pull on the handed-back tune leaves of a healthy engine, 0-100;
+ *   0 when the engine failed
  * @property {string} line what the customer says
  */
 
@@ -154,7 +159,11 @@ export function evaluateJob(job, handedBack) {
   // conditions, whatever load, weather or switches the bench was last left on.
   const d = delivered.session;
   const state = { ...handedBack, session: { ...handedBack.session, loadKpa: 100, env: d.env, faults: d.faults, liveAux: d.liveAux } };
-  const r = simulateSweep(pullInputs(state).args);
+  // On the engine as it is now: one the shop has worn out fails this pull where it would
+  // fail on the customer's first hard run.
+  const engineHealth = handedBack.session?.health ?? null;
+  const r = simulateSweep({ ...pullInputs(state).args, ...(engineHealth ? { health: engineHealth } : {}) });
+  const blownUp = !!r.failure;
   const score = computeTuningScore(r).score;
   let idleCache = null;
   const idle = () => (idleCache ??= idleTest(state));
@@ -164,8 +173,8 @@ export function evaluateJob(job, handedBack) {
   // diagnosis pull on it is not the shop's fault. What is the shop's fault is sending it
   // home on a tune that is still wearing the engine out every time it is driven hard.
   const wearPerPull = Math.max(r.wear?.piston ?? 0, r.wear?.bearing ?? 0, r.wear?.valve ?? 0);
-  const health = Math.max(0, 100 - wearPerPull);
-  const damaged = wearPerPull > DAMAGING_WEAR;
+  const health = blownUp ? 0 : Math.max(0, 100 - wearPerPull);
+  const damaged = blownUp || wearPerPull > DAMAGING_WEAR;
   const failed = (kind) => results.filter((x) => x.check.kind === kind && !x.pass);
   const unsafe = failed('safety').length > 0 || damaged;
   const complaint = failed('complaint').length === 0;
@@ -173,7 +182,8 @@ export function evaluateJob(job, handedBack) {
 
   /** @type {Verdict['verdict']} */
   const verdict = unsafe ? 'unsafe' : !complaint ? 'fail' : !request ? 'partial' : 'pass';
-  const repair = damaged ? Math.round(wearPerPull * 60) : 0;
+  // A failed engine is a whole rebuild: every part's full life.
+  const repair = blownUp ? REBUILD_COST : damaged ? Math.round(wearPerPull * 60) : 0;
   const quality = verdict === 'pass' ? 1 + Math.max(0, score - 90) / 100 : 1;
   const pay = verdict === 'pass' ? Math.round(job.pay * quality)
     : verdict === 'partial' ? Math.round(job.pay * 0.5)
@@ -183,7 +193,7 @@ export function evaluateJob(job, handedBack) {
   const rep = verdict === 'pass' ? job.rep : verdict === 'partial' ? 1 : verdict === 'fail' ? -2 : -8;
   const line = verdict === 'pass' ? 'That’s it. That’s exactly what I wanted. Thank you.'
     : verdict === 'partial' ? 'It’s better, and I’ll pay for what you did, but it isn’t everything I asked for.'
-      : verdict === 'unsafe' ? (damaged ? 'Something in the engine sounds wrong now. I’m not paying for this.' : 'My friend looked at your log. You were going to send me home with that?')
+      : verdict === 'unsafe' ? blownUp ? `The engine let go: ${r.failure?.title.toLowerCase()}. You are paying for that.` : (damaged ? 'Something in the engine sounds wrong now. I’m not paying for this.' : 'My friend looked at your log. You were going to send me home with that?')
         : job.hint;
   return { verdict, results, pay, repair, rep, peakHp: r.peakHp, score, health, line };
 }
