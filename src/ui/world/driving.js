@@ -56,7 +56,7 @@ const TC_BAND = 0.03;
 const TC_MAX_CUT = 0.95;
 /** Reverse gear ratio and speed ceiling. */
 const REVERSE_RATIO = 3.4;
-const REVERSE_MAX_MS = 6;
+const REVERSE_MAX_MS = 8;
 /** Steering lock at a standstill, radians, and how fast the wheels turn, rad/s. */
 const STEER_LOCK = 0.5;
 const STEER_RATE = 3.2;
@@ -253,7 +253,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // Held at a stop with the brake, a further press selects reverse; the throttle goes back to drive.
   if (Math.abs(s.vx) < 0.6 && brk > 0.3 && thr < 0.05) {
     s._stopT += dt;
-    if (s._stopT > 0.35) s.reverse = true;
+    if (s._stopT > 0.2) s.reverse = true;
   } else if (thr > 0.2 && s.vx > -0.6) { s.reverse = false; s._stopT = 0; } else if (brk < 0.05) s._stopT = 0;
   const reversing = s.reverse && s.vx < 0.8;
   if (reversing) [thr, brk] = [brk, thr];
@@ -315,16 +315,20 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // The dyno-derived torque curve already has the driveline's loss taken off (see
   // torqueCurveFromSweep), so the gearing multiplies it as it stands.
   let tqWheelIn = clamp(tqEng * (tqEng > 0 ? converter : 1), -Infinity, clutchLimit) * overall;
+  // Engine braking holds the wheels back whichever way they turn: a car rolling backwards in a
+  // forward gear is slowed by it, not pushed.
+  if (tqEng < 0) tqWheelIn = -Math.abs(tqWheelIn) * Math.sign(s.wR);
   // Traction control: what every modern car's ECU does, and what a driver does with his right
   // foot: back off the torque as the driven tyres go past their peak slip.
-  if (input.tc !== false && tqWheelIn > 0 && !input.handbrake) {
+  if (input.tc !== false && tqEng > 0 && !input.handbrake) {
     const kap = (Math.abs(s.wR) * r - Math.abs(s.vx)) / Math.max(Math.abs(s.vx), 1.2);
     s.tcCut = clamp(((kap - TC_ONSET) / TC_BAND), 0, 1) * TC_MAX_CUT;
     // The tail is already sliding: power would only spin it further.
     if (s.slipR > ESC_REAR_SLIP && Math.abs(s.vx) > 1.5) s.tcCut = Math.max(s.tcCut, clamp((s.slipR - ESC_REAR_SLIP) * 2, 0, 1) * TC_MAX_CUT);
     tqWheelIn *= 1 - s.tcCut;
   } else s.tcCut = 0;
-  if (reversing && (s.vx < -REVERSE_MAX_MS || s.wR * r < -REVERSE_MAX_MS * 1.05)) tqWheelIn = Math.max(0, tqWheelIn);
+  // Reverse is one low gear: the power fades out toward its top speed instead of switching on and off.
+  if (reversing && tqWheelIn < 0) tqWheelIn *= clamp((REVERSE_MAX_MS + s.vx) / 2, 0, 1);
 
   // ---- brakes ----
   const brakeTq = brk * mu * wTotal * r;
@@ -356,7 +360,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     const wheelV = w * r;
     const ref = Math.max(Math.abs(u), 1.2);
     const kappa = (wheelV - u) / ref;
-    const kin = Math.atan2(v, ref) * (u >= 0 ? 1 : -1);
+    // Against the sideways slide whichever way the car rolls: going backwards does not turn it round.
+    const kin = Math.atan2(v, ref);
     // The tyre's slip angle follows the kinematic one with its relaxation length.
     s[key] += (Math.tan(kin) - s[key]) * Math.min(1, (dt * Math.max(Math.abs(u), 1.5)) / relax);
     const sx = kappa / KAPPA_PEAK;
@@ -435,6 +440,16 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   if (Math.abs(s.vx) < 0.15 && Math.abs(s.vy) < 0.15 && thr < 0.02) {
     s.vx *= 1 - Math.min(1, dt * 6); s.vy *= 1 - Math.min(1, dt * 6); s.yawRate *= 1 - Math.min(1, dt * 8);
     if (Math.abs(s.vx) < 0.02) s.vx = 0;
+  }
+  // Reversing, and at a crawl, a car goes where its wheels point: the slip-angle model is
+  // unstable going backwards (the steered axle trails) and meaningless at walking pace, so the
+  // motion is drawn toward the rolling path, yaw = v tan(delta) / L with no slip at the rear axle.
+  const follow = s.vx < 0 ? clamp(1 - (Math.abs(s.vy) - 2) / 3, 0, 1) : clamp(1 - s.vx / 3, 0, 1);
+  if (follow > 0 && !input.handbrake) {
+    const yawK = (s.vx * Math.tan(s.steer)) / L;
+    const k = Math.min(1, dt * 12) * follow;
+    s.yawRate += (yawK - s.yawRate) * k;
+    s.vy += (b * yawK - s.vy) * k;
   }
   // At a crawl the slip-angle definition is meaningless, so damp the yaw instead of letting it jitter.
   if (speedAbs < 1.5) s.yawRate *= 1 - Math.min(1, dt * 4 * (1 - speedAbs / 1.5));

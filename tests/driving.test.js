@@ -225,8 +225,30 @@ describe('it stays a physical thing', () => {
     for (let i = 0; i < 240 * 3; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0, steer: 0 });
     expect(Math.abs(v.vx)).toBeLessThan(0.05);
     for (let i = 0; i < 240 * 6; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 });
-    expect(v.vx).toBeLessThan(-2);
-    expect(v.vx).toBeGreaterThan(-6.5);
+    expect(v.vx).toBeLessThan(-5);
+    expect(v.vx).toBeGreaterThan(-8.5);
+  });
+
+  it('steers in reverse along the path its wheels roll, without sliding sideways', () => {
+    const v = makeVehicle();
+    const p = pt();
+    for (let i = 0; i < 240 * 2; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 });
+    for (let i = 0; i < 240 * 2; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 1 });
+    const L = car.wheelbaseM;
+    expect(v.vx).toBeLessThan(-3);
+    // Yaw as the wheels roll, and the only sideways motion is the geometry's, not a slide.
+    expect(v.yawRate).toBeCloseTo((v.vx * Math.tan(v.steer)) / L, 1);
+    expect(Math.abs(Math.atan2(v.vy, -v.vx))).toBeLessThan(0.45);
+  });
+
+  it('slows a car rolling backwards in a forward gear, and its tyres pull a sideways slide straight', () => {
+    const v = makeVehicle();
+    const p = pt();
+    Object.assign(v, { vx: -8, vy: 4, yawRate: 1, wR: -8 / tireRadiusM(car), wF: -8 / tireRadiusM(car) });
+    for (let i = 0; i < 240 * 2; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0, steer: 0 });
+    expect(v.vx).toBeGreaterThan(-8);
+    expect(Math.abs(v.vy)).toBeLessThan(0.5);
+    expect(Math.abs(v.yawRate)).toBeLessThan(0.2);
   });
 
   it('respects the rev limiter', () => {
