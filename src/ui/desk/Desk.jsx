@@ -143,7 +143,8 @@ function Clock() {
  * @param {string|null} props.app which app or page is open
  * @param {(id: string) => void} props.onOpen open an app (tune, learn, build, physics) or a page (dyno, live)
  * @param {() => void} props.onDesktop back to the desktop
- * @param {() => void} props.onBay shut the laptop and look at the shop
+ * @param {() => void} props.onBay shut the laptop and look at the shop (in CAREER, back out to the town's shop)
+ * @param {string[]} [props.apps] which apps the desktop offers, by id (default: all four)
  * @param {() => void} [props.onSearch] @param {() => void} [props.onMenu] @param {() => void} [props.onTutorial] @param {() => void} [props.onRepair]
  * @param {Notice[]} [props.notices] what the notifications list holds
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
@@ -153,7 +154,7 @@ function Clock() {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
@@ -194,8 +195,8 @@ export function Desk({
                     <Wallpaper />
                     <div className={styles.wallpaperMark} aria-hidden="true">CARIBOU TUNING</div>
                     <div className={styles.icons}>
-                      {DESK_APPS.map((a) => (
-                        <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} tabIndex={open ? 0 : -1}>
+                      {DESK_APPS.filter((a) => !apps || apps.includes(a.id)).map((a) => (
+                        <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
                           <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (a.id)]}</svg>
                           <span className={`${styles.iconLabel} ink-frame`}>{a.label}</span>
                         </button>

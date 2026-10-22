@@ -82,3 +82,28 @@ svg { font-size-adjust: none; }
 
 /* Chart lines drawn freehand. */
 .recharts-curve { filter: url(#hand-jitter); }
+
+/*
+ * Scribbled watercolour. A washed fill is not flat: over the pale wash the brush went
+ * back and forth, so loose strokes of the stronger colour show through. ::before draws
+ * two crossing sets of hatching behind the content and the scribble filter shakes them
+ * into a scribble. Anything selected or current gets it, and anything marked `scribble`
+ * (the primary button, a warning). `--scribble` is the stroke colour, the accent unless
+ * a tone says otherwise.
+ */
+.scribble, [aria-pressed='true'], [aria-current='page'], [aria-selected='true'] {
+  position: relative; isolation: isolate;
+}
+.scribble::before, [aria-pressed='true']::before, [aria-current='page']::before, [aria-selected='true']::before {
+  content: ''; position: absolute; inset: 3px 4px; z-index: -1; pointer-events: none; border-radius: inherit;
+  background:
+    repeating-linear-gradient(-32deg, transparent 0 4px, var(--scribble, var(--acc)) 4px 5.4px, transparent 5.4px 8px),
+    repeating-linear-gradient(-21deg, transparent 0 10px, var(--scribble, var(--acc)) 10px 11px, transparent 11px 17px);
+  opacity: 0.3;
+  filter: url(#hand-scribble);
+}
+
+/* The doodles' washes are scribbled too. */
+.sw-bg { fill: var(--acc-bg); }
+.sw-ln { stroke: var(--acc); stroke-width: 1.5; opacity: 0.55; }
+svg .wash { fill: url(#scribble-wash) !important; }

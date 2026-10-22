@@ -79,6 +79,10 @@ export function createStage(canvas, opts = {}) {
       varying vec2 vUv;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
+      float vnoise(vec2 p){
+        vec2 i = floor(p); vec2 q = fract(p); q = q * q * (3.0 - 2.0 * q);
+        return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), q.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), q.x), q.y);
+      }
       // Inverse view depth is linear across a flat surface at any angle, so its second difference is
       // zero on a floor or a wall and spikes only on a silhouette or a fold.
       float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
@@ -116,6 +120,15 @@ export function createStage(canvas, opts = {}) {
         float sat = max(sc.r, max(sc.g, sc.b)) - min(sc.r, min(sc.g, sc.b));
         float thin = (0.40 + 0.38 * (1.0 - smoothstep(0.06, 0.28, sat))) * smoothstep(0.11, 0.135, L);
         vec3 wash = mix(c.rgb, paper, thin);
+        // Scribbled watercolour on anything coloured: the pigment lies unevenly, in
+        // blotches, and the brush went back and forth in loose wavy strokes of the full
+        // colour over the pale wash.
+        vec2 fc = gl_FragCoord.xy;
+        float colored = smoothstep(0.06, 0.28, sat);
+        wash = mix(wash, c.rgb, colored * (vnoise(fc / 70.0) - 0.35) * 0.55);
+        float sx = (fc.x * 0.82 + fc.y * 0.57) / 5.0 + 2.2 * sin(fc.y / 19.0 + fc.x / 47.0) + 1.5 * sin(fc.x / 31.0);
+        float strokeMark = smoothstep(0.7, 0.88, fract(sx)) * smoothstep(0.35, 0.65, vnoise(fc / 26.0));
+        wash = mix(wash, c.rgb * 0.82, colored * strokeMark * 0.5);
         // Pencil hatching in the shade, and cross-hatching where it is darkest.
         vec2 f = gl_FragCoord.xy;
         float h1 = step(0.7, fract((f.x + f.y) / 7.0));

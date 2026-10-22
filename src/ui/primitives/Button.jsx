@@ -43,7 +43,7 @@ export function Button({
   // caller-supplied class is additive instead of clobbering the button's own
   // generated classes when `{...rest}` spreads after it.
   // `ink-frame` (sketch.css) draws the outline as a hand-inked line; a quiet button has none.
-  const classes = [styles.button, styles[variant], styles[size], block && styles.block, variant !== 'quiet' && 'ink-frame', className]
+  const classes = [styles.button, styles[variant], styles[size], block && styles.block, variant !== 'quiet' && 'ink-frame', variant === 'primary' && 'scribble', className]
     .filter(Boolean)
     .join(' ');
 

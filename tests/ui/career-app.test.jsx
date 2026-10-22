@@ -56,14 +56,19 @@ describe('CAREER in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
     expect(screen.getByText(/ON THE BAY/)).toBeTruthy();
 
-    // Into the game, on the customer's car: the career nav, the job ticket, no DRAG.
+    // Into the game, on the customer's car: the shop laptop's Tune window, with the job
+    // ticket at its top.
     fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
     expect(window.location.hash).toBe('#/tune/airflow');
-    const nav = screen.getByRole('navigation', { name: 'Sections' });
-    expect(within(nav).getByRole('button', { name: 'SHOP' })).toBeTruthy();
-    expect(within(nav).queryByRole('button', { name: 'DRAG' })).toBeNull();
-    expect(within(nav).queryByRole('button', { name: 'HOME' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Tune' })).toBeTruthy();
     expect(screen.getByText(/Marcus · 2006 Nissan 350Z/)).toBeTruthy();
+    // The same laptop as SANDBOX's, with the career's apps: Build and Tune, not the
+    // reading apps.
+    fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
+    expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'PHYSICS' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
 
     // A new shop has not trained for spark: the page is there, and locked.
     fireEvent.click(screen.getByRole('button', { name: /SPARK, locked/ }));

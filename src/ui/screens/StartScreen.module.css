@@ -99,3 +99,6 @@
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }
+
+/* On the dark the pale wash would swallow the doodles' light lines: a thinner wash. */
+.icon :global(.wash) { opacity: 0.35; }

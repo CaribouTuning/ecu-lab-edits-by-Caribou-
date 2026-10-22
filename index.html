@@ -39,6 +39,16 @@
         <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="n" />
         <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
       </filter>
+      <!-- A fast, strong shake: turns ruled hatching into a loose scribble of the brush. -->
+      <filter id="hand-scribble" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="2" seed="11" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- The scribbled watercolour that fills a doodle's wash (sketch.css colours it). -->
+      <pattern id="scribble-wash" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
+        <rect class="sw-bg" width="7" height="7" />
+        <path class="sw-ln" d="M0 2.5H7" />
+      </pattern>
       <!-- A slower, wider shake for long lines: a frame round a whole window. -->
       <filter id="hand-jitter-lg" x="-5%" y="-5%" width="110%" height="110%">
         <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="3" result="n" />

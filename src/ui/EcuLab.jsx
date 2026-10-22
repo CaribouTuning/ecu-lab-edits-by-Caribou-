@@ -45,7 +45,7 @@ import {
 import { T, utilisationColor } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
-import { AppShell, StatusStrip } from './AppShell.jsx';
+import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildTop } from './desk/BuildTop.jsx';
 import { Desk } from './desk/Desk.jsx';
@@ -202,6 +202,10 @@ export const DYNO_PULL = Object.freeze({
 /** How long a whole pull takes with its audible bookends, milliseconds — the longest one can. */
 export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
+
+/** The apps on CAREER's laptop: the shop's computer builds and tunes; the dyno and the
+ *  engine stand are out in the shop. */
+const CAREER_APPS = ['build', 'tune'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
@@ -864,8 +868,8 @@ export function EcuLabApp() {
       })();
       return () => { cancelled = true; };
     }
-    // SANDBOX's laptop and its two reading apps are SANDBOX's: CAREER goes to its shop.
-    if (mode === 'career' && (appView === 'desk' || appView === 'bay' || (appView === 'app' && (tab === 'learn' || tab === 'physics')))) {
+    // The bay view and the two reading apps are SANDBOX's: CAREER's shop is the town's.
+    if (mode === 'career' && (appView === 'bay' || (appView === 'app' && (tab === 'learn' || tab === 'physics')))) {
       navigate({ view: 'shop', tab: null, section: null });
     }
     return undefined;
@@ -1176,7 +1180,6 @@ export function EcuLabApp() {
       dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, trimResets: (liveAux.trimResets ?? 0) + 1 } });
     },
   } : null;
-  const TUNE_GROUPS = ['BASE TABLES & HARDWARE', 'ENGINE MANAGEMENT', 'POWER ADDER'];
   // Which sections have anything to show. TUNE's and DYNO's switchers and the command
   // palette all read it through `sectionAvailable`, so none offers a page the others hide.
   /** @type {import('./commands.js').SectionFlags} */
@@ -1399,75 +1402,30 @@ export function EcuLabApp() {
 
         {/* ---------- TUNE: sub-view switcher for the calibration tables ---------- */}
         {tuneOpen && (
-          // flexWrap + a real flex-basis (rather than the old `flex: 1` /
-          // flex-basis:0%) so five items wrap to a second row on narrow
-          // viewports instead of shrinking below their min-content width and
-          // overflowing the column. No media query needed, so this doesn't
-          // touch the hand-maintained breakpoint list in tokens.css.
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
-            {inCareer && <MapSlots />}
-            {/* Grouped rows, each named for what its pages are: the base tables and the
-                parts they are scaled for, the ECU's control strategies, and a power
-                adder's own controller. Five to a row at 60px basis so each row stays one
-                row on a phone. A number on a page is how many of the last pull's log
-                entries send you there — shown only while that pull still describes this
-                setup. */}
-            {!inCareer ? (
-              // SANDBOX: one row of tabs across the Tune window, as drawn — VE first,
-              // then every other ECU page. The rows below are the career's.
-              <>
-              <div className={deskApps.tuneTabs}>
-                {tuneViews.map((v) => {
-                  const on = tuneView === v.id;
-                  const flagged = attention[v.id] ?? 0;
-                  const Icon = v.icon;
-                  return (
-                    <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
-                      onClick={() => { goSection('tune', v.id); setSelection(null); }}
-                      aria-label={flagged ? `${v.tab ?? v.label}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
-                      <Icon size={14} aria-hidden="true" />{v.tab ?? v.label}
-                      {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-              <MapSlots />
-              </>
-            ) : [0, 1, 2].filter((rowIdx) => tuneViews.some((v) => v.row === rowIdx)).map((rowIdx) => (
-              <div key={rowIdx}>
-                <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: T.ink3, margin: '4px 0 5px' }}>
-                  {TUNE_GROUPS[rowIdx]}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {tuneViews.filter((v) => v.row === rowIdx).map((v) => {
-                    const on = tuneView === v.id;
-                    const locked = inCareer && !pageUnlocked(career, v.id);
-                    const Icon = locked ? Lock : v.icon;
-                    const flagged = attention[v.id] ?? 0;
-                    return (
-                      <button key={v.id} onClick={() => { goSection('tune', v.id); setSelection(null); }}
-                        aria-label={locked ? `${v.label}, locked until the shop trains for it`
-                          : flagged ? `${v.label}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}
-                        style={{
-                          position: 'relative', flex: '1 1 60px', padding: '9px 0 8px', borderRadius: 10, display: 'flex', flexDirection: 'column',
-                          alignItems: 'center', gap: 4, fontWeight: 800, fontSize: 9.5, letterSpacing: 0.3,
-                          border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : rowIdx ? T.panel : T.panel2,
-                          color: on ? T.accInk : locked ? T.ink3 : T.ink2,
-                        }}>
-                        <Icon size={15} />{v.label}
-                        {flagged > 0 && (
-                          <span aria-hidden="true" style={{
-                            position: 'absolute', top: 3, right: 4, minWidth: 15, height: 15, padding: '0 4px', borderRadius: 8,
-                            background: T.warnBg, border: `1px solid ${T.warn}`, color: T.warnInk,
-                            fontSize: 9, fontFamily: T.mono, lineHeight: '13px', textAlign: 'center',
-                          }}>{flagged}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+            {/* One row of tabs across the Tune window, as drawn: VE first, then every
+                other ECU page. CAREER's locked pages keep their padlock. A number on a page
+                is how many of the last pull's log entries send you there — shown only while
+                that pull still describes this setup. */}
+            <div className={deskApps.tuneTabs}>
+              {tuneViews.map((v) => {
+                const on = tuneView === v.id;
+                const locked = inCareer && !pageUnlocked(career, v.id);
+                const Icon = locked ? Lock : v.icon;
+                const flagged = attention[v.id] ?? 0;
+                const name = v.tab ?? v.label;
+                return (
+                  <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
+                    onClick={() => { goSection('tune', v.id); setSelection(null); }}
+                    aria-label={locked ? `${name}, locked until the shop trains for it`
+                      : flagged ? `${name}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
+                    <Icon size={14} aria-hidden="true" />{name}
+                    {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <MapSlots />
             {Object.keys(attention).length > 0 && (
               <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 2 }}>
                 Numbered pages are where the last pull&apos;s log sends you — DYNO › PULL LOG has the details.
@@ -1721,33 +1679,29 @@ export function EcuLabApp() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
-      {/* CAREER: the nav, the status strip and the capped content column are `AppShell`'s.
-          SANDBOX: a laptop on the desk in your shop (desk/Desk.jsx). This outer div is the
-          100dvh/overflow:hidden frame either fills. */}
+      {/* Both modes work on a laptop on the desk in your shop (desk/Desk.jsx): apps in
+          windows, the dyno and the engine stand as pages. CAREER's laptop offers Build and
+          Tune, keeps the job's bar at the top of every window, and shutting it walks you
+          back out into the town's shop. This outer div is the 100dvh/overflow:hidden
+          frame it fills. */}
       <PullTraceContext.Provider value={advisorPull.points}>
-      {inCareer ? (
-        <AppShell
-          route={route} onNavigate={changeTab} onTutorial={goTutorial} onRepair={repairEngine} onSearch={openPalette} onMenu={goMenu}
-          career={inCareer}
-          banner={<CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />}
-        >
-          {screen}
-        </AppShell>
-      ) : (
-        <Desk
-          mode={deskMode} app={tab}
-          onOpen={deskOpen}
-          onDesktop={() => deskGo('desk')}
-          onBay={() => deskGo('bay')}
-          onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
-          notices={deskNotices}
-          engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
-          status={<StatusStrip actions={false} />}
-        >
-          {deskMode === 'app' || deskMode === 'page' ? <StatusStrip actions={false} /> : null}
-          {screen}
-        </Desk>
-      )}
+      <Desk
+        mode={deskMode} app={tab}
+        apps={inCareer ? CAREER_APPS : null}
+        onOpen={deskOpen}
+        onDesktop={() => deskGo('desk')}
+        onBay={inCareer ? () => changeTab('shop') : () => deskGo('bay')}
+        onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
+        notices={deskNotices}
+        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
+        status={<StatusStrip actions={false} />}
+      >
+        {inCareer && (deskMode === 'app' || deskMode === 'page') && (
+          <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />
+        )}
+        {deskMode === 'app' || deskMode === 'page' ? <StatusStrip actions={false} /> : null}
+        {screen}
+      </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}
       <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
       </PullTraceContext.Provider>

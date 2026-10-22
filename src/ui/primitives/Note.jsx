@@ -17,7 +17,8 @@ import styles from './Note.module.css';
  * @returns {React.ReactElement}
  */
 export function Note({ children, tone = 'info' }) {
-  const className = [styles.note, styles[tone] ?? styles.info].join(' ');
+  // A warning or a fault is a scribbled wash in its own colour (sketch.css).
+  const className = [styles.note, styles[tone] ?? styles.info, (tone === 'warn' || tone === 'danger') && 'scribble'].filter(Boolean).join(' ');
   return (
     <div className={className} role={tone === 'danger' ? 'alert' : 'note'}>
       <Info size={15} className={styles.icon} aria-hidden="true" />

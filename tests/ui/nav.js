@@ -1,9 +1,10 @@
 /**
  * Getting round the app in a test the way a player does.
  *
- * CAREER keeps its section nav. SANDBOX is a laptop in your shop (src/ui/desk/Desk.jsx):
- * Build, Tune, Learn and Physics are apps on its desktop, and the dyno and the engine stand
- * (LIVE) are in the shop, reached by shutting the laptop. `goTo` takes either route to the
+ * Both modes work on a laptop in your shop (src/ui/desk/Desk.jsx): Build and Tune (and in
+ * SANDBOX, Learn and Physics) are apps on its desktop, and SANDBOX's dyno and engine stand
+ * (LIVE) are in the shop, reached by shutting the laptop. CAREER's laptop shuts onto the
+ * town's shop instead. `goTo` takes either route to the
  * same screen, so a test says where it wants to be and not how the chrome gets there.
  */
 
