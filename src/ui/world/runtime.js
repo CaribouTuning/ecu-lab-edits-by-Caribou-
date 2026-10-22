@@ -25,6 +25,12 @@ const BODY_PITCH_RAD = 0.0035;
 const BODY_ROLL_RAD = 0.006;
 /** Steering-wheel turns per road-wheel turn. */
 const STEERING_RATIO = 15;
+/** How far the driver's head moves per g, metres, and how quickly it follows (per second). */
+const HEAD_PER_G = 0.05;
+const HEAD_RATE = 5;
+/** The rear-view mirror's picture: its size in pixels, and how far its camera sees. */
+const MIRROR_W = 128;
+const MIRROR_H = 34;
 
 /** Smallest angle from a to b, radians. */
 const angleTo = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -466,10 +472,41 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     d.rig.setGauges?.(toMph(Math.abs(s.vx)) / 160, s.rpm / (d.pt.redline * 1.1), [s.tcCut > 0.05, s.limiter || s.rpm > d.pt.redline * 0.96, !!tele.knock, !!tele.lean]);
     level.onDrive?.(d, dt);
     rig.update(dt, new THREE.Vector3(s.x, 0, s.z), s.heading, Math.abs(s.vx));
-    if (view === 'cockpit') cockpitCamera(d);
+    if (view === 'cockpit') cockpitCamera(d, dt);
   }
 
   const eye = new THREE.Vector3();
+  // The rear-view mirror: a small camera above the roof's rear edge looking back, drawn into a
+  // little picture every other frame while you drive from the seat. The picture is flipped
+  // left to right, as a mirror's is.
+  const mirrorRT = new THREE.WebGLRenderTarget(MIRROR_W, MIRROR_H, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  mirrorRT.texture.colorSpace = THREE.SRGBColorSpace;
+  mirrorRT.texture.wrapS = THREE.RepeatWrapping;
+  mirrorRT.texture.repeat.x = -1;
+  mirrorRT.texture.offset.x = 1;
+  const mirrorCam = new THREE.PerspectiveCamera(26, MIRROR_W / MIRROR_H, 0.5, 160);
+  const mirrorFrom = new THREE.Vector3();
+  const mirrorAt = new THREE.Vector3();
+  let mirrorTick = 0;
+  /** @param {any} d */
+  function mirrorView(d) {
+    const m = d.rig.mirror;
+    if (!m || view !== 'cockpit') return;
+    mirrorTick += 1;
+    if (mirrorTick % 2) return;
+    const mat = /** @type {THREE.MeshBasicMaterial} */ (m.glass.material);
+    if (mat.map !== mirrorRT.texture) { m.glass.material = new THREE.MeshBasicMaterial({ map: mirrorRT.texture }); }
+    const g = d.rig.group;
+    mirrorFrom.copy(m.from);
+    mirrorAt.copy(m.from).add(new THREE.Vector3(0, -0.6, -12));
+    mirrorCam.position.copy(g.localToWorld(mirrorFrom));
+    mirrorCam.up.set(0, 1, 0);
+    mirrorCam.lookAt(g.localToWorld(mirrorAt));
+    const r = stage.renderer;
+    r.setRenderTarget(mirrorRT);
+    r.render(stage.scene, mirrorCam);
+    r.setRenderTarget(null);
+  }
   const qLook = new THREE.Quaternion();
   const eLook = new THREE.Euler(0, 0, 0, 'YXZ');
   /**
@@ -477,12 +514,19 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
    * head leading into a turn and the body rolling and pitching with the car.
    * @param {any} d
    */
-  function cockpitCamera(d) {
+  function cockpitCamera(d, dt) {
     const s = d.state;
     const g = d.rig.group;
     g.updateMatrixWorld(true);
     const seat = d.rig.seat;
     if (d.rig.eye) eye.copy(d.rig.eye); else eye.set(seat.x, seat.y + 0.22, seat.z + 0.05);
+    // The driver's head is not bolted to the car: it sways out of a corner and forward under
+    // braking, a few centimetres, a moment behind the g that moves it.
+    const k = Math.min(1, dt * HEAD_RATE);
+    d.headX = (d.headX ?? 0) + (THREE.MathUtils.clamp(-s.ay * HEAD_PER_G / 9.81, -0.07, 0.07) - (d.headX ?? 0)) * k;
+    d.headZ = (d.headZ ?? 0) + (THREE.MathUtils.clamp(-s.ax * HEAD_PER_G / 9.81, -0.06, 0.06) - (d.headZ ?? 0)) * k;
+    eye.x += d.headX;
+    eye.z += d.headZ;
     stage.camera.position.copy(g.localToWorld(eye));
     // Look a little into the turn, and lift the gaze under braking.
     const lead = THREE.MathUtils.clamp(-s.yawRate * 0.18, -0.35, 0.35);
@@ -587,6 +631,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     }
     level.update?.(dt, clock, api);
     if (level.root) stage.followLight(drive?.inside ? new THREE.Vector3(drive.state.x, 0, drive.state.z) : new THREE.Vector3(player.x, 0, player.z));
+    if (drive?.inside) mirrorView(drive);
     stage.render();
     labelTimer += dt;
     if (labelTimer > 0.05) { labelTimer = 0; emitLabels(); }

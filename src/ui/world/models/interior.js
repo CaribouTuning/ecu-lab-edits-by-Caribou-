@@ -127,13 +127,17 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     add(box(0.03, 0.025, 0.1, C.chrome, { x: dx - s * 0.035, y: belt - 0.06, z: eye.z + 0.3, mat: lit(C.chrome), edge: false }));
     add(box(0.04, 0.012, 0.05, C.chromeDark, { x: dx - s * 0.08, y: belt - 0.13, z: eye.z + 0.12, edge: false }));
     // Sun visor, folded up against the headliner.
-    add(box(0.34, 0.02, 0.17, C.roofShade, { x: s * 0.36, y: top - 0.1, z: zf1 - 0.14, edge: false }));
+    add(box(0.32, 0.014, 0.15, C.roof, { x: s * 0.4, y: top - 0.092, z: zf1 - 0.16, mat: liner, edge: false }));
   }
   // The header over the screen, and the mirror hung from it.
   add(box(gw1 * 0.98, 0.035, 0.05, C.roofShade, { y: top - 0.075, z: zf1 - 0.01, mat: dbl(C.roofShade), edge: false }));
-  add(box(0.02, 0.07, 0.02, C.pillar, { y: top - 0.13, z: zf1 + 0.04, edge: false }));
-  add(box(0.27, 0.08, 0.03, C.pillar, { y: top - 0.19, z: zf1 + 0.055, edge: false }));
-  add(box(0.25, 0.064, 0.02, C.mirror, { y: top - 0.19, z: zf1 + 0.04, mat: lit(C.mirror), edge: false }));
+  add(box(0.02, 0.05, 0.02, C.pillar, { y: top - 0.115, z: zf1 + 0.04, edge: false }));
+  add(box(0.24, 0.07, 0.03, C.pillar, { y: top - 0.165, z: zf1 + 0.055, edge: false }));
+  // The glass is a picture of the road behind, drawn by a small camera (runtime: mirrorView).
+  const mirrorGlass = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.056), lit(C.mirror));
+  mirrorGlass.position.set(0, top - 0.165, zf1 + 0.035);
+  mirrorGlass.rotation.y = Math.PI;
+  add(mirrorGlass);
 
   // ---- floor and seats ----
   // The body's beltline deck runs across the cabin; carpet covers it, so the car reads as a
@@ -384,6 +388,8 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     eye,
     /** How far below level the driver looks, radians. */
     pitch,
+    /** The rear-view mirror's glass, and where its camera sits (car-local: above the roof's rear edge, looking back). */
+    mirror: { glass: mirrorGlass, from: new THREE.Vector3(0, top + 0.05, zr1) },
     /** Turn the wheel: radians, clockwise as the driver sees it. @param {number} angle */
     setWheel(angle) {
       spin.rotation.z = angle;

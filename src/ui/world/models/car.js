@@ -262,6 +262,7 @@ export function makeCar(spec = {}) {
   /** The driver's eye, car-local, for the first-person camera. */
   rig.eye = inside?.eye ?? null;
   rig.eyePitch = inside?.pitch ?? 0.09;
+  rig.mirror = inside?.mirror ?? null;
   /** Move the dial needles inside. @param {number} speed @param {number} rpm @param {boolean[]} [lamps] */
   rig.setGauges = (speed, rpm, lamps) => inside?.setGauges(speed, rpm, lamps);
 
