@@ -27,7 +27,8 @@
 
 .inner { position: relative; display: flex; flex-direction: column; align-items: center; }
 
-.logo { width: 112px; height: 112px; margin-bottom: 16px; image-rendering: pixelated; object-fit: contain; }
+.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; filter: drop-shadow(0 0 18px rgba(var(--acc-rgb), 0.25)); }
+@media (max-height: 700px) { .logo { width: 120px; height: 128px; } }
 
 .subtitle {
   margin-bottom: 30px;

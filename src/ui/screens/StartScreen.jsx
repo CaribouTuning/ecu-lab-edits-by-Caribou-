@@ -4,6 +4,7 @@ import React from 'react';
 
 import { Button } from '../primitives/Button.jsx';
 
+import { CARIBOU_FILL, CARIBOU_INK, CARIBOU_VIEWBOX } from './caribouLogo.js';
 import styles from './StartScreen.module.css';
 
 /**
@@ -55,20 +56,15 @@ const ICONS = {
 };
 
 /**
- * Where the Caribou logo goes: the image when there is one, a pixel caribou until then.
+ * The Caribou Tuning badge: an uploaded image when one is passed, the traced badge otherwise.
  * @param {{src?: string|null}} props
  */
 function LogoMark({ src }) {
-  if (src) return <img className={styles.logo} src={src} alt="Caribou" />;
+  if (src) return <img className={styles.logo} src={src} alt="Caribou Tuning" />;
   return (
-    <svg className={styles.logo} viewBox="0 0 24 24" role="img" aria-label="Caribou" shapeRendering="crispEdges">
-      {/* Antlers */}
-      <path d="M5 2h1v4h2V3h1v4h1v2H7V8H5zM18 2h1v6h-2v1h-3V7h1V3h1v3h2z" fill="var(--acc)" />
-      {/* Head and muzzle */}
-      <path d="M9 9h6v2h1v3h-1v4h-2v3h-2v-3H9v-4H8v-3h1z" fill="var(--ink)" />
-      <rect x="10" y="12" width="1" height="1" fill="var(--bg)" />
-      <rect x="13" y="12" width="1" height="1" fill="var(--bg)" />
-      <rect x="11" y="19" width="2" height="1" fill="var(--bg)" />
+    <svg className={styles.logo} viewBox={CARIBOU_VIEWBOX} role="img" aria-label="Caribou Tuning">
+      <path d={CARIBOU_FILL} fill="var(--acc-bg)" fillRule="evenodd" />
+      <path d={CARIBOU_INK} fill="var(--acc)" fillRule="evenodd" />
     </svg>
   );
 }
