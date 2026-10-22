@@ -59,6 +59,16 @@ const REVERSE_RATIO = 3.4;
 const REVERSE_MAX_MS = 8;
 /** Seconds holding the brake at a stop before reverse is chosen without a fresh press. */
 const REVERSE_HOLD_S = 1;
+/**
+ * The sprung body. Weight moves between the tyres two ways: part straight away, through the
+ * suspension links and the roll centres, and the rest only as the body pitches and rolls on
+ * its springs, a damped oscillation at the body's natural frequency (about 1.5 Hz on a road
+ * car, quicker on stiffer springs). That lag is what a driver feels: the nose loading up under
+ * braking, the car taking a set in a corner, the tail going light as you lift.
+ */
+const BODY_HZ = 1.5;
+const BODY_DAMPING = 0.6;
+const LINK_SHARE = 0.35;
 /** Off the throttle at walking pace the car settles to rest: driveline drag and a light foot, m/s^2. */
 const SETTLE_DECEL = 1.2;
 const SETTLE_BELOW_MS = 3;
@@ -152,6 +162,10 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {number} aF front tyre slip angle (tangent) as the tyre has built it up
  * @property {number} aR rear tyre slip angle (tangent)
  * @property {number} _stopT seconds held at a stop with the brake, before reverse is chosen
+ * @property {number} pitchA the acceleration the body has pitched to, m/s^2 (its springs' share of the transfer)
+ * @property {number} pitchV and how fast that is changing
+ * @property {number} rollA the cornering acceleration the body has rolled to, m/s^2
+ * @property {number} rollV and how fast that is changing
  * @property {boolean} _armed stopped with the brake let go: the next press of it selects reverse
  * @property {number} t seconds driven
  */
@@ -183,7 +197,7 @@ export function makeVehicle(at = {}) {
   return {
     x: at.x ?? 0, z: at.z ?? 0, heading: at.heading ?? 0, vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, steer: 0, rpm: IDLE_RPM,
     gear: 1, shiftT: 0, limiter: false, throttle: 0, brake: 0, ax: 0, ay: 0, slipF: 0, slipR: 0, wheelspin: 0, shifting: false,
-    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0, _armed: true, aF: 0, aR: 0,
+    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0, _armed: true, aF: 0, aR: 0, pitchA: 0, pitchV: 0, rollA: 0, rollV: 0,
   };
 }
 
@@ -248,7 +262,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     const t0 = clamp(input.throttle, 0, 1);
     const free = IDLE_RPM + (pt.redline * 0.75 - IDLE_RPM) * t0;
     s.rpm += (free - s.rpm) * Math.min(1, dt * 6);
-    Object.assign(s, { vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, ax: 0, ay: 0, throttle: t0, brake: 1, reverse: false, _stopT: 0, gear: 1, limiter: false, tcCut: 0 });
+    Object.assign(s, { vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, ax: 0, ay: 0, pitchA: 0, pitchV: 0, rollA: 0, rollV: 0, throttle: t0, brake: 1, reverse: false, _stopT: 0, gear: 1, limiter: false, tcCut: 0 });
     s.t += dt;
     return;
   }
@@ -292,9 +306,11 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   const overall = ratio * car.finalDrive;
 
   // ---- loads on the axles ----
-  const axPrev = s.ax;
   const wTotal = m * G;
-  const shift = (m * axPrev * h) / L;
+  // Through the links at once, through the springs as the body gets there.
+  const axLoad = LINK_SHARE * s.ax + (1 - LINK_SHARE) * s.pitchA;
+  const ayLoad = LINK_SHARE * s.ay + (1 - LINK_SHARE) * s.rollA;
+  const shift = (m * axLoad * h) / L;
   const FzR = clamp((wTotal * a) / L + shift, wTotal * 0.15, wTotal * 0.85);
   const FzF = wTotal - FzR;
 
@@ -352,7 +368,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // Each axle's grip, with this moment's lateral weight transfer and load sensitivity.
   const nominal = wTotal / 4;
   const axleCap = (Fz, share) => {
-    const dF = Math.min(Fz / 2 * 0.95, (m * Math.abs(s.ay) * h * share) / TRACK_M);
+    const dF = Math.min(Fz / 2 * 0.95, (m * Math.abs(ayLoad) * h * share) / TRACK_M);
     const outer = Fz / 2 + dF;
     const inner = Fz / 2 - dF;
     const g = (F) => F * (1 - LOAD_SENSITIVITY * (F / nominal - 1));
@@ -477,6 +493,12 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   s.z += (Math.cos(s.heading) * s.vx - Math.sin(s.heading) * s.vy) * dt;
   s.ax = ax;
   s.ay = ay;
+  // The body follows on its springs and dampers (semi-implicit, so it is stable at this step).
+  const wn = 2 * Math.PI * BODY_HZ * (ch.bodyHz ?? 1);
+  s.pitchV += (wn * wn * (ax - s.pitchA) - 2 * BODY_DAMPING * wn * s.pitchV) * dt;
+  s.pitchA += s.pitchV * dt;
+  s.rollV += (wn * wn * (ay - s.rollA) - 2 * BODY_DAMPING * wn * s.rollV) * dt;
+  s.rollA += s.rollV * dt;
   s.rpm = rpm;
   s.throttle = thr;
   s.brake = brk;

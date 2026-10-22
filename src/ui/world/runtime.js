@@ -20,6 +20,9 @@ import { createRig, createStage } from './stage.js';
 const WALK = 3.1;
 const RUN = 5.6;
 const PLAYER_R = 0.36;
+/** How far the body pitches and rolls on stock springs, radians per m/s^2: about 2 degrees at 1 g of braking, 3.5 in a 1 g corner. */
+const BODY_PITCH_RAD = 0.0035;
+const BODY_ROLL_RAD = 0.006;
 
 /** Smallest angle from a to b, radians. */
 const angleTo = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -221,6 +224,12 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const s = d.state;
     d.rig.group.position.set(s.x, d.lift ?? 0, s.z);
     d.rig.group.rotation.y = s.heading;
+    // The body dips under braking, squats on the throttle and leans out of a corner, as far as
+    // its springs let it; the stiffer the springs, the less it moves.
+    const give = 1 / ((d.pt.car.chassis?.bodyHz ?? 1) ** 2);
+    d.rig.group.rotation.order = 'YXZ';
+    d.rig.group.rotation.x = Math.max(-0.05, Math.min(0.05, -(s.pitchA ?? 0) * BODY_PITCH_RAD * give));
+    d.rig.group.rotation.z = Math.max(-0.06, Math.min(0.06, (s.rollA ?? 0) * BODY_ROLL_RAD * give));
     // Body roll and pitch from the accelerations the model computed.
     d.rig.group.rotation.z = THREE.MathUtils.clamp(-s.ay * 0.0035, -0.05, 0.05);
     d.rig.group.rotation.x = THREE.MathUtils.clamp(-s.ax * 0.003, -0.04, 0.04);

@@ -8,6 +8,7 @@
  *   springs and anti-roll bars  how the car's lateral weight transfer is shared front to rear,
  *                               and so which axle runs out of grip first (balance)
  *   ride height                 centre-of-gravity height: less weight transfer
+ *   spring rate (overall)       how quickly the body takes its set: stiffer settles sooner
  *   tyre pressure               contact patch and carcass: peak grip, response, rolling drag
  *   camber                      cornering grip against braking and traction grip
  *   limited-slip diff           the driven axle keeps its traction when the inside wheel unloads
@@ -104,6 +105,8 @@ export function physicsOf(has = {}, set = {}) {
     closeRatio: !!has.closeratio,
     shiftScale: has.sequential ? 0.4 : 1,
     bottoming: e.rideMm < -45 && e.springF < 5,
+    // The body's natural frequency against stock: it goes as the square root of the spring rate.
+    bodyHz: Math.sqrt((e.springF + e.springR) / 10),
   };
 }
 

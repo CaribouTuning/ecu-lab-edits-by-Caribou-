@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CAR, G, RHO_AIR, TIRE_GRIP, simulateDragRun, simulateSweep, tireRadiusM, torqueCurveFromSweep } from '../src/sim/index.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { pullInputs } from '../src/ui/state/pullInputs.js';
+import { NEUTRAL } from '../src/ui/career/chassis.js';
 import { STEP_S, makeVehicle, powertrainOf, stepVehicle, toMph } from '../src/ui/world/driving.js';
 import { dragCarFor } from '../src/ui/world/vehicle.js';
 
@@ -247,6 +248,27 @@ describe('it stays a physical thing', () => {
     // A fresh press of the brake at a stop is reverse.
     for (let i = 0; i < 240 * 2; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 });
     expect(v.vx).toBeLessThan(-2);
+  });
+
+  it('moves weight on sprung bodywork: it takes a moment to arrive, then settles where the acceleration says', () => {
+    const v = makeVehicle();
+    const p = pt();
+    Object.assign(v, { vx: 25, wR: 25 / tireRadiusM(car), wF: 25 / tireRadiusM(car), gear: 4 });
+    for (let i = 0; i < 240 * 0.5; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0, steer: 0 });
+    const t0 = v.pitchA;
+    // A stab of the brake: the car decelerates at once, but the nose takes its time to go down.
+    for (let i = 0; i < 12; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0.8, steer: 0 });
+    expect(Math.abs(v.pitchA - t0)).toBeLessThan(Math.abs(v.ax - t0) * 0.3);
+    for (let i = 0; i < 240 * 1; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0.8, steer: 0 });
+    expect(v.pitchA).toBeCloseTo(v.ax, 0);
+    // Stiffer springs settle sooner.
+    const soft = makeVehicle(); const stiff = makeVehicle();
+    for (const [st, hz] of [[soft, 1], [stiff, 1.4]]) {
+      const q = pt({ chassis: { ...NEUTRAL, bodyHz: hz } });
+      Object.assign(st, { vx: 25, wR: 25 / tireRadiusM(car), wF: 25 / tireRadiusM(car), gear: 4 });
+      for (let i = 0; i < 24; i += 1) stepVehicle(st, q, { throttle: 0, brake: 0.8, steer: 0 });
+    }
+    expect(stiff.pitchA).toBeLessThan(soft.pitchA);
   });
 
   it('steers in reverse along the path its wheels roll, without sliding sideways', () => {
