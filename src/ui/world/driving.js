@@ -35,13 +35,29 @@ export const STEP_S = 1 / 240;
 const KAPPA_PEAK = 0.11;
 /** Peak slip angle (tangent) by tyre grade: stiffer slicks peak sooner. */
 const ALPHA_PEAK = { street: 0.15, sport: 0.13, race: 0.1, drag: 0.1 };
-/** Shape constants of f(sigma): C = 1.5 and B = tan(pi/(2C)) so the peak lands on sigma = 1. */
-const SHAPE_C = 1.5;
+/**
+ * Shape constants of f(sigma): B = tan(pi/(2C)) so the peak lands on sigma = 1, and C sets how
+ * much grip a sliding tyre keeps, sin(C pi/2): 1.3 keeps 89%, as a road tyre does. (At 1.5 it
+ * kept 71%, and an axle that went past its peak fell off a cliff: a snap spin, not a slide.)
+ */
+const SHAPE_C = 1.3;
 const SHAPE_B = Math.tan(Math.PI / (2 * SHAPE_C));
-/** Brakes: peak deceleration torque as a multiple of what the front tyres can hold. */
-
+/**
+ * Brakes: their torque at full pedal, as a multiple of what the tyres can hold. A road car's
+ * brakes can lock its wheels with room to spare; it is the tyres, and the ABS keeping them just
+ * short of locking, that set the stopping distance.
+ */
+const BRAKE_MARGIN = 1.25;
 /** The share of the rear tyres' grip the rear brakes may use. */
-const EBD_REAR_SHARE = 0.7;
+const EBD_REAR_SHARE = 0.95;
+/**
+ * ABS: the slip each axle is held at under braking, a little short of the tyre's peak, and how
+ * quickly the valve releases and re-applies (per second). It modulates, as the real one does,
+ * rather than dumping the brake: the wheels sit near their best grip and the car still steers.
+ */
+const ABS_SLIP = 0.85;
+const ABS_RELEASE = 40;
+const ABS_APPLY = 8;
 /** Mass of one wheel assembly and the share that is rim and tyre (what spins). kg, fraction. */
 const WHEEL_MASS_KG = 20;
 const WHEEL_RING = 0.7;
@@ -50,9 +66,15 @@ const ENGINE_INERTIA = 0.18;
 /** Engine speed the engine idles at, and the hysteresis the limiter works with, RPM. */
 const IDLE_RPM = 850;
 const LIMITER_BAND_RPM = 200;
-/** Traction control: slip ratio it starts cutting at, how fast the cut grows, and the most it takes. */
-const TC_ONSET = 0.115;
-const TC_BAND = 0.03;
+/**
+ * Traction control is a governor, not a switch: it trims the torque just enough to hold the
+ * driven tyres at a slip a touch past their peak, where they push hardest. The trim builds up
+ * (integral) while the slip is over the target and backs off while it is under, with a quick
+ * extra cut (proportional) for a sudden flare. Gains are per second, per peak-slip of error.
+ */
+const TC_TARGET = 0.13;
+const TC_GAIN = 6;
+const TC_KICK = 0.6;
 const TC_MAX_CUT = 0.95;
 /** Traction control's ignition-cut cycles per second, and how much of the torque a cut event drops. */
 const TC_CUT_HZ = 14;
@@ -91,6 +113,15 @@ const STEER_PEAK_MARGIN = 0.85;
  * pushes wide at the limit is one a driver can save and a car that spins is not.
  */
 const REAR_ALPHA_SCALE = 0.75;
+/**
+ * And they carry more rubber at the back: a road car's rear tyres are a size wider (a 350Z runs
+ * 225s in front and 245s behind), worth this much more cornering grip. Without it the bicycle model is
+ * balanced on a knife edge: at the limit each axle's grip times its distance from the centre
+ * of mass is the same, and the slightest lift or brake tips the tail out.
+ */
+const REAR_GRIP = 1.08;
+/** The front's extra share of the lateral load transfer over the chassis's spring-and-bar split. */
+const FRONT_ROLL_BIAS = 0.08;
 /**
  * Lateral load transfer and tyre load sensitivity. A cornering car loads its outside tyres
  * and unloads its inside ones, and a tyre's grip grows more slowly than its load, so the axle
@@ -171,7 +202,10 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {number} rollV and how fast that is changing
  * @property {number} [clutchT] seconds since pulling away: the clutch taking up
  * @property {number} [tcPhase] where in its cut cycle traction control is, 0..1
+ * @property {number} [tcLevel] traction control's built-up trim, 0..1
  * @property {boolean} [tcCutting] traction control is dropping sparks this instant
+ * @property {number} [absF] the ABS valve on the front brakes, 0..1 of the pedal's pressure
+ * @property {number} [absR] and on the rear
  * @property {boolean} _armed stopped with the brake let go: the next press of it selects reverse
  * @property {number} t seconds driven
  */
@@ -365,21 +399,23 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // foot: back off the torque as the driven tyres go past their peak slip.
   if (input.tc !== false && tqEng > 0 && !input.handbrake) {
     const kap = (Math.abs(s.wR) * r - Math.abs(s.vx)) / Math.max(Math.abs(s.vx), 1.2);
-    s.tcCut = clamp(((kap - TC_ONSET) / TC_BAND), 0, 1) * TC_MAX_CUT;
+    const err = (kap - TC_TARGET) / KAPPA_PEAK;
+    s.tcLevel = clamp((s.tcLevel ?? 0) + dt * TC_GAIN * err, 0, TC_MAX_CUT);
+    s.tcCut = clamp(s.tcLevel + TC_KICK * Math.max(0, err), 0, TC_MAX_CUT);
     // The tail is already sliding: power would only spin it further.
     if (s.slipR > ESC_REAR_SLIP && Math.abs(s.vx) > 1.5) s.tcCut = Math.max(s.tcCut, clamp((s.slipR - ESC_REAR_SLIP) * 2, 0, 1) * TC_MAX_CUT);
     // The ECU does not turn the torque down like a dial: it drops sparks, whole firing events at
     // a time, so the engine stutters (the brap of traction control). Over each cycle the share
     // of cut events is the cut asked for.
     s.tcPhase = ((s.tcPhase ?? 0) + dt * TC_CUT_HZ) % 1;
-    s.tcCutting = s.tcCut > 0.04 && s.tcPhase < s.tcCut;
+    s.tcCutting = s.tcCut > 0.04 && s.tcPhase < s.tcCut / TC_DEPTH;
     if (s.tcCutting) tqWheelIn *= 1 - TC_DEPTH;
-  } else { s.tcCut = 0; s.tcCutting = false; }
+  } else { s.tcCut = 0; s.tcLevel = 0; s.tcCutting = false; }
   // Reverse is one low gear: the power fades out toward its top speed instead of switching on and off.
   if (reversing && tqWheelIn < 0) tqWheelIn *= clamp((REVERSE_MAX_MS + s.vx) / 2, 0, 1);
 
   // ---- brakes ----
-  const brakeTq = brk * mu * wTotal * r;
+  const brakeTq = brk * BRAKE_MARGIN * mu * wTotal * r;
   const tqBrakeF = brakeTq * ch.brakeFront;
   // Brake-force distribution (a proportioning valve on an old car, EBD on a new one): the
   // rear brakes never ask more of the rear tyres than their load, lightened by the
@@ -398,8 +434,8 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   };
   // A limited-slip diff keeps the driven axle's grip when the inside wheel unloads.
   const lsdGain = (cap) => cap + (1 - cap) * ch.lsd * 0.7;
-  const rawF = axleCap(FzF, ch.rollShareF);
-  const rawR = axleCap(FzR, 1 - ch.rollShareF);
+  const rawF = axleCap(FzF, ch.rollShareF + FRONT_ROLL_BIAS);
+  const rawR = axleCap(FzR, 1 - ch.rollShareF - FRONT_ROLL_BIAS);
   const capF = drive.drive === 'awd' ? lsdGain(rawF) : rawF;
   const capR = lsdGain(rawR);
   const relax = (RELAX_M[grip.grade] ?? 0.5) * ch.relaxScale;
@@ -419,7 +455,7 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     return { Fx: f * sx * longSc, Fy: -f * sy * latSc, sig, kappa };
   };
   const tF = sub(FzF, uF, vF, s.wF, alphaPeak, capF, 'aF', ch.muF, ch.latF, ch.longF);
-  const tR = sub(FzR, uR, vR, s.wR, alphaPeak * REAR_ALPHA_SCALE, capR, 'aR', ch.muR, ch.latR, ch.longR);
+  const tR = sub(FzR, uR, vR, s.wR, alphaPeak * REAR_ALPHA_SCALE, capR, 'aR', ch.muR, ch.latR * REAR_GRIP, ch.longR);
 
   // ---- wheel spin: engine torque on the driven wheel(s), tyre force and brakes against it ----
   const drivenFront = drive.drive === 'awd' ? 0.4 : 0;
@@ -431,24 +467,29 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // The wheel's equation is stiff (a tyre pulls hard against any slip), so it is advanced
   // implicitly: the tyre's small-slip stiffness is folded into the effective inertia, which
   // keeps it stable at a 4 ms step without changing where it settles.
-  const spinStep = (w, I, drv, tyre, Fz, tqBrake) => {
+  const spinStep = (w, I, drv, tyre, Fz, tqBrake, absKey) => {
     const ref = Math.max(Math.abs(s.vx), 1.2);
     const dFdw = ((mu * Fz * SHAPE_B * SHAPE_C) / KAPPA_PEAK) * (r / ref);
     const net = drv - tyre.Fx * r;
     let tb = tqBrake;
-    if (tb > 0 && !input.handbrake) {
-      // ABS: let go of the brake when the wheel would lock.
+    if (tb > 0 && !input.handbrake && Math.abs(s.vx) > 1) {
+      // ABS: past the target slip it bleeds the pressure off, short of it it builds it back.
       const kap = (Math.abs(w) * r - Math.abs(s.vx)) / Math.max(Math.abs(s.vx), 1.2);
-      if (kap < -0.2) tb *= 0.15;
-    }
+      const target = -ABS_SLIP * KAPPA_PEAK;
+      let f = s[absKey] ?? 1;
+      if (kap < target) f -= dt * ABS_RELEASE * Math.min(1, (target - kap) / KAPPA_PEAK);
+      else f += dt * ABS_APPLY;
+      s[absKey] = clamp(f, 0.05, 1);
+      tb *= s[absKey];
+    } else s[absKey] = 1;
     const dir = w === 0 ? 0 : -Math.sign(w);
     const wNext = w + (dt * (net + dir * tb)) / (I + dt * dFdw * r);
     // A brake cannot spin a wheel backwards.
     if (w !== 0 && Math.sign(wNext) !== Math.sign(w) && Math.abs(net) < tb) return 0;
     return wNext;
   };
-  s.wR = spinStep(s.wR, IwR, tqWheelIn * drivenRear, tR, FzR, tqBrakeR);
-  s.wF = spinStep(s.wF, IwF, tqWheelIn * drivenFront, tF, FzF, tqBrakeF);
+  s.wR = spinStep(s.wR, IwR, tqWheelIn * drivenRear, tR, FzR, tqBrakeR, 'absR');
+  s.wF = spinStep(s.wF, IwF, tqWheelIn * drivenFront, tF, FzF, tqBrakeF, 'absF');
   if (Math.abs(s.vx) < 0.3 && thr < 0.02 && brk > 0.02) { s.wR = 0; s.wF = 0; }
 
   // ---- body ----
