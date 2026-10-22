@@ -229,6 +229,26 @@ describe('it stays a physical thing', () => {
     expect(v.vx).toBeGreaterThan(-8.5);
   });
 
+  it('does not move on its own: coasting rolls to rest, and waiting at a stop on the brake does not back up', () => {
+    const v = makeVehicle();
+    const p = pt();
+    for (let i = 0; i < 240 * 3; i += 1) stepVehicle(v, p, { throttle: 1, brake: 0, steer: 0 });
+    for (let i = 0; i < 240 * 30; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0, steer: 0 });
+    expect(v.vx).toBe(0);
+    // Brake to a stop and keep the foot on it a moment, then let go: the car stays where it is.
+    for (let i = 0; i < 240 * 3; i += 1) stepVehicle(v, p, { throttle: 1, brake: 0, steer: 0 });
+    let t = 0;
+    while (v.vx > 0.01 && t < 20) { stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 }); t += STEP_S; }
+    for (let i = 0; i < 240 * 0.6; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 });
+    expect(v.reverse).toBe(false);
+    const x = v.x; const z = v.z;
+    for (let i = 0; i < 240 * 10; i += 1) stepVehicle(v, p, { throttle: 0, brake: 0, steer: 0 });
+    expect(Math.hypot(v.x - x, v.z - z)).toBeLessThan(0.1);
+    // A fresh press of the brake at a stop is reverse.
+    for (let i = 0; i < 240 * 2; i += 1) stepVehicle(v, p, { throttle: 0, brake: 1, steer: 0 });
+    expect(v.vx).toBeLessThan(-2);
+  });
+
   it('steers in reverse along the path its wheels roll, without sliding sideways', () => {
     const v = makeVehicle();
     const p = pt();

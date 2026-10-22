@@ -57,6 +57,11 @@ const TC_MAX_CUT = 0.95;
 /** Reverse gear ratio and speed ceiling. */
 const REVERSE_RATIO = 3.4;
 const REVERSE_MAX_MS = 8;
+/** Seconds holding the brake at a stop before reverse is chosen without a fresh press. */
+const REVERSE_HOLD_S = 1;
+/** Off the throttle at walking pace the car settles to rest: driveline drag and a light foot, m/s^2. */
+const SETTLE_DECEL = 1.2;
+const SETTLE_BELOW_MS = 3;
 /** Steering lock at a standstill, radians, and how fast the wheels turn, rad/s. */
 const STEER_LOCK = 0.5;
 const STEER_RATE = 3.2;
@@ -147,6 +152,7 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {number} aF front tyre slip angle (tangent) as the tyre has built it up
  * @property {number} aR rear tyre slip angle (tangent)
  * @property {number} _stopT seconds held at a stop with the brake, before reverse is chosen
+ * @property {boolean} _armed stopped with the brake let go: the next press of it selects reverse
  * @property {number} t seconds driven
  */
 
@@ -177,7 +183,7 @@ export function makeVehicle(at = {}) {
   return {
     x: at.x ?? 0, z: at.z ?? 0, heading: at.heading ?? 0, vx: 0, vy: 0, yawRate: 0, wF: 0, wR: 0, steer: 0, rpm: IDLE_RPM,
     gear: 1, shiftT: 0, limiter: false, throttle: 0, brake: 0, ax: 0, ay: 0, slipF: 0, slipR: 0, wheelspin: 0, shifting: false,
-    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0, aF: 0, aR: 0,
+    odo: 0, manual: false, t: 0, reverse: false, tcCut: 0, _stopT: 0, _armed: true, aF: 0, aR: 0,
   };
 }
 
@@ -250,10 +256,14 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // ---- driver ----
   let thr = clamp(input.throttle, 0, 1);
   let brk = clamp(input.brake, 0, 1);
-  // Held at a stop with the brake, a further press selects reverse; the throttle goes back to drive.
-  if (Math.abs(s.vx) < 0.6 && brk > 0.3 && thr < 0.05) {
+  // Reverse: stopped, let go of the brake and press it again, or keep holding it at a stop for a
+  // second. Waiting at a stop on the brake does not back the car up. The throttle goes back to drive.
+  const stopped = Math.abs(s.vx) < 0.6;
+  if (stopped && brk < 0.05) s._armed = true;
+  else if (!stopped) s._armed = false;
+  if (stopped && brk > 0.3 && thr < 0.05) {
     s._stopT += dt;
-    if (s._stopT > 0.2) s.reverse = true;
+    if (s._armed || s._stopT > REVERSE_HOLD_S) s.reverse = true;
   } else if (thr > 0.2 && s.vx > -0.6) { s.reverse = false; s._stopT = 0; } else if (brk < 0.05) s._stopT = 0;
   const reversing = s.reverse && s.vx < 0.8;
   if (reversing) [thr, brk] = [brk, thr];
@@ -435,6 +445,14 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     const beta = Math.atan2(s.vy, s.vx);
     const betaMax = alphaPeak * REAR_ALPHA_SCALE * 1.2;
     if (Math.abs(beta) > betaMax) s.vy -= (s.vy - Math.tan(Math.sign(beta) * betaMax) * s.vx) * k * 0.5;
+  }
+  // Off the pedals at walking pace, the car rolls to rest rather than on for ever on an idling,
+  // disengaged driveline; the wheels follow it down.
+  if (thr < 0.02 && Math.abs(s.vx) < SETTLE_BELOW_MS) {
+    const dv = SETTLE_DECEL * dt;
+    s.vx = Math.abs(s.vx) <= dv ? 0 : s.vx - Math.sign(s.vx) * dv;
+    s.wR = Math.sign(s.wR) === Math.sign(s.vx) ? Math.min(Math.abs(s.wR), Math.abs(s.vx) / r) * Math.sign(s.vx) : 0;
+    s.wF = s.vx / r;
   }
   // Parked: a car at rest with no input stays put (the stiction a bicycle model lacks).
   if (Math.abs(s.vx) < 0.15 && Math.abs(s.vy) < 0.15 && thr < 0.02) {
