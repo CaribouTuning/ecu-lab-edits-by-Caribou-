@@ -110,10 +110,12 @@ export function createStage(canvas, opts = {}) {
         // Watercolour: the colour thinned out towards the paper, flat and pale.
         float L = pow(max(lum(c.rgb), 0.0), 1.0 / 2.2); // as the eye sees it, not linear light
         // Grey surfaces (walls, floor, concrete) go almost to paper; coloured things keep
-        // their wash, the way a sketch is coloured in only where it matters.
+        // their wash, the way a sketch is coloured in only where it matters. Something
+        // black (the laptop) stays black: inked in, not washed out.
         vec3 sc = pow(max(c.rgb, vec3(0.0)), vec3(1.0 / 2.2));
         float sat = max(sc.r, max(sc.g, sc.b)) - min(sc.r, min(sc.g, sc.b));
-        vec3 wash = mix(c.rgb, paper, 0.40 + 0.38 * (1.0 - smoothstep(0.06, 0.28, sat)));
+        float thin = (0.40 + 0.38 * (1.0 - smoothstep(0.06, 0.28, sat))) * smoothstep(0.11, 0.135, L);
+        vec3 wash = mix(c.rgb, paper, thin);
         // Pencil hatching in the shade, and cross-hatching where it is darkest.
         vec2 f = gl_FragCoord.xy;
         float h1 = step(0.7, fract((f.x + f.y) / 7.0));

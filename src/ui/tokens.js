@@ -86,6 +86,24 @@ export const tokens = Object.freeze({
   paperGrid: '#d7e1e4',
   paperGridMajor: '#b8c9cf',
 
+
+  // The start screen keeps the deep dark blue it opened on, with light ink on it.
+  nightBg: '#0a0d14',
+  nightPanel: '#131824',
+  nightLine: '#33405a',
+  nightInk: '#e9eef8',
+  nightInk2: '#a3adc2',
+  nightAccBg: '#0f2033',
+  nightAccInk: '#8fc2ff',
+
+  // The laptop's desktop wallpaper: a blue bloom on a pale sky, the way a fresh
+  // computer ships.
+  wallSky: '#dce9f8',
+  wallSky2: '#a9c8ee',
+  wallDeep: '#0b3a9a',
+  wallMid: '#2c6fe0',
+  wallLight: '#8fbdff',
+
   // Type.
   mono: "'Patrick Hand', ui-monospace, Menlo, monospace",
   sans: "'Patrick Hand', 'Comic Neue', 'Segoe Print', cursive",

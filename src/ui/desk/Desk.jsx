@@ -30,6 +30,46 @@ export const DESK_APPS = [
   { id: 'physics', label: 'Physics', name: 'PHYSICS' },
 ];
 
+/** The petals of the wallpaper's bloom: angle (deg) and length, outermost first. */
+const PETALS = [
+  [-70, 1], [-35, 1.08], [0, 1.15], [35, 1.08], [70, 1],
+  [-52, 0.78], [-17, 0.86], [17, 0.86], [52, 0.78],
+];
+
+/**
+ * The desktop wallpaper: a blue bloom of folded petals on a pale sky, the look a new
+ * computer ships with. Drawn here, not an image: an original, in the theme's blues.
+ * @returns {React.ReactElement}
+ */
+function Wallpaper() {
+  return (
+    <svg className={styles.wallpaper} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="wall-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" style={{ stopColor: 'var(--wall-sky)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--wall-sky2)' }} />
+        </linearGradient>
+        <linearGradient id="wall-petal" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" style={{ stopColor: 'var(--wall-deep)' }} />
+          <stop offset="0.55" style={{ stopColor: 'var(--wall-mid)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--wall-light)' }} />
+        </linearGradient>
+      </defs>
+      <rect width="1600" height="900" fill="url(#wall-sky)" />
+      <g transform="translate(800 640)">
+        {PETALS.map(([deg, len]) => (
+          <path
+            key={deg}
+            transform={`rotate(${deg}) scale(${len})`}
+            d="M0 0 C-120 -90 -150 -300 0 -470 C150 -300 120 -90 0 0 Z"
+            fill="url(#wall-petal)" opacity="0.88"
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 /** The shop's pages, opened from the shop floor rather than the laptop. */
 export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor' };
 
@@ -151,6 +191,7 @@ export function Desk({
                   </section>
                 ) : (
                   <div className={styles.desktop}>
+                    <Wallpaper />
                     <div className={styles.wallpaperMark} aria-hidden="true">CARIBOU TUNING</div>
                     <div className={styles.icons}>
                       {DESK_APPS.map((a) => (

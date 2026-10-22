@@ -195,10 +195,14 @@ export function buildShopScene(stage, init) {
   // The laptop: a base, and a lid on a hinge at its back edge.
   const laptop = new THREE.Group();
   laptop.position.set(0, 0.84, 0.1);
-  laptop.add(box(0.7, 0.03, 0.48, W.metalDark, { y: 0 }));
+  // Black, and unlit so the shop's light cannot grey it: the sketch pass keeps a black
+  // thing black, inked in.
+  const black = new THREE.MeshBasicMaterial({ color: W.black });
+  const slab = (w, h, d, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), black); m.position.z = z; return m; };
+  laptop.add(slab(0.7, 0.03, 0.48));
   const hinge = new THREE.Group();
   hinge.position.set(0, 0.015, -0.24);
-  hinge.add(box(0.7, 0.02, 0.46, W.metalDark, { y: 0, z: 0.23 }));
+  hinge.add(slab(0.7, 0.02, 0.46, 0.23));
   const lidScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.4), new THREE.MeshBasicMaterial({ color: W.screen }));
   lidScreen.rotation.x = -Math.PI / 2;
   lidScreen.position.set(0, -0.011, 0.23);
@@ -256,6 +260,8 @@ export function buildShopScene(stage, init) {
       lid += (lidTarget - lid) * Math.min(1, dt * 5);
       // Open, the lid stands up a little past vertical; shut, it lies on the base.
       hinge.rotation.x = -(1 - lid) * 1.85;
+      // Shut, the screen is face down inside: only the black lid shows.
+      lidScreen.visible = lid < 0.9;
       for (const tr of traffic) {
         tr.c.group.position.x += tr.v * dt;
         if (tr.c.group.position.x > 40) tr.c.group.position.x = -40;

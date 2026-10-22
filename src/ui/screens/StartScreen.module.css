@@ -7,7 +7,12 @@
   padding: var(--sp-xxl);
   position: relative;
   overflow: hidden;
-  background-color: var(--bg); background-image: var(--graph); background-size: var(--graph-size);
+  /* The deep dark blue the app opened on, with the paper palette's roles re-inked light
+     for it, so every button and caption below reads on the dark. */
+  --ink: var(--night-ink); --ink2: var(--night-ink2); --ink3: var(--night-ink2);
+  --panel: var(--night-panel); --line: var(--night-line); --line-hi: var(--night-ink);
+  --acc-bg: var(--night-acc-bg); --acc-ink: var(--night-acc-ink);
+  background: var(--night-bg);
   color: var(--ink);
   font-family: var(--sans);
   text-align: center;

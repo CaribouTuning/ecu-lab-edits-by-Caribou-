@@ -43,6 +43,32 @@
   --paper-grid: #d7e1e4;
   --paper-grid-major: #b8c9cf;
 
+  --nigh\1-\2g: #0a0d14;
+  --nigh\1-\2anel: #131824;
+  --nigh\1-\2ine: #33405a;
+  --nigh\1-\2nk: #e9eef8;
+  --nigh\1-\2nk2: #a3adc2;
+  --nigh\1-\2c\1-\2g: #0f2033;
+  --nigh\1-\2c\1-\2nk: #8fc2ff;
+  --wal\1-\2ky: #dce9f8;
+  --wal\1-\2ky2: #a9c8ee;
+  --wal\1-\2eep: #0b3a9a;
+  --wal\1-\2id: #2c6fe0;
+  --wal\1-\2ight: #8fbdff;
+
+  --night-bg: #0a0d14;
+  --night-panel: #131824;
+  --night-line: #33405a;
+  --night-ink: #e9eef8;
+  --night-ink2: #a3adc2;
+  --night-acc-bg: #0f2033;
+  --night-acc-ink: #8fc2ff;
+  --wall-sky: #dce9f8;
+  --wall-sky2: #a9c8ee;
+  --wall-deep: #0b3a9a;
+  --wall-mid: #2c6fe0;
+  --wall-light: #8fbdff;
+
   --mono: 'Patrick Hand', ui-monospace, Menlo, monospace;
   --sans: 'Patrick Hand', 'Comic Neue', 'Segoe Print', cursive;
 
