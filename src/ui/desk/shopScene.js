@@ -23,7 +23,7 @@ import { makeBuilding } from '../world/models/buildings.js';
 
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
-  bay: { pos: new THREE.Vector3(0, 5.6, 10.5), look: new THREE.Vector3(0, 0.9, -1.2), fov: 46 },
+  bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
 };
 
 /** Where things are in the shop. */
@@ -85,11 +85,17 @@ export function buildShopScene(stage, init) {
   const root = new THREE.Group();
   scene.add(root);
   stage.setTime(0.15, false);
+  // Under its roof the sun barely reaches: the shop's own lamps light it, warm, from above.
+  const shopLight = new THREE.PointLight(W.sky.day.sun, 34, 24, 1.6);
+  shopLight.position.set(0, 4.6, 0.5);
+  scene.add(shopLight);
   stage.setDriving(true);
 
   // ---- the room ----
   root.add(tiledFloor(16, 14, W.concrete, W.concreteDark, 2).translateZ(0));
   const wallC = W.wallBase;
+  // A ceiling, so it is a room: from inside you see its roof, not the street's.
+  root.add(box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 }));
   // Side walls, and the back wall either side of the door and above it.
   for (const s of [-1, 1]) root.add(box(0.3, 5, 14, wallC, { x: s * 8.15, y: 2.5 }));
   // As drawn: the door right of centre, the sign on the wall to its left.

@@ -23,9 +23,10 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 /**
  * @param {HTMLCanvasElement} canvas
  * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean}} [opts]
- *   `sketch` draws the scene as ink and watercolour on paper instead of pixel art: full
- *   resolution, wobbly ink outlines, pencil hatching in the shade and paper grain. The
- *   sandbox's shop is drawn this way; the career's town stays pixel art.
+ *   `sketch` draws the scene as if doodled by hand instead of pixel art: full resolution,
+ *   its own colours and light, wobbly ink outlines, brushwork, pencil hatching in the
+ *   shade and paper grain. The sandbox's shop is drawn this way; the career's town stays
+ *   pixel art.
  */
 export function createStage(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });
@@ -70,12 +71,12 @@ export function createStage(canvas, opts = {}) {
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
       strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
       sketch: { value: opts.sketch ? 1 : 0 },
-      paper: { value: new THREE.Color(W.sketch.paper) }, inkCol: { value: new THREE.Color(W.sketch.ink) },
+      inkCol: { value: new THREE.Color(W.sketch.ink) },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
       uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
-      uniform float sketch; uniform vec3 paper; uniform vec3 inkCol;
+      uniform float sketch; uniform vec3 inkCol;
       varying vec2 vUv;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -111,34 +112,27 @@ export function createStage(canvas, opts = {}) {
         float cl = lum(texture2D(tColor, uv - vec2(tx.x, 0.0)).rgb); float cr = lum(texture2D(tColor, uv + vec2(tx.x, 0.0)).rgb);
         float cu = lum(texture2D(tColor, uv - vec2(0.0, tx.y)).rgb); float cd = lum(texture2D(tColor, uv + vec2(0.0, tx.y)).rgb);
         edge = max(edge, smoothstep(0.10, 0.22, abs(cl - cr) + abs(cu - cd)) * 0.8);
-        // Watercolour: the colour thinned out towards the paper, flat and pale.
+        // The room keeps its own colours and light, dark walls and all: a real space,
+        // doodled over rather than washed out. What makes it drawn is the hand on top.
         float L = pow(max(lum(c.rgb), 0.0), 1.0 / 2.2); // as the eye sees it, not linear light
-        // Grey surfaces (walls, floor, concrete) go almost to paper; coloured things keep
-        // their wash, the way a sketch is coloured in only where it matters. Something
-        // black (the laptop) stays black: inked in, not washed out.
-        vec3 sc = pow(max(c.rgb, vec3(0.0)), vec3(1.0 / 2.2));
-        float sat = max(sc.r, max(sc.g, sc.b)) - min(sc.r, min(sc.g, sc.b));
-        float thin = (0.40 + 0.38 * (1.0 - smoothstep(0.06, 0.28, sat))) * smoothstep(0.11, 0.135, L);
-        vec3 wash = mix(c.rgb, paper, thin);
-        // Scribbled watercolour on anything coloured: the pigment lies unevenly, in
-        // blotches, and the brush went back and forth in loose wavy strokes of the full
-        // colour over the pale wash.
+        vec3 wash = c.rgb;
+        // Brushwork: the colour lies unevenly, in blotches, and loose wavy strokes of a
+        // deeper shade run across every surface, walls and floor included.
         vec2 fc = gl_FragCoord.xy;
-        float colored = smoothstep(0.06, 0.28, sat);
-        wash = mix(wash, c.rgb, colored * (vnoise(fc / 70.0) - 0.35) * 0.55);
+        wash *= 0.88 + 0.24 * vnoise(fc / 70.0);
         float sx = (fc.x * 0.82 + fc.y * 0.57) / 5.0 + 2.2 * sin(fc.y / 19.0 + fc.x / 47.0) + 1.5 * sin(fc.x / 31.0);
         float strokeMark = smoothstep(0.7, 0.88, fract(sx)) * smoothstep(0.35, 0.65, vnoise(fc / 26.0));
-        wash = mix(wash, c.rgb * 0.82, colored * strokeMark * 0.5);
+        wash *= 1.0 - strokeMark * 0.22;
         // Pencil hatching in the shade, and cross-hatching where it is darkest.
         vec2 f = gl_FragCoord.xy;
         float h1 = step(0.7, fract((f.x + f.y) / 7.0));
         float h2 = step(0.7, fract((f.x - f.y) / 7.0));
-        float shade = smoothstep(0.30, 0.16, L);
-        float deep = smoothstep(0.14, 0.05, L);
-        wash = mix(wash, inkCol, h1 * shade * 0.35 + h2 * deep * 0.35);
-        // Paper grain, then the ink line on top.
+        float shade = smoothstep(0.34, 0.18, L);
+        float deep = smoothstep(0.18, 0.07, L);
+        wash = mix(wash, inkCol * 0.6, h1 * shade * 0.45 + h2 * deep * 0.45);
+        // Paper grain, then the ink line on top: near black, so it reads on dark walls too.
         wash *= 0.97 + 0.05 * hash(floor(f / 2.0));
-        wash = mix(wash, inkCol, clamp(edge, 0.0, 1.0) * 0.92);
+        wash = mix(wash, inkCol * 0.35, clamp(edge, 0.0, 1.0) * 0.95);
         gl_FragColor = linearToOutputTexel(vec4(wash, 1.0));
       }`,
     depthTest: false, depthWrite: false,

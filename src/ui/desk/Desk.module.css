@@ -16,7 +16,7 @@
 /* With the laptop open the shop is set back: dimmed, so the screen is what you read. */
 .backdrop[data-mode='desk']::after, .backdrop[data-mode='page']::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: var(--bg); opacity: 0.35;
+  background: var(--night-bg); opacity: 0.3;
 }
 /* The whole backdrop is the button that stands you up to look at the shop. */
 .lookUp { position: absolute; inset: 0; border: 0; background: transparent; cursor: zoom-out; }

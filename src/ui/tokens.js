@@ -319,8 +319,8 @@ export const horizonGlowAlpha = (alpha) => `rgba(255, 150, 60, ${alpha})`;
  * so the wardrobe catalogue stays plain data a screen can print without WebGL.
  */
 export const world = Object.freeze({
-  // The sandbox shop drawn as a sketch (stage.js, `sketch`): the paper it is washed
-  // towards and the ink its lines and hatching are drawn in. The UI's own paper and ink.
+  // The sandbox shop drawn as a sketch (stage.js, `sketch`): the ink its lines and
+  // hatching are drawn in, and the paper its hand-lettered sign is on.
   sketch: Object.freeze({ paper: '#f3eee2', ink: '#2e2a25' }),
   // Sky and light, by time of day: the top of the sky, the horizon, the sun, the ambient.
   sky: Object.freeze({
@@ -447,7 +447,7 @@ export const world = Object.freeze({
     block: '#7d838c', blockDark: '#5c6169', head: '#a9b0b9', cover: '#c8322c', coverDark: '#8e221e', coverOhv: '#2a2d33',
     plenum: '#b9c0c8', pipe: '#8a6a52', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
     pulley: '#3a3e46', plug: '#2c6fd0', hose: '#22252b', filter: '#d23a3a', cooler: '#5d6470', bottle: '#3a7ad8',
-    stand: '#d8a12c', standDark: '#8a6a1c', flywheel: '#4a4f57', backdrop: '#f3eee2', floor: '#d9cfb8',
+    stand: '#d8a12c', standDark: '#8a6a1c', flywheel: '#4a4f57', backdrop: '#1c2029', floor: '#2a2f3a',
   }),
   // The cabins of the car you drive (world/models/interior.js), one palette per kind of car.
   // Each names its plastics, its trim, its seats, its wheel and its dials.
