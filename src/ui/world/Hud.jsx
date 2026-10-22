@@ -357,7 +357,11 @@ export function RaceHud({ hud, onRetire }) {
  * is always the town you are in.
  * @param {{world: any, big?: boolean, onPick?: (place: string) => void}} p
  */
-export function MiniMap({ world, big = false, onPick }) {
+/**
+ * @param {{world: any, big?: boolean, onPick?: (id: string) => void, route?: {x: number, z: number, name: string}|null}} props
+ *   `route` is where the GPS is taking you: a line to it, a ring on it, and how far.
+ */
+export function MiniMap({ world, big = false, onPick, route = null }) {
   const map = world?.level?.map;
   const [me, setMe] = useState({ x: 0, z: 0, h: 0 });
   useEffect(() => {
@@ -384,6 +388,13 @@ export function MiniMap({ world, big = false, onPick }) {
           {big && <text y={-11} className={styles.mapLabel}>{p.name}</text>}
         </g>
       ))}
+      {route && (
+        <g>
+          <line x1={me.x} y1={me.z} x2={route.x} y2={route.z} className={styles.mapRoute} strokeWidth={big ? 4 : 3} />
+          <circle cx={route.x} cy={route.z} r={big ? 12 : 9} className={styles.mapTarget} />
+          {!big && <text x={me.x} y={me.z + 100} className={styles.mapLabel}>{`${route.name} ${Math.round(Math.hypot(route.x - me.x, route.z - me.z))} m`}</text>}
+        </g>
+      )}
       <g transform={`translate(${me.x} ${me.z}) rotate(${(-me.h * 180) / Math.PI})`}>
         <path d={big ? 'M 0 14 L 9 -9 L 0 -4 L -9 -9 Z' : 'M 0 10 L 6 -6 L 0 -3 L -6 -6 Z'} className={styles.mapMe} />
       </g>

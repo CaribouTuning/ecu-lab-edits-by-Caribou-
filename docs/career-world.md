@@ -27,6 +27,14 @@ and a ring highway with traffic. Its plan is data (`levels/townPlan.js`): the ro
 and the circuit are centre lines with widths, which the level draws as ribbons (one mesh of
 tarmac for the whole town), the race logic drives on, and the minimap draws again small.
 
+The places are spread out so that getting to them is a drive. Your shop, Pops' Diner and
+Threads are downtown; everything else stands on its own stretch of street (`SITES` in the plan:
+each place keeps its own layout, moved as a whole to face another east-west street). Gearhead
+Supply is at the west end of Main Street, the fuel stop at the east end, the academy and the car
+meet on North Street, the dealer and the scrapyard on South Street. The phone and the big map
+do not teleport you there: they set a route, a line on the minimap to the door with the
+distance, which clears when you arrive. Only home, your shop, is a tap away.
+
 | Place | Opens at rep | What it is for |
 |---|---|---|
 | Your shop | 0 | Customers, laptop, dyno, the parts bench |

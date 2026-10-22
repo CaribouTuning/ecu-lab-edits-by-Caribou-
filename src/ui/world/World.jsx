@@ -143,6 +143,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   careerRef.current = career;
   const [settings, setSettings] = useState(loadSettings);
   const [world, setWorld] = useState(/** @type {any} */ (null));
+  /** Where the GPS is taking you: a place id, or null. */
+  const [route, setRoute] = useState(/** @type {string|null} */ (null));
   const [prompt, setPrompt] = useState(/** @type {any} */ (null));
   const [labels, setLabels] = useState(/** @type {any[]} */ ([]));
   const [toasts, setToasts] = useState(/** @type {{id: number, text: string, tone?: string}[]} */ ([]));
@@ -224,19 +226,39 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     }, 340);
   }, []);
 
-  /** Fast travel from the phone: straight to a place's door. @param {string} id */
+  /**
+   * Going somewhere from the phone or the map. Home is a tap away (you can always call it a day
+   * at your shop); everywhere else the town is there to be crossed, so the phone sets a route:
+   * a line on the map to the place's door, and how far it is. Drive there, or walk.
+   * @param {string} id
+   */
   const fastTravel = useCallback((id) => {
     const c = careerRef.current;
     const p = placeById(id);
     const why = p && closedBecause(c, p);
     if (why) { toast(`${p.name} is closed. ${why}`, 'warn'); return; }
-    const w = worldRef.current;
-    if (id === 'garage') travel('garage', { from: 'town' });
-    else if (INTERIORS[id]) travel(id, {});
-    // Heading for a venue in a car: the car goes too, to the venue's access road.
-    else if (ARRIVE[id] && w?.drive?.inside) travel('town', { from: id, car: ARRIVE[id], enterCar: true });
-    else travel('town', { from: id });
-  }, [toast, travel]);
+    if (id === 'garage') { setRoute(null); travel('garage', { from: 'town' }); return; }
+    if (!p) return;
+    setRoute(id);
+    setDrawer(null);
+    setSheet(null);
+    // Inside somewhere: step out onto the street first.
+    if (place !== 'town') travel('town', { from: place === 'garage' ? 'garage' : place });
+    toast(`Route set: ${p.name}. Follow the line on the map.`);
+  }, [place, toast, travel]);
+
+  // Arrived: the route clears at the door.
+  useEffect(() => {
+    if (!route || place !== 'town') return undefined;
+    const p = placeById(route);
+    const t = setInterval(() => {
+      const w = worldRef.current;
+      if (!w || !p) return;
+      const at = w.drive?.inside ? w.drive.state : w.player;
+      if (Math.hypot(at.x - p.door.x, at.z - p.door.z) < 14) { setRoute(null); toast(`You're at ${p.name}.`, 'ok'); }
+    }, 400);
+    return () => clearInterval(t);
+  }, [route, place, toast]);
 
   /**
    * Take a car out for a drive: a customer's from its lift, or one of your own from the
@@ -633,7 +655,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         onMenu={onMenu}
       />
       <Objective text={objective} />
-      {place === 'town' && !drawer && !sheet && <MiniMap world={world} />}
+      {place === 'town' && !drawer && !sheet && <MiniMap world={world} route={route ? { x: placeById(route).door.x, z: placeById(route).door.z, name: placeById(route).name } : null} />}
       {racing && <RaceHud hud={raceHud} onRetire={() => worldRef.current?.cmd('retire')} />}
       <Labels labels={labels} />
       <Toasts toasts={toasts} />

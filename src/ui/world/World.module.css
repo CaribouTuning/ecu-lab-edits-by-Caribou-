@@ -559,4 +559,6 @@
 .mapLabel { fill: var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
 .mapMe { fill: var(--danger); stroke: var(--panel); stroke-width: 2; }
 .mapPick { cursor: pointer; }
+.mapRoute { stroke: var(--warn); stroke-dasharray: 8 6; stroke-linecap: round; }
+.mapTarget { fill: none; stroke: var(--warn); stroke-width: 4; }
 @media (max-height: 480px) { .miniMap { width: 96px; height: 96px; } }

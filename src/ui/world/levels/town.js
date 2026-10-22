@@ -25,7 +25,7 @@ import { loopPath, makeTraffic, makeWalkers } from './crowd.js';
 import { npcLook } from '../appearance.js';
 import { makePerson } from '../models/person.js';
 import { measuredPath } from './roadNet.js';
-import { CIRCUIT, DIRT, HIGHWAY, KEEP_CLEAR, LOTS, NET, ROADS, STRIP, TOWN, surfaceAt } from './townPlan.js';
+import { CIRCUIT, DIRT, HIGHWAY, KEEP_CLEAR, LOTS, NET, ROADS, SITES, STRIP, TOWN, siteAt, surfaceAt } from './townPlan.js';
 import { makeVenues } from './venue.js';
 
 export { TOWN };
@@ -187,33 +187,57 @@ export function buildTown(api, entry = {}) {
     colliders.push({ x: bx, z: bz, hw: spec.w / 2 + 0.2, hd: depth / 2 + 0.2 });
     return b;
   };
+  /**
+   * A place built where its district puts it: its pieces go in a group moved to the site, and its
+   * colliders move with it. (See SITES in the town plan.)
+   * @param {string} id
+   */
+  const site = (id) => {
+    const o = SITES[id];
+    const g = new THREE.Group();
+    g.position.set(o.dx, 0, o.dz);
+    root.add(g);
+    return { add: (/** @type {THREE.Object3D[]} */ ...ob) => { g.add(...ob); }, col: (/** @type {any[]} */ ...cs) => { for (const c of cs) colliders.push({ ...c, x: c.x + o.dx, z: c.z + o.dz }); } };
+  };
   addBuilding({ w: 22, h: 7.5, wall: W.brick, trim: W.concreteLight, roof: W.roof, doorX: 0, doorW: 4.4, doorColor: W.metalDark, text: 'YOUR TUNING SHOP', signColor: W.wallBlack, winCols: 3 }, -48, 14);
-  addBuilding({ w: 14, h: 6, wall: W.wallBlue, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'GEARHEAD SUPPLY', signColor: W.toolBlue, awning: W.toolRed, shopfront: true }, -20, 12);
-  addBuilding({ w: 16, h: 7, wall: W.plaster, trim: W.plasterDark, roof: W.roofGreen, roofKind: 'gable', doorX: 0, text: 'TUNING ACADEMY', signColor: W.roofGreen, awning: W.roofGreen, winCols: 4 }, -2, 14);
+  addBuilding({ w: 14, h: 6, wall: W.wallBlue, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'GEARHEAD SUPPLY', signColor: W.toolBlue, awning: W.toolRed, shopfront: true }, -20 + SITES.supply.dx, 12, 'north', -8 + SITES.supply.dz);
+  addBuilding({ w: 16, h: 7, wall: W.plaster, trim: W.plasterDark, roof: W.roofGreen, roofKind: 'gable', doorX: 0, text: 'TUNING ACADEMY', signColor: W.roofGreen, awning: W.roofGreen, winCols: 4 }, -2 + SITES.academy.dx, 14, 'north', -8 + SITES.academy.dz);
   addBuilding({ w: 12, h: 6, wall: W.wallPurple, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'THREADS', signColor: W.wallPurple, awning: W.neonPink, shopfront: true }, 18, 12);
   addBuilding({ w: 16, h: 5.5, wall: W.wallRed, trim: W.plaster, roof: W.metalDark, doorX: 0, text: 'POPS DINER', signColor: W.toolRed, awning: W.white, shopfront: true }, 34, 12);
-  addBuilding({ w: 30, h: 6, wall: W.wallGreen, trim: W.concreteLight, roof: W.metalDark, doorX: 0, doorW: 4, text: 'CARIBOU MOTORS', signColor: W.wallGreen, shopfront: true }, -60, 14, 'south', 16);
+  addBuilding({ w: 30, h: 6, wall: W.wallGreen, trim: W.concreteLight, roof: W.metalDark, doorX: 0, doorW: 4, text: 'CARIBOU MOTORS', signColor: W.wallGreen, shopfront: true }, -60 + SITES.dealer.dx, 14, 'south', 16 + SITES.dealer.dz);
+  // Downtown's other shops, where the places that moved out to the districts used to stand:
+  // somewhere to walk past on Main Street, nothing to go into.
+  addBuilding({ w: 14, h: 6, wall: W.plaster, trim: W.plasterDark, roof: W.metalDark, doorX: 0, text: 'BAKERY', signColor: W.wallRed, awning: W.white, shopfront: true }, -20, 12);
+  addBuilding({ w: 16, h: 7, wall: W.brick, trim: W.concreteLight, roof: W.roof, roofKind: 'gable', doorX: 0, text: 'RECORDS', signColor: W.wallPurple, awning: W.wallPurple, shopfront: true }, -2, 13);
+  addBuilding({ w: 14, h: 6, wall: W.wallBlue, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'BARBER', signColor: W.toolRed, awning: W.white, shopfront: true }, -60, 12, 'south', 16);
+  addBuilding({ w: 14, h: 5.5, wall: W.plasterDark, trim: W.plaster, roof: W.roofGreen, doorX: 0, text: 'LAUNDRY', signColor: W.toolBlue, shopfront: true }, -44, 12, 'south', 16);
+  addBuilding({ w: 16, h: 6, wall: W.wallGreen, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'BOOKS', signColor: W.wallGreen, awning: W.toolRed, shopfront: true }, -22, 12, 'south', 16);
+  addBuilding({ w: 26, h: 8, wall: W.wallRed, trim: W.plaster, roof: W.metalDark, doorX: 0, doorW: 4, text: 'CINEMA', signColor: W.toolYellow, awning: W.toolYellow, shopfront: true }, 3, 14, 'south', 16);
+  addBuilding({ w: 14, h: 6, wall: W.plaster, trim: W.plasterDark, roof: W.toolRed, doorX: 0, text: 'PIZZA', signColor: W.toolRed, awning: W.toolRed, shopfront: true }, 38, 12, 'south', 16);
+  addBuilding({ w: 12, h: 6, wall: W.wallPurple, trim: W.concreteLight, roof: W.metalDark, doorX: 0, text: 'ARCADE', signColor: W.neonPink, shopfront: true }, 54, 12, 'south', 16);
+  const gasSite = site('gas');
   const gas = makeGasStation(16, 12);
   gas.position.set(-14, 0, 14);
-  root.add(gas);
-  for (const [x, z] of [[-21.4, 8.8], [-6.6, 8.8], [-21.4, 19.2], [-6.6, 19.2]]) colliders.push({ x, z, r: 0.35 });
-  for (const x of [-18, -10]) colliders.push({ x, z: 14, hw: 0.5, hd: 1.1 });
+  gasSite.add(gas);
+  for (const [x, z] of [[-21.4, 8.8], [-6.6, 8.8], [-21.4, 19.2], [-6.6, 19.2]]) gasSite.col({ x, z, r: 0.35 });
+  for (const x of [-18, -10]) gasSite.col({ x, z: 14, hw: 0.5, hd: 1.1 });
   const kiosk = makeBuilding({ w: 7, d: 5, h: 3.4, wall: W.plaster, roof: W.toolRed, text: 'SHOP', signColor: W.toolRed, doorX: 0, doorW: 1.6, shopfront: true, night });
   kiosk.position.set(-14, 0, 29);
   kiosk.rotation.y = Math.PI;
-  root.add(kiosk);
-  colliders.push({ x: -14, z: 29, hw: 3.7, hd: 2.7 });
+  gasSite.add(kiosk);
+  gasSite.col({ x: -14, z: 29, hw: 3.7, hd: 2.7 });
 
   // ---- the scrapyard ----
+  const junkSite = site('junk');
   const fenceN = makeFence(28);
   fenceN.position.set(16, 0, 9);
-  root.add(fenceN);
+  junkSite.add(fenceN);
   const fenceS = makeFence(28);
   fenceS.position.set(16, 0, 36);
-  root.add(fenceS);
-  for (const x of [2, 30]) { const f = makeFence(27); f.rotation.y = Math.PI / 2; f.position.set(x, 0, 22.5); root.add(f); }
-  colliders.push({ x: 8, z: 9, hw: 6, hd: 0.3 }, { x: 24.5, z: 9, hw: 5.5, hd: 0.3 }, { x: 16, z: 36, hw: 14, hd: 0.3 }, { x: 2, z: 22.5, hw: 0.3, hd: 13.5 }, { x: 30, z: 22.5, hw: 0.3, hd: 13.5 });
-  root.add(box(3.4, 0.2, 0.2, W.hazard, { x: 16, y: 1.3, z: 9, edge: false }));
+  junkSite.add(fenceS);
+  for (const x of [2, 30]) { const f = makeFence(27); f.rotation.y = Math.PI / 2; f.position.set(x, 0, 22.5); junkSite.add(f); }
+  junkSite.col({ x: 8, z: 9, hw: 6, hd: 0.3 }, { x: 24.5, z: 9, hw: 5.5, hd: 0.3 }, { x: 16, z: 36, hw: 14, hd: 0.3 }, { x: 2, z: 22.5, hw: 0.3, hd: 13.5 }, { x: 30, z: 22.5, hw: 0.3, hd: 13.5 });
+  junkSite.add(box(3.4, 0.2, 0.2, W.hazard, { x: 16, y: 1.3, z: 9, edge: false }));
   /** @type {[number, number, number, string, string][]} */
   const wrecks = [[6, 14, 0.5, 'sedan', 'grey'], [11, 24, 2.4, 'hatch', 'orange'], [20, 15, -0.4, 'coupe', 'blue'], [24, 28, 1.3, 'pickup', 'green'], [8, 31, 0.1, 'wagon', 'pewter'], [26, 18, 3.0, 'muscle', 'red']];
   for (const [x, z, ry, body, color] of wrecks) {
@@ -222,33 +246,34 @@ export function buildTown(api, entry = {}) {
     c.group.rotation.set(0.04, ry, 0.05);
     c.setHood(true);
     c.update(10);
-    root.add(c.group);
-    colliders.push({ x, z, r: 1.9 });
+    junkSite.add(c.group);
+    junkSite.col({ x, z, r: 1.9 });
   }
-  for (const [x, z] of [[14, 12], [18, 31], [5, 22], [27, 34], [13, 33]]) { const t = makeTyreStack(5); t.position.set(x, 0, z); root.add(t); colliders.push({ x, z, r: 0.5 }); }
-  for (const [x, z, c] of /** @type {[number, number, string][]} */ ([[4, 10.5, W.barrel], [28, 11, W.barrelRed], [28, 33, W.barrel]])) { const b = makeBarrel(c); b.position.set(x, 0, z); root.add(b); colliders.push({ x, z, r: 0.4 }); }
-  for (const [x, z] of [[9, 17], [22, 21], [15, 27]]) { const c = makeCrate(); c.position.set(x, 0, z); root.add(c); colliders.push({ x, z, r: 0.5 }); }
+  for (const [x, z] of [[14, 12], [18, 31], [5, 22], [27, 34], [13, 33]]) { const t = makeTyreStack(5); t.position.set(x, 0, z); junkSite.add(t); junkSite.col({ x, z, r: 0.5 }); }
+  for (const [x, z, c] of /** @type {[number, number, string][]} */ ([[4, 10.5, W.barrel], [28, 11, W.barrelRed], [28, 33, W.barrel]])) { const b = makeBarrel(c); b.position.set(x, 0, z); junkSite.add(b); junkSite.col({ x, z, r: 0.4 }); }
+  for (const [x, z] of [[9, 17], [22, 21], [15, 27]]) { const c = makeCrate(); c.position.set(x, 0, z); junkSite.add(c); junkSite.col({ x, z, r: 0.5 }); }
   const junkSign = sign('SPARKYS SCRAPYARD', { w: 6, h: 0.9, bg: W.wallBase, fg: W.hazard });
   junkSign.position.set(16, 3.4, 9.2);
-  root.add(junkSign);
+  junkSite.add(junkSign);
 
   // ---- the car meet lot ----
-  for (let i = 0; i < 9; i += 1) root.add(box(0.12, 0.012, 4.6, W.roadEdge, { x: 40 + i * 3, y: 0.03, z: 12, edge: false, cast: false }));
+  const meetSite = site('meet');
+  for (let i = 0; i < 9; i += 1) meetSite.add(box(0.12, 0.012, 4.6, W.roadEdge, { x: 40 + i * 3, y: 0.03, z: 12, edge: false, cast: false }));
   const meetSign = makePylon('CAR MEET', W.neonPink);
   meetSign.position.set(52, 0, 9.6);
-  root.add(meetSign);
-  colliders.push({ x: 52, z: 9.6, r: 0.4 });
+  meetSite.add(meetSign);
+  meetSite.col({ x: 52, z: 9.6, r: 0.4 });
   if (night) {
     for (let i = 0; i < 7; i += 1) {
       const h = hash(`meetcar${i}`);
       const c = makeCar({ body: pickBy(['coupe', 'muscle', 'hatch', 'supercar', 'sedan', 'roadster'], h, 1), color: pickBy(['red', 'blue', 'candy', 'lime', 'purple', 'sunset', 'midnight', 'white'], h, 2), wheels: pickBy(['mesh', 'race', 'deep'], h, 3), spoiler: pickBy(['wing', 'gt', 'lip'], h, 4), underglow: pickBy(['neonPink', 'neonCyan', 'neonGreen', 'neonAmber'], h, 5), lowered: 0.8, engine: { layout: 'V8', turbo: true } });
       c.group.position.set(40.5 + i * 3.4, 0, 14);
       c.group.rotation.y = Math.PI + pickBy([0, 0.1, -0.1], h, 6);
-      root.add(c.group);
-      colliders.push({ x: 40.5 + i * 3.4, z: 14, hw: 1.0, hd: 2.2 });
+      meetSite.add(c.group);
+      meetSite.col({ x: 40.5 + i * 3.4, z: 14, hw: 1.0, hd: 2.2 });
     }
   }
-  for (const [x, z] of [[40, 34], [66, 34], [40, 9], [66, 9]]) { const c = makeCone(); c.position.set(x, 0, z); root.add(c); }
+  for (const [x, z] of [[40, 34], [66, 34], [40, 9], [66, 9]]) { const c = makeCone(); c.position.set(x, 0, z); meetSite.add(c); }
   const PODIUM = { x: 52, z: 26 };
   const podium = new THREE.Group();
   podium.position.set(PODIUM.x, 0, PODIUM.z);
@@ -262,7 +287,7 @@ export function buildTown(api, entry = {}) {
   beam.position.y = 4.7;
   beam.material.depthWrite = false;
   podium.add(beam);
-  root.add(podium);
+  meetSite.add(podium);
   const spectators = [];
   if (night) {
     for (let i = 0; i < 9; i += 1) {
@@ -270,7 +295,7 @@ export function buildTown(api, entry = {}) {
       const p = makePerson(npcLook(hash(`meetfan${i}`)), { mood: 'smile' });
       p.group.position.set(PODIUM.x + Math.cos(a) * 6.2, 0, PODIUM.z + Math.sin(a) * 6.2);
       p.group.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
-      root.add(p.group);
+      meetSite.add(p.group);
       spectators.push(p);
     }
   }
@@ -546,11 +571,11 @@ export function buildTown(api, entry = {}) {
     run: () => api.emit({ type: 'act', id: 'raceMenu', series: 'track' }),
   });
   interactables.push({
-    id: 'pump', x: -14, z: 14, r: 7, carOnly: true, maxSpeed: 4, label: 'Fill up', hint: 'Choose your fuel.',
+    id: 'pump', ...siteAt('gas', -14, 14), r: 7, carOnly: true, maxSpeed: 4, label: 'Fill up', hint: 'Choose your fuel.',
     run: () => api.emit({ type: 'act', id: 'pump' }),
   });
   interactables.push({
-    id: 'meet', x: 52, z: 22, r: 11, maxSpeed: 12,
+    id: 'meet', ...siteAt('meet', 52, 22), r: 11, maxSpeed: 12,
     label: () => { const why = closedBecause(api.career(), placeById('meet')); return why ? 'Car meet: closed' : 'Join the car meet'; },
     hint: () => closedBecause(api.career(), placeById('meet')) ?? 'Show your car and your look.',
     run: () => {
@@ -580,7 +605,7 @@ export function buildTown(api, entry = {}) {
   });
 
   // ---- people and traffic ----
-  const walkAreas = [{ minX: -64, maxX: 64, minZ: -8.2, maxZ: -5.6 }, { minX: -64, maxX: 64, minZ: 5.6, maxZ: 8.2 }, { minX: -56, maxX: -14, minZ: -42, maxZ: -24 }, { minX: 40, maxX: 64, minZ: 10, maxZ: 34 }];
+  const walkAreas = [{ minX: -64, maxX: 64, minZ: -8.2, maxZ: -5.6 }, { minX: -64, maxX: 64, minZ: 5.6, maxZ: 8.2 }, { minX: -56, maxX: -14, minZ: -42, maxZ: -24 }, { minX: 40 + SITES.meet.dx, maxX: 64 + SITES.meet.dx, minZ: 10 + SITES.meet.dz, maxZ: 34 + SITES.meet.dz }];
   const walkers = makeWalkers(root, walkAreas, night ? 14 : 9, hash(`town${career.day}`), (x, z) => blocked(x, z, 0.4));
   const trafficCols = [];
   const h = HIGHWAY;
@@ -596,10 +621,11 @@ export function buildTown(api, entry = {}) {
   const forSale = dealerStock(career).slice(0, 4);
   forSale.forEach((s, i) => {
     const c = makeCar({ body: s.body, color: s.color, wheels: s.wheels ?? 'alloy5', engine: s.engine ?? { layout: 'V6' }, plate: s.plate });
-    c.group.position.set(-56 + i * 8.6, 0.0, 12);
+    const at = siteAt('dealer', -56 + i * 8.6, 12);
+    c.group.position.set(at.x, 0.0, at.z);
     c.group.rotation.y = Math.PI + 0.4 - (i % 2) * 0.8;
     root.add(c.group);
-    colliders.push({ x: -56 + i * 8.6, z: 12, hw: 1.1, hd: 2.3 });
+    colliders.push({ x: at.x, z: at.z, hw: 1.1, hd: 2.3 });
   });
 
   const venues = makeVenues(api, root, colliders);
@@ -618,7 +644,7 @@ export function buildTown(api, entry = {}) {
     /** What the minimap draws. */
     map: { roads: ROADS, bounds: TOWN, places: PLACES.map((p) => ({ id: p.id, name: p.name, x: p.door.x, z: p.door.z })) },
     sync() { /* nothing in the town depends on the shop's save while you are in it */ },
-    cinematic: () => (presenting ? { x: PODIUM.x, z: PODIUM.z, heading: 0, speed: 0, mode: 'follow', yaw: presenting.t * 0.45 + 0.4, pitch: 0.36, dist: 12, fov: 34 } : null),
+    cinematic: () => (presenting ? { x: PODIUM.x + SITES.meet.dx, z: PODIUM.z + SITES.meet.dz, heading: 0, speed: 0, mode: 'follow', yaw: presenting.t * 0.45 + 0.4, pitch: 0.36, dist: 12, fov: 34 } : null),
     driveInput: (input) => venues.driveInput(input),
     onDrive: (d, dt) => venues.onDrive(d, dt),
     cmd(name, ...args) {
