@@ -57,7 +57,8 @@
 .lid {
   width: 100%; flex: 1; min-height: 0;
   padding: 12px 12px 14px; border-radius: var(--hand-a);
-  background: var(--panel3); border: 3px solid var(--ink);
+  /* A black laptop: the bezel round the screen, inked like everything else. */
+  background: var(--ink); border: 3px solid var(--ink);
   box-shadow: var(--pencil-twice);
   transform-origin: 50% 100%;
   transition: transform 0.55s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.45s ease 0.1s;
@@ -65,7 +66,7 @@
 }
 .base {
   width: 106%; height: 16px; border-radius: var(--hand-b);
-  background: var(--panel2); border: 3px solid var(--ink);
+  background: var(--ink-soft); border: 3px solid var(--ink);
   transition: opacity 0.45s ease 0.1s;
 }
 /* Shut: the lid folds down onto the base, and the shop comes forward. */
