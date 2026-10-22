@@ -302,6 +302,8 @@ export const world = Object.freeze({
     dusk: Object.freeze({ top: '#4a3f8f', horizon: '#ff9a62', sun: '#ffb27a', ambient: '#8a78b8', ground: '#4a3d4f', sunPower: 1.25, ambientPower: 0.8 }),
     night: Object.freeze({ top: '#070b1f', horizon: '#22305c', sun: '#8fa8e0', ambient: '#556aa6', ground: '#262e46', sunPower: 0.45, ambientPower: 0.95 }),
   }),
+  // The far horizon seen from behind the wheel (world/sky.js): hills, clouds, stars.
+  hillNear: '#5f7d5a', hillFar: '#8aa39a', cloud: '#f6f9fd', cloudShade: '#d3e0ee', star: '#aab8e0', starBright: '#f4f6ff',
   // The ground and what is built on it.
   asphalt: '#3a3f4a',
   asphaltDark: '#2c3039',

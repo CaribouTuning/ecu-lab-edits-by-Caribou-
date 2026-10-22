@@ -10,11 +10,14 @@
 import { world as W } from '../tokens.js';
 
 import { SPRITE_LIGHT, THREE } from './gfx.js';
+import { makeSky } from './sky.js';
 
 /** Internal rows of pixels each quality aims for. */
 export const PIXEL_ROWS = { chunky: 200, normal: 280, fine: 420 };
 
 const SKY = W.sky;
+/** How far you see, metres: haze start and end, and where the outlines fade out. Driving looks down the road. */
+const VIEW = { walk: { fog: [40, 130], ink: [60, 105] }, drive: { fog: [70, 250], ink: [90, 190] } };
 const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
@@ -30,7 +33,9 @@ export function createStage(canvas, opts = {}) {
   renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(SKY.day.horizon, 40, 130);
+  scene.fog = new THREE.Fog(SKY.day.horizon, VIEW.walk.fog[0], VIEW.walk.fog[1]);
+  const sky = makeSky();
+  scene.add(sky.group);
   const camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.3, 400);
   camera.position.set(0, 12, 14);
 
@@ -60,11 +65,11 @@ export function createStage(canvas, opts = {}) {
     uniforms: {
       tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
-      strength: { value: 0.62 }, thresh: { value: 0.035 },
+      strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
-      uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh;
+      uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
       varying vec2 vUv;
       // Inverse view depth is linear across a flat surface at any angle, so its second difference is
       // zero on a floor or a wall and spikes only on a silhouette or a fold.
@@ -79,7 +84,7 @@ export function createStage(canvas, opts = {}) {
         // line sits on the farther surface and a model keeps its full silhouette.
         float edge = smoothstep(thresh, thresh * 2.0, lap / max(w, 1e-5));
         // Far scenery sits in the haze: no ink on it, or the hills turn to wire.
-        edge *= 1.0 - smoothstep(60.0, 105.0, 1.0 / max(w, 1e-5));
+        edge *= 1.0 - smoothstep(inkNear, inkFar, 1.0 / max(w, 1e-5));
         c.rgb *= 1.0 - edge * strength;
         gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
       }`,
@@ -146,6 +151,7 @@ export function createStage(canvas, opts = {}) {
       sunDir.set(-0.5 - low * 0.8, 1 - low * 0.55, 0.65);
       sunDir.normalize();
       stage.night = k >= 1.5;
+      sky.setTime(a, b, f, stage.night);
       // Sprites are unlit: give them the scene's light as one tint, scaled so midday is white.
       const lit = (c, i) => new THREE.Color(c).multiplyScalar(i);
       const sunP = a.sunPower + (b.sunPower - a.sunPower) * f;
@@ -155,6 +161,21 @@ export function createStage(canvas, opts = {}) {
       SPRITE_LIGHT.setRGB(Math.min(1.1, now.r / noon.r), Math.min(1.1, now.g / noon.g), Math.min(1.1, now.b / noon.b));
     },
     night: false,
+
+    /**
+     * Behind the wheel the view opens up: the haze moves back, the outlines reach further, and
+     * the sky dome and the hills show. On foot the stage is as it always was.
+     * @param {boolean} on
+     */
+    setDriving(on) {
+      const v = on ? VIEW.drive : VIEW.walk;
+      const fog = /** @type {THREE.Fog} */ (scene.fog);
+      fog.near = v.fog[0];
+      fog.far = v.fog[1];
+      post.uniforms.inkNear.value = v.ink[0];
+      post.uniforms.inkFar.value = v.ink[1];
+      sky.group.visible = on;
+    },
 
     /** Keep the shadow box around the action, snapped to its own texels so it does not shimmer. @param {THREE.Vector3} at */
     followLight(at) {
@@ -188,6 +209,7 @@ export function createStage(canvas, opts = {}) {
     },
   };
   function drawOutlined() {
+    if (sky.group.visible) sky.follow(camera.position);
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);

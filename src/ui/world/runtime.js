@@ -185,7 +185,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const build = levels[id];
     if (!build) throw new Error(`no level ${id}`);
     const driving = drive;
-    if (driving) { stage.scene.remove(driving.rig.group); if (driving.inside) { driving.rig.group.remove(person.group); driving.inside = false; stage.scene.add(person.group); person.group.visible = true; person.group.scale.setScalar(1); person.group.rotation.set(0, 0, 0); person.setPose('idle'); tele.driving = false; } }
+    if (driving) { stage.scene.remove(driving.rig.group); if (driving.inside) { driving.rig.group.remove(person.group); driving.inside = false; stage.setDriving(false); stage.scene.add(person.group); person.group.visible = true; person.group.scale.setScalar(1); person.group.rotation.set(0, 0, 0); person.setPose('idle'); tele.driving = false; } }
     disposeLevel();
     labels.clear();
     level = build(api, entry);
@@ -261,6 +261,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   function enterCar() {
     if (!drive || drive.inside) return;
     drive.inside = true;
+    stage.setDriving(!level.indoor);
     person.setPose('sit');
     drive.rig.group.add(person.group);
     person.group.position.copy(drive.rig.seat);
@@ -300,6 +301,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     onEvent({ type: 'view', view: 'chase' });
     const s = drive.state;
     drive.inside = false;
+    stage.setDriving(false);
     drive.rig.group.remove(person.group);
     stage.scene.add(person.group);
     person.group.visible = true;
