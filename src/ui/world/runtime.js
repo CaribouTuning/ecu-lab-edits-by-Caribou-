@@ -23,6 +23,8 @@ const PLAYER_R = 0.36;
 /** How far the body pitches and rolls on stock springs, radians per m/s^2: about 2 degrees at 1 g of braking, 3.5 in a 1 g corner. */
 const BODY_PITCH_RAD = 0.0035;
 const BODY_ROLL_RAD = 0.006;
+/** Steering-wheel turns per road-wheel turn. */
+const STEERING_RATIO = 15;
 
 /** Smallest angle from a to b, radians. */
 const angleTo = (a, b) => ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -145,7 +147,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
   let promptKey = '';
   let clock = 0;
   const camOffset = { yaw: 0 };
-  const tele = { knock: false, lean: false, surface: 'road', driving: false, speedKph: 0, speedMph: 0, rpm: 0, redline: 8000, gear: 1, throttle: 0, brake: 0, boost: 0, limiter: false, shifting: false, tcCut: 0, slip: 0, odoKm: 0, manual: false, g: 0, reverse: false, level: '', lat: 0, hp: 0 };
+  const tele = { knock: false, lean: false, surface: 'road', driving: false, speedKph: 0, speedMph: 0, rpm: 0, redline: 8000, gear: 1, throttle: 0, brake: 0, boost: 0, limiter: false, shifting: false, tcCut: 0, tcCutting: false, slip: 0, odoKm: 0, manual: false, g: 0, reverse: false, level: '', lat: 0, hp: 0 };
   /** Transient things the screen draws over the picture: speech, nameplates. */
   const labels = new Map();
   let labelTimer = 0;
@@ -441,6 +443,7 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     tele.throttle = s.throttle;
     tele.brake = s.brake;
     tele.limiter = s.limiter;
+    tele.tcCutting = !!s.tcCutting;
     tele.shifting = s.shifting;
     tele.tcCut = s.tcCut;
     tele.slip = Math.max(s.slipR, s.slipF);
@@ -457,7 +460,9 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     tele.hp = d.hpAt ? d.hpAt(s.rpm) * s.throttle : 0;
     tele.steerIn = d.steerIn;
     // The wheel and dials inside the car follow the driver and the engine.
-    d.rig.setWheel?.(d.steerIn * 2.6);
+    // A road car's steering ratio: the rim turns about fifteen times the road wheels, so full
+    // lock at a standstill is well over a turn each way, and much less at speed.
+    d.rig.setWheel?.(-s.steer * STEERING_RATIO);
     d.rig.setGauges?.(toMph(Math.abs(s.vx)) / 160, s.rpm / (d.pt.redline * 1.1), [s.tcCut > 0.05, s.limiter || s.rpm > d.pt.redline * 0.96, !!tele.knock, !!tele.lean]);
     level.onDrive?.(d, dt);
     rig.update(dt, new THREE.Vector3(s.x, 0, s.z), s.heading, Math.abs(s.vx));

@@ -165,8 +165,14 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat }) {
   });
   const shoulder = (/** @type {number} */ side) => new THREE.Vector3(x + side * 0.2, eye.y - 0.3, eye.z - 0.08);
   /** Where a hand sits round the rim, radians from the top: it turns with the rim, within its side. */
-  const grip = (/** @type {number} */ side, /** @type {number} */ wheel) => (side > 0
-    ? Math.max(0.25, Math.min(2.4, 1.0 - wheel)) : Math.max(-2.4, Math.min(-0.25, -1.0 - wheel)));
+  const grip = (/** @type {number} */ side, /** @type {number} */ wheel) => {
+    // Turning past where the hand can follow, it lets go and takes a fresh hold back at the
+    // other end of its side: over a turn and more of lock, the hands feed the rim round.
+    const lo = 0.25;
+    const span = 2.15;
+    const u = (((1.0 - side * wheel - lo) % span) + span) % span;
+    return side * (lo + u);
+  };
   const handAt = (/** @type {number} */ phi) => new THREE.Vector3(Math.sin(phi) * R, Math.cos(phi) * R, 0);
   const zAxis = new THREE.Vector3(0, 0, 1);
   const xAxis = new THREE.Vector3(1, 0, 0);

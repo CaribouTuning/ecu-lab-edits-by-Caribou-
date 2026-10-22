@@ -271,6 +271,28 @@ describe('it stays a physical thing', () => {
     expect(stiff.pitchA).toBeLessThan(soft.pitchA);
   });
 
+  it('pulls away like a car, not a CVT: the revs come down onto the wheels and then climb with the road speed', () => {
+    const v = makeVehicle();
+    const p = pt();
+    const rpm = [];
+    for (let i = 0; i < 240 * 3; i += 1) { stepVehicle(v, p, { throttle: 1, brake: 0, steer: 0, tc: false }); if (i % 24 === 0 && v.gear === 1 && v.rpm < redline * 0.95) rpm.push(v.rpm); }
+    const low = Math.min(...rpm.slice(1));
+    expect(low).toBeLessThan(rpm[0] - 300);
+    expect(low).toBeGreaterThan(1900);
+    // Never a flat note: every tenth of a second in the climb, the revs have moved.
+    const climb = rpm.slice(rpm.indexOf(low) + 1);
+    for (let i = 1; i < climb.length; i += 1) expect(climb[i]).toBeGreaterThan(climb[i - 1]);
+  });
+
+  it('traction control cuts sparks in bursts, not a steady trim', () => {
+    const v = makeVehicle();
+    const p = pt();
+    let flips = 0;
+    let was = false;
+    for (let i = 0; i < 240; i += 1) { stepVehicle(v, p, { throttle: 1, brake: 0, steer: 0 }); if (v.tcCutting !== was) flips += 1; was = !!v.tcCutting; }
+    expect(flips).toBeGreaterThan(4);
+  });
+
   it('steers in reverse along the path its wheels roll, without sliding sideways', () => {
     const v = makeVehicle();
     const p = pt();

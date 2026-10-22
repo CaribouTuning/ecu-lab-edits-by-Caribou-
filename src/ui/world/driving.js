@@ -54,6 +54,9 @@ const LIMITER_BAND_RPM = 200;
 const TC_ONSET = 0.115;
 const TC_BAND = 0.03;
 const TC_MAX_CUT = 0.95;
+/** Traction control's ignition-cut cycles per second, and how much of the torque a cut event drops. */
+const TC_CUT_HZ = 14;
+const TC_DEPTH = 0.9;
 /** Reverse gear ratio and speed ceiling. */
 const REVERSE_RATIO = 3.4;
 const REVERSE_MAX_MS = 8;
@@ -166,6 +169,9 @@ const shape = (s) => Math.sin(SHAPE_C * Math.atan(SHAPE_B * s));
  * @property {number} pitchV and how fast that is changing
  * @property {number} rollA the cornering acceleration the body has rolled to, m/s^2
  * @property {number} rollV and how fast that is changing
+ * @property {number} [clutchT] seconds since pulling away: the clutch taking up
+ * @property {number} [tcPhase] where in its cut cycle traction control is, 0..1
+ * @property {boolean} [tcCutting] traction control is dropping sparks this instant
  * @property {boolean} _armed stopped with the brake let go: the next press of it selects reverse
  * @property {number} t seconds driven
  */
@@ -328,9 +334,20 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
   // ---- engine ----
   const rpmWheels = Math.abs(s.wR) * Math.abs(overall) * 60 / (2 * Math.PI);
   // A clutch or converter lets the engine sit above the wheels off the line.
+  // Off the line the engine sits at its launch speed, then comes down onto the wheels: a clutch
+  // takes up over its engagement time (as the strip model's does), a converter slips less as
+  // the car gathers speed. Either way the revs fall and then climb with the road speed, not
+  // pinned at one note while the car speeds up (which is what a CVT does, and sounds like).
   const launch = IDLE_RPM + (box.launchRpm - IDLE_RPM) * thr;
-  const coupled = rpmWheels >= launch;
-  let rpm = coupled ? rpmWheels : Math.max(rpmWheels, launch);
+  if (Math.abs(s.vx) < 0.5 && thr < 0.05) s.clutchT = 0;
+  else if (thr > 0.05) s.clutchT = (s.clutchT ?? 0) + dt;
+  const engaged = box.engageSec > 0
+    // A driver lets the clutch out progressively: it bites late, so the revs dip without bogging.
+    ? clamp((s.clutchT ?? 0) / box.engageSec, 0, 1) ** 2
+    : clamp(Math.abs(s.vx) / Math.max(1, box.couplingSpeedMs), 0, 1);
+  const slipRpm = launch * (1 - engaged) + rpmWheels * engaged;
+  const coupled = rpmWheels >= slipRpm - 1;
+  let rpm = coupled ? rpmWheels : slipRpm;
   if (s.limiter) { if (rpm < pt.redline - LIMITER_BAND_RPM) s.limiter = false; } else if (rpm >= pt.redline) s.limiter = true;
   const converter = box.torqueMult > 1 ? box.torqueMult - (box.torqueMult - 1) * clamp(Math.abs(s.vx) / Math.max(1, box.couplingSpeedMs), 0, 1) : 1;
   let tqEng;
@@ -351,8 +368,13 @@ export function stepVehicle(s, pt, input, dt = STEP_S) {
     s.tcCut = clamp(((kap - TC_ONSET) / TC_BAND), 0, 1) * TC_MAX_CUT;
     // The tail is already sliding: power would only spin it further.
     if (s.slipR > ESC_REAR_SLIP && Math.abs(s.vx) > 1.5) s.tcCut = Math.max(s.tcCut, clamp((s.slipR - ESC_REAR_SLIP) * 2, 0, 1) * TC_MAX_CUT);
-    tqWheelIn *= 1 - s.tcCut;
-  } else s.tcCut = 0;
+    // The ECU does not turn the torque down like a dial: it drops sparks, whole firing events at
+    // a time, so the engine stutters (the brap of traction control). Over each cycle the share
+    // of cut events is the cut asked for.
+    s.tcPhase = ((s.tcPhase ?? 0) + dt * TC_CUT_HZ) % 1;
+    s.tcCutting = s.tcCut > 0.04 && s.tcPhase < s.tcCut;
+    if (s.tcCutting) tqWheelIn *= 1 - TC_DEPTH;
+  } else { s.tcCut = 0; s.tcCutting = false; }
   // Reverse is one low gear: the power fades out toward its top speed instead of switching on and off.
   if (reversing && tqWheelIn < 0) tqWheelIn *= clamp((REVERSE_MAX_MS + s.vx) / 2, 0, 1);
 

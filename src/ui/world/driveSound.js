@@ -22,7 +22,7 @@ export function ensureDriveAudio() {
 /**
  * One frame of sound.
  * @param {{soundFrame: (rpm: number, load: number, cut: boolean) => any}} setup
- * @param {{rpm: number, throttle: number, limiter: boolean, gear: number}} t telemetry
+ * @param {{rpm: number, throttle: number, limiter: boolean, gear: number, tcCutting?: boolean}} t telemetry
  * @param {{on: boolean, volume?: number}} o
  * @param {{gear: number}} mem remembers the last gear, to hear a shift
  */
@@ -31,7 +31,8 @@ export function driveSoundFrame(setup, t, o, mem) {
   if (!a) return;
   if (!o.on) { setEngineAudioActive(a, false); return; }
   setEngineAudioActive(a, true);
-  const frame = setup.soundFrame(Math.max(900, t.rpm), t.throttle, t.limiter);
+  // A rev limiter and traction control both cut sparks, and sound it.
+  const frame = setup.soundFrame(Math.max(900, t.rpm), t.throttle, t.limiter || !!t.tcCutting);
   frame.volume = o.volume ?? 0.8;
   updateEngineAudio(a, frame);
   if (t.gear > mem.gear && mem.gear > 0) shiftEngineAudio(a, { automatic: false });

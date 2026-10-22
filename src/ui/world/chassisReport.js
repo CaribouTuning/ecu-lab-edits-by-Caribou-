@@ -22,9 +22,14 @@ export function chassisReport(pt) {
   let peak = 0;
   let fAtPeak = 0;
   let rAtPeak = 0;
+  // Grip is read over a quarter of a second, as a g-meter would show it: the instant-to-instant
+  // ripple (traction control cutting sparks, the tyres settling) is not grip.
+  let ayAvg = 0;
+  const k = STEP_S / 0.25;
   for (let t = 0; t < 7; t += STEP_S) {
     stepVehicle(v, pt, { throttle: v.vx < 18 ? 0.5 : 0.12, brake: 0, steer: -Math.min(1, t / 6) });
-    if (t > 1 && Math.abs(v.ay) > peak) { peak = Math.abs(v.ay); fAtPeak = v.slipF; rAtPeak = v.slipR; }
+    ayAvg += (Math.abs(v.ay) - ayAvg) * k;
+    if (t > 1 && ayAvg > peak) { peak = ayAvg; fAtPeak = v.slipF; rAtPeak = v.slipR; }
   }
   const bias = (fAtPeak - rAtPeak) / Math.max(0.01, fAtPeak + rAtPeak);
   // Stopping from 100 km/h in a straight line.
