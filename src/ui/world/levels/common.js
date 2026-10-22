@@ -49,9 +49,10 @@ export function bodyFor(job) {
 export function specForJob(job, build) {
   const h = hash(job.id);
   const bay = engineBayOf(build);
-  if (job.own) return { body: bodyFor(job), ...job.look, plate: job.plate, exhaust: build?.mods?.exhaust ? 'big' : 'single', engine: bay };
+  if (job.own) return { body: bodyFor(job), model: job.customer.car, ...job.look, plate: job.plate, exhaust: build?.mods?.exhaust ? 'big' : 'single', engine: bay };
   return {
     body: bodyFor(job),
+    model: job.customer.car,
     color: job.customer.color,
     wheels: pickBy(['alloy5', 'mesh', 'steel', 'deep', 'alloy5', 'race'], h, 1),
     wheelColor: pickBy(['chrome', 'black', 'silver', 'black'], h, 2),

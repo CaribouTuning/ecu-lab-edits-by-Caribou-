@@ -58,6 +58,7 @@ export const WHEEL_STYLES = {
  * @property {string} [plate]
  * @property {EngineBay} [engine]
  * @property {boolean} [interior] build the cabin's inside and a driver (for the car you drive)
+ * @property {string} [model] what the car is called (a dealer model or a customer's car): it picks the cabin
  */
 
 /**
@@ -245,8 +246,8 @@ export function makeCar(spec = {}) {
   rig.seat = new THREE.Vector3(0.4, seatY + 0.22, (zr0 + zf0) / 2 + 0.1);
   /** @type {ReturnType<typeof makeInterior>|null} */
   let inside = null;
-  if (spec.interior && !S.open) {
-    inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat, body: spec.body ?? 'coupe' });
+  if (spec.interior) {
+    inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat, body: spec.body ?? 'coupe', name: spec.model ?? '', open: !!S.open });
     inside.group.userData.dynamic = true;
     car.add(inside.group);
   } else {

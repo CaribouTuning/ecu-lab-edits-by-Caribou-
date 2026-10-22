@@ -1,17 +1,9 @@
 /**
  * The inside of a car, for the one you are driving.
  *
- * Every kind of car has its own cabin, as real ones do:
- *   economy   hatchbacks, saloons, estates: grey plastics, two dials under a round hood, a
- *             four-spoke wheel, a radio and three heater knobs, cloth seats
- *   sport     coupes: black, a carbon strip, a big centre rev counter flanked by two small
- *             dials, a three-spoke wheel with a yellow top marker, bolstered buckets
- *   classic   muscle cars: a wood-faced dash with a row of four chrome-ringed gauges, a thin
- *             wheel with a chrome horn ring, a tan leather bench, a pistol-grip shifter
- *   exotic    supercars: a digital screen with a light-bar rev counter, a flat-bottomed
- *             wheel, suede with red stitching, a tunnel of toggle switches
- *   truck     SUVs and pickups: a tall square dash, a wide gauge pod, a big four-spoke wheel,
- *             a broad console with cup holders
+ * Every car has its own cabin (cabins.js names them: Pops's old hatch with its bead seat
+ * cover and tape deck, the city car's centre speedometer, the coupe's three gauges on the dash
+ * top, the saloon's stack turned to the driver, the truck's column shifter and bench, and so on).
  * All of them have the parts a driver sees: A-pillars, a headliner, the mirror and sun visors,
  * door cards with an armrest and a handle, a centre stack, a console with the gear lever, the
  * passenger seat, and the driver's own arms on the wheel.
@@ -27,26 +19,11 @@
 import { world as W } from '../../tokens.js';
 import { THREE, box, cyl, pixelTexture, toon } from '../gfx.js';
 
+import { cabinFor } from './cabins.js';
+
 const C = W.cockpit;
 const dbl = (/** @type {string} */ hex) => toon(hex, { side: THREE.DoubleSide });
 const lit = (/** @type {string} */ hex) => new THREE.MeshBasicMaterial({ color: hex });
-
-/** Which cabin each body has. @type {Record<string, keyof typeof W.interiors>} */
-export const INTERIOR_OF = {
-  hatch: 'economy', sedan: 'economy', wagon: 'economy', coupe: 'sport', muscle: 'classic', supercar: 'exotic', suv: 'truck', pickup: 'truck',
-};
-
-/**
- * How each cabin is laid out: its wheel, its instruments, its shifter and its seats.
- * @type {Record<keyof typeof W.interiors, {wheel: 'four'|'three'|'horn'|'flat', rim: number, cluster: 'twin'|'triple'|'row'|'digital'|'pod', shifter: 'knob'|'short'|'pistol'|'paddles'|'tall', seat: 'cloth'|'bucket'|'bench'|'race'|'captain'}>}
- */
-const LAYOUT = {
-  economy: { wheel: 'four', rim: 0.16, cluster: 'twin', shifter: 'knob', seat: 'cloth' },
-  sport: { wheel: 'three', rim: 0.15, cluster: 'triple', shifter: 'short', seat: 'bucket' },
-  classic: { wheel: 'horn', rim: 0.18, cluster: 'row', shifter: 'pistol', seat: 'bench' },
-  exotic: { wheel: 'flat', rim: 0.14, cluster: 'digital', shifter: 'paddles', seat: 'race' },
-  truck: { wheel: 'four', rim: 0.18, cluster: 'pod', shifter: 'tall', seat: 'captain' },
-};
 
 /**
  * A dial face painted once: a face, a ring, ticks and a red zone.
@@ -77,12 +54,38 @@ function dialTexture(P, ticks, red) {
  * @param {number} d.zr1 @param {number} d.zf0 @param {number} d.zf1
  * @param {number} d.gw0 glass width at the belt @param {number} d.gw1 and at the roof
  * @param {THREE.Vector3} d.seat where the driver sits
- * @param {string} [d.body] the body style, which picks the cabin
+ * @param {string} [d.body] the body style @param {string} [d.name] what the car is called: these two pick the cabin
+ * @param {boolean} [d.open] no roof: no headliner, visors or roof-hung mirror
  */
-export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, body = 'coupe' }) {
-  const kind = INTERIOR_OF[body] ?? 'sport';
-  const P = W.interiors[kind];
-  const L = LAYOUT[kind];
+export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, body = 'coupe', name = '', open = false }) {
+  const L = cabinFor(name, body);
+  const kind = L.id;
+  const P = W.interiors[/** @type {keyof typeof W.interiors} */ (L.palette)];
+  const has = (/** @type {string} */ f) => (L.features ?? []).includes(f);
+  const tall = (L.dashH ?? 0.17) > 0.2;
+  const modern = has('topScreen') || L.cluster === 'digital';
+  /**
+   * A dial with a needle, on any panel: its face, a chrome ring if asked, and the needle's pivot.
+   * @param {THREE.Object3D} parent @param {number} dx @param {number} dy @param {number} r
+   * @param {number} ticks @param {number} red first red tick, or -1 @param {boolean} chrome @param {number} z0 the face's depth on the panel
+   */
+  function gauge(parent, dx, dy, r, ticks, red, chrome, z0) {
+    const faceM = new THREE.Mesh(new THREE.CircleGeometry(r, 20), new THREE.MeshBasicMaterial({ map: dialTexture(P, ticks, red), transparent: true }));
+    faceM.position.set(dx, dy, z0);
+    faceM.rotation.y = Math.PI;
+    parent.add(faceM);
+    if (chrome) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.004, 0.007, 4, 18), lit(C.chrome));
+      ring.position.set(dx, dy, z0 - 0.002);
+      parent.add(ring);
+    }
+    const pivot = new THREE.Group();
+    pivot.position.set(dx, dy, z0 - 0.004);
+    pivot.add(box(0.008, r * 0.82, 0.004, P.needle, { y: r * 0.4, mat: lit(P.needle), edge: false }));
+    pivot.add(box(0.016, 0.016, 0.006, P.ink, { mat: lit(P.ink), edge: false }));
+    parent.add(pivot);
+    return pivot;
+  }
   const group = new THREE.Group();
   const x = seat.x;
   // Everything is placed from the foot of the windscreen (zf0) and the beltline, so the view
@@ -92,8 +95,10 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   // Under a low roof the driver looks further down the road over the dash, not up at the lining.
   const pitch = Math.max(0.06, Math.min(0.2, 0.09 + (0.5 - (top - belt)) * 0.7));
   const R = L.rim;
+  /** @type {THREE.Group|null} */
+  let freshener = null;
   const wheelAt = new THREE.Vector3(x, belt - 0.05 - (R - 0.15) * 0.6, zf0 - 0.52);
-  const TILT = kind === 'truck' ? 0.75 : kind === 'exotic' ? 0.5 : 0.62;
+  const TILT = tall ? 0.75 : L.wheel === 'flat' ? 0.5 : 0.62;
   const dashW = Wd * 0.86;
   const face = zf0 - 0.4;
 
@@ -110,7 +115,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   // ---- the shell you see from the seat ----
   // The headliner: light cloth, lit as much by the glass all round as by the floor below it.
   const liner = toon(C.roof, { side: THREE.DoubleSide, emissive: C.roof, emissiveIntensity: 0.35 });
-  add(box(gw1 * 0.98, 0.03, zf1 - zr1 + 0.06, C.roof, { y: top - 0.07, z: (zr1 + zf1) / 2, mat: liner, edge: false }));
+  if (!open) add(box(gw1 * 0.98, 0.03, zf1 - zr1 + 0.06, C.roof, { y: top - 0.07, z: (zr1 + zf1) / 2, mat: liner, edge: false }));
   for (const s of [-1, 1]) {
     // A-pillar: from the cowl corner up to the roof's front corner, with a lit inner edge.
     const lo = new THREE.Vector3(s * (gw0 / 2 - 0.02), belt, zf0);
@@ -127,10 +132,10 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     add(box(0.03, 0.025, 0.1, C.chrome, { x: dx - s * 0.035, y: belt - 0.06, z: eye.z + 0.3, mat: lit(C.chrome), edge: false }));
     add(box(0.04, 0.012, 0.05, C.chromeDark, { x: dx - s * 0.08, y: belt - 0.13, z: eye.z + 0.12, edge: false }));
     // Sun visor, folded up against the headliner.
-    add(box(0.32, 0.014, 0.15, C.roof, { x: s * 0.4, y: top - 0.092, z: zf1 - 0.16, mat: liner, edge: false }));
+    if (!open) add(box(0.32, 0.014, 0.15, C.roof, { x: s * 0.4, y: top - 0.092, z: zf1 - 0.16, mat: liner, edge: false }));
   }
   // The header over the screen, and the mirror hung from it.
-  add(box(gw1 * 0.98, 0.035, 0.05, C.roofShade, { y: top - 0.075, z: zf1 - 0.01, mat: dbl(C.roofShade), edge: false }));
+  add(box(gw1 * 0.98, 0.035, 0.05, open ? C.pillar : C.roofShade, { y: top - 0.075, z: zf1 - 0.01, mat: dbl(open ? C.pillar : C.roofShade), edge: false }));
   add(box(0.02, 0.05, 0.02, C.pillar, { y: top - 0.115, z: zf1 + 0.04, edge: false }));
   add(box(0.24, 0.07, 0.03, C.pillar, { y: top - 0.165, z: zf1 + 0.055, edge: false }));
   // The glass is a picture of the road behind, drawn by a small camera (runtime: mirrorView).
@@ -138,6 +143,15 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   mirrorGlass.position.set(0, top - 0.165, zf1 + 0.035);
   mirrorGlass.rotation.y = Math.PI;
   add(mirrorGlass);
+  if (has('freshener')) {
+    // A paper pine tree on a string from the mirror, swinging with the corners (setWheel).
+    const tree = new THREE.Group();
+    tree.add(box(0.003, 0.08, 0.003, C.outline, { y: -0.04, edge: false }));
+    tree.add(box(0.05, 0.03, 0.004, C.pine, { y: -0.1, edge: false }), box(0.038, 0.025, 0.004, C.pine, { y: -0.075, edge: false }), box(0.024, 0.02, 0.004, C.pineDark, { y: -0.057, edge: false }), box(0.008, 0.015, 0.004, C.pineDark, { y: -0.123, edge: false }));
+    tree.position.set(0.05, top - 0.195, zf1 + 0.02);
+    add(tree);
+    freshener = tree;
+  }
 
   // ---- floor and seats ----
   // The body's beltline deck runs across the cabin; carpet covers it, so the car reads as a
@@ -154,11 +168,21 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
       g.add(box(0.14, 0.5, 0.012, P.seatHi, { y: 0.27, z: -0.055, edge: false }));
     } else if (L.seat === 'bench') {
       for (let k = 0; k < 4; k += 1) g.add(box(wide - 0.04, 0.012, 0.012, P.seatHi, { y: 0.08 + k * 0.13, z: -0.056, edge: false }));
+    } else if (L.seat === 'plaid') {
+      // A tartan centre panel: a grid of lines across and down.
+      g.add(box(0.26, 0.42, 0.01, P.seat, { y: 0.27, z: -0.052, edge: false }));
+      for (let k = 0; k < 6; k += 1) g.add(box(0.26, 0.008, 0.012, k % 2 ? P.seatHi : P.dashHi, { y: 0.09 + k * 0.07, z: -0.056, edge: false }));
+      for (let k = 0; k < 4; k += 1) g.add(box(0.008, 0.42, 0.012, k % 2 ? P.seatHi : P.dashHi, { x: -0.1 + k * 0.066, y: 0.27, z: -0.057, edge: false }));
+      for (const b of [-1, 1]) g.add(box(0.07, 0.5, 0.14, P.dashLow, { x: (b * wide) / 2, y: 0.25, z: -0.03, edge: false }));
+    } else if (L.seat === 'beads') {
+      // A wooden-bead cover, the kind a taxi driver swears by.
+      for (let i = 0; i < 6; i += 1) for (let j = 0; j < 8; j += 1) g.add(box(0.03, 0.03, 0.02, (i + j) % 2 ? C.bead : C.beadDark, { x: -0.15 + i * 0.06, y: 0.06 + j * 0.06, z: -0.06, edge: false }));
     } else {
       g.add(box(wide - 0.08, 0.3, 0.012, P.seatHi, { y: 0.3, z: -0.055, edge: false }));
     }
     if (L.seat === 'race') g.add(box(0.12, 0.08, 0.012, C.outline, { y: 0.47, z: -0.056, edge: false }));
     else g.add(box(0.24, 0.16, 0.09, P.seat, { y: 0.66, edge: false }));
+    if (L.seat === 'captain') g.add(box(0.06, 0.06, 0.3, P.seatHi, { x: wide / 2 + 0.04, y: 0.12, z: -0.15, edge: false }));
     g.position.set(sx, belt - 0.05, eye.z - 0.32);
     g.rotation.x = -0.18;
     return g;
@@ -168,17 +192,19 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
 
   // ---- the dash ----
   add(box(dashW, 0.32, 0.03, P.dashLow, { y: belt - 0.16, z: face, mat: dbl(P.dashLow), edge: false }));
-  const dashH = kind === 'truck' ? 0.24 : 0.17;
+  const dashH = L.dashH ?? 0.17;
   add(box(dashW, dashH, 0.4, P.dash, { y: belt - 0.1 + (dashH - 0.17) / 2, z: zf0 - 0.2, mat: dbl(P.dash), edge: false }));
   // The top lip, and the trim strip across the face: wood, carbon, red or plain.
   add(box(dashW, 0.02, 0.1, P.dashHi, { y: belt - 0.005 + (dashH - 0.17), z: zf0 - 0.06, mat: dbl(P.dashHi), edge: false }));
-  add(box(dashW, kind === 'classic' ? 0.09 : 0.03, 0.015, P.trim, { y: belt - (kind === 'classic' ? 0.09 : 0.11), z: face - 0.02, edge: false }));
-  if (kind === 'sport') for (let k = 0; k < 14; k += 1) add(box(0.03, 0.03, 0.016, k % 2 ? P.dash : P.dashHi, { x: -dashW / 2 + 0.05 + k * 0.06, y: belt - 0.11, z: face - 0.022, edge: false }));
+  const wideTrim = L.cluster === 'row' || kind === 'tahoe' || kind === 'pops';
+  add(box(dashW, wideTrim ? 0.09 : 0.03, 0.015, P.trim, { y: belt - (wideTrim ? 0.09 : 0.11), z: face - 0.02, edge: false }));
+  if (has('ambient')) add(box(dashW * 0.9, 0.006, 0.016, P.accent, { y: belt - 0.135, z: face - 0.024, mat: lit(P.accent), edge: false }));
+  if (kind === 'sport' || kind === 'golfr' || kind === 'z33hr') for (let k = 0; k < 14; k += 1) add(box(0.03, 0.03, 0.016, k % 2 ? P.dash : P.dashHi, { x: -dashW / 2 + 0.05 + k * 0.06, y: belt - 0.11, z: face - 0.022, edge: false }));
   add(box(dashW * 0.98, 0.15, 0.3, P.dashLow, { y: belt - 0.25, z: zf0 - 0.25, mat: dbl(P.dashLow), edge: false }));
   // Vents: two at the ends, two in the middle.
   for (const vx of [-dashW / 2 + 0.12, -0.12, 0.12, dashW / 2 - 0.12]) {
     if (Math.abs(vx - x) < 0.16) continue;
-    if (kind === 'exotic' || kind === 'classic') add(cyl(0.04, 0.04, 0.02, C.chromeDark, { axis: 'z', x: vx, y: belt - 0.06, z: face - 0.02, seg: 10, edge: false }));
+    if (L.wheel === 'flat' || L.cluster === 'row' || kind === 'c5') add(cyl(0.04, 0.04, 0.02, C.chromeDark, { axis: 'z', x: vx, y: belt - 0.06, z: face - 0.02, seg: 10, edge: false }));
     else {
       add(box(0.13, 0.055, 0.02, P.dashLow, { x: vx, y: belt - 0.06, z: face - 0.015, edge: false }));
       for (let k = 0; k < 3; k += 1) add(box(0.11, 0.008, 0.022, P.dashHi, { x: vx, y: belt - 0.08 + k * 0.02, z: face - 0.016, edge: false }));
@@ -189,37 +215,83 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   add(box(0.08, 0.02, 0.014, C.chromeDark, { x: -x, y: belt - 0.17, z: face - 0.022, edge: false }));
 
   // ---- the centre stack and the console ----
-  add(box(0.3, 0.3, 0.06, P.dashLow, { y: belt - 0.2, z: face - 0.03, edge: false }));
-  if (kind === 'exotic' || kind === 'truck' || kind === 'sport') {
-    add(box(0.22, 0.11, 0.012, P.screen, { y: belt - 0.11, z: face - 0.065, mat: lit(P.screen), edge: false }));
+  // The stack is its own panel, turned toward the driver in a car built around them.
+  const stack = new THREE.Group();
+  stack.position.set(0, belt - 0.2, face - 0.03);
+  if (has('angled')) stack.rotation.y = 0.2;
+  const sadd = (/** @type {THREE.Object3D[]} */ ...o) => { stack.add(...o); };
+  sadd(box(0.3, 0.3, 0.06, P.dashLow, { edge: false }));
+  if (has('cassette')) {
+    // A tape deck: a slot with a window, a green display, two knobs.
+    sadd(box(0.2, 0.05, 0.012, C.tape, { y: 0.09, z: -0.035, edge: false }));
+    sadd(box(0.12, 0.012, 0.014, C.outline, { y: 0.09, z: -0.037, edge: false }));
+    sadd(box(0.06, 0.016, 0.012, P.screen, { x: 0.06, y: 0.045, z: -0.036, mat: lit(P.screen), edge: false }));
+    for (const kx of [-0.08, 0.08]) sadd(cyl(0.018, 0.018, 0.02, C.chromeDark, { axis: 'z', x: kx, y: 0.03, z: -0.04, seg: 8, edge: false }));
+  } else if (modern) {
+    // The screen is up on the dash: here, a strip of climate buttons.
+    for (let k = 0; k < 6; k += 1) sadd(box(0.035, 0.022, 0.012, k === 2 ? P.accent : P.dashHi, { x: -0.09 + k * 0.036, y: 0.09, z: -0.035, mat: k === 2 ? lit(P.accent) : undefined, edge: false }));
+  } else if (tall || kind === 'sport' || kind === 'ctsv') {
+    sadd(box(0.22, 0.11, 0.012, P.screen, { y: 0.09, z: -0.035, mat: lit(P.screen), edge: false }));
   } else {
     // A radio: a display window and two knobs.
-    add(box(0.2, 0.05, 0.012, P.screen, { y: belt - 0.11, z: face - 0.065, mat: lit(P.screen), edge: false }));
-    for (const kx of [-0.08, 0.08]) add(cyl(0.018, 0.018, 0.02, C.chromeDark, { axis: 'z', x: kx, y: belt - 0.17, z: face - 0.07, seg: 8, edge: false }));
+    sadd(box(0.2, 0.05, 0.012, P.screen, { y: 0.09, z: -0.035, mat: lit(P.screen), edge: false }));
+    for (const kx of [-0.08, 0.08]) sadd(cyl(0.018, 0.018, 0.02, C.chromeDark, { axis: 'z', x: kx, y: 0.03, z: -0.04, seg: 8, edge: false }));
   }
   // The heater: three knobs, or a row of toggles.
-  if (kind === 'exotic') {
+  if (L.shifter === 'paddles') {
     for (let k = 0; k < 5; k += 1) {
-      add(box(0.018, 0.012, 0.04, C.chrome, { x: -0.09 + k * 0.045, y: belt - 0.25, z: face - 0.08, mat: lit(C.chrome), edge: false }));
-      if (k === 2) add(box(0.04, 0.03, 0.03, P.accent, { y: belt - 0.25, z: face - 0.07, mat: lit(P.accent), edge: false }));
+      sadd(box(0.018, 0.012, 0.04, C.chrome, { x: -0.09 + k * 0.045, y: -0.05, z: -0.05, mat: lit(C.chrome), edge: false }));
+      if (k === 2) sadd(box(0.04, 0.03, 0.03, P.accent, { y: -0.05, z: -0.04, mat: lit(P.accent), edge: false }));
     }
-  } else for (const kx of [-0.09, 0, 0.09]) add(cyl(0.025, 0.025, 0.025, P.dashHi, { axis: 'z', x: kx, y: belt - 0.26, z: face - 0.07, seg: 10, edge: false }));
+  } else for (const kx of [-0.09, 0, 0.09]) sadd(cyl(0.025, 0.025, 0.025, P.dashHi, { axis: 'z', x: kx, y: -0.06, z: -0.04, seg: 10, edge: false }));
+  add(stack);
+  if (has('clock')) {
+    // A little analogue clock in the middle of the dash.
+    add(cyl(0.035, 0.035, 0.02, C.chromeDark, { axis: 'z', y: belt - 0.06, z: face - 0.025, seg: 12, edge: false }));
+    add(cyl(0.028, 0.028, 0.022, P.dial, { axis: 'z', y: belt - 0.06, z: face - 0.026, seg: 12, mat: lit(P.dial), edge: false }));
+    add(box(0.004, 0.022, 0.004, P.ink, { y: belt - 0.052, z: face - 0.04, mat: lit(P.ink), edge: false }));
+  }
+  if (has('topScreen')) {
+    // A screen standing on the dash top, in the middle, turned a touch toward the driver.
+    const scr = new THREE.Group();
+    scr.add(box(0.3, 0.15, 0.02, C.outline, { mat: dbl(C.outline), edge: false }));
+    scr.add(box(0.27, 0.125, 0.004, P.screen, { z: -0.012, mat: lit(P.screen), edge: false }));
+    scr.add(box(0.08, 0.02, 0.006, P.accent, { x: -0.08, y: 0.04, z: -0.015, mat: lit(P.accent), edge: false }));
+    scr.add(box(0.2, 0.008, 0.006, P.ink, { y: -0.03, z: -0.015, mat: lit(P.ink), edge: false }));
+    scr.position.set(0.02, belt + dashH - 0.17 + 0.07, zf0 - 0.2);
+    scr.rotation.set(0.15, has('angled') ? 0.2 : 0.1, 0);
+    add(scr);
+  }
+  if (has('centerPod')) {
+    // Three small gauges in a pod on the dash top, angled at the driver: oil, volts, boost.
+    const pod = new THREE.Group();
+    pod.add(box(0.26, 0.08, 0.05, P.dashLow, { mat: dbl(P.dashLow), edge: false }));
+    for (let k = 0; k < 3; k += 1) gauge(pod, -0.08 + k * 0.08, 0, 0.032, 6, k === 2 ? 4 : -1, true, -0.026);
+    pod.position.set(0, belt + 0.04, zf0 - 0.16);
+    pod.rotation.set(0.35, 0.35, 0);
+    add(pod);
+  }
   // The console between the seats, low, and the gear lever on it.
-  const consoleW = kind === 'truck' ? 0.32 : 0.22;
-  add(box(consoleW, 0.08, face - eye.z + 0.15, P.dashLow, { y: belt + 0.02, z: (face + eye.z - 0.15) / 2, edge: false }));
-  add(box(consoleW - 0.04, 0.012, 0.3, P.dashHi, { y: belt + 0.065, z: face - 0.25, edge: false }));
-  add(box(0.012, 0.013, 0.3, P.trim, { y: belt + 0.066, z: face - 0.25, edge: false }));
-  if (kind === 'truck') for (const cx of [-0.07, 0.07]) add(cyl(0.04, 0.04, 0.02, C.outline, { x: cx, y: belt + 0.065, z: eye.z + 0.05, seg: 10, edge: false }));
+  const consoleW = tall ? 0.32 : 0.22;
+  const consoleH = has('tunnel') ? 0.16 : 0.08;
+  add(box(consoleW, consoleH, face - eye.z + 0.15, P.dashLow, { y: belt - 0.02 + consoleH / 2, z: (face + eye.z - 0.15) / 2, edge: false }));
+  const ctop = belt - 0.02 + consoleH;
+  add(box(consoleW - 0.04, 0.012, 0.3, P.dashHi, { y: ctop + 0.005, z: face - 0.25, edge: false }));
+  add(box(0.012, 0.013, 0.3, P.trim, { y: ctop + 0.006, z: face - 0.25, edge: false }));
+  if (tall) for (const cx of [-0.07, 0.07]) add(cyl(0.04, 0.04, 0.02, C.outline, { x: cx, y: ctop + 0.005, z: eye.z + 0.05, seg: 10, edge: false }));
   const lever = new THREE.Group();
-  lever.position.set(0, belt + 0.06, face - 0.25);
+  lever.position.set(0, ctop, face - 0.25);
   if (L.shifter === 'paddles') {
     // A paddle each side of the column, and a reverse toggle on the tunnel.
-    add(box(0.06, 0.03, 0.03, P.accent, { y: belt + 0.08, z: face - 0.22, mat: lit(P.accent), edge: false }));
+    add(box(0.06, 0.03, 0.03, P.accent, { y: ctop + 0.02, z: face - 0.22, mat: lit(P.accent), edge: false }));
+  } else if (L.shifter === 'column') {
+    // The lever is on the column (added with the wheel); the console is cup holders and a lid.
+    add(box(consoleW - 0.06, 0.02, 0.22, P.dashHi, { y: ctop + 0.01, z: eye.z + 0.15, edge: false }));
   } else {
-    const tall = L.shifter === 'tall' ? 0.2 : L.shifter === 'short' ? 0.09 : 0.14;
-    lever.add(box(0.02, tall, 0.02, C.chromeDark, { y: tall / 2, edge: false }));
-    if (L.shifter === 'pistol') lever.add(box(0.035, 0.08, 0.06, P.rimHi, { y: tall + 0.02, z: -0.015, edge: false }));
-    else lever.add(L.shifter === 'short' ? box(0.045, 0.045, 0.045, C.chrome, { y: tall + 0.02, mat: lit(C.chrome), edge: false }) : cyl(0.03, 0.03, 0.05, P.rimHi, { y: tall + 0.02, seg: 8, edge: false }));
+    const leverH = L.shifter === 'tall' ? 0.2 : L.shifter === 'short' ? 0.09 : 0.14;
+    lever.add(box(0.02, leverH, 0.02, C.chromeDark, { y: leverH / 2, edge: false }));
+    if (L.shifter === 'pistol') lever.add(box(0.035, 0.08, 0.06, P.rimHi, { y: leverH + 0.02, z: -0.015, edge: false }));
+    else lever.add(L.shifter === 'short' ? box(0.045, 0.045, 0.045, C.chrome, { y: leverH + 0.02, mat: lit(C.chrome), edge: false }) : cyl(0.03, 0.03, 0.05, P.rimHi, { y: leverH + 0.02, seg: 8, edge: false }));
     lever.add(box(0.08, 0.02, 0.08, P.dash, { y: 0.005, edge: false }));
     lever.rotation.x = -0.15;
     add(lever);
@@ -230,27 +302,24 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   cluster.position.set(x, belt + 0.02, zf0 - 0.36);
   cluster.rotation.x = 0.42;
   /** @param {number} dx @param {number} dy @param {number} r @param {number} ticks @param {number} red @param {boolean} [chrome] */
-  const dial = (dx, dy, r, ticks, red, chrome = false) => {
-    const faceM = new THREE.Mesh(new THREE.CircleGeometry(r, 20), new THREE.MeshBasicMaterial({ map: dialTexture(P, ticks, red), transparent: true }));
-    faceM.position.set(dx, dy, -0.018);
-    faceM.rotation.y = Math.PI;
-    cluster.add(faceM);
-    if (chrome) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.004, 0.007, 4, 18), lit(C.chrome));
-      ring.position.set(dx, dy, -0.02);
-      cluster.add(ring);
-    }
-    const pivot = new THREE.Group();
-    pivot.position.set(dx, dy, -0.022);
-    pivot.add(box(0.008, r * 0.82, 0.004, P.needle, { y: r * 0.4, mat: lit(P.needle), edge: false }));
-    pivot.add(box(0.016, 0.016, 0.006, P.ink, { mat: lit(P.ink), edge: false }));
-    cluster.add(pivot);
-    return pivot;
-  };
+  const dial = (dx, dy, r, ticks, red, chrome = false) => gauge(cluster, dx, dy, r, ticks, red, chrome, -0.018);
   /** @type {THREE.Group} */ let speedPivot;
   /** @type {THREE.Group|null} */ let rpmPivot = null;
   /** @type {THREE.Mesh[]} */ const bars = [];
-  if (L.cluster === 'twin') {
+  if (L.cluster === 'center') {
+    // One big speedometer in the middle of the dash, where the passenger can see it too.
+    cluster.position.set(0, belt + 0.01, zf0 - 0.3);
+    cluster.rotation.set(0.5, 0.25, 0);
+    cluster.add(box(0.24, 0.16, 0.05, C.outline, { z: 0.01, mat: dbl(C.outline), edge: false }));
+    speedPivot = dial(0, 0.005, 0.07, 12, -1, true);
+  } else if (L.cluster === 'row3') {
+    // A big speedometer in the middle, a rev counter and a fuel gauge either side.
+    cluster.add(box(0.5, 0.17, 0.05, C.outline, { z: 0.01, mat: dbl(C.outline), edge: false }));
+    cluster.add(box(0.52, 0.025, 0.09, P.dash, { y: 0.09, z: 0.02, edge: false }));
+    speedPivot = dial(0, 0, 0.078, 14, -1);
+    rpmPivot = dial(-0.16, -0.01, 0.055, 8, 6);
+    dial(0.16, -0.01, 0.045, 4, -1);
+  } else if (L.cluster === 'twin') {
     cluster.add(box(0.44, 0.17, 0.05, C.outline, { z: 0.01, mat: dbl(C.outline), edge: false }));
     cluster.add(box(0.46, 0.025, 0.09, P.dash, { y: 0.09, z: 0.02, edge: false }));
     speedPivot = dial(-0.105, 0, 0.076, 16, -1);
@@ -305,7 +374,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
   pivot.rotation.x = TILT;
   const spin = new THREE.Group();
   pivot.add(spin);
-  const thick = L.wheel === 'horn' ? 0.014 : L.wheel === 'four' && kind === 'truck' ? 0.028 : 0.024;
+  const thick = L.wheel === 'horn' ? 0.014 : L.wheel === 'four' && tall ? 0.028 : 0.024;
   spin.add(new THREE.Mesh(new THREE.TorusGeometry(R, thick, 6, 18), toon(P.rim)));
   const spoke = (/** @type {number} */ ang, /** @type {number} */ w) => {
     const len = R - 0.04;
@@ -314,7 +383,12 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     m.rotation.z = -ang;
     spin.add(m);
   };
-  if (L.wheel === 'four') {
+  if (L.wheel === 'two') {
+    // Two spokes dropping to a big round boss, as a small car of the nineties had.
+    for (const a of [Math.PI / 2 + 0.4, -Math.PI / 2 - 0.4]) spoke(a, 0.05);
+    spin.add(cyl(0.065, 0.07, 0.05, P.rimHi, { axis: 'z', z: -0.01, seg: 12, edge: false }));
+    spin.add(box(0.03, 0.03, 0.01, P.accent, { z: -0.04, edge: false }));
+  } else if (L.wheel === 'four') {
     for (const a of [Math.PI / 2 + 0.25, -Math.PI / 2 - 0.25, Math.PI - 0.5, Math.PI + 0.5]) spoke(a, 0.045);
     spin.add(box(0.13, 0.1, 0.05, P.rimHi, { z: -0.01, edge: false }));
     spin.add(box(0.05, 0.02, 0.01, P.accent, { z: -0.04, edge: false }));
@@ -335,6 +409,14 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     for (const bx of [-0.07, 0.07]) spin.add(box(0.025, 0.025, 0.01, P.accent, { x: bx, y: 0.01, z: -0.02, mat: lit(P.accent), edge: false }));
     spin.add(box(0.03, 0.03, 0.03, P.accent, { y: R, mat: lit(P.accent), edge: false }));
     spin.add(cyl(0.045, 0.05, 0.05, P.rimHi, { axis: 'z', z: -0.01, seg: 8, edge: false }));
+  }
+  if (L.shifter === 'column') {
+    // The gear lever on the column, out to the right of the wheel.
+    const stalk = box(0.016, 0.016, 0.2, C.chromeDark, { edge: false });
+    stalk.position.set(-0.12, -0.05, 0.06);
+    stalk.rotation.set(0, -0.9, 0.2);
+    pivot.add(stalk);
+    pivot.add(cyl(0.018, 0.018, 0.04, P.rimHi, { axis: 'x', x: -0.2, y: -0.07, z: 0.0, seg: 8, edge: false }));
   }
   if (L.shifter === 'paddles') for (const s of [-1, 1]) pivot.add(box(0.06, 0.09, 0.012, C.chromeDark, { x: s * (R * 0.75), y: 0.02, z: 0.04, edge: false }));
   add(pivot);
@@ -393,6 +475,7 @@ export function makeInterior({ Wd, belt, top, zf0, zf1, zr1, gw0, gw1, seat, bod
     /** Turn the wheel: radians, clockwise as the driver sees it. @param {number} angle */
     setWheel(angle) {
       spin.rotation.z = angle;
+      if (freshener) freshener.rotation.z = Math.max(-0.5, Math.min(0.5, angle * 0.06));
       for (const h of hands) {
         const phi = grip(h.side, angle);
         h.hand.position.copy(handAt(phi));
