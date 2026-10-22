@@ -488,10 +488,12 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
     const lead = THREE.MathUtils.clamp(-s.yawRate * 0.18, -0.35, 0.35);
     const nod = THREE.MathUtils.clamp(s.ax * 0.004, -0.04, 0.04);
     // A touch below level: the road over the bonnet, as a driver looks.
-    eLook.set(-0.09 + nod, Math.PI + lead, 0);
+    // (With the view turned to face forward, a positive pitch tips it down.)
+    eLook.set((d.rig.eyePitch ?? 0.09) + nod, Math.PI + lead, 0);
     qLook.setFromEuler(eLook);
     stage.camera.quaternion.copy(g.quaternion).multiply(qLook);
-    const fov = 74 + Math.min(10, Math.abs(s.vx) * 0.2);
+    // A cockpit camera's usual lens, opening a little with speed.
+    const fov = 64 + Math.min(8, Math.abs(s.vx) * 0.16);
     if (Math.abs(stage.camera.fov - fov) > 0.05) { stage.camera.fov = fov; stage.camera.updateProjectionMatrix(); }
     if (rig.shake > 0.001) { stage.camera.position.x += (Math.random() - 0.5) * rig.shake * 0.3; stage.camera.position.y += (Math.random() - 0.5) * rig.shake * 0.3; }
   }

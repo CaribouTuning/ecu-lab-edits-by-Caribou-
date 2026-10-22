@@ -239,13 +239,14 @@ export function makeCar(spec = {}) {
   }
   // Interior: seats, dash, wheel, and the driver's head is the person's own.
   const seatY = belt - 0.2;
-  for (const s of [-1, 1]) car.add(box(0.42, 0.5, 0.12, W.wallBlack, { x: s * 0.4, y: seatY + 0.2, z: (zr0 + zf0) / 2 - 0.15, edge: false }));
-  for (const s of [-1, 1]) car.add(box(0.42, 0.1, 0.45, W.wallBlack, { x: s * 0.4, y: seatY, z: (zr0 + zf0) / 2 + 0.05, edge: false }));
+  // Seen through the glass from outside; from the driver's seat the interior's own seats take over.
+  for (const s of [-1, 1]) shell.add(box(0.42, 0.5, 0.12, W.wallBlack, { x: s * 0.4, y: seatY + 0.2, z: (zr0 + zf0) / 2 - 0.15, edge: false }));
+  for (const s of [-1, 1]) shell.add(box(0.42, 0.1, 0.45, W.wallBlack, { x: s * 0.4, y: seatY, z: (zr0 + zf0) / 2 + 0.05, edge: false }));
   rig.seat = new THREE.Vector3(0.4, seatY + 0.22, (zr0 + zf0) / 2 + 0.1);
   /** @type {ReturnType<typeof makeInterior>|null} */
   let inside = null;
   if (spec.interior && !S.open) {
-    inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat });
+    inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat, body: spec.body ?? 'coupe' });
     inside.group.userData.dynamic = true;
     car.add(inside.group);
   } else {
@@ -260,6 +261,7 @@ export function makeCar(spec = {}) {
   rig.setWheel = (a) => inside?.setWheel(a);
   /** The driver's eye, car-local, for the first-person camera. */
   rig.eye = inside?.eye ?? null;
+  rig.eyePitch = inside?.pitch ?? 0.09;
   /** Move the dial needles inside. @param {number} speed @param {number} rpm @param {boolean[]} [lamps] */
   rig.setGauges = (speed, rpm, lamps) => inside?.setGauges(speed, rpm, lamps);
 

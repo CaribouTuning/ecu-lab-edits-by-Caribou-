@@ -416,8 +416,16 @@ export const world = Object.freeze({
   }),
   // The text box: paper, ink and a two-tone frame, as a handheld RPG draws one.
   talk: Object.freeze({ paper: '#f7f3e8', ink: '#262a33', frame: '#34405e', frameHi: '#9cc1ee', name: '#2f5fb8', choice: '#e2ecfa' }),
-  // The driver's seat, painted pixel by pixel (world/cockpitArt.js): dash, pillars, a wheel with
-  // hands on it, and amber dials.
+  // The cabins of the car you drive (world/models/interior.js), one palette per kind of car.
+  // Each names its plastics, its trim, its seats, its wheel and its dials.
+  interiors: Object.freeze({
+    economy: Object.freeze({ dash: '#4a4d55', dashHi: '#61656f', dashLow: '#33363d', trim: '#7b808b', seat: '#545a68', seatHi: '#6c7385', rim: '#2b2d33', rimHi: '#4a4d57', accent: '#9aa3b5', dial: '#0f1116', dialRing: '#5d6270', ink: '#f2f4f8', needle: '#ff7a3c', screen: '#3d8f7a' }),
+    sport: Object.freeze({ dash: '#1b1d22', dashHi: '#2d3038', dashLow: '#0f1013', trim: '#3a3f4a', seat: '#22252c', seatHi: '#b8322f', rim: '#1e2026', rimHi: '#3a3e48', accent: '#f2c230', dial: '#090a0d', dialRing: '#8a909c', ink: '#f0c75e', needle: '#ff3b2f', screen: '#3a7bd5' }),
+    classic: Object.freeze({ dash: '#3a2a22', dashHi: '#7a4a2a', dashLow: '#2a1d17', trim: '#9a5e30', seat: '#a8703c', seatHi: '#c58d55', rim: '#5a3a24', rimHi: '#8a5a34', accent: '#d8dde4', dial: '#efe6cf', dialRing: '#d8dde4', ink: '#1d1a14', needle: '#c42b20', screen: '#c9a24a' }),
+    exotic: Object.freeze({ dash: '#17171b', dashHi: '#2a2a31', dashLow: '#0c0c0f', trim: '#c21f2f', seat: '#1d1d22', seatHi: '#c21f2f', rim: '#202026', rimHi: '#34343c', accent: '#ff2b3d', dial: '#05070b', dialRing: '#c21f2f', ink: '#e8f2ff', needle: '#ff2b3d', screen: '#0d1a2b' }),
+    truck: Object.freeze({ dash: '#3b3f47', dashHi: '#545a65', dashLow: '#2a2d33', trim: '#6a707c', seat: '#4a4038', seatHi: '#6a5a4c', rim: '#24262b', rimHi: '#454952', accent: '#c8ccd4', dial: '#0e1015', dialRing: '#6a707c', ink: '#9be0ff', needle: '#ff8a2c', screen: '#2f6f96' }),
+  }),
+  // What every cabin shares: the roof, the pillars, the mirror, the driver's skin and sleeves, the lamps.
   cockpit: Object.freeze({
     outline: '#07080b', roof: '#8a8f99', roofShade: '#6c717c', pillar: '#16181f', carpet: '#191b21', pillarHi: '#262a36', glassEdge: '#3b4252',
     dash: '#1d2029', dashHi: '#323847', dashLow: '#101217',
@@ -425,6 +433,7 @@ export const world = Object.freeze({
     wheel: '#262a33', wheelHi: '#4c5364', wheelDark: '#14161c', marker: '#e0b54a',
     skin: '#d9a47c', skinHi: '#efc7a2', skinShade: '#a8764f', sleeve: '#34415e', sleeveDark: '#232d44',
     dial: '#0b0d12', dialRing: '#454c5c', ink: '#f0c75e', needle: '#ff5a3c', lampOff: '#2a2f3a', lampOn: '#ffb02e', lampBad: '#ff4a4a',
+    chrome: '#d5dbe4', chromeDark: '#8d96a3', glowOff: '#1c2028',
   }),
   eye: '#1a1c22',
   mouth: '#7a3a3a',
