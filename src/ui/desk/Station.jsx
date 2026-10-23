@@ -12,30 +12,12 @@
  * and the same controls are laid out flat, one after the other.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
 
 import { useSurfaces } from './Desk.jsx';
 
 import styles from './Station.module.css';
-
-/**
- * Whether the player has ever woken a computer, kept in the browser so it only asks once.
- * @param {string} key
- * @returns {[boolean, () => void]}
- */
-export function useWoken(key) {
-  const name = `ecu-lab.woken.${key}`;
-  const [woken, setWoken] = React.useState(() => {
-    try { return window.localStorage.getItem(name) === '1'; } catch { return false; }
-  });
-  const wake = () => {
-    if (woken) return;
-    setWoken(true);
-    try { window.localStorage.setItem(name, '1'); } catch { /* private window: it asks again next time */ }
-  };
-  return [woken, wake];
-}
 
 /**
  * One face of a thing in the shop, and what is on it.
@@ -65,30 +47,24 @@ export function Surface({ name, label, kind, children }) {
 }
 
 /**
- * A computer's screen: its software's menu along the top, and the screen it shows. Until
- * someone presses its power button it is asleep, its standby light on; once there is
- * something new to see on it (`nudge`) and nobody has looked, the light flashes three
- * times and stays lit.
+ * A computer's screen: its software's menu along the top, and the screen it shows. It is
+ * always on.
  *
  * @param {object} props
  * @param {string} props.label what the computer is: "Dyno computer"
- * @param {string} props.wakeKey which computer, for remembering it has been woken
  * @param {{id: string, label: string, flag?: boolean}[]} props.screens its software's menu
  * @param {string|null} props.current the screen showing
  * @param {(id: string) => void} props.onScreen a menu item was chosen
  * @param {string} props.title the software's name, in its title bar
  * @param {React.ReactNode} [props.status] the right of the title bar: what it is reading now
- * @param {boolean} [props.nudge]
  * @param {React.ReactNode} props.children the screen
  * @returns {React.ReactElement}
  */
-export function Computer({ label, wakeKey, screens, current, onScreen, title, status = null, nudge = false, children }) {
-  const [woken, wake] = useWoken(wakeKey);
-  const body = useRef(/** @type {HTMLDivElement|null} */ (null));
-  // Asleep, what is behind the standby screen is out of reach of the keyboard too.
-  useEffect(() => { if (body.current) /** @type {any} */ (body.current).inert = !woken; }, [woken]);
+export function Computer({ label, screens, current, onScreen, title, status = null, children }) {
+  // Always on, as a shop's dyno PC and run-stand computer are: no standby screen to click
+  // through before the machine can be used.
   return (
-    <div className={styles.monitor} data-awake={woken ? 'true' : 'false'}>
+    <div className={styles.monitor} data-awake="true">
       <div className={styles.titleBar}>
         <span className={styles.appName}>{title}</span>
         {status && <span className={styles.titleStatus}>{status}</span>}
@@ -97,8 +73,8 @@ export function Computer({ label, wakeKey, screens, current, onScreen, title, st
         <nav className={styles.menu} aria-label={`${label} screens`}>
           {screens.map((s) => (
             <button
-              key={s.id} type="button" className={styles.menuItem} aria-pressed={woken && current === s.id}
-              onClick={() => { wake(); onScreen(s.id); }}
+              key={s.id} type="button" className={styles.menuItem} aria-pressed={current === s.id}
+              onClick={() => onScreen(s.id)}
             >
               {s.label}{s.flag && <span className={styles.flagged}> (new findings)</span>}
             </button>
@@ -106,15 +82,7 @@ export function Computer({ label, wakeKey, screens, current, onScreen, title, st
         </nav>
       )}
       <div className={styles.screen}>
-        <div ref={body} className={styles.screenBody} aria-hidden={!woken}>{children}</div>
-        {!woken && (
-          <button type="button" className={styles.standby} data-nudge={nudge ? 'true' : undefined} onClick={wake} aria-label={`Switch on the ${label.toLowerCase()}`}>
-            <svg viewBox="0 0 24 24" className={styles.power} aria-hidden="true">
-              <path d="M12 3v8" /><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0" />
-            </svg>
-            <span>Press to start</span>
-          </button>
-        )}
+        <div className={styles.screenBody}>{children}</div>
       </div>
     </div>
   );

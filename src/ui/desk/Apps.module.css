@@ -27,16 +27,17 @@
 .physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
 @media (max-width: 900px) { .physGrid { grid-template-columns: 1fr; } }
 .physPanel {
-  min-width: 0; padding: 12px 14px 14px; border: 2px solid var(--pen); border-radius: var(--hand-b);
-  background: var(--panel); box-shadow: var(--pencil-twice);
+  /* A group box: a hairline edge, as the rest of the software draws one. */
+  min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel);
 }
 .panelHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.panelTitle { margin: 0 0 8px; font-size: var(--fs-md); font-weight: 800; letter-spacing: 0.02em; }
+.panelTitle { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
 .graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
 .graphBtns button {
-  min-width: 46px; padding: 5px 10px; border: 2px solid var(--pen); background: var(--panel2);
-  color: var(--ink); font-weight: 800; font-size: var(--fs-sm); cursor: pointer;
+  min-width: 46px; padding: 4px 10px; border: 0; border-radius: 6px; background: var(--mac-control);
+  color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer;
 }
 .buildSplit { display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: start; }
 .buildList { margin: 0; display: flex; flex-direction: column; gap: 7px; }
@@ -181,7 +182,7 @@
 .liveEq dt { color: var(--ink3); white-space: nowrap; }
 .liveEq dd { margin: 0; font-family: var(--mono); color: var(--ink); line-height: 1.45; }
 .cutControls { display: flex; gap: 8px; align-items: center; }
-.cutControls button { padding: 5px 12px; border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); font-weight: 800; font-size: var(--fs-sm); cursor: pointer; }
+.cutControls button { padding: 4px 12px; border: 0; border-radius: 6px; background: var(--mac-control); color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer; }
 .cutControls input { flex: 1; accent-color: var(--acc); }
 .cutCoolant { fill: var(--cut-coolant); opacity: 0.8; }
 .cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
@@ -211,7 +212,7 @@
 .cutLabel { fill: var(--ink); font-size: 10.5px; font-family: var(--sans); font-weight: 600; letter-spacing: 0.02em; }
 .physControls {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; padding: 12px 14px;
-  border: 2px solid var(--pen); border-radius: var(--hand-a); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
 }
 @media (max-width: 700px) { .physControls { grid-template-columns: 1fr; } }
 .ctl { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--ink2); }

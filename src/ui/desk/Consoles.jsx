@@ -32,10 +32,11 @@ export function DynoConsole({ roadTest, loadKpa, onLoad, nitrous, nitrousArmed, 
   return (
     <div className={styles.plate}>
       <div className={styles.group}>
-        <span className={styles.engraved} aria-hidden="true">Load (manifold pressure)</span>
+        <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
+        {/* The number on the key, the unit engraved above: three keys fit one row. */}
         <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
           {[100, 70, 40].map((k) => (
-            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running}>{k} kPa</button>
+            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
           ))}
         </div>
         {nitrous && (

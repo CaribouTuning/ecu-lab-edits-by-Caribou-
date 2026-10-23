@@ -347,7 +347,14 @@ export function Desk({
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
-            {focus ? (
+            {/* At the dyno or the stand you stand at its controls; this steps back to see the
+                car on the rollers or the engine on its stand, and back again. */}
+            {(scene === 'dyno' || scene === 'stand') && (!focus || focus === 'wide') && (
+              <button type="button" className={styles.back} aria-pressed={focus === 'wide'} onClick={() => setFocus(focus === 'wide' ? null : 'wide')}>
+                {focus === 'wide' ? 'Controls' : scene === 'dyno' ? 'See the car' : 'See the engine'}
+              </button>
+            )}
+            {focus && focus !== 'wide' ? (
               <button type="button" className={styles.back} onClick={() => setFocus(null)}>Step back</button>
             ) : (
               <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>

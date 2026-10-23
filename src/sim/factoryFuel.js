@@ -175,11 +175,12 @@ export const FACTORY_FUEL = {
   },
 };
 
-/** What a calibration with no engine-specific strategy runs: a player's own engine. */
+/** What a calibration with no engine-specific strategy runs: a player's own engine. @type {FuelStrategy} */
 const GENERIC_NA = {
   ...NA_PORT, wot: [[1000, 0.88], [3000, 0.87], [5000, 0.85], [7000, 0.83], [11000, 0.82]],
   confidence: 'family', sources: [UPREV, HPT_PE], note: 'A port-injected, naturally aspirated engine\'s usual strategy.',
 };
+/** @type {FuelStrategy} */
 const GENERIC_TURBO = {
   turbo: true, enrichFromKpa: 0, enrichFullKpa: 30, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
   confidence: 'family', sources: [JB4_N54], note: 'A turbo engine\'s usual strategy: lambda 1 off boost, rich under it.',

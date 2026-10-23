@@ -151,7 +151,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
         fit();
         for (const f of faces) f.obj.visible = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
         shop.setTickets(l.mode !== 'board');
-        shop.setFocus(/** @type {any} */ (l.focus && PLACE[/** @type {keyof typeof PLACE} */ (l.focus)] === l.mode ? l.focus : null));
+        shop.setFocus(/** @type {any} */ (l.focus === 'wide' ? 'wide' : l.focus && PLACE[/** @type {keyof typeof PLACE} */ (l.focus)] === l.mode ? l.focus : null));
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.
@@ -171,6 +171,27 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
         shop.update(dt, l.rpm, l.dynoRpm);
         shop.camera.updateMatrixWorld();
         css.render(cssScene, shop.camera);
+        // A face turned in 3-D is laid out, too, at the width it shows at from where you stand
+        // once the camera has stopped: standing at a station its monitor fills half the
+        // screen, and its words should be the page's own size there, not a fixed guess.
+        if (!shop.moving()) {
+          for (const f of faces) {
+            if (f.flat || !f.obj.visible) continue;
+            corner.set(-f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
+            const xa = ((corner.x + 1) / 2) * sizeW;
+            corner.set(f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
+            // Never narrower than its controls need in one row: a narrow screen shows the
+            // whole control box a little smaller rather than cutting its right end off.
+            const minPx = f.name.endsWith('Console') ? 480 : 360;
+            const pw = Math.round(Math.min(1100, Math.max(minPx, Math.abs(((corner.x + 1) / 2) * sizeW - xa))));
+            if (Math.abs(pw - f.px) > 8) {
+              f.px = pw;
+              f.el.style.width = `${pw}px`;
+              f.el.style.height = `${Math.round((pw * f.sf.h) / f.sf.w)}px`;
+              f.obj.scale.setScalar(f.sf.w / pw);
+            }
+          }
+        }
         for (const f of faces) {
           if (!f.flat) continue;
           f.el.style.display = f.obj.visible ? '' : 'none';

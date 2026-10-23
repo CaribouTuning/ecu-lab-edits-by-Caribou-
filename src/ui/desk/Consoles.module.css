@@ -1,9 +1,11 @@
 /* The carts' control plates (Consoles.jsx): latching keys, a big round button, a lever. */
 
-.plate { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; height: 100%; }
-.group { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1 1 120px; }
+/* One row, as a real control box is laid out: the face is twice as wide as it is tall, and a
+   control wrapped onto a second row went off its bottom edge. */
+.plate { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px; height: 100%; padding: 10px 14px; box-sizing: border-box; }
+.group { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .engraved { font-size: var(--fs-sm); color: var(--ink2); }
-.keys { display: flex; gap: 6px; flex-wrap: wrap; }
+.keys { display: flex; gap: 6px; flex-wrap: nowrap; }
 .key, .toggle {
   min-height: 34px; padding: 4px 12px; border: 1px solid var(--line-hi); border-radius: var(--r-xs);
   background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--fs-sm); cursor: pointer;
@@ -20,7 +22,8 @@
   display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: var(--r-xs);
   background: var(--bg); border: 1px solid var(--line);
 }
-.readout b { font-family: var(--mono); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+.readout, .lever, .bigButton { flex: none; }
+.readout b { font-family: var(--mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
 .readout span { color: var(--ink2); font-size: var(--fs-sm); }
 
 /* A big round button: the cap, and what it does under it. */

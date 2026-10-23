@@ -356,7 +356,7 @@ export function buildShopScene(stage, init) {
   const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
   /** @type {{pos: THREE.Vector3, look: THREE.Vector3, fov: number, exact?: boolean}} */
   let target = POSES.desk;
-  /** @type {keyof typeof surfaces|null} */
+  /** @type {keyof typeof surfaces|'wide'|null} */
   let focus = null;
   let focusAspect = 0;
   let lastPose = 'desk';
@@ -387,6 +387,53 @@ export function buildShopScene(stage, init) {
     return p;
   };
 
+  /**
+   * Standing at a station, ready to work it: the whole cart, its monitor above and its control
+   * box below, framed to fill the screen whatever its shape, the way you stand at a real dyno
+   * or a run stand. The camera sits a little above the screen's centre line and looks down at
+   * both, so the sloped control box reads as well as the monitor.
+   * @param {'dyno'|'stand'} name
+   */
+  const operatePose = (name) => {
+    if (focusAspect !== cam.aspect) { focusCache.clear(); focusAspect = cam.aspect; }
+    const key = `operate:${name}`;
+    const hit = focusCache.get(key);
+    if (hit) return hit;
+    const cart = name === 'dyno' ? dynoCart : standCart;
+    root.updateMatrixWorld(true);
+    const corners = [];
+    for (const sf of [cart.monitor, cart.console]) {
+      for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        corners.push(new THREE.Vector3((x * sf.w) / 2, (y * sf.h) / 2, 0).applyMatrix4(sf.at.matrixWorld));
+      }
+    }
+    const center = corners.reduce((a, v) => a.add(v), new THREE.Vector3()).multiplyScalar(1 / corners.length);
+    const q = new THREE.Quaternion(); cart.monitor.at.getWorldQuaternion(q);
+    // Out from the screen, tipped 18 degrees down onto the control box.
+    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0).normalize();
+    const dir = n.clone().multiplyScalar(Math.cos(0.31)).add(new THREE.Vector3(0, Math.sin(0.31), 0)).normalize();
+    const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+    const up = dir.clone().cross(right).normalize();
+    let w = 0; let h = 0;
+    for (const v of corners) {
+      const d = v.clone().sub(center);
+      w = Math.max(w, Math.abs(d.dot(right)) * 2);
+      h = Math.max(h, Math.abs(d.dot(up)) * 2);
+    }
+    const fov = 40;
+    const tv = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    const dist = Math.max(w / (2 * 0.92 * tv * cam.aspect), h / (2 * 0.88 * tv));
+    // On a screen taller than wide the width decides the distance and leaves height to spare:
+    // the station rides up to the top of the view rather than floating mid-screen over the
+    // cart's empty base.
+    const spare = Math.max(0, 2 * dist * tv * 0.94 - h);
+    // A quarter of it, not half: the page's own header covers the top of the view.
+    const look = center.clone().addScaledVector(up, -spare / 4);
+    const p = { pos: look.clone().addScaledVector(dir, dist), look, fov, exact: true };
+    focusCache.set(key, p);
+    return p;
+  };
+
   const anchors = {
     dyno: new THREE.Vector3(AT.dyno.x, 1.7, AT.dyno.z),
     stand: new THREE.Vector3(AT.stand.x, 1.7, AT.stand.z),
@@ -403,8 +450,12 @@ export function buildShopScene(stage, init) {
       lastPose = pose;
       shapeBoard(cam.aspect < 1);
       // The board is read square on, close enough to fill the screen: its view is its close-up.
-      const p = focus ? focusPose(focus) : pose === 'board' ? focusPose('board')
-        : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
+      // At a station the default is standing at its cart (operatePose); 'wide' steps back to
+      // see the whole bay, the car on the rollers or the engine on its stand.
+      const station = pose === 'dyno' || pose === 'stand';
+      const p = focus && focus !== 'wide' ? focusPose(/** @type {any} */ (focus)) : pose === 'board' ? focusPose('board')
+        : station && focus !== 'wide' ? operatePose(pose)
+          : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
       if (p === target) return;
       ceiling.visible = p !== POSES.bayTall;
       from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
@@ -417,8 +468,9 @@ export function buildShopScene(stage, init) {
     /** The painted tickets show unless the real ones are pinned over them. @param {boolean} on */
     setTickets(on) { tickets.visible = on; },
     /**
-     * Lean in to one face (its controls fill the screen), or step back (null).
-     * @param {keyof typeof surfaces|null} name
+     * Lean in to one face (its controls fill the screen), step back to the whole bay ('wide'),
+     * or stand at the station's cart (null).
+     * @param {keyof typeof surfaces|'wide'|null} name
      */
     setFocus(name) {
       if (name === focus) return;
@@ -458,8 +510,8 @@ export function buildShopScene(stage, init) {
       // The phone turned: frame the shop for its new shape.
       const tall = POSES[`${lastPose}Tall`];
       if (tall && (target === tall) !== (cam.aspect < 1)) api.setPose(/** @type {any} */ (lastPose));
-      // Leaning in and the screen changed shape: lean in again for the new shape.
-      if (focus && focusAspect !== cam.aspect) api.setPose(/** @type {any} */ (lastPose));
+      // Leaning in, or standing at a station, and the screen changed shape: frame it again.
+      if ((focus || target.exact) && focusAspect !== cam.aspect) api.setPose(/** @type {any} */ (lastPose));
       lid += (lidTarget - lid) * Math.min(1, dt * 5);
       // Open, the lid stands up a little past vertical; shut, it lies on the base.
       hinge.rotation.x = -(1 - lid) * 1.85;

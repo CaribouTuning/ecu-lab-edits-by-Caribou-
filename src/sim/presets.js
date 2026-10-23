@@ -1196,7 +1196,7 @@ export function stockModsOf(build) {
  *
  * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
- *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null}} build the BUILD
+ *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null, presetId?: string|null}} build the BUILD
  *   slice (or the fields of it named)
  * @param {import('./layouts.js').Layout|string|null} [layout] the breakpoints to write on: the
  *   tune's own, so a reset changes the numbers and not the axes the player is looking at

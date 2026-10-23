@@ -167,7 +167,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
   return (
     <div className={`${styles.pad} ${styles.physics}`}>
-      <div className={`${styles.physControls} ink-frame`}>
+      <div className={styles.physControls}>
         <label className={styles.ctl}>
           <span>Engine speed <b>{p.rpm} RPM</b></span>
           <input type="range" min={0} max={pts.length - 1} step={1} value={i}
@@ -181,7 +181,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         <p className={styles.ctlNote}>Your engine as built and tuned{fuel ? `, on ${fuel.label}` : ''}. Every panel, every number and the engine below follow these two.</p>
       </div>
       <div className={styles.physGrid}>
-        <section className={`${styles.physPanel} ink-frame`} aria-label="Your build in the model">
+        <section className={styles.physPanel} aria-label="Your build in the model">
           <h3 className={styles.panelTitle}>Your build in the model</h3>
           <div className={styles.buildSplit}>
             <dl className={styles.buildList}>
@@ -193,7 +193,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           </div>
         </section>
 
-        <section className={`${styles.physPanel} ink-frame`} aria-label="Graph">
+        <section className={styles.physPanel} aria-label="Graph">
           <div className={styles.panelHead}>
             <h3 className={styles.panelTitle}>{graph === 've' ? 'VE against RPM' : graph === '3d' ? 'The VE map in 3-D' : 'Power and torque'}</h3>
             <div className={styles.graphBtns} role="group" aria-label="Graph">
@@ -228,7 +228,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           <div className={styles.curveNums}>{p.rpm} RPM · {f(p.torque, 0)} lb-ft · {f(p.hp, 0)} hp · VE {f(p.ve, 0)} %</div>
         </section>
 
-        <section className={`${styles.physPanel} ink-frame`} aria-label="The raw physics model">
+        <section className={styles.physPanel} aria-label="The raw physics model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>
           <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>
       <Stage
@@ -312,7 +312,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
       </Stage>
         </section>
 
-        <section className={`${styles.physPanel} ink-frame`} aria-label="The engine running">
+        <section className={styles.physPanel} aria-label="The engine running">
           <h3 className={styles.panelTitle}>The engine in action: one cylinder at {p.rpm} RPM, {f(p.map, 0)} kPa</h3>
           <EngineCutaway bore={bore || 90} stroke={stroke || 86} cr={derived?.compression ?? 10} camDuration={derived?.camDuration ?? 230} point={p} />
         </section>

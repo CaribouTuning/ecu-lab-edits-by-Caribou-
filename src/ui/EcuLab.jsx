@@ -1381,9 +1381,8 @@ export function EcuLabApp() {
           <Station kind="stand">
             <Surface name="standMonitor" kind="monitor" label="Engine computer">
               <Computer
-                label="Engine computer" wakeKey="stand" current={standScreen} onScreen={setStandScreen}
+                label="Engine computer" current={standScreen} onScreen={setStandScreen}
                 title="Engine stand" status={<StandStatus />}
-                nudge={session.live.running}
                 screens={[{ id: 'bars', label: 'Live' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
               >
                 {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
@@ -1584,10 +1583,9 @@ export function EcuLabApp() {
               </Surface>
               <Surface name="dynoMonitor" kind="monitor" label="Dyno computer">
               <Computer
-                label="Dyno computer" wakeKey="dyno" screens={keys} current={shown} onScreen={pick}
+                label="Dyno computer" screens={keys} current={shown} onScreen={pick}
                 title={roadTest ? 'Road test logger' : 'Caribou Dyno'}
                 status={running ? `${Math.round(currentRpm)} rpm` : result && !roadTest ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
-                nudge={!!result && !running}
               >
                 {!result && !(runs.length > 0 && dynoView === 'history') && (
                   <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>

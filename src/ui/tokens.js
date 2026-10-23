@@ -522,7 +522,7 @@ export const world = Object.freeze({
     block: '#7d838c', blockDark: '#5c6169', head: '#a9b0b9', cover: '#c8322c', coverDark: '#8e221e', coverOhv: '#2a2d33',
     plenum: '#b9c0c8', pipe: '#8a6a52', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
     pulley: '#3a3e46', plug: '#2c6fd0', hose: '#22252b', filter: '#d23a3a', cooler: '#5d6470', bottle: '#3a7ad8',
-    stand: '#d8a12c', standDark: '#8a6a1c', flywheel: '#4a4f57', backdrop: '#1c2029', floor: '#2a2f3a',
+    stand: '#d8a12c', standDark: '#8a6a1c', flywheel: '#4a4f57', backdrop: '#1e1e1e', floor: '#2c2c2c',
   }),
   // The cabins of the car you drive (world/models/interior.js), one palette per kind of car.
   // Each names its plastics, its trim, its seats, its wheel and its dials.

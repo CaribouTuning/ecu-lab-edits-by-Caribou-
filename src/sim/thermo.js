@@ -295,7 +295,8 @@ export function productsPerKgCharge(phi, fuel) {
  * stoichiometric gasoline mixture, rising on the rich side. It is one of the reasons a real
  * engine makes its best power a little rich (section 7.2.2, power against equivalence ratio).
  *
- * @param {ReturnType<typeof productsPerKgCharge>} pr productsPerKgCharge's result
+ * @param {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi?: number, stoich?: number}} pr
+ *   productsPerKgCharge's result
  * @returns {number} products' moles over the charge's, about 1.04-1.12
  */
 export function molarExpansion(pr) {
