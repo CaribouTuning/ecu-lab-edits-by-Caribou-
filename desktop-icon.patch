@@ -1049,7 +1049,7 @@ index 0000000..f50c3fe
 +  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
 +!macroend
 diff --git a/electron-builder.yml b/electron-builder.yml
-index 1a634f4..11ee5f1 100644
+index 1a634f4..9b15b46 100644
 --- a/electron-builder.yml
 +++ b/electron-builder.yml
 @@ -12,7 +12,8 @@ copyright: Copyright © CaribouTuning and Turtle.GTI
@@ -1076,7 +1076,7 @@ index 1a634f4..11ee5f1 100644
      - { target: portable, arch: [x64] }
  nsis:
 -  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
-+  artifactName: ECU-Lab-installer.${ext}
++  artifactName: ECU-Lab-windows-installer.${ext}
    oneClick: false
    allowToChangeInstallationDirectory: true
 +  # The installer asks about the desktop shortcut itself (build/installer.nsh), so the
@@ -1085,7 +1085,7 @@ index 1a634f4..11ee5f1 100644
 +  createStartMenuShortcut: true
  portable:
 -  artifactName: ${productName}-${version}-portable-${arch}.${ext}
-+  artifactName: ECU-Lab-portable.${ext}
++  artifactName: ECU-Lab-windows-portable.${ext}
  
  mac:
    category: public.app-category.education
