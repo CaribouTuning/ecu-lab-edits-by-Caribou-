@@ -82,7 +82,6 @@ import { Computer, Station, Surface } from './desk/Station.jsx';
 import { DynoConsole, StandConsole, StandStatus } from './desk/Consoles.jsx';
 import { BarGraph, LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
 import { TableSurface } from './components/surface/TableSurface.jsx';
-import { DialMark } from './components/DialMark.jsx';
 import { eventBands } from './components/eventBands.js';
 import { tuneAttention } from './components/fixLinks.js';
 import { isApplePlatform, pageCommands, sectionAvailable } from './commands.js';
@@ -1143,19 +1142,21 @@ export function EcuLabApp() {
   // TUNE's own sub-view switcher below is unrelated: it is a second level of
   // navigation inside the TUNE tab, not the tabs themselves.
   const TUNE_VIEWS = [
-    { id: 'airflow', label: 'AIRFLOW', tab: 'VE · AIRFLOW', icon: Grid3x3, row: 0 },
-    { id: 'spark', label: 'SPARK', icon: Zap, row: 0 },
-    { id: 'fuel', label: 'FUEL', icon: Droplets, row: 0 },
-    { id: 'injectors', label: 'INJECTORS', icon: Fuel, row: 0 },
-    { id: 'sensors', label: 'SENSORS', icon: Activity, row: 0 },
-    { id: 'boost', label: 'BOOST', icon: Gauge, row: 1 },
-    { id: 'vvt', label: 'VVT', icon: RotateCw, row: 1 },
-    { id: 'idle', label: 'IDLE', icon: Timer, row: 1 },
-    { id: 'protect', label: 'PROTECT', icon: ShieldAlert, row: 1 },
-    { id: 'torque', label: 'Torque', icon: Crosshair, row: 1 },
+    // `label` is how the advisor's and the pull log's copy names the page ("TUNE › SPARK");
+    // `name` is the tab's own, the way tuning software names its worksheets.
+    { id: 'airflow', label: 'AIRFLOW', name: 'Airflow (VE)', icon: Grid3x3, row: 0 },
+    { id: 'spark', label: 'SPARK', name: 'Spark', icon: Zap, row: 0 },
+    { id: 'fuel', label: 'FUEL', name: 'Fuel', icon: Droplets, row: 0 },
+    { id: 'injectors', label: 'INJECTORS', name: 'Injectors', icon: Fuel, row: 0 },
+    { id: 'sensors', label: 'SENSORS', name: 'Sensors', icon: Activity, row: 0 },
+    { id: 'boost', label: 'BOOST', name: 'Boost', icon: Gauge, row: 1 },
+    { id: 'vvt', label: 'VVT', name: 'Cam timing', icon: RotateCw, row: 1 },
+    { id: 'idle', label: 'IDLE', name: 'Idle', icon: Timer, row: 1 },
+    { id: 'protect', label: 'PROTECT', name: 'Protection', icon: ShieldAlert, row: 1 },
+    { id: 'torque', label: 'Torque', name: 'Torque', icon: Crosshair, row: 1 },
     // Its own row, and only with a kit fitted — the way real ECU software shows its
     // nitrous tables once nitrous is enabled.
-    { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
+    { id: 'nitrous', label: 'NITROUS', name: 'Nitrous', icon: Flame, row: 2 },
   ];
   // CAREER: the TUNE pages and ECU settings a shop can use grow with its training. A
   // locked page still shows in the nav, with a padlock, so the player can see what
@@ -1259,7 +1260,6 @@ export function EcuLabApp() {
         }}
         onTutorial={goTutorial}
         version={BUILD_VERSION}
-        dial={<DialMark size={92} pct={0.62} />}
       />
     );
   }
@@ -1457,15 +1457,14 @@ export function EcuLabApp() {
               {tuneViews.map((v) => {
                 const on = tuneView === v.id;
                 const locked = inCareer && !pageUnlocked(career, v.id);
-                const Icon = locked ? Lock : v.icon;
                 const flagged = attention[v.id] ?? 0;
-                const name = v.tab ?? v.label;
+                const name = v.name ?? v.label;
                 return (
                   <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
                     onClick={() => { goSection('tune', v.id); setSelection(null); }}
                     aria-label={locked ? `${name}, locked until the shop trains for it`
                       : flagged ? `${name}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
-                    <Icon size={14} aria-hidden="true" />{name}
+                    {locked && <Lock size={12} aria-hidden="true" />}{name}
                     {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
                   </button>
                 );
@@ -1474,7 +1473,7 @@ export function EcuLabApp() {
             <MapSlots />
             {Object.keys(attention).length > 0 && (
               <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 2 }}>
-                Numbered pages are where the last pull&apos;s log sends you — DYNO › PULL LOG has the details.
+                A number on a tab is how many entries in the last pull&apos;s log point there. The dyno computer&apos;s pull log has the details.
               </div>
             )}
           </div>
@@ -1489,9 +1488,9 @@ export function EcuLabApp() {
                   <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
                 </div>
                 <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-                  {course ? <>The <b style={{ color: T.ink }}>{course.title}</b> course opens this page. It is on the shop&apos;s TRAINING board.</> : 'Training opens this page.'}
+                  {course ? <>The <b style={{ color: T.ink }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
                 </div>
-                <Button size="sm" onClick={() => changeTab('shop')}>GO TO THE SHOP</Button>
+                <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
               </Panel>
             </div>
           );

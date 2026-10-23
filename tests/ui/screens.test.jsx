@@ -22,29 +22,37 @@ describe('StartScreen', () => {
   it('opens the job board', () => {
     const onCareer = vi.fn();
     start({ onCareer });
-    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Career' }));
     expect(onCareer).toHaveBeenCalledTimes(1);
   });
 
   it('opens the sandbox', () => {
     const onStart = vi.fn();
     start({ onStart });
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
   it('opens the tutorial', () => {
     const onTutorial = vi.fn();
     start({ onTutorial });
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     expect(onTutorial).toHaveBeenCalledTimes(1);
   });
 
   it('says what each way in is for, so the first choice is not a guess', () => {
     start();
-    expect(screen.getByText('The 3D career: run a tuning shop in town')).toBeTruthy();
-    expect(screen.getByText('Your laptop and your shop: build and tune anything')).toBeTruthy();
+    expect(screen.getByText(/^Run a tuning shop in town/)).toBeTruthy();
+    expect(screen.getByText(/^Your laptop and your shop/)).toBeTruthy();
+    // The caption describes the button; the button's name stays its one word.
+    expect(screen.getByRole('button', { name: 'Career' }).getAttribute('aria-describedby')).toBe('way-career');
   });
+
+  it('shows the stock engine\'s own pull, run by the simulator, not a picture', async () => {
+    start();
+    const sheet = await screen.findByRole('img', { name: /^Dyno sheet: \d+ wheel horsepower at \d+ rpm/ }, { timeout: 20000 });
+    expect(sheet.querySelectorAll('polyline')).toHaveLength(2);
+  }, 30000);
 
   it('shows the build version', () => {
     start();

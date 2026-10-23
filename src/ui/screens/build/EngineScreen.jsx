@@ -133,7 +133,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       icon={Settings} label="Engine Architecture"
       sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
     >
-      <div className={styles.label}>Start From a Real Engine</div>
+      <div className={styles.label}>Start from a factory engine</div>
       <Select
         // Select's wrapper takes `className` straight onto its own hardcoded
         // `className={styles.wrap}` via rest-prop spread with no merge, so a
@@ -141,7 +141,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         // `style` is the only safe passthrough here today. Kept inline for
         // that reason rather than moved into the stylesheet.
         style={{ display: 'block', marginBottom: 13 }}
-        label="Start From a Real Engine"
+        label="Start from a factory engine"
         groups={PRESET_GROUPS.map((g) => ({
           label: g.manufacturer,
           // The heading carries the manufacturer, so strip it off the option

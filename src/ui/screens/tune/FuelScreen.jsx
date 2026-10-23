@@ -67,8 +67,11 @@ export function FuelScreen({ calAdvice, children }) {
             <UndoControls />
           </div>
           <div className={styles.intro}>Target air:fuel ratio the ECU aims for. Divide by 14.7 to read it as lambda.</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 6, margin: '6px 0 8px' }}>
+            <LayoutSwitch />
+            <div style={{ flex: '1 1 320px' }}><SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} /></div>
+          </div>
           <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
             <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} />
           </GridOrSurface>

@@ -73,7 +73,7 @@ function presetPicker() {
  * @returns {string}
  */
 function headerEngineName() {
-  return screen.getByTestId('build-line').textContent.split('·')[0].trim();
+  return screen.getByTestId('build-line').textContent.split(',')[0].trim();
 }
 
 /** Renders the app and clicks past the start screen. */
@@ -508,7 +508,7 @@ describe('the injector-duty preview call site', () => {
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 
     goTo('TUNE');
-    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Injectors' }));
 
     const meter = screen.getByRole('meter', { name: 'Duty' });
     const dutyValue = Number(meter.getAttribute('aria-valuenow'));
@@ -584,7 +584,7 @@ describe('every segmented control', () => {
     // The remaining two Segs are not on BUILD. ECU Injector Scaling is on TUNE >
     // Injectors, which is not the default sub-view, so it needs an explicit click.
     goTo('TUNE');
-    fireEvent.click(screen.getByRole('button', { name: 'INJECTORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Injectors' }));
     total += expectEverySegHasOneSelection();
 
     // DYNO's manifold-pressure picker (EcuLab.jsx) is the eighth and last, and is on

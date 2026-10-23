@@ -46,7 +46,7 @@ function AdvisorPanelImpl({ headline, tone, children }) {
       data-tone={tone}
     >
       <div className={styles.head}>
-        <span className={styles.eyebrow}>ADVISOR</span>
+        <span className={styles.eyebrow}>Advisor</span>
         <span className={styles.headline}>{headline}</span>
         <ChevronDown size={15} className={styles.chevron} aria-hidden="true" />
         <button

@@ -30,26 +30,28 @@ export const camelToKebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLo
 export const tokens = Object.freeze({
   // Surfaces, darkest to lightest. The base is blue-black rather than neutral grey
   // because red reads harder against blue than against grey.
-  bg: '#0a0d14',
-  panel: '#131824',
-  panel2: '#1a2130',
-  panel3: '#212a3c',
+  bg: '#0e0e0d',
+  panel: '#161615',
+  panel2: '#1d1d1b',
+  panel3: '#272724',
 
   // Borders.
-  line: '#262f42',
-  lineHi: '#33405a',
+  line: '#302f2b',
+  lineHi: '#46443e',
 
   // Text, four steps from primary to faintest.
-  ink: '#e9eef8',
-  inkSoft: '#c8d2e2',
-  ink2: '#8792a8',
-  ink3: '#5c6880',
+  ink: '#ecebe5',
+  inkSoft: '#d2d0c8',
+  ink2: '#a6a399',
+  ink3: '#8a877f',
 
   // Accent. `accOn` is text placed ON an accent fill — it must never be a grey.
-  acc: '#4c9eff',
-  accInk: '#8fc2ff',
-  accBg: '#0f2033',
-  accOn: '#04162e',
+  acc: '#e8e5da',
+  accInk: '#f6f4ee',
+  accBg: '#2a2925',
+  accOn: '#121210',
+  // Keyboard focus: a white ring, the brightest thing on the screen, never a status colour.
+  focus: '#ffffff',
 
   // Status. Reserved for engine state. Never used as decoration.
   ok: '#35e08a',
@@ -106,14 +108,14 @@ export const tokens = Object.freeze({
   cork: '#9c7448',
   pin: '#c8402f',
 
-  // The laptop's and the phone's wallpaper: the Caribou badge in polished chrome on the
-  // dark, standing on its own reflection.
-  wallSky: '#121826',
-  wallSky2: '#05070c',
+  // The laptop's and the phone's wallpaper: the Caribou badge in neutral chrome on a
+  // graphite ground (no blue, no reflection).
+  wallSky: '#1a1a18',
+  wallSky2: '#0b0b0a',
   chromeHi: '#ffffff',
-  chromeMid: '#c6d0de',
-  chromeLo: '#6f7d95',
-  badgeInk: '#0c1830',
+  chromeMid: '#d4d2cb',
+  chromeLo: '#7a786f',
+  badgeInk: '#121210',
   wallDeep: '#0b3a9a',
   wallMid: '#2c6fe0',
   wallLight: '#8fbdff',
@@ -144,7 +146,7 @@ export const tokens = Object.freeze({
 
   // Bare RGB triplets, so translucent washes can be built from the same colours
   // rather than re-typing them at a new alpha. See accAlpha/shadowAlpha below.
-  accRgb: '76, 158, 255',
+  accRgb: '232, 229, 218',
   shadowRgb: '0, 0, 0',
   glassRgb: '255, 255, 255',
 
@@ -167,10 +169,10 @@ export const tokens = Object.freeze({
   // stylesheets had accumulated; `50%` circles and one pill radius pinned to
   // half of its own element's height are deliberately left out — see the
   // comment at that declaration.
-  rXs: '3px',
-  rSm: '6px',
-  rMd: '9px',
-  rLg: '12px',
+  rXs: '2px',
+  rSm: '3px',
+  rMd: '4px',
+  rLg: '6px',
 
   // Spacing scale, for padding. Covers the seventeen raw padding declarations
   // the stylesheets had accumulated. A few values stay raw with a comment

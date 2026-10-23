@@ -35,9 +35,9 @@ export const DESK_APPS = [
 ];
 
 /**
- * The wallpaper: the Caribou Tuning badge in polished chrome on the dark, standing on a
- * glossy floor with its reflection under it. Drawn from the traced
- * badge (screens/caribouLogo.js), so it is sharp at any size.
+ * The wallpaper: the Caribou Tuning badge in chrome on a plain graphite ground. Drawn from
+ * the traced badge (screens/caribouLogo.js), so it is sharp at any size. (It used to stand
+ * on a glossy floor with a reflection; that was decoration, and it went.)
  * @returns {React.ReactElement}
  */
 function Wallpaper() {
@@ -61,18 +61,9 @@ function Wallpaper() {
           <stop offset="0.7" style={{ stopColor: 'var(--chrome-mid)' }} />
           <stop offset="1" style={{ stopColor: 'var(--chrome-hi)' }} />
         </linearGradient>
-        <linearGradient id="wall-fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="white" stopOpacity="0.45" />
-          <stop offset="0.6" stopColor="white" stopOpacity="0" />
-        </linearGradient>
-        <mask id="wall-reflect"><rect x="0" y="640" width="1600" height="300" fill="url(#wall-fade)" /></mask>
       </defs>
       <rect width="1600" height="900" fill="url(#wall-sky)" />
-      <line x1="0" y1="640" x2="1600" y2="640" style={{ stroke: 'var(--chrome-hi)' }} strokeOpacity="0.12" strokeWidth="2" />
-      <g transform="translate(590 170) scale(0.45)">{badge}</g>
-      <g mask="url(#wall-reflect)">
-        <g transform="translate(590 1110) scale(0.45 -0.45)" opacity="0.8">{badge}</g>
-      </g>
+      <g transform="translate(590 230) scale(0.45)">{badge}</g>
     </svg>
   );
 }

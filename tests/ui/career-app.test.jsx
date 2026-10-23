@@ -73,11 +73,11 @@ describe('CAREER in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
 
     // A new shop has not trained for spark: the page is there, and locked.
-    fireEvent.click(screen.getByRole('button', { name: /SPARK, locked/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Spark, locked/ }));
     expect(screen.getByText('Your shop has not learned this yet')).toBeTruthy();
 
     // The fix: the intake changed what the airflow sensor reads, so recalibrate it.
-    fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sensors' }));
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '1.11' } });
 
     // Hand it back from the ticket.
@@ -105,7 +105,7 @@ describe('CAREER in the app', () => {
     // A SANDBOX car with something distinctive about it: a MAF scalar nobody else uses.
     enterSandbox();
     goTo('TUNE');
-    fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sensors' }));
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '0.8' } });
 
     // To the shop by the main-menu button, and a customer's car onto the bay.
@@ -114,7 +114,7 @@ describe('CAREER in the app', () => {
     tab('Customers');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
     fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sensors' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('1');
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '1.05' } });
 
@@ -122,14 +122,14 @@ describe('CAREER in the app', () => {
     chrome('Main menu');
     enterSandbox();
     goTo('TUNE');
-    fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sensors' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('0.8');
 
     // And CAREER again: the customer's car still on its lift, half-done work and all.
     chrome('Main menu');
     await openShop();
     fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sensors' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('1.05');
   });
 

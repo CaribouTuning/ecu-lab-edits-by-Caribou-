@@ -89,7 +89,7 @@ describe('a deep link on a cold load', () => {
     window.location.hash = '#/tune/spark';
     mount();
 
-    expect(screen.queryByRole('button', { name: 'SANDBOX' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sandbox' })).toBeNull();
     expect(screen.getByText('Ignition Timing')).toBeTruthy();
   });
 
@@ -114,7 +114,7 @@ describe('clicking a tab', () => {
     expect(window.location.hash).toBe('#/tune/airflow');
 
     // Sub-tab strips are part of the address too, one level down.
-    fireEvent.click(screen.getByRole('button', { name: 'SPARK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Spark' }));
     expect(window.location.hash).toBe('#/tune/spark');
     expect(screen.getByText('Ignition Timing')).toBeTruthy();
   });
@@ -151,15 +151,16 @@ describe('clicking a tab', () => {
     launch();
     goTo('TUNE');
     const views = {
-      'VE · AIRFLOW': 'Volumetric Efficiency',
-      SPARK: 'Ignition Timing',
-      FUEL: 'Air-Fuel Ratio Target',
-      INJECTORS: 'Injectors',
-      SENSORS: 'Fuel Control & MAF Scaling',
+      'Airflow (VE)': 'Volumetric Efficiency',
+      Spark: 'Ignition Timing',
+      Fuel: 'Air-Fuel Ratio Target',
+      Injectors: 'Injectors',
+      Sensors: 'Fuel Control & MAF Scaling',
     };
     for (const [tabLabel, ownEyebrow] of Object.entries(views)) {
       fireEvent.click(screen.getByRole('button', { name: tabLabel }));
-      expect(screen.getByText(ownEyebrow)).toBeTruthy();
+      // Where the page's heading is the tab's own name, both are on screen.
+      expect(screen.getAllByText(ownEyebrow).length).toBeGreaterThan(tabLabel === ownEyebrow ? 1 : 0);
     }
   });
 });
@@ -234,7 +235,7 @@ describe('a fully collapsed accordion', () => {
 
   it('keeps CAREER out of SANDBOX: CAREER opens a shop of its own, SANDBOX has no customers', async () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Career' }));
     expect(window.location.hash).toBe('#/shop');
     // The save loads and you are sat at your desk; the paperwork is on the shop wall.
     await screen.findByRole('button', { name: 'Desktop' });
@@ -254,7 +255,7 @@ describe('a fully collapsed accordion', () => {
 describe('the tutorial', () => {
   it('has its own address, and leaving it lands back on BUILD', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     expect(window.location.hash).toBe('#/tutorial');
 
     fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));

@@ -43,25 +43,25 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
           label="Selection mode"
           value={rangeMode ? 'range' : 'cell'}
           onChange={(id) => { setRangeMode(id === 'range'); setSelection(null); }}
-          options={[{ id: 'cell', label: 'SINGLE CELL' }, { id: 'range', label: 'SELECT RANGE' }]}
+          options={[{ id: 'cell', label: 'Single cell' }, { id: 'range', label: 'Select range' }]}
         />
         {/* Changing VIEW keeps the selection: it is the same cells, drawn differently. */}
         <Seg
           label="Table view"
           value={diffView ? 'changes' : 'values'}
           onChange={(id) => setDiffView(id === 'changes')}
-          options={[{ id: 'values', label: 'VALUES' }, { id: 'changes', label: 'CHANGES' }]}
+          options={[{ id: 'values', label: 'Values' }, { id: 'changes', label: 'Changes' }]}
         />
         <div style={{ marginLeft: 'auto' }}>
           <Button
             variant="quiet" size="sm"
             onClick={() => setSelection({ type: 'range', r1: 0, c1: 0, r2: dims.rows - 1, c2: dims.cols - 1 })}
-          >ALL</Button>
+          >Select all</Button>
         </div>
       </div>
       {diffView && (
         <div style={{ fontSize: 10.5, color: T.ink2, marginBottom: 6 }}>
-          Change since this calibration was loaded · <span style={{ color: T.violet }}>violet up</span> · <span style={{ color: T.cyan }}>cyan down</span>
+          Change since this calibration was loaded: <span style={{ color: T.violet }}>violet up</span>, <span style={{ color: T.cyan }}>cyan down</span>
         </div>
       )}
     </>

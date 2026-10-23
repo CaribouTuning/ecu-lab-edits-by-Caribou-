@@ -281,7 +281,7 @@ describe('UndoControls', () => {
     // group, over an untouched default store) so a restore that hands back a
     // different preset fails here instead of slipping through.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up,/);
   });
 
   it('Cmd+Z still undoes while the grid has focus (#105)', () => {

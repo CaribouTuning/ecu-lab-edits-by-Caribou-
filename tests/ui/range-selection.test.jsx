@@ -168,7 +168,7 @@ describe('selecting a range on the grid', () => {
 
   it('SELECT RANGE takes two taps, and a third starts over', () => {
     mountAir();
-    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select range' }));
     fireEvent.click(cell(1500, 150));
     expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 1, c2: 1 });
     fireEvent.click(cell(3500, 70));
@@ -179,9 +179,9 @@ describe('selecting a range on the grid', () => {
 
   it('ALL selects the whole table, and switching mode clears', () => {
     mountAir();
-    fireEvent.click(screen.getByRole('button', { name: 'ALL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
     expect(store.tune.selection).toEqual({ type: 'range', r1: 0, c1: 0, r2: 5, c2: 7 });
-    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select range' }));
     expect(store.tune.selection).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe('selecting a range on the grid', () => {
         <FuelScreen calAdvice={calAdvice} />
       </StoreProvider>,
     );
-    const [sparkRange, fuelRange] = screen.getAllByRole('button', { name: 'SELECT RANGE' });
+    const [sparkRange, fuelRange] = screen.getAllByRole('button', { name: 'Select range' });
     fireEvent.click(sparkRange);
     expect(store.tune.rangeMode).toBe(true);
     expect(fuelRange.getAttribute('aria-pressed')).toBe('true');

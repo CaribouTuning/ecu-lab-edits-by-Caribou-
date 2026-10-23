@@ -34,7 +34,7 @@
 }
 .spotRow .spot { position: static; transform: none; }
 .spotLabel {
-  padding: 4px 12px; border-radius: var(--hand-a); border: 2px solid var(--pen);
+  padding: 4px 12px; border-radius: var(--ink-a); border: 2px solid var(--pen);
   background: var(--panel); font-size: var(--fs-md); white-space: nowrap;
 }
 .spot:hover .spotLabel, .spot:focus-visible .spotLabel { background: var(--acc); color: var(--acc-on); }
@@ -53,17 +53,17 @@
 }
 .lid {
   width: 100%; flex: 1; min-height: 0;
-  padding: 12px 12px 14px; border-radius: var(--hand-a);
+  padding: 12px 12px 14px; border-radius: var(--ink-a);
   /* A black laptop: the bezel round the screen, inked like everything else. */
   background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
-  box-shadow: var(--pencil-twice);
+  box-shadow: var(--pencil-twice-ink);
   /* No transform, ever: a lid folded in 3-D and back is rasterised at the folded size on
      iOS and comes back blurry. Shutting fades it instead. */
   transition: opacity 0.35s ease, visibility 0s linear 0.35s;
   pointer-events: auto;
 }
 .base {
-  width: 106%; height: 16px; border-radius: var(--hand-b);
+  width: 106%; height: 16px; border-radius: var(--ink-b);
   background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
   transition: opacity 0.45s ease 0.1s;
 }
@@ -75,7 +75,7 @@
 .screen {
   position: relative; height: 100%;
   display: flex; flex-direction: column;
-  border-radius: var(--hand-c); overflow: hidden;
+  border-radius: var(--r-md); overflow: hidden;
   background: var(--bg); border: 2px solid var(--pen);
 }
 .workspace { flex: 1; min-height: 0; position: relative; display: flex; }
@@ -113,7 +113,7 @@
 }
 .titleIcon { display: flex; }
 /* The window's name in a box, as drawn. */
-.title { flex: none; margin-right: auto; padding: 0 12px; font-size: var(--fs-lg); border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); }
+.title { flex: none; margin-right: auto; padding: 0 4px; font-size: var(--fs-base); font-weight: 600; border: 0; background: transparent; }
 .close {
   width: 30px; height: 26px; display: grid; place-items: center;
   border: 2px solid var(--pen); border-radius: var(--hand-c); background: var(--panel); color: var(--ink); cursor: pointer;

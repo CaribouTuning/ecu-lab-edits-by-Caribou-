@@ -40,12 +40,12 @@ const writeVe = (fn) => act(() => {
 });
 // LOAD = [200,150,100,70,40,20], RPM = [800,1500,2500,3500,4500,5500,6500,7500]
 const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: `${rpm} RPM, ${kpa} kPa` });
-const changes = () => fireEvent.click(screen.getByRole('button', { name: 'CHANGES' }));
+const changes = () => fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
 describe('the CHANGES view', () => {
   it('starts on VALUES, showing values', () => {
     mountAir();
-    expect(screen.getByRole('button', { name: 'VALUES' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Values' }).getAttribute('aria-pressed')).toBe('true');
     expect(cell(1500, 150).textContent).toBe(String(Math.round(store.tune.ve[1][1])));
   });
 
@@ -74,7 +74,7 @@ describe('the CHANGES view', () => {
         <FuelScreen calAdvice={calAdvice} />
       </StoreProvider>,
     );
-    const [sparkChanges, fuelChanges] = screen.getAllByRole('button', { name: 'CHANGES' });
+    const [sparkChanges, fuelChanges] = screen.getAllByRole('button', { name: 'Changes' });
     fireEvent.click(sparkChanges);
     expect(store.tune.diffView).toBe(true);
     expect(fuelChanges.getAttribute('aria-pressed')).toBe('true');

@@ -279,15 +279,16 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
         </div>
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
-            by `data-testid="build-line"` and split the engine name off its first `·`
-            segment. Query by this testid rather than by text — BUILD's accordion
+            by `data-testid="build-line"` and split the engine name off its first
+            comma (the fields were split by `·`; no preset name holds a comma). Query
+            by this testid rather than by text — BUILD's accordion
             sections stay mounted when collapsed, so any BUILD-tab prose containing
             "oct" (e.g. an octane explainer) would otherwise be an ambiguous match
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
           {noEngine
-            ? `No engine chosen yet · ${BUILD_VERSION}`
-            : `${engineName} · ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''} · ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)} · ${INJECTOR_OPTS[injIdx].label} · ${BUILD_VERSION}`}
+            ? `No engine chosen yet, ${BUILD_VERSION}`
+            : `${engineName}, ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''}, ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)}, ${INJECTOR_OPTS[injIdx].label}, ${BUILD_VERSION}`}
         </div>
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}

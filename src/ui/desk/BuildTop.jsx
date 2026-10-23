@@ -1,6 +1,6 @@
 /**
  * The top of the Build app: the engine as built, turning on screen and redrawn as you change
- * it, and the PRE-BUILT OEM MOTORS list to start from a factory engine.
+ * it, and the Factory engines list to start from a factory engine.
  *
  * Loading a factory engine replaces the calibration with its own. When the tables have work
  * in them it asks first, as BUILD's engine section always has: the ask is that section's,
@@ -45,7 +45,7 @@ export function BuildTop({ onAsk }) {
       <EngineViewer spec={spec} rpm={rpm} label={`The engine as built: ${label}`} />
       <div className={styles.buildRow}>
         <button type="button" className={styles.oem} aria-expanded={listOpen} onClick={() => setListOpen((o) => !o)}>
-          PRE-BUILT OEM MOTORS
+          Factory engines
         </button>
         <span className={styles.buildNote}>{label}. Change it below and watch the engine change.</span>
       </div>

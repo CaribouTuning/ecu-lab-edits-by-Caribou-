@@ -70,7 +70,7 @@ describe('entry', () => {
   it('opens on the start screen', () => {
     render(<EcuLab />);
     // Three ways in, not one: a career of customer cars, free play, and the tutorial.
-    for (const way of ['CAREER', 'SANDBOX', 'TUTORIAL']) {
+    for (const way of ['Career', 'Sandbox', 'Tutorial']) {
       expect(screen.getByRole('button', { name: way })).toBeTruthy();
     }
   });
@@ -83,7 +83,7 @@ describe('entry', () => {
 
   it('opens the tutorial and comes back', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     // It opens on its contents page: what you will learn, then the chapters.
     expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
@@ -100,7 +100,7 @@ describe('navigation', () => {
     // the button that was clicked: the button proves nothing about whether the click
     // actually switched screens.
     const marker = {
-      TUNE: () => screen.getByRole('button', { name: 'VE · AIRFLOW' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
+      TUNE: () => screen.getByRole('button', { name: 'Airflow (VE)' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
       DYNO: () => screen.getByRole('button', { name: 'Run a pull' }),
       // The live engine is the engine stand in the shop: its marker is the stand's own
       // bench computer, which only that place has.

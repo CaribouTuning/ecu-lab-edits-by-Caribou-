@@ -22,7 +22,7 @@ import styles from './EngineStart.module.css';
  */
 /**
  * The factory engines, by maker, as cards: the start screen's first choice and the Build
- * app's PRE-BUILT OEM MOTORS list.
+ * app's Factory engines list.
  * @param {{onPick: (preset: any) => void}} props
  */
 export function PrebuiltEngines({ onPick }) {
