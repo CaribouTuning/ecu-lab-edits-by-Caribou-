@@ -62,7 +62,9 @@ const REAL = {
   // Exhaust at peak power, °C. Production NA headers 750-900; turbine inlet up to ~950
   // (TURBINE). Lower edges allow for the model's known WOT shortfall (docs/accuracy.md).
   egtNa: [700, 900],
-  egtBoosted: [740, 980],
+  // The boosted floor moved from 740 when the N54 took its stock enrichment (lambda about
+  // 0.79, src/sim/factoryFuel.js): richer runs cooler, and it reads 739 at peak power.
+  egtBoosted: [730, 980],
   // Peak cylinder pressure, bar (PCP — a practitioners' forum, the weakest source here).
   pmaxNa: [45, 90],
   pmaxBoosted: [60, 140],

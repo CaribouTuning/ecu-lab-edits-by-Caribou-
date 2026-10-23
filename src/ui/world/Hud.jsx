@@ -31,23 +31,36 @@ const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleStri
  * @param {string} p.tierTitle
  * @param {string} p.where the name of the place
  * @param {() => void} p.onPhone @param {() => void} p.onMap @param {() => void} p.onPhoto @param {() => void} p.onSettings @param {() => void} p.onMenu
+ * @param {React.ReactNode} [p.children] under the status, in the same column (the objective, the way back)
  */
-export function TopBar({ career, tierTitle, where, onPhone, onMap, onPhoto, onSettings, onMenu }) {
+export function TopBar({ career, tierTitle, where, onPhone, onMap, onPhoto, onSettings, onMenu, children = null }) {
   const phase = PHASE[Math.min(3, career.phase ?? 0)];
+  // Two buttons, not five: the phone, which is the game's own menu of jobs and messages,
+  // and a menu for the rest. A driving game keeps its corners clear for the road.
+  const [more, setMore] = useState(false);
+  const pick = (fn) => () => { setMore(false); fn(); };
   return (
     <>
+      <div className={styles.leftCol}>
       <div className={styles.status} aria-label="Shop status">
-        <span className={styles.where}>{where}</span>
-        <span className={styles.chip} data-testid="shop-day"><phase.Icon size={13} aria-hidden="true" /><b>DAY {career.day}</b><i>{phase.name}</i></span>
-        <span className={styles.chip} data-testid="shop-money"><span className={styles.key}>CASH</span><b>{money(career.money)}</b></span>
-        <span className={styles.chip} data-testid="shop-rep"><span className={styles.key}>REP</span><b>{career.rep}</b><i>{tierTitle}</i></span>
+        <b className={styles.cash} data-testid="shop-money">{money(career.money)}</b>
+        <span className={styles.statusLine} data-testid="shop-day">Day {career.day}, {phase.name.toLowerCase()}</span>
+        <span className={styles.statusLine} data-testid="shop-rep">Reputation {career.rep}, {tierTitle.toLowerCase()}</span>
+        {where && <span className={styles.statusLine}>{where}</span>}
+      </div>
+      {children}
       </div>
       <div className={styles.buttons}>
         <button type="button" className={styles.round} onClick={onPhone} aria-label="Open the phone"><Smartphone size={18} aria-hidden="true" /></button>
-        <button type="button" className={styles.round} onClick={onMap} aria-label="Map"><MapIcon size={18} aria-hidden="true" /></button>
-        <button type="button" className={styles.round} onClick={onPhoto} aria-label="Photo"><Camera size={18} aria-hidden="true" /></button>
-        <button type="button" className={styles.round} onClick={onSettings} aria-label="Settings"><Settings size={18} aria-hidden="true" /></button>
-        <button type="button" className={styles.round} onClick={onMenu} aria-label="Main menu"><Menu size={18} aria-hidden="true" /></button>
+        <button type="button" className={styles.round} onClick={() => setMore((m) => !m)} aria-label="More" aria-expanded={more}><Menu size={18} aria-hidden="true" /></button>
+        {more && (
+          <div className={styles.moreMenu} role="menu" aria-label="More">
+            <button type="button" role="menuitem" onClick={pick(onMap)} aria-label="Map"><MapIcon size={15} aria-hidden="true" />Map</button>
+            <button type="button" role="menuitem" onClick={pick(onPhoto)} aria-label="Photo"><Camera size={15} aria-hidden="true" />Photo</button>
+            <button type="button" role="menuitem" onClick={pick(onSettings)} aria-label="Settings"><Settings size={15} aria-hidden="true" />Settings</button>
+            <button type="button" role="menuitem" onClick={pick(onMenu)} aria-label="Main menu"><Menu size={15} aria-hidden="true" />Main menu</button>
+          </div>
+        )}
       </div>
     </>
   );

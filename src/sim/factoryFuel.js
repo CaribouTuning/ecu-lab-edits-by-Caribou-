@@ -76,18 +76,18 @@ export const FACTORY_FUEL = {
   },
   vq35hr: {
     ...NA_PORT,
-    wot: [[1000, 0.88], [3000, 0.87], [5000, 0.85], [6500, 0.84], [7500, 0.82]],
+    wot: [[1000, 0.88], [3000, 0.87], [5000, 0.86], [7500, 0.85]],
     confidence: 'reported',
     sources: [UPREV, MY350Z_AFR],
-    note: 'The DE Rev-Up strategy carried to the HR\'s 7500 limit (2007-on cars read it on factory wideband sensors).',
+    note: 'The DE Rev-Up strategy taken to the HR\'s 7500 limit, held at 0.85 (12.5:1) at the top rather than the DE\'s 0.82, the lean end of what owners log, so the factory injectors keep their margin with the bolt-ons owners fit.',
   },
   n54: {
     turbo: true,
-    enrichFromKpa: 0, enrichFullKpa: 70,
+    enrichFromKpa: 0, enrichFullKpa: 30,
     wot: [[1500, 0.86], [3000, 0.81], [5000, 0.79], [7000, 0.78]],
     confidence: 'reported',
     sources: [COBB_N54, JB4_N54],
-    note: 'Lambda 1 off boost; richening with boost to about 11.5-11.9 AFR at full boost and high rpm.',
+    note: 'Lambda 1 off boost; rich by about 4 psi of boost (its stock boost tapers to 5-6 psi by redline), about 11.5-11.9 AFR at high rpm.',
   },
   'b58-m0': {
     turbo: true,
@@ -181,7 +181,7 @@ const GENERIC_NA = {
   confidence: 'family', sources: [UPREV, HPT_PE], note: 'A port-injected, naturally aspirated engine\'s usual strategy.',
 };
 const GENERIC_TURBO = {
-  turbo: true, enrichFromKpa: 0, enrichFullKpa: 70, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
+  turbo: true, enrichFromKpa: 0, enrichFullKpa: 30, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
   confidence: 'family', sources: [JB4_N54], note: 'A turbo engine\'s usual strategy: lambda 1 off boost, rich under it.',
 };
 

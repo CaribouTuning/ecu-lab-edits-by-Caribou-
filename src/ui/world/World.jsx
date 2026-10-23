@@ -701,11 +701,13 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         onPhoto={() => world?.input.press('photo')}
         onSettings={() => setSheet((s) => (s?.type === 'settings' ? null : { type: 'settings' }))}
         onMenu={onMenu}
-      />
-      <Objective text={objective} />
-      {onHome && !racing && (
-        <button type="button" className={styles.homeBtn} onClick={goHome}>Back to the shop</button>
-      )}
+      >
+        {/* Under the status, in one column down the left: what to do next, and the way back. */}
+        <Objective text={objective} />
+        {onHome && !racing && (
+          <button type="button" className={styles.homeBtn} onClick={goHome}>Back to the shop</button>
+        )}
+      </TopBar>
       {place === 'town' && !drawer && !sheet && <MiniMap world={world} route={route ? { x: placeById(route).door.x, z: placeById(route).door.z, name: placeById(route).name } : null} />}
       {racing && <RaceHud hud={raceHud} onRetire={() => worldRef.current?.cmd('retire')} />}
       <Labels labels={labels} />

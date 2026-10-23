@@ -513,6 +513,31 @@ export function calibrationAdvice({
   // ceiling and the table is over both: the cell is detonating, but the lower ceiling
   // is MBT. Classifying on ceiling order would file that cell as merely wasteful and
   // tell the player it is safe, which is the one thing this report must never do.
+  // THE LOG OVERRULES THE BREAKPOINTS. A table is judged at its breakpoints, but the engine
+  // runs between them: with few columns and a cam whose breathing bulges between two of them,
+  // both cells can read right while the pull runs lean or rich in the middle. Where the log
+  // says so, the cells either side of that speed, on the row nearest its pressure, are flagged
+  // with the correction the log itself implies.
+  if (pull) {
+    for (const p of pull.points) {
+      if (!(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
+      const near = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA);
+      if (!near.length) continue;
+      const row = near.reduce((a, c) => (Math.abs(c.map - p.map) < Math.abs(a.map - p.map) ? c : a)).map;
+      const cols = near.filter((c) => c.map === row);
+      const below = cols.filter((c) => c.rpm <= p.rpm).reduce((a, c) => (!a || c.rpm > a.rpm ? c : a), null);
+      const above = cols.filter((c) => c.rpm >= p.rpm).reduce((a, c) => (!a || c.rpm < a.rpm ? c : a), null);
+      for (const c of [below, above]) {
+        if (!c) continue;
+        const asked = Number((c.current * (c.target / p.afr)).toFixed(1));
+        if (!c.outside || Math.abs(asked - c.current) > Math.abs(c.delta)) {
+          c.outside = true;
+          c.suggested = asked;
+          c.delta = Number((asked - c.current).toFixed(1));
+        }
+      }
+    }
+  }
   const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA && c.outside);
   // SPARK CANNOT FIX EVERY CELL. Where the knock ceiling sits below the most retard the
   // table can hold, no number typed into this cell is safe at the boost being asked for:

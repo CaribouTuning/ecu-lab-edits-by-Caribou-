@@ -91,7 +91,10 @@ export const TEMPLATE_FIXES = {
   // E85's charge cooling moves the airflow too, so the real fix ends with a pass from the log.
   e85: (s) => veFix(scaleFix(s), 1),
   turbo: (s) => boostSparkAndFuel(s),
-  pair: (s) => airAndFuel(s),
+  // Then the spark checked against the log, as on any breathing change: intake and headers
+  // add charge, and with a stock VQ35HR's 2-degree factory margin a pull can knock until a
+  // degree comes out where the log says.
+  pair: (s) => sparkClean(airAndFuel(s)),
   'build-na': (s, job) => {
     const b = s.build;
     const built = setBuild(s, {

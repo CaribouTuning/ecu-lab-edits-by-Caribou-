@@ -26,43 +26,27 @@
 .fade[data-on='true'] { opacity: 1; pointer-events: auto; }
 
 /* ---- status ---- */
+/* The left edge, top down: the status, then what to do next, then the way back. One
+   column, so none of them can sit on another. */
+.leftCol {
+  position: absolute; top: var(--edge-t); left: var(--edge); z-index: 5;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  max-width: min(420px, calc(100% - 300px)); pointer-events: none;
+}
+.leftCol > * { pointer-events: auto; }
 .status {
-  position: absolute;
-  top: var(--edge-t);
-  left: var(--edge);
+  /* One quiet block of plain text, as a driving game's HUD keeps it: money first, then the
+     day and the shop's standing. No boxed chips, no tracked capitals. */
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 270px);
-  z-index: 5;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   pointer-events: none;
 }
-.where {
-  padding: 5px 10px;
-  border: 2px solid var(--line-hi);
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--acc-ink);
-}
-.chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 5px 9px;
-  border: 2px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  font-family: var(--mono);
-  font-size: var(--fs-sm);
-}
-.chip b { font-weight: 800; }
-.chip i { font-style: normal; font-size: var(--fs-xs); color: var(--ink2); }
-.chip svg { align-self: center; color: var(--warn); }
-.key { font-family: var(--sans); font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: var(--ink3); }
-
+.cash { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.statusLine { font-size: var(--fs-sm); color: var(--ink2); }
 .buttons { position: absolute; top: var(--edge-t); right: var(--edge-r); display: flex; gap: 6px; z-index: 6; }
 .round {
   display: grid;
@@ -78,6 +62,18 @@
 .round:hover { border-color: var(--acc); color: var(--acc-ink); }
 .round:focus-visible, .prompt:focus-visible, .pad:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .round[aria-pressed='true'] { border-color: var(--acc); background: var(--acc-bg); }
+.round[aria-expanded='true'] { border-color: var(--acc); background: var(--acc-bg); }
+/* The menu behind the second button: what used to be three more round buttons. */
+.moreMenu {
+  position: absolute; top: calc(var(--hit) + 6px); right: 0; min-width: 170px;
+  display: flex; flex-direction: column; padding: 4px; border-radius: var(--r-md);
+  border: 1px solid var(--line-hi); background: var(--panel);
+}
+.moreMenu button {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-base); text-align: left; cursor: pointer;
+}
+.moreMenu button:hover, .moreMenu button:focus-visible { background: var(--panel2); }
 
 /* ---- the thing in reach ---- */
 .prompt {
@@ -161,18 +157,15 @@
 @keyframes toastIn { from { transform: translateY(-8px); opacity: 0; } }
 
 .objective {
-  position: absolute;
-  top: calc(var(--edge-t) + 46px);
-  left: var(--edge);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: min(420px, calc(100% - 300px));
   padding: 5px 10px;
-  border: 2px solid var(--acc);
-  background: color-mix(in srgb, var(--acc-bg) 92%, transparent);
-  color: var(--acc-ink);
-  font-size: var(--fs-xs);
+  border: 0;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  color: var(--ink);
+  font-size: var(--fs-sm);
   font-weight: 700;
   line-height: 1.35;
   z-index: 5;
@@ -209,6 +202,9 @@
 .rpm span { color: var(--ink); font-weight: 800; }
 .lights { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); display: flex; gap: 6px; }
 .lights span { padding: 1px 5px; border: 1px solid var(--line); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink3); border-radius: var(--r-xs); }
+/* A warning light shows only while it is on, as a car's own do: four dark labels under the
+   tach were clutter the eye had to read past every second. */
+.lights span[data-on='false'] { display: none; }
 .lights span[data-on='true'] { border-color: var(--warn); background: var(--warn-bg); color: var(--warn-ink); }
 .lights span[data-bad='true'][data-on='true'] { border-color: var(--danger); background: var(--danger-bg); color: var(--danger-ink); }
 .pedals { display: flex; gap: 4px; align-items: flex-end; height: 70px; }
@@ -569,11 +565,10 @@
 
 /* Out on a drive from the desk: the way back, top centre, clear of the prompt and the pedals. */
 .homeBtn {
-  position: absolute; left: 50%; transform: translateX(-50%); top: calc(8px + var(--edge-t, 0px)); z-index: 6;
-  padding: 10px 16px; border: 2px solid var(--pen, var(--line-hi)); border-radius: var(--hand-a, 10px);
-  background: var(--panel); color: var(--ink); font-weight: 800; font-size: var(--fs-sm); letter-spacing: 0.04em; cursor: pointer;
+  padding: 8px 14px; border: 1px solid var(--line-hi); border-radius: var(--r-md);
+  background: var(--panel); color: var(--ink); font-weight: 600; font-size: var(--fs-sm); cursor: pointer;
 }
 /* On a phone the top centre holds the status chips: the way back goes under the objective. */
 @media (max-height: 520px), (orientation: portrait) and (max-width: 560px) {
-  .homeBtn { left: var(--edge); transform: none; top: calc(var(--edge-t) + 76px); padding: 6px 12px; font-size: var(--fs-xs); }
+  .homeBtn { padding: 6px 12px; font-size: var(--fs-xs); }
 }
