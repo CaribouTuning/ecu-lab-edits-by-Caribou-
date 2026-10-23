@@ -26,7 +26,8 @@ import { engineLayout, layoutById, readEcuTable, readTable } from './layouts.js'
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { bestPowerAfr, peakMapKpaOf, reachableKpa } from './manifold.js';
+import { factoryLambda, fuelStrategyFor } from './factoryFuel.js';
+import { peakMapKpaOf, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
@@ -36,7 +37,7 @@ import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
 import { inductionAtMap } from './turbo.js';
 import {
-  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -838,10 +839,12 @@ export function factoryCalibration(preset, layout = null) {
   const loadOf = (axes, rpm, kpa) => (axes.loadUnit === 'kPa' ? kpa : airAt(rpm, kpa) * (axes.loadUnit === 'mg/cyl' ? 1000 : 1));
   const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
 
-  // VE: the engine's breathing at each cell. FUEL: stoichiometric where a real ECU runs
-  // closed loop, best-power enrichment above.
+  // VE: the engine's breathing at each cell. FUEL: the engine's own factory strategy
+  // (factoryFuel.js, with its sources): lambda 1 where the ECU runs closed loop, enrichment
+  // ramping in with load to a full-load target that varies with speed.
   const ve = grid(L.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
-  const afr = grid(L.afr, (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(bestPowerAfr(boostPsiAt(rpm, kpa)).toFixed(2))));
+  const fuelPlan = fuelStrategyFor(preset, !!preset.induction.turboOn);
+  const afr = grid(L.afr, (rpm, kpa) => Number((14.7 * factoryLambda(fuelPlan, rpm, kpa, !!preset.induction.turboOn, BARO_KPA)).toFixed(2)));
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
   // margin where there is not. That is what a production calibration is. Knock is
