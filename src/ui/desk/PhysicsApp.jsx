@@ -21,11 +21,12 @@
  *   6 Heat      where the rest of the fuel's energy goes         BSFC, EGT
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 
 import { TableSurface } from '../components/surface/TableSurface.jsx';
 
 import styles from './Apps.module.css';
+import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
 
 const R_AIR = 287;
@@ -54,33 +55,6 @@ function Stage({ n, title, what, eq, rows, open = false, children }) {
         </div>
       </div>
     </details>
-  );
-}
-
-/**
- * One cylinder cut away, to this engine's proportions: the bore is the width, the stroke
- * how far the piston travels, and the chamber above it the compression ratio's share.
- * The piston runs at a pace that rises with the chosen RPM.
- * @param {{bore: number, stroke: number, cr: number, rpm: number}} props
- */
-function CylinderCut({ bore, stroke, cr, rpm }) {
-  const scale = 70 / Math.max(bore, stroke);
-  const w = bore * scale; const travel = stroke * scale;
-  const chamber = Math.max(4, travel / Math.max(1.5, cr - 1));
-  const x0 = 60 - w / 2; const top = 14;
-  // One full cycle a second at idle up to four at the limiter: slow enough to follow.
-  const period = Math.max(0.25, 1.6 - rpm / 6000);
-  return (
-    <svg viewBox="0 0 120 140" className={styles.cylArt} role="img" aria-label={`One cylinder, ${bore} mm bore by ${stroke} mm stroke, ${cr}:1 compression`}>
-      <rect x={x0 - 4} y={top} width={w + 8} height={chamber + travel + 26} className={styles.artBox2} />
-      <rect x={x0} y={top + 2} width={w} height={chamber + travel + 20} className={styles.artBox} />
-      <g className={styles.piston} style={/** @type {React.CSSProperties} */ ({ '--travel': `${travel}px`, animationDuration: `${period}s` })}>
-        <rect x={x0 + 1} y={top + chamber + 2} width={w - 2} height="16" className={styles.artFill} />
-        <line x1={60} y1={top + chamber + 18} x2={60} y2={top + chamber + 40} className={styles.artLine} />
-      </g>
-      <line x1={x0 - 10} y1={top + 2} x2={x0 - 10} y2={top + chamber + 2} className={styles.artWarn} />
-      <text x={8} y={136} className={styles.artText}>{bore} × {stroke} mm</text>
-    </svg>
   );
 }
 
@@ -129,10 +103,21 @@ function PressureTrace({ p }) {
  * @param {import('../world/models/engine.js').EngineSpec} [props.spec] the engine as built, for the 3-D model
  * @param {number[][]|null} [props.ve] the tune's VE table (highest load first), for the 3-D map
  * @param {{rpm: number[], load: number[], loadUnit: string}|null} [props.veAxes] its breakpoints
+ * @param {((loadKpa: number) => {points: any[]})|null} [props.sweepAt] runs the model's pull at a part-throttle load
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null }) {
-  const pts = useMemo(() => points ?? [], [points]);
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null }) {
+  // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
+  // the advisor's own pull; any other is solved here, once per load, and kept.
+  const [load, setLoad] = useState(100);
+  const deferredLoad = useDeferredValue(load);
+  const cache = useRef(/** @type {Map<number, any[]>} */ (new Map()));
+  useEffect(() => { cache.current = new Map(); }, [points, sweepAt]);
+  const pts = useMemo(() => {
+    if (deferredLoad >= 100 || !sweepAt) return points ?? [];
+    if (!cache.current.has(deferredLoad)) cache.current.set(deferredLoad, sweepAt(deferredLoad)?.points ?? []);
+    return cache.current.get(deferredLoad) ?? [];
+  }, [points, sweepAt, deferredLoad]);
   const peakIdx = useMemo(() => pts.reduce((b, q, j) => (q.torque > (pts[b]?.torque ?? -1) ? j : b), 0), [pts]);
   const [idx, setIdx] = useState(/** @type {number|null} */ (null));
   const [graph, setGraph] = useState(/** @type {'power'|'ve'|'3d'} */ ('power'));
@@ -182,10 +167,19 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
   return (
     <div className={`${styles.pad} ${styles.physics}`}>
-      <p className={styles.lead}>
-        The simulator&apos;s engine model, run on <b>your engine as built and tuned</b>{fuel ? ` on ${fuel.label}` : ''}, at full throttle.
-        Pick an RPM on the graph: every panel follows it.
-      </p>
+      <div className={`${styles.physControls} ink-frame`}>
+        <label className={styles.ctl}>
+          <span>Engine speed <b>{p.rpm} RPM</b></span>
+          <input type="range" min={0} max={pts.length - 1} step={1} value={i}
+            onChange={(e) => setIdx(Number(e.target.value))} aria-label="RPM" aria-valuetext={`${p.rpm} RPM`} />
+        </label>
+        <label className={styles.ctl}>
+          <span>Throttle <b>{load >= 100 ? 'wide open' : `${Math.round(((load - 20) / 80) * 100)} %`}</b> · manifold <b>{f(p.map, 0)} kPa</b></span>
+          <input type="range" min={20} max={100} step={10} value={load}
+            onChange={(e) => setLoad(Number(e.target.value))} aria-label="Throttle" aria-valuetext={`${load} kPa`} />
+        </label>
+        <p className={styles.ctlNote}>Your engine as built and tuned{fuel ? `, on ${fuel.label}` : ''}. Every panel, every number and the engine below follow these two.</p>
+      </div>
       <div className={styles.physGrid}>
         <section className={`${styles.physPanel} ink-frame`} aria-label="Your build in the model">
           <h3 className={styles.panelTitle}>Your build in the model</h3>
@@ -195,7 +189,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
                 <div key={k} className={styles.buildRow2}><dt>{k}</dt><dd><b>{v}</b><span>{why}</span></dd></div>
               ))}
             </dl>
-            <CylinderCut bore={Number(f(bore, 1))} stroke={Number(f(stroke, 1))} cr={derived?.compression ?? 10} rpm={p.rpm} />
+            {spec ? <div className={styles.buildEngine}><EngineViewer spec={spec} rpm={p.rpm} label="Your engine as built" /></div> : null}
           </div>
         </section>
 
@@ -231,10 +225,6 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
               <text x={CW - 40} y={CH - 22} className={styles.curveText}>RPM</text>
             </svg>
           )}
-          <input
-            type="range" className={styles.rpm} min={0} max={pts.length - 1} step={1} value={i}
-            onChange={(e) => setIdx(Number(e.target.value))} aria-label="RPM" aria-valuetext={`${p.rpm} RPM`}
-          />
           <div className={styles.curveNums}>{p.rpm} RPM · {f(p.torque, 0)} lb-ft · {f(p.hp, 0)} hp · VE {f(p.ve, 0)} %</div>
         </section>
 
@@ -243,7 +233,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>
       <Stage
         open n={1} title="Air in" what="The cylinder fills with air. How full it gets, against how full it could be at this pressure, is the volumetric efficiency: the number every hardware choice moves."
-        eq={<>m<sub>air</sub> = VE × ρ × V<sub>cyl</sub> &nbsp;&nbsp; ρ = MAP / (R × T)</>}
+        eq={<>ρ = MAP / (R × T) = {f((p.map ?? 0) * 1000, 0)} / (287 × {f(tK, 0)}) = {f(rho, 3)} kg/m³<br />m<sub>air</sub> = VE × ρ × V<sub>cyl</sub> = {f((p.ve ?? 0) / 100, 3)} × {f(rho, 3)} × {f(vCylL * 1000, 0)} cc = {f(mAirMg, 0)} mg</>}
         rows={[['VE', `${f(p.ve)} %`], ['MAP', `${f(p.map, 0)} kPa`], ['Charge temp', `${f(p.iat, 0)} °C = ${f(tK, 0)} K`], ['Air density ρ', `${f(rho, 3)} kg/m³`], ['V cyl', `${f(vCylL * 1000, 0)} cc`], ['Air per cylinder', `${f(mAirMg, 0)} mg`]]}
       >
         <svg viewBox="0 0 120 120" className={styles.art}>
@@ -258,7 +248,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
       <Stage
         n={2} title="Fuel" what="The ECU works out how much fuel that air needs for the mixture it wants, then holds the injector open long enough to deliver it."
-        eq={<>m<sub>fuel</sub> = m<sub>air</sub> / (AFR<sub>stoich</sub> × λ) &nbsp;&nbsp; PW = m<sub>fuel</sub> / flow + dead time</>}
+        eq={<>m<sub>fuel</sub> = m<sub>air</sub> / (AFR<sub>s</sub> × λ) = {f(mAirMg, 0)} / ({f(stoich, 1)} × {f(p.lambda, 3)}) = {f(mAirMg / (stoich * (p.lambda || 1)), 1)} mg<br />PW = m<sub>fuel</sub> / flow + dead time = {f(p.pw, 2)} ms</>}
         rows={[['λ (lambda)', f(p.lambda, 3)], ['AFR', `${f(p.afr)} : 1`], ['Stoichiometric', `${f(stoich)} : 1`], ['Fuel per cylinder', `${f(p.fuelMass, 1)} mg`], ['Pulse width', `${f(p.pw, 2)} ms`], ['Injector duty', `${f(p.duty, 0)} %`]]}
       >
         <svg viewBox="0 0 120 120" className={styles.art}>
@@ -292,7 +282,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
       <Stage
         n={5} title="Work and torque" what="The pressure on the piston over a whole cycle is the indicated mean effective pressure. Friction and the work of pumping air in and out take their share; what is left turns the crank."
-        eq={<>BMEP = IMEP − FMEP − PMEP &nbsp;&nbsp; T = BMEP × V<sub>d</sub> / 4π &nbsp;&nbsp; hp = T × rpm / 5252</>}
+        eq={<>BMEP = IMEP − FMEP − PMEP = {f(p.imep, 2)} − {f(p.fmep, 2)} − {f(p.pmep, 2)} = {f(p.bmep, 2)} bar<br />T = BMEP × V<sub>d</sub> / 4π = {f(crankNm, 0)} N·m &nbsp; hp = T × rpm / 5252 = {f(p.hp, 0)}</>}
         rows={[['IMEP', `${f(p.imep, 2)} bar`], ['Friction FMEP', `−${f(p.fmep, 2)} bar`], ['Pumping PMEP', `−${f(p.pmep, 2)} bar`], ['BMEP', `${f(p.bmep, 2)} bar`], ['Crank torque', `${f(crankNm, 0)} N·m = ${f(crankNm / NM_PER_LBFT, 0)} lb-ft`], ['At the rollers', `${f(p.torque, 0)} lb-ft (${f(lost * 100, 0)}% lost in the drivetrain)`]]}
       >
         <svg viewBox="0 0 120 120" className={styles.art}>
@@ -310,7 +300,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
       <Stage
         n={6} title="Heat" what="Most of the fuel's energy never reaches the crank: it goes out of the exhaust and into the coolant. How much fuel each horsepower costs says how well the engine turns heat into work."
-        eq={<>BSFC = fuel mass flow / power &nbsp;&nbsp; efficiency = 3.6 / (BSFC[kg/kWh] × LHV[MJ/kg])</>}
+        eq={<>η = 3.6 / (BSFC × 0.6083 × LHV) = 3.6 / ({f(p.bsfc, 3)} × 0.6083 × 43) = {f(eff * 100, 0)} %</>}
         rows={[['Exhaust gas temp', `${f(p.egt, 0)} °C`], ['BSFC', `${f(p.bsfc, 3)} lb/hp·h`], ['Thermal efficiency', `${f(eff * 100, 0)} % (on gasoline)`]]}
       >
         <svg viewBox="0 0 120 120" className={styles.art}>
@@ -323,13 +313,8 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         </section>
 
         <section className={`${styles.physPanel} ink-frame`} aria-label="The engine running">
-          <h3 className={styles.panelTitle}>The engine, running at {p.rpm} RPM</h3>
-          {spec ? <EngineViewer spec={spec} rpm={p.rpm} label={`Your engine, turning at ${p.rpm} RPM`} /> : null}
-          <ol className={styles.strokes}>
-            {[['Intake', `fills ${f(p.ve, 0)} % full`], ['Compression', `to ${f(derived?.compression, 1)} : 1`], ['Power', `peaks ${f(p.peakPressure, 0)} bar`], ['Exhaust', `out at ${f(p.egt, 0)} °C`]].map(([k, v], j) => (
-              <li key={k} className={styles.strokeStep} style={{ animationDelay: `${j * 0.5}s` }}><b>{k}</b><span>{v}</span></li>
-            ))}
-          </ol>
+          <h3 className={styles.panelTitle}>The engine in action: one cylinder at {p.rpm} RPM, {f(p.map, 0)} kPa</h3>
+          <EngineCutaway bore={bore || 90} stroke={stroke || 86} cr={derived?.compression ?? 10} camDuration={derived?.camDuration ?? 230} point={p} />
         </section>
       </div>
     </div>

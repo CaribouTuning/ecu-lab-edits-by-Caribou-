@@ -149,3 +149,60 @@
   .tuneTab { padding: 7px 9px; border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
   .tuneTab[aria-current='page'] { margin-bottom: 0; padding-bottom: 7px; }
 }
+
+/* ---------- Physics: the engine cutaway ---------- */
+.cutWrap { display: flex; flex-direction: column; gap: 10px; }
+.strokeBar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.strokePill { padding: 5px 4px; text-align: center; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.04em; color: var(--ink2); border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
+.strokePill[data-on] { background: var(--acc); color: var(--acc-on); border-color: var(--acc); }
+.cutSplit { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+.cutSvg { width: 100%; height: auto; max-height: 560px; background: var(--bg); border-radius: var(--r-md); }
+.cutSide { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cutStroke { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.cutStroke b { color: var(--ink); }
+.pvSvg { width: 100%; height: auto; max-height: 180px; background: var(--panel2); border-radius: var(--r-sm); }
+.pvLoop { fill: none; stroke: var(--cut-burn); stroke-width: 1.6; }
+.pvDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+.liveEq { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: var(--fs-xs); }
+.liveEq dt { color: var(--ink3); white-space: nowrap; }
+.liveEq dd { margin: 0; font-family: var(--mono); color: var(--ink); line-height: 1.45; }
+.cutControls { display: flex; gap: 8px; align-items: center; }
+.cutControls button { padding: 5px 12px; border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); font-weight: 800; font-size: var(--fs-sm); cursor: pointer; }
+.cutControls input { flex: 1; accent-color: var(--acc); }
+.cutCoolant { fill: var(--cut-coolant); opacity: 0.8; }
+.cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
+.cutBore { stroke: var(--ink3); stroke-width: 2; }
+.cutLeader { stroke: var(--ink3); stroke-width: 0.8; }
+.cutHead { fill: var(--panel3); }
+.cutCase { fill: var(--panel3); }
+.cutOil { fill: var(--cut-oil); opacity: 0.85; }
+.gasFresh { fill: var(--cut-fresh); }
+.gasBurn { fill: var(--cut-burn); }
+.gasSpent { fill: var(--cut-exhaust); }
+.cutFlame { fill: var(--warn); }
+.cutSpring { fill: none; stroke: var(--cut-oil); stroke-width: 2.2; }
+.cutStem { stroke: var(--ink-soft); stroke-width: 4; stroke-linecap: round; }
+.cutValve { fill: var(--ink-soft); stroke: var(--ink3); stroke-width: 1; }
+.cutCam { fill: var(--cut-metal); stroke: var(--ink3); stroke-width: 1.2; }
+.cutHub { fill: var(--panel); stroke: var(--cut-metal); stroke-width: 2.5; }
+.cutPlug { fill: var(--ink2); }
+.cutPlugTip { fill: var(--cut-metal); }
+.cutSpark { fill: var(--warn); }
+.cutCounter { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
+.cutWeb { fill: var(--cut-metal); }
+.cutRod { stroke: var(--cut-metal); stroke-width: 9; stroke-linecap: round; }
+.cutPiston { fill: var(--cut-metal); stroke: var(--ink3); stroke-width: 1.2; }
+.cutRing { stroke: var(--cut-metal-dark); stroke-width: 1.5; }
+.cutArrow { fill: var(--acc-ink); }
+.cutLabel { fill: var(--ink); font-size: 10.5px; font-family: var(--sans); font-weight: 600; letter-spacing: 0.02em; }
+.physControls {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; padding: 12px 14px;
+  border: 2px solid var(--pen); border-radius: var(--hand-a); background: var(--panel);
+}
+@media (max-width: 700px) { .physControls { grid-template-columns: 1fr; } }
+.ctl { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--ink2); }
+.ctl b { color: var(--ink); font-family: var(--mono); }
+.ctl input { accent-color: var(--acc); width: 100%; }
+.ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink3); }
+.buildEngine { min-height: 0; }
+.buildEngine > div { height: 170px; }

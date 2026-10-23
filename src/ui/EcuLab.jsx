@@ -104,7 +104,7 @@ import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
 /** The tabs that need an engine; HOME (stats, health, Learn) does not. */
-const ENGINE_TABS = ['build', 'tune', 'live', 'dyno'];
+const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'physics'];
 
 /** The engine a practice mission is built around, put on the bench when the player has none yet. */
 const MISSION_ENGINE = 'vq35de-revup';
@@ -632,6 +632,10 @@ export function EcuLabApp() {
     turbine, compressor, ecu, layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
+
+  // The Physics app's part-throttle pulls: the same model and calibration as the dyno,
+  // at the load its throttle asks for. Stable while the setup is, so it can cache them.
+  const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
@@ -1335,7 +1339,7 @@ export function EcuLabApp() {
         )}
         {tab === 'physics' && !inCareer && !engineMissing && (
           <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
-            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} />
+            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}

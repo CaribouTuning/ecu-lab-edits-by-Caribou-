@@ -87,6 +87,16 @@ export const tokens = Object.freeze({
   paperGridMajor: '#262f42',
 
 
+  // The Physics app's engine cutaway: the metal, the oil, the coolant, and the charge
+  // through the four strokes (fresh mixture, burning, spent).
+  cutMetal: '#9aa6b5',
+  cutMetalDark: '#5d6878',
+  cutOil: '#d9b13b',
+  cutCoolant: '#2fa3d6',
+  cutFresh: '#5aa9ff',
+  cutBurn: '#ff7a2e',
+  cutExhaust: '#8c8f96',
+
   // The app icons on the desktop and the home screen: a cream card with the doodle inked
   // on it in near-black over a pale blue wash, and the name on a cream label.
   tile: '#f7f2e6',
