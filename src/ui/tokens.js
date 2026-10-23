@@ -128,6 +128,19 @@ export const tokens = Object.freeze({
   macGreen: '#28c840',
   macLightInk: '#4d0000',
 
+  // The start screen keeps the look it was liked in: navy and the blue key (StartScreen).
+  startBg: '#0a0d14',
+  startPanel: '#131824',
+  startLineHi: '#33405a',
+  startInk: '#e9eef8',
+  startInk2: '#8792a8',
+  startInk3: '#5c6880',
+  startAcc: '#4c9eff',
+  startAccInk: '#8fc2ff',
+  startAccBg: '#0f2033',
+  startAccOn: '#04162e',
+  startAccRgb: '76, 158, 255',
+
   // The laptop's and the phone's wallpaper: the Caribou badge in neutral chrome on a
   // graphite ground (no blue, no reflection).
   wallSky: '#1a1a18',

@@ -70,7 +70,7 @@ describe('entry', () => {
   it('opens on the start screen', () => {
     render(<EcuLab />);
     // Three ways in, not one: a career of customer cars, free play, and the tutorial.
-    for (const way of ['Career', 'Sandbox', 'Tutorial']) {
+    for (const way of ['CAREER', 'SANDBOX', 'TUTORIAL']) {
       expect(screen.getByRole('button', { name: way })).toBeTruthy();
     }
   });
@@ -83,7 +83,7 @@ describe('entry', () => {
 
   it('opens the tutorial and comes back', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     // It opens on its contents page: what you will learn, then the chapters.
     expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'START' }));

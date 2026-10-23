@@ -79,7 +79,7 @@ describe('the tutorial is short', () => {
 describe('from the tutorial to the course, in the app', () => {
   it('OPEN THE COURSE lands on the course\u2019s contents, not on the page the tutorial was showing', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TUTORIAL.lessons.length} `) }));
     fireEvent.click(screen.getByRole('button', { name: 'OPEN THE COURSE' }));
     expect(screen.getByText('COURSE · CONTENTS')).toBeTruthy();

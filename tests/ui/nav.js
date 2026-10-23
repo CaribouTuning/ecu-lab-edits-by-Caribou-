@@ -53,7 +53,7 @@ export function goTo(name) {
 
 /** Past the start screen into SANDBOX, onto BUILD, as the old landing was. */
 export function enterSandbox() {
-  fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
+  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
   goTo('BUILD');
 }
 
@@ -76,7 +76,7 @@ export function chrome(name) {
  * laptop open. Resolves once the laptop is there.
  */
 export async function enterCareer() {
-  fireEvent.click(screen.getByRole('button', { name: 'Career' }));
+  fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
   await screen.findByRole('button', { name: 'Desktop' });
 }
 

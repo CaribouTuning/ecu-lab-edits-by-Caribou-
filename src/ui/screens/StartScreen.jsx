@@ -1,132 +1,101 @@
-/**
- * The first screen: what this is, the three ways in, and the product doing its one job.
- *
- * Left, the name, one sentence and the ways in as rows that say what each one is. Right,
- * a dyno sheet: the stock Nissan VQ35DE Rev-Up's pull, run by this simulator when the screen
- * opens (the tutorial's own engine and pull, `tutorial/scenarios.js`). Nothing on it is
- * drawn for show: the curve, the peak and the speed it lands at are the model's.
- */
+/** The first screen: the Caribou logo, what this is, and the three ways in. */
 
-import React, { useEffect, useState } from 'react';
-
-import { stock } from '../tutorial/scenarios.js';
+import React from 'react';
 
 import { CARIBOU_FILL, CARIBOU_INK, CARIBOU_VIEWBOX } from './caribouLogo.js';
 import styles from './StartScreen.module.css';
 
 /**
- * The three ways in. CAREER first: a customer car with a fault in it is the only one of
- * the three that tells you what you are trying to achieve. SANDBOX is your own shop with
- * every tool and no objective; the tutorial is the walk through.
+ * The three ways in, each under a picture of what it is.
+ *
+ * CAREER is the primary action, because a customer car with a fault in it is the only one
+ * of the three that tells you what you are trying to achieve. SANDBOX opens the laptop in
+ * your own shop, every tool and no objective. The tutorial is the standard walk through.
  */
 const WAYS_IN = [
-  { key: 'career', label: 'Career', caption: 'Run a tuning shop in town. Customers bring cars that run wrong; you find out why and fix the calibration.' },
-  { key: 'sandbox', label: 'Sandbox', caption: 'Your laptop and your shop. Build any engine, tune it, run it on the dyno and the engine stand.' },
-  { key: 'tutorial', label: 'Tutorial', caption: 'Five minutes: one pull, one fault, one fix.' },
+  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'The 3D career: run a tuning shop in town' },
+  { key: 'sandbox', label: 'SANDBOX', variant: 'ghost', caption: 'Your laptop and your shop: build and tune anything' },
+  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];
 
-/** @param {{src: string|null}} props */
+/** The three ways in, as clean line drawings over a flat wash (48-unit square). */
+const ICONS = {
+  // A car side-on, as drawn on the pad.
+  career: (
+    <>
+      <path className="wash" d="M6 30c2-6 8-8 14-8l6-8h12l5 9c3 1 4 4 4 7z" />
+      <path d="M3 33c0-4 1-8 5-9 4-1 9-1 12-2 2-3 4-7 7-8h11c2 3 4 6 5 9 3 1 4 5 4 9-2 .5-4 .3-6 .4M18 33.4h12" />
+      <path d="M27 15l-2 7h16" />
+      <circle cx="12" cy="34" r="5" /><circle cx="36" cy="34" r="5" />
+    </>
+  ),
+  // The laptop, open, with a spanner across it.
+  sandbox: (
+    <>
+      <path className="wash" d="M10 10h28v20H10z" />
+      <path d="M9 9.5c9-.3 21 .3 30 0 .3 7-.2 14 .2 21-10 .3-20-.3-30 0-.2-7 .3-14-.2-21z" />
+      <path d="M4 35c13-.6 27 .4 40-.2l-3 4c-11 .3-23-.2-34 .2z" />
+      <path d="M16 26l12-12m-2-2c2-2 6-1 6 2l-3 1 1 2 3-1c1 3-3 5-5 3" />
+    </>
+  ),
+  // A sheet of notes.
+  tutorial: (
+    <>
+      <path className="wash" d="M12 9h22l3 31H14z" />
+      <path d="M11 6c7 .4 17-.3 26 .3.4 10-.3 24 .5 34-4-3-7 1-10-1s-6 2-9 0-5 1-7-.4C11 28 11.5 16 11 6z" />
+      <path d="M15 14c3-2 5 2 8 0s5 2 8 0M15 21c3-2 5 2 8 0s5 2 8 0M15 28c3-2 5 2 8 0" />
+    </>
+  ),
+};
+
+/**
+ * The Caribou Tuning badge: an uploaded image when one is passed, the traced badge otherwise.
+ * @param {{src?: string|null}} props
+ */
 function LogoMark({ src }) {
   if (src) return <img className={styles.logo} src={src} alt="Caribou Tuning" />;
   return (
     <svg className={styles.logo} viewBox={CARIBOU_VIEWBOX} role="img" aria-label="Caribou Tuning">
-      <path d={CARIBOU_FILL} fill="var(--panel3)" fillRule="evenodd" />
+      <path d={CARIBOU_FILL} fill="var(--acc-bg)" fillRule="evenodd" />
       <path d={CARIBOU_INK} fill="var(--ink)" fillRule="evenodd" />
     </svg>
   );
 }
 
 /**
- * The stock pull as a dyno sheet: power and torque against rpm, the peak marked.
- * @param {{points: {rpm: number, hp: number, torque: number}[]}} props
- */
-function DynoSheet({ points }) {
-  const W = 520; const H = 300; const L = 44; const B = 34; const T = 18; const R = 14;
-  const r0 = points[0].rpm; const r1 = points[points.length - 1].rpm;
-  const top = Math.ceil(Math.max(...points.map((p) => Math.max(p.hp, p.torque))) / 50) * 50;
-  const x = (r) => L + ((r - r0) / (r1 - r0)) * (W - L - R);
-  const y = (v) => H - B - (v / top) * (H - B - T);
-  const line = (k) => points.map((p) => `${x(p.rpm).toFixed(1)},${y(p[k]).toFixed(1)}`).join(' ');
-  const peak = points.reduce((b, p) => (p.hp > b.hp ? p : b), points[0]);
-  const peakTq = points.reduce((b, p) => (p.torque > b.torque ? p : b), points[0]);
-  const ticks = [];
-  for (let v = 0; v <= top; v += 50) ticks.push(v);
-  return (
-    <figure className={styles.sheet}>
-      <figcaption className={styles.sheetHead}>
-        <span>Nissan VQ35DE Rev-Up, stock, on this simulator</span>
-        <span className={styles.sheetPeak}><b>{Math.round(peak.hp)}</b> whp at {peak.rpm} rpm, <b>{Math.round(peakTq.torque)}</b> lb-ft at {peakTq.rpm}</span>
-      </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} className={styles.sheetSvg} role="img"
-        aria-label={`Dyno sheet: ${Math.round(peak.hp)} wheel horsepower at ${peak.rpm} rpm and ${Math.round(peakTq.torque)} pound-feet at ${peakTq.rpm} rpm`}>
-        {ticks.map((v) => (
-          <g key={v}>
-            <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={styles.rule} />
-            <text x={L - 8} y={y(v) + 4} textAnchor="end" className={styles.tick}>{v}</text>
-          </g>
-        ))}
-        {[2000, 3000, 4000, 5000, 6000, 7000].filter((r) => r >= r0 && r <= r1).map((r) => (
-          <text key={r} x={x(r)} y={H - 12} textAnchor="middle" className={styles.tick}>{r}</text>
-        ))}
-        <polyline points={line('torque')} className={styles.torque} />
-        <polyline points={line('hp')} className={styles.power} />
-        <circle cx={x(peak.rpm)} cy={y(peak.hp)} r="4" className={styles.peak} />
-        <text x={W - R} y={y(points[points.length - 1].hp) - 10} textAnchor="end" className={styles.seriesPower}>power, whp</text>
-        <text x={W - R} y={y(points[points.length - 1].torque) + 18} textAnchor="end" className={styles.seriesTorque}>torque, lb-ft</text>
-      </svg>
-    </figure>
-  );
-}
-
-/**
  * @param {object} props
- * @param {() => void} props.onCareer
- * @param {() => void} props.onStart opens SANDBOX
+ * @param {() => void} props.onCareer open the 3D career
+ * @param {() => void} props.onStart open the sandbox laptop
  * @param {() => void} props.onTutorial
  * @param {string} props.version
- * @param {string|null} [props.logo] an image to use for the logo instead of the traced one
+ * @param {string|null} [props.logo] the logo image, when there is one
+ * @param {React.ReactNode} [props.dial] unused; kept so older call sites still render
  * @returns {React.ReactElement}
  */
 export function StartScreen({ onCareer, onStart, onTutorial, version, logo = null }) {
   const handlers = { career: onCareer, sandbox: onStart, tutorial: onTutorial };
-  // The pull runs after the first paint, so the ways in are there at once.
-  const [points, setPoints] = useState(/** @type {any[]|null} */ (null));
-  useEffect(() => {
-    const id = setTimeout(() => {
-      try { setPoints(stock().result.points); } catch { setPoints(null); }
-    }, 0);
-    return () => clearTimeout(id);
-  }, []);
   return (
     <div className={styles.screen} data-plain>
-      <div className={styles.lead}>
-        <div className={styles.brand}>
-          <LogoMark src={logo} />
-          <div>
-            <h1 className={styles.title}>ECU Lab</h1>
-            <p className={styles.maker}>Caribou Tuning</p>
-          </div>
-        </div>
-        <p className={styles.what}>
-          An engine and the computer that runs it, simulated from the physics. Build it, tune the
-          tables a real tuner edits, run it on the dyno and read why it made what it made.
-        </p>
-        <nav className={styles.ways} aria-label="Ways in">
+      <div className={styles.glow} aria-hidden="true" />
+      <div className={styles.inner}>
+        <LogoMark src={logo} />
+        <div className={styles.eyebrow} data-keep-tracking>CARIBOU TUNING</div>
+        <h1 className={styles.title} data-keep-tracking>ECU Lab</h1>
+        <p className={styles.subtitle} data-keep-tracking>Engine + ECU Simulator</p>
+        <div className={styles.actions}>
           {WAYS_IN.map((way) => (
-            <button
-              key={way.key} type="button" className={styles.way} data-key={way.key}
-              onClick={handlers[/** @type {keyof typeof handlers} */ (way.key)]}
-              aria-label={way.label} aria-describedby={`way-${way.key}`}
-            >
-              <span className={styles.wayName}>{way.label}</span>
-              <span className={styles.wayCaption} id={`way-${way.key}`}>{way.caption}</span>
-            </button>
+            <div key={way.key} className={styles.way}>
+              <svg className={styles.icon} viewBox="0 0 48 48" aria-hidden="true">
+                {ICONS[/** @type {keyof typeof ICONS} */ (way.key)]}
+              </svg>
+              <button type="button" className={`${styles.btn} ${styles[way.variant]}`} onClick={handlers[way.key]} data-keep-tracking>
+                {way.label}
+              </button>
+              <div className={styles.caption}>{way.caption}</div>
+            </div>
           ))}
-        </nav>
+        </div>
         <div className={styles.version}>{version}</div>
-      </div>
-      <div className={styles.side} aria-live="polite">
-        {points && points.length > 1 && <DynoSheet points={points} />}
       </div>
     </div>
   );
