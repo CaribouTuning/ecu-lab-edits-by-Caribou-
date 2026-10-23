@@ -168,14 +168,14 @@ describe('the live engine', () => {
     // The panel's status line is the engine's own state machine, read off the store.
     expect(screen.getByText('Engine off. Start it to watch the ECU work in real time.')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
 
     // liveStep catches on the third 50 ms step from cold (tests/live.test.js covers the
     // physics), so this is ~150 ms of real time. Real timers rather than fake ones, for
     // the same reason as characterisation.test.jsx's dyno pull: fake timers would need
     // act() around every tick.
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy(),
       { timeout: 5000 },
     );
     // Not just "the flag flipped": the engine is actually turning, which only happens
@@ -191,18 +191,18 @@ describe('the live engine', () => {
     // throttle pad's own label is the only thing that reads it back. Stub those
     // dispatches and the pad silently stops acknowledging the press.
     launchOnLive();
-    fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
     await waitFor(
-      () => expect(screen.getByText('PRESS AND HOLD TO REV')).toBeTruthy(),
+      () => expect(screen.getByText('Press and hold to rev')).toBeTruthy(),
       { timeout: 5000 },
     );
 
-    const pad = screen.getByText('PRESS AND HOLD TO REV');
+    const pad = screen.getByText('Press and hold to rev');
     fireEvent.pointerDown(pad.parentElement);
-    expect(screen.getByText('WIDE OPEN THROTTLE')).toBeTruthy();
+    expect(screen.getByText('Wide open throttle')).toBeTruthy();
 
-    fireEvent.pointerUp(screen.getByText('WIDE OPEN THROTTLE').parentElement);
-    expect(screen.getByText('PRESS AND HOLD TO REV')).toBeTruthy();
+    fireEvent.pointerUp(screen.getByText('Wide open throttle').parentElement);
+    expect(screen.getByText('Press and hold to rev')).toBeTruthy();
   });
 
   it('shuts down on STOP', async () => {
@@ -211,19 +211,19 @@ describe('the live engine', () => {
     // regressed to a value-carrying write of a captured `live`, the engine would come
     // straight back to life on the next step.
     launchOnLive();
-    fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
     await waitFor(
-      () => expect(screen.getByText('PRESS AND HOLD TO REV')).toBeTruthy(),
+      () => expect(screen.getByText('Press and hold to rev')).toBeTruthy(),
       { timeout: 5000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'STOP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
 
     // Wait past several more interval ticks: a STOP that the next step overwrites
     // would show as the engine still running here.
     await act(async () => { await new Promise((r) => { setTimeout(r, 400); }); });
     expect(screen.getByText('Engine off. Start it to watch the ECU work in real time.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'START ENGINE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
   });
 
   it('does not re-render the app while it is stopped', async () => {
@@ -272,16 +272,17 @@ describe('running a dyno pull', () => {
     // the whole pull and forever afterwards.
     launch();
     goTo('DYNO');
-    expect(tachReading()).toBe(1500);
+    // Before any pull the car on the rollers is not running.
+    expect(tachReading()).toBe(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     // jsdom has no Web Audio, so there is nothing to hear the idle either side of the
     // sweep with — and a pull that cannot be heard goes straight to the sweep.
-    expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'IDLING…' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Idling…' })).toBeNull();
 
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
     // The reveal ran to the end of the sweep, so the needle is up at the last logged
@@ -298,19 +299,19 @@ describe('running a dyno pull', () => {
     it('holds idle before the sweep and comes back down after it, because it can be heard', async () => {
       launch();
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
       // A pull opens by holding idle before it loads, so this is the first phase label.
-      expect(screen.getByRole('button', { name: 'IDLING…' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Idling…' })).toBeTruthy();
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy(),
         { timeout: DYNO_PULL_MS },
       );
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'COMING BACK DOWN…' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Coming back down…' })).toBeTruthy(),
         { timeout: DYNO_PULL_MS },
       );
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: DYNO_PULL_MS },
       );
       // The whole sequence outlasts the runner's default per-test timeout — hence the
@@ -320,12 +321,12 @@ describe('running a dyno pull', () => {
 
     it('skips the bookends when sound is switched off, because nobody can hear them', async () => {
       launchOnLive();
-      fireEvent.click(screen.getByTitle('Engine sound'));
+      fireEvent.click(screen.getByRole('button', { name: 'Sound on' }));
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
-      expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
+      expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: 10000 },
       );
     });
@@ -335,7 +336,7 @@ describe('running a dyno pull', () => {
       // 'suspended' on exactly the tap that unlocks audio, and the first TEST told the
       // player the browser was blocking a beep they had just heard.
       launchOnLive();
-      fireEvent.click(screen.getByRole('button', { name: 'TEST' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Test sound' }));
       expect(await screen.findByText(/Audio is running/)).toBeTruthy();
       expect(screen.queryByText(/still blocking audio/)).toBeNull();
     });
@@ -347,11 +348,11 @@ describe('running a dyno pull', () => {
       // TEST beep schedules a sleep for when it ends, and with nothing "sounding" that
       // sleep suspended the context under a running engine.
       launchOnLive();
-      fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
       const [ctx] = audio.contexts;
       expect(ctx).toBeTruthy();
-      await waitFor(() => expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy(), { timeout: 5000 });
-      fireEvent.click(screen.getByRole('button', { name: 'TEST' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy(), { timeout: 5000 });
+      fireEvent.click(screen.getByRole('button', { name: 'Test sound' }));
       // Past the beep and the sleep delay after it (0.45 s + 0.5 s).
       await new Promise((resolve) => { setTimeout(resolve, 1400); });
       expect(ctx.suspends).toBe(0);
@@ -363,12 +364,12 @@ describe('running a dyno pull', () => {
       // costs a noticeable share of a core for the life of the page.
       launch();
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
       const [ctx] = audio.contexts;
       expect(ctx).toBeTruthy();
       await waitFor(() => expect(ctx.state).toBe('running'));
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: DYNO_PULL_MS + 2000 },
       );
       await waitFor(() => expect(ctx.state).toBe('suspended'), { timeout: 2000 });
@@ -382,13 +383,13 @@ describe('running a dyno pull', () => {
     // write itself but stops before the clear.
     launch();
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' }));
     // Guard: the APPLY/DISCARD pair only exists while `histogram` is set, so this also
     // proves the build-side write landed before the clear is asserted below.
@@ -411,9 +412,9 @@ describe('running a dyno pull', () => {
     launch();
     goTo('DYNO');
 
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
     const afterFirstPull = tachReading();
@@ -424,7 +425,7 @@ describe('running a dyno pull', () => {
     // test above already establishes is reachable.
     expect(afterFirstPull).toBeGreaterThan(1500);
 
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     // Deliberately no `waitFor` here: `doRun` dispatches SET_SESSION_FIELD/revealCount
     // and BANK_PULL synchronously, inside this very click, before the reveal interval
     // has ticked even once. The whole failure this test exists to catch is the FIRST
@@ -435,18 +436,11 @@ describe('running a dyno pull', () => {
 });
 
 /**
- * The dyno tab's tach renders its RPM figure as a bare integer directly above a "RPM"
- * caption. recharts also labels an axis "RPM", so match on the pairing rather than on
- * the caption alone.
+ * The engine speed the dyno console's window reads.
  * @returns {number}
  */
 function tachReading() {
-  const readings = screen.getAllByText('RPM')
-    .map((el) => el.previousElementSibling)
-    .filter((el) => el && /^\d+$/.test(el.textContent))
-    .map((el) => Number(el.textContent));
-  expect(readings).toHaveLength(1);
-  return readings[0];
+  return Number(screen.getByRole('status', { name: 'Dyno engine speed' }).textContent.replace(/\D/g, ''));
 }
 
 describe('the dyno load selector', () => {
@@ -502,9 +496,9 @@ describe('banking a pull', () => {
     // ordering a real fast-clicking player can produce instead of avoiding it.
     launch();
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
@@ -534,12 +528,12 @@ describe('banking a pull', () => {
     it('leaves the banked scores exactly as measured, and says they are last pull\'s', async () => {
       launch();
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: 10000 },
       );
-      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       const measured = statTile('PULL SCORE');
       // Guard the setup: a scorecard showing nothing would make the comparison below
       // pass for the wrong reason.
@@ -570,12 +564,12 @@ describe('banking a pull', () => {
       // the bug fully in place. Verified by running it against the old memo.
       launch();
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: 10000 },
       );
-      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       const measured = {
         pull: statTile('PULL SCORE'),
         tuning: statTile('TUNING SCORE'),
@@ -591,7 +585,7 @@ describe('banking a pull', () => {
       // trivially if the pipe was never actually changed.
       expect(screen.getByRole('button', { name: '4.0"' }).getAttribute('aria-pressed')).toBe('true');
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Score' }));
 
       expect({
         pull: statTile('PULL SCORE'),
@@ -608,12 +602,12 @@ describe('banking a pull', () => {
       // player learns to ignore.
       launch();
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
       await waitFor(
-        () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+        () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
         { timeout: 10000 },
       );
-      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       const measured = statTile('PULL SCORE');
 
       // A calibration edit, not a hardware one: SET_TABLE is what the undo stack
@@ -627,7 +621,7 @@ describe('banking a pull', () => {
       const dock = within(screen.getByTestId('selection-dock'));
       fireEvent.click(dock.getByRole('button', { name: '+1' }));
       goTo('DYNO');
-      fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
       expect(statTile('PULL SCORE')).toBe(measured);
 
@@ -685,16 +679,15 @@ describe('the engine-sound toggle', () => {
     // `soundOn` gates the audio synth's master gain, which jsdom has no way to hear.
     // The button's own glyph is the readable half of that write.
     launchOnLive();
-    // By title, not by name: the button's only content is the glyph this test is
-    // asserting on, and that glyph IS its accessible name.
-    const toggle = () => screen.getByTitle('Engine sound');
-    expect(toggle().textContent).toBe('♪');
+    // The stand console's sound key says which way it is.
+    const toggle = () => screen.getByRole('button', { name: /^Sound (on|off)$/ });
+    expect(toggle().textContent).toBe('Sound on');
 
     fireEvent.click(toggle());
-    expect(toggle().textContent).toBe('✕');
+    expect(toggle().textContent).toBe('Sound off');
 
     fireEvent.click(toggle());
-    expect(toggle().textContent).toBe('♪');
+    expect(toggle().textContent).toBe('Sound on');
   });
 });
 

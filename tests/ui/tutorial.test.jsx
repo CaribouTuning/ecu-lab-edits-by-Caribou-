@@ -180,8 +180,8 @@ describe('the numbers are the game’s', () => {
     enterSandbox();
     goTo('DYNO');
     fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' }));
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(), { timeout: 10000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(), { timeout: 10000 });
     const strip = document.querySelector('[data-tour="strip-last-pull"]');
     expect(strip.textContent).toContain(`${Math.round(stock().result.peakHp)} whp`);
   }, DYNO_PULL_MS + 4000);

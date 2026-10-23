@@ -52,13 +52,13 @@ describe('CAREER in the app', () => {
     expect(money()).toContain('$1,000');
 
     // The customer says what the car does; taking it in puts it on the bay.
-    tab('CUSTOMERS');
+    tab('Customers');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
-    expect(screen.getByText(/ON THE BAY/)).toBeTruthy();
+    expect(screen.getByText(/On the bay/)).toBeTruthy();
 
     // Into the game, on the customer's car: the shop laptop's Tune window, with the job
     // ticket at its top.
-    fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     expect(window.location.hash).toBe('#/tune/airflow');
     expect(screen.getByRole('region', { name: 'Tune' })).toBeTruthy();
     expect(screen.getByText(/Marcus · 2006 Nissan 350Z/)).toBeTruthy();
@@ -86,9 +86,9 @@ describe('CAREER in the app', () => {
     expect(window.location.hash).toBe('#/shop');
     // Grading runs a full dyno pull on the real simulator; under a loaded test run that
     // can take longer than findByText's default second.
-    await screen.findByText(/JOB DONE/, {}, { timeout: 10000 });
+    await screen.findByText(/Job done/, {}, { timeout: 10000 });
     expect(money()).not.toContain('$1,000');
-    expect(screen.getByTestId('shop-rep').textContent).not.toMatch(/^REP0/);
+    expect(screen.getByTestId('shop-rep').textContent).not.toMatch(/^Reputation0/);
 
     // Saved, with the car gone home.
     await waitFor(async () => {
@@ -111,9 +111,9 @@ describe('CAREER in the app', () => {
     // To the shop by the main-menu button, and a customer's car onto the bay.
     chrome('Main menu');
     await openShop();
-    tab('CUSTOMERS');
+    tab('Customers');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
-    fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('1');
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '1.05' } });
@@ -128,7 +128,7 @@ describe('CAREER in the app', () => {
     // And CAREER again: the customer's car still on its lift, half-done work and all.
     chrome('Main menu');
     await openShop();
-    fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     fireEvent.click(screen.getByRole('button', { name: 'SENSORS' }));
     expect(/** @type {HTMLInputElement} */ (screen.getByLabelText('MAF scalar')).value).toBe('1.05');
   });
@@ -136,9 +136,9 @@ describe('CAREER in the app', () => {
   it('keeps the customer’s parts: BUILD is for looking, not changing', async () => {
     render(<EcuLab />);
     await openShop();
-    tab('CUSTOMERS');
+    tab('Customers');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
-    fireEvent.click(screen.getByRole('button', { name: /WORK ON THE CAR/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     goTo('BUILD');
     expect(screen.getByText(/The customer.s car\./)).toBeTruthy();
     const body = screen.getByText('Engine Architecture').closest('button').nextElementSibling;
@@ -148,7 +148,7 @@ describe('CAREER in the app', () => {
   it('comes back after a reload: the shop is saved, the car on its lift with it', async () => {
     const first = render(<EcuLab />);
     await openShop();
-    tab('CUSTOMERS');
+    tab('Customers');
     fireEvent.click(screen.getByRole('button', { name: "Take Marcus's car" }));
     await act(async () => { await new Promise((r) => setTimeout(r, 500)); });
     first.unmount();
@@ -157,6 +157,6 @@ describe('CAREER in the app', () => {
     render(<EcuLab />);
     await screen.findByRole('button', { name: 'Desktop' });
     await openJobBoard();
-    expect(screen.getByRole('button', { name: /WORK ON THE CAR/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Work on the car/ })).toBeTruthy();
   });
 });

@@ -1,6 +1,7 @@
 /* The bench computers' own screens (BenchScreens.jsx). */
 
 .bars { display: flex; flex-direction: column; gap: 10px; }
+.status { margin: 0 0 10px; font-size: var(--fs-sm); line-height: 1.45; color: var(--ink2); }
 .rpmHead { display: flex; align-items: baseline; gap: 8px; }
 .rpmNum { font-family: var(--mono); font-size: 44px; font-weight: 800; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
 .rpmNum[data-cut='true'] { color: var(--danger); }

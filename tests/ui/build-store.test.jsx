@@ -383,9 +383,9 @@ describe('correcting VE from a logged pull', () => {
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
@@ -430,16 +430,16 @@ describe('applying a fuel-trim histogram', () => {
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     // The reveal is a setInterval that ends by setting running false, which is what
     // uncovers the CURVES/PULL LOG/DATALOG/SCORE sub-tabs. Real timers + waitFor,
     // same approach as characterisation.test.jsx's dyno-pull test.
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     fireEvent.click(screen.getByRole('button', { name: 'BUILD HISTOGRAM FROM THIS PULL' }));
 
     // Guard: BUILD HISTOGRAM swaps its own button for an APPLY/DISCARD pair only once

@@ -423,7 +423,7 @@ describe('the palette in the app', () => {
     run('run dyno');
     expect(window.location.hash).toBe('#/dyno/result');
     // jsdom has no Web Audio, so the pull goes straight to the sweep.
-    expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
   });
 
   it('does nothing on Cmd-K from the tutorial view', () => {
@@ -438,14 +438,14 @@ describe('the palette in the app', () => {
     cmdK();
     run('start engine');
     expect(window.location.hash).toBe('#/live/engine');
-    expect(screen.getByRole('button', { name: 'STOP' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
   });
 
   it('offers no DYNO page but Curves while a pull is running', () => {
     launch();
     cmdK();
     run('run dyno');
-    expect(screen.getByRole('button', { name: 'SWEEPING…' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sweeping…' })).toBeTruthy();
     cmdK();
     type('datalog');
     expect(screen.getByText('No matches')).toBeTruthy();
@@ -456,13 +456,13 @@ describe('the palette in the app', () => {
   it('offers Stop engine once the engine is started, and running it stops it', () => {
     launch();
     goTo('LIVE');
-    fireEvent.click(screen.getByRole('button', { name: 'START ENGINE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start engine' }));
 
     cmdK();
     const labels = options().map((o) => o.textContent);
     expect(labels).toContain('Stop engineAction');
     run('stop engine');
-    expect(screen.getByRole('button', { name: 'START ENGINE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
   });
 
   it('offers Redo after an undo, and running it redoes the edit', () => {

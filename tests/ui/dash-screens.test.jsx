@@ -48,8 +48,8 @@ describe('LiveScreen', () => {
     // The engine's own state machine, straight from `session.live`: nothing above this
     // component told it the engine was off.
     expect(screen.getByText('Engine off. Start it to watch the ECU work in real time.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'START ENGINE' })).toBeTruthy();
-    expect(screen.getByText('START THE ENGINE FIRST')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
+    expect(screen.getByText('Start the engine first')).toBeTruthy();
   });
 
   it('is a page, not an accordion: the controls are there without opening anything', () => {
@@ -62,7 +62,7 @@ describe('LiveScreen', () => {
       />,
     );
     expect(screen.getByText('Live Engine').closest('button')).toBeNull();
-    expect(screen.getByRole('button', { name: 'START ENGINE' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
     expect(screen.getByRole('status', { name: 'Engine speed' }).textContent).toBe('0');
   });
 
@@ -74,7 +74,7 @@ describe('LiveScreen', () => {
         onStart={noop} onStop={noop} onToggleSound={noop} onTestSound={noop} onThrottle={onThrottle}
       />,
     );
-    const pad = screen.getByText('START THE ENGINE FIRST').parentElement;
+    const pad = screen.getByText('Start the engine first').parentElement;
     fireEvent.pointerDown(pad);
     fireEvent.pointerUp(pad);
     expect(onThrottle.mock.calls).toEqual([[100], [0]]);

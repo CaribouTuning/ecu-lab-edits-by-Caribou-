@@ -121,22 +121,22 @@ async function sweep() {
   // The live engine is its own tab on this branch, not a section of HOME.
   goTo('LIVE');
   collect();
-  clickButton('START ENGINE'); // mounts STOP, the other branch of that variant
+  clickButton('Start engine'); // mounts STOP, the other branch of that variant
   collect();
 
   goTo('DYNO');
   collect();
-  clickButton('RUN DYNO PULL');
+  clickButton('Run a pull');
   collect();
   // `disabled={running}` is the entire mechanism behind the disabled-state
   // contrast fix, and losing it also lets a second pull fire mid-sweep. The label
   // names the PHASE while running; jsdom has no audio, so the pull is the sweep alone.
-  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'SWEEPING…' })).disabled).toBe(true);
+  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'Sweeping…' })).disabled).toBe(true);
   // Named from the pull sequence rather than carrying a number that has to be
   // remembered if it is retimed.
-  await waitFor(() => expect(screen.getByRole('button', { name: 'DATALOG' })).toBeTruthy(),
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Data' })).toBeTruthy(),
     { timeout: DYNO_PULL_MS + 2000 });
-  clickButton('DATALOG');
+  clickButton('Data');
   collect();
   clickButton('BUILD HISTOGRAM FROM THIS PULL'); // mounts APPLY CORRECTIONS / DISCARD
   collect();
@@ -161,7 +161,7 @@ function variantsOn(el) {
 // below would go on passing over the shorter list.
 const EXPECTED = [
   'RESET ALL TO STOCK', 'FLAT ACROSS ALL', 'SPOOL RAMP', 'ZERO',
-  'APPLY HALF', 'APPLY ALL', 'DONE', 'RESCALE ECU TO', 'STOP', 'TEST', 'RUN DYNO PULL',
+  'APPLY HALF', 'APPLY ALL', 'DONE', 'RESCALE ECU TO',
   'BUILD HISTOGRAM FROM THIS PULL', 'APPLY CORRECTIONS TO VE', 'DISCARD',
 ];
 

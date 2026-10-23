@@ -13,6 +13,10 @@
 .backdrop { position: absolute; inset: 0; }
 .backdropCanvas { display: block; width: 100%; height: 100%; }
 .backdropFallback { width: 100%; height: 100%; background: var(--bg); }
+/* The things in the shop the page's controls are laid on (ShopBackdrop.jsx): a layer the
+   size of the picture that lets clicks through to the picture, except on the faces. */
+.surfaceLayer { position: absolute !important; inset: 0; pointer-events: none; }
+.surface { overflow: hidden; }
 /* With the laptop open the shop is set back: dimmed, so the screen is what you read. */
 .backdrop[data-mode='desk']::after, .backdrop[data-mode='page']::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;

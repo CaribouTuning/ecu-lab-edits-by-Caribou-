@@ -83,6 +83,24 @@ function TrimBar({ label, value }) {
 }
 
 /**
+ * What the ECU is doing right now, in a sentence: LIVE's status line, and the engine
+ * stand's computer's.
+ * @param {Record<string, any>} live the session's live engine
+ * @returns {string}
+ */
+export function liveStatus(live) {
+  if (live.cranking && !live.running) return 'Starter engaged…';
+  if (!live.running) return 'Engine off. Start it to watch the ECU work in real time.';
+  if (live.limiterCut || live.onLimiter) return 'On the rev limiter. The ECU is cutting cylinders to hold the engine at its limit. With a fuel cut those cylinders pump plain air, so the wideband reads lean here though the mixture is not.';
+  if (live.dfco) return 'Overrun fuel cut: the injectors are off while it coasts down. Real ECUs do this, and it costs nothing.';
+  if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
+  if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
+  if (live.coolantC < 80) return 'Warming up: the ECU adds fuel until the coolant reaches 80 °C.';
+  if (live.closedLoop) return 'Warm and in closed loop: the ECU trims fuel against the O2 sensor.';
+  return 'Open loop: the ECU follows your tables and ignores the O2 sensor.';
+}
+
+/**
  * The engine's own controls: the tach and what the ECU is doing, START/STOP, the sound, the
  * throttle pad and the volume. LIVE's page shows them over its gauges; the engine stand in
  * the shop puts them on the stand's control box.
@@ -114,15 +132,7 @@ export function LiveControls({ tachFullScaleRpm, onStart, onStop, onToggleSound,
         </div>
         <div className={styles.column}>
           <div className={styles.status}>
-            {live.running
-              ? (live.limiterCut || live.onLimiter ? 'On the rev limiter — the ECU is cutting cylinders to hold the engine at its limit. With a fuel cut those cylinders pump plain air, so the wideband reads lean here; that is not a lean mixture.'
-                : live.dfco ? 'Overrun fuel cut — injectors off while coasting down. Real ECUs do this; it costs nothing to spin.'
-                : live.ecu?.knockNow ? `Knock — your SPARK table asks for more advance than the engine tolerates at this RPM and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`
-                : (live.ecu?.knockRetard ?? 0) > 0.5 ? `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`
-                : live.coolantC < 80 ? 'Warming up — the ECU adds extra fuel until the coolant reaches 80 °C.'
-                : live.closedLoop ? 'Warm and in closed loop — the ECU is trimming fuel against the O2 sensor.'
-                : 'Open loop — the ECU is following your tables directly, ignoring O2 feedback.')
-              : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
+            {liveStatus(live)}
           </div>
           <div className={styles.actions}>
             {/* START was filled with `ok`. Green here is decoration, not
@@ -135,12 +145,12 @@ export function LiveControls({ tachFullScaleRpm, onStart, onStop, onToggleSound,
               variant={live.running || live.cranking ? 'ghost' : 'primary'}
               style={{ flex: 1 }}
               onClick={live.running || live.cranking ? onStop : onStart}
-            >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
+            >{live.running || live.cranking ? 'Stop' : 'Start engine'}</Button>
             {/* Plays one note through the same graph the engine uses, so a player
                 whose browser has blocked audio finds out here rather than by
                 wondering why a running engine is silent. `ghost` for the same
                 reason STOP is: it is a secondary action. */}
-            <Button variant="ghost" title="Test sound" onClick={onTestSound}>TEST</Button>
+            <Button variant="ghost" onClick={onTestSound}>Test sound</Button>
             <button
               className={styles.sound}
               data-on={soundOn ? 'true' : 'false'}
@@ -161,7 +171,7 @@ export function LiveControls({ tachFullScaleRpm, onStart, onStop, onToggleSound,
       >
         <div className={styles.padFill} style={{ width: `${clamp(live.effThrottle ?? 0, 0, 100)}%` }} />
         <span className={styles.padLabel}>
-          {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
+          {!live.running ? 'Start the engine first' : throttleInput > 0 ? 'Wide open throttle' : 'Press and hold to rev'}
         </span>
       </div>
 

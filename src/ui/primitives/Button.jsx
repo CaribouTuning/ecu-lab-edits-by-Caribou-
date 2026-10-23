@@ -48,7 +48,7 @@ export function Button({
     .join(' ');
 
   return (
-    <button type={type} className={classes} {...rest}>
+    <button type={type} className={classes} data-variant={variant} {...rest}>
       {children}
     </button>
   );

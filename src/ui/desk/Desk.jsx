@@ -15,7 +15,7 @@
  */
 
 import { Atom, Bell, BookOpen, ChevronLeft, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
 import { CARIBOU_FILL, CARIBOU_INK } from '../screens/caribouLogo.js';
@@ -76,6 +76,18 @@ function Wallpaper() {
     </svg>
   );
 }
+
+/**
+ * The faces in the shop a page's controls are laid on (ShopBackdrop.jsx): the elements to
+ * render into, which of them read at their size from where you stand, and which one you
+ * have leaned in to. With no WebGL there are none, and the page lays its controls out flat.
+ * @typedef {{surfaces: Record<string, HTMLElement>|null, legible: Record<string, boolean>, focus: string|null, setFocus: (name: string|null) => void}} Surfaces
+ */
+/** @type {React.Context<Surfaces>} */
+const SurfacesContext = createContext(/** @type {Surfaces} */ ({ surfaces: null, legible: {}, focus: null, setFocus: () => {} }));
+
+/** @returns {Surfaces} */
+export const useSurfaces = () => useContext(SurfacesContext);
 
 /** The shop's pages, opened from the shop floor rather than the laptop. */
 export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor', office: 'Job board' };
@@ -160,7 +172,11 @@ export function Desk({
   mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
-  useEffect(() => { setMenu(null); }, [mode, app]);
+  const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
+  const [legible, setLegible] = useState(/** @type {Record<string, boolean>} */ ({}));
+  const [focus, setFocus] = useState(/** @type {string|null} */ (null));
+  useEffect(() => { setMenu(null); setFocus(null); }, [mode, app]);
+  const surfaceCtx = useMemo(() => ({ surfaces, legible, focus, setFocus }), [surfaces, legible, focus]);
   const appInfo = DESK_APPS.find((a) => a.id === app);
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
@@ -262,7 +278,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} focus={focus} onSurfaces={setSurfaces} onLegible={setLegible} onPick={pick} onLook={onBay} />
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
@@ -329,11 +345,15 @@ export function Desk({
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
-            <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
-              <BookOpen size={15} aria-hidden="true" /><span>{phone ? 'Phone' : 'Laptop'}</span>
-            </button>
+            {focus ? (
+              <button type="button" className={styles.back} onClick={() => setFocus(null)}>Step back</button>
+            ) : (
+              <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
+                <span>{phone ? 'Phone' : 'Laptop'}</span>
+              </button>
+            )}
           </header>
-          <div className={styles.pageBody}>{children}</div>
+          <div className={styles.pageBody}><SurfacesContext.Provider value={surfaceCtx}>{children}</SurfacesContext.Provider></div>
         </div>
       )}
     </div>

@@ -34,8 +34,13 @@ export function makeLift() {
   return g;
 }
 
-/** A chassis dyno: rollers in a pit, a big fan, and a monitor on a stand. */
-export function makeDyno(owned = true) {
+/**
+ * A chassis dyno: rollers in a pit, a big fan, and a monitor on a stand.
+ * @param {boolean} [owned] false: only the painted bay where one will go
+ * @param {{monitor?: boolean}} [o] `monitor: false` leaves the stand off (the shop's own
+ *   dyno has its computer on a cart beside it)
+ */
+export function makeDyno(owned = true, o = {}) {
   const g = G();
   g.userData.dynamic = true;
   if (!owned) {
@@ -70,12 +75,14 @@ export function makeDyno(owned = true) {
   g.add(fan);
   g.userData.fan = blades;
   // Monitor stand and strap anchors.
-  g.add(box(0.1, 1.3, 0.1, W.metal, { x: -2.1, y: 0.65, z: 1.6 }));
-  g.add(box(0.8, 0.5, 0.06, W.screenOff, { x: -2.1, y: 1.35, z: 1.6 }));
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.4), glow(W.screen));
-  scr.position.set(-2.1, 1.35, 1.64);
-  g.add(scr);
-  g.userData.screen = scr;
+  if (o.monitor !== false) {
+    g.add(box(0.1, 1.3, 0.1, W.metal, { x: -2.1, y: 0.65, z: 1.6 }));
+    g.add(box(0.8, 0.5, 0.06, W.screenOff, { x: -2.1, y: 1.35, z: 1.6 }));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.4), glow(W.screen));
+    scr.position.set(-2.1, 1.35, 1.64);
+    g.add(scr);
+    g.userData.screen = scr;
+  }
   for (const s of [-1, 1]) for (const z of [-0.6, 1.8]) g.add(cyl(0.07, 0.07, 0.08, W.toolRed, { x: s * 1.9, y: 0.06, z, edge: false }));
   return g;
 }

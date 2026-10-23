@@ -44,7 +44,8 @@ export function goTo(name) {
       if (desk) fireEvent.click(desk);
       fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
     }
-    fireEvent.click(screen.getByRole('button', { name: tab }));
+    // The shop's markers name the thing: the dyno, and the engine on its stand (LIVE).
+    fireEvent.click(screen.getByRole('button', { name: tab === 'DYNO' ? 'Dyno' : 'Engine stand' }));
     return;
   }
   throw new Error(`goTo: no way to ${name}`);

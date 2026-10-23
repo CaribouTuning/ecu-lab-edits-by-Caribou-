@@ -102,6 +102,9 @@ export const tokens = Object.freeze({
   tile: '#f7f2e6',
   tileInk: '#1f1c18',
   tileWash: '#bcd2ee',
+  // The job board: its cork, and the pins in its tickets.
+  cork: '#9c7448',
+  pin: '#c8402f',
 
   // The laptop's and the phone's wallpaper: the Caribou badge in polished chrome on the
   // dark, standing on its own reflection.

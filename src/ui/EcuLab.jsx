@@ -22,7 +22,7 @@
 
 import React, { useMemo, useEffect, useRef, useCallback, useDeferredValue, useState } from 'react';
 import {
-  Grid3x3, Zap, Droplets, Activity, Play,
+  Grid3x3, Zap, Droplets, Activity,
   Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind, Flame, Lock,
 } from 'lucide-react';
 
@@ -42,7 +42,7 @@ import {
   beepEngineAudio, createEngineAudio, setEngineAudioActive,
   silenceEngineAudio, updateEngineAudio, wakeEngineAudio,
 } from './audio/engineAudio.js';
-import { T, utilisationColor } from './theme.js';
+import { T } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
 import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
@@ -78,12 +78,10 @@ import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
-import { Board, Computer, Station } from './desk/Station.jsx';
+import { Computer, Station, Surface } from './desk/Station.jsx';
+import { DynoConsole, StandConsole, StandStatus } from './desk/Consoles.jsx';
 import { BarGraph, LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
 import { TableSurface } from './components/surface/TableSurface.jsx';
-import { StatTile } from './primitives/StatTile.jsx';
-import { Seg } from './primitives/Seg.jsx';
-import { Toggle } from './primitives/Toggle.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { eventBands } from './components/eventBands.js';
 import { tuneAttention } from './components/fixLinks.js';
@@ -93,7 +91,7 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { LiveControls, LiveGauges } from './screens/dash/LiveScreen.jsx';
+import { LiveGauges } from './screens/dash/LiveScreen.jsx';
 import { LiveEcuPanel } from './screens/dash/LiveEcuPanel.jsx';
 import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
 import { FuelScreen } from './screens/tune/FuelScreen.jsx';
@@ -137,37 +135,6 @@ function LockedSettings({ section }) {
   );
 }
 
-function Tach({ rpm, cylinders, running, fullScaleRpm }) {
-  const pct = clamp(rpm / fullScaleRpm, 0, 1);
-  // fullScaleRpm is redline * 1.1 (see tachFullScaleRpm), so redline itself always
-  // sits at pct ≈ 0.909 regardless of engine — the red zone has to start at or just
-  // below that, not above it, or the needle never shows red at the engine's own redline.
-  const zoneColor = utilisationColor(pct * 100);
-  return (
-    <Panel style={{ textAlign: 'center', background: T.panel }}>
-      <style>{`@keyframes cylpulse{0%,100%{opacity:.25;transform:scaleY(.6)}50%{opacity:1;transform:scaleY(1)}}`}</style>
-      <div style={{ position: 'relative', display: 'inline-block' }}>
-        <DialMark size={168} pct={pct} live={running} />
-        <div style={{ position: 'absolute', top: '58%', left: '50%', transform: 'translate(-50%,-50%)', textAlign: 'center' }}>
-          <div style={{ fontSize: 26, fontWeight: 800, fontFamily: T.mono, color: T.ink }}>{Math.round(rpm)}</div>
-          <div style={{ fontSize: 8.5, color: T.ink3, letterSpacing: 1.5, fontWeight: 700 }}>RPM</div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: 4, justifyContent: 'center', marginTop: 8, height: 26 }}>
-        {Array.from({ length: cylinders }).map((_, i) => (
-          <div key={i} style={{
-            width: 8, height: 24, borderRadius: 2, background: zoneColor,
-            // Duration then delay, both inside the shorthand: `animation` resets
-            // `animation-delay`, so declaring the longhand beside it left the
-            // per-cylinder stagger dependent on property order.
-            animation: running ? `cylpulse ${Math.max(0.12, 50 / Math.max(rpm, 500))}s ${i * (0.5 / cylinders)}s ease-in-out infinite` : 'none',
-            opacity: running ? undefined : 0.3,
-          }} />
-        ))}
-      </div>
-    </Panel>
-  );
-}
 
 
 // ============================================================
@@ -1365,22 +1332,27 @@ export function EcuLabApp() {
         )}
         {appView === 'shop' && inCareer && (
           <Station kind="board">
-            <Board><CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} /></Board>
+            <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} /></Surface>
           </Station>
         )}
         {appView === 'app' && inCareer && !career.working && (() => {
           const empty = (
             <div style={{ padding: 16 }}>
               <Panel>
-                <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>The bay is empty</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>The bay is empty</div>
                 <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-                  There is no customer car to work on. Take one in from the shop&apos;s CUSTOMERS board.
+                  There is no customer car to work on. Take one in from the job board.
                 </div>
-                <Button size="sm" onClick={() => changeTab('shop')}>GO TO THE SHOP</Button>
+                <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
               </Panel>
             </div>
           );
-          return tab === 'dyno' || tab === 'live' ? <Station kind="board"><Board label="The bay is empty">{empty}</Board></Station> : empty;
+          // At the dyno or the stand, the computer there says so.
+          if (tab === 'dyno' || tab === 'live') {
+            const where = tab === 'dyno' ? 'dynoMonitor' : 'standMonitor';
+            return <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}><Surface name={where} kind="monitor" label="The bay is empty">{empty}</Surface></Station>;
+          }
+          return empty;
         })()}
         {/* ---------- LEARN and PHYSICS: the laptop's two reading apps (SANDBOX) ---------- */}
         {tab === 'learn' && !inCareer && (
@@ -1398,31 +1370,31 @@ export function EcuLabApp() {
             an accordion card, so nothing about it reads as a HOME section. */}
         {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
         {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live'
-          ? <Station kind="board"><Board label="No engine yet"><EngineStart /></Board></Station>
+          ? (
+            <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}>
+              <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
+            </Station>
+          )
           : <EngineStart />)}
 
         {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
-          <Station
-            kind="stand" controlsLabel="Engine controls"
-            controls={(
-              <LiveControls
-                tachFullScaleRpm={tachFullScaleRpm}
-                onStart={startEngine} onStop={stopEngine}
-                onToggleSound={toggleSound} onThrottle={setThrottleInput}
-                onTestSound={testSound}
-              />
-            )}
-          >
-            <Computer
-              label="Engine computer" wakeKey="stand" current={standScreen} onScreen={setStandScreen}
-              nudge={session.live.running}
-              screens={[{ id: 'bars', label: 'LIVE' }, { id: 'sensors', label: 'SENSORS' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'PHYSICS' }]}
-            >
-              {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
-              {standScreen === 'sensors' && <LiveGauges />}
-              {standScreen === 'ecu' && <LiveEcuPanel />}
-              {standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
-            </Computer>
+          <Station kind="stand">
+            <Surface name="standMonitor" kind="monitor" label="Engine computer">
+              <Computer
+                label="Engine computer" wakeKey="stand" current={standScreen} onScreen={setStandScreen}
+                title="Engine stand" status={<StandStatus />}
+                nudge={session.live.running}
+                screens={[{ id: 'bars', label: 'Live' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
+              >
+                {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
+                {standScreen === 'sensors' && <LiveGauges />}
+                {standScreen === 'ecu' && <LiveEcuPanel />}
+                {standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
+              </Computer>
+            </Surface>
+            <Surface name="standConsole" kind="console" label="Engine controls">
+              <StandConsole onStart={startEngine} onStop={stopEngine} onToggleSound={toggleSound} onThrottle={setThrottleInput} onTestSound={testSound} />
+            </Surface>
           </Station>
         )}
 
@@ -1579,13 +1551,13 @@ export function EcuLabApp() {
           const shown = running ? (dynoExtra === 'live' ? 'live' : 'result') : (dynoExtra ?? dynoView);
           /** @type {{id: string, label: string, flag?: boolean}[]} */
           const keys = [];
-          if (result) keys.push({ id: 'result', label: 'CURVES' }, { id: 'live', label: 'LIVE DATA' });
+          if (result) keys.push({ id: 'result', label: 'Curves' }, { id: 'live', label: 'Live' });
           if (!running) {
             if (result) {
               keys.push({ id: 've', label: 'VE' });
               keys.push({ id: '3d', label: '3D' });
             }
-            for (const [id, label] of [['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]) {
+            for (const [id, label] of [['log', 'Pull log'], ['data', 'Data'], ['score', 'Score'], ['history', 'History']]) {
               if (!(id === 'history' ? (result || runs.length > 0) : result)) continue;
               if (!sectionAvailable(`dyno/${id}`, sectionFlags)) continue;
               keys.push({ id, label, flag: id === 'log' && result.events.length > 0 });
@@ -1599,62 +1571,26 @@ export function EcuLabApp() {
           const point = chartData[chartData.length - 1];
           const veAxes = (layout ?? layoutById(tune.layout)).ve;
           return (
-            <Station
-              kind="dyno" controlsLabel="Dyno controls"
-              controls={(
-                <>
-                  <Eyebrow icon={Activity}>{roadTest ? 'Road Test' : 'Dyno Cell'}</Eyebrow>
-                  {roadTest && (
-                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
-                      The shop has no dyno yet, so a pull is a run up through the gears on the road: the wideband and the ECU log
-                      everything, but nothing measures power. The shop can buy a dyno.
-                    </div>
-                  )}
-                  <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
-                  <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
-                  <div data-compact="hide" style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
-                    ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
-                  </div>
-                  {nitrous && (
-                    <div style={{ marginTop: 10 }}>
-                      <Toggle label="Spray nitrous on this pull" sub={`${nitrous.shotHp} shot ${nitrous.kit} kit, inside the window on TUNE › NITROUS — the same arming switch as LIVE`}
-                        checked={nitrousArmed} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })} />
-                    </div>
-                  )}
-
-                  <div data-compact="hide" style={{ margin: '12px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
-
-                  {/* The app's most important control. `disabled` dims the whole button
-                      rather than recolouring the label, so its contrast never changes. The
-                      label names the PHASE: the pull is a sequence, and this is the only
-                      thing on screen that says which part of it you are listening to. */}
-                  <div style={{ margin: '10px 0', marginBottom: result ? 12 : 0 }}>
-                    <Button size="lg" onClick={doRun} disabled={running}>
-                      <Play size={16} aria-hidden="true" />
-                      {!running ? (roadTest ? 'RUN A ROAD TEST' : 'RUN DYNO PULL')
-                        : dynoPhase === 'settle' ? 'IDLING…'
-                          : dynoPhase === 'sweep' ? 'SWEEPING…'
-                            : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
-                              : 'SETTLING…'}
-                    </Button>
-                  </div>
-
-                  {result && !roadTest && (
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <StatTile label="PEAK WHP" value={result.peakHp} tone="acc" />
-                      <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
-                    </div>
-                  )}
-                </>
-              )}
-            >
+            <Station kind="dyno">
+              <Surface name="dynoConsole" kind="console" label="Dyno controls">
+                <DynoConsole
+                  roadTest={roadTest} loadKpa={loadKpa} onLoad={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })}
+                  nitrous={nitrous} nitrousArmed={nitrousArmed} onNitrous={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })}
+                  running={running} phase={dynoPhase} rpm={running || result ? currentRpm : 0} onRun={doRun}
+                />
+              </Surface>
+              <Surface name="dynoMonitor" kind="monitor" label="Dyno computer">
               <Computer
                 label="Dyno computer" wakeKey="dyno" screens={keys} current={shown} onScreen={pick}
+                title={roadTest ? 'Road test logger' : 'Caribou Dyno'}
+                status={running ? `${Math.round(currentRpm)} rpm` : result && !roadTest ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
                 nudge={!!result && !running}
               >
                 {!result && !(runs.length > 0 && dynoView === 'history') && (
                   <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
-                    Strap the car down and make a pull: this screen shows what it measured, the curves, the log and the score.
+                    {roadTest
+                      ? 'No dyno yet. Run a road test from the console: the logger records the wideband and the ECU through the gears.'
+                      : 'Strap the car down and run a pull from the console. The curves, the log and the score come up here.'}
                   </div>
                 )}
 
@@ -1732,6 +1668,7 @@ export function EcuLabApp() {
                   <HistoryScreen />
                 )}
               </Computer>
+              </Surface>
             </Station>
           );
         })()}

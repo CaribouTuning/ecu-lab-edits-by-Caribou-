@@ -746,34 +746,34 @@ describe('DYNO while a pull is running', () => {
     goTo('DYNO');
 
     // First pull, run to completion, so the switcher and a result both exist.
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
 
     // Select DATALOG explicitly — the view a careless normalisation would keep
     // showing (as a blank tab) once a second pull starts.
-    fireEvent.click(screen.getByRole('button', { name: 'DATALOG' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
     expect(screen.getByText('Datalog')).toBeTruthy();
 
     // Start a second pull. doRun dispatches `running: true` synchronously, inside
     // this very click, before the reveal interval has ticked even once — so no
     // `waitFor` here would let the sweep catch up and paper over the one frame this
     // test exists to check.
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
 
     // DATALOG is gone...
     expect(screen.queryByText('Datalog')).toBeNull();
     // ...the switcher is gone (all four of its buttons, DATALOG included)...
-    expect(screen.queryByRole('button', { name: 'DATALOG' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'PULL LOG' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SCORE' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Data' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pull log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Score' })).toBeNull();
     // ...and CURVES is showing instead, unasked-for by the URL.
     expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
 
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
     // Vitest's default per-test budget is 5s, and this test waits for TWO real
@@ -814,15 +814,15 @@ describe('DYNO body gating — HISTORY outlives result', () => {
     });
     act(() => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'runs', value: [restoredRun] }));
 
-    expect(screen.getByRole('button', { name: 'HISTORY' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'History' })).toBeTruthy();
     // Only HISTORY: the other four sections lead to screens that render nothing
     // without a result, so they must not be offered.
-    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'PULL LOG' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'DATALOG' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SCORE' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Curves' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pull log' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Data' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Score' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'HISTORY' }));
+    fireEvent.click(screen.getByRole('button', { name: 'History' }));
     expect(screen.getByText('Run 1')).toBeTruthy();
   });
 
@@ -833,8 +833,8 @@ describe('DYNO body gating — HISTORY outlives result', () => {
     enterSandbox();
     goTo('DYNO');
 
-    expect(screen.queryByRole('button', { name: 'HISTORY' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'CURVES' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'History' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Curves' })).toBeNull();
   });
 });
 

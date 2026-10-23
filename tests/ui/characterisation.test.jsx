@@ -101,7 +101,7 @@ describe('navigation', () => {
     // actually switched screens.
     const marker = {
       TUNE: () => screen.getByRole('button', { name: 'VE · AIRFLOW' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
-      DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
+      DYNO: () => screen.getByRole('button', { name: 'Run a pull' }),
       // The live engine is the engine stand in the shop: its marker is the stand's own
       // bench computer, which only that place has.
       LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
@@ -189,19 +189,21 @@ describe('running a dyno pull', () => {
   it('produces a result', async () => {
     launch();
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'RUN DYNO PULL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     // doRun() calls setResult(r) synchronously (before the reveal interval even
-    // starts), so the PEAK WHP tile mounts immediately — no need to wait for the
-    // sweep to finish. This is the actual point of the test: if setResult were
-    // wired to the wrong slice (or dropped entirely), this tile never appears,
-    // regardless of what the button label does.
-    expect(screen.getByText('PEAK WHP')).toBeTruthy();
+    // starts), so the dyno computer's curves mount immediately — no need to wait for the
+    // sweep to finish. This is the actual point of the test: if setResult were wired to
+    // the wrong slice (or dropped entirely), they never appear, regardless of what the
+    // button label does.
+    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
     // The reveal is a setInterval that ends by setting running false, so the button
     // returns to its idle label. Real timers + waitFor is less brittle here than fake
     // timers, which would need act() wrapping around every tick.
     await waitFor(
-      () => expect(screen.getByRole('button', { name: 'RUN DYNO PULL' })).toBeTruthy(),
+      () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
       { timeout: 10000 },
     );
+    // Done, the computer's title bar reads the pull's peaks.
+    expect(screen.getByText(/^Peak \d+ whp, \d+ lb-ft$/)).toBeTruthy();
   }, DYNO_PULL_MS + 4000);
 });

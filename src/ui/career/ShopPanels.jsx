@@ -4,7 +4,7 @@
  * show exactly the same cards, from the same code.
  */
 
-import { Check, Lock, Users, Wrench } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '../primitives/Button.jsx';
@@ -56,7 +56,7 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
       <>
         {unseen && (
           <section className={styles.card} data-tone={VERDICT[last.verdict].tone} aria-label="Job result">
-            <div className={styles.cardTag}>{VERDICT[last.verdict].title.toUpperCase()} · {jobById(last.jobId).customer.name}</div>
+            <div className={styles.cardTag}>{VERDICT[last.verdict].title}: {jobById(last.jobId).customer.name}</div>
             <p className={styles.quote}>&ldquo;{last.line}&rdquo;</p>
             <ul className={styles.checks}>
               {last.results.map((r) => (
@@ -75,12 +75,12 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
             </div>
             {last.verdict === 'pass' && <p className={styles.teach}><b>What this job was about:</b> {jobById(last.jobId).teaches}</p>}
             {!last.leaves && <p className={styles.teach}>The car is still on its lift. Have another look.</p>}
-            <Button size="sm" onClick={() => update({ ...career, lastSeen: last.seq })}>OK</Button>
+            <Button size="sm" onClick={() => update({ ...career, lastSeen: last.seq })}>Done</Button>
           </section>
         )}
         {working ? (
           <section className={styles.card} aria-label="On the bay">
-            <div className={styles.cardTag}>ON THE BAY · {working.own ? 'YOUR CAR · ' : ''}{working.customer.car}</div>
+            <div className={styles.cardTag}>On the bay: {working.own ? 'your ' : ''}{working.customer.car}</div>
             {working.own ? (
               <p className={styles.small}>Your own car. New hardware leaves the old calibration behind: after every part, retune.</p>
             ) : (
@@ -90,26 +90,26 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
               </>
             )}
             <div className={styles.row}>
-              <Button onClick={onWork}><Wrench size={15} aria-hidden="true" /> WORK ON THE CAR</Button>
+              <Button onClick={onWork}>Work on the car</Button>
               {working.own
-                ? <Button variant="quiet" size="sm" onClick={() => update(stowFromLift(career, working.ownId))}>PUT IT AWAY</Button>
-                : <Button variant="quiet" size="sm" onClick={() => update(giveUp(career, working.id))}>SEND IT BACK UNFINISHED</Button>}
+                ? <Button variant="quiet" size="sm" onClick={() => update(stowFromLift(career, working.ownId))}>Put it away</Button>
+                : <Button variant="quiet" size="sm" onClick={() => update(giveUp(career, working.id))}>Send it back unfinished</Button>}
             </div>
           </section>
         ) : (
           <section className={styles.card} aria-label="On the bay">
-            <div className={styles.cardTag}>THE BAY IS EMPTY</div>
-            <p className={styles.small}>{waiting.some((j) => blockers(career, j).length === 0) ? 'A customer is waiting. Take their car in from CUSTOMERS.' : 'Nobody you can help yet. Train or buy what the next customer needs.'}</p>
-            <Button size="sm" variant="ghost" onClick={() => setTab('customers')}><Users size={14} aria-hidden="true" /> CUSTOMERS</Button>
+            <div className={styles.cardTag}>The bay is empty</div>
+            <p className={styles.small}>{waiting.some((j) => blockers(career, j).length === 0) ? 'A customer is waiting. Take their car in from Customers.' : 'Nobody you can help yet. Train or buy what the next customer needs.'}</p>
+            <Button size="sm" variant="ghost" onClick={() => setTab('customers')}>Customers</Button>
           </section>
         )}
         {career.lifts.filter((l) => l.jobId !== career.working).map((l) => {
           const job = jobById(l.jobId);
           return (
             <section key={l.jobId} className={styles.card} aria-label={`${job.customer.name}'s car`}>
-              <div className={styles.cardTag}>ON A LIFT · {job.customer.car}</div>
+              <div className={styles.cardTag}>On a lift: {job.customer.car}</div>
               <p className={styles.small}>{job.own ? 'Your own car.' : `${job.customer.name}: ${job.wants}`}</p>
-              <Button size="sm" variant="ghost" onClick={() => update({ ...career, working: l.jobId })}>PUT IT ON THE BAY</Button>
+              <Button size="sm" variant="ghost" onClick={() => update({ ...career, working: l.jobId })}>Put it on the bay</Button>
             </section>
           );
         })}
@@ -123,20 +123,21 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
           const blocked = blockers(career, job);
           return (
             <section key={job.id} className={styles.card} aria-label={`${job.customer.name}, ${job.customer.car}`}>
-              <div className={styles.cardTag}>{job.build ? 'ENGINE BUILD' : job.generated ? `WALK-IN · ${TIER_NAME[job.tier].toUpperCase()}` : TIER_NAME[job.tier].toUpperCase()} · {job.customer.name} · {job.customer.car}</div>
+              <div className={styles.cardTag}>{job.customer.name}, {job.customer.car}</div>
+              <p className={styles.small}>{job.build ? 'An engine build' : `${job.generated ? 'Walk-in, ' : ''}${TIER_NAME[job.tier]} job`}</p>
               <p className={styles.quote}>&ldquo;{job.says}&rdquo;</p>
               <p className={styles.small}><b>Wants:</b> {job.wants}</p>
               <div className={styles.meta}><span>Pays <b>{money(job.pay)}</b></span><span>Reputation <b>+{job.rep}</b></span></div>
-              {blocked.length > 0 && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> Needs: {blocked.join(' · ')}</p>}
-              <Button size="sm" disabled={blocked.length > 0} onClick={() => takeJob(job.id)} aria-label={`Take ${job.customer.name}'s car`}>TAKE THE CAR</Button>
+              {blocked.length > 0 && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> Needs {blocked.join(', ')}</p>}
+              <Button size="sm" disabled={blocked.length > 0} onClick={() => takeJob(job.id)} aria-label={`Take ${job.customer.name}'s car`}>Take the car</Button>
             </section>
           );
         })}
         {waiting.length === 0 && <p className={styles.intro}>No one else is waiting today.</p>}
         <section className={styles.card} aria-label="Tomorrow">
-          <div className={styles.cardTag}>DAY {career.day} · CLOSING UP</div>
+          <div className={styles.cardTag}>Day {career.day}: closing up</div>
           <p className={styles.small}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait for you overnight. Opening tomorrow costs the day&apos;s running costs, {money(overhead(career))}.</p>
-          <Button size="sm" variant="ghost" onClick={() => update(nextDay(career))}>OPEN TOMORROW</Button>
+          <Button size="sm" variant="ghost" onClick={() => update(nextDay(career))}>Open tomorrow</Button>
         </section>
       </>
     )}
@@ -149,12 +150,12 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
           const own = career.owned.includes(e.id);
           return (
             <section key={e.id} className={styles.card} data-owned={own ? 'true' : 'false'} aria-label={e.title}>
-              <div className={styles.cardTag}>{own ? 'OWNED' : money(e.price)} · {e.title}</div>
+              <div className={styles.cardTag}>{e.title}, {own ? 'owned' : money(e.price)}</div>
               <p className={styles.small}>{e.does}</p>
               {own ? <span className={styles.owned}><Check size={14} aria-hidden="true" /> In the shop</span> : (
                 <>
                   {why && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> {why}</p>}
-                  <Button size="sm" disabled={!!why} onClick={() => update(buy(career, e.id))} aria-label={`Buy ${e.title}`}>BUY</Button>
+                  <Button size="sm" disabled={!!why} onClick={() => update(buy(career, e.id))} aria-label={`Buy ${e.title}`}>Buy</Button>
                 </>
               )}
             </section>
@@ -171,12 +172,12 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
           const done = career.trained.includes(t.id);
           return (
             <section key={t.id} className={styles.card} data-owned={done ? 'true' : 'false'} aria-label={t.title}>
-              <div className={styles.cardTag}>{done ? 'COMPLETED' : money(t.price)} · {t.title}</div>
+              <div className={styles.cardTag}>{t.title}, {done ? 'completed' : money(t.price)}</div>
               <p className={styles.small}>{t.summary}</p>
-              {done ? <Button size="sm" variant="ghost" onClick={() => setLesson(t.id)}>REVIEW THE LESSON</Button> : (
+              {done ? <Button size="sm" variant="ghost" onClick={() => setLesson(t.id)}>Review the lesson</Button> : (
                 <>
                   {why && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> {why}</p>}
-                  <Button size="sm" disabled={!!why} onClick={() => { update(train(career, t.id)); setLesson(t.id); }} aria-label={`Take the ${t.title} course`}>TAKE THE COURSE</Button>
+                  <Button size="sm" disabled={!!why} onClick={() => { update(train(career, t.id)); setLesson(t.id); }} aria-label={`Take the ${t.title} course`}>Take the course</Button>
                 </>
               )}
             </section>
@@ -188,22 +189,22 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
     {tab === 'books' && (
       <>
         <section className={styles.card} aria-label="Reputation">
-          <div className={styles.cardTag}>REPUTATION · {tier.title}</div>
+          <div className={styles.cardTag}>Reputation: {tier.title}</div>
           <div className={styles.repTrack}><span className={styles.repFill} style={{ width: `${nextTier ? Math.min(100, ((career.rep - tier.min) / (nextTier.min - tier.min)) * 100) : 100}%` }} /></div>
           <p className={styles.small}>{nextTier ? `${nextTier.min - career.rep} more to become a ${nextTier.title.toLowerCase()}.` : 'As good as a shop gets.'} Good work raises it; unsafe work or unfinished cars cost it.</p>
         </section>
         <section className={styles.card} aria-label="Running costs">
-          <div className={styles.cardTag}>RUNNING COSTS · {money(overhead(career))} A DAY</div>
+          <div className={styles.cardTag}>Running costs: {money(overhead(career))} a day</div>
           <p className={styles.small}>Rent, and what the shop has grown into: every extra lift, the dyno, the lounge. Paid each time the day moves on.</p>
         </section>
         <section className={styles.card} aria-label="Milestones">
-          <div className={styles.cardTag}>MILESTONES · {career.milestones.length}/{MILESTONES.length}</div>
+          <div className={styles.cardTag}>Milestones: {career.milestones.length} of {MILESTONES.length}</div>
           <ul className={styles.plain}>
             {MILESTONES.map((m) => <li key={m.id} data-done={career.milestones.includes(m.id) ? 'true' : 'false'}>{career.milestones.includes(m.id) ? '★' : '☆'} {m.title}</li>)}
           </ul>
         </section>
         <section className={styles.card} aria-label="Job history">
-          <div className={styles.cardTag}>RECENT WORK</div>
+          <div className={styles.cardTag}>Recent work</div>
           {career.history.length === 0 ? <p className={styles.small}>Nothing yet.</p> : (
             <ul className={styles.plain}>
               {career.history.slice(0, 12).map((h, i) => (
@@ -214,13 +215,13 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
         </section>
         <section className={styles.card} aria-label="Start over">
           {!confirmReset ? (
-            <Button size="sm" variant="quiet" onClick={() => setConfirmReset(true)}>START A NEW CAREER</Button>
+            <Button size="sm" variant="quiet" onClick={() => setConfirmReset(true)}>Start a new career</Button>
           ) : (
             <>
               <p className={styles.small}>This deletes the shop: money, reputation, equipment, training and every car. Sandbox is not affected.</p>
               <div className={styles.row}>
-                <Button size="sm" variant="danger" onClick={() => { update(newCareer()); setConfirmReset(false); }}>DELETE THE SHOP</Button>
-                <Button size="sm" variant="ghost" onClick={() => setConfirmReset(false)}>KEEP IT</Button>
+                <Button size="sm" variant="danger" onClick={() => { update(newCareer()); setConfirmReset(false); }}>Delete the shop</Button>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmReset(false)}>Keep it</Button>
               </div>
             </>
           )}
@@ -241,7 +242,7 @@ export function LessonDialog({ lesson, onClose, onLearn }) {
   return (
     <div className={styles.lessonScrim} role="dialog" aria-modal="true" aria-label={`${t.title} lesson`}>
       <div className={styles.lesson}>
-        <div className={styles.cardTag}>TRAINING · {t.title}</div>
+        <div className={styles.cardTag}>Training: {t.title}</div>
         {t.lesson.map((para) => <p key={para} className={styles.lessonText}>{para}</p>)}
         <p className={styles.small}><b>Opens:</b> {[...t.pages.map((pg) => `TUNE › ${pg.toUpperCase()}`), ...(t.sections ?? []).map((sc) => `the ECU settings on TUNE › ${sc.toUpperCase()}`)].join(', ')}.</p>
         {t.deeper && <p className={styles.small}><b>Go deeper:</b> {t.deeper}{onLearn ? '.' : ''}</p>}

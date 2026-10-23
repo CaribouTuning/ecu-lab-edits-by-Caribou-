@@ -9,6 +9,7 @@
 import React from 'react';
 
 import { useSession } from '../state/StoreProvider.jsx';
+import { liveStatus } from '../screens/dash/LiveScreen.jsx';
 
 import styles from './BenchScreens.module.css';
 
@@ -90,7 +91,12 @@ export function LiveBars({ fullScaleRpm, redline }) {
     { label: 'IAT', value: f(live.sensedIat, 0), unit: ' °C', pct: live.sensedIat / 90, tone: live.sensedIat > 65 ? 'danger' : 'acc' },
     { label: 'FUEL TRIM', value: `${live.stft > 0 ? '+' : ''}${f(live.stft, 1)}`, unit: '%', pct: (live.stft + 25) / 50, tone: Math.abs(live.stft) > 15 ? 'danger' : Math.abs(live.stft) > 8 ? 'warn' : 'ok' },
   ];
-  return <BarGraph rpm={live.sensedRpm} fullScaleRpm={fullScaleRpm} redline={redline} throttle={live.effThrottle ?? 0} cut={!!live.fuelCut} meters={meters} />;
+  return (
+    <>
+      <p className={styles.status}>{liveStatus(live)}</p>
+      <BarGraph rpm={live.sensedRpm} fullScaleRpm={fullScaleRpm} redline={redline} throttle={live.effThrottle ?? 0} cut={!!live.fuelCut} meters={meters} />
+    </>
+  );
 }
 
 /**

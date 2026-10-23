@@ -75,11 +75,11 @@ export function LegacyShop({ onWork, onMenu, onLearn, office = false }) {
   };
 
   const TABS = [
-    { id: 'today', label: 'TODAY', icon: ClipboardList },
-    { id: 'customers', label: 'CUSTOMERS', icon: Users, count: waiting.filter((j) => blockers(career, j).length === 0).length },
-    { id: 'upgrades', label: 'UPGRADES', icon: Hammer },
-    { id: 'training', label: 'TRAINING', icon: BookOpen },
-    { id: 'books', label: 'BOOKS', icon: Wallet },
+    { id: 'today', label: 'Today', icon: ClipboardList },
+    { id: 'customers', label: 'Customers', icon: Users, count: waiting.filter((j) => blockers(career, j).length === 0).length },
+    { id: 'upgrades', label: 'Upgrades', icon: Hammer },
+    { id: 'training', label: 'Training', icon: BookOpen },
+    { id: 'books', label: 'Books', icon: Wallet },
   ];
 
   return (
@@ -90,9 +90,9 @@ export function LegacyShop({ onWork, onMenu, onLearn, office = false }) {
           <span className={styles.brandName}>Your tuning shop</span>
         </div>
         <div className={styles.stats} aria-label="Shop status">
-          <span className={styles.stat}><span className={styles.statKey}>DAY</span>{career.day}</span>
-          <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>CASH</span>{money(career.money)}</span>
-          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>REP</span>{career.rep} · {isMaster(career) ? 'Master tuner' : tier.title}</span>
+          <span className={styles.stat}><span className={styles.statKey}>Day</span>{career.day}</span>
+          <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>Cash</span>{money(career.money)}</span>
+          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>Reputation</span>{career.rep}, {isMaster(career) ? 'master tuner' : tier.title.toLowerCase()}</span>
         </div>
         {!office && <Button size="sm" variant="ghost" onClick={onMenu} aria-label="Main menu"><Menu size={15} aria-hidden="true" /> MENU</Button>}
       </header>
@@ -108,7 +108,7 @@ export function LegacyShop({ onWork, onMenu, onLearn, office = false }) {
       <nav className={styles.tabs} aria-label="Shop">
         {TABS.map((t) => (
           <button key={t.id} type="button" className={styles.tab} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
-            <t.icon size={15} aria-hidden="true" />
+            {!office && <t.icon size={15} aria-hidden="true" />}
             <span>{t.label}</span>
             {t.count > 0 && <span className={styles.count}>{t.count}</span>}
           </button>
