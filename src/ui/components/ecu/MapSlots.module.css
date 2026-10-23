@@ -38,8 +38,9 @@
   border-color: var(--acc);
 }
 
-/* An empty slot is quieter than one holding a tune: dashed, not dimmer text (issue 79). */
-.slot[data-state='empty'] { color: var(--ink2); border-style: dashed; }
+/* An empty slot is quieter than one holding a tune: a dashed border and no stored dot,
+   not dimmer text (issue 79). Its text keeps .slot's --ink2. */
+.slot[data-state='empty'] { border-style: dashed; }
 
 /* A stored tune: the same dot the app uses everywhere for "something is here". */
 .stored {
