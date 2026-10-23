@@ -1,0 +1,108 @@
+name: Desktop
+
+# Packages ECU Lab as a desktop app for Windows, macOS and Linux and attaches the
+# installers to a GitHub Release.
+#
+# A tag does both jobs at once: deploy.yml publishes the site, this publishes the
+# installers. Run it by hand from the Actions tab to get the installers as downloadable
+# run artifacts without cutting a release, which is the way to try a build.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Once, on Linux only. The fingerprint is a float-sensitive hash, so the suite is
+  # only meaningful on the platform it is pinned on. A tag can sit on any commit, so
+  # nothing is packaged without passing it.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test
+        run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows, flag: --win }
+          - { os: macos-latest, name: macos, flag: --mac }
+          - { os: ubuntu-latest, name: linux, flag: --linux }
+    runs-on: ${{ matrix.os }}
+    env:
+      # The installers are unsigned. Say so, rather than let the builder go looking
+      # for a certificate that is not there.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Package
+        run: npm run desktop:dist -- ${{ matrix.flag }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  # Tags only. Re-running after a failure replaces the files on the existing release
+  # instead of failing because it already exists.
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: files
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # A tag name may legally contain shell metacharacters, so it travels as an
+          # environment variable and is only ever quoted in the script.
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" files/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" files/* --repo "$GITHUB_REPOSITORY" \
+              --title "ECU Lab $TAG" --generate-notes --verify-tag
+          fi
