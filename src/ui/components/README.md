@@ -12,9 +12,10 @@ Keeping them here rather than beside the primitives is the point. Three files in
 location, and the next person adding one would have no way to tell which kind they were
 looking at.
 
-`BuildSection` and `ExpandableInfo` are both hand-rolled disclosures, and neither carries
-`aria-expanded` — issue #81 tracks replacing both with a real `Disclosure` primitive, at
-which point they graduate out of this folder by being deleted.
+`BuildSection` and `ExpandableInfo` are both hand-rolled disclosures. Both now carry
+`aria-expanded`, `aria-controls` and an `inert` collapsed body (issue 81), the last
+through `inert.js`; a shared `Disclosure` primitive was left for later because a branch
+in flight edits both files.
 
 `BuildSection` keeps its inline `maxHeight` deliberately: `tests/ui/routing-shell.test.jsx`
 reads it to tell an open section from a collapsed one, which is how the fully-collapsed
@@ -56,3 +57,10 @@ each mount one above their grid. It takes no props and reads `history` from the 
 itself, because the stacks are global — undoing a spark edit from the FUEL screen is
 correct behaviour, not a bug. What is undoable lives in `src/ui/state/reducer.js`
 (`UNDOABLE`); what a snapshot carries lives in `src/ui/state/history.js`.
+
+`CommandPalette` is the one file here with a stylesheet, and the reason is the
+opposite of its neighbours': they were lifted out of `EcuLab.jsx` with inline styles
+already on them, and it was written new (issue 63), so it was written the way a
+primitive is. It is not in `primitives/` because it is not general — it knows what a
+command is. It knows nothing else: `commands.js` beside the shell builds and ranks
+the list, and EcuLab owns when it is open.
