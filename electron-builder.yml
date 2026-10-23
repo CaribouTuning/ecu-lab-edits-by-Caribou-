@@ -12,7 +12,8 @@ copyright: Copyright © CaribouTuning and Turtle.GTI
 
 directories:
   output: release
-  # Optional: put icon.png (1024x1024) in build/ and every platform's icon is made from it.
+  # build/icon.png (1024x1024) is the source for every platform's icon; icon.svg is
+  # the original it was rendered from.
   buildResources: build
 
 files:
@@ -25,23 +26,30 @@ files:
 asar: true
 publish: null
 
+# File names carry no version on purpose: the release they are attached to already
+# names it, and a fixed name makes each file easy to recognise and to link to.
+# Every target is a plain file (no zips), so each one is visible on the release page.
+
 win:
   target:
     - { target: nsis, arch: [x64] }
     - { target: portable, arch: [x64] }
 nsis:
-  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  artifactName: ECU-Lab-installer.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # The installer asks about the desktop shortcut itself (build/installer.nsh), so the
+  # builder must not create one unconditionally.
+  createDesktopShortcut: false
+  createStartMenuShortcut: true
 portable:
-  artifactName: ${productName}-${version}-portable-${arch}.${ext}
+  artifactName: ECU-Lab-portable.${ext}
 
 mac:
   category: public.app-category.education
   target:
     - { target: dmg, arch: [x64, arm64] }
-    - { target: zip, arch: [x64, arm64] }
-  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  artifactName: ECU-Lab-mac-${arch}.${ext}
 
 linux:
   category: Education
@@ -51,4 +59,4 @@ linux:
   target:
     - { target: AppImage, arch: [x64] }
     - { target: deb, arch: [x64] }
-  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  artifactName: ECU-Lab-linux-${arch}.${ext}

@@ -21,7 +21,15 @@ const HOST = 'ecu-lab';
 const ENTRY = `${SCHEME}://${HOST}/index.html`;
 
 /** The Vite build. Inside a packaged app this resolves into `app.asar`. */
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(HERE, '..', 'dist');
+
+/**
+ * Window and taskbar icon for Windows and Linux (macOS takes it from the app bundle).
+ * The installers' own icons are built from build/icon.png by electron-builder; this
+ * copy is what the running window shows, and what replaces the Electron logo in dev.
+ */
+const ICON = path.join(HERE, 'icon.png');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -82,6 +90,7 @@ function createWindow() {
     title: 'ECU Lab',
     // Matches the page background in index.html, so there is no white flash on launch.
     backgroundColor: '#0a0d14',
+    icon: ICON,
     // Windows and Linux: hide the menu bar until Alt is pressed.
     autoHideMenuBar: true,
     webPreferences: {
@@ -122,6 +131,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     registerAppProtocol();
+    // A packaged macOS app gets its Dock icon from the bundle. Only a dev run needs it.
+    if (!app.isPackaged) app.dock?.setIcon(ICON);
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
