@@ -167,6 +167,12 @@ A missing secret is a silent no-op, not a failure. That is what keeps forks and 
 requests (which GitHub does not give secrets to) green, and a Discord outage only raises a
 workflow warning — a notification never fails a deploy.
 
+After adding or rotating a webhook, check it from the Actions tab: run **Discord test**,
+pick a channel, and look for a test message there. The run's log says
+`Discord notification sent.`, warns that Discord rejected the request, or notes that the
+secret is not set. Nobody can read a secret back once it is saved, so a real post is the
+only way to know the stored URL works.
+
 ## The fingerprint test
 
 `tests/fingerprint.test.js` hashes the whole simulation across a large matrix of
