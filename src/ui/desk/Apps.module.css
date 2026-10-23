@@ -207,36 +207,76 @@
 .buildEngine { min-height: 0; }
 .buildEngine > div { height: 170px; }
 
-/* ---------- CAREER: Pops's messages ---------- */
-.msgs { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; min-height: 100%; }
-.msgList { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-right: 1px solid var(--line); background: var(--panel); }
-.msgProgress { display: flex; flex-direction: column; gap: 6px; padding: 8px 6px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); color: var(--ink2); }
+/* ---------- CAREER: Pops's messages, as the phone's Messages and Mail draw them ---------- */
+.msgs { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; min-height: 100%; background: var(--bg); font-family: var(--sans); }
+.msgList { min-width: 0; display: flex; flex-direction: column; padding: 8px 0 16px; border-right: 1px solid var(--line); background: var(--bg); }
+.msgTitle { margin: 4px 16px 8px; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.msgProgress { display: flex; flex-direction: column; gap: 6px; margin: 0 12px 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); font-size: var(--fs-sm); color: var(--ink2); }
 .msgProgress b { color: var(--ink); }
-.msgBar { height: 6px; border-radius: 3px; background: var(--panel3); overflow: hidden; }
-.msgBar span { display: block; height: 100%; background: var(--acc); }
-.msgRow { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border: 1.5px solid transparent; background: transparent; color: var(--ink2); text-align: left; cursor: pointer; }
-.msgRow:hover { background: var(--panel2); }
-.msgRowText { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-sm); }
-.msgRowText b { color: inherit; display: flex; align-items: center; gap: 6px; }
-.msgRowText span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.msgDot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); display: inline-block; }
-.msgView { padding: 18px 22px 28px; max-width: 760px; }
-.msgBack { display: none; margin-bottom: 8px; border: 0; background: transparent; color: var(--acc-ink); font-weight: 700; cursor: pointer; padding: 0; }
-.msgSubject { margin: 0 0 2px; font-size: var(--fs-lg); }
-.msgFrom { margin: 0 0 14px; font-size: var(--fs-xs); color: var(--ink3); }
-.msgPara { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.65; color: var(--ink); }
-.bubbles { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.bubble { margin: 0; max-width: 80%; padding: 10px 14px; border-radius: 18px 18px 18px 4px; background: var(--panel3); color: var(--ink); font-size: var(--fs-md); line-height: 1.5; }
-.msgLesson { margin: 18px 0 14px; padding: 14px 16px; border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); }
+.msgBar { height: 4px; border-radius: 2px; background: var(--panel3); overflow: hidden; }
+.msgBar span { display: block; height: 100%; background: var(--msg-sent); }
+.msgRows { display: flex; flex-direction: column; }
+.msgRow {
+  display: flex; gap: 10px; align-items: center; padding: 10px 12px 10px 4px; border: 0; border-radius: 0;
+  background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit;
+}
+.msgRow:hover { background: var(--panel); }
+.msgRow[aria-current='page'] { background: var(--msg-sent); }
+.msgRow[aria-current='page'] :is(small, .msgRowPreview, .msgRowSubject) { color: var(--app-glyph); }
+.msgDotSlot { flex: none; width: 12px; display: grid; place-items: center; }
+.msgDot { width: 10px; height: 10px; border-radius: 50%; background: var(--msg-sent); display: block; }
+.msgRow[aria-current='page'] .msgDot { background: var(--app-glyph); }
+.avatar {
+  flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(var(--app-search-hi), var(--app-search-lo)); color: var(--app-glyph); font-size: 19px; font-weight: 600;
+}
+.avatar[data-small='true'] { width: 36px; height: 36px; font-size: 16px; }
+.msgRowText {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;
+  padding-bottom: 10px; margin-bottom: -10px; border-bottom: 1px solid var(--line);
+}
+.msgRowTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.msgRowTop b { font-size: var(--fs-md); font-weight: 600; }
+.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-sm); color: var(--ink3); flex: none; }
+.msgRowSubject, .msgRowPreview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+.msgRowSubject { display: flex; align-items: center; gap: 5px; color: var(--ink-soft); }
+.msgRowSubject svg { flex: none; }
+.msgRowSubject[data-unread='true'] { color: var(--ink); font-weight: 600; }
+.msgRowPreview { color: var(--ink3); }
+.msgView { min-width: 0; padding: 14px 22px 28px; }
+.msgEmpty { color: var(--ink3); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
+.msgBack {
+  display: none; align-items: center; gap: 0; margin: 0 0 6px -6px; padding: 4px 4px; border: 0;
+  background: transparent; color: var(--msg-sent); font: inherit; font-size: var(--fs-md); cursor: pointer;
+}
+/* A text: the thread, Pops's bubbles grey on the left, yours blue on the right. */
+.threadHead { display: flex; flex-direction: column; align-items: center; gap: 3px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.threadHead b { font-size: var(--fs-sm); font-weight: 600; }
+.threadHead small { font-size: var(--fs-xs); color: var(--ink3); }
+.threadDay { align-self: center; margin: 0 0 4px; font-size: var(--fs-xs); color: var(--ink3); }
+.bubbles { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 12px; max-width: 640px; margin: 0 auto; }
+.bubble { margin: 0; max-width: 78%; padding: 8px 14px; border-radius: 18px; background: var(--msg-got); color: var(--ink); font-size: var(--fs-md); line-height: 1.4; }
+.bubble[data-me='true'] { align-self: flex-end; margin-top: 8px; background: var(--msg-sent); color: var(--app-glyph); }
+/* An email: Mail's page, the subject over who it is from. */
+.mail { max-width: 720px; }
+.msgSubject { margin: 4px 0 12px; font-size: 22px; font-weight: 700; line-height: 1.25; }
+.mailFrom { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.mailFrom > span { display: flex; flex-direction: column; flex: 1; }
+.mailFrom b { font-size: var(--fs-base); font-weight: 600; }
+.mailFrom small { font-size: var(--fs-xs); color: var(--ink3); }
+.mailWhen { align-self: flex-start; }
+.msgPara { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.6; color: var(--ink); }
+.msgLesson { margin: 18px 0 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel); }
 .msgLesson h4 { margin: 0 0 8px; font-size: var(--fs-base); color: var(--acc-ink); }
 .msgLesson ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink); }
 .msgSources { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.5; }
-.msgCourse { padding: 6px 12px; border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); font-weight: 700; font-size: var(--fs-sm); cursor: pointer; }
-.msgGoal { padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-bg); color: var(--warn-ink); font-size: var(--fs-sm); }
+.msgCourse { padding: 8px 14px; border: 0; border-radius: 10px; background: var(--msg-sent); color: var(--app-glyph); font: inherit; font-weight: 600; font-size: var(--fs-sm); cursor: pointer; }
+.msgGoal { padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: var(--fs-sm); }
 @media (max-width: 700px) {
-  .msgs { grid-template-columns: 1fr; }
+  .msgs { grid-template-columns: minmax(0, 1fr); }
   .msgs[data-open] .msgList { display: none; }
   .msgs:not([data-open]) .msgView { display: none; }
   .msgList { border-right: 0; }
-  .msgBack { display: inline-block; }
+  .msgBack { display: inline-flex; }
+  .msgView { padding: 8px 14px 24px; }
 }

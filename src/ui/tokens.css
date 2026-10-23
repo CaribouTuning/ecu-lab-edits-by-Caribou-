@@ -75,12 +75,31 @@
   --wall-deep: #0b3a9a;
   --wall-mid: #2c6fe0;
   --wall-light: #8fbdff;
+  /* The apps' icons, iOS style, and Messages' bubbles. */
+  --app-tune-hi: #5ac8fa;
+  --app-tune-lo: #0a5fd8;
+  --app-build-hi: #b8bec8;
+  --app-build-lo: #5d6470;
+  --app-learn-hi: #ffb340;
+  --app-learn-lo: #f46a00;
+  --app-physics-hi: #bf8cff;
+  --app-physics-lo: #6a35e8;
+  --app-msg-hi: #6cf57f;
+  --app-msg-lo: #0bb82a;
+  --app-search-hi: #8e8e98;
+  --app-search-lo: #48484f;
+  --app-shop-hi: #ffd84a;
+  --app-shop-lo: #f29a00;
+  --app-glyph: #ffffff;
+  --msg-sent: #1d8cff;
+  --msg-got: #2a2d34;
 
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   --acc-rgb: 76, 158, 255;
   --shadow-rgb: 0, 0, 0;
+  --glass-rgb: 255, 255, 255;
 
   /* Font-size scale, small to large. See the matching comment in tokens.js for
      why these six steps replace fifteen raw values rather than naming all of

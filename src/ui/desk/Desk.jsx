@@ -14,7 +14,7 @@
  * hands over the screen for it; this decides how it is framed.
  */
 
-import { Bell, BookOpen, ChevronLeft, Home, Search, Settings, Store, X } from 'lucide-react';
+import { Atom, Bell, BookOpen, ChevronLeft, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
@@ -85,63 +85,24 @@ export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor', office: 'Job board
 const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
 
 /**
- * The four apps' pictures, doodled in pen the way they were drawn on the pad, each over a
- * pale watercolour wash. Drawn on a 48-unit square with `DOODLE` stroke settings.
+ * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
+ * it (Desk.module.css colours each tile by `data-app`). The same on the laptop and the phone.
  */
-const APP_ICONS = {
-  // A power curve on its axes, labelled HP and RPM.
-  tune: (
-    <>
-      <path className="wash" d="M10 36c2-12 10-22 20-20s12 12 10 20z" />
-      <path d="M9 6c0 10 .5 22 0 33 9 .3 22-.4 33 .2" />
-      <path d="M11 36c4-9 8-19 15-21 6-2 10 5 12 13" />
-      <text x="1" y="24" className="label">HP</text>
-      <text x="28" y="47" className="label">RPM</text>
-    </>
-  ),
-  // An envelope, a note poking out of it.
-  messages: (
-    <>
-      <path className="wash" d="M7 16h34v24H7z" />
-      <path d="M14 18V8h20v10" />
-      <path d="M18 12h12M18 15h8" />
-      <path d="M6.5 16c11-.3 23 .3 35 0 .3 8-.2 16 .3 24-12 .3-24-.3-35 0-.3-8 .2-16-.3-24z" />
-      <path d="M7 17l17 13 17-13M7 40l13-11M41 40L28 29" />
-    </>
-  ),
-  // A sheet of notes, its corner curling.
-  learn: (
-    <>
-      <path className="wash" d="M12 10h22l4 30H14z" />
-      <path d="M11 6c7 .4 17-.3 26 .3.4 10-.3 24 .5 34-4-3-7 1-10-1s-6 2-9 0-5 1-7-.4C11 28 11.5 16 11 6z" />
-      <path d="M15 14c3-2 5 2 8 0s5 2 8 0M15 21c3-2 5 2 8 0s5 2 8 0M15 28c3-2 5 2 8 0" />
-    </>
-  ),
-  // Two pistons on their rods, meeting at the crank.
-  build: (
-    <>
-      <path className="wash" d="M8 12l12-6 6 12-12 6zM28 8l12 4-4 12-12-4z" />
-      <path d="M7 12.5l12.5-6.5 6 12-12.5 6.3z M9.5 16l11-5.5" />
-      <path d="M28.5 7.5l12 4.5-4.5 12-12-4.6z M27 11.5l11.5 4" />
-      <path d="M19 21l5 15M30 22l-4 14" />
-      <circle cx="25" cy="38" r="5" />
-      <circle cx="25" cy="38" r="1.5" />
-    </>
-  ),
-  // An atom: a nucleus and three crossed orbits, an electron on each.
-  physics: (
-    <>
-      <circle className="wash" cx="24" cy="24" r="15" />
-      <ellipse cx="24" cy="24" rx="20" ry="7.5" />
-      <ellipse cx="24" cy="24" rx="20" ry="7.5" transform="rotate(60 24 24)" />
-      <ellipse cx="24" cy="24" rx="20" ry="7.5" transform="rotate(-60 24 24)" />
-      <circle cx="24" cy="24" r="3" className="dot" />
-      <circle cx="44" cy="24" r="1.8" className="dot" />
-      <circle cx="14" cy="7" r="1.8" className="dot" />
-      <circle cx="14" cy="41" r="1.8" className="dot" />
-    </>
-  ),
-};
+const GLYPHS = { tune: Gauge, build: Wrench, learn: BookOpen, physics: Atom, messages: MessageCircle, search: Search, shop: Store };
+
+/**
+ * @param {{id: string, badge?: number, small?: boolean}} props
+ * @returns {React.ReactElement}
+ */
+function AppTile({ id, badge = 0, small = false }) {
+  const Glyph = GLYPHS[/** @type {keyof typeof GLYPHS} */ (id)] ?? Gauge;
+  return (
+    <span className={styles.appTile} data-app={id} data-small={small ? 'true' : undefined} aria-hidden="true">
+      <Glyph strokeWidth={2.1} fill={id === 'messages' ? 'currentColor' : 'none'} />
+      {badge > 0 && <span className={styles.appBadge}>{badge}</span>}
+    </span>
+  );
+}
 
 /** A phone's screen, either way up: where the device in your hand is a phone, not a laptop. */
 const PHONE_QUERY = '(max-width: 560px), (max-height: 500px)';
@@ -244,7 +205,6 @@ export function Desk({
       {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>+{notices.length}</span>}
     </button>
   );
-  const appIcon = (id) => <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (id)]}</svg>;
   const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'messages'));
 
   // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
@@ -280,17 +240,17 @@ export function Desk({
           <div className={styles.appGrid}>
             {shownApps.map((a) => (
               <button key={a.id} type="button" className={styles.phoneIcon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
-                <span className={`${styles.phoneIconTile} ink-frame`}>{appIcon(a.id)}{badges[a.id] ? <span className={styles.appBadge}>{badges[a.id]}</span> : null}</span>
+                <AppTile id={a.id} badge={badges[a.id]} />
                 <span className={styles.phoneIconLabel}>{a.label}</span>
               </button>
             ))}
           </div>
           <div className={styles.dock}>
             <button type="button" className={styles.dockBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
-              <Search aria-hidden="true" /><span>Search</span>
+              <AppTile id="search" /><span>Search</span>
             </button>
             <button type="button" className={styles.dockBtn} onClick={onBay} aria-label="Put the phone down" tabIndex={open ? 0 : -1}>
-              <Store aria-hidden="true" /><span>Shop</span>
+              <AppTile id="shop" /><span>Shop</span>
             </button>
           </div>
         </div>
@@ -313,7 +273,7 @@ export function Desk({
                   <section className={styles.window} aria-label={appInfo.label}>
                     <header className={styles.titleBar}>
                       <span className={styles.titleIcon} aria-hidden="true">
-                        <svg viewBox="0 0 48 48" className={styles.doodle}>{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (appInfo.id)]}</svg>
+                        <AppTile id={appInfo.id} small />
                       </span>
                       <span className={`${styles.title} ink-frame`}>{appInfo.label}</span>
                       <button type="button" className={`${styles.close} ink-frame`} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
@@ -328,8 +288,8 @@ export function Desk({
                     <div className={styles.icons}>
                       {shownApps.map((a) => (
                         <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
-                          {appIcon(a.id)}{badges[a.id] ? <span className={styles.appBadge}>{badges[a.id]}</span> : null}
-                          <span className={`${styles.iconLabel} ink-frame`}>{a.label}</span>
+                          <AppTile id={a.id} badge={badges[a.id]} />
+                          <span className={styles.iconLabel}>{a.label}</span>
                         </button>
                       ))}
                     </div>

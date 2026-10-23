@@ -115,6 +115,26 @@ export const tokens = Object.freeze({
   wallMid: '#2c6fe0',
   wallLight: '#8fbdff',
 
+  // The apps' icons, iOS style: a tile in a top-to-bottom gradient with a white glyph, and
+  // Messages' sent and received bubbles.
+  appTuneHi: '#5ac8fa',
+  appTuneLo: '#0a5fd8',
+  appBuildHi: '#b8bec8',
+  appBuildLo: '#5d6470',
+  appLearnHi: '#ffb340',
+  appLearnLo: '#f46a00',
+  appPhysicsHi: '#bf8cff',
+  appPhysicsLo: '#6a35e8',
+  appMsgHi: '#6cf57f',
+  appMsgLo: '#0bb82a',
+  appSearchHi: '#8e8e98',
+  appSearchLo: '#48484f',
+  appShopHi: '#ffd84a',
+  appShopLo: '#f29a00',
+  appGlyph: '#ffffff',
+  msgSent: '#1d8cff',
+  msgGot: '#2a2d34',
+
   // Type.
   mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
   sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
@@ -123,6 +143,7 @@ export const tokens = Object.freeze({
   // rather than re-typing them at a new alpha. See accAlpha/shadowAlpha below.
   accRgb: '76, 158, 255',
   shadowRgb: '0, 0, 0',
+  glassRgb: '255, 255, 255',
 
   // Font-size scale, small to large. Named by role/size rather than kept as the
   // 15 raw values they replace, because a scale is a small set of deliberate
