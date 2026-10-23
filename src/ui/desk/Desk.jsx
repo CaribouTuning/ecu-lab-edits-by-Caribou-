@@ -30,6 +30,8 @@ export const DESK_APPS = [
   { id: 'learn', label: 'Learn', name: 'LEARN' },
   { id: 'build', label: 'Build', name: 'BUILD' },
   { id: 'physics', label: 'Physics', name: 'PHYSICS' },
+  // CAREER: Pops's emails and texts.
+  { id: 'messages', label: 'Messages', name: 'MESSAGES' },
 ];
 
 /**
@@ -91,6 +93,16 @@ const APP_ICONS = {
       <path d="M11 36c4-9 8-19 15-21 6-2 10 5 12 13" />
       <text x="1" y="24" className="label">HP</text>
       <text x="28" y="47" className="label">RPM</text>
+    </>
+  ),
+  // An envelope, a note poking out of it.
+  messages: (
+    <>
+      <path className="wash" d="M7 16h34v24H7z" />
+      <path d="M14 18V8h20v10" />
+      <path d="M18 12h12M18 15h8" />
+      <path d="M6.5 16c11-.3 23 .3 35 0 .3 8-.2 16 .3 24-12 .3-24-.3-35 0-.3-8 .2-16-.3-24z" />
+      <path d="M7 17l17 13 17-13M7 40l13-11M41 40L28 29" />
     </>
   ),
   // A sheet of notes, its corner curling.
@@ -168,6 +180,7 @@ function Clock() {
  * @param {() => void} props.onBay shut the laptop and look at the shop (in CAREER, back out to the town's shop)
  * @param {string[]} [props.apps] which apps the desktop offers, by id (default: SANDBOX's four)
  * @param {boolean} [props.outside] CAREER: the shop's garage door leads outside
+ * @param {Record<string, number>} [props.badges] a count to show on an app's icon
  * @param {() => void} [props.onSearch] @param {() => void} [props.onMenu] @param {() => void} [props.onTutorial] @param {() => void} [props.onRepair]
  * @param {Notice[]} [props.notices] what the notifications list holds
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
@@ -177,7 +190,7 @@ function Clock() {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
@@ -226,7 +239,7 @@ export function Desk({
     </button>
   );
   const appIcon = (id) => <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (id)]}</svg>;
-  const shownApps = DESK_APPS.filter((a) => !apps || apps.includes(a.id));
+  const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'messages'));
 
   // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
   // apps full screen, and putting it down shows the shop.
@@ -261,7 +274,7 @@ export function Desk({
           <div className={styles.appGrid}>
             {shownApps.map((a) => (
               <button key={a.id} type="button" className={styles.phoneIcon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
-                <span className={`${styles.phoneIconTile} ink-frame`}>{appIcon(a.id)}</span>
+                <span className={`${styles.phoneIconTile} ink-frame`}>{appIcon(a.id)}{badges[a.id] ? <span className={styles.appBadge}>{badges[a.id]}</span> : null}</span>
                 <span className={styles.phoneIconLabel}>{a.label}</span>
               </button>
             ))}
@@ -309,7 +322,7 @@ export function Desk({
                     <div className={styles.icons}>
                       {shownApps.map((a) => (
                         <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
-                          {appIcon(a.id)}
+                          {appIcon(a.id)}{badges[a.id] ? <span className={styles.appBadge}>{badges[a.id]}</span> : null}
                           <span className={`${styles.iconLabel} ink-frame`}>{a.label}</span>
                         </button>
                       ))}

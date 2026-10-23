@@ -49,6 +49,8 @@ import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildTop } from './desk/BuildTop.jsx';
 import { CarPicker } from './desk/CarPicker.jsx';
+import { MessagesApp } from './desk/MessagesApp.jsx';
+import { advanceSaga, openChapter, unreadCount } from './career/story.js';
 import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
@@ -206,7 +208,7 @@ export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
 
 /** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
  *  out in the shop: the dyno, the engine stand, the job board, the door outside. */
-const CAREER_APPS = ['build', 'tune'];
+const CAREER_APPS = ['build', 'tune', 'messages'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
@@ -259,6 +261,13 @@ export function EcuLabApp() {
   // are the same ones SANDBOX uses; what changes is whose car is in them and which
   // parts of the ECU the shop has learned to use.
   const [career] = useCareer();
+  // CAREER's story moves on by itself: whenever the save changes, any chapter whose goal
+  // is now met closes, pays, and opens the next (career/story.js). A no-op otherwise.
+  useEffect(() => {
+    if (!career || mode !== 'career') return;
+    const next = advanceSaga(career);
+    if (next !== career) dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
+  }, [career, mode, dispatch]);
   // CAREER: the car you took out into town, and whether you are choosing one.
   const [outsideCar, setOutsideCar] = useState(/** @type {{ownId?: string, bay?: number}|null} */ (null));
   const outsideCarRef = useRef(outsideCar);
@@ -889,6 +898,8 @@ export function EcuLabApp() {
     if (mode === 'career' && appView === 'app' && (tab === 'learn' || tab === 'physics')) {
       navigate({ view: 'shop', tab: null, section: null });
     }
+    // Pops's messages are CAREER's.
+    if (appView === 'messages' && mode !== 'career') navigate({ view: 'desk', tab: null, section: null });
     // The town needs a car to be in, and only CAREER has one: a reload there with none
     // chosen lands in the shop.
     if (appView === 'outside' && (mode !== 'career' || !outsideCarRef.current)) {
@@ -1341,6 +1352,9 @@ export function EcuLabApp() {
     <>
         {!inCareer && <MissionCoach route={route} onCourse={goCourse} />}
         {/* ---------- CAREER's job board, on the shop wall: today, customers, upgrades, the books ---------- */}
+        {appView === 'messages' && inCareer && (
+          <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} onCourse={goCourse} />
+        )}
         {appView === 'shop' && inCareer && (
           <CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} />
         )}
@@ -1685,6 +1699,7 @@ export function EcuLabApp() {
   const deskOpen = (t) => {
     if (t === 'outside') { setPickCar(true); return; }
     if (t === 'board') { changeTab('shop'); return; }
+    if (t === 'messages') { deskGo('messages'); return; }
     if (t !== 'learn') { changeTab(t); return; }
     goSection('learn', 'how');
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
@@ -1693,9 +1708,15 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
   /** @type {import('./desk/Desk.jsx').Notice[]} */
   const deskNotices = [];
+  if (inCareer) {
+    const unread = unreadCount(career);
+    const ch = openChapter(career);
+    if (unread) deskNotices.push({ id: 'pops', text: `Pops sent you ${unread === 1 ? 'a message' : `${unread} messages`}.`, tone: 'warn', action: 'Read', go: () => deskGo('messages') });
+    if (ch) deskNotices.push({ id: 'goal', text: `${ch.title}: ${ch.goal}`, tone: 'ok', action: 'Messages', go: () => deskGo('messages') });
+  }
   if (!inCareer) {
     if (engineMissing) deskNotices.push({ id: 'engine', text: 'No engine yet: choose one in Build.', tone: 'warn', action: 'Build', go: () => goTab('build') });
     else {
@@ -1719,7 +1740,8 @@ export function EcuLabApp() {
           frame it fills. */}
       <PullTraceContext.Provider value={advisorPull.points}>
       <Desk
-        mode={deskMode} app={appView === 'shop' ? 'office' : tab}
+        mode={deskMode} app={appView === 'shop' ? 'office' : appView === 'messages' ? 'messages' : tab}
+        badges={inCareer ? { messages: unreadCount(career) } : {}}
         apps={inCareer ? CAREER_APPS : null}
         onOpen={deskOpen}
         onDesktop={() => deskGo('desk')}
@@ -1729,10 +1751,10 @@ export function EcuLabApp() {
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
         status={<StatusStrip actions={false} />}
       >
-        {inCareer && appView !== 'shop' && (deskMode === 'app' || deskMode === 'page') && (
+        {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (
           <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />
         )}
-        {(deskMode === 'app' || deskMode === 'page') && appView !== 'shop' ? <StatusStrip actions={false} /> : null}
+        {(deskMode === 'app' || deskMode === 'page') && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}

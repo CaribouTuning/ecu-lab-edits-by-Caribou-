@@ -41,7 +41,7 @@ export function goalsFor(c) {
     { id: 'earn', kind: 'earn', text: 'Earn $500 from customers', target: 500, reward: 120, when: (x) => x.rep >= 5 },
     { id: 'spanner', kind: 'spanner', text: 'Find a golden spanner in town', target: 1, reward: 90 },
     { id: 'drive', kind: 'drive', text: 'Drive a car for two kilometres', target: 2, reward: 90 },
-    { id: 'tip', kind: 'tip', text: 'Have a coffee and listen to Pops', target: 1, reward: 40 },
+    { id: 'tip', kind: 'tip', text: 'Read Pops’s tip of the day', target: 1, reward: 40 },
     { id: 'race', kind: 'race', text: 'Win a race at the drag strip', target: 1, reward: 200, when: (x) => x.rep >= 15 && (x.cars ?? []).length > 0 },
     { id: 'meet', kind: 'meet', text: 'Finish in the top three at the meet', target: 1, reward: 200, when: (x) => x.rep >= 40 && (x.cars ?? []).length > 0 },
     { id: 'junk', kind: 'junk', text: 'Dig in the scrapyard', target: 1, reward: 60, when: (x) => x.rep >= 10 },

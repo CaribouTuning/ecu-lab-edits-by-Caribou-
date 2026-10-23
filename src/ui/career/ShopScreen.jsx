@@ -17,6 +17,7 @@ import { loadSettings } from '../world/settings.js';
 import { webglAvailable } from '../world/support.js';
 
 import { repTier } from './catalog.js';
+import { isMaster } from './story.js';
 import { jobById } from './jobs.js';
 import { accept, blockers, board } from './shop.js';
 import { LessonDialog, ShopPanel, money } from './ShopPanels.jsx';
@@ -91,7 +92,7 @@ export function LegacyShop({ onWork, onMenu, onLearn, office = false }) {
         <div className={styles.stats} aria-label="Shop status">
           <span className={styles.stat}><span className={styles.statKey}>DAY</span>{career.day}</span>
           <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>CASH</span>{money(career.money)}</span>
-          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>REP</span>{career.rep} · {tier.title}</span>
+          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>REP</span>{career.rep} · {isMaster(career) ? 'Master tuner' : tier.title}</span>
         </div>
         {!office && <Button size="sm" variant="ghost" onClick={onMenu} aria-label="Main menu"><Menu size={15} aria-hidden="true" /> MENU</Button>}
       </header>

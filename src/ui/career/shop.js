@@ -73,6 +73,7 @@ export const START_MONEY = 1000;
  * @property {boolean} [introDone] the welcome has been read
  * @property {boolean} [starterGiven] the first car has been handed over (once, ever)
  * @property {{won: string[], best: Record<string, number>}} [track] circuit rivals beaten, and each car's best lap
+ * @property {{ch: number, read: string[], done: boolean}} [saga] the story: the open chapter, messages read, finished (story.js)
  */
 
 /**

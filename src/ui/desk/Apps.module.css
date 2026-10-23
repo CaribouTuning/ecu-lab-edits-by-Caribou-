@@ -206,3 +206,37 @@
 .ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink3); }
 .buildEngine { min-height: 0; }
 .buildEngine > div { height: 170px; }
+
+/* ---------- CAREER: Pops's messages ---------- */
+.msgs { display: grid; grid-template-columns: minmax(220px, 300px) 1fr; min-height: 100%; }
+.msgList { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-right: 1px solid var(--line); background: var(--panel); }
+.msgProgress { display: flex; flex-direction: column; gap: 6px; padding: 8px 6px 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); color: var(--ink2); }
+.msgProgress b { color: var(--ink); }
+.msgBar { height: 6px; border-radius: 3px; background: var(--panel3); overflow: hidden; }
+.msgBar span { display: block; height: 100%; background: var(--acc); }
+.msgRow { display: flex; gap: 10px; align-items: flex-start; padding: 8px; border: 1.5px solid transparent; background: transparent; color: var(--ink2); text-align: left; cursor: pointer; }
+.msgRow:hover { background: var(--panel2); }
+.msgRowText { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-sm); }
+.msgRowText b { color: inherit; display: flex; align-items: center; gap: 6px; }
+.msgRowText span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msgDot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); display: inline-block; }
+.msgView { padding: 18px 22px 28px; max-width: 760px; }
+.msgBack { display: none; margin-bottom: 8px; border: 0; background: transparent; color: var(--acc-ink); font-weight: 700; cursor: pointer; padding: 0; }
+.msgSubject { margin: 0 0 2px; font-size: var(--fs-lg); }
+.msgFrom { margin: 0 0 14px; font-size: var(--fs-xs); color: var(--ink3); }
+.msgPara { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.65; color: var(--ink); }
+.bubbles { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.bubble { margin: 0; max-width: 80%; padding: 10px 14px; border-radius: 18px 18px 18px 4px; background: var(--panel3); color: var(--ink); font-size: var(--fs-md); line-height: 1.5; }
+.msgLesson { margin: 18px 0 14px; padding: 14px 16px; border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); }
+.msgLesson h4 { margin: 0 0 8px; font-size: var(--fs-base); color: var(--acc-ink); }
+.msgLesson ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink); }
+.msgSources { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.5; }
+.msgCourse { padding: 6px 12px; border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); font-weight: 700; font-size: var(--fs-sm); cursor: pointer; }
+.msgGoal { padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-bg); color: var(--warn-ink); font-size: var(--fs-sm); }
+@media (max-width: 700px) {
+  .msgs { grid-template-columns: 1fr; }
+  .msgs[data-open] .msgList { display: none; }
+  .msgs:not([data-open]) .msgView { display: none; }
+  .msgList { border-right: 0; }
+  .msgBack { display: inline-block; }
+}

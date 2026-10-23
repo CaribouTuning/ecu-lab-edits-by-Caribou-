@@ -554,6 +554,21 @@ export function buildTown(api, entry = {}) {
       },
     });
   }
+  // Driving only (CAREER from the desk): pull up outside and go in from the car.
+  for (const p of PLACES) {
+    if (['gas', 'meet', 'strip', 'track'].includes(p.id)) continue;
+    interactables.push({
+      id: `pull:${p.id}`, x: p.door.x, z: p.door.z, r: 11, carOnly: true, maxSpeed: 4,
+      enabled: (a) => a.driveOnly,
+      label: () => (closedBecause(api.career(), p) ? `${p.name}: closed` : `Park and go in: ${p.name}`),
+      hint: () => closedBecause(api.career(), p) ?? p.blurb,
+      run: () => {
+        const why = closedBecause(api.career(), p);
+        if (why) { api.emit({ type: 'toast', text: `${p.name} is closed. ${why}`, tone: 'warn' }); return; }
+        api.emit({ type: 'act', id: 'go', place: p.id });
+      },
+    });
+  }
   interactables.push({
     id: 'park', x: -37, z: -4.4, r: 5, carOnly: true, maxSpeed: 7, label: 'Park it at the shop', hint: 'Back on its lift, or on the apron.',
     // Not the moment you pull out: only once you have been somewhere.

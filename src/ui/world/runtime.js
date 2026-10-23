@@ -161,6 +161,11 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
 
   const api = {
     shakeOn: true,
+    /**
+     * CAREER from the desk: out in the world you are always in the car. You get out only
+     * inside a building you have pulled up at, and walk only in there.
+     */
+    driveOnly: false,
     stage, rig, input, player, person, tele,
     get level() { return level; },
     get drive() { return drive; },
@@ -627,7 +632,10 @@ export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quali
         // Not near anything: get in the car if it is close.
         const d = Math.hypot(drive.state.x - player.x, drive.state.z - player.z);
         if (d < 3.4) enterCar();
-      } else if (input.pressed('interact') && drive?.inside && !prompt && Math.abs(drive.state.vx) < 2) exitCar();
+      } else if (input.pressed('interact') && drive?.inside && !prompt && Math.abs(drive.state.vx) < 2) {
+        if (!api.driveOnly || level.indoor) exitCar();
+        else onEvent({ type: 'toast', text: 'Pull up at a building to go in: the town is for driving.' });
+      }
       input.clearEdges();
     }
     level.update?.(dt, clock, api);

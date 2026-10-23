@@ -477,7 +477,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       case 'trophies': setSheet({ type: 'trophies' }); break;
       case 'door': travel('town', { from: 'garage' }); break;
       case 'go':
-        if (e.place === 'town') travel('town', { from: e.from ?? 'garage' });
+        // Back out of a building when driving only: straight back into the car you parked.
+        if (e.place === 'town') travel('town', { from: e.from ?? 'garage', enterCar: !!onHomeRef.current });
         else if (e.place === 'junk') setSheet({ type: 'junk', result: null });
         else if (e.place === 'garage') travel('garage', { from: 'town' });
         else if (LEVELS[e.place]) travel(e.place, {});
@@ -559,6 +560,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     canvas.addEventListener('webglcontextlost', lost);
     worldRef.current = w;
     if (window.__ECU_E2E__) window.__ecuWorld = w;
+    w.driveOnly = !!start;
     if (start) w.loadLevel('town', { from: 'garage' });
     else w.loadLevel('garage', lastSpot ? { from: 'work', at: lastSpot } : { from: 'start' });
     setWorld(w);
@@ -648,6 +650,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const objective = useMemo(() => {
     if (!settings.hints) return null;
     if (racing) return null;
+    if (onHome && !driving && place !== 'town') return 'Have a look round. Leave by the door and you are back in your car.';
     if (onHome && !driving) return 'Out in town. Get in and drive, or press BACK TO THE SHOP to go back to your desk.';
     if (driving && outJob?.startsWith('own:')) return 'Your car, your town. The drag strip is off the highway to the north, the Raceway to the south: drive to the start and press E. The map shows the way.';
     if (driving) return 'Feel what your tune did. When you are done, drive to the shop and park it.';
