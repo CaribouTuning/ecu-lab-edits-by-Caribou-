@@ -15,10 +15,10 @@
 
 import { world as W } from '../tokens.js';
 import { THREE, box, cyl, floorPlane, groundPlane } from '../world/gfx.js';
-import { tiledFloor } from '../world/levels/common.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
-import { makeDyno, makeLamp, makeLift, makeRollupDoor, makeRoundTree, makeShelf, makeToolChest, makeTree, makeTyreStack } from '../world/models/props.js';
+import { dressShop } from './shopDetail.js';
+import { makeDyno, makeLamp, makeLift, makeRollupDoor, makeRoundTree, makeTree } from '../world/models/props.js';
 import { makeBuilding } from '../world/models/buildings.js';
 
 const POSES = {
@@ -95,7 +95,9 @@ export function buildShopScene(stage, init) {
   stage.setDriving(true);
 
   // ---- the room ----
-  root.add(tiledFloor(16, 14, W.concrete, W.concreteDark, 2).translateZ(0));
+  root.add(floorPlane(16, 14, W.floorEpoxy, { y: 0 }));
+  // The shop, dressed: benches, tools, racking, jacks, the hoist, lights (shopDetail.js).
+  dressShop(root);
   const wallC = W.wallBase;
   // A ceiling, so it is a room: from inside you see its roof, not the street's.
   const ceiling = box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 });
@@ -124,18 +126,6 @@ export function buildShopScene(stage, init) {
     lamp.position.set(x, 4.9, 2.4);
     root.add(lamp);
   }
-  const chest = makeToolChest();
-  chest.position.set(-7.4, 0, 2.5);
-  chest.rotation.y = Math.PI / 2;
-  root.add(chest);
-  const shelf = makeShelf(3);
-  shelf.position.set(7.5, 0, 3);
-  shelf.rotation.y = -Math.PI / 2;
-  root.add(shelf);
-  const tyres = makeTyreStack(5);
-  tyres.position.set(-7.2, 0, -5.6);
-  root.add(tyres);
-
   // ---- outside: the street ----
   const outside = groundPlane(160, 60, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3 });
   outside.position.set(0, -0.02, -38);
