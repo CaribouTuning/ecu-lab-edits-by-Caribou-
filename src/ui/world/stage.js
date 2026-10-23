@@ -22,7 +22,9 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean}} [opts]
+ *   `hatch: false` (a sketch only) leaves out the hatching and grain: clean, crisp ink
+ *   outlines on the model's own colours, for a close-up such as the Build engine.
  *   `sketch` draws the scene as if doodled by hand instead of pixel art: full resolution,
  *   its own colours and light, ink outlines, pencil hatching in the shade and paper
  *   grain, all held still. The sandbox's shop is drawn this way; the career's town stays
@@ -70,13 +72,13 @@ export function createStage(canvas, opts = {}) {
       tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
       strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
-      sketch: { value: opts.sketch ? 1 : 0 },
+      sketch: { value: opts.sketch ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 },
       inkCol: { value: new THREE.Color(W.sketch.ink) },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
       uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
-      uniform float sketch; uniform vec3 inkCol;
+      uniform float sketch; uniform float hatch; uniform vec3 inkCol;
       varying vec2 vUv;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -124,9 +126,9 @@ export function createStage(canvas, opts = {}) {
         float h2 = step(0.7, fract((f.x - f.y) / 7.0));
         float shade = smoothstep(0.34, 0.18, L);
         float deep = smoothstep(0.18, 0.07, L);
-        wash = mix(wash, inkCol * 0.6, h1 * shade * 0.45 + h2 * deep * 0.45);
+        wash = mix(wash, inkCol * 0.6, hatch * (h1 * shade * 0.45 + h2 * deep * 0.45));
         // Paper grain, then the ink line on top: near black, so it reads on dark walls too.
-        wash *= 0.97 + 0.05 * hash(floor(f / 2.0));
+        wash *= 1.0 - hatch * (0.03 - 0.05 * hash(floor(f / 2.0)));
         wash = mix(wash, inkCol * 0.35, clamp(edge, 0.0, 1.0) * 0.95);
         gl_FragColor = linearToOutputTexel(vec4(wash, 1.0));
       }`,
@@ -154,7 +156,9 @@ export function createStage(canvas, opts = {}) {
       cssW = w ?? Math.max(2, Math.floor(rect?.width ?? canvas.clientWidth ?? 800));
       cssH = h ?? Math.max(2, Math.floor(rect?.height ?? canvas.clientHeight ?? 450));
       // A sketch is drawn at full resolution: pen lines, not pixels.
-      factor = opts.sketch ? 1 : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
+      // A sketch is drawn at the screen's own resolution, retina included (to 2x): pen
+      // lines, not pixels, and sharp on a phone.
+      factor = opts.sketch ? 1 / Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
       const { w: iw, h: ih } = stage.size;
       renderer.setSize(iw, ih, false);
       target.setSize(iw, ih);

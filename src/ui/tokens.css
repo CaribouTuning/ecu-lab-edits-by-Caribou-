@@ -56,8 +56,15 @@
   --wal\1-\2id: #2c6fe0;
   --wal\1-\2ight: #8fbdff;
 
-  --wall-sky: #0d1836;
-  --wall-sky2: #04081a;
+  --tile: #f7f2e6;
+  --tile-ink: #1f1c18;
+  --tile-wash: #bcd2ee;
+  --wall-sky: #5d9ae8;
+  --wall-sky2: #1747a8;
+  --chrome-hi: #ffffff;
+  --chrome-mid: #c6d0de;
+  --chrome-lo: #6f7d95;
+  --badge-ink: #0c1830;
   --wall-deep: #0b3a9a;
   --wall-mid: #2c6fe0;
   --wall-light: #8fbdff;

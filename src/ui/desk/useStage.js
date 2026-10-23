@@ -14,7 +14,7 @@ import { createStage } from '../world/stage.js';
 
 /**
  * @param {(stage: ReturnType<typeof createStage>) => {update?: (dt: number) => void, dispose?: () => void}} setup
- * @param {{shadows?: boolean}} [opts]
+ * @param {{shadows?: boolean, hatch?: boolean}} [opts]
  * @returns {{canvasRef: React.MutableRefObject<HTMLCanvasElement|null>, failed: boolean, stageRef: React.MutableRefObject<any>}}
  */
 export function useStage(setup, opts = {}) {
@@ -29,7 +29,7 @@ export function useStage(setup, opts = {}) {
     let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     try {
-      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true });
+      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch });
     } catch {
       setFailed(true);
       return undefined;

@@ -61,10 +61,9 @@
   /* A black laptop: the bezel round the screen, inked like everything else. */
   background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
   box-shadow: var(--pencil-twice);
-  transform-origin: 50% 100%;
-  /* Open, the lid has no transform at all, so it is an ordinary flat layer. */
-  transform: none;
-  transition: transform 0.55s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.45s ease 0.1s;
+  /* No transform, ever: a lid folded in 3-D and back is rasterised at the folded size on
+     iOS and comes back blurry. Shutting fades it instead. */
+  transition: opacity 0.35s ease, visibility 0s linear 0.35s;
   pointer-events: auto;
 }
 .base {
@@ -73,7 +72,8 @@
   transition: opacity 0.45s ease 0.1s;
 }
 /* Shut: the lid folds down onto the base, and the shop comes forward. */
-.laptop[data-state='shut'] .lid { transform: perspective(1600px) rotateX(-88deg); opacity: 0; pointer-events: none; }
+.laptop[data-state='shut'] .lid { opacity: 0; visibility: hidden; pointer-events: none; }
+.laptop[data-state='open'] .lid { transition: opacity 0.35s ease, visibility 0s; }
 .laptop[data-state='shut'] .base { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .lid, .base { transition: none; } }
 .screen {
@@ -106,13 +106,14 @@
   border: 1px solid transparent; background: transparent; color: var(--ink); cursor: pointer;
 }
 .icon svg {
-  width: 72px; height: 72px; padding: 8px; border-radius: var(--hand-a);
-  background: var(--panel); border: 2.5px solid var(--pen); color: var(--ink); box-shadow: var(--pencil-twice);
+  width: 76px; height: 76px; padding: 9px; border-radius: var(--hand-a);
+  background: var(--tile); border: 2.5px solid var(--tile-ink); color: var(--tile-ink);
+  box-shadow: 3px 4px 0 -1px var(--tile-ink);
 }
-.icon:hover, .icon:focus-visible { background: var(--acc-bg); border-color: var(--pen); }
+.icon:hover svg, .icon:focus-visible svg { background: var(--tile-wash); }
 .iconLabel {
-  padding: 1px 12px; border-radius: var(--hand-c); border: 2px solid var(--pen);
-  background: var(--panel); font-size: var(--fs-md); letter-spacing: 0.03em;
+  padding: 1px 12px; border-radius: var(--hand-c); border: 2px solid var(--tile-ink);
+  background: var(--tile); color: var(--tile-ink); font-size: var(--fs-md); font-weight: 600; letter-spacing: 0.01em;
 }
 
 /* ---------- a window ---------- */
@@ -131,6 +132,7 @@
 .close:hover { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
 .windowBody {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y pinch-zoom;
   scrollbar-width: auto; scrollbar-color: var(--line-hi) var(--panel);
 }
 /* The slide bar on the window's right edge: always drawn, wide enough to grab. */
@@ -202,7 +204,7 @@
   font-weight: 700; font-size: var(--fs-sm);
 }
 .back:hover { border-color: var(--acc); }
-.pageBody { flex: 1; min-height: 0; overflow-y: auto; }
+.pageBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .pageBody > * { max-width: var(--content-max); margin-left: auto; margin-right: auto; }
 
 /* ---------- inside the apps ---------- */
@@ -235,10 +237,10 @@
 
 /* ---------- the app doodles ---------- */
 .doodle {
-  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
-  filter: url(#hand-jitter); overflow: visible;
+  fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
+  overflow: visible;
 }
-.doodle :global(.wash) { fill: var(--acc-bg); stroke: none; }
+.doodle :global(.wash) { fill: var(--tile-wash) !important; stroke: none; }
 .doodle :global(.dot) { fill: currentColor; stroke: none; }
 .doodle :global(.label) { fill: currentColor; stroke: none; font-family: var(--sans); font-size: 9px; }
 
@@ -247,10 +249,10 @@
   position: absolute; inset: 0; z-index: 2;
   display: flex; flex-direction: column;
   background: rgb(var(--shadow-rgb)); color: var(--ink);
-  transition: transform 0.45s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.35s ease;
+  transition: opacity 0.3s ease, visibility 0s;
 }
-/* Put down: it slides off the bottom and the shop is there. */
-.phone[data-state='shut'] { transform: translateY(105%); opacity: 0; pointer-events: none; }
+/* Put down: it fades and the shop is there (no transform: see .lid). */
+.phone[data-state='shut'] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
 @media (prefers-reduced-motion: reduce) { .phone { transition: none; } }
 .statusBar {
   position: relative; flex: none; display: flex; align-items: center; justify-content: space-between;
@@ -268,29 +270,40 @@
 
 .homeScreen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--wall-sky); }
 /* Four apps to a row, as a phone lays them out; a landscape phone has room for all in one. */
+/* Four apps to a row, as a phone lays them out. */
 .appGrid {
-  position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 8px;
-  padding: 28px max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
+  position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px 10px; justify-items: center;
+  padding: 26px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
 }
 .phoneIcon {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; padding: 0;
 }
 .phoneIconTile {
-  width: 62px; height: 62px; display: grid; place-items: center;
-  border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); box-shadow: var(--pencil-twice);
+  width: 64px; height: 64px; display: grid; place-items: center;
+  border: 2.5px solid var(--tile-ink); border-radius: var(--hand-b); background: var(--tile);
+  box-shadow: 3px 4px 0 -1px var(--tile-ink);
 }
-.phoneIconTile svg { width: 44px; height: 44px; color: var(--ink); }
-.phoneIcon:active .phoneIconTile { background: var(--acc-bg); }
-.phoneIconLabel { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.phoneIconTile svg { width: 46px; height: 46px; color: var(--tile-ink); }
+.phoneIcon:active .phoneIconTile { background: var(--tile-wash); }
+.phoneIconLabel {
+  padding: 0 8px; border: 2px solid var(--tile-ink); border-radius: var(--hand-c);
+  background: var(--tile); color: var(--tile-ink); font-size: var(--fs-sm); font-weight: 600;
+}
+/* The dock: the shop and search, as two more cards. */
 .dock {
-  position: absolute; left: 12px; right: 12px; bottom: 14px;
-  display: flex; justify-content: space-around; padding: 10px 6px;
-  border: 2px solid var(--pen); border-radius: var(--hand-a); background: var(--panel);
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px;
+  display: flex; gap: 22px; padding: 12px 22px;
+  border: 2px solid var(--pen); border-radius: var(--hand-a); background: rgba(var(--shadow-rgb), 0.35);
 }
 .dockBtn {
-  display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 72px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
   border: 0; background: transparent; color: var(--ink); font-size: var(--fs-xs); font-weight: 700; cursor: pointer;
+}
+.dockBtn > svg {
+  width: 56px; height: 56px; padding: 14px; box-sizing: border-box;
+  border: 2.5px solid var(--tile-ink); border-radius: var(--hand-b); background: var(--tile); color: var(--tile-ink);
+  box-shadow: 3px 4px 0 -1px var(--tile-ink);
 }
 .phoneApp { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
 .phoneAppBar {
@@ -311,8 +324,8 @@
 }
 .homeBar span { width: 134px; height: 5px; border-radius: 3px; background: var(--ink); opacity: 0.85; }
 @media (max-height: 500px) {
-  .appGrid { grid-template-columns: repeat(4, 96px); justify-content: center; padding-top: 20px; }
-  .dock { left: auto; right: max(16px, env(safe-area-inset-right)); top: 16px; bottom: 16px; flex-direction: column; width: 92px; }
+  .appGrid { grid-template-columns: repeat(4, 96px); justify-content: center; padding-top: 18px; }
+  .dock { left: auto; transform: none; right: max(16px, env(safe-area-inset-right)); top: 50%; bottom: auto; translate: 0 -50%; flex-direction: column; }
   .statusBar { height: calc(26px + env(safe-area-inset-top)); }
   .homeBar { height: calc(14px + env(safe-area-inset-bottom)); }
 }

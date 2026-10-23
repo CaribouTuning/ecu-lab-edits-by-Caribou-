@@ -40,13 +40,13 @@
 
 /* --- variants --- */
 
-/* The action: inked round twice over a watercolour wash, not a flat machine fill. */
+/* The action: solid accent, drawn round twice. */
 .primary {
-  background: var(--acc-bg);
-  color: var(--acc-ink);
+  background: var(--acc);
+  color: var(--acc-on);
   box-shadow: var(--pencil-twice);
 }
-.primary:hover:not(:disabled) { background: var(--warn-bg); color: var(--ink); }
+.primary:hover:not(:disabled) { background: var(--acc-ink); }
 
 .ghost {
   background: var(--panel);

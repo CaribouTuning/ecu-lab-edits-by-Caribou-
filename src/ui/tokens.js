@@ -87,10 +87,20 @@ export const tokens = Object.freeze({
   paperGridMajor: '#262f42',
 
 
-  // The laptop's desktop wallpaper: a blue bloom on a night-dark ground, the way a
-  // fresh computer ships in its dark theme.
-  wallSky: '#0d1836',
-  wallSky2: '#04081a',
+  // The app icons on the desktop and the home screen: a cream card with the doodle inked
+  // on it in near-black over a pale blue wash, and the name on a cream label.
+  tile: '#f7f2e6',
+  tileInk: '#1f1c18',
+  tileWash: '#bcd2ee',
+
+  // The laptop's and the phone's wallpaper: the Caribou badge in polished chrome on a
+  // glossy blue with light swooshes across it, the way a computer shipped in 2003.
+  wallSky: '#5d9ae8',
+  wallSky2: '#1747a8',
+  chromeHi: '#ffffff',
+  chromeMid: '#c6d0de',
+  chromeLo: '#6f7d95',
+  badgeInk: '#0c1830',
   wallDeep: '#0b3a9a',
   wallMid: '#2c6fe0',
   wallLight: '#8fbdff',

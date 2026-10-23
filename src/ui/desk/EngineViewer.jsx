@@ -58,7 +58,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built' }) {
         stage.followLight(new THREE.Vector3(0, 0, 0));
       },
     };
-  });
+  }, { hatch: false });
 
   const onDown = (e) => { live.current.drag = e.clientX; e.currentTarget.setPointerCapture?.(e.pointerId); };
   const onMove = (e) => {

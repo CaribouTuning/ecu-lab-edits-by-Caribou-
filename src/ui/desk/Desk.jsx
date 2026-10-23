@@ -14,10 +14,11 @@
  * hands over the screen for it; this decides how it is framed.
  */
 
-import { Bell, BookOpen, ChevronLeft, Home, Search, Settings, X } from 'lucide-react';
+import { Bell, BookOpen, ChevronLeft, Home, Search, Settings, Store, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
+import { CARIBOU_FILL, CARIBOU_INK } from '../screens/caribouLogo.js';
 
 import { ShopBackdrop } from './ShopBackdrop.jsx';
 
@@ -31,41 +32,59 @@ export const DESK_APPS = [
   { id: 'physics', label: 'Physics', name: 'PHYSICS' },
 ];
 
-/** The petals of the wallpaper's bloom: angle (deg) and length, outermost first. */
-const PETALS = [
-  [-70, 1], [-35, 1.08], [0, 1.15], [35, 1.08], [70, 1],
-  [-52, 0.78], [-17, 0.86], [17, 0.86], [52, 0.78],
+/** The light swooshes across the wallpaper: each a soft band of light, as on the glossy desktops of the early 2000s. */
+const SWOOSHES = [
+  'M-100 700 C 300 520 700 470 1700 560 L 1700 600 C 700 520 300 570 -100 760 Z',
+  'M-100 120 C 400 260 900 700 1700 820 L 1700 870 C 860 740 380 320 -100 190 Z',
+  'M300 -50 C 700 200 1100 260 1700 120 L 1700 170 C 1100 320 700 270 260 -50 Z',
+  'M-100 520 C 500 420 1100 300 1700 330 L 1700 350 C 1100 330 500 450 -100 560 Z',
 ];
 
 /**
- * The desktop wallpaper: a blue bloom of folded petals on a pale sky, the look a new
- * computer ships with. Drawn here, not an image: an original, in the theme's blues.
+ * The wallpaper: the Caribou Tuning badge in polished chrome, standing on a glossy blue
+ * floor with its reflection under it, and swooshes of light behind. Drawn from the traced
+ * badge (screens/caribouLogo.js), so it is sharp at any size.
  * @returns {React.ReactElement}
  */
 function Wallpaper() {
+  const badge = (
+    <>
+      <path d={CARIBOU_FILL} fill="url(#wall-chrome)" fillRule="evenodd" stroke="var(--badge-ink)" strokeWidth="10" />
+      <path d={CARIBOU_INK} fill="var(--badge-ink)" fillRule="evenodd" />
+    </>
+  );
   return (
     <svg className={styles.wallpaper} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <defs>
-        <linearGradient id="wall-sky" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id="wall-sky" x1="1" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: 'var(--wall-sky)' }} />
           <stop offset="1" style={{ stopColor: 'var(--wall-sky2)' }} />
         </linearGradient>
-        <linearGradient id="wall-petal" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" style={{ stopColor: 'var(--wall-deep)' }} />
-          <stop offset="0.55" style={{ stopColor: 'var(--wall-mid)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--wall-light)' }} />
+        <linearGradient id="wall-light" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0 }} />
+          <stop offset="0.55" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0.5 }} />
+          <stop offset="1" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0.1 }} />
         </linearGradient>
+        <linearGradient id="wall-chrome" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" style={{ stopColor: 'var(--chrome-hi)' }} />
+          <stop offset="0.45" style={{ stopColor: 'var(--chrome-mid)' }} />
+          <stop offset="0.5" style={{ stopColor: 'var(--chrome-lo)' }} />
+          <stop offset="0.7" style={{ stopColor: 'var(--chrome-mid)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--chrome-hi)' }} />
+        </linearGradient>
+        <linearGradient id="wall-fade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="white" stopOpacity="0.45" />
+          <stop offset="0.6" stopColor="white" stopOpacity="0" />
+        </linearGradient>
+        <mask id="wall-reflect"><rect x="0" y="640" width="1600" height="300" fill="url(#wall-fade)" /></mask>
       </defs>
       <rect width="1600" height="900" fill="url(#wall-sky)" />
-      <g transform="translate(800 640)">
-        {PETALS.map(([deg, len]) => (
-          <path
-            key={deg}
-            transform={`rotate(${deg}) scale(${len})`}
-            d="M0 0 C-120 -90 -150 -300 0 -470 C150 -300 120 -90 0 0 Z"
-            fill="url(#wall-petal)" opacity="0.88"
-          />
-        ))}
+      {SWOOSHES.map((d) => <path key={d} d={d} fill="url(#wall-light)" />)}
+      <rect y="640" width="1600" height="260" style={{ fill: 'var(--wall-sky2)' }} opacity="0.35" />
+      <line x1="0" y1="640" x2="1600" y2="640" style={{ stroke: 'var(--chrome-hi)' }} strokeOpacity="0.35" strokeWidth="2" />
+      <g transform="translate(590 170) scale(0.45)">{badge}</g>
+      <g mask="url(#wall-reflect)">
+        <g transform="translate(590 1110) scale(0.45 -0.45)" opacity="0.8">{badge}</g>
       </g>
     </svg>
   );
@@ -261,10 +280,10 @@ export function Desk({
           </div>
           <div className={styles.dock}>
             <button type="button" className={styles.dockBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
-              <Search size={20} aria-hidden="true" /><span>Search</span>
+              <Search aria-hidden="true" /><span>Search</span>
             </button>
             <button type="button" className={styles.dockBtn} onClick={onBay} aria-label="Put the phone down" tabIndex={open ? 0 : -1}>
-              <ChevronLeft size={20} aria-hidden="true" style={{ transform: 'rotate(-90deg)' }} /><span>Shop</span>
+              <Store aria-hidden="true" /><span>Shop</span>
             </button>
           </div>
         </div>
@@ -299,7 +318,6 @@ export function Desk({
                 ) : (
                   <div className={styles.desktop}>
                     <Wallpaper />
-                    <div className={styles.wallpaperMark} aria-hidden="true">CARIBOU TUNING</div>
                     <div className={styles.icons}>
                       {shownApps.map((a) => (
                         <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>

@@ -54,8 +54,6 @@ button:nth-of-type(3n):not([data-plain] *) { border-radius: var(--hand-c); }
 [class*='glow' i]:not([data-plain] *) { display: none; }
 * { backdrop-filter: none !important; text-shadow: none !important; }
 
-/* Icons get a slightly shaky pen. */
-svg.lucide:not([data-plain] *) { stroke-width: 2.2; filter: url(#hand-jitter); }
 
 /*
  * An inked frame drawn as its own stroke, so the pen can shake on the line without
@@ -77,26 +75,13 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 .recharts-curve { filter: url(#hand-jitter); }
 
 /*
- * Scribbled watercolour. A washed fill is not flat: over the pale wash the brush went
- * back and forth, so loose strokes of the stronger colour show through. ::before draws
- * two crossing sets of hatching behind the content and the scribble filter shakes them
- * into a scribble. Anything selected or current gets it, and anything marked `scribble`
- * (the primary button, a warning). `--scribble` is the stroke colour, the accent unless
- * a tone says otherwise.
+ * Anything selected or current is filled in solid with the accent: a clear highlight,
+ * not a scribble. The outline stays drawn.
  */
-:is(.scribble, [aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *) {
-  position: relative; isolation: isolate;
+:is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *):not([role='gridcell']):not([data-cell]) {
+  background: var(--acc) !important; color: var(--acc-on) !important; border-color: var(--acc) !important;
 }
-:is(.scribble, [aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *)::before {
-  content: ''; position: absolute; inset: 3px 4px; z-index: -1; pointer-events: none; border-radius: inherit;
-  background:
-    repeating-linear-gradient(-32deg, transparent 0 4px, var(--scribble, var(--acc)) 4px 5.4px, transparent 5.4px 8px),
-    repeating-linear-gradient(-21deg, transparent 0 10px, var(--scribble, var(--acc)) 10px 11px, transparent 11px 17px);
-  opacity: 0.35;
-  filter: url(#hand-scribble);
-}
+:is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *) svg { color: inherit; }
 
-/* The doodles' washes are scribbled too. */
-.sw-bg { fill: var(--acc-bg); }
-.sw-ln { stroke: var(--acc); stroke-width: 1.5; opacity: 0.55; }
-svg .wash:not([data-plain] *) { fill: url(#scribble-wash) !important; }
+/* The doodles' washes: a flat pale fill under the lines. */
+svg .wash:not([data-plain] *) { fill: var(--acc-bg); }
