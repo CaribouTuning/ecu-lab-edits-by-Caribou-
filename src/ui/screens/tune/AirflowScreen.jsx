@@ -85,9 +85,9 @@ export function AirflowScreen({ children, veLog }) {
           </div>
           <div className={styles.intro}>How full each cylinder gets, by rpm (columns) and manifold kPa (rows; 100 is wide open). Tap a cell for its numbers.</div>
           {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 6, margin: '6px 0 8px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
             <LayoutSwitch />
-            <div style={{ flex: '1 1 320px' }}><SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} /></div>
+            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
             <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} />

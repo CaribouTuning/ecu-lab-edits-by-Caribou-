@@ -23,9 +23,9 @@
   --ink-round: 255px 225px 240px 215px / 215px 240px 225px 255px;
   /* Software corners. The old names are kept so every stylesheet that used them now
      draws straight without a change at each call site. */
-  --hand-a: var(--r-sm);
-  --hand-b: var(--r-sm);
-  --hand-c: var(--r-sm);
+  --hand-a: 6px;
+  --hand-b: 6px;
+  --hand-c: 6px;
   --hand-round: 50%;
   /* A second, offset pencil stroke behind a drawn physical box. On software, nothing. */
   --pencil-twice-ink: 3px 4px 0 -1px var(--line-hi);
@@ -46,33 +46,28 @@ body { font-family: var(--sans); }
 
 /*
  * The inked frame, for physical things (the laptop's lid and base, the phone): the box
- * keeps its border's width for layout but paints it clear, and ::after draws a line with
- * the pen's shake in it, drawn once as a nine-sliced mask so nothing re-runs a filter.
- * `.ink-frame` (without -lg) used to put the same line on software; it is now an
- * ordinary class that draws nothing of its own.
+ * keeps its border's width for layout but paints it clear, and ::after draws the line
+ * through the pen's slow shake (#hand-jitter-lg in index.html). The line sits on its own
+ * layer (will-change), so the filter runs when the frame changes size, not every time the
+ * numbers on the screen inside it change: that repaint, not the filter itself, was the lag
+ * the coarser pre-shaken mask (`--ink-mask-lg`, now unused here) had been swapped in for.
  */
 .ink-frame-lg { position: relative; border-color: transparent !important; }
 .ink-frame-lg::after {
   content: ''; position: absolute; inset: -3px; pointer-events: none;
-  border: 3px solid var(--pen); border-radius: inherit;
-}
-@supports (-webkit-mask-box-image: none) {
-  .ink-frame-lg::after {
-    border: 0; border-radius: 0; background: var(--pen);
-    -webkit-mask-box-image: var(--ink-mask-lg) 48 / 48px round;
-    will-change: transform;
-  }
+  border: 3px solid var(--pen); border-radius: inherit; filter: url(#hand-jitter-lg);
+  will-change: transform;
 }
 
 /* Sliders and ticks in the interface's own key colour rather than the browser's blue. */
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--acc); }
 
 /*
- * Anything selected or current is a pressed key: solid light, dark text. The table's own
- * cells keep their heat colours.
+ * Anything selected or current is drawn as a Mac draws it with the Graphite accent: a
+ * lighter grey chip with white text. The table's own cells keep their heat colours.
  */
 :is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *):not([role='gridcell']):not([data-cell]) {
-  background: var(--acc) !important; color: var(--acc-on) !important; border-color: var(--acc) !important;
+  background: var(--mac-selected) !important; color: var(--mac-sel-ink) !important; border-color: var(--mac-selected) !important;
 }
 :is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *) svg { color: inherit; }
 

@@ -233,9 +233,11 @@ function fuelLabel(fuel, ethanolPct) {
  * @param {() => void} [props.onSearch] opens the command palette
  * @param {() => void} [props.onMenu] back to the start screen
  * @param {boolean} [props.actions] the icon buttons; SANDBOX's laptop has them on its taskbar instead
+ * @param {boolean} [props.bar] drawn as a Mac window's status bar along its bottom: one quiet
+ *   line, without the maker's name (the menu bar names the app)
  * @returns {React.ReactElement}
  */
-export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true }) {
+export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true, bar = false }) {
   const [build] = useBuild();
   const [session] = useSession();
   const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
@@ -266,17 +268,19 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
   const induction = turboOn ? 'Turbo' : blower ? 'Supercharged' : 'NA';
 
   return (
-    <div className={styles.strip}>
+    <div className={styles.strip} data-bar={bar ? 'true' : undefined}>
       <div className={styles.stripInner}>
         {/* The maker + product name. The old hand-rolled header (deleted with it,
             d5d9f66) carried these as its own two-line block; StatusStrip had no
             equivalent, so once a player pressed START the app was nameless. Restored
             here at the strip's leading edge, sized for a slim strip rather than a
             transplant of the header's larger type scale — see AppShell.module.css. */}
-        <div className={styles.brand}>
-          <span className={styles.brandMaker}>Caribou Tuning</span>
-          <span className={styles.brandProduct}>ECU Lab</span>
-        </div>
+        {!bar && (
+          <div className={styles.brand}>
+            <span className={styles.brandMaker}>Caribou Tuning</span>
+            <span className={styles.brandProduct}>ECU Lab</span>
+          </div>
+        )}
         {/* The build line, moved here from the header. Its shape is pinned by
             characterisation.test.jsx and build-store.test.jsx, both of which find it
             by `data-testid="build-line"` and split the engine name off its first

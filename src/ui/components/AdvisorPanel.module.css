@@ -2,12 +2,13 @@
    that. Chrome only — see the header comment in AdvisorPanel.jsx. */
 
 .panel {
-  --advisor-accent: var(--ink2);
+  /* A Mac inspector: a quiet well beside the table. The verdict's tone is a small dot by
+     the headline, not a coloured stripe down the side. */
+  --advisor-accent: var(--ink3);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--advisor-accent);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel2);
-  padding: 12px 13px;
+  padding: 10px 12px;
 }
 
 .head {
@@ -34,17 +35,30 @@
 }
 
 .eyebrow {
-  font-size: 10px;
-  letter-spacing: 1px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--ink3);
 }
 
 .headline {
   flex: 1;
-  font-size: var(--fs-sm);
-  color: var(--advisor-accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }
+.headline::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--advisor-accent);
+}
+
+.head { flex-wrap: wrap; }
 
 .chevron {
   flex-shrink: 0;
@@ -59,9 +73,9 @@
 .body {
   display: none;
   margin-top: var(--sp-md);
-  font-size: var(--fs-sm);
+  font-size: 12px;
   color: var(--ink2);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .panel[data-open='true'] .body {
@@ -81,7 +95,7 @@
 }
 
 .panel[data-tone='info'] {
-  --advisor-accent: var(--cyan);
+  --advisor-accent: var(--ink3);
 }
 
 /* 560px is the project's one breakpoint — see the note beside the scale in
@@ -105,3 +119,4 @@
     display: block;
   }
 }
+.eyebrow { flex-basis: 100%; }

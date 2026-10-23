@@ -156,11 +156,13 @@ function Clock() {
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
+ * @param {React.ReactNode} [props.footer] the open app's status bar: along the bottom of a
+ *   laptop window, at the top of a phone's app
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
@@ -240,7 +242,7 @@ export function Desk({
               <Search size={17} aria-hidden="true" />
             </button>
           </header>
-          <div className={styles.windowBody}>{children}</div>
+          <div className={styles.windowBody}>{footer}{children}</div>
         </section>
       ) : (
         <div className={styles.homeScreen}>
@@ -279,16 +281,20 @@ export function Desk({
               <div className={styles.workspace}>
                 {mode === 'app' && appInfo ? (
                   <section className={styles.window} aria-label={appInfo.label}>
+                    {/* A Mac window's title bar: the traffic lights on the left (only the
+                        red one does anything here: it closes the app), the name centred. */}
                     <header className={styles.titleBar}>
-                      <span className={styles.titleIcon} aria-hidden="true">
-                        <AppTile id={appInfo.id} small />
+                      <span className={styles.lights}>
+                        <button type="button" className={styles.light} data-light="close" onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
+                          <X size={8} strokeWidth={3} aria-hidden="true" />
+                        </button>
+                        <span className={styles.light} data-light="min" aria-hidden="true" />
+                        <span className={styles.light} data-light="zoom" aria-hidden="true" />
                       </span>
-                      <span className={`${styles.title} ink-frame`}>{appInfo.label}</span>
-                      <button type="button" className={`${styles.close} ink-frame`} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
-                        <X size={15} aria-hidden="true" />
-                      </button>
+                      <span className={styles.title}>{appInfo.label}</span>
                     </header>
                     <div className={styles.windowBody}>{children}</div>
+                    {footer && <footer className={styles.windowFooter}>{footer}</footer>}
                   </section>
                 ) : (
                   <div className={styles.desktop}>
@@ -306,9 +312,14 @@ export function Desk({
               </div>
 
               <nav className={styles.taskbar} aria-label="Taskbar">
-                <button type="button" className={styles.taskBtn} onClick={onDesktop} aria-label="Desktop" title="Desktop" tabIndex={open ? 0 : -1}>
-                  <Home size={16} aria-hidden="true" />
-                </button>
+                <span className={styles.menuLeft}>
+                  <button type="button" className={styles.taskBtn} onClick={onDesktop} aria-label="Desktop" title="Desktop" tabIndex={open ? 0 : -1}>
+                    <Home size={14} aria-hidden="true" />
+                  </button>
+                  {/* The app in front, named in bold, as a Mac's menu bar does. */}
+                  <span className={styles.menuApp}>ECU Lab</span>
+                  <span className={styles.menuMaker}>Caribou Tuning</span>
+                </span>
                 <button
                   type="button" className={`${styles.search} ink-frame`} onClick={onSearch} tabIndex={open ? 0 : -1}
                   aria-label="Search pages and actions" title={`Search (${apple ? '⌘K' : 'Ctrl+K'})`} aria-keyshortcuts={apple ? 'Meta+K' : 'Control+K'}

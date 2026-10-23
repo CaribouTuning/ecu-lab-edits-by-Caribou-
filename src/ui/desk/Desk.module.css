@@ -73,10 +73,17 @@
 .laptop[data-state='shut'] .base { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .lid, .base { transition: none; } }
 .screen {
+  /* The software on the laptop is a Mac in dark mode with the Graphite accent: inside the
+     screen the neutral tokens are the Mac's, so every app picks them up without knowing.
+     (The laptop's body round it stays inked: see .lid.) Data colours are not remapped. */
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
+  --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   position: relative; height: 100%;
   display: flex; flex-direction: column;
   border-radius: var(--r-md); overflow: hidden;
-  background: var(--bg); border: 2px solid var(--pen);
+  background: var(--bg); border: 1px solid var(--mac-separator);
+  color: var(--ink); font-size: 13px;
 }
 .workspace { flex: 1; min-height: 0; position: relative; display: flex; }
 
@@ -105,50 +112,61 @@
 .icon .appTile { width: 72px; height: 72px; }
 .iconLabel { color: var(--app-glyph); font-size: var(--fs-base); font-weight: 500; letter-spacing: 0.01em; }
 
-/* ---------- a window ---------- */
+/* ---------- a window: a Mac app's ---------- */
 .window { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
 .titleBar {
-  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 10px; flex: none;
-  background: var(--panel2); border-bottom: 2px solid var(--pen);
+  position: relative; display: flex; align-items: center; height: 30px; padding: 0 10px; flex: none;
+  background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
 }
-.titleIcon { display: flex; }
-/* The window's name in a box, as drawn. */
-.title { flex: none; margin-right: auto; padding: 0 4px; font-size: var(--fs-base); font-weight: 600; border: 0; background: transparent; }
-.close {
-  width: 30px; height: 26px; display: grid; place-items: center;
-  border: 2px solid var(--pen); border-radius: var(--hand-c); background: var(--panel); color: var(--ink); cursor: pointer;
+.lights { display: flex; gap: 8px; align-items: center; }
+.light {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: var(--mac-control-hi); color: transparent;
 }
-.close:hover { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
+.light[data-light='close'] { background: var(--mac-red); cursor: pointer; }
+.light[data-light='min'] { background: var(--mac-yellow); }
+.light[data-light='zoom'] { background: var(--mac-green); }
+/* The cross shows only while the pointer is over the lights, as on a Mac. */
+.lights:hover .light[data-light='close'], .light[data-light='close']:focus-visible { color: var(--mac-light-ink); }
+.title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 13px; font-weight: 600; color: var(--mac-label2); pointer-events: none;
+}
+/* The status bar along the bottom of the window. */
+.windowFooter { flex: none; border-top: 1px solid var(--mac-separator); background: var(--mac-titlebar); }
 .windowBody {
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y pinch-zoom;
   scrollbar-width: auto; scrollbar-color: var(--line-hi) var(--panel);
 }
 /* The slide bar on the window's right edge: always drawn, wide enough to grab. */
-.windowBody::-webkit-scrollbar { width: 12px; }
-.windowBody::-webkit-scrollbar-track { background: var(--panel); border-left: 1px solid var(--line); }
-.windowBody::-webkit-scrollbar-thumb { background: var(--line-hi); border-radius: 6px; border: 3px solid var(--panel); }
+.windowBody::-webkit-scrollbar { width: 11px; }
+.windowBody::-webkit-scrollbar-track { background: transparent; }
+.windowBody::-webkit-scrollbar-thumb { background: var(--mac-control-hi); border-radius: 6px; border: 3px solid var(--bg); }
 .windowBody::-webkit-scrollbar-thumb:hover { background: var(--ink3); }
 
-/* ---------- the taskbar ---------- */
+/* ---------- the menu bar: along the top of the screen, as on a Mac ---------- */
 .taskbar {
-  position: relative; flex: none; height: 44px;
+  position: relative; flex: none; height: 26px; order: -1;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 0 8px;
-  background: var(--panel); border-top: 2px solid var(--pen);
+  background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
 }
 .taskBtn {
-  position: relative; height: 32px; min-width: 34px; padding: 0 8px; display: inline-grid; place-items: center;
-  border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink); cursor: pointer;
+  position: relative; height: 22px; min-width: 26px; padding: 0 6px; display: inline-grid; place-items: center;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink); cursor: pointer;
 }
-.taskBtn:hover, .taskBtn[aria-expanded='true'] { background: var(--panel2); border-color: var(--line); }
-.taskbar > .taskBtn { justify-self: start; }
+.taskBtn:hover, .taskBtn[aria-expanded='true'] { background: var(--mac-control); }
+.menuLeft { justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.menuApp { font-size: 13px; font-weight: 700; color: var(--mac-label); white-space: nowrap; }
+.menuMaker { font-size: 13px; color: var(--mac-label2); white-space: nowrap; }
+/* A Mac search field: a rounded well, the magnifier and a grey placeholder. */
 .search {
-  display: inline-flex; align-items: center; gap: 8px; height: 30px; width: min(320px, 34vw); padding: 0 12px;
-  border-radius: var(--hand-a); border: 2px solid var(--pen); background: var(--bg); color: var(--ink2); cursor: text;
-  font-size: var(--fs-md);
+  display: inline-flex; align-items: center; gap: 6px; height: 20px; width: min(260px, 30vw); padding: 0 8px;
+  border-radius: 6px; border: 0; background: var(--mac-control); color: var(--ink2); cursor: text;
+  font-size: 12px;
 }
 .tray { justify-self: end; display: flex; align-items: center; gap: 4px; }
-.clock { padding: 0 6px; font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); white-space: nowrap; }
+.clock { padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
 .badge {
   position: absolute; top: -3px; right: -6px; min-width: 20px; height: 16px; padding: 0 4px; border-radius: 8px;
   font-family: var(--mono); font-size: 10px; line-height: 14px; text-align: center;
@@ -156,17 +174,18 @@
 }
 .badge[data-tone='warn'] { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
 .flyout {
-  position: absolute; bottom: 50px; right: 8px; z-index: 5; min-width: 200px; max-height: 60vh; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 4px; padding: 8px;
-  background: var(--panel); border: 2px solid var(--pen); border-radius: var(--hand-b);
-  box-shadow: var(--pencil-twice);
+  position: absolute; top: 28px; right: 8px; z-index: 5; min-width: 200px; max-height: 60vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  /* A Mac menu: a rounded panel with a hairline edge and a soft shadow. */
+  background: var(--mac-titlebar); border: 1px solid var(--mac-control-hi); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.5);
 }
 .flyout[data-wide='true'] { width: min(440px, 80vw); }
 .flyout > button {
-  text-align: left; padding: 8px 10px; border-radius: var(--r-sm);
+  text-align: left; padding: 4px 10px; border-radius: 4px;
   border: 1px solid transparent; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--fs-sm);
 }
-.flyout > button:hover { background: var(--panel2); border-color: var(--line); }
+.flyout > button:hover { background: var(--mac-row-sel); }
 .status { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
 .notice {
   display: flex; align-items: center; gap: 8px; justify-content: space-between;
@@ -214,6 +233,7 @@
 /* A phone: the laptop is the whole screen, and the icons come closer together. */
 /* A phone, upright or on its side: the laptop's screen is the phone's screen. */
 @media (max-width: 560px), (max-height: 500px) {
+  .menuMaker { display: none; }
   .laptop { width: 100vw; height: 100dvh; }
   .lid { padding: 0; border-radius: 0; border: 0; }
   .screen { border-radius: 0; border: 0; }
@@ -221,8 +241,8 @@
   .icons { grid-template-columns: repeat(2, 104px); gap: 18px 20px; }
   .search span { display: none; }
   .search { width: auto; }
-  .taskbar { height: calc(44px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
-  .titleBar { padding-top: env(safe-area-inset-top); height: calc(40px + env(safe-area-inset-top)); padding-left: max(10px, env(safe-area-inset-left)); }
+  .taskbar { height: calc(30px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  .titleBar { padding-left: max(10px, env(safe-area-inset-left)); }
   .pageBar { padding-top: env(safe-area-inset-top); height: calc(46px + env(safe-area-inset-top)); }
 }
 /* On its side there is height for one row of apps, not two. */
@@ -350,3 +370,12 @@
   display: grid; place-items: center; background: var(--danger); color: var(--app-glyph); font-size: var(--fs-xs); font-weight: 700;
 }
 .icon { position: relative; }
+
+/* An app open on the phone is the same software as on the laptop, so it gets the same
+   Apple dark-mode greys (see .screen). */
+.phoneApp {
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
+  --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
+  background: var(--bg);
+}

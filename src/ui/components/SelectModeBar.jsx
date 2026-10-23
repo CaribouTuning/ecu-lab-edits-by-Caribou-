@@ -36,7 +36,7 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
     <>
       {/* Wraps: at phone width the view toggle drops to its own line rather than
           pushing the row off the side of the screen. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center', marginBottom: 8 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
         {/* Changing mode clears the selection: a half-taken range means nothing in
             single-cell mode, and a single cell is not an anchor. */}
         <Seg
@@ -52,15 +52,13 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
           onChange={(id) => setDiffView(id === 'changes')}
           options={[{ id: 'values', label: 'Values' }, { id: 'changes', label: 'Changes' }]}
         />
-        <div style={{ marginLeft: 'auto' }}>
-          <Button
-            variant="quiet" size="sm"
-            onClick={() => setSelection({ type: 'range', r1: 0, c1: 0, r2: dims.rows - 1, c2: dims.cols - 1 })}
-          >Select all</Button>
-        </div>
+        <Button
+          variant="ghost" size="sm"
+          onClick={() => setSelection({ type: 'range', r1: 0, c1: 0, r2: dims.rows - 1, c2: dims.cols - 1 })}
+        >Select all</Button>
       </div>
       {diffView && (
-        <div style={{ fontSize: 10.5, color: T.ink2, marginBottom: 6 }}>
+        <div style={{ fontSize: 11, color: T.ink2, marginTop: 6 }}>
           Change since this calibration was loaded: <span style={{ color: T.violet }}>violet up</span>, <span style={{ color: T.cyan }}>cyan down</span>
         </div>
       )}

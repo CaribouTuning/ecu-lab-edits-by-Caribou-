@@ -12,8 +12,12 @@
   margin-bottom: 2px;
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--cyan);
+  color: var(--ink2);
 }
+
+.maths { margin-top: 8px; }
+.maths > summary { cursor: pointer; color: var(--ink2); font-size: 12px; }
+.mathsBody { margin-top: 4px; font-family: var(--mono); font-size: 11px; color: var(--ink2); }
 
 /* FUEL's two mixture directions, coloured differently — carried over from
    FuelScreen.module.css's `.cell[data-richen='true']`. Richen (this cell is

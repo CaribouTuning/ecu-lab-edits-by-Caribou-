@@ -1446,95 +1446,99 @@ export function EcuLabApp() {
           </div>
         )}
 
-        {/* ---------- TUNE: sub-view switcher for the calibration tables ---------- */}
+        {/* ---------- TUNE: a Mac app's window, a sidebar of the ECU's tables beside the open one ---------- */}
         {tuneOpen && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px 0' }}>
-            {/* One row of tabs across the Tune window, as drawn: VE first, then every
-                other ECU page. CAREER's locked pages keep their padlock. A number on a page
-                is how many of the last pull's log entries send you there — shown only while
-                that pull still describes this setup. */}
-            <div className={deskApps.tuneTabs}>
-              {tuneViews.map((v) => {
-                const on = tuneView === v.id;
-                const locked = inCareer && !pageUnlocked(career, v.id);
-                const flagged = attention[v.id] ?? 0;
-                const name = v.name ?? v.label;
-                return (
-                  <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
-                    onClick={() => { goSection('tune', v.id); setSelection(null); }}
-                    aria-label={locked ? `${name}, locked until the shop trains for it`
-                      : flagged ? `${name}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
-                    {locked && <Lock size={12} aria-hidden="true" />}{name}
-                    {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <MapSlots />
-            {Object.keys(attention).length > 0 && (
-              <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 2 }}>
-                A number on a tab is how many entries in the last pull&apos;s log point there. The dyno computer&apos;s pull log has the details.
+          <div className={deskApps.tuneLayout}>
+            {/* The sidebar, as a Mac app lists its documents: the tables, VE first, then every
+                other ECU page, and under them the ECU's four map slots. CAREER's locked pages
+                keep their padlock. A count on a page is how many of the last pull's log entries
+                send you there, shown only while that pull still describes this setup. */}
+            <nav className={deskApps.tuneSidebar} aria-label="ECU tables">
+              <div className={deskApps.sideHead}>Tables</div>
+              <div className={deskApps.tuneTabs}>
+                {tuneViews.map((v) => {
+                  const on = tuneView === v.id;
+                  const locked = inCareer && !pageUnlocked(career, v.id);
+                  const flagged = attention[v.id] ?? 0;
+                  const name = v.name ?? v.label;
+                  const Icon = v.icon;
+                  return (
+                    <button key={v.id} type="button" aria-current={on ? 'page' : undefined} className={deskApps.tuneTab}
+                      onClick={() => { goSection('tune', v.id); setSelection(null); }}
+                      title={flagged ? `${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log point here` : undefined}
+                      aria-label={locked ? `${name}, locked until the shop trains for it`
+                        : flagged ? `${name}, named by ${flagged} ${flagged === 1 ? 'entry' : 'entries'} in the last pull's log` : undefined}>
+                      {locked ? <Lock size={13} aria-hidden="true" /> : <Icon size={13} aria-hidden="true" />}
+                      <span className={deskApps.tuneTabName}>{name}</span>
+                      {flagged > 0 && <span aria-hidden="true" className={deskApps.tuneFlag}>{flagged}</span>}
+                    </button>
+                  );
+                })}
               </div>
+              <div className={deskApps.sideHead}>Maps</div>
+              <div className={deskApps.sideMaps}><MapSlots /></div>
+            </nav>
+            <div className={deskApps.tuneMain}>
+            {tuneOpen && lockedPage && (() => {
+              const course = trainingFor(lockedPage);
+              return (
+                <div style={{ padding: 16 }}>
+                  <Panel>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>
+                      <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
+                    </div>
+                    <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
+                      {course ? <>The <b style={{ color: T.ink }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
+                    </div>
+                    <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
+                  </Panel>
+                </div>
+              );
+            })()}
+
+            {tunePage && tuneView === 'airflow' && (
+              <AirflowScreen veLog={veLog}>
+                {ecuOpen('airflow') ? <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} /> : <LockedSettings section="airflow" />}
+              </AirflowScreen>
             )}
+
+            {tunePage && tuneView === 'spark' && (
+              <SparkScreen calAdvice={calAdvice}>
+                {ecuOpen('spark') ? <EcuSection embedded section="spark" title="Spark corrections & knock control" icon={Zap} liveVars={liveVars} /> : <LockedSettings section="spark" />}
+              </SparkScreen>
+            )}
+
+            {tunePage && tuneView === 'fuel' && (
+              <FuelScreen calAdvice={calAdvice}>
+                {ecuOpen('fuel') ? <EcuSection embedded section="fuel" title="Fuel strategy & enrichment" icon={Droplets} liveVars={liveVars} /> : <LockedSettings section="fuel" />}
+              </FuelScreen>
+            )}
+
+            {tunePage && tuneView === 'injectors' && (
+              <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc}>
+                <div style={{ padding: '0 16px' }}>
+                  <EcuSection embedded section="injectors" title="Injector settings" icon={Fuel} liveVars={liveVars} />
+                </div>
+              </InjectorsScreen>
+            )}
+
+            {tunePage && tuneView === 'sensors' && (
+              <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result}>
+                <div style={{ padding: '0 16px' }}>
+                  <EcuSection embedded section="sensors" title="Sensor calibration" icon={Activity} liveVars={liveVars} />
+                </div>
+              </SensorsScreen>
+            )}
+
+            {tunePage && ['boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'].includes(tuneView) && (() => {
+              const v = TUNE_VIEWS.find((x) => x.id === tuneView);
+              const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management', nitrous: 'Nitrous control' };
+              return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
+            })()}
+
+            </div>
           </div>
         )}
-
-        {tuneOpen && lockedPage && (() => {
-          const course = trainingFor(lockedPage);
-          return (
-            <div style={{ padding: 16 }}>
-              <Panel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>
-                  <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
-                </div>
-                <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-                  {course ? <>The <b style={{ color: T.ink }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
-                </div>
-                <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
-              </Panel>
-            </div>
-          );
-        })()}
-
-        {tunePage && tuneView === 'airflow' && (
-          <AirflowScreen veLog={veLog}>
-            {ecuOpen('airflow') ? <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} /> : <LockedSettings section="airflow" />}
-          </AirflowScreen>
-        )}
-
-        {tunePage && tuneView === 'spark' && (
-          <SparkScreen calAdvice={calAdvice}>
-            {ecuOpen('spark') ? <EcuSection embedded section="spark" title="Spark corrections & knock control" icon={Zap} liveVars={liveVars} /> : <LockedSettings section="spark" />}
-          </SparkScreen>
-        )}
-
-        {tunePage && tuneView === 'fuel' && (
-          <FuelScreen calAdvice={calAdvice}>
-            {ecuOpen('fuel') ? <EcuSection embedded section="fuel" title="Fuel strategy & enrichment" icon={Droplets} liveVars={liveVars} /> : <LockedSettings section="fuel" />}
-          </FuelScreen>
-        )}
-
-        {tunePage && tuneView === 'injectors' && (
-          <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc}>
-            <div style={{ padding: '0 16px' }}>
-              <EcuSection embedded section="injectors" title="Injector settings" icon={Fuel} liveVars={liveVars} />
-            </div>
-          </InjectorsScreen>
-        )}
-
-        {tunePage && tuneView === 'sensors' && (
-          <SensorsScreen needsMafRecal={needsMafRecal} chartData={chartData} result={result}>
-            <div style={{ padding: '0 16px' }}>
-              <EcuSection embedded section="sensors" title="Sensor calibration" icon={Activity} liveVars={liveVars} />
-            </div>
-          </SensorsScreen>
-        )}
-
-        {tunePage && ['boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'].includes(tuneView) && (() => {
-          const v = TUNE_VIEWS.find((x) => x.id === tuneView);
-          const titles = { boost: 'Boost control', vvt: 'Variable cam timing', idle: 'Idle control', protect: 'Engine protection', torque: 'Torque management', nitrous: 'Nitrous control' };
-          return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
-        })()}
 
         {/* ---------- DYNO: the car on the rollers, its controls and the dyno's computer ---------- */}
         {/* Walked up to the dyno in the shop (Station.jsx): the camera is on the car, the
@@ -1739,11 +1743,14 @@ export function EcuLabApp() {
         notices={deskNotices}
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}
         status={<StatusStrip actions={false} />}
+        footer={appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} bar /> : null}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (
           <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />
         )}
-        {(deskMode === 'app' || deskMode === 'page') && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
+        {/* An app's status bar is the window's own (Desk's footer); a page in the shop
+            keeps the strip at its top. */}
+        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}

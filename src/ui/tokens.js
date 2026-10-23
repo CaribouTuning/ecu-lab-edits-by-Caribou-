@@ -108,6 +108,26 @@ export const tokens = Object.freeze({
   cork: '#9c7448',
   pin: '#c8402f',
 
+  // The laptop's software, drawn as a native Mac app in dark mode with the Graphite
+  // accent (Desk.module.css .window remaps the neutral tokens to these).
+  macWindow: '#1e1e1e',
+  macTitlebar: '#2b2b2b',
+  macSidebar: '#262626',
+  macBox: '#252525',
+  macControl: '#3d3d3d',
+  macControlHi: '#4b4b4b',
+  macSelected: '#6a6a6a',
+  macRowSel: '#474747',
+  macSeparator: '#383838',
+  macLabel: '#e6e6e6',
+  macLabel2: '#a6a6a6',
+  macLabel3: '#8c8c8c',
+  macSelInk: '#ffffff',
+  macRed: '#ff5f57',
+  macYellow: '#febc2e',
+  macGreen: '#28c840',
+  macLightInk: '#4d0000',
+
   // The laptop's and the phone's wallpaper: the Caribou badge in neutral chrome on a
   // graphite ground (no blue, no reflection).
   wallSky: '#1a1a18',

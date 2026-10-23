@@ -117,37 +117,51 @@
 }
 .buildRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; }
 .oem {
-  padding: 10px 14px; border-radius: var(--r-sm); border: 2px solid var(--acc); background: var(--acc-bg);
-  color: var(--acc-ink); font-weight: 800; letter-spacing: 0.05em; font-size: var(--fs-sm); cursor: pointer;
+  padding: 4px 12px; border-radius: 6px; border: 0; background: var(--mac-control);
+  color: var(--mac-label); font-weight: 500; font-size: 13px; cursor: pointer;
 }
-.oem[aria-expanded='true'] { background: var(--acc); color: var(--acc-on); }
+.oem:hover { background: var(--mac-control-hi); }
+.oem[aria-expanded='true'] { background: var(--mac-selected); color: var(--mac-sel-ink); }
 .buildNote { font-size: var(--fs-sm); color: var(--ink2); }
 .oemList { max-height: 40vh; overflow-y: auto; margin-top: 10px; padding: 12px; border: 1px solid var(--line-hi); border-radius: var(--r-md); background: var(--panel); }
 
 /* ---------- Tune: one row of tabs, VE first ---------- */
-.tuneTabs {
-  display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line-hi);
-  scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;
+/* Tune as a Mac app: a source-list sidebar of the ECU's tables beside the open one. */
+.tuneLayout { display: grid; grid-template-columns: 164px minmax(0, 1fr); align-items: start; min-height: 100%; }
+.tuneSidebar {
+  position: sticky; top: 0; align-self: stretch; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 8px; background: var(--mac-sidebar); border-right: 1px solid var(--mac-separator);
 }
+.sideHead { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--mac-label3); }
+.tuneTabs { display: flex; flex-direction: column; gap: 1px; }
 .tuneTab {
-  position: relative; flex: none; display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 14px 8px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--r-sm) var(--r-sm) 0 0;
-  background: transparent; color: var(--ink2); font-weight: 800; font-size: var(--fs-xs, 11px); letter-spacing: 0.04em; cursor: pointer;
+  display: flex; align-items: center; gap: 7px; width: 100%; height: 26px; padding: 0 8px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--mac-label);
+  font-size: 13px; font-weight: 400; text-align: left; cursor: pointer;
 }
-.tuneTab:hover { color: var(--ink); background: var(--panel); }
-.tuneTab[aria-current='page'] {
-  color: var(--acc-ink); background: var(--panel2); border-color: var(--line-hi);
-  box-shadow: inset 0 2px 0 var(--acc); margin-bottom: -1px; padding-bottom: 9px;
-}
+.tuneTab svg { flex: none; color: var(--mac-label2); }
+.tuneTab[aria-current='page'] svg { color: inherit; }
+.tuneTab:hover:not([aria-current='page']) { background: var(--mac-control); }
+/* The selected row: sketch.css draws it in the Graphite selection; a sidebar's is quieter. */
+.tuneTab[aria-current='page'] { background: var(--mac-row-sel) !important; border-color: transparent !important; color: var(--mac-sel-ink) !important; }
+.tuneTabName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A count, as Mail shows unread mail beside a mailbox. */
 .tuneFlag {
-  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; border: 1px solid var(--warn);
-  background: var(--warn-bg); color: var(--warn-ink); font-size: 9px; font-family: var(--mono); line-height: 13px; text-align: center;
+  flex: none; min-width: 18px; padding: 0 5px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink);
+  font-size: 11px; font-variant-numeric: tabular-nums; line-height: 16px; text-align: center;
 }
-/* On a phone every ECU page's tab is in view: they wrap rather than scroll off the side. */
+.sideMaps { padding: 2px 8px 8px; }
+.tuneMain { min-width: 0; container: tune / inline-size; }
+/* On a phone there is no room for a sidebar: the tables are one scrolling row above the
+   open one, and the map slots sit beside them. */
 @media (max-width: 560px) {
-  .tuneTabs { flex-wrap: wrap; overflow-x: visible; border-bottom: 0; gap: 4px; }
-  .tuneTab { padding: 7px 9px; border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
-  .tuneTab[aria-current='page'] { margin-bottom: 0; padding-bottom: 7px; }
+  .tuneLayout { grid-template-columns: minmax(0, 1fr); }
+  .tuneSidebar { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--mac-separator); }
+  .sideHead { display: none; }
+  .tuneTabs { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .tuneTab { width: auto; height: 28px; padding: 0 10px; background: var(--mac-control); }
+  .tuneTab svg { display: none; }
+  .sideMaps { padding: 0; }
 }
 
 /* ---------- Physics: the engine cutaway ---------- */

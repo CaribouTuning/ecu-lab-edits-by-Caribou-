@@ -310,8 +310,13 @@ function VeMath({ cell }) {
  */
 function VeAdvisory({ report }) {
   const { state, detail } = report;
+  // The correction's arithmetic, behind a disclosure: there for whoever wants it, not the
+  // first thing in the pane.
   const formula = (
-    <div className={styles.bannerCell}>VE new = VE × (λ measured ÷ λ target) × fuel trims × MAF factor</div>
+    <details className={styles.maths}>
+      <summary>How the correction is worked out</summary>
+      <div className={styles.mathsBody}>VE new = VE × (λ measured ÷ λ target) × fuel trims × MAF factor</div>
+    </details>
   );
   switch (state) {
     case 'no-logs':
@@ -319,9 +324,9 @@ function VeAdvisory({ report }) {
       const why = pullWhy(detail.pullInfo);
       return (
         <div className={styles.prose}>
-          {formula}
           No tuning software can see an engine&apos;s true VE; it corrects the table from logs. {why}
-          {' '}Run a pull for the full-throttle row, and drive the LIVE engine warm at a steady throttle for the rest — then apply the correction under the table.
+          {' '}Run a pull for the full-throttle row, and drive the LIVE engine warm at a steady throttle for the rest. Then apply the correction under the table.
+          {formula}
         </div>
       );
     }

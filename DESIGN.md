@@ -46,24 +46,39 @@ sake of cards, and no forced capitals.
 | 2 | **Vendor clone**: copy one real tuning suite closely | Instantly familiar to tuners | Dated (many of them are Windows-era UIs). Raises trademark questions. Means nothing to learners. |
 | 3 | **Glass dashboard**: frosted panels, neon accent, glows | Looks "modern" in a thumbnail | Exactly what generated UIs default to. Low contrast. Glow competes with data colour. |
 | 4 | **Paper and pencil**: a light, engineering-notebook theme | Calm; good for teaching | Fights the dark 3D shop it sits in. Heat maps lose contrast on white. Glare in a garage. |
-| 5 | **Workshop instrument software** (chosen): graphite chrome, colour only for data, table first, ink only on physical things | Reads like a real tool. Keeps the shop's character where it belongs. Colour regains meaning. | Plainer at first glance. Needs discipline to stay that way. |
+| 5 | **Workshop instrument software**: graphite chrome, colour only for data, table first, ink only on physical things | Reads like a real tool. Keeps the shop's character where it belongs. Colour regains meaning. | Still a custom look: players read it as a web template, not as software they know. |
+| 6 | **A native Mac app** (chosen, October 2026): the laptop runs macOS-style software in dark mode with the Graphite accent | Every player knows what a Mac app looks like, so nothing reads as made up. Its rules (title bar, sidebar, segmented controls, inspector) are fixed, not invented. | A look borrowed from one platform. Needs care not to imitate Apple's own marks: no Apple logo, no SF Symbols files, no Apple app names. |
+
+Direction 5 shipped first, and players still called the screens AI-made. The owner chose
+direction 6: the laptop's software should look like a native Mac app.
 
 ### The chosen direction
 
-**Workshop instrument software.** The world is drawn; the software is not.
+**The world is drawn; the software is a Mac app.**
 
 - **The physical world is inked.** The 3D shop, the laptop and phone bodies, the shop's
   markers and paper on the job board keep the pen: the sketch post-process
   (`desk/stage.js`), wobbly outlines (`--ink-a/b/c/round`) and `.ink-frame-lg`.
-- **Software on a screen is not inked.** The apps and the dyno and engine-stand
-  computers have straight edges, small corners and one-pixel rules. That covers every
-  table, chart and control on them.
-- **Colour is data.** The chrome is greyscale. A selection is a solid light key with dark
-  text (`--acc` on `--acc-on`). Hue appears only when it means something: table heat,
-  the power and torque curves, ok / warning / danger.
-- **The table first.** On TUNE pages the map is the first thing under the tabs. Toolbars
-  sit on one line beside it, and explanations go in `title` attributes and the advisor,
-  not in paragraphs above it.
+- **The laptop's software is a Mac app in dark mode.** A menu bar along the top of the
+  screen names the app (ECU Lab). Each app opens in a window with traffic lights and a
+  centred title, and a status bar along its bottom carries the engine line and readouts.
+  The `--mac-*` tokens hold the colours. Inside the laptop's screen and a phone's open
+  app, the neutral tokens (`--bg`, `--panel*`, `--line*`, `--ink*`, `--pen`) are remapped
+  to them (Desk.module.css `.screen`, `.phoneApp`). Every app therefore picks them up
+  without knowing, and a component that wants them must use the CSS variables, not the
+  JS `T` constants.
+- **Mac controls.** Push buttons are grey rounded keys with no outline. Segmented
+  controls are one well, with the chosen segment a lighter raised chip. Pop-up buttons
+  have a chevron. Group boxes are a faint well with a hairline edge. Corners are 6 to
+  8 px.
+- **Graphite selection.** A selection is a lighter grey chip with white text
+  (`--mac-selected` on `--mac-sel-ink`); a sidebar row's is quieter (`--mac-row-sel`).
+  Hue appears only when it means something: table heat, the power and torque curves,
+  ok / warning / danger, and the traffic lights.
+- **Tune is a document window.** A source-list sidebar holds the ECU's tables, with the
+  map slots under them. The open table has one toolbar line, and the advisor is an
+  inspector beside it. The inspector sits beside the table only when Tune's own width
+  holds all 16 columns (a container query); otherwise it goes under the table.
 - **Interaction is with the thing.** The dyno, the engine stand and the job board are
   operated on the objects in the shop, not through a panel beside the 3D view
   (`desk/Station.jsx`, `desk/ShopBackdrop.jsx`).
@@ -83,6 +98,11 @@ sake of cards, and no forced capitals.
 - Text never moves. No animated type, no jitter on chart lines.
 
 ## Colour
+
+The table below is the ground outside the laptop: the start screen, the shop's pages and
+the dyno. The laptop's own software uses the `--mac-*` tokens described above (window
+#1e1e1e, sidebar #262626, controls #3d3d3d, selection #6a6a6a, text #e6e6e6 / #a6a6a6 /
+#8c8c8c).
 
 | Token | Value | Use |
 |---|---|---|
@@ -109,23 +129,25 @@ colours out of components, keep the accent from being a status colour, and keep
 - **Desktop**: the laptop or the shop fills the window, and apps open in it as windows.
 - **Phone, portrait**: one column. The start screen puts its dyno sheet under the ways in.
 - **Phone, landscape** (height under 520 px): two columns again, with the blurbs dropped.
-- Spacing comes from `--sp-*` (3 to 24 px). Corners are `--r-xs` to `--r-lg`
-  (2 to 6 px). Nothing on software is rounder than 6 px except a round button.
+- Spacing comes from `--sp-*` (3 to 24 px). Software corners are 6 to 8 px, as a Mac's.
 - Left-aligned. Nothing is centred for effect. The start screen's columns are centred as
   a block, but their contents read from the left edge.
 
 ## Components
 
-- **Keys** (`Seg`, `Consoles.module.css .key`): a pressed key is `--acc` with dark
-  text, and its state is `aria-pressed`, so the style and the meaning are one attribute.
-- **Tabs**: words, not icons. A locked tab adds a padlock, and its name says so to a
-  screen reader ("…, locked until the shop trains for it").
+- **Keys** (`Seg`): Mac segmented controls. The state is `aria-pressed`, so the style and
+  the meaning are one attribute. The dyno's console keys (`Consoles.module.css .key`) are
+  physical and keep their own look.
+- **Sidebar rows**: a small monochrome glyph and the name, as a Mac source list has. A
+  locked table shows a padlock instead, and its name says so to a screen reader ("…,
+  locked until the shop trains for it"). A count beside a row is how many log entries
+  point there, as Mail counts unread mail.
 - **Tables**: heat colours on cells, and the selection drawn as an outline over them, so
   a selected cell keeps its value's colour.
 - **Charts**: one-pixel grid, mono ticks, power in `--ink`, torque in `--cyan`, and a
   previous run dashed at half opacity.
-- **The advisor**: one panel. Its left stripe is the verdict's tone, the one stripe
-  kept, because it is a real state.
+- **The advisor**: an inspector. The verdict's tone is a small dot by its headline,
+  not a stripe. Arithmetic sits behind a disclosure ("How the correction is worked out").
 - **Machine consoles** (dyno, engine stand): physical controls drawn as such. They have
   a big round button whose colour is its state (green go, red stop), latching keys and a
   hold-to-open lever.

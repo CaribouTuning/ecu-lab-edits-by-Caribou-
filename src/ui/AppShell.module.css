@@ -368,3 +368,10 @@
   .brand { display: none; }
   .stripInner { padding: var(--sp-xs) var(--sp-md); }
 }
+
+/* A Mac window's status bar (StatusStrip `bar`, Desk's window footer): one quiet line of
+   small grey text, the readouts at the right. */
+.strip[data-bar='true'] { background: transparent; border-bottom: 0; }
+.strip[data-bar='true'] .stripInner { max-width: none; padding: 3px 12px; }
+.strip[data-bar='true'] .engine { font-size: 11px; color: var(--mac-label2); }
+.strip[data-bar='true'] .readouts { flex-wrap: nowrap; }

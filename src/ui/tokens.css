@@ -57,6 +57,26 @@
   --tile-wash: #bcd2ee;
   --cork: #9c7448;
   --pin: #c8402f;
+  /* The laptop's software, drawn as a native Mac app in dark mode with the Graphite
+     accent: neutral greys, a grey selection, and the window's traffic lights. Applied by
+     remapping the neutral tokens inside a window (Desk.module.css .window). */
+  --mac-window: #1e1e1e;
+  --mac-titlebar: #2b2b2b;
+  --mac-sidebar: #262626;
+  --mac-box: #252525;
+  --mac-control: #3d3d3d;
+  --mac-control-hi: #4b4b4b;
+  --mac-selected: #6a6a6a;
+  --mac-row-sel: #474747;
+  --mac-separator: #383838;
+  --mac-label: #e6e6e6;
+  --mac-label2: #a6a6a6;
+  --mac-label3: #8c8c8c;
+  --mac-sel-ink: #ffffff;
+  --mac-red: #ff5f57;
+  --mac-yellow: #febc2e;
+  --mac-green: #28c840;
+  --mac-light-ink: #4d0000;
   --wall-sky: #1a1a18;
   --wall-sky2: #0b0b0a;
   --chrome-hi: #ffffff;
