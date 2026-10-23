@@ -28,6 +28,7 @@ const ROOT = path.resolve(HERE, '..', 'dist');
  * Window and taskbar icon for Windows and Linux (macOS takes it from the app bundle).
  * The installers' own icons are built from build/icon.png by electron-builder; this
  * copy is what the running window shows, and what replaces the Electron logo in dev.
+ * It is a 512px export of build/icon.png: re-export both whenever the icon changes.
  */
 const ICON = path.join(HERE, 'icon.png');
 
@@ -61,15 +62,17 @@ function registerAppProtocol() {
     const url = new URL(request.url);
     if (url.host !== HOST) return respond('Not found', { status: 404 });
 
-    const requested = decodeURIComponent(url.pathname);
-    const file = path.normalize(path.join(ROOT, requested === '/' ? 'index.html' : requested));
-
-    // Nothing outside dist/ is ever served, whatever the URL says.
-    if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
-      return respond('Forbidden', { status: 403 });
-    }
-
     try {
+      // Inside the try: a malformed escape such as %E0%A4%A throws here, and should be
+      // an ordinary 404 rather than an unhandled error.
+      const requested = decodeURIComponent(url.pathname);
+      const file = path.normalize(path.join(ROOT, requested === '/' ? 'index.html' : requested));
+
+      // Nothing outside dist/ is ever served, whatever the URL says.
+      if (file !== ROOT && !file.startsWith(ROOT + path.sep)) {
+        return respond('Forbidden', { status: 403 });
+      }
+
       const body = await readFile(file);
       const type = MIME[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
       return respond(body, { headers: { 'content-type': type } });
@@ -80,6 +83,16 @@ function registerAppProtocol() {
 }
 
 const isWeb = (url) => /^https?:\/\//i.test(url);
+
+/** True for any address on the app's own origin, not just the entry page. */
+const isApp = (url) => {
+  try {
+    const { protocol, host } = new URL(url);
+    return protocol === `${SCHEME}:` && host === HOST;
+  } catch {
+    return false;
+  }
+};
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -106,10 +119,12 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // The window only ever shows the app. Hash changes (the app's routing) and reloads
-  // keep the same document URL, so they pass; anything else is sent to the browser.
+  // The window only ever shows the app. Anything on the app's own origin may load (the
+  // protocol handler answers 404 for what does not exist, and maps `/` to index.html);
+  // everything else is sent to the browser instead. Hash changes, the app's routing,
+  // are in-page and never reach this handler.
   win.webContents.on('will-navigate', (event, url) => {
-    if (url.split('#')[0] === ENTRY) return;
+    if (isApp(url)) return;
     event.preventDefault();
     if (isWeb(url)) shell.openExternal(url);
   });
@@ -123,8 +138,14 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
+    // Nothing to show before the app is ready; the first launch is still starting up.
+    if (!app.isReady()) return;
     const [win] = BrowserWindow.getAllWindows();
-    if (!win) return;
+    if (!win) {
+      // macOS keeps the app running after its last window closes.
+      createWindow();
+      return;
+    }
     if (win.isMinimized()) win.restore();
     win.focus();
   });

@@ -24,6 +24,10 @@ jobs:
   # nothing is packaged without passing it.
   test:
     runs-on: ubuntu-latest
+    env:
+      # This job never runs Electron, so do not download its binary. The build jobs
+      # below leave it unset: electron-builder needs the real thing.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v5
 
@@ -36,6 +40,14 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The same gates the site goes through in ci.yml, so an installer is never
+      # built from a commit the site would have refused.
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
 
   build:
     needs: test
@@ -61,9 +73,7 @@ jobs:
 
       - run: npm ci
 
-      - name: Build the web app
-        run: npm run build
-
+      # `desktop:dist` builds the web app first, then packages it.
       - name: Package
         run: npm run desktop:dist -- ${{ matrix.flag }}
 
@@ -77,11 +87,17 @@ jobs:
             release/*.deb
           if-no-files-found: error
 
-  # Tags only. Re-running after a failure replaces the files on the existing release
-  # instead of failing because it already exists.
+  # Tags only. Runs even when a platform failed, so one broken build does not hold back
+  # the others: a plain `needs: build` would skip this job unless every leg passed.
+  # A failed `test` still stops everything, because `build` is then skipped and this
+  # job's condition below refuses a skipped build.
+  #
+  # The run still shows red when a leg failed, and a warning says which release is
+  # partial. "Re-run failed jobs" rebuilds only the broken platform and runs this again;
+  # the upload below replaces files, so the missing installer is added to the same release.
   release:
     needs: build
-    if: github.ref_type == 'tag'
+    if: ${{ !cancelled() && github.ref_type == 'tag' && (needs.build.result == 'success' || needs.build.result == 'failure') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -91,6 +107,19 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: files
+
+      - name: Check what was built
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          COUNT=$(find files -type f 2>/dev/null | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No platform produced an installer, so there is nothing to release."
+            exit 1
+          fi
+          if [ "$BUILD_RESULT" != 'success' ]; then
+            echo "::warning::At least one platform failed. Publishing the ones that built; fix the failure and use 'Re-run failed jobs' to add the rest."
+          fi
 
       - name: Attach to the release
         env:
