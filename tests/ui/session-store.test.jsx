@@ -469,7 +469,8 @@ function selectedLoad() {
     .map((name) => screen.getByRole('button', { name }));
   const pressed = buttons.filter((b) => b.getAttribute('aria-pressed') === 'true');
   expect(pressed).toHaveLength(1);
-  return pressed[0].textContent;
+  // The key's name, not its face: the face shows the number, the unit is engraved above it.
+  return pressed[0].getAttribute('aria-label');
 }
 
 describe('banking a pull', () => {
