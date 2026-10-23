@@ -103,10 +103,10 @@ export const tokens = Object.freeze({
   tileInk: '#1f1c18',
   tileWash: '#bcd2ee',
 
-  // The laptop's and the phone's wallpaper: the Caribou badge in polished chrome on a
-  // glossy blue with light swooshes across it, the way a computer shipped in 2003.
-  wallSky: '#5d9ae8',
-  wallSky2: '#1747a8',
+  // The laptop's and the phone's wallpaper: the Caribou badge in polished chrome on the
+  // dark, standing on its own reflection.
+  wallSky: '#121826',
+  wallSky2: '#05070c',
   chromeHi: '#ffffff',
   chromeMid: '#c6d0de',
   chromeLo: '#6f7d95',

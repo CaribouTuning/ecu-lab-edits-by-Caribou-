@@ -32,17 +32,9 @@ export const DESK_APPS = [
   { id: 'physics', label: 'Physics', name: 'PHYSICS' },
 ];
 
-/** The light swooshes across the wallpaper: each a soft band of light, as on the glossy desktops of the early 2000s. */
-const SWOOSHES = [
-  'M-100 700 C 300 520 700 470 1700 560 L 1700 600 C 700 520 300 570 -100 760 Z',
-  'M-100 120 C 400 260 900 700 1700 820 L 1700 870 C 860 740 380 320 -100 190 Z',
-  'M300 -50 C 700 200 1100 260 1700 120 L 1700 170 C 1100 320 700 270 260 -50 Z',
-  'M-100 520 C 500 420 1100 300 1700 330 L 1700 350 C 1100 330 500 450 -100 560 Z',
-];
-
 /**
- * The wallpaper: the Caribou Tuning badge in polished chrome, standing on a glossy blue
- * floor with its reflection under it, and swooshes of light behind. Drawn from the traced
+ * The wallpaper: the Caribou Tuning badge in polished chrome on the dark, standing on a
+ * glossy floor with its reflection under it. Drawn from the traced
  * badge (screens/caribouLogo.js), so it is sharp at any size.
  * @returns {React.ReactElement}
  */
@@ -56,14 +48,9 @@ function Wallpaper() {
   return (
     <svg className={styles.wallpaper} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <defs>
-        <linearGradient id="wall-sky" x1="1" y1="0" x2="0" y2="1">
+        <linearGradient id="wall-sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: 'var(--wall-sky)' }} />
           <stop offset="1" style={{ stopColor: 'var(--wall-sky2)' }} />
-        </linearGradient>
-        <linearGradient id="wall-light" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0 }} />
-          <stop offset="0.55" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0.5 }} />
-          <stop offset="1" style={{ stopColor: 'var(--chrome-hi)', stopOpacity: 0.1 }} />
         </linearGradient>
         <linearGradient id="wall-chrome" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: 'var(--chrome-hi)' }} />
@@ -79,9 +66,7 @@ function Wallpaper() {
         <mask id="wall-reflect"><rect x="0" y="640" width="1600" height="300" fill="url(#wall-fade)" /></mask>
       </defs>
       <rect width="1600" height="900" fill="url(#wall-sky)" />
-      {SWOOSHES.map((d) => <path key={d} d={d} fill="url(#wall-light)" />)}
-      <rect y="640" width="1600" height="260" style={{ fill: 'var(--wall-sky2)' }} opacity="0.35" />
-      <line x1="0" y1="640" x2="1600" y2="640" style={{ stroke: 'var(--chrome-hi)' }} strokeOpacity="0.35" strokeWidth="2" />
+      <line x1="0" y1="640" x2="1600" y2="640" style={{ stroke: 'var(--chrome-hi)' }} strokeOpacity="0.12" strokeWidth="2" />
       <g transform="translate(590 170) scale(0.45)">{badge}</g>
       <g mask="url(#wall-reflect)">
         <g transform="translate(590 1110) scale(0.45 -0.45)" opacity="0.8">{badge}</g>
