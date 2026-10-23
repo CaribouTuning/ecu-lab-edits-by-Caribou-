@@ -26,6 +26,8 @@ import styles from './Desk.module.css';
 
 /** The desktop's apps, as the sketch lays them out: Tune and Learn, Build and Physics. */
 export const DESK_APPS = [
+  // CAREER's paperwork: today's cars, the customers, upgrades, training and the books.
+  { id: 'office', label: 'Shop', name: 'SHOP' },
   { id: 'tune', label: 'Tune', name: 'TUNE' },
   { id: 'learn', label: 'Learn', name: 'LEARN' },
   { id: 'build', label: 'Build', name: 'BUILD' },
@@ -108,6 +110,17 @@ const APP_ICONS = {
       <text x="28" y="47" className="label">RPM</text>
     </>
   ),
+  // The shop: an awning over a door and a window, the sign above.
+  office: (
+    <>
+      <path className="wash" d="M8 20h32v20H8z" />
+      <path d="M6 12c12-.4 24 .3 36 0l2 8c-12 .3-28-.2-40 0z" />
+      <path d="M12 12v8M20 12v8M28 12v8M36 12v8" />
+      <path d="M8 20.5v19.5h32V20.5" />
+      <path d="M14 40V28h8v12M27 27h9v7h-9z" />
+      <path d="M10 7h28" />
+    </>
+  ),
   // A sheet of notes, its corner curling.
   learn: (
     <>
@@ -181,7 +194,8 @@ function Clock() {
  * @param {(id: string) => void} props.onOpen open an app (tune, learn, build, physics) or a page (dyno, live)
  * @param {() => void} props.onDesktop back to the desktop
  * @param {() => void} props.onBay shut the laptop and look at the shop (in CAREER, back out to the town's shop)
- * @param {string[]} [props.apps] which apps the desktop offers, by id (default: all four)
+ * @param {string[]} [props.apps] which apps the desktop offers, by id (default: SANDBOX's four)
+ * @param {boolean} [props.outside] CAREER: the shop's garage door leads outside
  * @param {() => void} [props.onSearch] @param {() => void} [props.onMenu] @param {() => void} [props.onTutorial] @param {() => void} [props.onRepair]
  * @param {Notice[]} [props.notices] what the notifications list holds
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
@@ -191,7 +205,7 @@ function Clock() {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
@@ -199,6 +213,7 @@ export function Desk({
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
     else if (id === 'stand') onOpen('live');
+    else if (id === 'door') onOpen('outside');
     else onDesktop();
   };
   const open = mode === 'desktop' || mode === 'app';
@@ -238,7 +253,7 @@ export function Desk({
     </button>
   );
   const appIcon = (id) => <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (id)]}</svg>;
-  const shownApps = DESK_APPS.filter((a) => !apps || apps.includes(a.id));
+  const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'office'));
 
   // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
   // apps full screen, and putting it down shows the shop.
@@ -294,7 +309,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk'} phone={phone} engineSpec={engineSpec} rpm={rpm} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk'} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} onPick={pick} onLook={onBay} />
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (

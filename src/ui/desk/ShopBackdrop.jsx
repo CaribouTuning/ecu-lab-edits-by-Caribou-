@@ -21,6 +21,7 @@ export const HOTSPOTS = [
   { id: 'dyno', label: 'DYNO', hint: 'Make a pull on the dyno' },
   { id: 'stand', label: 'LIVE', hint: 'The engine on the stand: run it live' },
   { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
+  { id: 'door', label: 'Go outside', hint: 'Take a car out into town' },
 ];
 
 /**
@@ -29,11 +30,12 @@ export const HOTSPOTS = [
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
  * @param {boolean} [props.phone] the device is a phone, not the laptop
+ * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, engineSpec, rpm, onPick, onLook }) {
+export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, onPick, onLook }) {
   const live = useRef({ mode, rpm, spec: engineSpec, specDirty: false });
   live.current.mode = mode;
   live.current.rpm = rpm;
@@ -78,7 +80,7 @@ export function ShopBackdrop({ mode, phone = false, engineSpec, rpm, onPick, onL
       )}
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer}>
-          {HOTSPOTS.map((h) => (
+          {HOTSPOTS.filter((h) => outside || h.id !== 'door').map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}

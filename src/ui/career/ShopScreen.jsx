@@ -28,9 +28,11 @@ import styles from './ShopScreen.module.css';
  * @param {() => void} props.onWork opens the game on the car on the bay
  * @param {() => void} props.onMenu back to the start screen
  * @param {() => void} [props.onLearn] opens the Tuning Course
+ * @param {boolean} [props.office] the laptop's Shop app: the paperwork only, since the
+ *   shop itself is in front of you (no drawn scene, no menu button: the laptop has both)
  * @returns {React.ReactElement|null}
  */
-export function LegacyShop({ onWork, onMenu, onLearn }) {
+export function LegacyShop({ onWork, onMenu, onLearn, office = false }) {
   const [career, dispatch] = useCareer();
   const [tab, setTab] = useState('today');
   const [arriving, setArriving] = useState(/** @type {string|null} */ (null));
@@ -80,7 +82,7 @@ export function LegacyShop({ onWork, onMenu, onLearn }) {
   ];
 
   return (
-    <div className={styles.screen}>
+    <div className={office ? styles.officeScreen : styles.screen}>
       <header className={styles.top}>
         <div className={styles.brand}>
           <span className={styles.brandMaker}>CAREER</span>
@@ -91,12 +93,16 @@ export function LegacyShop({ onWork, onMenu, onLearn }) {
           <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>CASH</span>{money(career.money)}</span>
           <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>REP</span>{career.rep} · {tier.title}</span>
         </div>
-        <Button size="sm" variant="ghost" onClick={onMenu} aria-label="Main menu"><Menu size={15} aria-hidden="true" /> MENU</Button>
+        {!office && <Button size="sm" variant="ghost" onClick={onMenu} aria-label="Main menu"><Menu size={15} aria-hidden="true" /> MENU</Button>}
       </header>
 
-      <div className={styles.sceneWrap}>
-        <ShopScene career={career} arriving={arriving} departing={departing} speech={speech} />
-      </div>
+      {office ? (
+        speech && <p className={styles.office} role="status">“{speech.text}”</p>
+      ) : (
+        <div className={styles.sceneWrap}>
+          <ShopScene career={career} arriving={arriving} departing={departing} speech={speech} />
+        </div>
+      )}
 
       <nav className={styles.tabs} aria-label="Shop">
         {TABS.map((t) => (
@@ -118,8 +124,17 @@ export function LegacyShop({ onWork, onMenu, onLearn }) {
   );
 }
 
+/**
+ * CAREER on the laptop (or phone): the Shop app, the shop's paperwork.
+ * @param {{onWork: () => void, onMenu: () => void, onLearn?: () => void}} props
+ * @returns {React.ReactElement|null}
+ */
+export function CareerOffice(props) {
+  return <LegacyShop {...props} office />;
+}
+
 /** The 3-D world, loaded on demand: three.js is not part of the tuning app's first download. */
-const World = lazy(() => import('../world/World.jsx'));
+export const World = lazy(() => import('../world/World.jsx'));
 
 /**
  * @param {object} props

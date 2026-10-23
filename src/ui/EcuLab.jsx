@@ -48,6 +48,7 @@ import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildTop } from './desk/BuildTop.jsx';
+import { CarPicker } from './desk/CarPicker.jsx';
 import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
@@ -57,7 +58,7 @@ import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
 import { stowFromLift } from './career/ownedCars.js';
 import { advancePhase, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
-import { ShopScreen } from './career/ShopScreen.jsx';
+import { CareerOffice, World as TownWorld } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
@@ -203,9 +204,9 @@ export const DYNO_PULL = Object.freeze({
 export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
-/** The apps on CAREER's laptop: the shop's computer builds and tunes; the dyno and the
- *  engine stand are out in the shop. */
-const CAREER_APPS = ['build', 'tune'];
+/** The apps on CAREER's laptop: the shop's paperwork, and the car on the bay's build and
+ *  tune; the dyno and the engine stand are out in the shop. */
+const CAREER_APPS = ['office', 'build', 'tune'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
@@ -258,6 +259,11 @@ export function EcuLabApp() {
   // are the same ones SANDBOX uses; what changes is whose car is in them and which
   // parts of the ECU the shop has learned to use.
   const [career] = useCareer();
+  // CAREER: the car you took out into town, and whether you are choosing one.
+  const [outsideCar, setOutsideCar] = useState(/** @type {{ownId?: string, bay?: number}|null} */ (null));
+  const outsideCarRef = useRef(outsideCar);
+  outsideCarRef.current = outsideCar;
+  const [pickCar, setPickCar] = useState(false);
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
@@ -876,9 +882,14 @@ export function EcuLabApp() {
       })();
       return () => { cancelled = true; };
     }
-    // The bay view and the two reading apps are SANDBOX's: CAREER's shop is the town's.
-    if (mode === 'career' && (appView === 'bay' || (appView === 'app' && (tab === 'learn' || tab === 'physics')))) {
+    // The two reading apps are SANDBOX's: CAREER goes to its Shop app.
+    if (mode === 'career' && appView === 'app' && (tab === 'learn' || tab === 'physics')) {
       navigate({ view: 'shop', tab: null, section: null });
+    }
+    // The town needs a car to be in, and only CAREER has one: a reload there with none
+    // chosen lands in the shop.
+    if (appView === 'outside' && (mode !== 'career' || !outsideCarRef.current)) {
+      navigate({ view: mode === 'career' ? 'bay' : 'desk', tab: null, section: null });
     }
     return undefined;
   }, [appView, mode, tab, career, dispatch, navigate]);
@@ -1263,17 +1274,21 @@ export function EcuLabApp() {
       />
     );
   }
-  if (appView === 'shop') {
-    // Until ENTER_CAREER has landed the bench still holds SANDBOX's car, so the shop
-    // waits for it rather than offering to work on the wrong one.
-    if (!inCareer) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
+  // Until ENTER_CAREER has landed the bench still holds SANDBOX's car, so the shop
+  // waits for it rather than offering to work on the wrong one.
+  if (appView === 'shop' && !inCareer) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
+  // CAREER, out of the shop: the town, in the car you took. Going back into the shop
+  // brings you back to your desk.
+  if (appView === 'outside') {
+    if (!inCareer || !outsideCar) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
     return (
-      <ShopScreen
-        onWork={() => goTab('tune')}
-        onDyno={() => goTab('dyno')}
-        onMenu={goMenu}
-        onLearn={goCourse}
-      />
+      <React.Suspense fallback={<div style={{ minHeight: '100dvh', background: T.bg }} />}>
+        <TownWorld
+          career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })}
+          onWork={() => goTab('tune')} onDyno={() => goTab('dyno')} onMenu={goMenu} onLearn={goCourse}
+          start={outsideCar} onHome={() => { setOutsideCar(null); navigate({ view: 'bay', tab: null, section: null }); }}
+        />
+      </React.Suspense>
     );
   }
   if (appView === 'tutorial') {
@@ -1322,7 +1337,11 @@ export function EcuLabApp() {
   const screen = (
     <>
         {!inCareer && <MissionCoach route={route} onCourse={goCourse} />}
-        {inCareer && !career.working && tab !== 'shop' && (
+        {/* ---------- CAREER's Shop app: today's cars, customers, upgrades, the books ---------- */}
+        {appView === 'shop' && inCareer && (
+          <CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} />
+        )}
+        {appView === 'app' && inCareer && !career.working && (
           <div style={{ padding: 16 }}>
             <Panel>
               <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>The bay is empty</div>
@@ -1661,6 +1680,8 @@ export function EcuLabApp() {
   // Moving round the laptop and the shop is moving between screens, so it costs what a nav
   // tap does (`changeTab`): the tuning grid's cursor does not come back with you.
   const deskOpen = (t) => {
+    if (t === 'outside') { setPickCar(true); return; }
+    if (t === 'office') { changeTab('shop'); return; }
     if (t !== 'learn') { changeTab(t); return; }
     goSection('learn', 'how');
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
@@ -1669,7 +1690,7 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'app' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
   /** @type {import('./desk/Desk.jsx').Notice[]} */
   const deskNotices = [];
   if (!inCareer) {
@@ -1695,24 +1716,31 @@ export function EcuLabApp() {
           frame it fills. */}
       <PullTraceContext.Provider value={advisorPull.points}>
       <Desk
-        mode={deskMode} app={tab}
+        mode={deskMode} app={appView === 'shop' ? 'office' : tab}
         apps={inCareer ? CAREER_APPS : null}
         onOpen={deskOpen}
         onDesktop={() => deskGo('desk')}
-        onBay={inCareer ? () => changeTab('shop') : () => deskGo('bay')}
+        onBay={() => deskGo('bay')} outside={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
         status={<StatusStrip actions={false} />}
       >
-        {inCareer && (deskMode === 'app' || deskMode === 'page') && (
+        {inCareer && appView !== 'shop' && (deskMode === 'app' || deskMode === 'page') && (
           <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />
         )}
-        {deskMode === 'app' || deskMode === 'page' ? <StatusStrip actions={false} /> : null}
+        {(deskMode === 'app' || deskMode === 'page') && appView !== 'shop' ? <StatusStrip actions={false} /> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}
       <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
+      {pickCar && inCareer && (
+        <CarPicker
+          career={career}
+          onPick={(car) => { setPickCar(false); setOutsideCar(car); navigate({ view: 'outside', tab: null, section: null }); }}
+          onClose={() => setPickCar(false)}
+        />
+      )}
       </PullTraceContext.Provider>
     </div>
   );

@@ -135,8 +135,14 @@ const openPlaces = (c) => PLACES.filter((p) => !closedBecause(c, p));
  * @param {() => void} [props.onLearn]
  * @param {() => void} [props.onFlat] fall back to the flat shop (no WebGL, or the user asked)
  * @param {boolean} [props.preserve] keep the drawing buffer (screenshots in tests)
+ * @param {{ownId?: string, bay?: number}|null} [props.start] begin out in town, driving this
+ *   car (one of yours, or the customer's on a lift), rather than on foot in the shop
+ * @param {(() => void)|null} [props.onHome] going back into the shop ends the trip: the
+ *   shop is the laptop's, at your desk, so the world hands back instead of walking you in
  */
-export default function World({ career, update, onWork, onDyno, onMenu, onLearn, onFlat, preserve = false }) {
+export default function World({ career, update, onWork, onDyno, onMenu, onLearn, onFlat, preserve = false, start = null, onHome = null }) {
+  const onHomeRef = useRef(onHome);
+  onHomeRef.current = onHome;
   const canvasRef = useRef(null);
   const worldRef = useRef(/** @type {any} */ (null));
   const careerRef = useRef(career);
@@ -218,6 +224,11 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     setDrawer(null);
     setSheet(null);
     setFade(true);
+    if (id === 'garage' && onHomeRef.current) {
+      // Home: back to the desk, where the shop is.
+      setTimeout(() => onHomeRef.current?.(), 340);
+      return;
+    }
     setTimeout(() => {
       w.loadLevel(id, entry);
       setFade(false);
@@ -287,6 +298,15 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
       travel('town', { from: what.from ?? 'garage', car: at, enterCar: true });
     }, 60);
   }, [toast, travel]);
+
+  // Out of the shop in a car: start the drive once the world is up.
+  const started = useRef(false);
+  useEffect(() => {
+    if (!world || !start || started.current) return;
+    started.current = true;
+    setPlace('town');
+    startDrive({ ...start, from: 'garage' });
+  }, [world, start, startDrive]);
 
   /** The race on now: who against whom, for the result to settle. */
   const raceRef = useRef(/** @type {null|{series: 'drag'|'track', rival: any, carId: string, gears: number, drag: any}} */ (null));
@@ -539,7 +559,8 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     canvas.addEventListener('webglcontextlost', lost);
     worldRef.current = w;
     if (window.__ECU_E2E__) window.__ecuWorld = w;
-    w.loadLevel('garage', lastSpot ? { from: 'work', at: lastSpot } : { from: 'start' });
+    if (start) w.loadLevel('town', { from: 'garage' });
+    else w.loadLevel('garage', lastSpot ? { from: 'work', at: lastSpot } : { from: 'start' });
     setWorld(w);
     return () => {
       canvas.removeEventListener('webglcontextlost', lost);
@@ -597,6 +618,9 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   // The welcome, once.
   useEffect(() => {
     if (!world || careerRef.current.introDone) return;
+    // Out on a drive from the desk: the walk-round welcome is about a shop you no longer
+    // walk round. It is marked done rather than said.
+    if (start) { update({ ...careerRef.current, introDone: true }); return; }
     say(INTRO.map((l) => ({ who: 'Pops', text: l.text })), () => { update({ ...careerRef.current, introDone: true }); });
     // Once, when the world first opens on a new career.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -626,12 +650,27 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     if (racing) return null;
     if (driving && outJob?.startsWith('own:')) return 'Your car, your town. The drag strip is off the highway to the north, the Raceway to the south: drive to the start and press E. The map shows the way.';
     if (driving) return 'Feel what your tune did. When you are done, drive to the shop and park it.';
+    if (outJob && onHome) return 'Drive back into your shop, or press BACK TO THE SHOP, to go back to your desk.';
     if (outJob) return 'The customer’s car is parked outside: walk to it and press E, or drive it back to the shop.';
     if (career.last && career.last.seq !== career.lastSeen) return 'Read what the customer said: open the phone, then TODAY.';
     if (place !== 'garage' && place !== 'town') return null;
     if (career.lifts.length === 0) return place === 'garage' ? 'Walk to the board by the door and take a customer, or take your own car out from the apron.' : 'Head back to your shop on the main street.';
     return 'Look under the bonnet, then open the laptop at the desk and work out what is wrong.';
-  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, racing, outJob, place]);
+  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, racing, outJob, place, onHome]);
+
+  /** Out on a drive from the desk: park whatever you are in and go back to the desk. */
+  const goHome = () => {
+    const w = worldRef.current;
+    const c = careerRef.current;
+    if (w?.drive) {
+      const km = (w.drive.state.odo ?? 0) / 1000;
+      if (km > 0.05) update(bump(c, 'drive', km));
+      w.exitCar();
+      w.dropCar();
+    }
+    silenceDriveSound();
+    onHomeRef.current?.();
+  };
 
   const takeJob = (id) => {
     const job = jobById(id);
@@ -661,6 +700,9 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         onMenu={onMenu}
       />
       <Objective text={objective} />
+      {onHome && !racing && (
+        <button type="button" className={styles.homeBtn} onClick={goHome}>Back to the shop</button>
+      )}
       {place === 'town' && !drawer && !sheet && <MiniMap world={world} route={route ? { x: placeById(route).door.x, z: placeById(route).door.z, name: placeById(route).name } : null} />}
       {racing && <RaceHud hud={raceHud} onRetire={() => worldRef.current?.cmd('retire')} />}
       <Labels labels={labels} />

@@ -164,3 +164,7 @@
 }
 
 .loading { display: grid; place-items: center; min-height: 100dvh; background: var(--bg); color: var(--ink2); font-size: var(--fs-sm); letter-spacing: 0.1em; }
+
+/* The Shop app on the laptop: the paperwork, in the window. */
+.officeScreen { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 24px; }
+.office { margin: 0; padding: 10px 12px; border-left: 3px solid var(--acc); background: var(--panel); color: var(--ink); font-size: var(--fs-sm); }

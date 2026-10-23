@@ -562,3 +562,10 @@
 .mapRoute { stroke: var(--warn); stroke-dasharray: 8 6; stroke-linecap: round; }
 .mapTarget { fill: none; stroke: var(--warn); stroke-width: 4; }
 @media (max-height: 480px) { .miniMap { width: 96px; height: 96px; } }
+
+/* Out on a drive from the desk: the way back. */
+.homeBtn {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + var(--edge-b, 0px)); z-index: 6;
+  padding: 10px 16px; border: 2px solid var(--pen, var(--line-hi)); border-radius: var(--hand-a, 10px);
+  background: var(--panel); color: var(--ink); font-weight: 800; font-size: var(--fs-sm); letter-spacing: 0.04em; cursor: pointer;
+}

@@ -66,6 +66,8 @@ describe('CAREER in the app', () => {
     // reading apps.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
     expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy();
+    // The shop's paperwork is an app on the same desktop.
+    expect(screen.getByRole('button', { name: 'SHOP' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'PHYSICS' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));

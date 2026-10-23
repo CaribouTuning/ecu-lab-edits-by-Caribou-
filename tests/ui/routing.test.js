@@ -81,6 +81,8 @@ describe('formatRoute', () => {
     expect(formatRoute({ view: 'shop', tab: null, section: null })).toBe('#/shop');
     expect(formatRoute({ view: 'desk', tab: null, section: null })).toBe('#/desk');
     expect(formatRoute({ view: 'bay', tab: null, section: null })).toBe('#/bay');
+    expect(formatRoute({ view: 'outside', tab: null, section: null })).toBe('#/outside');
+    expect(parseRoute('#/outside')).toEqual({ view: 'outside', tab: null, section: null });
     expect(formatRoute({ view: 'app', tab: 'learn', section: null })).toBe('#/learn');
     expect(formatRoute({ view: 'app', tab: 'tune', section: 'spark' })).toBe('#/tune/spark');
   });

@@ -235,6 +235,7 @@ export function buildShopScene(stage, init) {
     dyno: new THREE.Vector3(AT.dyno.x, 1.7, AT.dyno.z),
     stand: new THREE.Vector3(AT.stand.x, 1.7, AT.stand.z),
     laptop: new THREE.Vector3(AT.desk.x, 1.1, AT.desk.z + 0.1),
+    door: new THREE.Vector3(1.6, 2.2, -7),
   };
   let t = 0;
   const api = {
