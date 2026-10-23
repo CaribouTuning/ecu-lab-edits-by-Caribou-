@@ -374,10 +374,9 @@ export function EcuLabApp() {
   // `presetId` and flags unsaved work in the same reducer pass (see reducer.js).
   // CLEAR_PRESET_ID is dispatched from EngineScreen's "Custom build" option.
   //
-  // Moving the grid cursor is not a calibration edit:
-  // `SET_TUNE_FIELD` deliberately does not clear `presetId` or flag `tablesDirty`
-  // (see reducer.js), so moving the highlighted grid cell never disowns a loaded
-  // preset.
+  // Moving the grid cursor is not a calibration edit: `SET_TUNE_FIELD` deliberately
+  // does not clear `presetId` or flag `tablesDirty` (see reducer.js), so moving the
+  // highlighted grid cell never disowns a loaded preset.
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
 
   const octaneBonus = tankFuel(build).bonus;
@@ -977,9 +976,10 @@ export function EcuLabApp() {
   // — reachable in practice on the `artifact` storage backend, where the underlying
   // `window.storage.get` is a real round trip. A single RESTORE_CAREER action, rather
   // than separate `SET_SESSION_FIELD` dispatches, is what keeps that race from rolling a
-  // banked pull back to the pre-pull snapshot: the reducer merges the loaded career with whatever the session already holds instead
-  // of overwriting it. See RESTORE_CAREER's own doc in reducer.js for the full case,
-  // including why a skip-instead-of-merge fix would only move the data loss.
+  // banked pull back to the pre-pull snapshot: the reducer merges the loaded career with
+  // whatever the session already holds instead of overwriting it. See RESTORE_CAREER's
+  // own doc in reducer.js for the full case, including why a skip-instead-of-merge fix
+  // would only move the data loss.
   useEffect(() => {
     let cancelled = false;
     (async () => {

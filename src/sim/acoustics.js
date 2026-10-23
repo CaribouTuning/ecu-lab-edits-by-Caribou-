@@ -494,11 +494,11 @@ export function cyclicVariation({ rpm, overlapDeg = 0 }) {
   // VALVE OVERLAP, NOT RESIDUAL FRACTION, AND THAT IS A COMPROMISE WORTH READING.
   //
   // Residual is the better physical basis, but it does not work against the residual
-  // model we have: `residualFraction` in thermo.js is dominated
-  // by the pressure ratio across the cylinder, so at a 40 kPa idle it reports 0.12 for a
-  // stock cam and 0.13 for a 290-degree race cam — a 9% spread, where the audible
-  // difference between those two engines is total. Worse, it reports a HIGH number for a
-  // stock engine at deep vacuum, so driving lope from it would make every engine loaf at idle.
+  // model we have: `residualFraction` in thermo.js is dominated by the pressure ratio
+  // across the cylinder, so at a 40 kPa idle it reports 0.12 for a stock cam and 0.13
+  // for a 290-degree race cam — a 9% spread, where the audible difference between those
+  // two engines is total. Worse, it reports a HIGH number for a stock engine at deep
+  // vacuum, so driving lope from it would make every engine loaf at idle.
   // A stock engine does not loaf. It idles smoothly, and it must sound like it.
   //
   // Overlap separates them cleanly (0 degrees against 44) because overlap is the actual

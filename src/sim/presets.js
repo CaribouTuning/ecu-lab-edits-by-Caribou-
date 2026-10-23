@@ -229,10 +229,11 @@ export const ENGINE_PRESETS = [
       // across RPM is not published, and it is the only thing fitted here: 13 psi held
       // to 2500, then a taper down to about 6.75 psi at the 7000 limiter (the curve's
       // last node, 6.5, sits at 7500 and is never reached; redline cuts the pull
-      // first). That taper is steeper than the real engine's, and deliberately so. This model was calibrated on a naturally
-      // aspirated V6, and it reports more torque per unit of manifold pressure than a
-      // real high-compression boosted six makes — hold 13 psi flat to 4500 here and the
-      // pull returns about 340 wlb-ft against a 281 target. Everything above the torque peak
+      // first). That taper is steeper than the real engine's, and deliberately so. This
+      // model was calibrated on a naturally aspirated V6, and it reports more torque per
+      // unit of manifold pressure than a real high-compression boosted six makes — hold
+      // 13 psi flat to 4500 here and the pull returns about 340 wlb-ft against a 281
+      // target. Everything above the torque peak
       // is where that error can be absorbed without contradicting a published number,
       // so that is where it is absorbed.
       //

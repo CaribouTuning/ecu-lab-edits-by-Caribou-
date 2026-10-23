@@ -93,8 +93,8 @@ export const ACTIONS = Object.freeze({
 
 /**
  * Writes a calibration table (`ve`, `timing` or `afr`) and, in the SAME pass, clears
- * `presetId` (BUILD) and sets `tablesDirty` (TUNE). Every hand edit has to cross the
- * build/tune boundary in one step like this, which is the main reason this is one
+ * `presetId` (BUILD) and sets `tablesDirty` (TUNE). Every hand table edit has to cross
+ * the build/tune boundary in one step like this, which is the main reason this is one
  * reducer and not two.
  * `label` is the undo entry's detail, e.g. "scale +5% · 12 cells" — see `labelFor`.
  * @typedef {{type: 'SET_TABLE', table: 've'|'timing'|'afr', value: number[][], label?: string}} SetTableAction
@@ -660,7 +660,8 @@ function baseReducer(state, action) {
           // A clear bench: no result, scores or histogram measured on the last car.
           // The run log and its pin stay. They are the player's saved history, written
           // to storage whenever they change, so emptying them here would delete every
-          // pull the player had ever banked. A job's pulls are labelled with the job instead.
+          // pull the player had ever banked. A job's pulls are labelled with the job
+          // instead.
           result: null,
           pullScores: null,
           histogram: null,
@@ -868,9 +869,9 @@ function clearsRedo(action) {
  *    different car makes every entry meaningless). Listing it here would be worse than
  *    redundant: the branch in `reducer` rebuilds `history` from the pre-action `past`.
  *
- * The UNDOABLE actions are listed here too, for one list that answers "is this
- * new work?". They reach `future: []` through the recording branch in `reducer` rather than
- * through this Set, and listing them keeps the two from disagreeing on paper.
+ * The UNDOABLE actions are listed here too, for one list that answers "is this new
+ * work?". They reach `future: []` through the recording branch in `reducer` rather
+ * than through this Set, and listing them keeps the two from disagreeing on paper.
  */
 const CLEARS_REDO = new Set([
   ACTIONS.SET_BUILD_FIELD, ACTIONS.CLEAR_PRESET_ID, ACTIONS.SET_TURBINE,

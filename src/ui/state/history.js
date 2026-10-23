@@ -80,9 +80,10 @@ const TUNE_KEYS = ['ve', 'timing', 'afr', 'ecu', 'maps', 'activeMap', 'tablesDir
  * `reducer.js` asks this so `SET_TUNE_FIELD`'s exclusion from the redo-clearing set is
  * structural rather than a fact about who happens to call it. Production callers pass
  * cursor and UI fields (`selection`, `rangeMode`, `diffView`), all outside the
- * snapshot, but nothing stops a future one passing `'ve'`, and that write would then survive alongside a live redo
- * branch that overwrites exactly it. Asking the key list directly closes that by
- * construction, and keeps the list itself private to this module.
+ * snapshot, but nothing stops a future one passing `'ve'`, and that write would then
+ * survive alongside a live redo branch that overwrites exactly it. Asking the key list
+ * directly closes that by construction, and keeps the list itself private to this
+ * module.
  * @param {string} field
  * @returns {boolean}
  */
@@ -106,10 +107,10 @@ export function snapshot(state) {
 }
 
 /**
- * Puts back every snapshotted field, build and tune. The scope for an action that replaces the whole calibration and the
- * hardware under it: APPLY_PRESET and RESET_TO_STOCK. Undoing a preset load
- * genuinely means "return to the state before it", so anything the player changed
- * afterwards is meant to go with it.
+ * Puts back every snapshotted field, build and tune. The scope for an action that
+ * replaces the whole calibration and the hardware under it: APPLY_PRESET and
+ * RESET_TO_STOCK. Undoing a preset load genuinely means "return to the state before
+ * it", so anything the player changed afterwards is meant to go with it.
  */
 export const RESTORE_ALL = 'all';
 

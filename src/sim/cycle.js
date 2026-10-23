@@ -565,8 +565,8 @@ export function cycleInputsFor({
   // does not pressurise the cylinder further. Computing p from the mixed temperature at
   // fixed mass would inflate trapped pressure by about a tenth under boost, and since
   // ignition delay goes as pressure to the -1.7 power, that alone would make boosted
-  // engines far more knock-prone than they are. Pressure comes from the fresh charge; the mixed
-  // temperature below is what the thermal history and the end gas run on.
+  // engines far more knock-prone than they are. Pressure comes from the fresh charge;
+  // the mixed temperature below is what the thermal history and the end gas run on.
   // Nitrous vapour is gas in the cylinder too, at its own gas constant (R / 44 g/mol).
   const trappedPa = n2oG > 0
     ? (((airChargeG / 1000) * R_AIR + (n2oG / 1000) * N2O.gasConstant) * cooledK) / vIvc
