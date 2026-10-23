@@ -100,3 +100,9 @@ input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color:
 
 /* The doodles' washes: a flat pale fill under the lines. */
 svg .wash:not([data-plain] *) { fill: var(--acc-bg); }
+
+/*
+ * Labels are words, not ornament: no letter-spacing tracked out and no capitals forced on
+ * by the stylesheet, anywhere. Text keeps the case it was written in.
+ */
+*:not([data-keep-tracking]) { letter-spacing: normal !important; text-transform: none !important; }

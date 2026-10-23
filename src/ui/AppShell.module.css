@@ -242,7 +242,7 @@
 }
 
 .run::after {
-  content: '● RUNNING';
+  content: 'Engine running';
   visibility: hidden;
 }
 

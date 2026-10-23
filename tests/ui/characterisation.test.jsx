@@ -195,7 +195,7 @@ describe('running a dyno pull', () => {
     // sweep to finish. This is the actual point of the test: if setResult were wired to
     // the wrong slice (or dropped entirely), they never appear, regardless of what the
     // button label does.
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
     // The reveal is a setInterval that ends by setting running false, so the button
     // returns to its idle label. Real timers + waitFor is less brittle here than fake
     // timers, which would need act() wrapping around every tick.

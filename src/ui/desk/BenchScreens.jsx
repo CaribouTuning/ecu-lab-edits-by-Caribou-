@@ -40,7 +40,7 @@ export function BarGraph({ rpm, fullScaleRpm, redline, throttle, cut = false, me
     <div className={styles.bars}>
       <div className={styles.rpmHead}>
         <span className={styles.rpmNum} data-cut={cut ? 'true' : undefined}>{Math.round(rpm)}</span>
-        <span className={styles.rpmUnit}>RPM</span>
+        <span className={styles.rpmUnit}>rpm</span>
       </div>
       <div className={styles.segments} role="meter" aria-label="Engine speed bar" aria-valuemin={0} aria-valuemax={fullScaleRpm} aria-valuenow={Math.round(rpm)}>
         {Array.from({ length: SEGMENTS }, (_, i) => (
@@ -50,7 +50,7 @@ export function BarGraph({ rpm, fullScaleRpm, redline, throttle, cut = false, me
       <div className={styles.scale} aria-hidden="true">
         {[0, 0.25, 0.5, 0.75, 1].map((k) => <span key={k}>{Math.round((fullScaleRpm * k) / 1000)}k</span>)}
       </div>
-      <Bar label="THROTTLE" value={`${Math.round(throttle)}`} unit="%" pct={throttle / 100} tone="ok" big />
+      <Bar label="Throttle" value={`${Math.round(throttle)}`} unit="%" pct={throttle / 100} tone="ok" big />
       <div className={styles.meters}>
         {meters.map((m) => <Bar key={m.label} {...m} />)}
       </div>
@@ -84,12 +84,12 @@ export function LiveBars({ fullScaleRpm, redline }) {
   const meters = [
     { label: 'MAP', value: f(live.sensedMap, 0), unit: ' kPa', pct: live.sensedMap / 250 },
     { label: 'MAF', value: f(live.sensedMaf, 1), unit: ' g/s', pct: live.sensedMaf / 400 },
-    { label: 'LAMBDA', value: f(lam, 2), unit: ' λ', pct: (lam - 0.6) / 0.8, tone: lam > 1.08 || lam < 0.72 ? 'warn' : 'ok' },
-    { label: 'TIMING', value: f(timing, 0), unit: '°', pct: timing / 50, tone: live.ecu?.knockNow ? 'danger' : 'acc' },
-    { label: 'INJ DUTY', value: f(duty, 0), unit: '%', pct: duty / 100, tone: duty > 90 ? 'danger' : 'acc' },
-    { label: 'COOLANT', value: f(live.sensedCoolant, 0), unit: ' °C', pct: live.sensedCoolant / 120, tone: live.sensedCoolant > 105 ? 'danger' : live.sensedCoolant < 80 ? 'warn' : 'ok' },
+    { label: 'Lambda', value: f(lam, 2), unit: ' λ', pct: (lam - 0.6) / 0.8, tone: lam > 1.08 || lam < 0.72 ? 'warn' : 'ok' },
+    { label: 'Spark timing', value: f(timing, 0), unit: '°', pct: timing / 50, tone: live.ecu?.knockNow ? 'danger' : 'acc' },
+    { label: 'Injector duty', value: f(duty, 0), unit: '%', pct: duty / 100, tone: duty > 90 ? 'danger' : 'acc' },
+    { label: 'Coolant', value: f(live.sensedCoolant, 0), unit: ' °C', pct: live.sensedCoolant / 120, tone: live.sensedCoolant > 105 ? 'danger' : live.sensedCoolant < 80 ? 'warn' : 'ok' },
     { label: 'IAT', value: f(live.sensedIat, 0), unit: ' °C', pct: live.sensedIat / 90, tone: live.sensedIat > 65 ? 'danger' : 'acc' },
-    { label: 'FUEL TRIM', value: `${live.stft > 0 ? '+' : ''}${f(live.stft, 1)}`, unit: '%', pct: (live.stft + 25) / 50, tone: Math.abs(live.stft) > 15 ? 'danger' : Math.abs(live.stft) > 8 ? 'warn' : 'ok' },
+    { label: 'Fuel trim', value: `${live.stft > 0 ? '+' : ''}${f(live.stft, 1)}`, unit: '%', pct: (live.stft + 25) / 50, tone: Math.abs(live.stft) > 15 ? 'danger' : Math.abs(live.stft) > 8 ? 'warn' : 'ok' },
   ];
   return (
     <>
@@ -160,7 +160,7 @@ export function VeCurve({ points, at = null }) {
   const near = at == null ? null : pts.reduce((b, p) => (Math.abs(p.rpm - at) < Math.abs(b.rpm - at) ? p : b), pts[0]);
   return (
     <div className={styles.ve}>
-      <div className={styles.veHead}>VOLUMETRIC EFFICIENCY · peak <b>{f(peak.ve ?? NaN, 0)} %</b> at {peak.rpm} rpm</div>
+      <div className={styles.veHead}>Volumetric efficiency: peak <b>{f(peak.ve ?? NaN, 0)} %</b> at {peak.rpm} rpm</div>
       <svg viewBox={`0 0 ${W} ${H}`} className={styles.veSvg} role="img" aria-label={`VE against RPM, peak ${f(peak.ve ?? NaN, 0)} percent at ${peak.rpm} RPM`}>
         {[25, 50, 75, 100].map((v) => (
           <g key={v}>

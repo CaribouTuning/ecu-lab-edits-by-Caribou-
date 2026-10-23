@@ -221,20 +221,20 @@ export function LiveGauges() {
       <div className={styles.gaugeRow}>
         {/* With the engine off nothing is burning, so there is no mixture, no fuel state and no
             idle-air trim to read: a "1.00 λ" or "FUEL ON" on a dead engine is a reading nobody took. */}
-        <LiveGauge label="LAMBDA" value={engineOff ? '—' : live.sensedLambda.toFixed(2)} unit={engineOff ? '' : 'λ'} color={T.violet} />
-        <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-        <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && (live.ecu ? live.ecu.knockNow : live.live.knock))} />
+        <LiveGauge label="Lambda" value={engineOff ? '—' : live.sensedLambda.toFixed(2)} unit={engineOff ? '' : 'λ'} color={T.violet} />
+        <LiveGauge label="Coolant" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
+        <LiveGauge label="Spark timing" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && (live.ecu ? live.ecu.knockNow : live.live.knock))} />
       </div>
       <div className={styles.gaugeRow}>
-        <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
-        <LiveGauge label="DUTY" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
-        <LiveGauge label="IDLE AIR" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
-        <LiveGauge label="FUEL" value={engineOff ? 'OFF' : live.fuelCut ? 'CUT' : 'ON'} unit="" color={engineOff ? T.ink3 : live.fuelCut ? T.warn : T.ok} />
+        <LiveGauge label="Injector pulse" value={live.live ? live.live.pw : '—'} unit="ms" />
+        <LiveGauge label="Injector duty" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
+        <LiveGauge label="Idle air" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
+        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? T.ink3 : live.fuelCut ? T.warn : T.ok} />
       </div>
 
       <div className={styles.trims}>
-        <TrimBar label="SHORT TERM FUEL TRIM (STFT)" value={live.stft} />
-        <TrimBar label="LONG TERM FUEL TRIM (LTFT)" value={live.ltft} />
+        <TrimBar label="Short-term fuel trim" value={live.stft} />
+        <TrimBar label="Long-term fuel trim" value={live.ltft} />
       </div>
     </>
   );

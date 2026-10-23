@@ -1152,7 +1152,7 @@ export function EcuLabApp() {
     { id: 'vvt', label: 'VVT', icon: RotateCw, row: 1 },
     { id: 'idle', label: 'IDLE', icon: Timer, row: 1 },
     { id: 'protect', label: 'PROTECT', icon: ShieldAlert, row: 1 },
-    { id: 'torque', label: 'TORQUE', icon: Crosshair, row: 1 },
+    { id: 'torque', label: 'Torque', icon: Crosshair, row: 1 },
     // Its own row, and only with a kit fitted — the way real ECU software shows its
     // nitrous tables once nitrous is enabled.
     { id: 'nitrous', label: 'NITROUS', icon: Flame, row: 2 },
@@ -1633,12 +1633,12 @@ export function EcuLabApp() {
                     rpm={running ? currentRpm : (point?.rpm ?? 0)} fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline}
                     throttle={running && dynoPhase === 'sweep' ? loadKpa : 0}
                     meters={[
-                      { label: 'POWER', value: `${Math.round(point?.hp ?? 0)}`, unit: ' whp', pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
-                      { label: 'TORQUE', value: `${Math.round(point?.torque ?? 0)}`, unit: ' lb-ft', pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
-                      { label: 'AFR', value: (point?.afr ?? 0).toFixed(1), unit: ':1', pct: ((point?.afr ?? 14.7) - 9) / 9, tone: 'ok' },
-                      { label: 'TIMING', value: `${Math.round(point?.timing ?? 0)}`, unit: '°', pct: (point?.timing ?? 0) / 50 },
-                      { label: 'INJ DUTY', value: `${Math.round(point?.duty ?? 0)}`, unit: '%', pct: (point?.duty ?? 0) / 100, tone: (point?.duty ?? 0) > 90 ? 'danger' : 'acc' },
-                      { label: 'FUEL TRIM', value: `${(point?.trimPct ?? 0) > 0 ? '+' : ''}${(point?.trimPct ?? 0).toFixed(1)}`, unit: '%', pct: ((point?.trimPct ?? 0) + 25) / 50, tone: 'ok' },
+                      { label: 'Power', value: `${Math.round(point?.hp ?? 0)}`, unit: ' whp', pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
+                      { label: 'Torque', value: `${Math.round(point?.torque ?? 0)}`, unit: ' lb-ft', pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
+                      { label: 'Air-fuel ratio', value: (point?.afr ?? 0).toFixed(1), unit: ':1', pct: ((point?.afr ?? 14.7) - 9) / 9, tone: 'ok' },
+                      { label: 'Spark timing', value: `${Math.round(point?.timing ?? 0)}`, unit: '°', pct: (point?.timing ?? 0) / 50 },
+                      { label: 'Injector duty', value: `${Math.round(point?.duty ?? 0)}`, unit: '%', pct: (point?.duty ?? 0) / 100, tone: (point?.duty ?? 0) > 90 ? 'danger' : 'acc' },
+                      { label: 'Fuel trim', value: `${(point?.trimPct ?? 0) > 0 ? '+' : ''}${(point?.trimPct ?? 0).toFixed(1)}`, unit: '%', pct: ((point?.trimPct ?? 0) + 25) / 50, tone: 'ok' },
                     ]}
                   />
                 )}

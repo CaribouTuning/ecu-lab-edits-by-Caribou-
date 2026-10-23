@@ -172,7 +172,7 @@ function HealthFieldInner({ pct }) {
   const tone = statusTone(pct);
   return (
     <div className={styles.field} data-tour="strip-health">
-      <span className={styles.fieldLabel}>HEALTH</span>
+      <span className={styles.fieldLabel}>Health</span>
       <span className={styles.healthTrack}>
         <span className={styles.healthFill} data-tone={tone} style={{ width: `${pct}%` }} />
       </span>
@@ -197,7 +197,7 @@ function EngineRunLight() {
   // engine starts; see `.run` in AppShell.module.css for how it keeps its width.
   return (
     <span className={styles.run}>
-      {session.live.running && <span>● RUNNING</span>}
+      {session.live.running && <span>Engine running</span>}
     </span>
   );
 }
@@ -274,7 +274,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
             here at the strip's leading edge, sized for a slim strip rather than a
             transplant of the header's larger type scale — see AppShell.module.css. */}
         <div className={styles.brand}>
-          <span className={styles.brandMaker}>CARIBOU TUNING</span>
+          <span className={styles.brandMaker}>Caribou Tuning</span>
           <span className={styles.brandProduct}>ECU Lab</span>
         </div>
         {/* The build line, moved here from the header. Its shape is pinned by
@@ -292,9 +292,9 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>
-          <StripField label="BOOST" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
-          {noEngine ? <StripField label="HEALTH" value="—" /> : <HealthField pct={overallHealth} />}
-          <StripField label="LAST PULL" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
+          <StripField label="Boost" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
+          {noEngine ? <StripField label="Health" value="—" /> : <HealthField pct={overallHealth} />}
+          <StripField label="Last pull" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
           <EngineRunLight />
         </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a

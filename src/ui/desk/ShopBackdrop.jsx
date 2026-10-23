@@ -224,7 +224,6 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
               onClick={() => onPick(h.id)}
               title={h.hint}
             >
-              <span className={styles.spotRing} aria-hidden="true" />
               <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.id === 'dyno' && cars?.rollers === false ? 'Road test' : h.label}</span>
             </button>
           ))}

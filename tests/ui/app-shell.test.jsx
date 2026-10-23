@@ -199,19 +199,19 @@ describe('the engine-run light', () => {
 
     // What would turn the first assertion red: EngineRunLight rendering
     // unconditionally, or reading a field other than `session.live.running`.
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    expect(screen.queryByText('Engine running')).toBeNull();
 
     act(() => dispatch({
       type: ACTIONS.SET_SESSION_FIELD, field: 'live', value: { running: true },
     }));
     // What would turn this one red: the light never appearing at all — a dead
     // component, not just a wrongly-gated one.
-    expect(screen.getByText('● RUNNING')).toBeTruthy();
+    expect(screen.getByText('Engine running')).toBeTruthy();
 
     act(() => dispatch({
       type: ACTIONS.SET_SESSION_FIELD, field: 'live', value: { running: false },
     }));
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    expect(screen.queryByText('Engine running')).toBeNull();
   });
 });
 
@@ -231,7 +231,7 @@ describe('the app\'s name', () => {
     render(<EcuLab />);
     enterSandbox();
 
-    expect(screen.getByText('CARIBOU TUNING')).toBeTruthy();
+    expect(screen.getByText('Caribou Tuning')).toBeTruthy();
     expect(screen.getByText('ECU Lab')).toBeTruthy();
   });
 });
@@ -323,7 +323,7 @@ describe('the status strip at every width', () => {
     mountShell(ROUTE_TUNE, () => {});
     const readouts = document.querySelector(`.${shellStyles.readouts}`);
     expect(readouts).toBeTruthy();
-    for (const label of ['BOOST', 'HEALTH', 'LAST PULL']) {
+    for (const label of ['Boost', 'Health', 'Last pull']) {
       expect(within(/** @type {HTMLElement} */ (readouts)).getByText(label)).toBeTruthy();
     }
     // What would turn this red: the buttons folded into the group that drops to a
@@ -380,12 +380,12 @@ describe('the status strip at every width', () => {
 
   it('holds the run light\'s width while the engine is idle, so starting it cannot reflow the strip', () => {
     mountShell(ROUTE_TUNE, () => {});
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    expect(screen.queryByText('Engine running')).toBeNull();
     // The slot is mounted while idle, and its invisible stand-in is the exact text
     // the light shows, so lit and unlit are the same width.
     expect(document.querySelector(`.${shellStyles.run}`)).toBeTruthy();
     const standIn = decls(shellCss, '.run::after');
-    expect(standIn).toMatch(decl('content', "'● RUNNING'"));
+    expect(standIn).toMatch(decl('content', "'Engine running'"));
     expect(standIn).toMatch(decl('visibility', 'hidden'));
   });
 });

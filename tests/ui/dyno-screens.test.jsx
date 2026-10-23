@@ -179,8 +179,8 @@ const BANDED_RESULT = {
 describe('ResultScreen', () => {
   it('renders the power/torque and AFR/timing panels', () => {
     mount(<ResultScreen chartData={[]} engineDerived={{ redline: 7000 }} />);
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
-    expect(screen.getByText('AFR (COMMANDED VS ACTUAL) / TIMING')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
+    expect(screen.getByText('Air-fuel ratio, asked for and measured, and spark timing')).toBeTruthy();
   });
 
   it('computes its chart ceiling off the shell-computed engineDerived, not one it derives itself', () => {
@@ -770,7 +770,7 @@ describe('DYNO while a pull is running', () => {
     expect(screen.queryByRole('button', { name: 'Pull log' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Score' })).toBeNull();
     // ...and CURVES is showing instead, unasked-for by the URL.
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
 
     await waitFor(
       () => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(),
@@ -1245,7 +1245,7 @@ describe('DYNO event bands during the reveal', () => {
     const { container } = mountDynoWith(true);
     // CURVES is on screen — this is the gate under test failing to hide the charts,
     // not the charts being absent for some unrelated reason.
-    expect(screen.getByText('POWER & TORQUE')).toBeTruthy();
+    expect(screen.getByText('Power and torque against rpm')).toBeTruthy();
     expect(container.querySelectorAll('rect[data-tone]')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /to the whole pull/ })).toBeNull();
   });

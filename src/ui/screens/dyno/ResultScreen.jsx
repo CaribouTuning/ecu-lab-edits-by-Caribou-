@@ -125,14 +125,14 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
     <>
       {roadTest ? (
         <Panel tight className={styles.panel} data-tour="dyno-power">
-          <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
+          <div className={styles.chartLabel}>Power and torque against rpm</div>
           <p className={styles.roadNote}>
             Road test: the wideband and the ECU log everything below, but nothing on a road measures power. A dyno does.
           </p>
         </Panel>
       ) : (
       <Panel tight className={styles.panel} data-tour="dyno-power">
-        <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
+        <div className={styles.chartLabel}>Power and torque against rpm</div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
@@ -159,7 +159,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
       )}
 
       <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
-        <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
+        <div className={styles.chartLabel}>Air-fuel ratio, asked for and measured, and spark timing</div>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
@@ -174,7 +174,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
               <ReferenceArea
                 key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
                 // This chart's bands are the second copy of every event — see the
-                // POWER & TORQUE chart above for the first. Both stay visible (the
+                // power and torque chart above for the first. Both stay visible (the
                 // overlap is the intended visual), but only one copy should be a tab
                 // stop: two focusable nodes per event with identical accessible names
                 // would double every announcement in the a11y tree.
