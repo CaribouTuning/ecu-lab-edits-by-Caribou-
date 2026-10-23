@@ -16,7 +16,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { loadShop } from '../../src/storage.js';
-import { chrome, enterSandbox, goTo } from './nav.js';
+import { chrome, enterSandbox, goTo, enterCareer, openJobBoard } from './nav.js';
 
 class ResizeObserverStub {
   observe() {}
@@ -38,8 +38,8 @@ beforeEach(() => {
 
 /** From the start screen into the shop, once the save has loaded. */
 async function openShop() {
-  fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
-  await screen.findByText('Your tuning shop');
+  await enterCareer();
+  await openJobBoard();
 }
 
 const tab = (name) => fireEvent.click(within(screen.getByRole('navigation', { name: 'Shop' })).getByRole('button', { name: new RegExp(name) }));
@@ -66,8 +66,8 @@ describe('CAREER in the app', () => {
     // reading apps.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
     expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy();
-    // The shop's paperwork is an app on the same desktop.
-    expect(screen.getByRole('button', { name: 'SHOP' })).toBeTruthy();
+    // The shop's paperwork is not on the laptop: it is the job board on the shop wall.
+    expect(screen.queryByRole('button', { name: 'SHOP' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'PHYSICS' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
@@ -155,7 +155,8 @@ describe('CAREER in the app', () => {
 
     window.location.hash = '#/shop';
     render(<EcuLab />);
-    await screen.findByText('Your tuning shop');
+    await screen.findByRole('button', { name: 'Desktop' });
+    await openJobBoard();
     expect(screen.getByRole('button', { name: /WORK ON THE CAR/ })).toBeTruthy();
   });
 });

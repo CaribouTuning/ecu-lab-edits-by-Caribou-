@@ -22,6 +22,7 @@ export const HOTSPOTS = [
   { id: 'stand', label: 'LIVE', hint: 'The engine on the stand: run it live' },
   { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
   { id: 'door', label: 'Go outside', hint: 'Take a car out into town' },
+  { id: 'board', label: 'Job board', hint: 'Today, customers, upgrades, training and the books' },
 ];
 
 /**
@@ -80,7 +81,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
       )}
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer}>
-          {HOTSPOTS.filter((h) => outside || h.id !== 'door').map((h) => (
+          {HOTSPOTS.filter((h) => outside || (h.id !== 'door' && h.id !== 'board')).map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}

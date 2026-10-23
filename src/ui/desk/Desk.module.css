@@ -251,6 +251,14 @@
   background: rgb(var(--shadow-rgb)); color: var(--ink);
   transition: opacity 0.3s ease, visibility 0s;
 }
+/* On its home screen the phone is held up in front of the shop, the shop showing round
+   it: tap the shop and you put the phone down. An app fills the screen. */
+.phone[data-home] {
+  inset: max(4%, env(safe-area-inset-top)) 6% max(4%, env(safe-area-inset-bottom));
+  border: 7px solid rgb(var(--shadow-rgb)); border-radius: 38px; overflow: hidden;
+  box-shadow: 0 0 0 2px var(--pen);
+}
+@media (max-height: 500px) { .phone[data-home] { inset: 5% 14%; border-radius: 26px; } }
 /* Put down: it fades and the shop is there (no transform: see .lid). */
 .phone[data-state='shut'] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
 @media (prefers-reduced-motion: reduce) { .phone { transition: none; } }

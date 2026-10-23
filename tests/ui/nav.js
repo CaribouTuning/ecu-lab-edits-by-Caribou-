@@ -64,6 +64,26 @@ export function enterSandbox() {
 export function chrome(name) {
   const direct = button(name);
   if (direct) { fireEvent.click(direct); return; }
+  // Out in the shop (a page over it, or stood looking at it): the laptop has the menu.
+  if (!button('Settings')) fireEvent.click(screen.getAllByRole('button', { name: 'Open the laptop' })[0]);
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   fireEvent.click(screen.getByRole('menuitem', { name }));
+}
+
+/**
+ * Into CAREER from the start screen: the save loads and you are sat at the desk, the
+ * laptop open. Resolves once the laptop is there.
+ */
+export async function enterCareer() {
+  fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+  await screen.findByRole('button', { name: 'Desktop' });
+}
+
+/** CAREER: look up from the laptop at the shop and walk over to the job board on the wall. */
+export async function openJobBoard() {
+  const desk = button('Desktop');
+  if (desk) fireEvent.click(desk);
+  fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
+  fireEvent.click(screen.getByRole('button', { name: /Job board/ }));
+  await screen.findByText('Your tuning shop');
 }

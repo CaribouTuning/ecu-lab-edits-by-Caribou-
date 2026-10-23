@@ -23,7 +23,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { ROUTES } from '../../src/ui/routing.js';
-import { chrome, enterSandbox, goTo } from './nav.js';
+import { chrome, enterSandbox, goTo, openJobBoard } from './nav.js';
 
 // Same stub, and the same reason, as characterisation.test.jsx: recharts'
 // <ResponsiveContainer> on the DYNO panel needs a ResizeObserver to mount at all.
@@ -236,7 +236,10 @@ describe('a fully collapsed accordion', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
     expect(window.location.hash).toBe('#/shop');
-    expect(await screen.findByText('Your tuning shop')).toBeTruthy();
+    // The save loads and you are sat at your desk; the paperwork is on the shop wall.
+    await screen.findByRole('button', { name: 'Desktop' });
+    expect(window.location.hash).toBe('#/desk');
+    await openJobBoard();
     // No SANDBOX chrome in the shop, and the way back to the start screen is there.
     expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
     chrome('Main menu');

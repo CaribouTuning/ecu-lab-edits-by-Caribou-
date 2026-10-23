@@ -10,7 +10,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
-import { enterSandbox, goTo } from './nav.js';
+import { enterSandbox, goTo, enterCareer } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -126,8 +126,7 @@ describe('a practice mission with no engine chosen yet', () => {
   it('does the same when started from CAREER, whose SANDBOX car is the one with no engine', async () => {
     window.location.hash = '';
     render(<EcuLab blankStart />);
-    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
-    await screen.findByText('Your tuning shop');
+    await enterCareer();
     openCourse();
     fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
     expect(screen.queryByTestId('engine-start')).toBeNull();

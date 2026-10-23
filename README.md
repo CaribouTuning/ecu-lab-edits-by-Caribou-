@@ -22,9 +22,10 @@ Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn
 and the Tuning Course) and Physics (the engine model laid open on your own engine: your
 build, the curves and VE map, every calculation, and the engine running); shut the laptop
 and the dyno and the engine stand (LIVE) are in the shop behind it. Played on a phone, the
-laptop is a phone: the same apps on a home screen. CAREER is done from the same desk: a Shop
-app for the paperwork, and the garage door to go outside, which puts you in town driving
-the car you pick. Played on a phone, the
+laptop is a phone: the same apps on a home screen. CAREER is done from the same desk: Build and
+Tune on the laptop; look up at the shop for the dyno, the engine stand, the job board on the
+wall (customers, upgrades, training, the books) and the garage door, which puts you in town
+driving the car you pick. Played on a phone, the
 laptop is a phone: the same apps on a home screen, and you put it down to see the shop.
 CAREER's work is done on the same laptop (or phone).
 **TUTORIAL** is five minutes on the basics. **CAREER** is a tuning shop of your own.

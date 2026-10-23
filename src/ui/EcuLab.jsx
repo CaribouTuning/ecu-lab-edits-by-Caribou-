@@ -204,9 +204,9 @@ export const DYNO_PULL = Object.freeze({
 export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
-/** The apps on CAREER's laptop: the shop's paperwork, and the car on the bay's build and
- *  tune; the dyno and the engine stand are out in the shop. */
-const CAREER_APPS = ['office', 'build', 'tune'];
+/** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
+ *  out in the shop: the dyno, the engine stand, the job board, the door outside. */
+const CAREER_APPS = ['build', 'tune'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
@@ -878,11 +878,14 @@ export function EcuLabApp() {
       let cancelled = false;
       (async () => {
         const c = career ?? reviveCareer(await loadShop());
-        if (!cancelled) dispatch({ type: ACTIONS.ENTER_CAREER, career: c });
+        if (cancelled) return;
+        dispatch({ type: ACTIONS.ENTER_CAREER, career: c });
+        // You start sat at your desk, the laptop open, the shop in front of you.
+        navigate({ view: 'desk', tab: null, section: null });
       })();
       return () => { cancelled = true; };
     }
-    // The two reading apps are SANDBOX's: CAREER goes to its Shop app.
+    // The two reading apps are SANDBOX's: CAREER goes to its job board.
     if (mode === 'career' && appView === 'app' && (tab === 'learn' || tab === 'physics')) {
       navigate({ view: 'shop', tab: null, section: null });
     }
@@ -1337,7 +1340,7 @@ export function EcuLabApp() {
   const screen = (
     <>
         {!inCareer && <MissionCoach route={route} onCourse={goCourse} />}
-        {/* ---------- CAREER's Shop app: today's cars, customers, upgrades, the books ---------- */}
+        {/* ---------- CAREER's job board, on the shop wall: today, customers, upgrades, the books ---------- */}
         {appView === 'shop' && inCareer && (
           <CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} />
         )}
@@ -1681,7 +1684,7 @@ export function EcuLabApp() {
   // tap does (`changeTab`): the tuning grid's cursor does not come back with you.
   const deskOpen = (t) => {
     if (t === 'outside') { setPickCar(true); return; }
-    if (t === 'office') { changeTab('shop'); return; }
+    if (t === 'board') { changeTab('shop'); return; }
     if (t !== 'learn') { changeTab(t); return; }
     goSection('learn', 'how');
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
@@ -1690,7 +1693,7 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'app' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
   /** @type {import('./desk/Desk.jsx').Notice[]} */
   const deskNotices = [];
   if (!inCareer) {

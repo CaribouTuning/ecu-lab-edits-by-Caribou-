@@ -26,8 +26,6 @@ import styles from './Desk.module.css';
 
 /** The desktop's apps, as the sketch lays them out: Tune and Learn, Build and Physics. */
 export const DESK_APPS = [
-  // CAREER's paperwork: today's cars, the customers, upgrades, training and the books.
-  { id: 'office', label: 'Shop', name: 'SHOP' },
   { id: 'tune', label: 'Tune', name: 'TUNE' },
   { id: 'learn', label: 'Learn', name: 'LEARN' },
   { id: 'build', label: 'Build', name: 'BUILD' },
@@ -93,7 +91,7 @@ function Wallpaper() {
 }
 
 /** The shop's pages, opened from the shop floor rather than the laptop. */
-export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor' };
+export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor', office: 'Job board' };
 
 /**
  * The four apps' pictures, doodled in pen the way they were drawn on the pad, each over a
@@ -108,17 +106,6 @@ const APP_ICONS = {
       <path d="M11 36c4-9 8-19 15-21 6-2 10 5 12 13" />
       <text x="1" y="24" className="label">HP</text>
       <text x="28" y="47" className="label">RPM</text>
-    </>
-  ),
-  // The shop: an awning over a door and a window, the sign above.
-  office: (
-    <>
-      <path className="wash" d="M8 20h32v20H8z" />
-      <path d="M6 12c12-.4 24 .3 36 0l2 8c-12 .3-28-.2-40 0z" />
-      <path d="M12 12v8M20 12v8M28 12v8M36 12v8" />
-      <path d="M8 20.5v19.5h32V20.5" />
-      <path d="M14 40V28h8v12M27 27h9v7h-9z" />
-      <path d="M10 7h28" />
     </>
   ),
   // A sheet of notes, its corner curling.
@@ -214,6 +201,7 @@ export function Desk({
     if (id === 'dyno') onOpen('dyno');
     else if (id === 'stand') onOpen('live');
     else if (id === 'door') onOpen('outside');
+    else if (id === 'board') onOpen('board');
     else onDesktop();
   };
   const open = mode === 'desktop' || mode === 'app';
@@ -253,12 +241,12 @@ export function Desk({
     </button>
   );
   const appIcon = (id) => <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (id)]}</svg>;
-  const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'office'));
+  const shownApps = DESK_APPS.filter((a) => !apps || apps.includes(a.id));
 
   // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
   // apps full screen, and putting it down shows the shop.
   const device = phone ? (
-    <div className={styles.phone} data-state={open ? 'open' : 'shut'} aria-hidden={!open}>
+    <div className={styles.phone} data-state={open ? 'open' : 'shut'} data-home={mode === 'desktop' ? 'true' : undefined} aria-hidden={!open}>
       <div className={styles.statusBar}>
         <Clock />
         <span className={styles.statusRight}>

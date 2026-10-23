@@ -112,6 +112,12 @@ export function buildShopScene(stage, init) {
   const sign = handSign('Caribou Tuning', 5.4, 1.1);
   sign.position.set(-4.85, 3.3, -6.95);
   root.add(sign);
+  // The job board on the left wall: a cork board of tickets, by the dyno.
+  root.add(box(0.12, 1.5, 2.2, W.woodLight, { x: -7.95, y: 2.1, z: -4.9 }));
+  /** @type {[number, number, string][]} */
+  const tickets = [[2.4, -5.5, W.white], [2.4, -4.8, W.toolBlue], [1.85, -5.2, W.white], [1.9, -4.4, W.white]];
+  for (const [y, z, c] of tickets) root.add(box(0.03, 0.42, 0.34, c, { x: -7.87, y, z }));
+
   // Lamps over the work, forward of the door so none hangs in front of the sign.
   for (const x of [-4.6, 0, 4.6]) {
     const lamp = makeLamp();
@@ -236,6 +242,7 @@ export function buildShopScene(stage, init) {
     stand: new THREE.Vector3(AT.stand.x, 1.7, AT.stand.z),
     laptop: new THREE.Vector3(AT.desk.x, 1.1, AT.desk.z + 0.1),
     door: new THREE.Vector3(1.6, 2.2, -7),
+    board: new THREE.Vector3(-7.6, 2.3, -4.9),
   };
   let t = 0;
   const api = {
