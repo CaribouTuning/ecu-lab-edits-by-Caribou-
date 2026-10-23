@@ -78,6 +78,9 @@ import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
+import { Board, Computer, Station } from './desk/Station.jsx';
+import { BarGraph, LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
+import { TableSurface } from './components/surface/TableSurface.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
 import { Seg } from './primitives/Seg.jsx';
 import { Toggle } from './primitives/Toggle.jsx';
@@ -90,7 +93,8 @@ import { EngineScreen } from './screens/build/EngineScreen.jsx';
 import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
-import { LiveScreen } from './screens/dash/LiveScreen.jsx';
+import { LiveControls, LiveGauges } from './screens/dash/LiveScreen.jsx';
+import { LiveEcuPanel } from './screens/dash/LiveEcuPanel.jsx';
 import { AirflowScreen } from './screens/tune/AirflowScreen.jsx';
 import { FuelScreen } from './screens/tune/FuelScreen.jsx';
 import { InjectorsScreen } from './screens/tune/InjectorsScreen.jsx';
@@ -273,6 +277,10 @@ export function EcuLabApp() {
   const outsideCarRef = useRef(outsideCar);
   outsideCarRef.current = outsideCar;
   const [pickCar, setPickCar] = useState(false);
+  // The bench computers' screens that are not the dyno's routed sections: VE, 3D and the
+  // pull's live channels on the dyno's; the engine stand's are all its own.
+  const [dynoExtra, setDynoExtra] = useState(/** @type {null|'ve'|'3d'|'live'} */ (null));
+  const [standScreen, setStandScreen] = useState('bars');
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
@@ -1356,19 +1364,24 @@ export function EcuLabApp() {
           <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} onCourse={goCourse} />
         )}
         {appView === 'shop' && inCareer && (
-          <CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} />
+          <Station kind="board">
+            <Board><CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} /></Board>
+          </Station>
         )}
-        {appView === 'app' && inCareer && !career.working && (
-          <div style={{ padding: 16 }}>
-            <Panel>
-              <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>The bay is empty</div>
-              <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-                There is no customer car to work on. Take one in from the shop&apos;s CUSTOMERS board.
-              </div>
-              <Button size="sm" onClick={() => changeTab('shop')}>GO TO THE SHOP</Button>
-            </Panel>
-          </div>
-        )}
+        {appView === 'app' && inCareer && !career.working && (() => {
+          const empty = (
+            <div style={{ padding: 16 }}>
+              <Panel>
+                <div style={{ fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>The bay is empty</div>
+                <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
+                  There is no customer car to work on. Take one in from the shop&apos;s CUSTOMERS board.
+                </div>
+                <Button size="sm" onClick={() => changeTab('shop')}>GO TO THE SHOP</Button>
+              </Panel>
+            </div>
+          );
+          return tab === 'dyno' || tab === 'live' ? <Station kind="board"><Board label="The bay is empty">{empty}</Board></Station> : empty;
+        })()}
         {/* ---------- LEARN and PHYSICS: the laptop's two reading apps (SANDBOX) ---------- */}
         {tab === 'learn' && !inCareer && (
           <LearnApp shelf={route.section} onShelf={(id) => goSection('learn', id)} />
@@ -1384,17 +1397,33 @@ export function EcuLabApp() {
             section on HOME, several taps down and easy never to find. It is a page, not
             an accordion card, so nothing about it reads as a HOME section. */}
         {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
-        {engineMissing && ENGINE_TABS.includes(tab) && <EngineStart />}
+        {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live'
+          ? <Station kind="board"><Board label="No engine yet"><EngineStart /></Board></Station>
+          : <EngineStart />)}
 
         {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
-          <div style={{ padding: 16 }}>
-            <LiveScreen
-              tachFullScaleRpm={tachFullScaleRpm}
-              onStart={startEngine} onStop={stopEngine}
-              onToggleSound={toggleSound} onThrottle={setThrottleInput}
-              onTestSound={testSound}
-            />
-          </div>
+          <Station
+            kind="stand" controlsLabel="Engine controls"
+            controls={(
+              <LiveControls
+                tachFullScaleRpm={tachFullScaleRpm}
+                onStart={startEngine} onStop={stopEngine}
+                onToggleSound={toggleSound} onThrottle={setThrottleInput}
+                onTestSound={testSound}
+              />
+            )}
+          >
+            <Computer
+              label="Engine computer" wakeKey="stand" current={standScreen} onScreen={setStandScreen}
+              nudge={session.live.running}
+              screens={[{ id: 'bars', label: 'LIVE' }, { id: 'sensors', label: 'SENSORS' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'PHYSICS' }]}
+            >
+              {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
+              {standScreen === 'sensors' && <LiveGauges />}
+              {standScreen === 'ecu' && <LiveEcuPanel />}
+              {standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
+            </Computer>
+          </Station>
         )}
 
         {/* ---------- BUILD: engine architecture, induction, fuel system, exhaust ---------- */}
@@ -1536,64 +1565,100 @@ export function EcuLabApp() {
           return <EcuControlScreen section={/** @type {any} */ (tuneView)} title={titles[tuneView]} icon={v.icon} liveVars={liveVars} />;
         })()}
 
-        {/* ---------- DYNO: run a pull, then curves / log / datalog / score ---------- */}
-        {tab === 'dyno' && !engineMissing && (!inCareer || career.working) && (
-          <div style={{ padding: 16 }}>
-            <Eyebrow icon={Activity}>{roadTest ? 'Road Test' : 'Dyno Cell'}</Eyebrow>
-            {roadTest && (
-              <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
-                The shop has no dyno yet, so a pull is a run up through the gears on the road: the wideband and the ECU log
-                everything, but nothing measures power. The shop can buy a dyno.
-              </div>
-            )}
-            <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
-            <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
-            <div style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
-              ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
-            </div>
-            {nitrous && (
-              <div style={{ marginTop: 10 }}>
-                <Toggle label="Spray nitrous on this pull" sub={`${nitrous.shotHp} shot ${nitrous.kit} kit, inside the window on TUNE › NITROUS — the same arming switch as LIVE`}
-                  checked={nitrousArmed} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })} />
-              </div>
-            )}
+        {/* ---------- DYNO: the car on the rollers, its controls and the dyno's computer ---------- */}
+        {/* Walked up to the dyno in the shop (Station.jsx): the camera is on the car, the
+            dyno's own controls (the load, the nitrous switch, RUN) are its control box, and
+            what the pull measured is on the bench computer beside it, a screen a button. */}
+        {tab === 'dyno' && !engineMissing && (!inCareer || career.working) && (() => {
+          // DYNO's gating is irregular ON PURPOSE. While a pull is running the computer
+          // shows the curves (or the pull's live channels, if that is the screen you
+          // chose) and offers nothing else, whatever section the URL has selected: a
+          // DATALOG/PULL LOG/SCORE view would otherwise go blank the moment a pull starts.
+          // HISTORY is offered without a result: its data (`runs`) is restored from storage
+          // on a cold start, while `result` is not persisted and is cleared by APPLY_PRESET.
+          const shown = running ? (dynoExtra === 'live' ? 'live' : 'result') : (dynoExtra ?? dynoView);
+          /** @type {{id: string, label: string, flag?: boolean}[]} */
+          const keys = [];
+          if (result) keys.push({ id: 'result', label: 'CURVES' }, { id: 'live', label: 'LIVE DATA' });
+          if (!running) {
+            if (result) {
+              keys.push({ id: 've', label: 'VE' });
+              keys.push({ id: '3d', label: '3D' });
+            }
+            for (const [id, label] of [['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]) {
+              if (!(id === 'history' ? (result || runs.length > 0) : result)) continue;
+              if (!sectionAvailable(`dyno/${id}`, sectionFlags)) continue;
+              keys.push({ id, label, flag: id === 'log' && result.events.length > 0 });
+            }
+          }
+          const pick = (id) => {
+            if (id === 've' || id === '3d' || id === 'live') { setDynoExtra(id); return; }
+            setDynoExtra(null);
+            goSection('dyno', id);
+          };
+          const point = chartData[chartData.length - 1];
+          const veAxes = (layout ?? layoutById(tune.layout)).ve;
+          return (
+            <Station
+              kind="dyno" controlsLabel="Dyno controls"
+              controls={(
+                <>
+                  <Eyebrow icon={Activity}>{roadTest ? 'Road Test' : 'Dyno Cell'}</Eyebrow>
+                  {roadTest && (
+                    <div style={{ fontSize: 12, color: T.ink2, lineHeight: 1.55, marginBottom: 10 }}>
+                      The shop has no dyno yet, so a pull is a run up through the gears on the road: the wideband and the ECU log
+                      everything, but nothing measures power. The shop can buy a dyno.
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: T.ink2, marginBottom: 8, fontWeight: 600 }}>Manifold pressure for the pull (load)</div>
+                  <Seg label="Manifold pressure for the pull (load)" options={[100, 70, 40].map((l) => ({ label: `${l} kPa`, id: l }))} value={loadKpa} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })} />
+                  <div data-compact="hide" style={{ fontSize: 10.5, color: T.ink3, marginTop: 4, marginBottom: 4 }}>
+                    ~100 kPa is wide-open throttle naturally aspirated. Boost adds on top and walks the tables into the higher-MAP rows automatically.
+                  </div>
+                  {nitrous && (
+                    <div style={{ marginTop: 10 }}>
+                      <Toggle label="Spray nitrous on this pull" sub={`${nitrous.shotHp} shot ${nitrous.kit} kit, inside the window on TUNE › NITROUS — the same arming switch as LIVE`}
+                        checked={nitrousArmed} onChange={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })} />
+                    </div>
+                  )}
 
-            <div style={{ margin: '14px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
+                  <div data-compact="hide" style={{ margin: '12px 0' }}><Tach rpm={running || result ? currentRpm : 1500} cylinders={engineDerived.cyl} running={running} fullScaleRpm={tachFullScaleRpm} /></div>
 
-            {/* The app's most important control, and the one PR 1's review caught
-                rendering its label at 1.14:1 while running — panel3 fill under ink2
-                text. `disabled` now dims the whole button instead of recolouring the
-                label, so the contrast between fill and label never changes.
+                  {/* The app's most important control. `disabled` dims the whole button
+                      rather than recolouring the label, so its contrast never changes. The
+                      label names the PHASE: the pull is a sequence, and this is the only
+                      thing on screen that says which part of it you are listening to. */}
+                  <div style={{ margin: '10px 0', marginBottom: result ? 12 : 0 }}>
+                    <Button size="lg" onClick={doRun} disabled={running}>
+                      <Play size={16} aria-hidden="true" />
+                      {!running ? (roadTest ? 'RUN A ROAD TEST' : 'RUN DYNO PULL')
+                        : dynoPhase === 'settle' ? 'IDLING…'
+                          : dynoPhase === 'sweep' ? 'SWEEPING…'
+                            : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
+                              : 'SETTLING…'}
+                    </Button>
+                  </div>
 
-                Deliberately NOT `block`. This sits in the main content column, which
-                on a desktop window is the window; the hand-rolled width:100% here is
-                the literal button that spanned the screen. `lg` gives it its weight
-                instead.
-
-                The label names the PHASE, because the pull is now a sequence rather
-                than a single sweep and the button is the only thing on screen that
-                says which part of it you are listening to. */}
-            <div style={{ marginBottom: 16 }}>
-              <Button size="lg" onClick={doRun} disabled={running}>
-                <Play size={16} aria-hidden="true" />
-                {!running ? (roadTest ? 'RUN A ROAD TEST' : 'RUN DYNO PULL')
-                  : dynoPhase === 'settle' ? 'IDLING…'
-                    : dynoPhase === 'sweep' ? 'SWEEPING…'
-                      : dynoPhase === 'spooldown' ? 'COMING BACK DOWN…'
-                        : 'SETTLING…'}
-              </Button>
-            </div>
-
-            {result && (
-              <>
-                {!roadTest && (
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-                    <StatTile label="PEAK WHP" value={result.peakHp} tone="acc" />
-                    <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
+                  {result && !roadTest && (
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <StatTile label="PEAK WHP" value={result.peakHp} tone="acc" />
+                      <StatTile label="PEAK TQ" value={result.peakTq} unit="lb-ft" tone="alt" />
+                    </div>
+                  )}
+                </>
+              )}
+            >
+              <Computer
+                label="Dyno computer" wakeKey="dyno" screens={keys} current={shown} onScreen={pick}
+                nudge={!!result && !running}
+              >
+                {!result && !(runs.length > 0 && dynoView === 'history') && (
+                  <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
+                    Strap the car down and make a pull: this screen shows what it measured, the curves, the log and the score.
                   </div>
                 )}
 
-                {runs[1] && !running && !roadTest && (() => {
+                {result && runs[1] && !running && !roadTest && shown === 'result' && (() => {
                   const prev = runs[1];
                   const dHp = result.peakHp - prev.peakHp;
                   const dTq = result.peakTq - prev.peakTq;
@@ -1601,7 +1666,7 @@ export function EcuLabApp() {
                   const dKnock = knockNow - prev.knocks;
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
                   return (
-                    <Panel tight style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Panel tight style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <TrendingUp size={15} color={T.ink2} style={{ flexShrink: 0 }} />
                       <div style={{ display: 'flex', gap: 14, fontSize: 12.5, flexWrap: 'wrap' }}>
                         <span style={{ color: dHp === 0 ? T.ink2 : dHp > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
@@ -1611,83 +1676,65 @@ export function EcuLabApp() {
                     </Panel>
                   );
                 })()}
-              </>
-            )}
 
-            {/* HISTORY sits outside the `result` gate deliberately: its data (`runs`)
-                outlives `result` — it is restored from storage on a cold start, while
-                `result` is not persisted and is cleared by APPLY_PRESET — so it is the
-                first DYNO section for which that is true. When there is no result yet,
-                the switcher below shows ONLY the history entry, since the other four
-                lead to sections that render nothing without one. */}
-            {!running && (result || runs.length > 0) && (
-              <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-                {[['result', 'CURVES'], ['log', 'PULL LOG'], ['data', 'DATALOG'], ['score', 'SCORE'], ['history', 'HISTORY']]
-                  .filter(([id]) => sectionAvailable(`dyno/${id}`, sectionFlags))
-                  .map(([id, label]) => {
-                  const on = dynoView === id;
-                  const flag = id === 'log' && result && result.events.length > 0;
-                  return (
-                    <button key={id} onClick={() => goSection('dyno', id)} style={{
-                      flex: 1, padding: '9px 0', borderRadius: 9, fontWeight: 800, fontSize: 10, letterSpacing: 0.3,
-                      border: `1px solid ${on ? T.acc : T.line}`, background: on ? T.accBg : T.panel2,
-                      color: on ? T.accInk : T.ink2, position: 'relative',
-                    }}>
-                      {label}
-                      {flag && <span style={{ position: 'absolute', top: 5, right: 7, width: 5, height: 5, borderRadius: 3, background: T.danger }} />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {result && (
-              <>
-                {/* DYNO's gating is irregular ON PURPOSE, not four uniform
-                    `dynoView === x` checks like TUNE's. While a pull is running the
-                    switcher above is hidden and CURVES is the only view that can show
-                    — "the machine is busy, watch this" — regardless of which section
-                    the URL has selected. Normalising these to match TUNE would make a
-                    DATALOG/PULL LOG/SCORE view silently go blank the moment a pull
-                    starts instead of falling back to the live curves. Preserve every
-                    condition exactly. */}
-                {(running || dynoView === 'result') && (
+                {result && shown === 'result' && (
                   <ResultScreen
                     chartData={chartData}
                     engineDerived={engineDerived}
                     ghostLabel={ghostLabel(ghost, pinnedRunId)}
-                    // `bands` is memoised on `result`, which is banked at sweep START —
-                    // same hazard `scores` guards a few lines up, with the same fix:
-                    // hide it for the duration of `running` rather than let it leak the
-                    // next pull's full knock/lean tint onto a chart that has not drawn a
-                    // trace yet. A band clicked mid-reveal would also dispatch and
-                    // navigate to a log gated on `!running`, doing nothing for seconds
-                    // and then jerking the view once the pull finishes.
+                    // `bands` is memoised on `result`, which is banked at sweep START: hidden
+                    // while `running`, or the next pull's knock/lean tint would leak onto a
+                    // chart that has not drawn a trace yet, and a band clicked mid-reveal
+                    // would navigate to a log gated on `!running`.
                     bands={running ? [] : bands}
                     wholePullCount={running ? 0 : wholePullCount}
                     onSelectRpm={selectLogRpm}
                   />
                 )}
 
-                {!running && dynoView === 'data' && (
+                {result && shown === 'live' && (
+                  <BarGraph
+                    rpm={running ? currentRpm : (point?.rpm ?? 0)} fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline}
+                    throttle={running && dynoPhase === 'sweep' ? loadKpa : 0}
+                    meters={[
+                      { label: 'POWER', value: `${Math.round(point?.hp ?? 0)}`, unit: ' whp', pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
+                      { label: 'TORQUE', value: `${Math.round(point?.torque ?? 0)}`, unit: ' lb-ft', pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
+                      { label: 'AFR', value: (point?.afr ?? 0).toFixed(1), unit: ':1', pct: ((point?.afr ?? 14.7) - 9) / 9, tone: 'ok' },
+                      { label: 'TIMING', value: `${Math.round(point?.timing ?? 0)}`, unit: '°', pct: (point?.timing ?? 0) / 50 },
+                      { label: 'INJ DUTY', value: `${Math.round(point?.duty ?? 0)}`, unit: '%', pct: (point?.duty ?? 0) / 100, tone: (point?.duty ?? 0) > 90 ? 'danger' : 'acc' },
+                      { label: 'FUEL TRIM', value: `${(point?.trimPct ?? 0) > 0 ? '+' : ''}${(point?.trimPct ?? 0).toFixed(1)}`, unit: '%', pct: ((point?.trimPct ?? 0) + 25) / 50, tone: 'ok' },
+                    ]}
+                  />
+                )}
+
+                {result && !running && shown === 've' && (
+                  <VeCurve points={result.points} />
+                )}
+
+                {result && !running && shown === '3d' && (
+                  <TableSurface x={veAxes.rpm} y={[...veAxes.load].reverse()} z={[...ve].reverse()} lo={10} hi={130} xLabel="RPM" yLabel={veAxes.loadUnit} unit="%" decimals={0}
+                    title="Volumetric efficiency" xVar="rpm" yVar={veAxes.loadUnit === 'kPa' ? 'map' : null} />
+                )}
+
+                {result && !running && shown === 'data' && (
                   <DataScreen />
                 )}
 
-                {!running && dynoView === 'log' && (
+                {result && !running && shown === 'log' && (
                   <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} />
                 )}
 
-                {!running && dynoView === 'score' && scores && (
+                {result && !running && shown === 'score' && scores && (
                   <ScoreScreen scores={scores} stale={scoresStale} />
                 )}
-              </>
-            )}
 
-            {!running && dynoView === 'history' && (
-              <HistoryScreen />
-            )}
-          </div>
-        )}
+                {!running && shown === 'history' && (
+                  <HistoryScreen />
+                )}
+              </Computer>
+            </Station>
+          );
+        })()}
 
 
     </>
@@ -1748,7 +1795,7 @@ export function EcuLabApp() {
         onBay={() => deskGo('bay')} outside={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
-        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0}
+        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0}
         status={<StatusStrip actions={false} />}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (

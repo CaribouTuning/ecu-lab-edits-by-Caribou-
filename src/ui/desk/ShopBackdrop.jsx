@@ -27,19 +27,22 @@ export const HOTSPOTS = [
 
 /**
  * @param {object} props
- * @param {'desk'|'bay'|'page'} props.mode the laptop open, the shop with it shut, or a page over it all
+ * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'board'} props.mode the laptop open, the shop with it shut, a
+ *   page over it all, or walked up to one thing in it (the camera on it, the page see-through)
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
+ * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, onPick, onLook }) {
-  const live = useRef({ mode, rpm, spec: engineSpec, specDirty: false });
+export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false });
   live.current.mode = mode;
   live.current.rpm = rpm;
+  live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
   useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
@@ -52,16 +55,30 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
     return {
       update(dt) {
         const l = live.current;
-        // Behind a page the shop is dimmed and still: draw it a few times a second, not
-        // sixty, so LIVE and the dyno have the machine to themselves.
-        if (l.mode === 'page') {
+        // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
+        // nothing moves until it runs: draw it a few times a second, not sixty, so the
+        // page's own numbers have the machine to themselves.
+        const scene = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'board';
+        shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
+        const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0));
+        if (l.mode === 'page' || (scene && !busy)) {
           idle += dt;
           if (idle < 0.25) return false;
+          dt = idle;
           idle = 0;
         }
-        shop.setPose(l.mode === 'bay' ? 'bay' : 'desk');
+        // Framed clear of the page's bench computer: above it on an upright phone, beside it
+        // on its side, and above and right of it on a wide screen (Station.module.css).
+        const cv = canvasRef.current;
+        if (cv) {
+          const w = cv.clientWidth; const h = cv.clientHeight;
+          if (w <= 560) shop.setFrame(0, 0.62);
+          else if (l.mode === 'board') shop.setFrame(-0.62, 0.05);
+          else if (h <= 500) shop.setFrame(0.6, 0.5);
+          else shop.setFrame(0.5, 0.42);
+        }
         if (l.specDirty) { l.specDirty = false; shop.setEngine(l.spec); }
-        shop.update(dt, l.rpm);
+        shop.update(dt, l.rpm, l.dynoRpm);
         // Keep each button on its object.
         const canvas = canvasRef.current;
         if (!canvas || l.mode !== 'bay') return;

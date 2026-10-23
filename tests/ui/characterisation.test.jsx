@@ -102,9 +102,9 @@ describe('navigation', () => {
     const marker = {
       TUNE: () => screen.getByRole('button', { name: 'VE · AIRFLOW' }), // TUNE_VIEWS sub-tab (VE first, as the sandbox draws it)
       DYNO: () => screen.getByRole('button', { name: 'RUN DYNO PULL' }),
-      // The live engine is its own tab now. HOME in free play has no jobs board — that
-      // is CAREER's — so its marker is the stats section it opens on.
-      LIVE: () => screen.getByText('Live Engine'),
+      // The live engine is the engine stand in the shop: its marker is the stand's own
+      // bench computer, which only that place has.
+      LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
       LEARN: () => screen.getByRole('navigation', { name: 'Learn shelves' }),
       PHYSICS: () => screen.getByText('Air in'),
       BUILD: () => screen.getByText('Garage'),

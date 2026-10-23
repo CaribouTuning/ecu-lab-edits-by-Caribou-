@@ -80,6 +80,10 @@ function Wallpaper() {
 /** The shop's pages, opened from the shop floor rather than the laptop. */
 export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor', office: 'Job board' };
 
+/** Where the camera goes for each page: the dyno, the engine on its stand, the board on the wall. */
+/** @type {Record<string, 'dyno'|'stand'|'board'>} */
+const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
+
 /**
  * The four apps' pictures, doodled in pen the way they were drawn on the pad, each over a
  * pale watercolour wash. Drawn on a 48-unit square with `DOODLE` stroke settings.
@@ -185,12 +189,13 @@ function Clock() {
  * @param {Notice[]} [props.notices] what the notifications list holds
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
  * @param {number} [props.rpm] that engine's speed while it runs
+ * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
@@ -203,6 +208,7 @@ export function Desk({
     else onDesktop();
   };
   const open = mode === 'desktop' || mode === 'app';
+  const scene = mode === 'page' ? (PAGE_SCENES[app ?? ''] ?? null) : null;
   const flagged = notices.filter((n) => n.tone && n.tone !== 'ok').length;
   const apple = isApplePlatform();
   const phone = usePhone();
@@ -295,7 +301,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk'} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} onPick={pick} onLook={onBay} />
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
@@ -356,7 +362,7 @@ export function Desk({
       )}
 
       {mode === 'page' && (
-        <div className={styles.page}>
+        <div className={styles.page} data-scene={scene ?? undefined}>
           <header className={styles.pageBar}>
             <button type="button" className={styles.back} onClick={onBay} aria-label="Back to the shop">
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>

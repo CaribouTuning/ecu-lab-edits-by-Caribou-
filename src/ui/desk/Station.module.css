@@ -1,0 +1,79 @@
+/* A place in the shop: the bench computer and the machine's controls over the picture (Station.jsx). */
+
+.station { position: relative; flex: 1; min-height: 0; pointer-events: none; }
+.station > * { pointer-events: auto; }
+.station, .station > * { box-sizing: border-box; }
+
+/* ---------- the bench computer ---------- */
+.computer {
+  position: absolute; left: 16px; bottom: 16px;
+  width: min(740px, calc(56% - 24px)); height: min(580px, calc(64% - 16px));
+  display: flex; flex-direction: column;
+}
+.monitor {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border-radius: var(--r-md); border: 3px solid var(--pen); background: var(--bg);
+}
+.screen { position: relative; flex: 1; min-height: 0; border-radius: var(--r-sm); background: var(--panel); overflow: hidden; }
+.screenBody { position: absolute; inset: 0; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+/* Asleep: the whole screen is the button that wakes it. */
+.wake {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  border: 0; border-radius: 0 !important; background: var(--bg); color: var(--warn); cursor: pointer;
+  font-family: var(--sans); font-size: var(--fs-lg); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.wake:hover, .wake:focus-visible { background: var(--warn-bg); }
+/* There is something on it now, and nobody has looked: it calls you over. */
+.wake[data-nudge='true'] { animation: nudge 1.4s ease-in-out infinite; }
+@keyframes nudge { 50% { background: var(--warn-bg); box-shadow: inset 0 0 0 4px var(--warn); } }
+@media (prefers-reduced-motion: reduce) { .wake[data-nudge='true'] { animation: none; background: var(--warn-bg); box-shadow: inset 0 0 0 4px var(--warn); } }
+
+/* The bezel's buttons, one a screen. */
+.bezel { flex: none; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.key {
+  position: relative; flex: 1 0 auto; height: 32px; padding: 0 12px;
+  border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); cursor: pointer;
+  font-family: var(--sans); font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.06em; white-space: nowrap;
+}
+.key:hover { border-color: var(--acc); }
+.flag { position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
+.stand { flex: none; align-self: center; width: 120px; height: 8px; margin-top: -2px; border-radius: 0 0 var(--r-xs) var(--r-xs); background: var(--pen); }
+
+/* ---------- the machine's controls ---------- */
+.controls {
+  position: absolute; right: 16px; bottom: 16px;
+  width: min(360px, calc(40% - 24px)); max-height: calc(100% - 32px); overflow-y: auto;
+  padding: 14px; border-radius: var(--r-md); border: 3px solid var(--pen); background: var(--panel);
+}
+
+/* ---------- the job board: the board itself, close up ---------- */
+.board {
+  position: absolute; top: 16px; bottom: 16px; right: 16px; width: min(860px, calc(64% - 24px));
+  border-radius: var(--r-md); border: 3px solid var(--pen); background: var(--bg); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.boardBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+/* ---------- a phone held upright: the machine at the top, its computer under it ---------- */
+@media (max-width: 560px) {
+  .station { display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; padding: 8px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .computer { position: relative; left: auto; bottom: auto; width: 100%; height: 50%; flex: none; }
+  .controls { position: relative; right: auto; bottom: auto; order: -1; width: 100%; max-height: 24%; padding: 10px; flex: none; }
+  .monitor { padding: 6px; gap: 6px; }
+  .screenBody { padding: 8px; }
+  .stand { display: none; }
+  .board { position: relative; top: auto; bottom: auto; right: auto; width: 100%; height: 72%; flex: none; }
+}
+/* On a phone the control box keeps to the controls: the help and the big dial go. */
+@media (max-width: 560px), (max-height: 500px) {
+  .controls [data-compact='hide'] { display: none; }
+  .controls { overflow-x: hidden; }
+}
+/* ---------- a phone on its side: the computer left, the controls right ---------- */
+@media (max-height: 500px) {
+  .computer { left: max(8px, env(safe-area-inset-left)); bottom: 8px; top: 8px; height: auto; width: calc(60% - 12px); }
+  .controls { right: max(8px, env(safe-area-inset-right)); bottom: 8px; width: calc(40% - 12px); max-height: 58%; padding: 10px; }
+  .monitor { padding: 6px; gap: 6px; }
+  .stand { display: none; }
+  .board { top: 8px; bottom: 8px; right: max(8px, env(safe-area-inset-right)); width: calc(64% - 12px); }
+}

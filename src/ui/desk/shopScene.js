@@ -27,6 +27,12 @@ const POSES = {
   // The same, on a screen taller than wide (a phone held upright): high above the room,
   // its ceiling lifted off, looking down over the whole floor so it fits the narrow frame.
   bayTall: { pos: new THREE.Vector3(0, 15, 5.2), look: new THREE.Vector3(0, 0, -0.4), fov: 40 },
+  // Walked up to one thing: the car on the dyno, the engine on its stand, the board on the
+  // wall. `look` is the thing; `framed` poses put it where the page leaves room for it
+  // (`setFrame`), clear of the bench computer, rather than in the middle of the screen.
+  dyno: { pos: new THREE.Vector3(-0.6, 3.6, 5.0), look: new THREE.Vector3(-4.6, 0.6, -1.6), fov: 40, framed: true },
+  stand: { pos: new THREE.Vector3(1.4, 2.5, 5.6), look: new THREE.Vector3(-1.4, 1.0, 2.2), fov: 36, framed: true },
+  board: { pos: new THREE.Vector3(-3.4, 2.3, -2.4), look: new THREE.Vector3(-7.9, 2.2, -4.9), fov: 50, framed: true },
 };
 
 /** Where things are in the shop. */
@@ -116,9 +122,20 @@ export function buildShopScene(stage, init) {
   root.add(sign);
   // The job board on the left wall: a cork board of tickets, by the dyno.
   root.add(box(0.12, 1.5, 2.2, W.woodLight, { x: -7.95, y: 2.1, z: -4.9 }));
-  /** @type {[number, number, string][]} */
-  const tickets = [[2.4, -5.5, W.white], [2.4, -4.8, W.toolBlue], [1.85, -5.2, W.white], [1.9, -4.4, W.white]];
-  for (const [y, z, c] of tickets) root.add(box(0.03, 0.42, 0.34, c, { x: -7.87, y, z }));
+  // Job tickets pinned up in rows, a pin in each, one in the shop's blue for today's job.
+  for (let r = 0; r < 3; r += 1) {
+    for (let c = 0; c < 4; c += 1) {
+      if ((r * 4 + c) % 5 === 3) continue;
+      const y = 2.55 - r * 0.46 + ((c * 7 + r * 3) % 3) * 0.03;
+      const z = -5.75 + c * 0.56;
+      root.add(box(0.03, 0.36, 0.38, r === 0 && c === 1 ? W.toolBlue : W.white, { x: -7.87, y, z, edge: true }));
+      root.add(cyl(0.025, 0.025, 0.05, W.toolRed, { axis: 'x', x: -7.84, y: y + 0.13, z, edge: false }));
+    }
+  }
+  const jobSign = handSign('Jobs', 1.2, 0.36);
+  jobSign.rotation.y = Math.PI / 2;
+  jobSign.position.set(-7.9, 3.1, -4.9);
+  root.add(jobSign);
 
   // Lamps over the work, forward of the door so none hangs in front of the sign.
   for (const x of [-4.6, 0, 4.6]) {
@@ -219,8 +236,11 @@ export function buildShopScene(stage, init) {
 
   // ---- the camera ----
   const cam = stage.camera;
-  const from = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
-  const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
+  const from = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov, off: new THREE.Vector2() };
+  const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov, off: new THREE.Vector2() };
+  // Where on screen a framed pose puts its thing, -1..1 each way (0, 0 the middle).
+  const frame = new THREE.Vector2();
+  const noOff = new THREE.Vector2();
   let target = POSES.desk;
   let lastPose = 'desk';
   let blend = 1;
@@ -238,17 +258,27 @@ export function buildShopScene(stage, init) {
   const api = {
     anchors,
     camera: cam,
-    /** @param {'desk'|'bay'} pose */
+    /** @param {'desk'|'bay'|'dyno'|'stand'|'board'} pose */
     setPose(pose) {
       lastPose = pose;
-      const p = pose === 'bay' && cam.aspect < 1 ? POSES.bayTall : (POSES[pose] ?? POSES.desk);
+      const p = (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
       if (p === target) return;
       ceiling.visible = p !== POSES.bayTall;
-      from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
+      from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov; from.off.copy(now.off);
       target = p;
       blend = 0;
-      lidTarget = pose === 'bay' ? 1 : 0;
+      lidTarget = pose === 'desk' ? 0 : 1;
     },
+    /**
+     * Where a framed pose puts its thing on screen: the part of it the page leaves clear.
+     * @param {number} x -1 left .. 1 right @param {number} y -1 bottom .. 1 top
+     */
+    setFrame(x, y) {
+      if (frame.x === x && frame.y === y) return;
+      frame.set(x, y);
+    },
+    /** @returns {boolean} the camera is still on its way somewhere */
+    moving() { return blend < 1; },
     /** @param {import('../world/models/engine.js').EngineSpec} spec */
     setEngine(spec) {
       mount.remove(engine.group);
@@ -257,16 +287,19 @@ export function buildShopScene(stage, init) {
       engine.group.position.set(0, -0.4, 0);
       mount.add(engine.group);
     },
-    /** @param {number} dt @param {number} rpm the engine on the stand, 0 when it is off */
-    update(dt, rpm) {
+    /**
+     * @param {number} dt @param {number} rpm the engine on the stand, 0 when it is off
+     * @param {number} [dynoRpm] the engine of the car on the dyno during a pull, 0 between
+     */
+    update(dt, rpm, dynoRpm = 0) {
       t += dt;
       blend = Math.min(1, blend + dt / 0.7);
       const k = blend * blend * (3 - 2 * blend);
       now.pos.lerpVectors(from.pos, target.pos, k);
       now.look.lerpVectors(from.look, target.look, k);
       now.fov = from.fov + (target.fov - from.fov) * k;
+      now.off.lerpVectors(from.off, /** @type {any} */ (target).framed ? frame : noOff, k);
       cam.position.copy(now.pos);
-      cam.lookAt(now.look);
       // The poses are framed for a wide screen. On a narrower one (a phone held upright)
       // keep about the same width of shop in view: open the lens vertically to match, up
       // to the point where it would see out past the room; the markers stay on screen.
@@ -274,8 +307,14 @@ export function buildShopScene(stage, init) {
       const fov = cam.aspect >= wide ? now.fov
         : Math.min(80, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(now.fov / 2)) * wide / cam.aspect)));
       if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+      // Look at the thing, then turn away from it just enough to put it where it is framed.
+      cam.lookAt(now.look);
+      const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+      if (now.off.x) cam.rotateY(Math.atan(now.off.x * tanV * cam.aspect));
+      if (now.off.y) cam.rotateX(-Math.atan(now.off.y * tanV));
       // The phone turned: frame the shop for its new shape.
-      if (lastPose === 'bay' && (target === POSES.bayTall) !== (cam.aspect < 1)) api.setPose('bay');
+      const tall = POSES[`${lastPose}Tall`];
+      if (tall && (target === tall) !== (cam.aspect < 1)) api.setPose(/** @type {any} */ (lastPose));
       lid += (lidTarget - lid) * Math.min(1, dt * 5);
       // Open, the lid stands up a little past vertical; shut, it lies on the base.
       hinge.rotation.x = -(1 - lid) * 1.85;
@@ -288,8 +327,14 @@ export function buildShopScene(stage, init) {
         tr.c.roll?.(Math.abs(tr.v) * dt);
       }
       engine.update(dt, rpm);
-      // The dyno's rollers and the car on them idle over; the lift stays put.
-      dynoCar.roll?.(dt * 0.6);
+      // The dyno's rollers and the car on them idle over; the lift stays put. In a pull the
+      // wheels turn with the engine, through a gear (a picture, not the drivetrain model:
+      // about 3.6 turns of the crank to one of the wheels in the gear a pull is made in).
+      const wheelHz = dynoRpm > 0 ? dynoRpm / 60 / 3.6 : 0.3;
+      const roll = wheelHz * 2 * Math.PI * 0.32 * dt;
+      dynoCar.roll?.(roll);
+      for (const r of dyno.userData.rollers ?? []) r.rotation.x -= roll / 0.22;
+      if (dyno.userData.fan && dynoRpm > 0) dyno.userData.fan.rotation.z += dt * 14;
       stage.followLight(new THREE.Vector3(0, 0, 0));
       void t;
     },

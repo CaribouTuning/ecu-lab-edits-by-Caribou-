@@ -206,6 +206,13 @@
 .back:hover { border-color: var(--acc); }
 .pageBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .pageBody > * { max-width: var(--content-max); margin-left: auto; margin-right: auto; }
+/* A place in the shop rather than a page over it: the shop shows through, and the place's
+   computer and controls sit on it (Station.jsx). */
+.page[data-scene] { background: transparent; pointer-events: none; }
+.page[data-scene] > * { pointer-events: auto; }
+.page[data-scene] .pageBody { display: flex; flex-direction: column; overflow: hidden; pointer-events: none; }
+.page[data-scene] .pageBody > * { pointer-events: auto; flex: none; width: 100%; }
+.page[data-scene] .pageBody > [data-station] { flex: 1; min-height: 0; max-width: none; pointer-events: none; }
 
 /* ---------- inside the apps ---------- */
 .viewer {
