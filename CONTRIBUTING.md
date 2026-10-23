@@ -132,7 +132,7 @@ the app on Windows, macOS and Linux, and attaches the installers to a GitHub Rel
 the tag. The installers are unsigned, so Windows SmartScreen and macOS Gatekeeper will
 warn on first launch. Run the workflow by hand from the Actions tab to get the installers
 as run artifacts without cutting a release. Locally, `npm run desktop:dev` opens the app
-in a desktop window and `npm run build && npm run desktop:dist` makes installers for the
+in a desktop window and `npm run desktop:dist` makes installers for the
 current platform in `release/`.
 
 `--no-git-tag-version` suppresses the commit and tag but still runs npm's `version`

@@ -27,7 +27,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "desktop:dev": "vite build && electron .",
-    "desktop:dist": "electron-builder --publish never",
+    "desktop:dist": "vite build && electron-builder --publish never",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:fingerprint:update": "node scripts/update-fingerprint.js",

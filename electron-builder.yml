@@ -35,7 +35,7 @@ win:
     - { target: nsis, arch: [x64] }
     - { target: portable, arch: [x64] }
 nsis:
-  artifactName: ECU-Lab-installer.${ext}
+  artifactName: ECU-Lab-windows-installer.${ext}
   oneClick: false
   allowToChangeInstallationDirectory: true
   # The installer asks about the desktop shortcut itself (build/installer.nsh), so the
@@ -43,7 +43,7 @@ nsis:
   createDesktopShortcut: false
   createStartMenuShortcut: true
 portable:
-  artifactName: ECU-Lab-portable.${ext}
+  artifactName: ECU-Lab-windows-portable.${ext}
 
 mac:
   category: public.app-category.education
