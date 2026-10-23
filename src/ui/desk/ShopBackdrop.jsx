@@ -48,9 +48,17 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
 
   const { canvasRef, failed } = useStage((stage) => {
     const shop = buildShopScene(stage, { engineSpec: live.current.spec });
+    let idle = 0;
     return {
       update(dt) {
         const l = live.current;
+        // Behind a page the shop is dimmed and still: draw it a few times a second, not
+        // sixty, so LIVE and the dyno have the machine to themselves.
+        if (l.mode === 'page') {
+          idle += dt;
+          if (idle < 0.25) return false;
+          idle = 0;
+        }
         shop.setPose(l.mode === 'bay' ? 'bay' : 'desk');
         if (l.specDirty) { l.specDirty = false; shop.setEngine(l.spec); }
         shop.update(dt, l.rpm);

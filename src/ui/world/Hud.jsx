@@ -14,6 +14,11 @@ import { sfx } from './sfx.js';
 
 import styles from './World.module.css';
 
+/** A phone held upright, where the world is drawn sideways. Matches World.module.css. */
+const SIDEWAYS = typeof window !== 'undefined' && window.matchMedia
+  ? window.matchMedia('(orientation: portrait) and (max-width: 560px)')
+  : { matches: false };
+
 const PHASE = [
   { name: 'Morning', Icon: Sun }, { name: 'Afternoon', Icon: Sun }, { name: 'Evening', Icon: Sunset }, { name: 'Night', Icon: Moon },
 ];
@@ -186,6 +191,9 @@ export function TouchControls({ world, driving }) {
     const R = 46;
     let dx = e.clientX - down.current.ox;
     let dy = e.clientY - down.current.oy;
+    // On a phone held upright the world is drawn turned a quarter clockwise (World.module.css),
+    // so the stick's right is the screen's down.
+    if (SIDEWAYS.matches) [dx, dy] = [dy, -dx];
     const d = Math.hypot(dx, dy);
     if (d > R) { dx = (dx / d) * R; dy = (dy / d) * R; }
     knob.current.style.transform = `translate(${dx}px, ${dy}px)`;

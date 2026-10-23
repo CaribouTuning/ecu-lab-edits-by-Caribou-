@@ -364,6 +364,18 @@ describe('the live engine runs its controllers in time', () => {
     expect(lowest).toBeGreaterThan(560);
   });
 
+  // A real engine catches, flares a few hundred RPM over its fast idle and comes down in
+  // a second or two. The base idle air used to be a fifth open on a cold start and the
+  // hold ran nearly a second, so every V6 shot to 2,500–2,900 RPM and took four seconds
+  // to come back: it read as the throttle sticking.
+  it.each([[null], ['vq35hr'], ['vq35de-revup'], ['n54']])('flares modestly on a start and settles (%s)', (preset) => {
+    for (const coolantC of [20, 88]) {
+      const { rows } = runLive(makeEngine({ preset }), { seconds: 4, coolantC });
+      expect(Math.max(...rows.map((r) => r.rpm))).toBeLessThan(2000);
+      expect(rows.at(-1).rpm).toBeLessThan(1100);
+    }
+  });
+
   it('charges the battery at a hot idle, and sags only under a heavy electrical load', () => {
     // A 120 A alternator gives about half its rating at idle: enough for the car itself,
     // not for lights and A/C on top.

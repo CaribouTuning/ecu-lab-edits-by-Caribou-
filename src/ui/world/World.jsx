@@ -188,7 +188,6 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const [confirmReset, setConfirmReset] = useState(false);
   const [touch, setTouch] = useState(false);
   const [fade, setFade] = useState(false);
-  const [dismissedRotate, setDismissedRotate] = useState(false);
   const toastId = useRef(0);
   const drawerRef = useRef(null);
   const settingsRef = useRef(settings);
@@ -772,12 +771,6 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         />
       )}
 
-      <div className={styles.rotate} data-dismissed={dismissedRotate ? 'true' : 'false'}>
-        <div className={styles.rotateIcon} aria-hidden="true">📱</div>
-        <h2 className={styles.sheetTitle}>Turn your phone sideways</h2>
-        <p className={styles.lede}>The shop is built for a landscape screen: walking on the left, buttons on the right.</p>
-        <Button variant="ghost" size="sm" onClick={() => setDismissedRotate(true)}>PLAY ANYWAY</Button>
-      </div>
     </div>
   );
 }

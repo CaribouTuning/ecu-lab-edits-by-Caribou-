@@ -334,10 +334,21 @@
 .facts dd[data-tone='ok'] { color: var(--ok-ink); }
 .lede { margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-soft); }
 
-.rotate { display: none; }
+/*
+ * A phone held upright: the town is a landscape game, so it is drawn turned a quarter
+ * clockwise, the right way up once the phone is turned. Nothing asks the player to turn
+ * it; they see the picture on its side and turn the phone. Hud.jsx turns the stick to
+ * match, and the stage sizes its picture from the layout box, not the turned one.
+ */
+@media (orientation: portrait) and (max-width: 560px) {
+  .root {
+    position: fixed; top: 0; left: 100vw; width: 100dvh; height: 100vw;
+    transform: rotate(90deg); transform-origin: top left;
+  }
+}
 
-/* ---- a phone held sideways, and anything else short ---- */
-@media (max-height: 520px) {
+/* ---- a phone held sideways (or upright, drawn sideways), and anything else short ---- */
+@media (max-height: 520px), (orientation: portrait) and (max-width: 560px) {
   .root { --hit: 36px; --edge: max(var(--sp-sm), env(safe-area-inset-left)); --edge-t: max(var(--sp-sm), env(safe-area-inset-top)); --edge-b: max(var(--sp-sm), env(safe-area-inset-bottom)); }
   .where { display: none; }
   .chip { padding: 3px 7px; font-size: var(--fs-xs); }
@@ -371,16 +382,8 @@
   .prompt { max-width: calc(100% - 280px); }
 }
 
-/* Held upright, a phone is too narrow to play on: ask for the other way round, once. */
-@media (orientation: portrait) and (max-width: 700px) {
-  .rotate { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-lg); padding: var(--sp-xxl); background: var(--bg); text-align: center; }
-  .rotate[data-dismissed='true'] { display: none; }
-  .rotateIcon { font-size: 54px; animation: tilt 1.8s ease-in-out infinite; }
-}
-@keyframes tilt { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
-
 @media (prefers-reduced-motion: reduce) {
-  .prompt, .rotateIcon { animation: none; }
+  .prompt { animation: none; }
   .drawer, .fade { transition: none; }
 }
 
@@ -483,7 +486,7 @@
 .talkChoice[data-on='true'] { background: var(--talk-choice); }
 .talkChoice[data-on='true']::before { content: '\25B6'; position: absolute; left: 9px; color: var(--talk-name); }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-@media (max-height: 460px) {
+@media (max-height: 460px), (orientation: portrait) and (max-width: 560px) {
   .talkBox { min-height: 70px; padding: 10px 16px 12px; font-size: var(--fs-sm); }
   .talk { width: min(640px, calc(100% - 260px)); }
 }
@@ -561,7 +564,7 @@
 .mapPick { cursor: pointer; }
 .mapRoute { stroke: var(--warn); stroke-dasharray: 8 6; stroke-linecap: round; }
 .mapTarget { fill: none; stroke: var(--warn); stroke-width: 4; }
-@media (max-height: 480px) { .miniMap { width: 96px; height: 96px; } }
+@media (max-height: 480px), (orientation: portrait) and (max-width: 560px) { .miniMap { width: 96px; height: 96px; } }
 
 /* Out on a drive from the desk: the way back. */
 .homeBtn {

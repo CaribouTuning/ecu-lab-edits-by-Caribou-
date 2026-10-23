@@ -67,6 +67,21 @@ button:nth-of-type(3n):not([data-plain] *) { border-radius: var(--hand-c); }
   border: 2px solid var(--pen); border-radius: inherit; filter: url(#hand-jitter);
 }
 .ink-frame-lg::after { inset: -3px; border-width: 3px; filter: url(#hand-jitter-lg); }
+/*
+ * Where the browser can nine-slice a mask (Safari, Chrome, Edge), the shaken line is a
+ * picture drawn once rather than a filter run on every repaint: a filter re-ran its noise
+ * over every frame each time anything inside changed, twenty times a second on LIVE, and
+ * that was most of what made it lag.
+ */
+@supports (-webkit-mask-box-image: none) {
+  .ink-frame:not([data-plain] *)::after, .ink-frame-lg::after {
+    filter: none; border: 0; border-radius: 0; background: var(--pen);
+    -webkit-mask-box-image: var(--ink-mask) 24 / 24px round;
+    /* Its own layer: drawn once, not again whenever the numbers inside it change. */
+    will-change: transform;
+  }
+  .ink-frame-lg::after { -webkit-mask-box-image: var(--ink-mask-lg) 48 / 48px round; }
+}
 
 /* Sliders and ticks in ink rather than the browser's own blue. */
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--acc); }

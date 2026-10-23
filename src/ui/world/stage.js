@@ -152,9 +152,11 @@ export function createStage(canvas, opts = {}) {
 
     /** Re-measure and re-size. @param {number} [w] @param {number} [h] */
     resize(w, h) {
-      const rect = canvas.parentElement?.getBoundingClientRect();
-      cssW = w ?? Math.max(2, Math.floor(rect?.width ?? canvas.clientWidth ?? 800));
-      cssH = h ?? Math.max(2, Math.floor(rect?.height ?? canvas.clientHeight ?? 450));
+      // The layout size, not the box on screen: a world turned sideways on a phone held
+      // upright still draws its picture the long way round.
+      const box = canvas.parentElement;
+      cssW = w ?? Math.max(2, Math.floor(box?.clientWidth || canvas.clientWidth || 800));
+      cssH = h ?? Math.max(2, Math.floor(box?.clientHeight || canvas.clientHeight || 450));
       // A sketch is drawn at full resolution: pen lines, not pixels.
       // A sketch is drawn at the screen's own resolution, retina included (to 2x): pen
       // lines, not pixels, and sharp on a phone.
