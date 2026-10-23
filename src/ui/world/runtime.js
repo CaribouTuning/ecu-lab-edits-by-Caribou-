@@ -128,7 +128,10 @@ function clampToBounds(x, z, rects) {
 export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quality = 'normal', preserve = false }) {
   // Drawn like the shop: full resolution, ink outlines, pencil hatching in the shade and
   // paper grain (CHUNKY keeps big pixels).
-  const stage = createStage(canvas, { quality, preserve, sketch: quality !== 'chunky', hatch: true });
+  // On a phone the town is the heaviest thing the app draws, every frame, the whole screen:
+  // a touch screen gets one and a half drawn pixels a screen pixel, not two.
+  const touch = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const stage = createStage(canvas, { quality, preserve, sketch: quality !== 'chunky', hatch: true, maxDpr: touch ? 1.5 : 2 });
   // Test hook: a browser test can draw debug shapes with the same three.js the scene uses.
   if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__THREE = THREE;
   const rig = createRig(stage.camera);

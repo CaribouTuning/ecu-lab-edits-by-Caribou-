@@ -32,25 +32,29 @@ export const HOTSPOTS = [
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
+ * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false });
+export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false });
   live.current.mode = mode;
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
   useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const carsKey = JSON.stringify(cars ?? null);
+  useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
   const spots = useRef({});
   const v = new THREE.Vector3();
 
   const { canvasRef, failed } = useStage((stage) => {
-    const shop = buildShopScene(stage, { engineSpec: live.current.spec });
+    const shop = buildShopScene(stage, { engineSpec: live.current.spec, cars: live.current.cars });
+    live.current.carsDirty = false;
     let idle = 0;
     return {
       update(dt) {
@@ -78,6 +82,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
           else shop.setFrame(0.5, 0.42);
         }
         if (l.specDirty) { l.specDirty = false; shop.setEngine(l.spec); }
+        if (l.carsDirty) { l.carsDirty = false; shop.setCars(l.cars ?? { dyno: {}, lift: {} }); }
         shop.update(dt, l.rpm, l.dynoRpm);
         // Keep each button on its object.
         const canvas = canvasRef.current;
@@ -117,7 +122,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
               title={h.hint}
             >
               <span className={styles.spotRing} aria-hidden="true" />
-              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>
+              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.id === 'dyno' && cars?.rollers === false ? 'ROAD TEST' : h.label}</span>
             </button>
           ))}
         </div>

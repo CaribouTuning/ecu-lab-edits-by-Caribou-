@@ -35,6 +35,14 @@ const POSES = {
   board: { pos: new THREE.Vector3(-3.4, 2.3, -2.4), look: new THREE.Vector3(-7.9, 2.2, -4.9), fov: 50, framed: true },
 };
 
+/**
+ * The cars in the shop: the one on the dyno and the one up on the lift, each a look or
+ * nothing. Left out, a look is the shop's own demonstration car.
+ * @typedef {{body?: string, color?: string}} CarLook
+ * @typedef {{dyno?: CarLook|null, lift?: CarLook|null, rollers?: boolean}} ShopCars
+ *   `rollers: false`: the shop has not bought its dyno yet, and the bay is bare floor
+ */
+
 /** Where things are in the shop. */
 const AT = {
   dyno: new THREE.Vector3(-4.6, 0, -1.6),
@@ -87,7 +95,7 @@ function handSign(text, w, h) {
 
 /**
  * @param {any} stage from createStage
- * @param {{engineSpec: import('../world/models/engine.js').EngineSpec, car?: object}} init
+ * @param {{engineSpec: import('../world/models/engine.js').EngineSpec, cars?: ShopCars}} init
  */
 export function buildShopScene(stage, init) {
   const scene = stage.scene;
@@ -170,23 +178,49 @@ export function buildShopScene(stage, init) {
   });
 
   // ---- the dyno, and a car on it ----
-  const dyno = makeDyno(true);
+  let dyno = makeDyno(true);
   dyno.position.copy(AT.dyno);
   root.add(dyno);
-  const dynoCar = makeCar({ body: 'coupe', color: 'orange', ...init.car });
-  dynoCar.group.position.copy(AT.dyno);
-  dynoCar.group.rotation.y = Math.PI;
-  root.add(dynoCar.group);
+  /** @type {ReturnType<typeof makeCar>|null} */
+  let dynoCar = null;
 
   // ---- the lift, a car up on it ----
   const lift = makeLift();
   lift.position.copy(AT.lift);
   lift.userData.setHeight?.(1.5);
   root.add(lift);
-  const liftCar = makeCar({ body: 'hatch', color: 'teal' });
-  liftCar.group.position.set(AT.lift.x, 1.6, AT.lift.z);
-  liftCar.group.rotation.y = Math.PI;
-  root.add(liftCar.group);
+  /** @type {ReturnType<typeof makeCar>|null} */
+  let liftCar = null;
+  /**
+   * Put the cars in: the one on the dyno and the one up on the lift, each a look (a body
+   * and a colour) or nothing, which leaves the rollers bare or the lift down.
+   * @param {ShopCars} cars
+   */
+  const placeCars = (cars) => {
+    const rollers = cars.rollers !== false;
+    if (!!dyno.userData.rollers !== rollers) {
+      root.remove(dyno);
+      dyno = makeDyno(rollers);
+      dyno.position.copy(AT.dyno);
+      root.add(dyno);
+    }
+    if (dynoCar) root.remove(dynoCar.group);
+    if (liftCar) root.remove(liftCar.group);
+    dynoCar = cars.dyno ? makeCar({ body: 'coupe', color: 'orange', ...cars.dyno }) : null;
+    if (dynoCar) {
+      dynoCar.group.position.copy(AT.dyno);
+      dynoCar.group.rotation.y = Math.PI;
+      root.add(dynoCar.group);
+    }
+    liftCar = cars.lift ? makeCar({ body: 'hatch', color: 'teal', ...cars.lift }) : null;
+    lift.userData.setHeight?.(liftCar ? 1.5 : 0.1);
+    if (liftCar) {
+      liftCar.group.position.set(AT.lift.x, 1.6, AT.lift.z);
+      liftCar.group.rotation.y = Math.PI;
+      root.add(liftCar.group);
+    }
+  };
+  placeCars(init.cars ?? { dyno: {}, lift: {} });
 
   // ---- the engine stand, and the engine you are building on it ----
   const stand = new THREE.Group();
@@ -277,6 +311,7 @@ export function buildShopScene(stage, init) {
       if (frame.x === x && frame.y === y) return;
       frame.set(x, y);
     },
+    setCars: placeCars,
     /** @returns {boolean} the camera is still on its way somewhere */
     moving() { return blend < 1; },
     /** @param {import('../world/models/engine.js').EngineSpec} spec */
@@ -332,7 +367,7 @@ export function buildShopScene(stage, init) {
       // about 3.6 turns of the crank to one of the wheels in the gear a pull is made in).
       const wheelHz = dynoRpm > 0 ? dynoRpm / 60 / 3.6 : 0.3;
       const roll = wheelHz * 2 * Math.PI * 0.32 * dt;
-      dynoCar.roll?.(roll);
+      dynoCar?.roll?.(roll);
       for (const r of dyno.userData.rollers ?? []) r.rotation.x -= roll / 0.22;
       if (dyno.userData.fan && dynoRpm > 0) dyno.userData.fan.rotation.z += dt * 14;
       stage.followLight(new THREE.Vector3(0, 0, 0));

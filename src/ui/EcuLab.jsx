@@ -1756,6 +1756,12 @@ export function EcuLabApp() {
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
   const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  // CAREER: the car you are working on is the one on the dyno, and another job's car (if a
+  // lift holds one) is up on the lift. SANDBOX keeps the shop's own two.
+  const lookOf = (jobId) => { const c = jobId ? jobById(jobId)?.customer : null; return c ? { body: c.body, color: c.color } : null; };
+  const shopCars = inCareer
+    ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null), rollers: !roadTest }
+    : undefined;
   /** @type {import('./desk/Desk.jsx').Notice[]} */
   const deskNotices = [];
   if (inCareer) {
@@ -1795,7 +1801,7 @@ export function EcuLabApp() {
         onBay={() => deskGo('bay')} outside={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
-        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0}
+        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}
         status={<StatusStrip actions={false} />}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (

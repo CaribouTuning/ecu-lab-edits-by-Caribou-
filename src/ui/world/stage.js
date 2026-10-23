@@ -22,7 +22,8 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean, maxDpr?: number}} [opts]
+ *   `maxDpr` caps how many drawn pixels a sketch spends per screen pixel (default 2).
  *   `hatch: false` (a sketch only) leaves out the hatching and grain: clean, crisp ink
  *   outlines on the model's own colours, for a close-up such as the Build engine.
  *   `sketch` draws the scene as if doodled by hand instead of pixel art: full resolution,
@@ -179,7 +180,7 @@ export function createStage(canvas, opts = {}) {
       // A sketch is drawn at full resolution: pen lines, not pixels.
       // A sketch is drawn at the screen's own resolution, retina included (to 2x): pen
       // lines, not pixels, and sharp on a phone.
-      factor = opts.sketch ? 1 / Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
+      factor = opts.sketch ? 1 / Math.min(opts.maxDpr ?? 2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
       const { w: iw, h: ih } = stage.size;
       renderer.setSize(iw, ih, false);
       target.setSize(iw, ih);

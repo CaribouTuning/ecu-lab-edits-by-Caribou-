@@ -151,12 +151,13 @@ function Clock() {
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
  * @param {number} [props.rpm] that engine's speed while it runs
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
+ * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, status = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
@@ -261,7 +262,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} onPick={pick} onLook={onBay} />
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
