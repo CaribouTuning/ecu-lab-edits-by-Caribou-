@@ -6,7 +6,7 @@
  * simulator (evaluate.js), and the shop takes it from there.
  */
 
-import { ChevronDown, Store } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import React, { useState } from 'react';
 
 import { Button } from '../primitives/Button.jsx';
@@ -31,9 +31,8 @@ export function CareerBar({ career, onShop, onHandBack }) {
     return (
       <section className={styles.bar} aria-label="Job ticket">
         <div className={styles.row}>
-          <span className={styles.tag}>SHOP</span>
           <span className={styles.title}>No car on the bay</span>
-          <Button size="sm" variant="ghost" onClick={onShop}><Store size={14} aria-hidden="true" /> SHOP</Button>
+          <Button size="sm" variant="ghost" onClick={onShop}>Job board</Button>
         </div>
       </section>
     );
@@ -43,11 +42,10 @@ export function CareerBar({ career, onShop, onHandBack }) {
     <section className={styles.bar} aria-label="Job ticket">
       <div className={styles.row}>
         <button type="button" className={styles.head} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          <span className={styles.tag}>JOB</span>
-          <span className={styles.title}>{job.own ? 'Your car' : job.customer.name} · {job.customer.car}</span>
+          <span className={styles.title}>{job.own ? 'Your car' : job.customer.name}, {job.customer.car}</span>
           <ChevronDown size={15} aria-hidden="true" className={styles.chevron} />
         </button>
-        <Button size="sm" variant="ghost" onClick={onShop}><Store size={14} aria-hidden="true" /> SHOP</Button>
+        <Button size="sm" variant="ghost" onClick={onShop}>Job board</Button>
       </div>
       {open && (
         <div className={styles.body}>
@@ -59,7 +57,7 @@ export function CareerBar({ career, onShop, onHandBack }) {
           )}
           {!job.own && (
             <>
-              <div className={styles.sub}>WORK ORDER</div>
+              <div className={styles.sub}>Work order</div>
               <ul className={styles.list}>{job.work.map((w) => <li key={w}>{w}</li>)}</ul>
               <div className={styles.sub}>WHEN IT GOES HOME, IT HAS TO</div>
               <ul className={styles.list}>
@@ -72,7 +70,7 @@ export function CareerBar({ career, onShop, onHandBack }) {
           {job.build && <p className={styles.note}>An engine-building job: BUILD is open, and every part you choose is on the customer. Build to their list, then log and tune what you built.</p>}
           {roadOnly && <p className={styles.note}>No dyno yet: pulls are road tests. They log everything a wideband and the ECU see, but not horsepower.</p>}
           <div className={styles.actions}>
-            <Button size="sm" onClick={onHandBack}>{job.own ? 'PUT THE CAR AWAY' : 'HAND BACK THE CAR'}</Button>
+            <Button size="sm" onClick={onHandBack}>{job.own ? 'Put the car away' : 'Hand back the car'}</Button>
           </div>
         </div>
       )}

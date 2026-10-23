@@ -100,7 +100,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
       // A hair in front of the face, so the drawn one never shows through.
       obj.position.add(new THREE.Vector3(0, 0, 0.004).applyQuaternion(obj.quaternion));
       if (!flat) cssScene.add(obj);
-      return { name, sf, el, obj, px: 0, flat };
+      return { name, sf, el, obj, px: 0, flat, shape: 0 };
     });
     let sizeW = 0; let sizeH = 0;
     let wasMoving = true;
@@ -175,11 +175,22 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
           if (!f.flat) continue;
           f.el.style.display = f.obj.visible ? '' : 'none';
           if (!f.obj.visible) continue;
+          // Where the board is now (it hangs the tall way on a phone held upright).
+          f.sf.at.getWorldPosition(f.obj.position);
           // Its top-left and bottom-right corners on screen.
           corner.set(-f.sf.w / 2, f.sf.h / 2, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
           const x0 = ((corner.x + 1) / 2) * sizeW; const y0 = ((1 - corner.y) / 2) * sizeH;
           corner.set(f.sf.w / 2, -f.sf.h / 2, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
           const x1 = ((corner.x + 1) / 2) * sizeW;
+          // Laid out at the width it shows at, so its words are always the page's own size;
+          // only once the camera has stopped, so it is not laid out again every frame.
+          const pw = Math.round(x1 - x0);
+          if (!shop.moving() && pw > 100 && (Math.abs(pw - f.px) > 2 || f.shape !== f.sf.h / f.sf.w)) {
+            f.shape = f.sf.h / f.sf.w;
+            f.px = pw;
+            f.el.style.width = `${pw}px`;
+            f.el.style.height = `${Math.round((pw * f.sf.h) / f.sf.w)}px`;
+          }
           f.el.style.transform = `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px) scale(${((x1 - x0) / f.px).toFixed(4)})`;
         }
         if (scene) {

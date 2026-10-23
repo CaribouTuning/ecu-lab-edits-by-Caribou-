@@ -247,7 +247,7 @@ describe('a fully collapsed accordion', () => {
 
     enterSandbox();
     expect(screen.queryByText('Your tuning shop')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SHOP' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
   });
 });
 

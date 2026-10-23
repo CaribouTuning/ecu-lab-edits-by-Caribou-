@@ -158,7 +158,8 @@ export function buildShopScene(stage, init) {
   sign.position.set(-4.85, 3.3, -6.95);
   root.add(sign);
   // The job board on the left wall: a cork board of tickets, by the dyno.
-  root.add(box(0.12, 1.5, 2.2, W.woodLight, { x: -7.95, y: 2.1, z: -4.9 }));
+  const cork = box(0.12, 1.5, 2.2, W.woodLight, { x: -7.95, y: 2.1, z: -4.9 });
+  root.add(cork);
   // Its face, where the board's real tickets are pinned (the page's, ShopBackdrop.jsx); the
   // painted ones below stand in for them seen from across the shop.
   const boardAt = new THREE.Object3D();
@@ -306,6 +307,21 @@ export function buildShopScene(stage, init) {
     standMonitor: standCart.monitor, standConsole: standCart.console,
     board: { at: boardAt, w: 2.04, h: 1.4 },
   };
+  // Seen on a screen taller than wide, the board hangs the tall way (1.6 by 2.3 m), so its
+  // tickets fill the phone rather than a strip across it.
+  let boardTall = false;
+  const shapeBoard = (tall) => {
+    if (tall === boardTall) return;
+    boardTall = tall;
+    const [w, h] = tall ? [1.6, 2.3] : [2.2, 1.5];
+    cork.scale.set(1, h / 1.5, w / 2.2);
+    cork.position.y = tall ? 2.45 : 2.1;
+    boardAt.position.y = cork.position.y;
+    surfaces.board.w = w - 0.16;
+    surfaces.board.h = h - 0.1;
+    jobSign.position.y = cork.position.y + h / 2 + 0.45;
+    focusCache.clear();
+  };
 
   // ---- your desk, and the laptop on it ----
   const desk = new THREE.Group();
@@ -385,6 +401,7 @@ export function buildShopScene(stage, init) {
     /** @param {'desk'|'bay'|'dyno'|'stand'|'board'} pose */
     setPose(pose) {
       lastPose = pose;
+      shapeBoard(cam.aspect < 1);
       // The board is read square on, close enough to fill the screen: its view is its close-up.
       const p = focus ? focusPose(focus) : pose === 'board' ? focusPose('board')
         : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;

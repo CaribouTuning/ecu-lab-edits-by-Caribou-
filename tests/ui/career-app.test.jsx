@@ -61,13 +61,13 @@ describe('CAREER in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     expect(window.location.hash).toBe('#/tune/airflow');
     expect(screen.getByRole('region', { name: 'Tune' })).toBeTruthy();
-    expect(screen.getByText(/Marcus · 2006 Nissan 350Z/)).toBeTruthy();
+    expect(screen.getByText(/Marcus, 2006 Nissan 350Z/)).toBeTruthy();
     // The same laptop as SANDBOX's, with the career's apps: Build and Tune, not the
     // reading apps.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
     expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy();
     // The shop's paperwork is not on the laptop: it is the job board on the shop wall.
-    expect(screen.queryByRole('button', { name: 'SHOP' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'PHYSICS' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
@@ -81,8 +81,8 @@ describe('CAREER in the app', () => {
     fireEvent.change(screen.getByLabelText('MAF scalar'), { target: { value: '1.11' } });
 
     // Hand it back from the ticket.
-    fireEvent.click(screen.getByRole('button', { name: /JOB/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'HAND BACK THE CAR' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Marcus, 2006 Nissan 350Z/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hand back the car' }));
     expect(window.location.hash).toBe('#/shop');
     // Grading runs a full dyno pull on the real simulator; under a loaded test run that
     // can take longer than findByText's default second.
