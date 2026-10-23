@@ -86,8 +86,8 @@ describe('LearnScreen', () => {
     // Deliberately NOT wrapped in a store: this screen is constant, and a store read
     // creeping into it is exactly what would put it back in the 20 Hz re-render path.
     render(<LearnScreen active onToggle={noop} />);
-    expect(screen.getByText('PART 1 · FUNDAMENTALS')).toBeTruthy();
-    expect(screen.getByText('PART 3 · THE TUNING PROCESS')).toBeTruthy();
+    expect(screen.getByText('Part 1: Fundamentals')).toBeTruthy();
+    expect(screen.getByText('Part 3: The tuning process')).toBeTruthy();
   });
 
   it('is memoised, so a live-engine tick does not walk all thirty-nine articles', () => {

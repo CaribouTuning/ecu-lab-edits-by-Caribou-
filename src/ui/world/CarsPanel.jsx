@@ -79,16 +79,16 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
       <div className={styles.slotTabs} role="tablist" aria-label="Cars">
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'cars'} onClick={() => setMode('cars')}>MY CARS {cars.length}/{carLimit(career)}</button>
         <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'looks'} onClick={() => setMode('looks')} disabled={!sel}>LOOKS</button>
-        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'engine'} onClick={() => setMode('engine')} disabled={!sel}>ENGINE</button>
-        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'chassis'} onClick={() => setMode('chassis')} disabled={!sel}>CHASSIS</button>
-        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'lot'} onClick={() => setMode('lot')}>FOR SALE</button>
+        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'engine'} onClick={() => setMode('engine')} disabled={!sel}>Engine</button>
+        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'chassis'} onClick={() => setMode('chassis')} disabled={!sel}>Chassis</button>
+        <button type="button" role="tab" className={styles.slotTab} aria-selected={mode === 'lot'} onClick={() => setMode('lot')}>For sale</button>
       </div>
 
       {mode === 'cars' && (cars.length === 0 ? (
         <section className={styles.card}>
-          <div className={styles.tag}>NO CARS OF YOUR OWN YET</div>
+          <div className={styles.tag}>No cars of your own yet</div>
           <p className={styles.small}>Customers&rsquo; cars go home. Yours stay. Caribou Motors sells project cars from $900, ready to be tuned and raced.</p>
-          <Button size="sm" onClick={() => (atDealer ? setMode('lot') : onGo('dealer'))}>{atDealer ? 'SEE THE LOT' : 'GO TO CARIBOU MOTORS'}</Button>
+          <Button size="sm" onClick={() => (atDealer ? setMode('lot') : onGo('dealer'))}>{atDealer ? 'See the lot' : 'Go to Caribou Motors'}</Button>
         </section>
       ) : cars.map((car) => {
         const st = carState(career, car.id);
@@ -99,7 +99,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             <button type="button" className={styles.itemBtn} aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : car.id)}>
               <span className={styles.dot} style={{ background: W.paint[car.look.color] }} />
               <b>{car.name}</b>
-              <i>{onLift ? 'ON A LIFT' : 'PARKED'}</i>
+              <i>{onLift ? 'On a lift' : 'PARKED'}</i>
             </button>
             {isOpen && st && (
               <>
@@ -107,8 +107,8 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
                 <p className={styles.small}>Engine: {engineById(car.engine ?? engineForPreset(car.preset) ?? '')?.name ?? 'factory'}. Parts fitted: {car.parts.length ? car.parts.map((id) => partById(id)?.name ?? id).join(', ') : 'none: it is as it left the factory.'}</p>
                 <div className={styles.row}>
                   {!onLift && <Button size="sm" onClick={() => onDrive(car.id)}><Gauge size={13} aria-hidden="true" /> DRIVE</Button>}
-                  {onLift ? <Button size="sm" variant="ghost" onClick={() => update(stowFromLift(career, car.id))}>LOWER IT OFF THE LIFT</Button> : (
-                    <Button size="sm" variant="ghost" disabled={free <= 0} onClick={() => update(parkOnLift(career, car.id))}><Wrench size={13} aria-hidden="true" /> {free <= 0 ? 'NO FREE LIFT' : 'PUT IT ON A LIFT'}</Button>
+                  {onLift ? <Button size="sm" variant="ghost" onClick={() => update(stowFromLift(career, car.id))}>Lower it off the lift</Button> : (
+                    <Button size="sm" variant="ghost" disabled={free <= 0} onClick={() => update(parkOnLift(career, car.id))}><Wrench size={13} aria-hidden="true" /> {free <= 0 ? 'No free lift' : 'Put it on a lift'}</Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => setMode('looks')}><Paintbrush size={13} aria-hidden="true" /> LOOKS</Button>
                   <Button size="sm" variant="ghost" onClick={() => onTab('parts')}>PARTS</Button>
@@ -125,7 +125,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
       {mode === 'looks' && sel && (
         <div className={styles.grid1}>
           <section className={styles.card}>
-            <div className={styles.tag}>PAINT · {sel.name}</div>
+            <div className={styles.tag}>Paint: {sel.name}</div>
             <div className={styles.swatches}>
               {PAINTS.map((p) => {
                 const bought = p.price === 0 || owned.has(`paint:${p.id}`);
@@ -135,31 +135,31 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             <p className={styles.dim}>Standard colours are free. Specials cost once; after that they are yours to put on any car.</p>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>WHEELS</div>
+            <div className={styles.tag}>Wheels</div>
             <div className={styles.chips}>
               {WHEEL_SETS.map((w) => { const bought = w.price === 0 || owned.has(`wheels:${w.id}`); return <button key={w.id} type="button" className={styles.chip} aria-pressed={sel.look.wheels === w.id} disabled={!bought && career.money < w.price} onClick={() => update(restyleCar(career, sel.id, { wheels: w.id }))}>{w.id}{bought ? '' : ` ${money(w.price)}`}</button>; })}
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>SPOILER</div>
+            <div className={styles.tag}>Spoiler</div>
             <div className={styles.chips}>
               {SPOILERS.map((w) => { const bought = w.price === 0 || owned.has(`spoiler:${w.id}`); return <button key={w.id} type="button" className={styles.chip} aria-pressed={sel.look.spoiler === w.id} disabled={!bought && career.money < w.price} onClick={() => update(restyleCar(career, sel.id, { spoiler: w.id }))}>{w.id}{bought ? '' : ` ${money(w.price)}`}</button>; })}
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>WHEEL FINISH</div>
+            <div className={styles.tag}>Wheel finish</div>
             <div className={styles.chips}>
               {WHEEL_FINISHES.map((f) => <button key={f} type="button" className={styles.chip} aria-pressed={(sel.look.wheelColor ?? 'chrome') === f} onClick={() => update(restyleCar(career, sel.id, { wheelColor: f }))}>{f}</button>)}
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>STRIPES</div>
+            <div className={styles.tag}>Stripes</div>
             <div className={styles.chips}>
               {STRIPES.map((c) => <button key={String(c)} type="button" className={styles.chip} aria-pressed={(sel.look.stripes ?? null) === c} onClick={() => update(restyleCar(career, sel.id, { stripes: c }))}>{c ? `${c} stripes` : 'no stripes'}</button>)}
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>BODY KIT</div>
+            <div className={styles.tag}>Body kit</div>
             <div className={styles.chips}>
               {KITS.map((k) => {
                 const bought = owned.has(`kit:${k.id}`);
@@ -170,7 +170,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             <p className={styles.dim}>Arches and scoops change how a car looks, not how it goes: the car meet scores them, the strip does not.</p>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>STANCE, GLOW</div>
+            <div className={styles.tag}>Stance, glow</div>
             <div className={styles.chips}>
               {[0, 0.4, 0.8].map((v) => <button key={v} type="button" className={styles.chip} aria-pressed={sel.look.lowered === v} onClick={() => update(restyleCar(career, sel.id, { lowered: v }))}>{v === 0 ? 'stock height' : v < 0.5 ? 'lowered' : 'slammed'}</button>)}
               {UNDERGLOWS.map((u) => { const bought = u.price === 0 || owned.has(`glow:${u.id}`); return <button key={String(u.id)} type="button" className={styles.chip} aria-pressed={sel.look.underglow === u.id} disabled={!bought && career.money < u.price} onClick={() => update(restyleCar(career, sel.id, { underglow: u.id }))}>{u.id ? `${u.id.replace('neon', '').toLowerCase()} glow${bought ? '' : ` ${money(u.price)}`}` : 'no glow'}</button>; })}
@@ -185,7 +185,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
       {mode === 'engine' && sel && (
         <div className={styles.grid1}>
           <section className={styles.card}>
-            <div className={styles.tag}>ENGINE SWAP · {sel.name}</div>
+            <div className={styles.tag}>Engine swap: {sel.name}</div>
             <p className={styles.small}>A swapped engine comes out of its donor with its own ECU, on its factory calibration. The old engine&rsquo;s intake, exhaust, injectors and boost go with it; the tyres, gearing and weight work stay with the car. A heavier engine is a heavier car.{!canSwap && ' Swaps are done at your shop or at Gearhead Supply.'}</p>
           </section>
           {ENGINES.map((e) => {
@@ -193,7 +193,7 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
             const fitted = (sel.engine ?? engineForPreset(sel.preset)) === e.id;
             return (
               <section key={e.id} className={styles.card} data-active={fitted} aria-label={e.name}>
-                <div className={styles.itemHead}><b>{e.name}</b>{fitted && <i>FITTED</i>}</div>
+                <div className={styles.itemHead}><b>{e.name}</b>{fitted && <i>Fitted</i>}</div>
                 <p className={styles.small}>{e.blurb} {e.kg ? `About ${e.kg} kg more than the little 1.6.` : ''}</p>
                 {why && !fitted && <p className={styles.blocked}>{why}</p>}
                 {!fitted && <Button size="sm" disabled={!canSwap || !!why} onClick={() => { if (window.confirm(`Swap the ${e.name} into the ${sel.name} for ${money(e.price)}? The parts on the old engine go with it.`)) update(swapEngine(career, sel.id, e.id)); }}>SWAP IN · {money(e.price)}</Button>}
@@ -207,9 +207,9 @@ export function CarsPanel({ career, update, place, focus, onDrive, onGo, onTab }
         <div className={styles.grid1}>
           {!atDealer && (
             <section className={styles.card}>
-              <div className={styles.tag}>CARIBOU MOTORS</div>
+              <div className={styles.tag}>Caribou Motors</div>
               <p className={styles.small}>Today&rsquo;s stock is below. You can only buy at the dealership.</p>
-              <Button size="sm" variant="ghost" onClick={() => onGo('dealer')}>GO THERE</Button>
+              <Button size="sm" variant="ghost" onClick={() => onGo('dealer')}>Go there</Button>
             </section>
           )}
           {stock.length === 0 && <p className={styles.small}>Nothing on the lot for a shop of your standing today.</p>}

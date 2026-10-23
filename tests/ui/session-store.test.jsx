@@ -535,7 +535,7 @@ describe('banking a pull', () => {
         { timeout: 10000 },
       );
       fireEvent.click(screen.getByRole('button', { name: 'Score' }));
-      const measured = statTile('PULL SCORE');
+      const measured = statTile('Pull score');
       // Guard the setup: a scorecard showing nothing would make the comparison below
       // pass for the wrong reason.
       expect(Number(measured)).toBeGreaterThan(0);
@@ -548,7 +548,7 @@ describe('banking a pull', () => {
       // now would produce.
       fireEvent.click(screen.getByRole('button', { name: '40 kPa' }));
 
-      expect(statTile('PULL SCORE')).toBe(measured);
+      expect(statTile('Pull score')).toBe(measured);
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
     });
 
@@ -572,9 +572,9 @@ describe('banking a pull', () => {
       );
       fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       const measured = {
-        pull: statTile('PULL SCORE'),
-        tuning: statTile('TUNING SCORE'),
-        engineer: statTile('ENGINEER SCORE'),
+        pull: statTile('Pull score'),
+        tuning: statTile('Tuning score'),
+        engineer: statTile('Engineer score'),
       };
       expect(Number(measured.pull)).toBeGreaterThan(0);
 
@@ -589,9 +589,9 @@ describe('banking a pull', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Score' }));
 
       expect({
-        pull: statTile('PULL SCORE'),
-        tuning: statTile('TUNING SCORE'),
-        engineer: statTile('ENGINEER SCORE'),
+        pull: statTile('Pull score'),
+        tuning: statTile('Tuning score'),
+        engineer: statTile('Engineer score'),
       }).toEqual(measured);
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
     });
@@ -609,7 +609,7 @@ describe('banking a pull', () => {
         { timeout: 10000 },
       );
       fireEvent.click(screen.getByRole('button', { name: 'Score' }));
-      const measured = statTile('PULL SCORE');
+      const measured = statTile('Pull score');
 
       // A calibration edit, not a hardware one: SET_TABLE is what the undo stack
       // records, and the tables are the inputs a tuner changes most between pulls.
@@ -624,12 +624,12 @@ describe('banking a pull', () => {
       goTo('DYNO');
       fireEvent.click(screen.getByRole('button', { name: 'Score' }));
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
-      expect(statTile('PULL SCORE')).toBe(measured);
+      expect(statTile('Pull score')).toBe(measured);
 
       fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
 
       expect(screen.queryByText(/before your latest change/)).toBeNull();
-      expect(statTile('PULL SCORE')).toBe(measured);
+      expect(statTile('Pull score')).toBe(measured);
     });
   });
 });

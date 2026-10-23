@@ -57,7 +57,7 @@ export const MISSIONS = [
     blurb: 'Run the engine on the dyno and read what it tells you.',
     steps: [
       { text: 'Open DYNO.', check: at('dyno') },
-      { text: 'Press RUN DYNO PULL and let it finish.', check: pulledSince },
+      { text: 'Press Run a pull and let it finish.', check: pulledSince },
       { text: 'Open PULL LOG and read it, before the power number.', check: at('dyno', 'log') },
       { text: 'Open DATALOG and drag through the pull.', check: at('dyno', 'data') },
     ],
@@ -95,7 +95,7 @@ export const MISSIONS = [
       { text: 'Fit the Cold Air Intake on BUILD › INDUCTION.', check: (ctx) => !!ctx.state.build.mods.intake },
       { text: 'Run a pull.', check: pulledSince },
       {
-        text: 'On TUNE › AIRFLOW, press APPLY HALF under the table.',
+        text: 'On TUNE › AIRFLOW, press Apply half under the table.',
         check: (ctx) => ctx.state.tune.ve !== ctx.marks[ctx.marks.length - 1].ve,
         hint: 'CORRECT VE FROM LOGS is under the VE table. Select a cell and open the advisor to see its maths first.',
       },

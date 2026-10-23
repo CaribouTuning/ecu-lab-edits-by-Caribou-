@@ -7,7 +7,7 @@
  * would cost more than the 3-D scene does.
  */
 
-import { Camera, Gauge, Map as MapIcon, Menu, Moon, Settings, Smartphone, Sun, Sunset, Zap } from 'lucide-react';
+import { Camera, ChevronDown, ChevronUp, CircleParking, Gauge, Map as MapIcon, Menu, Moon, Settings, Smartphone, Sun, Sunset, Video, Zap } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { sfx } from './sfx.js';
@@ -237,12 +237,12 @@ export function TouchControls({ world, driving }) {
       </div>
       {driving ? (
         <div className={styles.pads}>
-          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('view')} aria-label="Change camera">CAM</button>
-          <button type="button" className={`${styles.pad} ${styles.padSmall}`} {...holdProps('handbrake')} aria-label="Handbrake">HB</button>
-          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftDown')} aria-label="Shift down">−</button>
-          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftUp')} aria-label="Shift up">+</button>
-          <button type="button" className={`${styles.pad} ${styles.padBrake}`} {...holdProps('brake')} aria-label="Brake">BRAKE</button>
-          <button type="button" className={`${styles.pad} ${styles.padGas}`} {...holdProps('throttle')} aria-label="Accelerator">GAS</button>
+          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('view')} aria-label="Change camera"><Video size={16} aria-hidden="true" /></button>
+          <button type="button" className={`${styles.pad} ${styles.padSmall}`} {...holdProps('handbrake')} aria-label="Handbrake"><CircleParking size={16} aria-hidden="true" /></button>
+          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftDown')} aria-label="Shift down"><ChevronDown size={18} aria-hidden="true" /></button>
+          <button type="button" className={`${styles.pad} ${styles.padSmall}`} onPointerDown={() => press('shiftUp')} aria-label="Shift up"><ChevronUp size={18} aria-hidden="true" /></button>
+          <button type="button" className={`${styles.pad} ${styles.padBrake}`} {...holdProps('brake')} aria-label="Brake">Brake</button>
+          <button type="button" className={`${styles.pad} ${styles.padGas}`} {...holdProps('throttle')} aria-label="Accelerator">Gas</button>
         </div>
       ) : (
         <div className={styles.pads}>
@@ -367,7 +367,7 @@ export function RaceHud({ hud, onRetire }) {
         <span>TIME <b>{t(hud.time)}</b></span>
         <span>BEST <b>{t(hud.best)}</b></span>
         {hud.gap != null && hud.phase === 'run' && <span>{hud.gap > 0 ? 'BEHIND' : 'AHEAD'} <b>{Math.abs(hud.gap).toFixed(0)} m</b></span>}
-        <button type="button" className={styles.raceRetire} onClick={onRetire}>RETIRE</button>
+        <button type="button" className={styles.raceRetire} onClick={onRetire}>Retire</button>
       </div>
     </div>
   );

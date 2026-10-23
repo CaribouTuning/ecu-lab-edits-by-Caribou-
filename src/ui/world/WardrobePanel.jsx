@@ -34,7 +34,7 @@ export function WardrobePanel({ career, update, canBuy, onGo }) {
       <div className={styles.summary}>
         <span><Sparkles size={13} aria-hidden="true" /> STYLE <b>{score}</b>/100</span>
         <span className={styles.dim}>{canBuy ? 'You are in the boutique: everything is for sale.' : 'Change into anything you own. New clothes are sold at Threads, in town.'}</span>
-        {!canBuy && onGo && <Button size="sm" variant="ghost" onClick={onGo}>GO TO THREADS</Button>}
+        {!canBuy && onGo && <Button size="sm" variant="ghost" onClick={onGo}>Go to Threads</Button>}
       </div>
       <div className={styles.slotTabs} role="tablist" aria-label="Wardrobe sections">
         {SLOTS.map((s) => (
@@ -51,13 +51,13 @@ export function WardrobePanel({ career, update, canBuy, onGo }) {
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>HAIRCUT</div>
+            <div className={styles.tag}>Haircut</div>
             <div className={styles.chips}>
               {HAIR_STYLES.map((h) => <button key={h.id} type="button" className={styles.chip} aria-pressed={look.hair === h.id} onClick={() => update(restyle(career, { hair: h.id }))}>{h.name}</button>)}
             </div>
           </section>
           <section className={styles.card}>
-            <div className={styles.tag}>HAIR COLOUR</div>
+            <div className={styles.tag}>Hair colour</div>
             <div className={styles.swatches}>
               {HAIR_COLORS.map((c) => <button key={c} type="button" className={styles.swatch} style={{ background: W.hair[c] }} aria-label={`Hair colour ${c}`} aria-pressed={look.hairColor === c} onClick={() => update(restyle(career, { hairColor: c }))} />)}
             </div>
@@ -78,7 +78,7 @@ export function WardrobePanel({ career, update, canBuy, onGo }) {
                 <ul className={styles.items}>{o.items.map((i) => <li key={i} data-have={owned.includes(i)}>{owned.includes(i) ? <Check size={11} aria-hidden="true" /> : <Lock size={11} aria-hidden="true" />} {itemById(i).name}</li>)}</ul>
                 {have ? <Button size="sm" onClick={() => update(wearOutfit(career, o.id))}><Shirt size={13} aria-hidden="true" /> WEAR</Button> : (
                   <Button size="sm" disabled={!canBuy || locked || career.money < price} onClick={() => update(buyOutfit(career, o.id))}>
-                    {!canBuy ? 'SOLD AT THREADS' : locked ? 'NEEDS MORE REP' : `BUY THE SET ${money(price)}`}
+                    {!canBuy ? 'Sold at Threads' : locked ? 'Needs more rep' : `BUY THE SET ${money(price)}`}
                   </Button>
                 )}
               </section>
@@ -92,7 +92,7 @@ export function WardrobePanel({ career, update, canBuy, onGo }) {
           {(slot === 'hat' || slot === 'glasses' || slot === 'extra') && (
             <section className={styles.card} data-active={look[slot] == null}>
               <div className={styles.tag}>NONE</div>
-              <Button size="sm" variant="ghost" onClick={() => update(wear(career, slot, null))}>TAKE IT OFF</Button>
+              <Button size="sm" variant="ghost" onClick={() => update(wear(career, slot, null))}>Take it off</Button>
             </section>
           )}
           {ITEMS.filter((i) => i.slot === slot).map((it) => {
@@ -112,7 +112,7 @@ export function WardrobePanel({ career, update, canBuy, onGo }) {
                 ) : (
                   <>
                     {why && <p className={styles.blocked}><Lock size={11} aria-hidden="true" /> {why}</p>}
-                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(buyItem(career, it.id))}>{canBuy ? `BUY ${money(it.price)}` : 'SOLD AT THREADS'}</Button>
+                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(buyItem(career, it.id))}>{canBuy ? `BUY ${money(it.price)}` : 'Sold at Threads'}</Button>
                   </>
                 )}
               </section>

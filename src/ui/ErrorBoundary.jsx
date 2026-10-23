@@ -37,7 +37,7 @@ export class ErrorBoundary extends React.Component {
         padding: 24, gap: 14,
       }}>
         <div style={{ fontSize: 10.5, letterSpacing: 2, color: T.accInk, fontWeight: 800 }}>
-          CARIBOU TUNING · ECU LAB
+          Caribou Tuning ECU Lab
         </div>
         <div style={{ fontSize: 21, fontWeight: 800 }}>Something broke.</div>
         <div style={{ fontSize: 13.5, color: T.ink2, lineHeight: 1.65, maxWidth: 520 }}>

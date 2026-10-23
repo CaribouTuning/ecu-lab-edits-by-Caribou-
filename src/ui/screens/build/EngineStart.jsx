@@ -37,7 +37,7 @@ export function PrebuiltEngines({ onPick }) {
                 <span className={styles.name}>{p.name}</span>
                 <span className={styles.spec}>
                   {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
-                  {p.induction.turboOn ? ' turbo' : ''} · {p.factory.crankHp} hp · {p.years}
+                  {p.induction.turboOn ? ' turbo' : ''}, {p.factory.crankHp} hp, {p.years}
                 </span>
               </button>
             ))}

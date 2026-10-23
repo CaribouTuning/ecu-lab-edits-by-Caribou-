@@ -265,11 +265,11 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
             <text x={PW - 8} y={PH - 13} className={styles.artText} textAnchor="end">V</text>
           </svg>
           <dl className={styles.liveEq}>
-            <dt>Crank angle</dt><dd>{f(phi, 0)}° of 720 · {f(th, 0)}° from TDC</dd>
+            <dt>Crank angle</dt><dd>{f(phi, 0)}° of 720, {f(th, 0)}° from TDC</dd>
             <dt>Piston pin</dt><dd>x = r cos θ + √(l² − r² sin² θ) = {f(xNow, 1)} mm</dd>
             <dt>Volume</dt><dd>V = V<sub>c</sub> + A(l + r − x) = {f(m.vc / 1000, 0)} + {f(m.area / 100, 1)} cm² × {f((m.l + m.r - xNow) / 10, 2)} cm = {f(V / 1000, 0)} cc</dd>
             <dt>Pressure</dt><dd>{strokeIdx === 1 ? <>p = p<sub>ivc</sub>(V<sub>max</sub>/V)<sup>1.32</sup> = </> : strokeIdx === 2 ? <>p = p<sub>ivc</sub>(V<sub>max</sub>/V)<sup>1.32</sup> × (1 + K x<sub>b</sub>), x<sub>b</sub> = {f(m.burned(phi) * 100, 0)}% burned = </> : strokeIdx === 0 ? <>p ≈ MAP = </> : <>p ≈ exhaust back-pressure = </>}{f(P, 1)} bar</dd>
-            <dt>Valves</dt><dd>intake {f(liftIn * 100, 0)}% open · exhaust {f(liftEx * 100, 0)}% open</dd>
+            <dt>Valves</dt><dd>intake {f(liftIn * 100, 0)}% open, exhaust {f(liftEx * 100, 0)}% open</dd>
             <dt>Spark</dt><dd>{f(p.timing, 1)}° before TDC (φ = {f(m.sparkPhi, 0)}°)</dd>
           </dl>
           <div className={styles.cutControls}>

@@ -110,7 +110,7 @@ describe('the CHANGES view', () => {
 });
 
 const dock = () => screen.getByTestId('selection-dock');
-const revertButton = () => within(dock()).queryByRole('button', { name: 'REVERT' });
+const revertButton = () => within(dock()).queryByRole('button', { name: 'Revert' });
 
 describe('REVERT and the changed count', () => {
   it('is hidden, and the title unchanged, when nothing differs', () => {

@@ -56,6 +56,7 @@ function saveProgress(bookId, p) {
  */
 export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }) {
   const LESSONS = book.lessons;
+  const bookName = book.label[0] + book.label.slice(1).toLowerCase();
   const [progress, setProgress] = useState(() => loadProgress(book.id));
   // null is the contents page; otherwise an index into LESSONS.
   const [at, setAt] = useState(/** @type {number|null} */ (null));
@@ -78,8 +79,8 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
     return (
       <div className={styles.screen}>
         <div className={styles.bar}>
-          <div className={styles.count}>{book.label} · CONTENTS</div>
-          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'SKIP' : 'CLOSE'}</Button>
+          <div className={styles.count}>{bookName} contents</div>
+          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'Skip' : 'Close'}</Button>
         </div>
         <div className={styles.body} ref={top}>
           <div className={styles.inner}>
@@ -106,24 +107,24 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
   return (
     <div className={styles.screen}>
       <div className={styles.bar}>
-        <div className={styles.count}>{book.label} · {at + 1}/{LESSONS.length}</div>
+        <div className={styles.count}>{bookName}, page {at + 1} of {LESSONS.length}</div>
         <div className={styles.barActions}>
           <Button variant="quiet" size="sm" onClick={() => setAt(null)}>
             <ListIcon size={14} aria-hidden="true" /> CONTENTS
           </Button>
-          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'SKIP' : 'CLOSE'}</Button>
+          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'Skip' : 'Close'}</Button>
         </div>
       </div>
 
       <div className={styles.body} ref={top}>
         <article className={styles.inner} key={lesson.id}>
-          <div className={styles.eyebrow}>{multiChapter ? `CHAPTER ${chapterNo} · ` : ''}{lesson.chapter.title.toUpperCase()}</div>
+          <div className={styles.eyebrow}>{multiChapter ? `Chapter ${chapterNo}: ` : ''}{lesson.chapter.title}</div>
           <h1 className={styles.title}><span className={styles.num}>{lesson.number}</span> {lesson.title}</h1>
           <Body />
           {mission && onPractice && (
             <div className={styles.practice}>
               <div>
-                <div className={styles.practiceTag}>PRACTICE IN THE GAME</div>
+                <div className={styles.practiceTag}>Practice in the game</div>
                 <div className={styles.practiceTitle}>{mission.title}</div>
                 <div className={styles.practiceText}>{mission.blurb} A checklist follows you through the game and ticks itself as you go.</div>
               </div>
@@ -153,7 +154,7 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
           <ChevronLeft size={16} aria-hidden="true" /> BACK
         </Button>
         {last && onCourse && (
-          <Button size="lg" variant="ghost" onClick={onCourse}>OPEN THE COURSE</Button>
+          <Button size="lg" variant="ghost" onClick={onCourse}>Open the course</Button>
         )}
         <Button size="lg" onClick={() => (last ? onDone() : setAt(at + 1))}>
           {last ? book.doneLabel : 'NEXT'}
@@ -177,11 +178,11 @@ function Contents({ book, read, onOpen, onPractice }) {
       <p className={styles.lede}>{book.lede}</p>
 
       <div className={styles.outcomes}>
-        <div className={styles.sectionHead}>BY THE END YOU WILL BE ABLE TO</div>
+        <div className={styles.sectionHead}>By the end you will be able to</div>
         <ul className={styles.outcomeList}>
           {book.outcomes.map((o) => <li key={o}>{o}</li>)}
         </ul>
-        <div className={styles.sectionHead}>YOU NEED</div>
+        <div className={styles.sectionHead}>You need</div>
         <p className={styles.need}>No car knowledge. Multiplication helps. Sound is optional.</p>
       </div>
 
@@ -191,7 +192,7 @@ function Contents({ book, read, onOpen, onPractice }) {
         {book.chapters.map((c, ci) => (
           <section key={c.id} className={styles.chapter}>
             <div className={styles.chapterHead}>
-              <span>{book.chapters.length > 1 ? `${ci + 1} · ` : ''}{c.title}</span>
+              <span>{book.chapters.length > 1 ? `${ci + 1}. ` : ''}{c.title}</span>
               <span className={styles.minutes}>{c.minutes} min</span>
             </div>
             <ul className={styles.lessonList}>
@@ -216,7 +217,7 @@ function Contents({ book, read, onOpen, onPractice }) {
 
       {onPractice && (
         <>
-          <div className={styles.sectionHead}>PRACTICE MISSIONS</div>
+          <div className={styles.sectionHead}>Practice missions</div>
           <p className={styles.need}>Hands-on, in the real game. A checklist follows you and ticks itself as you do each step.</p>
           <ul className={styles.missionList}>
             {MISSIONS.map((m) => (
@@ -241,7 +242,7 @@ function EndResult() {
   const { hp, tq } = peaks(d);
   return (
     <>
-      <div className={styles.sectionHead}>WHERE YOU ARE GOING</div>
+      <div className={styles.sectionHead}>Where you are going</div>
       <ScreenSnippet
         where="DYNO"
         demo={d}

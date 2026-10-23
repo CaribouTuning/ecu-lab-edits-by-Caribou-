@@ -85,10 +85,10 @@ describe('entry', () => {
     render(<EcuLab />);
     fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     // It opens on its contents page: what you will learn, then the chapters.
-    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
+    expect(screen.getByText('Tutorial contents')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
-    expect(screen.getByText(/TUTORIAL · 1\//)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
+    expect(screen.getByText(/Tutorial, page 1 of/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(screen.getByRole('region', { name: 'Build' })).toBeTruthy();
   });
 });

@@ -179,7 +179,7 @@ describe('AirflowScreen', () => {
     const log = veLog();
     mount(<AirflowScreen veLog={log} />);
     const region = within(screen.getByRole('region', { name: 'Correct VE from logs' }));
-    fireEvent.click(region.getByRole('button', { name: 'APPLY HALF' }));
+    fireEvent.click(region.getByRole('button', { name: 'Apply half' }));
     expect(log.onApply).toHaveBeenCalledWith(0.5);
     expect(region.getByRole('link', { name: 'TUNE › SENSORS' }).getAttribute('href')).toBe('#/tune/sensors');
   });
@@ -407,7 +407,7 @@ describe('SensorsScreen', () => {
     // the shell's computation, not to the mods/turboOn this same screen also reads
     // for the explanatory sub-note.
     mount(<SensorsScreen {...quietProps} needsMafRecal />);
-    expect(screen.getByText('HARDWARE CHANGED')).toBeTruthy();
+    expect(screen.getByText('Hardware changed')).toBeTruthy();
   });
 
   it('shows the FUEL TRIM chart only when the shell says a pull result exists', () => {

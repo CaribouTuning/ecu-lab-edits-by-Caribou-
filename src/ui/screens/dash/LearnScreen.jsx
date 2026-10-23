@@ -39,22 +39,22 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
       {/* The course is the way through this subject for someone learning it; the
           articles below are the reference it draws on. */}
       <a className={styles.course} href="#/course">
-        <span className={styles.courseTag}>THE TUNING COURSE</span>
+        <span className={styles.courseTag}>The tuning course</span>
         <span className={styles.courseTitle}>Learn to tune, start to finish</span>
         <span className={styles.courseText}>16 short lessons, about 40 minutes, a lesson at a time. Live game screens, worked maths with your engine&apos;s own numbers, a real bolt-on retune, and practice missions that tick themselves off in the game.</span>
-        <span className={styles.courseCta}>OPEN THE COURSE ›</span>
+        <span className={styles.courseCta}>Open the course ›</span>
       </a>
       <div className={styles.intro}>The articles: read in order, or dip in. Each explains a piece of what the live engine is doing right now.</div>
       {/* Reading paths: most readers arrive with a question, not a free afternoon. */}
       <div className={styles.paths}>
-        <div className={styles.pathsHead}>WHERE TO START</div>
+        <div className={styles.pathsHead}>Where to start</div>
         <div><b className={styles.em}>New to tuning:</b> the Tuning Course above, then 1–5 and 12–16.</div>
         <div><b className={styles.em}>Just fitted a part:</b> 42 and 43, then 45 for a whole job worked through.</div>
         <div><b className={styles.em}>Something is wrong on the dyno:</b> 44, troubleshooting by symptom.</div>
         <div><b className={styles.em}>How the game works it out:</b> 6–11, 26, 39 and 46.</div>
       </div>
 
-      <div className={`${styles.part} ${styles.partFirst}`}>PART 1 · FUNDAMENTALS</div>
+      <div className={`${styles.part} ${styles.partFirst}`}>Part 1: Fundamentals</div>
       <div className={styles.partGoal}>After this part you can say what the ECU decides, what VE and lambda are, and why timing makes torque until knock stops it.</div>
 
       <Article g="how" title="1. The whole thing in one paragraph">
@@ -92,26 +92,26 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br /><b className={styles.em}>How much is too much?</b> A common tuner's rule of thumb treats anything sustained above about 2° of retard as a problem to fix, not an operating point. Zero is the target.
       </Article>
 
-      <div className={styles.part}>PART 2 · WHAT THE ECU CALCULATES</div>
+      <div className={styles.part}>Part 2: What the ECU calculates</div>
       <div className={styles.partGoal}>After this part you can follow the ECU&apos;s arithmetic from manifold pressure to injector time to torque, with every symbol in plain words.</div>
 
       {/* Unnumbered, as it was in the reference build: a key to read the numbered
           articles by, not an article in the sequence. */}
       <Article g="engine" title="Symbol key — plain-English version">
         Read this once and the formulas below stop looking like maths and start looking like a description of what the engine is doing.
-        <br /><br /><b className={styles.em}>AIR SIDE</b>
+        <br /><br /><b className={styles.em}>Air side</b>
         <br /><span className={styles.formula}>MAP</span> — manifold absolute pressure. <i>How hard the air is being pushed toward the cylinder.</i> About 101 kPa is atmospheric; 20-30 kPa at idle, because the throttle is shut and the engine pulls vacuum; above 101 means a turbo is pushing. Formulas need it in pascals, so kPa × 1000.
         <br /><br /><span className={styles.formula}>T</span> — charge temperature in <b className={styles.em}>kelvin</b>, not celsius: add 273.15 to your °C. It has to be absolute because at 0 K a gas has no volume; celsius has no such meaning, and the formula would break.
         <br /><br /><span className={styles.formula}>R</span> — the gas constant for air, 287 J/(kg·K). <i>A property of air itself</i> — never a tuning value; it is the same on every engine on earth.
         <br /><br /><span className={styles.formula}>ρ</span> (rho) — air density in kg/m³. <i>How much air is actually packed into a given space.</i> Cold, dense air is more oxygen and more possible power, which is why the same car makes more power on a cold night.
         <br /><br /><span className={styles.formula}>VE</span> — volumetric efficiency, as a fraction. <i>How good the engine is at filling its own cylinders.</i> A 95% cell means the cylinder took in 95% of what its volume could hold at that pressure.
         <br /><br /><span className={styles.formula}>V_cyl</span> — swept volume of ONE cylinder in m³ (displacement ÷ cylinders). <span className={styles.formula}>Vd</span> — the whole engine's displacement in m³: a 3.5 L engine is 0.0035 m³.
-        <br /><br /><b className={styles.em}>FUEL SIDE</b>
+        <br /><br /><b className={styles.em}>Fuel side</b>
         <br /><span className={styles.formula}>stoichRatio</span> — the air:fuel mass ratio at which fuel and oxygen exactly consume each other. <i>A chemical property of the fuel, not a choice:</i> 14.7:1 for gasoline, 9.8:1 for E85.
         <br /><br /><span className={styles.formula}>λ</span> (lambda) — measured AFR ÷ that fuel's stoichRatio. <i>How rich or lean you are, expressed so it means the same thing on any fuel.</i> 1.00 is exactly balanced, 0.85 is 15% more fuel than strictly needed — rich, and where power lives — and 1.10 is lean.
         <br /><br /><span className={styles.formula}>LHV</span> — lower heating value, J/kg. <i>How much energy is in a kilogram of the fuel.</i> Gasoline about 44 MJ/kg, E85 about 29.2 MJ/kg. E85 has less energy per kilogram but you burn far more kilograms, which is why the power comes out similar.
         <br /><br /><span className={styles.formula}>PW</span> — injector pulse width, milliseconds. <i>How long the injector is held open.</i> The ECU does not command fuel; it commands time.
-        <br /><br /><b className={styles.em}>OUTPUT SIDE</b>
+        <br /><br /><b className={styles.em}>Output side</b>
         <br /><span className={styles.formula}>CR</span> — compression ratio: 10.3 means the mixture is squeezed into 1/10.3 of its starting volume.
         <br /><br /><span className={styles.formula}>η</span> (eta) — thermal efficiency, a fraction between 0 and 1. <i>The share of the fuel's chemical energy that becomes work instead of heat out of the exhaust.</i> Around 0.35 is typical; most of a fuel's energy genuinely leaves as heat.
         <br /><br /><span className={styles.formula}>MEP</span> — mean effective pressure. <i>The single average pressure that, pushing on the piston for one stroke, would do the same work the real, varying pressure does.</i> It lets engines of different sizes be compared fairly, and comes in three kinds:
@@ -120,7 +120,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><span className={styles.formula}>BMEP</span> — what is left and reaches the crank, IMEP − FMEP
         <br />A healthy naturally aspirated engine peaks around 11–14 bar BMEP. Below zero, the engine cannot even pay for its own losses — which is exactly what engine braking is.
         <br /><br /><span className={styles.formula}>MBT</span> — minimum spark advance for best torque. <i>The least advance that still makes maximum power.</i> "Minimum" matters: past MBT you gain nothing and only add knock risk.
-        <br /><br /><b className={styles.em}>TWO CONSTANTS THAT LOOK ARBITRARY</b>
+        <br /><br /><b className={styles.em}>Two constants that look arbitrary</b>
         <br /><span className={styles.formula}>4π</span> in the torque formula: a four-stroke fires once every <b className={styles.em}>two</b> crank revolutions. Work per cycle is MEP × Vd, and two revolutions is 4π radians, so torque = work ÷ angle = MEP × Vd ÷ 4π. A two-stroke fires every revolution and uses 2π.
         <br /><br /><span className={styles.formula}>120000</span> in the duty-cycle formula: one injection per two revolutions. Two revolutions at N rpm take 2 ÷ (N/60) seconds = 120/N seconds = <b className={styles.em}>120000/N milliseconds</b>. At 7500 rpm that is 16 ms — the injector's whole time budget.
       </Article>
@@ -173,7 +173,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br /><b className={styles.em}>Pumping loss</b> is the one people forget: at part throttle the engine is working hard to breathe against a closed throttle, and that shows up as wasted work. Under boost it flips — if the turbine is not choking the exhaust harder than the compressor is filling the intake, the gas-exchange loop can actually hand work back.
       </Article>
 
-      <div className={styles.part}>PART 3 · THE TUNING PROCESS</div>
+      <div className={styles.part}>Part 3: The tuning process</div>
       <div className={styles.partGoal}>After this part you can run the tuning loop, read a datalog, and tell a calibration fault from a hardware limit.</div>
 
       <Article g="how" title="12. The loop: change → pull → read → adjust">
@@ -213,7 +213,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br />And watch engine health on HOME. Damage here accumulates the way it does in reality: a few destructive pulls, not one dramatic failure.
       </Article>
 
-      <div className={styles.part}>PART 4 · GETTING IT TO THE GROUND</div>
+      <div className={styles.part}>Part 4: Getting it to the ground</div>
       <div className={styles.partGoal}>After this part you can explain why the same power runs different times: gearing, grip, weight transfer and drag.</div>
 
       <Article g="engine" title="17. A torque curve is only half of acceleration">
@@ -260,7 +260,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br /><b className={styles.em}>Elapsed time</b> is the combination, so improving it means working out which half is costing you. High trap but poor ET means grip and gearing, not more boost. Low trap means you actually need power. That is the same diagnostic habit as reading a pull log: find the cause, do not compensate for it downstream.
       </Article>
 
-      <div className={styles.part}>PART 5 · WHAT THE SIMULATOR IS DOING</div>
+      <div className={styles.part}>Part 5: What the simulator is doing</div>
       <div className={styles.partGoal}>After this part you can say where the model&apos;s numbers come from, what the rest of the ECU does, and where the simulator simplifies.</div>
 
       <Article g="engine" title="22. The turbo is a machine, not a boost knob">

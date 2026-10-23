@@ -258,7 +258,7 @@ describe('the tutorial', () => {
     fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     expect(window.location.hash).toBe('#/tutorial');
 
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(window.location.hash).toBe('#/build/engine');
   });
 });

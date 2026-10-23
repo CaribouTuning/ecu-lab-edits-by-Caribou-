@@ -287,7 +287,7 @@ function FirstPull() {
   return (
     <>
       <Goal learn="run a dyno pull and read the two charts it draws." need="Chapter 2." />
-      <P>There is no preview. Press <K>RUN DYNO PULL</K> and the engine sweeps from 1500 RPM to its redline at full throttle, recording every channel at every 100 RPM. That is the only way to find out what a change did, exactly like a real dyno day.</P>
+      <P>There is no preview. Press <K>Run a pull</K> and the engine sweeps from 1500 RPM to its redline at full throttle, recording every channel at every 100 RPM. That is the only way to find out what a change did, exactly like a real dyno day.</P>
       <ScreenSnippet
         where="DYNO › CURVES"
         demo={d}
@@ -307,8 +307,8 @@ function FirstPull() {
         Power is torque times speed. That is why the power peak comes later than the torque peak: past {tq.rpm} RPM the torque falls, but more slowly than the speed rises.
       </Worked>
       <Do steps={[
-        <>Open <K>DYNO</K> and press <K>RUN DYNO PULL</K>.</>,
-        <>Check <K>LAST PULL</K> in the strip: about {hp.hp} whp on the stock engine.</>,
+        <>Open <K>DYNO</K> and press <K>Run a pull</K>.</>,
+        <>Check <K>Last pull</K> in the strip: about {hp.hp} whp on the stock engine.</>,
       ]} />
       <Did>You measured the engine. From now on every change gets a pull, and every pull gets compared with the one before.</Did>
       <Trouble items={[
@@ -503,9 +503,9 @@ function VeFromLogs() {
       )}
       <Do steps={[
         <>Fit <K>Cold Air Intake</K> on <K>BUILD › INDUCTION</K>, then run a pull.</>,
-        <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>CORRECT VE FROM LOGS</K> now has samples.</>,
+        <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>Correct VE from logs</K> now has samples.</>,
         <>Select the 5500 RPM, 100 kPa cell and open the advisor to see its maths.</>,
-        <>Press <K>APPLY HALF</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,
+        <>Press <K>Apply half</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,
       ]} />
       <Did>You corrected a speed-density table from a wideband log, the way it is done on real cars, and you can check the software&apos;s working by hand.</Did>
       <Trouble items={[

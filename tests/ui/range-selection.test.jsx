@@ -95,8 +95,8 @@ describe('SelectionDock on a range', () => {
   it('interpolates and smooths, one undo step each', () => {
     mountAir();
     select({ type: 'range', r1: 0, c1: 0, r2: 2, c2: 3 });
-    fireEvent.click(within(dock()).getByRole('button', { name: 'INTERPOLATE' }));
-    fireEvent.click(within(dock()).getByRole('button', { name: 'SMOOTH' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Interpolate' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Smooth' }));
     expect(store.history.past.map((e) => e.label)).toEqual([
       'VE edit · interpolate · 12 cells',
       'VE edit · smooth · 12 cells',
@@ -106,8 +106,8 @@ describe('SelectionDock on a range', () => {
   it('hides INTERPOLATE and SMOOTH for a single cell', () => {
     mountAir();
     select({ type: 'cell', row: 1, col: 1 });
-    expect(within(dock()).queryByRole('button', { name: 'SMOOTH' })).toBeNull();
-    expect(within(dock()).queryByRole('button', { name: 'INTERPOLATE' })).toBeNull();
+    expect(within(dock()).queryByRole('button', { name: 'Smooth' })).toBeNull();
+    expect(within(dock()).queryByRole('button', { name: 'Interpolate' })).toBeNull();
   });
 
   it('goes back to ADD after the dock closes', () => {

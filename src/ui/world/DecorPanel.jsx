@@ -41,15 +41,15 @@ export function DecorPanel({ career, update, canBuy, onGo }) {
   return (
     <div className={styles.panel}>
       <div className={styles.summary}>
-        <span>YOUR SHOP, YOUR WAY</span>
+        <span>Your shop, your way</span>
         <span className={styles.dim}>{canBuy ? 'Everything here changes how the shop looks. None of it changes what it earns.' : 'Decor is sold at Gearhead Supply. You can swap what you own from anywhere.'}</span>
-        {!canBuy && <Button size="sm" variant="ghost" onClick={onGo}>GO TO GEARHEAD SUPPLY</Button>}
+        {!canBuy && <Button size="sm" variant="ghost" onClick={onGo}>Go to Gearhead Supply</Button>}
       </div>
       <Row slot="wall" list={WALLS} label="WALLS" swatch={(id) => W[id]} />
       <Row slot="floor" list={FLOORS} label="FLOOR" />
       <Row slot="neon" list={NEONS} label="NEON SIGN" swatch={(id) => W[id]} />
       <section className={styles.card}>
-        <div className={styles.tag}>EXTRAS</div>
+        <div className={styles.tag}>Extras</div>
         <div className={styles.grid1}>
           {EXTRAS.map((x) => {
             const have = d.extras.includes(x.id);

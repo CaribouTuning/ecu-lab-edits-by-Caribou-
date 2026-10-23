@@ -51,11 +51,11 @@ describe('SANDBOX with no engine yet', () => {
     launchBlank();
     goTo('BUILD');
     const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
-    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(form.getAllByRole('alert').length).toBeGreaterThanOrEqual(5);
     expect(screen.getByTestId('engine-start')).toBeTruthy();
     fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '400' } });
-    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(form.getByText(/^Between 75 and 105 mm\. Outside this range/)).toBeTruthy();
   });
 
@@ -69,7 +69,7 @@ describe('SANDBOX with no engine yet', () => {
     fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.1' } });
     fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '6500' } });
     expect(form.getByTestId('spec-displacement').textContent).toMatch(/5\.33 L/);
-    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(screen.queryByTestId('engine-start')).toBeNull();
     expect(screen.getByTestId('build-line').textContent).toMatch(/^5\.3L V8/);
   });
@@ -102,7 +102,7 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '81.4' } });
     fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.3' } });
     fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '7000' } });
-    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
     fireEvent.change(screen.getAllByRole('slider').find((s) => s.getAttribute('min') === '180'), { target: { value: '222' } });
@@ -140,7 +140,7 @@ describe('the form refuses what the simulator cannot answer for, and says why', 
     goTo('BUILD');
     const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
     fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '11500' } });
-    fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(form.getByText(/Between 4000 and 11000 rpm\. Past 11,000 rpm is racing-engine territory/)).toBeTruthy();
   });
 });

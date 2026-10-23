@@ -154,7 +154,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const stroke = derived?.stroke ?? 0; const bore = derived?.bore ?? 0;
   const pistonSpeed = (2 * (stroke / 1000) * p.rpm) / 60;
   const buildRows = /** @type {[string, string, string][]} */ ([
-    ['Cylinders', `${derived?.cyl ?? '—'} · ${derived?.configuration ?? ''}`, 'how many slices the work is split into'],
+    ['Cylinders', `${derived?.cyl ?? '—'}, ${derived?.configuration ?? ''}`, 'how many slices the work is split into'],
     ['Bore × stroke', `${f(bore, 1)} × ${f(stroke, 1)} mm`, `${f(vCylL * 1000, 0)} cc a cylinder, ${f(derived?.displacementL, 2)} L in all`],
     ['Compression', `${f(derived?.compression, 1)} : 1`, 'squeeze before the spark: more work per burn, closer to knock'],
     ['Cam duration', `${f(derived?.camDuration, 0)}°`, 'how long the valves stay open: shapes the VE curve'],
@@ -174,7 +174,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
             onChange={(e) => setIdx(Number(e.target.value))} aria-label="RPM" aria-valuetext={`${p.rpm} RPM`} />
         </label>
         <label className={styles.ctl}>
-          <span>Throttle <b>{load >= 100 ? 'wide open' : `${Math.round(((load - 20) / 80) * 100)} %`}</b> · manifold <b>{f(p.map, 0)} kPa</b></span>
+          <span>Throttle <b>{load >= 100 ? 'wide open' : `${Math.round(((load - 20) / 80) * 100)} %`}</b>, manifold <b>{f(p.map, 0)} kPa</b></span>
           <input type="range" min={20} max={100} step={10} value={load}
             onChange={(e) => setLoad(Number(e.target.value))} aria-label="Throttle" aria-valuetext={`${load} kPa`} />
         </label>
@@ -225,7 +225,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
               <text x={CW - 40} y={CH - 22} className={styles.curveText}>RPM</text>
             </svg>
           )}
-          <div className={styles.curveNums}>{p.rpm} RPM · {f(p.torque, 0)} lb-ft · {f(p.hp, 0)} hp · VE {f(p.ve, 0)} %</div>
+          <div className={styles.curveNums}>{p.rpm} rpm: {f(p.torque, 0)} lb-ft, {f(p.hp, 0)} hp, VE {f(p.ve, 0)} %</div>
         </section>
 
         <section className={styles.physPanel} aria-label="The raw physics model">

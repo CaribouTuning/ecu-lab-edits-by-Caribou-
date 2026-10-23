@@ -39,7 +39,7 @@ export function ChassisPanel({ career, update, car }) {
   return (
     <div className={styles.grid1}>
       <section className={styles.card}>
-        <div className={styles.tag}>CHASSIS · {car.name}</div>
+        <div className={styles.tag}>Chassis: {car.name}</div>
         <p className={styles.small}>Fitted: {fitted.length ? fitted.map((k) => CHASSIS_PARTS[k]).join(', ') : 'nothing: stock suspension and gearing. Tyre pressure and brake bias are always yours to set; the rest open with parts from Gearhead Supply.'}</p>
         {report ? (
           <dl className={styles.stats}>
@@ -65,7 +65,7 @@ export function ChassisPanel({ career, update, car }) {
           </section>
         );
       })}
-      <div className={styles.row}><Button size="sm" variant="ghost" onClick={() => update(resetChassis(career, car.id))}>BACK TO DEFAULTS</Button></div>
+      <div className={styles.row}><Button size="sm" variant="ghost" onClick={() => update(resetChassis(career, car.id))}>Back to defaults</Button></div>
     </div>
   );
 }

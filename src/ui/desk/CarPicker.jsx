@@ -38,7 +38,7 @@ export function CarPicker({ career, onPick, onClose }) {
           {own.map((c) => (
             <button key={c.id} type="button" className={`${styles.pickCar} ink-frame`} onClick={() => onPick({ ownId: c.id })}>
               <span className={styles.pickSwatch} style={{ background: c.look?.color }} aria-hidden="true"><Car size={18} /></span>
-              <span><b>{c.name}</b><small>Yours · {c.plate} · {Math.round(c.km ?? 0)} km</small></span>
+              <span><b>{c.name}</b><small>Yours, {c.plate}, {Math.round(c.km ?? 0)} km</small></span>
             </button>
           ))}
           {lifts.map((l, i) => {
@@ -47,7 +47,7 @@ export function CarPicker({ career, onPick, onClose }) {
             return (
               <button key={l.jobId} type="button" className={`${styles.pickCar} ink-frame`} onClick={() => onPick({ bay: i })}>
                 <span className={styles.pickSwatch} style={{ background: job.customer.color }} aria-hidden="true"><Car size={18} /></span>
-                <span><b>{job.customer.car}</b><small>{job.customer.name}&apos;s · road test from lift {i + 1}</small></span>
+                <span><b>{job.customer.car}</b><small>{job.customer.name}&apos;s, on lift {i + 1}</small></span>
               </button>
             );
           })}

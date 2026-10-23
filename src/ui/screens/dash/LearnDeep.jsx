@@ -176,7 +176,7 @@ function HowItRuns() {
 export function LearnDeep() {
   return (
     <>
-      <div className={styles.part}>PART 6 · TUNING IN DEPTH</div>
+      <div className={styles.part}>Part 6: Tuning in depth</div>
       <div className={styles.partGoal}>After this part you can run the VE-from-logs method by hand, tell a MAF error from a VE error, diagnose a pull from its symptoms, and say how the simulator gets its answers.</div>
       <Article g="ecu" lazy title="42. Correcting VE from logs, step by step"><VeFromLogs /></Article>
       <Article g="ecu" lazy title="43. MAF, speed-density, and telling their errors apart"><MafAndSd /></Article>

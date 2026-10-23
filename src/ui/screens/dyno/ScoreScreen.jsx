@@ -53,7 +53,7 @@ export function ScoreScreen({ scores, stale = false }) {
         </Note>
       )}
       <Panel className={styles.pullPanel}>
-        <div className={styles.pullLabel}>PULL SCORE</div>
+        <div className={styles.pullLabel}>Pull score</div>
         <div className={styles.pullValue}>{scores.pull}</div>
         {/* NEW BEST is a fact about the run that produced this number, decided when it
             was banked — not a live `pull >= bestScore` comparison, which is true by
@@ -66,7 +66,7 @@ export function ScoreScreen({ scores, stale = false }) {
       </Panel>
       <div className={styles.cardsRow}>
         {/** @type {Array<[string, {score: number, label: string}]>} */ (
-          [['TUNING SCORE', scores.tuning], ['ENGINEER SCORE', scores.engineer]]
+          [['Tuning score', scores.tuning], ['Engineer score', scores.engineer]]
         ).map(([label, s]) => {
           const c = statusColor(s.score);
           return (
@@ -88,7 +88,7 @@ export function ScoreScreen({ scores, stale = false }) {
       {scores.tuning.advisories?.length > 0 && (
         <div className={styles.advisoriesWrap}>
           <div className={styles.advisoriesLabel}>
-            HARDWARE TRADE-OFFS · NOT SCORED
+            Hardware trade-offs (not scored)
           </div>
           {scores.tuning.advisories.map((a, i) => (
             <div key={i} className={styles.advisory}>{a}</div>

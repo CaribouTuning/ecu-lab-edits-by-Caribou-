@@ -116,9 +116,9 @@ export function InductionScreen({ active, onToggle }) {
     <BuildSection
       active={active} onClick={() => onToggle('induction')}
       icon={Wind} label="Induction"
-      sub={`${turboOn ? `Turbo · ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine · peak ${Math.max(...boostCurve)} psi`
-        : blower ? `${blower.label} · ${ratio.toFixed(2)}:1 pulley · ~${peakBoost.toFixed(0)} psi`
-          : 'Not installed'}${nitrous ? ` · ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
+      sub={`${turboOn ? `Turbo, ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine, peak ${Math.max(...boostCurve)} psi`
+        : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${peakBoost.toFixed(0)} psi`
+          : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
       {/* The card markup below is verbatim out of the dissolved BoltonsScreen: a plain
           `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
@@ -275,12 +275,12 @@ export function InductionScreen({ active, onToggle }) {
         <div className={styles.subPanelInner}>
           <div className={styles.label}>Supercharger</div>
           <PickList
-            options={BLOWER_OPTS.map((o) => ({ label: `${o.label} · ${BLOWER_KIND[o.type]}`, value: o.id }))}
+            options={BLOWER_OPTS.map((o) => ({ label: `${o.label}, ${BLOWER_KIND[o.type]}`, value: o.id }))}
             value={blower.id} onChange={(v) => setBlower(v)} />
           <div className={styles.hint}>
             {blower.type === 'centrifugal'
-              ? `${blower.stepUp}:1 internal step-up · impeller rated ${rated.toLocaleString('en-US')} rpm · up to ${blower.boostCeiling} psi`
-              : `${blower.dispL} L per revolution · rated ${rated.toLocaleString('en-US')} rpm · up to ${Math.round(blower.etaPeak * 100)}% efficient`}
+              ? `${blower.stepUp}:1 internal step-up, impeller rated ${rated.toLocaleString('en-US')} rpm, up to ${blower.boostCeiling} psi`
+              : `${blower.dispL} L per revolution, rated ${rated.toLocaleString('en-US')} rpm, up to ${Math.round(blower.etaPeak * 100)}% efficient`}
           </div>
 
           <Panel tight style={{ marginBottom: 10 }}>

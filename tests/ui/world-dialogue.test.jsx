@@ -42,15 +42,15 @@ describe('the text box', () => {
     vi.useFakeTimers();
     const yes = vi.fn();
     const no = vi.fn();
-    const talk = { lines: [{ who: 'Gus', text: 'Want to see the kit?', choices: [{ label: 'SHOW ME', run: yes }, { label: 'NOT NOW', run: no }] }] };
+    const talk = { lines: [{ who: 'Gus', text: 'Want to see the kit?', choices: [{ label: 'Show me', run: yes }, { label: 'Not now', run: no }] }] };
     render(<Dialogue talk={talk} onDone={() => {}} sound={false} />);
     expect(screen.queryByRole('menuitem')).toBeNull();
     typeAll();
-    expect(screen.getAllByRole('menuitem').map((b) => b.textContent)).toEqual(['SHOW ME', 'NOT NOW']);
+    expect(screen.getAllByRole('menuitem').map((b) => b.textContent)).toEqual(['Show me', 'Not now']);
     fireEvent.keyDown(window, { code: 'ArrowDown' });
     fireEvent.keyDown(window, { code: 'Enter' });
     expect(no).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'SHOW ME' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show me' }));
     expect(yes).toHaveBeenCalledTimes(1);
   });
 });

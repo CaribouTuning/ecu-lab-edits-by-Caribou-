@@ -66,19 +66,26 @@ export function Computer({ label, screens, current, onScreen, title, status = nu
   return (
     <div className={styles.monitor} data-awake="true">
       <div className={styles.titleBar}>
+        <span className={styles.lights} aria-hidden="true">
+          <span className={styles.light} data-light="close" />
+          <span className={styles.light} data-light="min" />
+          <span className={styles.light} data-light="zoom" />
+        </span>
         <span className={styles.appName}>{title}</span>
         {status && <span className={styles.titleStatus}>{status}</span>}
       </div>
       {screens.length > 0 && (
         <nav className={styles.menu} aria-label={`${label} screens`}>
-          {screens.map((s) => (
-            <button
-              key={s.id} type="button" className={styles.menuItem} aria-pressed={current === s.id}
-              onClick={() => onScreen(s.id)}
-            >
-              {s.label}{s.flag && <span className={styles.flagged}> (new findings)</span>}
-            </button>
-          ))}
+          <span className={styles.segments}>
+            {screens.map((s) => (
+              <button
+                key={s.id} type="button" className={styles.menuItem} aria-pressed={current === s.id}
+                onClick={() => onScreen(s.id)}
+              >
+                {s.label}{s.flag && <span className={styles.flagged}> (new findings)</span>}
+              </button>
+            ))}
+          </span>
         </nav>
       )}
       <div className={styles.screen}>

@@ -32,13 +32,19 @@ export function DynoConsole({ roadTest, loadKpa, onLoad, nitrous, nitrousArmed, 
   return (
     <div className={styles.plate}>
       <div className={styles.group}>
-        <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
-        {/* The number on the key, the unit engraved above: three keys fit one row. */}
-        <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
-          {[100, 70, 40].map((k) => (
-            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
-          ))}
-        </div>
+        {/* A road test is one full-throttle pull: there is no load to choose. */}
+        {!roadTest && (
+          <>
+            <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
+            {/* The number on the key, the unit engraved above: three keys fit one row. */}
+            <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
+              {[100, 70, 40].map((k) => (
+                <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
+              ))}
+            </div>
+          </>
+        )}
+        {roadTest && <span className={styles.engraved}>Full throttle to redline</span>}
         {nitrous && (
           <button type="button" className={styles.toggle} aria-pressed={nitrousArmed} onClick={() => onNitrous(!nitrousArmed)} disabled={running}>
             Nitrous {nitrousArmed ? 'armed' : 'off'} <small>{nitrous.shotHp} shot, {nitrous.kit}</small>

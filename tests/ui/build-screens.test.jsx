@@ -143,9 +143,9 @@ describe('FuelSystemScreen', () => {
     // avoids also matching the PickList option button, which is still on screen
     // reading "650cc" after the click.
     mount(<FuelSystemScreen active onToggle={noop} />);
-    expect(screen.getByText('91 · 315cc (stock)')).toBeTruthy();
+    expect(screen.getByText('91, 315cc (stock)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '650cc' }));
-    expect(screen.getByText('91 · 650cc')).toBeTruthy();
+    expect(screen.getByText('91, 650cc')).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {

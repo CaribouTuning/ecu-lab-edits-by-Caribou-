@@ -52,15 +52,15 @@ describe('the tutorial is short', () => {
 
   it('opens on a short contents page, then counts through its cards', () => {
     render(<TutorialScreen onDone={() => {}} />);
-    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
-    expect(screen.getByText('BY THE END YOU WILL BE ABLE TO')).toBeTruthy();
+    expect(screen.getByText('Tutorial contents')).toBeTruthy();
+    expect(screen.getByText('By the end you will be able to')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'START' }));
-    expect(screen.getByText(`TUTORIAL · 1/${TUTORIAL.lessons.length}`)).toBeTruthy();
+    expect(screen.getByText(`Tutorial, page 1 of ${TUTORIAL.lessons.length}`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'NEXT' }));
-    expect(screen.getByText(`TUTORIAL · 2/${TUTORIAL.lessons.length}`)).toBeTruthy();
+    expect(screen.getByText(`Tutorial, page 2 of ${TUTORIAL.lessons.length}`)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
     fireEvent.click(screen.getByRole('button', { name: /BACK/ }));
-    expect(screen.getByText('TUTORIAL · CONTENTS')).toBeTruthy();
+    expect(screen.getByText('Tutorial contents')).toBeTruthy();
   });
 
   it('ends by offering the course, or the game', () => {
@@ -68,9 +68,9 @@ describe('the tutorial is short', () => {
     const onCourse = vi.fn();
     render(<TutorialScreen onDone={onDone} onCourse={onCourse} />);
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TUTORIAL.lessons.length} `) }));
-    fireEvent.click(screen.getByRole('button', { name: 'OPEN THE COURSE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open the course' }));
     fireEvent.click(screen.getByRole('button', { name: 'START TUNING' }));
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(onCourse).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledTimes(2);
   });
@@ -81,8 +81,8 @@ describe('from the tutorial to the course, in the app', () => {
     render(<EcuLab />);
     fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TUTORIAL.lessons.length} `) }));
-    fireEvent.click(screen.getByRole('button', { name: 'OPEN THE COURSE' }));
-    expect(screen.getByText('COURSE · CONTENTS')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the course' }));
+    expect(screen.getByText('Course contents')).toBeTruthy();
     expect(window.location.hash).toBe('#/course');
   });
 });
@@ -92,8 +92,8 @@ describe('the Tuning Course', () => {
 
   it('says what you will learn, what you need and how long, before lesson one', () => {
     course();
-    expect(screen.getByText('COURSE · CONTENTS')).toBeTruthy();
-    expect(screen.getByText('YOU NEED')).toBeTruthy();
+    expect(screen.getByText('Course contents')).toBeTruthy();
+    expect(screen.getByText('You need')).toBeTruthy();
     const minutes = COURSE.chapters.reduce((m, c) => m + c.minutes, 0);
     expect(screen.getByText(new RegExp(`About ${minutes} minutes`))).toBeTruthy();
   });
@@ -148,8 +148,8 @@ describe.each([
     const article = screen.getByRole('article');
     // The course's lessons carry the whole lesson shape; the tutorial's cards are short.
     if (book === COURSE) {
-      expect(within(article).getByText('YOU WILL')).toBeTruthy();
-      expect(within(article).getByText('WHAT YOU JUST DID')).toBeTruthy();
+      expect(within(article).getByText('You will')).toBeTruthy();
+      expect(within(article).getByText('What you just did')).toBeTruthy();
     }
     for (const fig of screen.queryAllByRole('figure')) {
       const name = fig.getAttribute('aria-label');
@@ -166,7 +166,7 @@ describe('a lesson’s screen is live', () => {
     // than the grid's displayed rounding (at 5500 RPM it is under one VE point).
     const cells = () => within(fig).getAllByRole('button', { name: / RPM, \d+(\.\d+)? kPa$/ }).map((b) => b.textContent).join('|');
     const before = cells();
-    fireEvent.click(within(fig).getByRole('button', { name: 'APPLY HALF' }));
+    fireEvent.click(within(fig).getByRole('button', { name: 'Apply half' }));
     expect(cells()).not.toBe(before);
     const panel = within(fig).getByRole('region', { name: 'Correct VE from logs' });
     expect(within(panel).getByText(/before you changed VE table .* run another pull/)).toBeTruthy();
@@ -182,8 +182,8 @@ describe('the numbers are the game’s', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' }));
     fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(), { timeout: 10000 });
-    const strip = document.querySelector('[data-tour="strip-last-pull"]');
-    expect(strip.textContent).toContain(`${Math.round(stock().result.peakHp)} whp`);
+    // At the dyno the computer's title bar carries the pull's peak, where the strip would.
+    expect(screen.getByText(new RegExp(`^Peak ${Math.round(stock().result.peakHp)} whp`))).toBeTruthy();
   }, DYNO_PULL_MS + 4000);
 
   it('each chapter-4 scenario says what the lesson says it does', () => {
@@ -278,14 +278,14 @@ describe('practice missions', () => {
     enterSandbox();
     // The laptop's Learn app is where the course lives.
     goTo('LEARN');
-    act(() => { window.location.hash = screen.getByRole('link', { name: /OPEN THE COURSE/ }).getAttribute('href'); window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
+    act(() => { window.location.hash = screen.getByRole('link', { name: /Open the course/ }).getAttribute('href'); window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
     fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
     const coach = screen.getByRole('region', { name: 'Practice mission' });
     expect(within(coach).getByText('0/4')).toBeTruthy();
     // Each click inside `goTo` is its own act(): the route has to land between them.
     goTo('DYNO');
     expect(within(screen.getByRole('region', { name: 'Practice mission' })).getByText('1/4')).toBeTruthy();
-    fireEvent.click(within(screen.getByRole('region', { name: 'Practice mission' })).getByRole('button', { name: 'STOP PRACTICE' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Practice mission' })).getByRole('button', { name: 'Stop practice' }));
     expect(screen.queryByRole('region', { name: 'Practice mission' })).toBeNull();
   });
 });

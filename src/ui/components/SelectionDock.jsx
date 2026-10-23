@@ -297,9 +297,9 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
       )}
       {(count > 1 || changed > 0) && (
         <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
-          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(interpolateRect(data, rect, bounds), 'interpolate')}>INTERPOLATE</Button>}
-          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(smoothRect(data, rect, bounds), 'smooth')}>SMOOTH</Button>}
-          {changed > 0 && <Button variant="ghost" size="sm" onClick={revert}>REVERT</Button>}
+          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(interpolateRect(data, rect, bounds), 'interpolate')}>Interpolate</Button>}
+          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(smoothRect(data, rect, bounds), 'smooth')}>Smooth</Button>}
+          {changed > 0 && <Button variant="ghost" size="sm" onClick={revert}>Revert</Button>}
         </div>
       )}
     </div>

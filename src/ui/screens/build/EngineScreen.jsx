@@ -131,7 +131,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
     <BuildSection
       active={active} onClick={() => onToggle('engine')}
       icon={Settings} label="Engine Architecture"
-      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration} · ${engineConfig.compression.toFixed(1)}:1 · ${engineConfig.camDuration}° cam`}
+      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}, ${engineConfig.compression.toFixed(1)}:1, ${engineConfig.camDuration}° cam`}
     >
       <div className={styles.label}>Start from a factory engine</div>
       <Select
@@ -152,7 +152,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
           // their prefix. That reads fine (VW is the badge, Volkswagen the
           // maker) and is not worth an abbreviation table in the UI layer.
           options: g.presets.map((p) => ({
-            label: `${p.name.replace(`${p.manufacturer} `, '')} · ${p.factory.crankHp} hp`,
+            label: `${p.name.replace(`${p.manufacturer} `, '')}, ${p.factory.crankHp} hp`,
             value: p.id,
           })),
         }))}
@@ -185,15 +185,15 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         <Panel tight style={{ marginBottom: 13 }}>
           <div className={styles.blurb}>{activePreset.blurb}</div>
           <div className={styles.statRow}>
-            <span>FACTORY RATING</span>
+            <span>Factory rating</span>
             <span className={styles.statValue}>
-              {activePreset.factory.crankHp} hp · {activePreset.factory.crankTq} lb-ft
+              {activePreset.factory.crankHp} hp, {activePreset.factory.crankTq} lb-ft
             </span>
           </div>
           <div className={styles.statRowLast}>
-            <span>YOUR LAST PULL</span>
+            <span>Your last pull</span>
             <span className={styles.pullValue} data-have={result ? 'true' : 'false'}>
-              {result ? `${result.peakHp} whp · ${result.peakTq} lb-ft` : 'no pull logged'}
+              {result ? `${result.peakHp} whp, ${result.peakTq} lb-ft` : 'no pull logged'}
             </span>
           </div>
           <div className={styles.footnote}>
@@ -250,8 +250,8 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
         </Note>
       )}
       <Panel tight style={{ marginBottom: 13 }}>
-        <div className={styles.displacementRow}><span>DISPLACEMENT</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
-        <div className={styles.displacementRow}><span>BORE : STROKE</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
+        <div className={styles.displacementRow}><span>Displacement</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
+        <div className={styles.displacementRow}><span>Bore : stroke</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
         <div className={styles.character}>{engineDerived.character}</div>
       </Panel>
 
@@ -268,7 +268,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Configuration</div>
-      <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} · ${CYL_COUNT[c]}cyl`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
+      <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} (${CYL_COUNT[c]} cyl)`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
       <ExpandableInfo title="Why cylinder count and layout matter">
         For the same total displacement, spreading it across more, smaller cylinders means a shorter flame path in each, so the burn finishes sooner and the end gas has less time to knock — a small real knock-margin benefit — and more, smaller firing pulses smooth the delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
       </ExpandableInfo>
@@ -292,7 +292,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       </div>
       <input type="range" min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
       <div className={styles.rangeCaption}>
-        <span>mild · low-end torque</span><span>wild · top-end power</span>
+        <span>mild, low-end torque</span><span>wild, top-end power</span>
       </div>
       <ExpandableInfo title="What camshaft duration actually does">
         Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
@@ -347,7 +347,7 @@ export function EngineScreen({ active, onToggle, engineDerived, activePreset, ve
       <Seg label="Cam followers" options={FOLLOWER_OPTS} value={engineConfig.follower ?? ((engineConfig.valvetrain ?? 'dohc') === 'dohc' ? 'flat' : 'roller')} onChange={(v) => setCfg({ follower: v })} equal />
       <div className={styles.labelSpaced}>
         Intake valve: {(engineConfig.intakeValveMm ?? TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore).toFixed(1)} mm × {intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}
-        {engineConfig.intakeValveMm == null && <span className={styles.overlapNote}> · typical for this head</span>}
+        {engineConfig.intakeValveMm == null && <span className={styles.overlapNote}>, typical for this head</span>}
       </div>
       <input type="range" aria-label="Intake valve diameter" min={25} max={60} step={0.5} value={engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2} onChange={(e) => setCfg({ intakeValveMm: Number(e.target.value) })} className={styles.slider} />
       <div className={styles.labelSpaced}>Spark plugs per cylinder</div>

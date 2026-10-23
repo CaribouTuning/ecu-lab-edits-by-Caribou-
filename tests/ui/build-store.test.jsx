@@ -283,7 +283,7 @@ describe('choosing a turbine', () => {
 
     // The Induction summary is where the count is legible: it reads "Twin
     // <housing> turbine" above 1 and the bare housing name at 1.
-    const inductionSummary = () => screen.getByText(/turbine · peak/).textContent;
+    const inductionSummary = () => screen.getByText(/turbine, peak/).textContent;
     expect(inductionSummary()).toMatch(/Twin/);
 
     fireEvent.click(screen.getByText('Induction'));
@@ -394,7 +394,7 @@ describe('correcting VE from a logged pull', () => {
     expect(screen.queryByRole('button', { name: 'ACCEPT RE-LOGGED VALUES' })).toBeNull();
     const panel = within(screen.getByRole('region', { name: 'Correct VE from logs' }));
     const veBefore = tune.ve.map((/** @type {number[]} */ r) => [...r]);
-    fireEvent.click(panel.getByRole('button', { name: 'APPLY HALF' }));
+    fireEvent.click(panel.getByRole('button', { name: 'Apply half' }));
 
     const changedRows = tune.ve.map((/** @type {number[]} */ row, /** @type {number} */ ri) => row.some((v, ci) => v !== veBefore[ri][ci]));
     expect(changedRows.some(Boolean)).toBe(true);
@@ -636,14 +636,14 @@ describe('every toggle', () => {
     // turbo switch would pass the whole suite.
     launch();
     fireEvent.click(screen.getByText('Induction'));
-    const summary = () => screen.getByText(/Not installed|turbine · peak/).textContent;
+    const summary = () => screen.getByText(/Not installed|turbine, peak/).textContent;
     expect(summary()).toBe('Not installed');
 
     fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
 
     expect(screen.getByRole('switch', { name: /Turbo kit/ }).getAttribute('aria-checked')).toBe('true');
     // And it reached the build, not just the switch: the section summary reads turboOn.
-    expect(summary()).toMatch(/turbine · peak/);
+    expect(summary()).toMatch(/turbine, peak/);
   });
 
   it('installs the intercooler when switched on, and reports it', () => {

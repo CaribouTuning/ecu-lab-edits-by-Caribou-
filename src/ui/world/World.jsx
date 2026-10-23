@@ -57,7 +57,7 @@ const TABS = [
   { id: 'cars', label: 'CARS', icon: Car, at: null },
   { id: 'parts', label: 'PARTS', icon: Cog, at: null },
   { id: 'wardrobe', label: 'WARDROBE', icon: Shirt, at: null },
-  { id: 'decor', label: 'SHOP DECOR', icon: Paintbrush, at: null },
+  { id: 'decor', label: 'Shop decor', icon: Paintbrush, at: null },
   { id: 'books', label: 'BOOKS', icon: Wallet, at: null },
 ];
 
@@ -74,7 +74,7 @@ const TALK_VARS = /** @type {React.CSSProperties} */ ({
  */
 const CLERKS = {
   supply: {
-    yes: 'SHOW ME',
+    yes: 'Show me',
     lines: (c) => [
       { who: 'Gus', text: c.rep < 10 ? 'New shop on Main Street, huh? Welcome. Lifts, a dyno, a wideband: tools first, then the clever stuff.' : 'Back again. Kit is restocked.' },
       { who: 'Gus', text: 'A tuner is only as good as what they can measure. A wideband reads the real air-fuel ratio. Guessing does not.' },
@@ -99,7 +99,7 @@ const CLERKS = {
     },
   },
   dealer: {
-    yes: 'SEE THE CARS',
+    yes: 'See the cars',
     lines: () => [{ who: 'Rita', text: 'Every car on this lot is a real engine with real numbers. Pick one you want to learn, not just one that is fast.' }],
   },
 };
@@ -135,14 +135,19 @@ const openPlaces = (c) => PLACES.filter((p) => !closedBecause(c, p));
  * @param {() => void} [props.onLearn]
  * @param {() => void} [props.onFlat] fall back to the flat shop (no WebGL, or the user asked)
  * @param {boolean} [props.preserve] keep the drawing buffer (screenshots in tests)
- * @param {{ownId?: string, bay?: number}|null} [props.start] begin out in town, driving this
+ * @param {{ownId?: string, bay?: number, roadTest?: boolean}|null} [props.start] begin out in town, driving this
  *   car (one of yours, or the customer's on a lift), rather than on foot in the shop
  * @param {(() => void)|null} [props.onHome] going back into the shop ends the trip: the
  *   shop is the laptop's, at your desk, so the world hands back instead of walking you in
+ * @param {(() => void)|null} [props.onRoadTest] with `start.roadTest`: the pull to redline is
+ *   done, and the player goes back to the logger to read it
  */
-export default function World({ career, update, onWork, onDyno, onMenu, onLearn, onFlat, preserve = false, start = null, onHome = null }) {
+export default function World({ career, update, onWork, onDyno, onMenu, onLearn, onFlat, preserve = false, start = null, onHome = null, onRoadTest = null }) {
   const onHomeRef = useRef(onHome);
   onHomeRef.current = onHome;
+  const onRoadTestRef = useRef(onRoadTest);
+  onRoadTestRef.current = onRoadTest;
+  const roadTest = !!start?.roadTest && !!onRoadTest;
   const canvasRef = useRef(null);
   const worldRef = useRef(/** @type {any} */ (null));
   const careerRef = useRef(career);
@@ -410,7 +415,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     if (!clerk) { open(); return; }
     const lines = clerk.lines(c);
     const last = lines[lines.length - 1];
-    say([...lines.slice(0, -1), { ...last, choices: [{ label: clerk.yes, run: () => { endTalk(); open(); } }, { label: 'NOT NOW', run: () => endTalk() }] }]);
+    say([...lines.slice(0, -1), { ...last, choices: [{ label: clerk.yes, run: () => { endTalk(); open(); } }, { label: 'Not now', run: () => endTalk() }] }]);
   }, [endTalk, goPhone, say, update]);
 
   const onAct = useCallback((e) => {
@@ -425,7 +430,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
         const here = c.lifts.filter((l) => !w?.away?.has(l.jobId));
         if (!here.length) { say([{ text: 'The laptop is on, but there is no car on a lift to plug it into. Take a customer from the board by the door, or put one of your own cars up.' }]); break; }
         if (here.length === 1) { open(here[0]); break; }
-        say([{ text: 'Which car do you plug the laptop into?', choices: [...here.map((l) => ({ label: name(l).toUpperCase(), run: () => { endTalk(); open(l); } })), { label: 'NOT NOW', run: () => endTalk() }] }]);
+        say([{ text: 'Which car do you plug the laptop into?', choices: [...here.map((l) => ({ label: name(l).toUpperCase(), run: () => { endTalk(); open(l); } })), { label: 'Not now', run: () => endTalk() }] }]);
         break;
       }
       case 'calendar': goPhone('today'); break;
@@ -643,23 +648,66 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     return () => { cancelAnimationFrame(raf); silenceDriveSound(); };
   }, [world, driving, racing, drawer, sheet]);
 
+  // The road test: one pull, flat out from low in a gear to redline. Released early, it
+  // starts again; done, the car is parked and the player is back at the logger.
+  const [pull, setPull] = useState(/** @type {'wait'|'pulling'|'done'} */ ('wait'));
+  useEffect(() => {
+    if (!world || !roadTest || !driving || pull === 'done') return undefined;
+    let held = false;
+    let from = 0;
+    let peak = 0;
+    let gear = 0;
+    const t = setInterval(() => {
+      const te = world.tele;
+      if (te.throttle < 0.9 || te.gear < 1) {
+        if (held) { held = false; setPull('wait'); }
+        return;
+      }
+      if (!held) { held = true; from = te.rpm; peak = te.rpm; gear = te.gear; setPull('pulling'); }
+      // The automatic changes up just short of redline at full throttle, so 95% of it
+      // counts, and so does a change up from within 15% of it.
+      const upshifted = te.gear > gear && peak >= te.redline * 0.85;
+      peak = Math.max(peak, te.rpm);
+      gear = te.gear;
+      if (from <= te.redline * 0.7 && (peak >= te.redline * 0.95 || te.limiter || upshifted)) {
+        clearInterval(t);
+        setPull('done');
+        toast(`Pull logged to ${Math.round(peak)} rpm. Back to the logger.`, 'ok');
+        setTimeout(() => {
+          const w = worldRef.current;
+          if (w?.drive) { w.exitCar(); w.dropCar(); }
+          silenceDriveSound();
+          onRoadTestRef.current?.();
+        }, 1400);
+      }
+    }, 50);
+    return () => clearInterval(t);
+  }, [world, roadTest, driving, pull === 'done', toast]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const tier = repTier(career.rep);
   const waitingUnseen = career.last && career.last.seq !== career.lastSeen;
   const where = place === 'garage' ? 'Your shop' : place === 'town' ? 'Town' : placeById(place)?.name ?? place;
   const objective = useMemo(() => {
+    if (roadTest && pull === 'done') return 'Pull logged. Back to the logger with it.';
+    if (roadTest) {
+      if (!driving) return 'Road test: get in the car (E) and do one full-throttle pull to redline, or go back to the shop to call it off.';
+      return pull === 'pulling'
+        ? 'Keep it flat to redline.'
+        : 'Road test: find a straight, floor it from low in a gear and hold full throttle to redline. You go back to the logger when it is done.';
+    }
     if (!settings.hints) return null;
     if (racing) return null;
     if (onHome && !driving && place !== 'town') return 'Have a look round. Leave by the door and you are back in your car.';
-    if (onHome && !driving) return 'Out in town. Get in and drive, or press BACK TO THE SHOP to go back to your desk.';
+    if (onHome && !driving) return 'Out in town. Get in and drive, or press Back to the shop to go back to your desk.';
     if (driving && outJob?.startsWith('own:')) return 'Your car, your town. The drag strip is off the highway to the north, the Raceway to the south: drive to the start and press E. The map shows the way.';
     if (driving) return 'Feel what your tune did. When you are done, drive to the shop and park it.';
-    if (outJob && onHome) return 'Drive back into your shop, or press BACK TO THE SHOP, to go back to your desk.';
+    if (outJob && onHome) return 'Drive back into your shop, or press Back to the shop, to go back to your desk.';
     if (outJob) return 'The customer’s car is parked outside: walk to it and press E, or drive it back to the shop.';
     if (career.last && career.last.seq !== career.lastSeen) return 'Read what the customer said: open the phone, then TODAY.';
     if (place !== 'garage' && place !== 'town') return null;
     if (career.lifts.length === 0) return place === 'garage' ? 'Walk to the board by the door and take a customer, or take your own car out from the apron.' : 'Head back to your shop on the main street.';
     return 'Look under the bonnet, then open the laptop at the desk and work out what is wrong.';
-  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, racing, outJob, place, onHome]);
+  }, [career.last, career.lastSeen, career.lifts.length, settings.hints, driving, racing, outJob, place, onHome, roadTest, pull]);
 
   /** Out on a drive from the desk: park whatever you are in and go back to the desk. */
   const goHome = () => {
@@ -736,7 +784,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
               <MapPin size={22} aria-hidden="true" />
               <h3>{tabInfo.at === 'garage' ? 'The board is at your shop' : `Go to ${placeById(tabInfo.at).name}`}</h3>
               <p>{placeById(tabInfo.at).blurb} {placeById(tabInfo.at).learn}</p>
-              <Button size="sm" onClick={() => fastTravel(tabInfo.at)}>TRAVEL THERE</Button>
+              <Button size="sm" onClick={() => fastTravel(tabInfo.at)}>Travel there</Button>
             </div>
           ) : drawer === 'cars' ? (
             <CarsPanel career={career} update={update} place={place} focus={focusCar} onDrive={(id) => { setDrawer(null); startDrive({ ownId: id }); }} onGo={fastTravel} onTab={setDrawer} />
@@ -786,25 +834,25 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const job = jobById(sheet.jobId);
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Under the bonnet">
-        <div className={styles.sheetTag}>UNDER THE BONNET · {job.customer.car}</div>
+        <div className={styles.sheetTag}>Under the bonnet of the {job.customer.car}</div>
         <p className={styles.lede}>You lift the bonnet and write down what is fitted. A fact is not a diagnosis: work out what each one does to the air and the fuel.</p>
         <dl className={styles.facts}>
           {sheet.facts.map((f) => (<React.Fragment key={f.label}><dt>{f.label}</dt><dd data-tone={f.tone}>{f.value}</dd></React.Fragment>))}
         </dl>
-        <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>GOT IT</Button></div>
+        <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>Got it</Button></div>
       </div>
     );
   }
   if (sheet.type === 'close') {
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Close up">
-        <div className={styles.sheetTag}>DAY {career.day} · CLOSING UP</div>
+        <div className={styles.sheetTag}>Closing up, day {career.day}</div>
         <h2 className={styles.sheetTitle}>Open tomorrow?</h2>
         <p className={styles.lede}>New customers come in every day, and the better your reputation, the bigger their jobs. Cars on the lifts wait overnight. Opening costs the running costs of ${overhead(career).toLocaleString('en-US')}: rent, and what the shop has grown into.</p>
         <div className={styles.sheetRow}>
-          <Button size="sm" onClick={onNextDay}>OPEN TOMORROW</Button>
-          {(career.phase ?? 0) < 3 && <Button size="sm" variant="ghost" onClick={onWait}>WAIT A FEW HOURS</Button>}
-          <Button size="sm" variant="ghost" onClick={onClose}>NOT YET</Button>
+          <Button size="sm" onClick={onNextDay}>Open tomorrow</Button>
+          {(career.phase ?? 0) < 3 && <Button size="sm" variant="ghost" onClick={onWait}>Wait a few hours</Button>}
+          <Button size="sm" variant="ghost" onClick={onClose}>Not yet</Button>
         </div>
         <p className={styles.lede}>{['It is morning.', 'It is afternoon.', 'It is evening: the car meet is on.', 'It is night.'][Math.min(3, career.phase ?? 0)]} Handing a car back moves the day along; so does waiting.</p>
       </div>
@@ -814,7 +862,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const have = new Set(career.ach ?? []);
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Trophies">
-        <div className={styles.sheetTag}>TROPHIES · {career.milestones.length} milestones · {have.size} of {ACHIEVEMENTS.length} medals</div>
+        <div className={styles.sheetTag}>Trophies: {career.milestones.length} milestones, {have.size} of {ACHIEVEMENTS.length} medals</div>
         <ul className={styles.places}>
           {ACHIEVEMENTS.map((a) => (
             <li key={a.id} data-closed={have.has(a.id) ? 'false' : 'true'}>
@@ -830,7 +878,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     if (!sheet.carId) {
       return (
         <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Fuel">
-          <div className={styles.sheetTag}>FUEL STOP</div>
+          <div className={styles.sheetTag}>Fuel stop</div>
           <h2 className={styles.sheetTitle}>Not your tank to fill</h2>
           <p className={styles.lede}>This is a customer&rsquo;s car, and the fuel in it is part of the job: octane is knock resistance, and a car running on the wrong grade is a car running on a tune it was not made for. Your own cars can be filled with any grade here.</p>
           <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>OK</Button></div>
@@ -841,7 +889,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const car = career.cars.find((x) => x.id === sheet.carId);
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Fuel">
-        <div className={styles.sheetTag}>FUEL STOP · {car?.name}</div>
+        <div className={styles.sheetTag}>Fuel stop{car ? `: ${car.name}` : ''}</div>
         <p className={styles.lede}>Pick what goes in the tank. The calibration does not change when the fuel does: a different grade moves the knock limit and the mixture the car wants, so retune after switching.</p>
         <ul className={styles.places}>
           {FUELS.map((f) => {
@@ -849,8 +897,8 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
             const here = st?.build.octaneIdx === f.idx;
             return (
               <li key={f.idx} data-closed={why ? 'true' : 'false'} data-here={here ? 'true' : 'false'}>
-                <div><b>{f.label} · ${f.price}</b><span>{why ?? f.note}</span></div>
-                <Button size="sm" variant={here ? 'ghost' : 'primary'} disabled={!!why || here} onClick={() => update(refuel(career, sheet.carId, f.idx))}>{here ? 'IN THE TANK' : 'FILL'}</Button>
+                <div><b>{f.label}, ${f.price}</b><span>{why ?? f.note}</span></div>
+                <Button size="sm" variant={here ? 'ghost' : 'primary'} disabled={!!why || here} onClick={() => update(refuel(career, sheet.carId, f.idx))}>{here ? 'In the tank' : 'FILL'}</Button>
               </li>
             );
           })}
@@ -878,7 +926,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const set = (patch) => setSettings({ ...settings, ...patch });
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Settings">
-        <div className={styles.sheetTag}>SETTINGS</div>
+        <div className={styles.sheetTag}>Settings</div>
         <div className={styles.sheetRow}>
           <span className={styles.lede}>Pixel size</span>
           {['chunky', 'normal', 'fine'].map((q) => <Button key={q} size="sm" variant={settings.quality === q ? 'primary' : 'ghost'} onClick={() => set({ quality: q })}>{q.toUpperCase()}</Button>)}
@@ -906,7 +954,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
         {onFlat && (
           <div className={styles.sheetRow}>
             <span className={styles.lede}>Shop view</span>
-            <Button size="sm" variant="ghost" onClick={() => { setSettings({ ...settings, view: 'flat' }); onFlat(); }}>USE THE FLAT SHOP</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setSettings({ ...settings, view: 'flat' }); onFlat(); }}>Use the flat shop</Button>
           </div>
         )}
         <p className={styles.lede}>Keys: WASD or arrows to walk, SHIFT to run, E to use, Q and R to turn the view, P for a photo. Driving: W/S gas and brake, A/D steer, SPACE handbrake, Z/X shift, V first-person view, T driver aids, L lights, BACKSPACE to straighten up.</p>
@@ -918,7 +966,7 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
     const open = openPlaces(career);
     return (
       <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Map">
-        <div className={styles.sheetTag}>MAP · {open.length} of {PLACES.length} places open</div>
+        <div className={styles.sheetTag}>Map: {open.length} of {PLACES.length} places open</div>
         {place === 'town' && <MiniMap world={world} big onPick={(id) => { if (!closedBecause(career, placeById(id))) { onClose(); onTravel(id); } }} />}
         <ul className={styles.places}>
           {PLACES.map((p) => {
@@ -943,8 +991,8 @@ function Sheet({ onFlat, sheet, career, settings, setSettings, onClose, onNextDa
 }
 
 const SERIES_INTRO = {
-  drag: { title: 'MAIN STREET DRAGS', text: 'The Main Street Kings run this strip, and the Champ runs the Kings. Beat them one at a time, in order. Each rival drives a real car on the same physics as yours: to beat a faster car, make yours faster, or launch better.' },
-  track: { title: 'CARIBOU RACEWAY', text: 'The club ladder: two laps, one rival at a time. On a circuit power only helps on the straights; in the corners grip is the speed limit, and the brakes decide who gets there first.' },
+  drag: { title: 'Main Street Drags', text: 'The Main Street Kings run this strip, and the Champ runs the Kings. Beat them one at a time, in order. Each rival drives a real car on the same physics as yours: to beat a faster car, make yours faster, or launch better.' },
+  track: { title: 'Caribou Raceway', text: 'The club ladder: two laps, one rival at a time. On a circuit power only helps on the straights; in the corners grip is the speed limit, and the brakes decide who gets there first.' },
 };
 
 /**
@@ -963,7 +1011,7 @@ function RaceMenu({ career, series, drivingId, onClose, onRace, onBring }) {
   const idle = (career.cars ?? []).filter((x) => !career.lifts.some((l) => l.jobId === ownJobId(x.id)));
   return (
     <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label={intro.title}>
-      <div className={styles.sheetTag}>{intro.title} · {won.length} of {list.length} beaten</div>
+      <div className={styles.sheetTag}>{intro.title}: {won.length} of {list.length} beaten</div>
       <p className={styles.lede}>{intro.text}</p>
       {!car ? (
         <>
@@ -974,7 +1022,7 @@ function RaceMenu({ career, series, drivingId, onClose, onRace, onBring }) {
         </>
       ) : (
         <div className={styles.sheetRow}>
-          <span className={styles.lede}>In the {car.name}{best ? ` · best ${best.toFixed(2)} s` : ''}</span>
+          <span className={styles.lede}>In the {car.name}{best ? `, best ${best.toFixed(2)} s` : ''}</span>
           <Button size="sm" variant="ghost" onClick={() => onRace(series, null)}>{series === 'drag' ? 'SOLO PASS' : 'TIMED LAPS'}</Button>
         </div>
       )}
@@ -987,7 +1035,7 @@ function RaceMenu({ career, series, drivingId, onClose, onRace, onBring }) {
           return (
             <li key={r.id} data-closed={locked ? 'true' : 'false'} data-here={isNext ? 'true' : 'false'}>
               <div>
-                <b>{done ? '\u2713 ' : isNext ? '\u25b6 ' : ''}{r.name} · {r.car}</b>
+                <b>{done ? '\u2713 ' : isNext ? '\u25b6 ' : ''}{r.name}, {r.car}</b>
                 <span>{locked ? (why ?? 'Locked: climb the ladder.') : `${isNext ? `\u201c${r.says}\u201d ` : ''}Entry $${r.fee}, ${done ? 'rematch pays' : 'prize'} $${prizeFor(career, r).toLocaleString('en-US')}.${why ? ` ${why}` : ''}`}</span>
               </div>
               {!locked && <Button size="sm" disabled={!car || !!why} onClick={() => onRace(series, r.id)}>{done ? 'REMATCH' : 'RACE'}</Button>}
@@ -1033,7 +1081,7 @@ function RaceResult({ r: sheet, onClose }) {
       {rival && <p className={styles.lede}>{paid >= 0 ? 'Won' : 'Lost'} <b>${Math.abs(paid).toLocaleString('en-US')}</b>{repGain > 0 ? `, and reputation +${repGain} for beating ${rival.name} for the first time` : ''}.</p>}
       {!rival && sheet.best && <p className={styles.lede}><b>A new best for this car.</b></p>}
       <ul className={styles.facts2}>{(talk ?? []).map((t) => <li key={t}>{t}</li>)}</ul>
-      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>CARRY ON</Button></div>
+      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>Carry on</Button></div>
     </div>
   );
 }
@@ -1045,7 +1093,7 @@ function MeetSheet({ career, onClose, onMeet }) {
   const why = cannotEnter(career, carId);
   return (
     <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Car meet">
-      <div className={styles.sheetTag}>CAR MEET · {career.meets ?? 0} shown so far</div>
+      <div className={styles.sheetTag}>Car meet: {career.meets ?? 0} shown so far</div>
       <p className={styles.lede}>The crowd judges three things, and each is yours to change: <b>build</b> (power for the weight, on the dyno), <b>tune</b> (how clean the pull log is) and <b>style</b> (the car&rsquo;s looks and your own outfit). First place pays $800 and a name.</p>
       {cars.length === 0 ? <p className={styles.lede}>You need a car of your own to show.</p> : (
         <div className={styles.sheetRow}>
@@ -1054,7 +1102,7 @@ function MeetSheet({ career, onClose, onMeet }) {
       )}
       {why && <p className={styles.lede}>{why}</p>}
       <div className={styles.sheetRow}>
-        <Button size="sm" disabled={!!why} onClick={() => onMeet(carId)}>SHOW THE CAR</Button>
+        <Button size="sm" disabled={!!why} onClick={() => onMeet(carId)}>Show the car</Button>
         <Button size="sm" variant="ghost" onClick={onClose}>CLOSE</Button>
       </div>
     </div>
@@ -1098,7 +1146,7 @@ function DinerSheet({ career, update, onClose }) {
   const goals = goalsFor(career);
   return (
     <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Pops' Diner">
-      <div className={styles.sheetTag}>TODAY&rsquo;S GOALS{career.streak ? ` · ${career.streak}-day streak` : ''}</div>
+      <div className={styles.sheetTag}>Today&rsquo;s goals{career.streak ? `, ${career.streak}-day streak` : ''}</div>
       <ul className={styles.places}>
         {goals.map((g) => {
           const n = progressOf(career, g);
@@ -1106,14 +1154,14 @@ function DinerSheet({ career, update, onClose }) {
           const got = claimed(career, g.id);
           return (
             <li key={g.id} data-closed={got ? 'true' : 'false'}>
-              <div><b>{g.text}</b><span>{g.kind === 'earn' ? `$${n} of $${g.target}` : g.kind === 'drive' ? `${n} of ${g.target} km` : `${n} of ${g.target}`} · ${g.reward}</span></div>
+              <div><b>{g.text}</b><span>{g.kind === 'earn' ? `$${n} of $${g.target}` : g.kind === 'drive' ? `${n} of ${g.target} km` : `${n} of ${g.target}`}, ${g.reward}</span></div>
               <Button size="sm" variant={done && !got ? 'primary' : 'ghost'} disabled={!done || got} onClick={() => update(claim(career, g.id))}>{got ? 'PAID' : 'CLAIM'}</Button>
             </li>
           );
         })}
       </ul>
       <p className={styles.lede}>All three in one day pays a bonus of $150 and a point of reputation.</p>
-      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>THANKS, POPS</Button></div>
+      <div className={styles.sheetRow}><Button size="sm" onClick={onClose}>Thanks, Pops</Button></div>
     </div>
   );
 }
@@ -1124,7 +1172,7 @@ function JunkSheet({ career, update, onClose }) {
   const why = cannotDig(career);
   return (
     <div className={styles.sheet} data-world-sheet="" role="dialog" aria-label="Scrapyard">
-      <div className={styles.sheetTag}>SPARKY&rsquo;S SCRAPYARD · {digsLeft(career)} digs left today</div>
+      <div className={styles.sheetTag}>Sparky&rsquo;s Scrapyard: {digsLeft(career)} digs left today</div>
       <p className={styles.lede}>A dig costs ${DIG_COST}. Pick a pile: what is in it depends on what the pile is.</p>
       {found && <p className={styles.lede}><b>{found.text}</b></p>}
       <ul className={styles.places}>

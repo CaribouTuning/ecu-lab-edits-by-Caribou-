@@ -422,13 +422,15 @@ export function buildShopScene(stage, init) {
     }
     const fov = 40;
     const tv = Math.tan(THREE.MathUtils.degToRad(fov / 2));
-    const dist = Math.max(w / (2 * 0.92 * tv * cam.aspect), h / (2 * 0.88 * tv));
+    // The page's header and the job bar cover the top of the view, about a ninth of it:
+    // the station is fitted below them, never under them.
+    const top = 0.11;
+    const dist = Math.max(w / (2 * 0.92 * tv * cam.aspect), h / (2 * (0.86 - top) * tv));
     // On a screen taller than wide the width decides the distance and leaves height to spare:
-    // the station rides up to the top of the view rather than floating mid-screen over the
-    // cart's empty base.
-    const spare = Math.max(0, 2 * dist * tv * 0.94 - h);
-    // A quarter of it, not half: the page's own header covers the top of the view.
-    const look = center.clone().addScaledVector(up, -spare / 4);
+    // the station rides up to just under the header rather than floating mid-screen over
+    // the cart's empty base.
+    const spare = Math.max(0, 2 * dist * tv * (0.94 - top) - h);
+    const look = center.clone().addScaledVector(up, top * dist * tv - spare / 2);
     const p = { pos: look.clone().addScaledVector(dir, dist), look, fov, exact: true };
     focusCache.set(key, p);
     return p;

@@ -105,7 +105,7 @@ function PullAndRead() {
   const d = overAdvanced();
   return (
     <>
-      <P>There is no preview. On <K>DYNO</K>, press <K>RUN DYNO PULL</K>: the engine sweeps to redline and logs everything. Then read the <b>Pull Log</b> before the power number. Here is one from an engine with too much spark:</P>
+      <P>There is no preview. On <K>DYNO</K>, press <K>Run a pull</K>: the engine sweeps to redline and logs everything. Then read the <b>Pull Log</b> before the power number. Here is one from an engine with too much spark:</P>
       <ScreenSnippet
         where="DYNO › PULL LOG"
         demo={d}

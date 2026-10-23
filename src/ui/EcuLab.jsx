@@ -239,7 +239,7 @@ export function EcuLabApp() {
     if (next !== career) dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
   }, [career, mode, dispatch]);
   // CAREER: the car you took out into town, and whether you are choosing one.
-  const [outsideCar, setOutsideCar] = useState(/** @type {{ownId?: string, bay?: number}|null} */ (null));
+  const [outsideCar, setOutsideCar] = useState(/** @type {{ownId?: string, bay?: number, roadTest?: boolean}|null} */ (null));
   const outsideCarRef = useRef(outsideCar);
   outsideCarRef.current = outsideCar;
   const [pickCar, setPickCar] = useState(false);
@@ -626,9 +626,25 @@ export function EcuLabApp() {
   // at the load its throttle asks for. Stable while the setup is, so it can cache them.
   const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A road test is driven, not simulated where you sit: out in town in the car, one
+  // full-throttle pull to redline, then back at the logger with what it saw. Set while
+  // the player is on their way back, so the pull that lands is logged rather than sent
+  // out again.
+  const roadTestBackRef = useRef(false);
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
     if (engineMissing) return;
+    if (roadTest && !roadTestBackRef.current && inCareer) {
+      const bay = career.lifts.findIndex((l) => l.jobId === career.working);
+      if (bay >= 0) {
+        // The car goes out as it is on the laptop now, not as it was when it came in.
+        dispatch({ type: ACTIONS.CAREER_UPDATE, career: storeCar(career, career.working, { build, tune }) });
+        setOutsideCar({ bay, roadTest: true });
+        navigate({ view: 'outside', tab: null, section: null });
+        return;
+      }
+    }
+    roadTestBackRef.current = false;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     // The reveal animation's own state: `running` gates the RUN button's label and the
@@ -637,7 +653,8 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
+    // A road test was driven flat out, whatever load the dyno's keys were left on.
+    const r = simulateSweep(sweepArgs(roadTest ? 100 : loadKpa, ecuBundle));
     // Cells TUNE says are past the knock limit that THIS pull did not run: its log cannot
     // show them, so they cost the score here instead of leaving it at "Dialed In". Judged
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
@@ -722,6 +739,19 @@ export function EcuLabApp() {
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
+  // The car is put away once the town has gone, not before: cleared while the town is
+  // still the view, the guard that sends a town with no car back to the shop would win.
+  const wasOutside = useRef(false);
+  useEffect(() => {
+    if (wasOutside.current && appView !== 'outside') setOutsideCar(null);
+    wasOutside.current = appView === 'outside';
+  }, [appView]);
+  // Back from the road test, in front of the logger: the pull it recorded lands now.
+  const doRunRef = useRef(doRun);
+  doRunRef.current = doRun;
+  useEffect(() => {
+    if (roadTestBackRef.current && appView === 'app' && tab === 'dyno') doRunRef.current();
+  }, [appView, tab]);
 
   // Keep the live-engine config in a ref so the loop always uses current tuning
   // without needing to restart the interval every time a table changes.
@@ -1161,6 +1191,8 @@ export function EcuLabApp() {
   // CAREER: the TUNE pages and ECU settings a shop can use grow with its training. A
   // locked page still shows in the nav, with a padlock, so the player can see what
   // there is to learn; opening one says which course opens it.
+  // At the dyno or the engine stand the computer's own title bar says what the strip would.
+  const atStation = appView === 'app' && (tab === 'dyno' || tab === 'live');
   const tuneOpen = tab === 'tune' && !engineMissing && (!inCareer || !!career.working);
   const lockedPage = inCareer && tuneView != null && !pageUnlocked(career, tuneView) ? tuneView : null;
   const tunePage = tuneOpen && !lockedPage;
@@ -1276,6 +1308,7 @@ export function EcuLabApp() {
           career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })}
           onWork={() => goTab('tune')} onDyno={() => goTab('dyno')} onMenu={goMenu} onLearn={goCourse}
           start={outsideCar} onHome={() => { setOutsideCar(null); navigate({ view: 'bay', tab: null, section: null }); }}
+          onRoadTest={() => { roadTestBackRef.current = true; goTab('dyno'); }}
         />
       </React.Suspense>
     );
@@ -1748,7 +1781,7 @@ export function EcuLabApp() {
         )}
         {/* An app's status bar is the window's own (Desk's footer); a page in the shop
             keeps the strip at its top. */}
-        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
+        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' && !atStation ? <StatusStrip actions={false} /> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}

@@ -13,7 +13,7 @@
 .card { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-sm); padding: var(--sp-md); border: 2px solid var(--line); background: var(--panel); border-radius: var(--r-md); }
 .card[data-active='true'] { border-color: var(--acc); background: var(--acc-bg); }
 .card[data-owned='false'] { opacity: 0.92; }
-.tag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.16em; color: var(--ink3); }
+.tag { font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
 .small { margin: 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-soft); }
 .blocked { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: var(--fs-xs); color: var(--warn-ink); }
 .itemHead { display: flex; align-items: center; gap: 5px; font-size: var(--fs-sm); }

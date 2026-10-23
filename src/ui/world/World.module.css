@@ -320,7 +320,7 @@
   border-radius: 12px;
 }
 .sheetTitle { margin: 0; font-size: var(--fs-lg); font-weight: 800; }
-.sheetTag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.16em; color: var(--acc-ink); }
+.sheetTag { font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
 .sheetRow { display: flex; flex-wrap: wrap; gap: var(--sp-sm); }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px var(--sp-lg); margin: 0; font-size: var(--fs-sm); }
 .facts dt { font-weight: 800; color: var(--ink2); }

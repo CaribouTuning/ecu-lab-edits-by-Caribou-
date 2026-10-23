@@ -59,7 +59,7 @@ export function CareerBar({ career, onShop, onHandBack }) {
             <>
               <div className={styles.sub}>Work order</div>
               <ul className={styles.list}>{job.work.map((w) => <li key={w}>{w}</li>)}</ul>
-              <div className={styles.sub}>WHEN IT GOES HOME, IT HAS TO</div>
+              <div className={styles.sub}>When it goes home, it has to</div>
               <ul className={styles.list}>
                 {job.checks.map((c) => (
                   <li key={c.label}>{c.label}{HOW_TO_SEE[c.type] && <span className={styles.how}>{HOW_TO_SEE[c.type]}</span>}</li>

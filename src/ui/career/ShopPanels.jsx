@@ -247,8 +247,8 @@ export function LessonDialog({ lesson, onClose, onLearn }) {
         <p className={styles.small}><b>Opens:</b> {[...t.pages.map((pg) => `TUNE › ${pg.toUpperCase()}`), ...(t.sections ?? []).map((sc) => `the ECU settings on TUNE › ${sc.toUpperCase()}`)].join(', ')}.</p>
         {t.deeper && <p className={styles.small}><b>Go deeper:</b> {t.deeper}{onLearn ? '.' : ''}</p>}
         <div className={styles.row}>
-          <Button size="sm" onClick={onClose}>GOT IT</Button>
-          {onLearn && <Button size="sm" variant="ghost" onClick={onLearn}>OPEN THE COURSE</Button>}
+          <Button size="sm" onClick={onClose}>Got it</Button>
+          {onLearn && <Button size="sm" variant="ghost" onClick={onLearn}>Open the course</Button>}
         </div>
       </div>
     </div>

@@ -12,8 +12,8 @@ import { Button } from '../primitives/Button.jsx';
 import styles from './Panels.module.css';
 
 const GROUPS = [
-  { id: 'air', label: 'AIR IN' }, { id: 'exhaust', label: 'EXHAUST OUT' }, { id: 'fuel', label: 'FUEL' }, { id: 'engine', label: 'ENGINE' },
-  { id: 'boost', label: 'BOOST AND NITROUS' }, { id: 'chassis', label: 'SUSPENSION' }, { id: 'drive', label: 'TYRES, GEARING, DIFF, WEIGHT' },
+  { id: 'air', label: 'AIR IN' }, { id: 'exhaust', label: 'Exhaust out' }, { id: 'fuel', label: 'FUEL' }, { id: 'engine', label: 'ENGINE' },
+  { id: 'boost', label: 'Boost and nitrous' }, { id: 'chassis', label: 'SUSPENSION' }, { id: 'drive', label: 'TYRES, GEARING, DIFF, WEIGHT' },
 ];
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
@@ -28,7 +28,7 @@ export function PartsPanel({ career, update, canBuy, onGo }) {
     return (
       <div className={styles.panel}>
         <section className={styles.card}>
-          <div className={styles.tag}>PARTS ARE FOR YOUR OWN CARS</div>
+          <div className={styles.tag}>Parts are for your own cars</div>
           <p className={styles.small}>A customer&rsquo;s car arrives with whatever its owner fitted. Parts are for cars that are yours: buy one at Caribou Motors first.</p>
         </section>
       </div>
@@ -37,12 +37,12 @@ export function PartsPanel({ career, update, canBuy, onGo }) {
   return (
     <div className={styles.panel}>
       <div className={styles.summary}>
-        <span>FITTING TO</span>
+        <span>Fitting to</span>
         <div className={styles.chips}>
           {cars.map((c) => <button key={c.id} type="button" className={styles.chip} aria-pressed={car?.id === c.id} onClick={() => setCarId(c.id)}>{c.name}</button>)}
         </div>
         <span className={styles.dim}>{canBuy ? 'Fitting a part changes the hardware and leaves the calibration alone. Retune afterwards.' : 'Parts are fitted at your shop’s bench, or at Gearhead Supply.'}</span>
-        {!canBuy && <Button size="sm" variant="ghost" onClick={onGo}>GO TO GEARHEAD SUPPLY</Button>}
+        {!canBuy && <Button size="sm" variant="ghost" onClick={onGo}>Go to Gearhead Supply</Button>}
       </div>
       {GROUPS.map((g) => (
         <div key={g.id} className={styles.grid1}>
@@ -58,7 +58,7 @@ export function PartsPanel({ career, update, canBuy, onGo }) {
                 {fitted ? <span className={styles.small}><Check size={12} aria-hidden="true" /> Fitted</span> : (
                   <>
                     {why && <p className={styles.blocked}><Lock size={11} aria-hidden="true" /> {why}</p>}
-                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(fitPart(career, car.id, p.id))}>{canBuy ? `FIT ${money(p.price)}` : 'AT THE SHOP'}</Button>
+                    <Button size="sm" disabled={!canBuy || !!why} onClick={() => update(fitPart(career, car.id, p.id))}>{canBuy ? `FIT ${money(p.price)}` : 'At the shop'}</Button>
                   </>
                 )}
               </section>
