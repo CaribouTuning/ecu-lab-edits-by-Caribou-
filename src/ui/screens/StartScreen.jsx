@@ -20,7 +20,7 @@ const WAYS_IN = [
   { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];
 
-/** The three ways in, doodled in pen over a watercolour wash (48-unit square). */
+/** The three ways in, as clean line drawings over a flat wash (48-unit square). */
 const ICONS = {
   // A car side-on, as drawn on the pad.
   career: (
@@ -77,7 +77,7 @@ function LogoMark({ src }) {
 export function StartScreen({ onCareer, onStart, onTutorial, version, logo = null }) {
   const handlers = { career: onCareer, sandbox: onStart, tutorial: onTutorial };
   return (
-    <div className={styles.screen}>
+    <div className={styles.screen} data-plain>
       <div className={styles.glow} aria-hidden="true" />
       <div className={styles.inner}>
         <LogoMark src={logo} />

@@ -362,3 +362,10 @@
     order: 0;
   }
 }
+
+/* On a phone, either way up, the screen is too small to spend a line on the maker's
+   name: the laptop and the start screen already carry it. */
+@media (max-width: 560px), (max-height: 500px) {
+  .brand { display: none; }
+  .stripInner { padding: var(--sp-xs) var(--sp-md); }
+}

@@ -30,37 +30,37 @@ export const camelToKebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLo
 export const tokens = Object.freeze({
   // Surfaces, darkest to lightest. The base is blue-black rather than neutral grey
   // because red reads harder against blue than against grey.
-  bg: '#f3eee2',
-  panel: '#faf7ef',
-  panel2: '#efe9db',
-  panel3: '#e5dcc8',
+  bg: '#0a0d14',
+  panel: '#131824',
+  panel2: '#1a2130',
+  panel3: '#212a3c',
 
   // Borders.
-  line: '#7a7265',
-  lineHi: '#2e2a25',
+  line: '#262f42',
+  lineHi: '#33405a',
 
   // Text, four steps from primary to faintest.
-  ink: '#23201b',
-  inkSoft: '#3a352e',
-  ink2: '#5c554a',
-  ink3: '#857c6c',
+  ink: '#e9eef8',
+  inkSoft: '#c8d2e2',
+  ink2: '#8792a8',
+  ink3: '#5c6880',
 
   // Accent. `accOn` is text placed ON an accent fill — it must never be a grey.
-  acc: '#2a64a8',
-  accInk: '#1f4f86',
-  accBg: '#dbe7f2',
-  accOn: '#faf7ef',
+  acc: '#4c9eff',
+  accInk: '#8fc2ff',
+  accBg: '#0f2033',
+  accOn: '#04162e',
 
   // Status. Reserved for engine state. Never used as decoration.
-  ok: '#2e7d47',
-  okInk: '#22603a',
-  okBg: '#ddeedd',
-  warn: '#b8730c',
-  warnInk: '#82510a',
-  warnBg: '#f6e6c3',
-  danger: '#c0332b',
-  dangerInk: '#9a251e',
-  dangerBg: '#f5dad5',
+  ok: '#35e08a',
+  okInk: '#7fe8b4',
+  okBg: '#0d2419',
+  warn: '#ffb020',
+  warnInk: '#ffd07a',
+  warnBg: '#2a2110',
+  danger: '#ff4d4d',
+  dangerInk: '#ff9d9d',
+  dangerBg: '#2a1414',
 
   // Status borders. One step brighter than the matching *Bg so a status box reads as
   // a bounded object rather than a wash — without reaching the full status hue, which
@@ -69,49 +69,40 @@ export const tokens = Object.freeze({
   // Button's danger variant) deliberately uses the saturated hue instead, because it
   // needs to read louder than something that merely reports; that is not an
   // inconsistency to "fix" by pointing it at these tokens too.
-  okLine: '#8dbf9a',
-  warnLine: '#ddb765',
-  dangerLine: '#df9a92',
-  violetLine: '#b3a3d8',
+  okLine: '#1e5238',
+  warnLine: '#5c4415',
+  dangerLine: '#5c2626',
+  violetLine: '#3b3363',
 
   // Secondary data hue, for charts that must plot two series at once (power vs
   // torque). Distinct from `acc` on purpose so a chart never looks like a control.
-  cyan: '#1c7f8e',
-  cyanBg: '#d6ecee',
-  violet: '#6d4fb8',
-  violetBg: '#e6dff3',
+  cyan: '#38d9f0',
+  cyanBg: '#0b2630',
+  violet: '#a78bfa',
+  violetBg: '#1d1a33',
 
   // The graph paper everything is drawn on: a faint minor grid and a firmer major one,
   // like the pad the interface was sketched on.
-  paperGrid: '#d7e1e4',
-  paperGridMajor: '#b8c9cf',
+  paperGrid: '#1a2130',
+  paperGridMajor: '#262f42',
 
 
-  // The start screen keeps the deep dark blue it opened on, with light ink on it.
-  nightBg: '#0a0d14',
-  nightPanel: '#131824',
-  nightLine: '#33405a',
-  nightInk: '#e9eef8',
-  nightInk2: '#a3adc2',
-  nightAccBg: '#0f2033',
-  nightAccInk: '#8fc2ff',
-
-  // The laptop's desktop wallpaper: a blue bloom on a pale sky, the way a fresh
-  // computer ships.
-  wallSky: '#dce9f8',
-  wallSky2: '#a9c8ee',
+  // The laptop's desktop wallpaper: a blue bloom on a night-dark ground, the way a
+  // fresh computer ships in its dark theme.
+  wallSky: '#0d1836',
+  wallSky2: '#04081a',
   wallDeep: '#0b3a9a',
   wallMid: '#2c6fe0',
   wallLight: '#8fbdff',
 
   // Type.
-  mono: "'Patrick Hand', ui-monospace, Menlo, monospace",
-  sans: "'Patrick Hand', 'Comic Neue', 'Segoe Print', cursive",
+  mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",
+  sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
 
   // Bare RGB triplets, so translucent washes can be built from the same colours
   // rather than re-typing them at a new alpha. See accAlpha/shadowAlpha below.
-  accRgb: '42, 100, 168',
-  shadowRgb: '46, 42, 37',
+  accRgb: '76, 158, 255',
+  shadowRgb: '0, 0, 0',
 
   // Font-size scale, small to large. Named by role/size rather than kept as the
   // 15 raw values they replace, because a scale is a small set of deliberate

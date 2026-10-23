@@ -277,8 +277,10 @@ export function EcuLabApp() {
   // section segment — spells. Defaulting it to a section would make closing impossible,
   // and no existing test would fail.
   const buildSection = tab === 'build' ? route.section : null;
-  const tuneView = tab === 'tune' ? route.section : null;
-  const dynoView = tab === 'dyno' ? route.section : null;
+  // TUNE and DYNO are pages, not accordions: a link that names no page opens the first
+  // one rather than a blank screen with nothing chosen.
+  const tuneView = tab === 'tune' ? route.section ?? ROUTES.tune[0] : null;
+  const dynoView = tab === 'dyno' ? route.section ?? ROUTES.dyno[0] : null;
   const revealTimer = useRef(null);
   const liveTimer = useRef(null);
   const liveCfgRef = useRef(null);
@@ -536,7 +538,9 @@ export function EcuLabApp() {
     // CAREER's SHOP is a view of its own rather than a tab: it has no status strip and
     // no nav, because it is where the day is run from, not a screen of the car.
     if (t === 'shop') navigate({ view: 'shop', tab: null, section: null });
-    else navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
+    // BUILD opens on its list of sections, all shut, so the four of them (engine,
+    // induction, fuel, exhaust) are in view at once; the other tabs open on their first page.
+    else navigate({ view: 'app', tab: t, section: t === 'build' ? null : ROUTES[t][0] });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   }, [navigate, dispatch]);
 
@@ -1330,7 +1334,8 @@ export function EcuLabApp() {
           <LearnApp shelf={route.section} onShelf={(id) => goSection('learn', id)} />
         )}
         {tab === 'physics' && !inCareer && !engineMissing && (
-          <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} />
+          <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
+            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}

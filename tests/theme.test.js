@@ -216,9 +216,8 @@ describe('diffTint', () => {
     expect(hueGap(hueOf(diffTint(2, 10)), hexHue(tokens.violet))).toBeLessThan(3);
     expect(hueGap(hueOf(diffTint(-2, 10)), hexHue(tokens.cyan))).toBeLessThan(3);
   });
-  it('deepens with magnitude and stops at full scale', () => {
-    // A wash on paper: a bigger change is a stronger, darker wash.
-    expect(lightOf(diffTint(1, 10))).toBeGreaterThan(lightOf(diffTint(5, 10)));
+  it('brightens with magnitude and stops at full scale', () => {
+    expect(lightOf(diffTint(1, 10))).toBeLessThan(lightOf(diffTint(5, 10)));
     expect(diffTint(10, 10)).toBe(diffTint(40, 10));
     expect(diffTint(-6, 6)).toBe(diffTint(-60, 6));
   });

@@ -23,20 +23,64 @@
   .sideBtn { flex: none; }
 }
 
-/* ---------- Physics: the curve and the stages ---------- */
-.curve { margin-bottom: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel); }
-.curveSvg { display: block; width: 100%; height: auto; max-height: 220px; }
+/* ---------- Physics: four panels, as drawn ---------- */
+.physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .physGrid { grid-template-columns: 1fr; } }
+.physPanel {
+  min-width: 0; padding: 12px 14px 14px; border: 2px solid var(--pen); border-radius: var(--hand-b);
+  background: var(--panel); box-shadow: var(--pencil-twice);
+}
+.panelHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panelTitle { margin: 0 0 8px; font-size: var(--fs-md); font-weight: 800; letter-spacing: 0.02em; }
+.panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
+.graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
+.graphBtns button {
+  min-width: 46px; padding: 5px 10px; border: 2px solid var(--pen); background: var(--panel2);
+  color: var(--ink); font-weight: 800; font-size: var(--fs-sm); cursor: pointer;
+}
+.buildSplit { display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: start; }
+.buildList { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.buildRow2 { display: grid; grid-template-columns: 104px 1fr; gap: 8px; font-size: var(--fs-sm); }
+.buildRow2 dt { color: var(--ink3); }
+.buildRow2 dd { margin: 0; display: flex; flex-direction: column; }
+.buildRow2 dd b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); line-height: 1.4; }
+.cylArt { width: 100%; height: auto; }
+.piston { animation: piston 1s ease-in-out infinite alternate; }
+@keyframes piston { to { transform: translateY(var(--travel)); } }
+.artDot { fill: var(--cyan); stroke: var(--bg); stroke-width: 3; }
+.strokes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.strokeStep {
+  display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1.5px solid var(--line-hi);
+  border-radius: var(--hand-c); font-size: var(--fs-xs); color: var(--ink2);
+  animation: strokeOn 2s steps(1) infinite;
+}
+.strokeStep b { color: var(--ink); font-size: var(--fs-sm); }
+@keyframes strokeOn { 0% { background: var(--acc-bg); border-color: var(--acc); } 25% { background: transparent; border-color: var(--line-hi); } }
+@media (prefers-reduced-motion: reduce) { .piston, .strokeStep { animation: none; } }
+@media (max-width: 560px) {
+  .buildSplit { grid-template-columns: 1fr 84px; }
+  .buildRow2 { grid-template-columns: 1fr; gap: 0; }
+  .strokes { grid-template-columns: repeat(2, 1fr); }
+}
+.curveSvg { display: block; width: 100%; height: auto; max-height: 240px; }
 .curveSvg path, .curveSvg polyline, .art path, .art rect, .art line { filter: url(#hand-jitter); }
 .rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
 .curveNums { font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); }
-.stage {
-  display: grid; grid-template-columns: minmax(150px, 220px) 1fr; gap: 16px; align-items: start;
-  margin-bottom: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--panel);
+/* A stage of the raw model: a row that opens. */
+.stage { border-top: 1px solid var(--line); }
+.stage:first-of-type { border-top: 0; }
+.stageTitle {
+  display: flex; align-items: center; gap: 8px; padding: 8px 2px; cursor: pointer; list-style: none;
+  font-size: var(--fs-base); font-weight: 700;
 }
-@media (max-width: 560px) { .stage { grid-template-columns: 1fr; } }
+.stageTitle::-webkit-details-marker { display: none; }
+.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink3); font-weight: 800; }
+.stage[open] > .stageTitle::after { content: '−'; }
+.stageBody { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; padding: 2px 0 12px; }
+@media (max-width: 560px) { .stageBody { grid-template-columns: 1fr; } .art { max-height: 140px; } }
 .stageArt { padding: 8px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
 .art { display: block; width: 100%; height: auto; }
-.stageTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: var(--fs-md); font-weight: 800; }
 .stageNum {
   width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;
   background: var(--acc-bg); color: var(--acc-ink); border: 1px solid var(--acc); font-size: var(--fs-xs);
@@ -98,4 +142,10 @@
 .tuneFlag {
   min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; border: 1px solid var(--warn);
   background: var(--warn-bg); color: var(--warn-ink); font-size: 9px; font-family: var(--mono); line-height: 13px; text-align: center;
+}
+/* On a phone every ECU page's tab is in view: they wrap rather than scroll off the side. */
+@media (max-width: 560px) {
+  .tuneTabs { flex-wrap: wrap; overflow-x: visible; border-bottom: 0; gap: 4px; }
+  .tuneTab { padding: 7px 9px; border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
+  .tuneTab[aria-current='page'] { margin-bottom: 0; padding-bottom: 7px; }
 }

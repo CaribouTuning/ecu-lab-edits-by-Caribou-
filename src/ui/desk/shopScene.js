@@ -24,6 +24,9 @@ import { makeBuilding } from '../world/models/buildings.js';
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
   bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
+  // The same, on a screen taller than wide (a phone held upright): high above the room,
+  // its ceiling lifted off, looking down over the whole floor so it fits the narrow frame.
+  bayTall: { pos: new THREE.Vector3(0, 15, 5.2), look: new THREE.Vector3(0, 0, -0.4), fov: 40 },
 };
 
 /** Where things are in the shop. */
@@ -95,7 +98,8 @@ export function buildShopScene(stage, init) {
   root.add(tiledFloor(16, 14, W.concrete, W.concreteDark, 2).translateZ(0));
   const wallC = W.wallBase;
   // A ceiling, so it is a room: from inside you see its roof, not the street's.
-  root.add(box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 }));
+  const ceiling = box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 });
+  root.add(ceiling);
   // Side walls, and the back wall either side of the door and above it.
   for (const s of [-1, 1]) root.add(box(0.3, 5, 14, wallC, { x: s * 8.15, y: 2.5 }));
   // As drawn: the door right of centre, the sign on the wall to its left.
@@ -222,6 +226,7 @@ export function buildShopScene(stage, init) {
   const from = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
   const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
   let target = POSES.desk;
+  let lastPose = 'desk';
   let blend = 1;
   let lid = 0; // 0 open, 1 shut
   let lidTarget = 0;
@@ -232,13 +237,15 @@ export function buildShopScene(stage, init) {
     laptop: new THREE.Vector3(AT.desk.x, 1.1, AT.desk.z + 0.1),
   };
   let t = 0;
-  return {
+  const api = {
     anchors,
     camera: cam,
     /** @param {'desk'|'bay'} pose */
     setPose(pose) {
-      const p = POSES[pose] ?? POSES.desk;
+      lastPose = pose;
+      const p = pose === 'bay' && cam.aspect < 1 ? POSES.bayTall : (POSES[pose] ?? POSES.desk);
       if (p === target) return;
+      ceiling.visible = p !== POSES.bayTall;
       from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
       target = p;
       blend = 0;
@@ -262,7 +269,15 @@ export function buildShopScene(stage, init) {
       now.fov = from.fov + (target.fov - from.fov) * k;
       cam.position.copy(now.pos);
       cam.lookAt(now.look);
-      if (Math.abs(cam.fov - now.fov) > 0.01) { cam.fov = now.fov; cam.updateProjectionMatrix(); }
+      // The poses are framed for a wide screen. On a narrower one (a phone held upright)
+      // keep about the same width of shop in view: open the lens vertically to match, up
+      // to the point where it would see out past the room; the markers stay on screen.
+      const wide = 1.6;
+      const fov = cam.aspect >= wide ? now.fov
+        : Math.min(80, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(now.fov / 2)) * wide / cam.aspect)));
+      if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+      // The phone turned: frame the shop for its new shape.
+      if (lastPose === 'bay' && (target === POSES.bayTall) !== (cam.aspect < 1)) api.setPose('bay');
       lid += (lidTarget - lid) * Math.min(1, dt * 5);
       // Open, the lid stands up a little past vertical; shut, it lies on the base.
       hinge.rotation.x = -(1 - lid) * 1.85;
@@ -281,4 +296,5 @@ export function buildShopScene(stage, init) {
       void t;
     },
   };
+  return api;
 }

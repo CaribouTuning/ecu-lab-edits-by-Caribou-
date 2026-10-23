@@ -1,5 +1,6 @@
 /**
- * SANDBOX's chrome: a laptop on your desk, in your shop.
+ * The chrome both modes work in: a laptop on your desk, in your shop. Played on a phone it
+ * is your phone instead (usePhone): the same apps on a home screen, each full screen.
  *
  *   desktop   the laptop open on its desktop: four apps (Tune, Learn, Build, Physics) and a
  *             taskbar (home, search, settings, the clock, notifications)
@@ -122,6 +123,23 @@ const APP_ICONS = {
   ),
 };
 
+/** A phone's screen, either way up: where the device in your hand is a phone, not a laptop. */
+const PHONE_QUERY = '(max-width: 560px), (max-height: 500px)';
+
+/** @returns {boolean} whether the screen is a phone's */
+export function usePhone() {
+  const query = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
+  const [phone, setPhone] = useState(query);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(PHONE_QUERY);
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return phone;
+}
+
 /** The time on the taskbar, kept current. */
 function Clock() {
   const fmt = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -167,12 +185,100 @@ export function Desk({
   const open = mode === 'desktop' || mode === 'app';
   const flagged = notices.filter((n) => n.tone && n.tone !== 'ok').length;
   const apple = isApplePlatform();
+  const phone = usePhone();
+
+  const settingsMenu = menu === 'settings' && (
+    <div className={`${styles.flyout} ink-frame-lg`} data-side="right" role="menu" aria-label="Settings">
+      <button type="button" role="menuitem" onClick={() => { setMenu(null); onMenu?.(); }} aria-label="Main menu">Main menu</button>
+      <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
+      <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
+      <button type="button" role="menuitem" onClick={() => { setMenu(null); onBay(); }}>{phone ? 'Put the phone down' : 'Shut the laptop'}</button>
+    </div>
+  );
+  const noticesMenu = menu === 'notices' && (
+    <div className={`${styles.flyout} ink-frame-lg`} data-side="right" data-wide="true" aria-label="Notifications">
+      {status && <div className={styles.status}>{status}</div>}
+      {notices.length === 0 && <div className={styles.notice}>Nothing needs you right now.</div>}
+      {notices.map((n) => (
+        <div key={n.id} className={styles.notice} data-tone={n.tone ?? 'ok'}>
+          <span>{n.text}</span>
+          {n.go && <button type="button" onClick={() => { setMenu(null); n.go?.(); }}>{n.action ?? 'Open'}</button>}
+        </div>
+      ))}
+    </div>
+  );
+  const settingsBtn = (
+    <button type="button" className={styles.taskBtn} onClick={() => setMenu(menu === 'settings' ? null : 'settings')} aria-label="Settings" aria-expanded={menu === 'settings'} tabIndex={open ? 0 : -1}>
+      <Settings size={16} aria-hidden="true" />
+    </button>
+  );
+  const noticesBtn = (
+    <button type="button" className={styles.taskBtn} onClick={() => setMenu(menu === 'notices' ? null : 'notices')} aria-label={`${notices.length} notifications`} aria-expanded={menu === 'notices'} tabIndex={open ? 0 : -1}>
+      <Bell size={16} aria-hidden="true" />
+      {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>+{notices.length}</span>}
+    </button>
+  );
+  const appIcon = (id) => <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (id)]}</svg>;
+  const shownApps = DESK_APPS.filter((a) => !apps || apps.includes(a.id));
+
+  // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
+  // apps full screen, and putting it down shows the shop.
+  const device = phone ? (
+    <div className={styles.phone} data-state={open ? 'open' : 'shut'} aria-hidden={!open}>
+      <div className={styles.statusBar}>
+        <Clock />
+        <span className={styles.statusRight}>
+          {noticesBtn}
+          {settingsBtn}
+          <span className={styles.battery} aria-hidden="true"><span /></span>
+        </span>
+        {settingsMenu}
+        {noticesMenu}
+      </div>
+      {mode === 'app' && appInfo ? (
+        <section className={styles.phoneApp} aria-label={appInfo.label}>
+          <header className={styles.phoneAppBar}>
+            <button type="button" className={styles.phoneBack} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
+              <ChevronLeft size={18} aria-hidden="true" /><span>Home</span>
+            </button>
+            <span className={styles.phoneAppTitle}>{appInfo.label}</span>
+            <button type="button" className={styles.phoneBack} onClick={onSearch} aria-label="Search pages and actions">
+              <Search size={17} aria-hidden="true" />
+            </button>
+          </header>
+          <div className={styles.windowBody}>{children}</div>
+        </section>
+      ) : (
+        <div className={styles.homeScreen}>
+          <Wallpaper />
+          <div className={styles.appGrid}>
+            {shownApps.map((a) => (
+              <button key={a.id} type="button" className={styles.phoneIcon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
+                <span className={`${styles.phoneIconTile} ink-frame`}>{appIcon(a.id)}</span>
+                <span className={styles.phoneIconLabel}>{a.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.dock}>
+            <button type="button" className={styles.dockBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
+              <Search size={20} aria-hidden="true" /><span>Search</span>
+            </button>
+            <button type="button" className={styles.dockBtn} onClick={onBay} aria-label="Put the phone down" tabIndex={open ? 0 : -1}>
+              <ChevronLeft size={20} aria-hidden="true" style={{ transform: 'rotate(-90deg)' }} /><span>Shop</span>
+            </button>
+          </div>
+        </div>
+      )}
+      <button type="button" className={styles.homeBar} onClick={onDesktop} aria-label="Desktop" tabIndex={open ? 0 : -1}><span /></button>
+    </div>
+  ) : null;
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk'} engineSpec={engineSpec} rpm={rpm} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk'} phone={phone} engineSpec={engineSpec} rpm={rpm} onPick={pick} onLook={onBay} />
 
-      {mode !== 'page' && (
+      {mode !== 'page' && phone && device}
+      {mode !== 'page' && !phone && (
         <div className={styles.laptop} data-state={open ? 'open' : 'shut'} aria-hidden={!open}>
           <div className={`${styles.lid} ink-frame-lg`}>
             <div className={styles.screen}>
@@ -195,9 +301,9 @@ export function Desk({
                     <Wallpaper />
                     <div className={styles.wallpaperMark} aria-hidden="true">CARIBOU TUNING</div>
                     <div className={styles.icons}>
-                      {DESK_APPS.filter((a) => !apps || apps.includes(a.id)).map((a) => (
+                      {shownApps.map((a) => (
                         <button key={a.id} type="button" className={styles.icon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
-                          <svg viewBox="0 0 48 48" className={styles.doodle} aria-hidden="true">{APP_ICONS[/** @type {keyof typeof APP_ICONS} */ (a.id)]}</svg>
+                          {appIcon(a.id)}
                           <span className={`${styles.iconLabel} ink-frame`}>{a.label}</span>
                         </button>
                       ))}
@@ -217,35 +323,12 @@ export function Desk({
                   <Search size={14} aria-hidden="true" /><span>Search</span>
                 </button>
                 <div className={styles.tray}>
-                  <button type="button" className={styles.taskBtn} onClick={() => setMenu(menu === 'settings' ? null : 'settings')} aria-label="Settings" aria-expanded={menu === 'settings'} tabIndex={open ? 0 : -1}>
-                    <Settings size={16} aria-hidden="true" />
-                  </button>
+                  {settingsBtn}
                   <Clock />
-                  <button type="button" className={styles.taskBtn} onClick={() => setMenu(menu === 'notices' ? null : 'notices')} aria-label={`${notices.length} notifications`} aria-expanded={menu === 'notices'} tabIndex={open ? 0 : -1}>
-                    <Bell size={16} aria-hidden="true" />
-                    {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>+{notices.length}</span>}
-                  </button>
+                  {noticesBtn}
                 </div>
-                {menu === 'settings' && (
-                  <div className={`${styles.flyout} ink-frame-lg`} data-side="right" role="menu" aria-label="Settings">
-                    <button type="button" role="menuitem" onClick={() => { setMenu(null); onMenu?.(); }} aria-label="Main menu">Main menu</button>
-                    <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
-                    <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
-                    <button type="button" role="menuitem" onClick={() => { setMenu(null); onBay(); }}>Shut the laptop</button>
-                  </div>
-                )}
-                {menu === 'notices' && (
-                  <div className={`${styles.flyout} ink-frame-lg`} data-side="right" data-wide="true" aria-label="Notifications">
-                    {status && <div className={styles.status}>{status}</div>}
-                    {notices.length === 0 && <div className={styles.notice}>Nothing needs you right now.</div>}
-                    {notices.map((n) => (
-                      <div key={n.id} className={styles.notice} data-tone={n.tone ?? 'ok'}>
-                        <span>{n.text}</span>
-                        {n.go && <button type="button" onClick={() => { setMenu(null); n.go?.(); }}>{n.action ?? 'Open'}</button>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {settingsMenu}
+                {noticesMenu}
               </nav>
             </div>
           </div>
@@ -260,8 +343,8 @@ export function Desk({
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
-            <button type="button" className={styles.back} onClick={onDesktop} aria-label="Open the laptop">
-              <BookOpen size={15} aria-hidden="true" /><span>Laptop</span>
+            <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
+              <BookOpen size={15} aria-hidden="true" /><span>{phone ? 'Phone' : 'Laptop'}</span>
             </button>
           </header>
           <div className={styles.pageBody}>{children}</div>

@@ -107,7 +107,8 @@ describe('a deep link on a cold load', () => {
 describe('clicking a tab', () => {
   it('writes the URL, not just React state', () => {
     launch();
-    expect(window.location.hash).toBe('#/build/engine');
+    // BUILD opens on its list of sections, all shut, so all four are in view at once.
+    expect(window.location.hash).toBe('#/build');
 
     goTo('TUNE');
     expect(window.location.hash).toBe('#/tune/airflow');
@@ -123,10 +124,14 @@ describe('clicking a tab', () => {
     // Those are the heads of the ROUTES lists, and `goTab` reads them from there — so
     // this asserts the defaults did not quietly change hands during the conversion.
     launch();
-    for (const [tab, label] of [['build', 'BUILD'], ['tune', 'TUNE'], ['dyno', 'DYNO'], ['physics', 'PHYSICS']]) {
+    for (const [tab, label] of [['tune', 'TUNE'], ['dyno', 'DYNO'], ['physics', 'PHYSICS']]) {
       goTo(label);
       expect(window.location.hash).toBe(`#/${tab}/${ROUTES[tab][0]}`);
     }
+    // BUILD is an accordion and opens with every section shut, so the four section
+    // headers are a list you can see whole instead of the first one's long contents.
+    goTo('BUILD');
+    expect(window.location.hash).toBe('#/build');
     // LEARN is the exception, on purpose: the laptop opens it on "How it works", the
     // shelf a newcomer wants, not on the reference list that heads its sidebar.
     goTo('LEARN');
@@ -173,7 +178,7 @@ describe('the back button', () => {
     await waitFor(() => expect(window.location.hash).toBe('#/desk'));
     await waitFor(() => expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy());
     window.history.back();
-    await waitFor(() => expect(window.location.hash).toBe('#/build/engine'));
+    await waitFor(() => expect(window.location.hash).toBe('#/build'));
     await waitFor(() => expect(screen.getByText('Garage')).toBeTruthy());
   });
 
@@ -194,7 +199,7 @@ describe('the back button', () => {
 
     // One press, from the desktop back to the BUILD window it was on.
     window.history.back();
-    await waitFor(() => expect(window.location.hash).toBe('#/build/engine'));
+    await waitFor(() => expect(window.location.hash).toBe('#/build'));
   });
 });
 
@@ -210,6 +215,8 @@ describe('a fully collapsed accordion', () => {
     // component that merely remembers `null` in React state would pass the first half
     // and fail the second.
     launch();
+    fireEvent.click(screen.getByText('Engine Architecture'));
+    expect(window.location.hash).toBe('#/build/engine');
     expect(sectionIsOpen('Engine Architecture')).toBe(true);
 
     fireEvent.click(screen.getByText('Engine Architecture'));

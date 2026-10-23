@@ -7,12 +7,7 @@
   padding: var(--sp-xxl);
   position: relative;
   overflow: hidden;
-  /* The deep dark blue the app opened on, with the paper palette's roles re-inked light
-     for it, so every button and caption below reads on the dark. */
-  --ink: var(--night-ink); --ink2: var(--night-ink2); --ink3: var(--night-ink2);
-  --panel: var(--night-panel); --line: var(--night-line); --line-hi: var(--night-ink);
-  --acc-bg: var(--night-acc-bg); --acc-ink: var(--night-acc-ink);
-  background: var(--night-bg);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
   text-align: center;
@@ -32,7 +27,7 @@
 
 .inner { position: relative; display: flex; flex-direction: column; align-items: center; }
 
-.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; transform: rotate(-2deg); }
+.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; }
 @media (max-height: 700px) { .logo { width: 120px; height: 128px; } }
 
 .subtitle {
@@ -43,11 +38,12 @@
   color: var(--ink2);
 }
 
-/* The picture above each way in: a pen doodle, as on the pad. */
+/* The picture above each way in: a clean line drawing. The start screen is the one
+   place the interface is not doodled (data-plain); everything past it is. */
 .icon {
-  width: 64px; height: 64px; margin: 0 auto 4px; color: var(--ink);
-  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
-  filter: url(#hand-jitter); overflow: visible;
+  width: 56px; height: 56px; margin: 0 auto 4px; color: var(--ink2);
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  overflow: visible;
 }
 .icon :global(.wash) { fill: var(--acc-bg); stroke: none; }
 
@@ -95,10 +91,27 @@
    560px is the project's one breakpoint — see the note beside the scale in
    tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
 @media (min-width: 560px) {
-  .title { font-size: 64px; }
+  .title { font-size: 52px; }
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }
 
-/* On the dark the pale wash would swallow the doodles' light lines: a thinner wash. */
-.icon :global(.wash) { opacity: 0.35; }
+/* An upright phone: each way in is one row, its doodle beside the button and the
+   caption under it, so all three fit on the screen with the logo. */
+@media (max-width: 559px) {
+  .screen { padding: max(var(--sp-xl), env(safe-area-inset-top)) var(--sp-xl) max(var(--sp-xl), env(safe-area-inset-bottom)); }
+  .logo { width: 128px; height: 136px; }
+  .subtitle { margin-bottom: 22px; }
+  .way { display: grid; grid-template-columns: 52px 1fr; column-gap: 12px; row-gap: 4px; align-items: center; text-align: left; }
+  .icon { width: 48px; height: 48px; margin: 0; grid-row: span 2; }
+  .caption { grid-column: 2; }
+}
+/* A phone on its side: little height, so everything a size down. */
+@media (max-height: 500px) {
+  .screen { padding: var(--sp-md) var(--sp-xl); }
+  .logo { width: 70px; height: 74px; margin-bottom: 4px; }
+  .title { font-size: 34px; margin-bottom: 0; }
+  .subtitle { margin-bottom: 12px; }
+  .icon { width: 40px; height: 40px; }
+  .version { margin-top: 8px; }
+}

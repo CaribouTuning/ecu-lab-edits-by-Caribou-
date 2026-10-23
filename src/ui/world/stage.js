@@ -24,8 +24,8 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
  * @param {HTMLCanvasElement} canvas
  * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean}} [opts]
  *   `sketch` draws the scene as if doodled by hand instead of pixel art: full resolution,
- *   its own colours and light, wobbly ink outlines, brushwork, pencil hatching in the
- *   shade and paper grain. The sandbox's shop is drawn this way; the career's town stays
+ *   its own colours and light, ink outlines, pencil hatching in the shade and paper
+ *   grain, all held still. The sandbox's shop is drawn this way; the career's town stays
  *   pixel art.
  */
 export function createStage(canvas, opts = {}) {
@@ -88,12 +88,11 @@ export function createStage(canvas, opts = {}) {
       // zero on a floor or a wall and spikes only on a silhouette or a fold.
       float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
       void main(){
-        // SKETCH: the pen shakes. Every lookup is nudged along a slow wave, so a straight
-        // edge comes out as a hand-drawn line rather than a ruled one.
-        vec2 shake = sketch * texel * 1.6 * vec2(sin(vUv.y * 61.0 + vUv.x * 7.0), cos(vUv.x * 53.0 - vUv.y * 9.0));
-        vec2 uv = vUv + shake;
+        // The world holds still: edges are found where they are, so walls and floors stay
+        // straight. (A shaking pen here made the whole room look drunk.)
+        vec2 uv = vUv;
         vec4 c = texture2D(tColor, vUv);
-        vec2 tx = texel * (1.0 + sketch * 0.6);
+        vec2 tx = texel;
         float w = invZ(uv);
         float l = invZ(uv - vec2(tx.x, 0.0)); float r = invZ(uv + vec2(tx.x, 0.0));
         float u = invZ(uv - vec2(0.0, tx.y)); float d = invZ(uv + vec2(0.0, tx.y));
@@ -116,13 +115,9 @@ export function createStage(canvas, opts = {}) {
         // doodled over rather than washed out. What makes it drawn is the hand on top.
         float L = pow(max(lum(c.rgb), 0.0), 1.0 / 2.2); // as the eye sees it, not linear light
         vec3 wash = c.rgb;
-        // Brushwork: the colour lies unevenly, in blotches, and loose wavy strokes of a
-        // deeper shade run across every surface, walls and floor included.
+        // A light, uneven wash: the colour lies a little patchily, nothing that moves or waves.
         vec2 fc = gl_FragCoord.xy;
-        wash *= 0.88 + 0.24 * vnoise(fc / 70.0);
-        float sx = (fc.x * 0.82 + fc.y * 0.57) / 5.0 + 2.2 * sin(fc.y / 19.0 + fc.x / 47.0) + 1.5 * sin(fc.x / 31.0);
-        float strokeMark = smoothstep(0.7, 0.88, fract(sx)) * smoothstep(0.35, 0.65, vnoise(fc / 26.0));
-        wash *= 1.0 - strokeMark * 0.22;
+        wash *= 0.95 + 0.1 * vnoise(fc / 90.0);
         // Pencil hatching in the shade, and cross-hatching where it is darkest.
         vec2 f = gl_FragCoord.xy;
         float h1 = step(0.7, fract((f.x + f.y) / 7.0));

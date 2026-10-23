@@ -12,11 +12,11 @@
 /* ---------- the shop behind ---------- */
 .backdrop { position: absolute; inset: 0; }
 .backdropCanvas { display: block; width: 100%; height: 100%; }
-.backdropFallback { width: 100%; height: 100%; background-color: var(--bg); background-image: var(--graph); background-size: var(--graph-size); }
+.backdropFallback { width: 100%; height: 100%; background: var(--bg); }
 /* With the laptop open the shop is set back: dimmed, so the screen is what you read. */
 .backdrop[data-mode='desk']::after, .backdrop[data-mode='page']::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: var(--night-bg); opacity: 0.3;
+  background: var(--bg); opacity: 0.35;
 }
 /* The whole backdrop is the button that stands you up to look at the shop. */
 .lookUp { position: absolute; inset: 0; border: 0; background: transparent; cursor: zoom-out; }
@@ -31,53 +31,56 @@
 .spotRow .spot { position: static; transform: none; }
 .spotRing {
   width: 46px; height: 46px; border-radius: var(--hand-round);
-  border: 3px solid var(--ink); background: var(--panel); box-shadow: var(--pencil-twice);
+  border: 3px solid var(--pen); background: var(--panel); box-shadow: var(--pencil-twice);
   display: grid; place-items: center; filter: url(#hand-jitter);
   animation: spotPulse 1.6s ease-in-out infinite;
 }
 .spotLabel {
-  padding: 2px 12px; border-radius: var(--hand-a); border: 2px solid var(--ink);
+  padding: 2px 12px; border-radius: var(--hand-a); border: 2px solid var(--pen);
   background: var(--panel); font-size: var(--fs-md); letter-spacing: 0.04em; white-space: nowrap;
 }
 .spot:hover .spotRing, .spot:focus-visible .spotRing { background: var(--warn-bg); }
 /* A '!' in a speech bubble: something to do here. */
-.spotRing::before { content: '!'; font-size: 28px; line-height: 1; color: var(--danger); font-family: var(--sans); }
+.spotRing::before { content: '!'; font-size: 26px; font-weight: 800; line-height: 1; color: var(--warn); font-family: var(--sans); }
 @keyframes spotPulse { 50% { transform: scale(1.12); } }
 @media (prefers-reduced-motion: reduce) { .spotRing { animation: none; } }
 
 /* ---------- the laptop ---------- */
+/* Centred by margins, not by a -50% translate, and with no perspective on it: a
+   half-pixel offset or a 3D context left behind by the lid's fold renders the whole
+   screen soft, which is what made everything blurry after shutting and reopening. */
 .laptop {
-  position: absolute; left: 50%; top: 50%;
+  position: absolute; inset: 0; margin: auto;
   width: min(1180px, 96vw); height: min(780px, 92dvh);
-  transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center;
-  perspective: 1600px;
   pointer-events: none;
 }
 .lid {
   width: 100%; flex: 1; min-height: 0;
   padding: 12px 12px 14px; border-radius: var(--hand-a);
   /* A black laptop: the bezel round the screen, inked like everything else. */
-  background: var(--ink); border: 3px solid var(--ink);
+  background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
   box-shadow: var(--pencil-twice);
   transform-origin: 50% 100%;
+  /* Open, the lid has no transform at all, so it is an ordinary flat layer. */
+  transform: none;
   transition: transform 0.55s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.45s ease 0.1s;
   pointer-events: auto;
 }
 .base {
   width: 106%; height: 16px; border-radius: var(--hand-b);
-  background: var(--ink-soft); border: 3px solid var(--ink);
+  background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
   transition: opacity 0.45s ease 0.1s;
 }
 /* Shut: the lid folds down onto the base, and the shop comes forward. */
-.laptop[data-state='shut'] .lid { transform: rotateX(-88deg); opacity: 0; pointer-events: none; }
+.laptop[data-state='shut'] .lid { transform: perspective(1600px) rotateX(-88deg); opacity: 0; pointer-events: none; }
 .laptop[data-state='shut'] .base { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .lid, .base { transition: none; } }
 .screen {
   position: relative; height: 100%;
   display: flex; flex-direction: column;
   border-radius: var(--hand-c); overflow: hidden;
-  background: var(--bg); border: 2px solid var(--ink);
+  background: var(--bg); border: 2px solid var(--pen);
 }
 .workspace { flex: 1; min-height: 0; position: relative; display: flex; }
 
@@ -104,11 +107,11 @@
 }
 .icon svg {
   width: 72px; height: 72px; padding: 8px; border-radius: var(--hand-a);
-  background: var(--panel); border: 2.5px solid var(--ink); color: var(--ink); box-shadow: var(--pencil-twice);
+  background: var(--panel); border: 2.5px solid var(--pen); color: var(--ink); box-shadow: var(--pencil-twice);
 }
-.icon:hover, .icon:focus-visible { background: var(--acc-bg); border-color: var(--ink); }
+.icon:hover, .icon:focus-visible { background: var(--acc-bg); border-color: var(--pen); }
 .iconLabel {
-  padding: 1px 12px; border-radius: var(--hand-c); border: 2px solid var(--ink);
+  padding: 1px 12px; border-radius: var(--hand-c); border: 2px solid var(--pen);
   background: var(--panel); font-size: var(--fs-md); letter-spacing: 0.03em;
 }
 
@@ -116,14 +119,14 @@
 .window { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
 .titleBar {
   display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 6px 0 10px; flex: none;
-  background: var(--panel2); border-bottom: 2px solid var(--ink);
+  background: var(--panel2); border-bottom: 2px solid var(--pen);
 }
 .titleIcon svg { width: 22px; height: 22px; color: var(--ink); display: block; }
 /* The window's name in a box, as drawn. */
-.title { flex: none; margin-right: auto; padding: 0 12px; font-size: var(--fs-lg); border: 2px solid var(--ink); border-radius: var(--hand-b); background: var(--panel); }
+.title { flex: none; margin-right: auto; padding: 0 12px; font-size: var(--fs-lg); border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); }
 .close {
   width: 30px; height: 26px; display: grid; place-items: center;
-  border: 2px solid var(--ink); border-radius: var(--hand-c); background: var(--panel); color: var(--ink); cursor: pointer;
+  border: 2px solid var(--pen); border-radius: var(--hand-c); background: var(--panel); color: var(--ink); cursor: pointer;
 }
 .close:hover { background: var(--danger-bg); color: var(--danger-ink); border-color: var(--danger-line); }
 .windowBody {
@@ -140,7 +143,7 @@
 .taskbar {
   position: relative; flex: none; height: 44px;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 0 8px;
-  background: var(--panel); border-top: 2px solid var(--ink);
+  background: var(--panel); border-top: 2px solid var(--pen);
 }
 .taskBtn {
   position: relative; height: 32px; min-width: 34px; padding: 0 8px; display: inline-grid; place-items: center;
@@ -150,7 +153,7 @@
 .taskbar > .taskBtn { justify-self: start; }
 .search {
   display: inline-flex; align-items: center; gap: 8px; height: 30px; width: min(320px, 34vw); padding: 0 12px;
-  border-radius: var(--hand-a); border: 2px solid var(--ink); background: var(--bg); color: var(--ink2); cursor: text;
+  border-radius: var(--hand-a); border: 2px solid var(--pen); background: var(--bg); color: var(--ink2); cursor: text;
   font-size: var(--fs-md);
 }
 .tray { justify-self: end; display: flex; align-items: center; gap: 4px; }
@@ -164,7 +167,7 @@
 .flyout {
   position: absolute; bottom: 50px; right: 8px; z-index: 5; min-width: 200px; max-height: 60vh; overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px; padding: 8px;
-  background: var(--panel); border: 2px solid var(--ink); border-radius: var(--hand-b);
+  background: var(--panel); border: 2px solid var(--pen); border-radius: var(--hand-b);
   box-shadow: var(--pencil-twice);
 }
 .flyout[data-wide='true'] { width: min(440px, 80vw); }
@@ -190,7 +193,7 @@
 .page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
 .pageBar {
   flex: none; height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
-  background: var(--panel); border-bottom: 2px solid var(--ink);
+  background: var(--panel); border-bottom: 2px solid var(--pen);
 }
 .pageTitle { flex: 1; text-align: center; letter-spacing: 0.06em; font-size: var(--fs-lg); }
 .back {
@@ -211,7 +214,8 @@
 .viewerFallback { display: grid; place-items: center; height: 100%; color: var(--ink3); font-size: var(--fs-sm); }
 
 /* A phone: the laptop is the whole screen, and the icons come closer together. */
-@media (max-width: 560px) {
+/* A phone, upright or on its side: the laptop's screen is the phone's screen. */
+@media (max-width: 560px), (max-height: 500px) {
   .laptop { width: 100vw; height: 100dvh; }
   .lid { padding: 0; border-radius: 0; border: 0; }
   .screen { border-radius: 0; border: 0; }
@@ -219,6 +223,14 @@
   .icons { grid-template-columns: repeat(2, 104px); gap: 18px 20px; }
   .search span { display: none; }
   .search { width: auto; }
+  .taskbar { height: calc(44px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  .titleBar { padding-top: env(safe-area-inset-top); height: calc(40px + env(safe-area-inset-top)); padding-left: max(10px, env(safe-area-inset-left)); }
+  .pageBar { padding-top: env(safe-area-inset-top); height: calc(46px + env(safe-area-inset-top)); }
+}
+/* On its side there is height for one row of apps, not two. */
+@media (max-height: 500px) {
+  .icons { grid-template-columns: repeat(4, 96px); top: 18px; }
+  .icon svg { width: 56px; height: 56px; }
 }
 
 /* ---------- the app doodles ---------- */
@@ -229,3 +241,78 @@
 .doodle :global(.wash) { fill: var(--acc-bg); stroke: none; }
 .doodle :global(.dot) { fill: currentColor; stroke: none; }
 .doodle :global(.label) { fill: currentColor; stroke: none; font-family: var(--sans); font-size: 9px; }
+
+/* ---------- the phone (a phone's screen, either way up) ---------- */
+.phone {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column;
+  background: rgb(var(--shadow-rgb)); color: var(--ink);
+  transition: transform 0.45s cubic-bezier(0.5, 0, 0.3, 1), opacity 0.35s ease;
+}
+/* Put down: it slides off the bottom and the shop is there. */
+.phone[data-state='shut'] { transform: translateY(105%); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .phone { transition: none; } }
+.statusBar {
+  position: relative; flex: none; display: flex; align-items: center; justify-content: space-between;
+  height: calc(34px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
+  background: rgb(var(--shadow-rgb)); font-size: var(--fs-sm); font-weight: 700;
+}
+.statusBar .clock { padding: 0; color: var(--ink); font-family: var(--sans); }
+.statusRight { display: flex; align-items: center; gap: 2px; }
+.battery {
+  width: 24px; height: 12px; margin-left: 6px; border: 1.5px solid var(--ink2); border-radius: 3px; padding: 1px; position: relative;
+}
+.battery::after { content: ''; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; background: var(--ink2); border-radius: 1px; }
+.battery span { display: block; width: 72%; height: 100%; background: var(--ok); border-radius: 1px; }
+.statusBar .flyout { top: calc(100% + 4px); bottom: auto; right: 8px; }
+
+.homeScreen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--wall-sky); }
+/* Four apps to a row, as a phone lays them out; a landscape phone has room for all in one. */
+.appGrid {
+  position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 8px;
+  padding: 28px max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
+}
+.phoneIcon {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 0;
+}
+.phoneIconTile {
+  width: 62px; height: 62px; display: grid; place-items: center;
+  border: 2px solid var(--pen); border-radius: var(--hand-b); background: var(--panel); box-shadow: var(--pencil-twice);
+}
+.phoneIconTile svg { width: 44px; height: 44px; color: var(--ink); }
+.phoneIcon:active .phoneIconTile { background: var(--acc-bg); }
+.phoneIconLabel { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.dock {
+  position: absolute; left: 12px; right: 12px; bottom: 14px;
+  display: flex; justify-content: space-around; padding: 10px 6px;
+  border: 2px solid var(--pen); border-radius: var(--hand-a); background: var(--panel);
+}
+.dockBtn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 72px;
+  border: 0; background: transparent; color: var(--ink); font-size: var(--fs-xs); font-weight: 700; cursor: pointer;
+}
+.phoneApp { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+.phoneAppBar {
+  flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 44px;
+  padding: 0 max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left));
+  background: var(--panel); border-bottom: 2px solid var(--pen);
+}
+.phoneAppTitle { font-size: var(--fs-md); font-weight: 800; letter-spacing: 0.02em; }
+.phoneBack {
+  display: inline-flex; align-items: center; gap: 2px; justify-self: start; height: 34px; padding: 0 8px;
+  border: 0; background: transparent; color: var(--acc-ink); font-size: var(--fs-base); font-weight: 600; cursor: pointer;
+}
+.phoneAppBar .phoneBack:last-child { justify-self: end; }
+/* The home indicator: tap it to go home. */
+.homeBar {
+  flex: none; display: grid; place-items: center; height: calc(22px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom); border: 0; background: rgb(var(--shadow-rgb)); cursor: pointer;
+}
+.homeBar span { width: 134px; height: 5px; border-radius: 3px; background: var(--ink); opacity: 0.85; }
+@media (max-height: 500px) {
+  .appGrid { grid-template-columns: repeat(4, 96px); justify-content: center; padding-top: 20px; }
+  .dock { left: auto; right: max(16px, env(safe-area-inset-right)); top: 16px; bottom: 16px; flex-direction: column; width: 92px; }
+  .statusBar { height: calc(26px + env(safe-area-inset-top)); }
+  .homeBar { height: calc(14px + env(safe-area-inset-bottom)); }
+}

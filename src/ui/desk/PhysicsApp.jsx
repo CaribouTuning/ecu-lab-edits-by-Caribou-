@@ -1,10 +1,17 @@
 /**
- * The Physics app: the engine model laid open, stage by stage, on your own engine.
+ * The Physics app: the engine model laid open on your own engine, in four panels, as drawn.
  *
- * Each stage is a picture of what happens, the equation the simulator solves for it, and the
- * numbers it got for your current build and tune at the RPM you pick on the power curve at
- * the top. The numbers are the full-throttle pull the advisor and the dyno also use (the
- * app's `advisorPull`), so this page, the TUNE advice and the DYNO never disagree.
+ *   your build      the build's numbers and what the model makes of each, with a small
+ *                   cut-away of one cylinder drawn to its bore, stroke and compression
+ *   the graph       power and torque against RPM, or VE (the VE button), or the VE map in
+ *                   3-D (the 3D button); the RPM you pick here sets every other panel
+ *   the raw model   every calculation the simulator makes at that RPM, stage by stage,
+ *                   each with its equation, its numbers and what it means
+ *   the engine      the 3-D engine from Build, running at that RPM, with its cylinder's
+ *                   four strokes going round beside it
+ *
+ * The numbers are the full-throttle pull the advisor and the dyno also use (the app's
+ * `advisorPull`), so this page, the TUNE advice and the DYNO never disagree. The stages:
  *
  *   1 Air       how much air the cylinder takes in            m = VE x rho x V, rho = MAP / (R T)
  *   2 Fuel      how much fuel that needs, and the injector time m_f = m_air / (AFR_s x lambda)
@@ -16,7 +23,10 @@
 
 import React, { useMemo, useState } from 'react';
 
+import { TableSurface } from '../components/surface/TableSurface.jsx';
+
 import styles from './Apps.module.css';
+import { EngineViewer } from './EngineViewer.jsx';
 
 const R_AIR = 287;
 const NM_PER_LBFT = 1.3558;
@@ -25,22 +35,52 @@ const NM_PER_LBFT = 1.3558;
 const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 /**
- * One stage: a picture, the equation, and the numbers.
- * @param {{n: number, title: string, what: string, eq: React.ReactNode, rows: [string, string][], children: React.ReactNode}} props
+ * One stage of the model: a row that opens to its picture, equation and numbers, so the
+ * six stages read as a list first and nothing is in the way until you ask for it.
+ * @param {{n: number, title: string, what: string, eq: React.ReactNode, rows: [string, string][], open?: boolean, children: React.ReactNode}} props
  */
-function Stage({ n, title, what, eq, rows, children }) {
+function Stage({ n, title, what, eq, rows, open = false, children }) {
   return (
-    <section className={styles.stage} aria-labelledby={`phys-${n}`}>
-      <div className={styles.stageArt} aria-hidden="true">{children}</div>
-      <div className={styles.stageText}>
-        <h3 id={`phys-${n}`} className={styles.stageTitle}><span className={styles.stageNum}>{n}</span>{title}</h3>
-        <p className={styles.stageWhat}>{what}</p>
-        <div className={styles.eq}>{eq}</div>
-        <dl className={styles.nums}>
-          {rows.map(([k, v]) => (<React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>))}
-        </dl>
+    <details className={styles.stage} open={open}>
+      <summary className={styles.stageTitle}><span className={styles.stageNum}>{n}</span>{title}</summary>
+      <div className={styles.stageBody}>
+        <div className={styles.stageArt} aria-hidden="true">{children}</div>
+        <div className={styles.stageText}>
+          <p className={styles.stageWhat}>{what}</p>
+          <div className={styles.eq}>{eq}</div>
+          <dl className={styles.nums}>
+            {rows.map(([k, v]) => (<React.Fragment key={k}><dt>{k}</dt><dd>{v}</dd></React.Fragment>))}
+          </dl>
+        </div>
       </div>
-    </section>
+    </details>
+  );
+}
+
+/**
+ * One cylinder cut away, to this engine's proportions: the bore is the width, the stroke
+ * how far the piston travels, and the chamber above it the compression ratio's share.
+ * The piston runs at a pace that rises with the chosen RPM.
+ * @param {{bore: number, stroke: number, cr: number, rpm: number}} props
+ */
+function CylinderCut({ bore, stroke, cr, rpm }) {
+  const scale = 70 / Math.max(bore, stroke);
+  const w = bore * scale; const travel = stroke * scale;
+  const chamber = Math.max(4, travel / Math.max(1.5, cr - 1));
+  const x0 = 60 - w / 2; const top = 14;
+  // One full cycle a second at idle up to four at the limiter: slow enough to follow.
+  const period = Math.max(0.25, 1.6 - rpm / 6000);
+  return (
+    <svg viewBox="0 0 120 140" className={styles.cylArt} role="img" aria-label={`One cylinder, ${bore} mm bore by ${stroke} mm stroke, ${cr}:1 compression`}>
+      <rect x={x0 - 4} y={top} width={w + 8} height={chamber + travel + 26} className={styles.artBox2} />
+      <rect x={x0} y={top + 2} width={w} height={chamber + travel + 20} className={styles.artBox} />
+      <g className={styles.piston} style={/** @type {React.CSSProperties} */ ({ '--travel': `${travel}px`, animationDuration: `${period}s` })}>
+        <rect x={x0 + 1} y={top + chamber + 2} width={w - 2} height="16" className={styles.artFill} />
+        <line x1={60} y1={top + chamber + 18} x2={60} y2={top + chamber + 40} className={styles.artLine} />
+      </g>
+      <line x1={x0 - 10} y1={top + 2} x2={x0 - 10} y2={top + chamber + 2} className={styles.artWarn} />
+      <text x={8} y={136} className={styles.artText}>{bore} × {stroke} mm</text>
+    </svg>
   );
 }
 
@@ -86,21 +126,28 @@ function PressureTrace({ p }) {
  * @param {any[]} props.points the full-throttle pull of the current calibration
  * @param {any} props.derived the engine's derived geometry
  * @param {{label: string}} [props.fuel]
+ * @param {import('../world/models/engine.js').EngineSpec} [props.spec] the engine as built, for the 3-D model
+ * @param {number[][]|null} [props.ve] the tune's VE table (highest load first), for the 3-D map
+ * @param {{rpm: number[], load: number[], loadUnit: string}|null} [props.veAxes] its breakpoints
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel }) {
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null }) {
   const pts = useMemo(() => points ?? [], [points]);
   const peakIdx = useMemo(() => pts.reduce((b, q, j) => (q.torque > (pts[b]?.torque ?? -1) ? j : b), 0), [pts]);
   const [idx, setIdx] = useState(/** @type {number|null} */ (null));
+  const [graph, setGraph] = useState(/** @type {'power'|'ve'|'3d'} */ ('power'));
+  const veRows = useMemo(() => (ve ? [...ve].reverse() : null), [ve]);
+  const veLoads = useMemo(() => (veAxes ? [...veAxes.load].reverse() : null), [veAxes]);
   const i = Math.min(pts.length - 1, idx ?? peakIdx);
   const p = pts[i];
   if (!p) return <div className={styles.pad}>Build an engine first: the model needs something to run.</div>;
 
   // The curve at the top, and the RPM picker it doubles as.
-  const CW = 1000; const CH = 220;
+  const CW = 600; const CH = 260;
   const maxT = Math.max(...pts.map((q) => q.torque), 1);
   const maxH = Math.max(...pts.map((q) => q.hp), 1);
-  const top = Math.max(maxT, maxH) * 1.1;
+  const maxVe = Math.max(...pts.map((q) => q.ve ?? 0), 1);
+  const top = graph === 've' ? Math.max(110, maxVe * 1.1) : Math.max(maxT, maxH) * 1.1;
   const rpm0 = pts[0].rpm; const rpm1 = pts[pts.length - 1].rpm;
   const cx = (rpm) => ((rpm - rpm0) / Math.max(1, rpm1 - rpm0)) * (CW - 20) + 10;
   const cy = (v) => CH - 14 - (v / top) * (CH - 24);
@@ -119,31 +166,83 @@ export function PhysicsApp({ points, derived, fuel }) {
   // Brake thermal efficiency from BSFC (lb/hp·h = 0.6083 kg/kWh) and gasoline's 43 MJ/kg.
   const eff = 3.6 / (Math.max(0.05, p.bsfc ?? 0.45) * 0.6083 * 43);
 
-  return (
-    <div className={styles.pad}>
-      <p className={styles.lead}>
-        The simulator&apos;s engine model, one stage at a time, run on <b>your engine as built and tuned</b>{fuel ? ` on ${fuel.label}` : ''}.
-        Pick an RPM on the curve: every number below is the model&apos;s own answer at that speed, at full throttle.
-      </p>
-      <div className={styles.curve}>
-        <svg viewBox={`0 0 ${CW} ${CH}`} className={styles.curveSvg} role="img" aria-label={`Torque and power against RPM; ${p.rpm} RPM chosen`}>
-          <polyline points={line('torque')} className={styles.artLine} />
-          <polyline points={line('hp')} className={styles.artLine2} />
-          <line x1={cx(p.rpm)} y1={6} x2={cx(p.rpm)} y2={CH - 14} className={styles.artWarn} />
-          <line x1={0} y1={CH - 14} x2={CW} y2={CH - 14} className={styles.artAxis} />
-          <text x={14} y={20} className={styles.curveText}>torque (lb-ft)</text>
-          <text x={140} y={20} className={styles.curveText2}>power (hp)</text>
-          <text x={cx(p.rpm) + 6} y={CH - 22} className={styles.curveText}>{p.rpm} rpm</text>
-        </svg>
-        <input
-          type="range" className={styles.rpm} min={0} max={pts.length - 1} step={1} value={i}
-          onChange={(e) => setIdx(Number(e.target.value))} aria-label="RPM" aria-valuetext={`${p.rpm} RPM`}
-        />
-        <div className={styles.curveNums}>{p.rpm} RPM · {f(p.torque, 0)} lb-ft · {f(p.hp, 0)} hp</div>
-      </div>
+  const stroke = derived?.stroke ?? 0; const bore = derived?.bore ?? 0;
+  const pistonSpeed = (2 * (stroke / 1000) * p.rpm) / 60;
+  const buildRows = /** @type {[string, string, string][]} */ ([
+    ['Cylinders', `${derived?.cyl ?? '—'} · ${derived?.configuration ?? ''}`, 'how many slices the work is split into'],
+    ['Bore × stroke', `${f(bore, 1)} × ${f(stroke, 1)} mm`, `${f(vCylL * 1000, 0)} cc a cylinder, ${f(derived?.displacementL, 2)} L in all`],
+    ['Compression', `${f(derived?.compression, 1)} : 1`, 'squeeze before the spark: more work per burn, closer to knock'],
+    ['Cam duration', `${f(derived?.camDuration, 0)}°`, 'how long the valves stay open: shapes the VE curve'],
+    ['Piston speed', `${f(pistonSpeed, 1)} m/s at ${p.rpm} rpm`, 'from the stroke: what the intake has to keep up with'],
+    ['Fuel', fuel?.label ?? '—', 'sets the knock limit and the stoichiometric ratio'],
+  ]);
+  const graphLabel = graph === 've'
+    ? `Volumetric efficiency against RPM; ${p.rpm} RPM chosen, ${f(p.ve, 0)} %`
+    : `Torque and power against RPM; ${p.rpm} RPM chosen`;
 
+  return (
+    <div className={`${styles.pad} ${styles.physics}`}>
+      <p className={styles.lead}>
+        The simulator&apos;s engine model, run on <b>your engine as built and tuned</b>{fuel ? ` on ${fuel.label}` : ''}, at full throttle.
+        Pick an RPM on the graph: every panel follows it.
+      </p>
+      <div className={styles.physGrid}>
+        <section className={`${styles.physPanel} ink-frame`} aria-label="Your build in the model">
+          <h3 className={styles.panelTitle}>Your build in the model</h3>
+          <div className={styles.buildSplit}>
+            <dl className={styles.buildList}>
+              {buildRows.map(([k, v, why]) => (
+                <div key={k} className={styles.buildRow2}><dt>{k}</dt><dd><b>{v}</b><span>{why}</span></dd></div>
+              ))}
+            </dl>
+            <CylinderCut bore={Number(f(bore, 1))} stroke={Number(f(stroke, 1))} cr={derived?.compression ?? 10} rpm={p.rpm} />
+          </div>
+        </section>
+
+        <section className={`${styles.physPanel} ink-frame`} aria-label="Graph">
+          <div className={styles.panelHead}>
+            <h3 className={styles.panelTitle}>{graph === 've' ? 'VE against RPM' : graph === '3d' ? 'The VE map in 3-D' : 'Power and torque'}</h3>
+            <div className={styles.graphBtns} role="group" aria-label="Graph">
+              <button type="button" aria-pressed={graph === 've'} onClick={() => setGraph(graph === 've' ? 'power' : 've')} title="Show VE against RPM">VE</button>
+              <button type="button" aria-pressed={graph === '3d'} onClick={() => setGraph(graph === '3d' ? 'power' : '3d')} title="Show the VE map in 3-D">3D</button>
+            </div>
+          </div>
+          {graph === '3d' && veRows && veAxes && veLoads ? (
+            <TableSurface x={veAxes.rpm} y={veLoads} z={veRows} lo={10} hi={130} xLabel="RPM" yLabel={veAxes.loadUnit} unit="%" decimals={0}
+              title="Volumetric efficiency" xVar="rpm" yVar={veAxes.loadUnit === 'kPa' ? 'map' : null} />
+          ) : (
+            <svg viewBox={`0 0 ${CW} ${CH}`} className={styles.curveSvg} role="img" aria-label={graphLabel}>
+              {graph === 've' ? (
+                <polyline points={line('ve')} className={styles.artLine} />
+              ) : (
+                <>
+                  <polyline points={line('torque')} className={styles.artLine} />
+                  <polyline points={line('hp')} className={styles.artLine2} />
+                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="9" className={styles.artDot} />
+                  <text x={cx(p.rpm) + 14} y={cy(p.hp) - 10} className={styles.curveText2}>{f(p.hp, 0)} hp</text>
+                </>
+              )}
+              {graph === 've' && <circle cx={cx(p.rpm)} cy={cy(p.ve ?? 0)} r="9" className={styles.artDot} />}
+              <line x1={cx(p.rpm)} y1={6} x2={cx(p.rpm)} y2={CH - 14} className={styles.artWarn} />
+              <line x1={0} y1={CH - 14} x2={CW} y2={CH - 14} className={styles.artAxis} />
+              {graph === 've'
+                ? <text x={14} y={24} className={styles.curveText}>VE (%)</text>
+                : <><text x={14} y={24} className={styles.curveText}>torque (lb-ft)</text><text x={130} y={24} className={styles.curveText2}>power (hp)</text></>}
+              <text x={CW - 40} y={CH - 22} className={styles.curveText}>RPM</text>
+            </svg>
+          )}
+          <input
+            type="range" className={styles.rpm} min={0} max={pts.length - 1} step={1} value={i}
+            onChange={(e) => setIdx(Number(e.target.value))} aria-label="RPM" aria-valuetext={`${p.rpm} RPM`}
+          />
+          <div className={styles.curveNums}>{p.rpm} RPM · {f(p.torque, 0)} lb-ft · {f(p.hp, 0)} hp · VE {f(p.ve, 0)} %</div>
+        </section>
+
+        <section className={`${styles.physPanel} ink-frame`} aria-label="The raw physics model">
+          <h3 className={styles.panelTitle}>The raw physics model</h3>
+          <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>
       <Stage
-        n={1} title="Air in" what="The cylinder fills with air. How full it gets, against how full it could be at this pressure, is the volumetric efficiency: the number every hardware choice moves."
+        open n={1} title="Air in" what="The cylinder fills with air. How full it gets, against how full it could be at this pressure, is the volumetric efficiency: the number every hardware choice moves."
         eq={<>m<sub>air</sub> = VE × ρ × V<sub>cyl</sub> &nbsp;&nbsp; ρ = MAP / (R × T)</>}
         rows={[['VE', `${f(p.ve)} %`], ['MAP', `${f(p.map, 0)} kPa`], ['Charge temp', `${f(p.iat, 0)} °C = ${f(tK, 0)} K`], ['Air density ρ', `${f(rho, 3)} kg/m³`], ['V cyl', `${f(vCylL * 1000, 0)} cc`], ['Air per cylinder', `${f(mAirMg, 0)} mg`]]}
       >
@@ -221,6 +320,18 @@ export function PhysicsApp({ points, derived, fuel }) {
           <text x="10" y="80" className={styles.artText}>the rest: exhaust, coolant</text>
         </svg>
       </Stage>
+        </section>
+
+        <section className={`${styles.physPanel} ink-frame`} aria-label="The engine running">
+          <h3 className={styles.panelTitle}>The engine, running at {p.rpm} RPM</h3>
+          {spec ? <EngineViewer spec={spec} rpm={p.rpm} label={`Your engine, turning at ${p.rpm} RPM`} /> : null}
+          <ol className={styles.strokes}>
+            {[['Intake', `fills ${f(p.ve, 0)} % full`], ['Compression', `to ${f(derived?.compression, 1)} : 1`], ['Power', `peaks ${f(p.peakPressure, 0)} bar`], ['Exhaust', `out at ${f(p.egt, 0)} °C`]].map(([k, v], j) => (
+              <li key={k} className={styles.strokeStep} style={{ animationDelay: `${j * 0.5}s` }}><b>{k}</b><span>{v}</span></li>
+            ))}
+          </ol>
+        </section>
+      </div>
     </div>
   );
 }

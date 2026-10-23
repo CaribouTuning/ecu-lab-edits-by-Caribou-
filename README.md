@@ -19,8 +19,11 @@ It is a teaching tool, not a game with a horsepower slider.
 
 Three ways in: **SANDBOX** is free play, on a laptop in your own shop: its desktop has
 Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide
-and the Tuning Course) and Physics (the engine model laid open, stage by stage, on your own
-engine); shut the laptop and the dyno and the engine stand (LIVE) are in the shop behind it.
+and the Tuning Course) and Physics (the engine model laid open on your own engine: your
+build, the curves and VE map, every calculation, and the engine running); shut the laptop
+and the dyno and the engine stand (LIVE) are in the shop behind it. Played on a phone, the
+laptop is a phone: the same apps on a home screen, and you put it down to see the shop.
+CAREER's work is done on the same laptop (or phone).
 **TUTORIAL** is five minutes on the basics. **CAREER** is a tuning shop of your own.
 Customers bring cars with real faults and describe what the car does, never what is wrong
 with it: a cast of named customers, and new walk-ins every day without end, generated

@@ -581,12 +581,18 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
     return () => window.removeEventListener('keydown', onKey);
   }, [endTalk]);
 
-  // Medals: noticed whenever the save changes, paid once.
+  // Medals: noticed whenever the save changes, paid once. Announced once too: the save
+  // can change again before the payout lands, and that pass would see the medal unpaid.
+  const announced = useRef(new Set());
   useEffect(() => {
     const { career: next, earned } = collect(career);
     if (!earned.length) return;
     update(next);
-    for (const a of earned) toast(`Achievement: ${a.title}${a.reward ? ` (+$${a.reward})` : ''}`, 'ok');
+    for (const a of earned) {
+      if (announced.current.has(a.id)) continue;
+      announced.current.add(a.id);
+      toast(`Achievement: ${a.title}${a.reward ? ` (+$${a.reward})` : ''}`, 'ok');
+    }
   }, [career, toast, update]);
   // The welcome, once.
   useEffect(() => {

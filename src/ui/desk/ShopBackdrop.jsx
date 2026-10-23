@@ -28,11 +28,12 @@ export const HOTSPOTS = [
  * @param {'desk'|'bay'|'page'} props.mode the laptop open, the shop with it shut, or a page over it all
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
+ * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, engineSpec, rpm, onPick, onLook }) {
+export function ShopBackdrop({ mode, phone = false, engineSpec, rpm, onPick, onLook }) {
   const live = useRef({ mode, rpm, spec: engineSpec, specDirty: false });
   live.current.mode = mode;
   live.current.rpm = rpm;
@@ -60,8 +61,10 @@ export function ShopBackdrop({ mode, engineSpec, rpm, onPick, onLook }) {
           const el = spots.current[id];
           if (!el) continue;
           v.copy(at).project(shop.camera);
-          el.style.left = `${((v.x + 1) / 2) * w}px`;
-          el.style.top = `${((1 - v.y) / 2) * h}px`;
+          // Kept on screen, however narrow it is: a marker never goes past the edge.
+          const pad = 48;
+          el.style.left = `${Math.min(w - pad, Math.max(pad, ((v.x + 1) / 2) * w))}px`;
+          el.style.top = `${Math.min(h - pad, Math.max(pad, ((1 - v.y) / 2) * h))}px`;
         }
       },
     };
@@ -86,7 +89,7 @@ export function ShopBackdrop({ mode, engineSpec, rpm, onPick, onLook }) {
               title={h.hint}
             >
               <span className={styles.spotRing} aria-hidden="true" />
-              <span className={`${styles.spotLabel} ink-frame`}>{h.label}</span>
+              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>
             </button>
           ))}
         </div>

@@ -114,8 +114,7 @@ export const utilisationColor = (v) => T[utilisationTone(v)];
 function heat(value, min, max) {
   const t = clamp((value - min) / (max - min), 0, 1);
   const hue = 214 - t * 214;
-  // A watercolour wash under inked numbers: pale, never dark.
-  return `hsl(${hue.toFixed(0)}, 62%, ${(86 - t * 10).toFixed(0)}%)`;
+  return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
 }
 
 /**
@@ -132,7 +131,7 @@ function heat(value, min, max) {
  */
 function deltaHeat(delta, fullScale = 12) {
   const mag = clamp(Math.abs(delta) / fullScale, 0, 1);
-  return `hsl(${delta > 0 ? 8 : 200}, 60%, ${(93 - mag * 20).toFixed(0)}%)`;
+  return `hsl(${delta > 0 ? 8 : 200}, 60%, ${14 + mag * 22}%)`;
 }
 
 // The hues of T.violet and T.cyan, so the overlay reads as the app's secondary data
@@ -143,7 +142,7 @@ const DIFF_DOWN_HUE = 188;
 
 /**
  * Tint for a cell's change from the loaded calibration (issue 106): violet up, cyan down,
- * a deeper wash with magnitude up to `fullScale`.
+ * brighter with magnitude up to `fullScale`.
  *
  * Not `deltaHeat`: that one's warm half sits on red, and a table the player has simply
  * edited must never look like a fault. The floor keeps the smallest change distinct
@@ -155,7 +154,7 @@ const DIFF_DOWN_HUE = 188;
  */
 function diffTint(delta, fullScale) {
   const mag = clamp(Math.abs(delta) / fullScale, 0, 1);
-  return `hsl(${delta > 0 ? DIFF_UP_HUE : DIFF_DOWN_HUE}, 55%, ${(86 - mag * 18).toFixed(0)}%)`;
+  return `hsl(${delta > 0 ? DIFF_UP_HUE : DIFF_DOWN_HUE}, 55%, ${(20 + mag * 20).toFixed(0)}%)`;
 }
 
 export { T, accAlpha, deltaHeat, diffTint, heat, horizonGlowAlpha, shadowAlpha, smokeAlpha, strip };
