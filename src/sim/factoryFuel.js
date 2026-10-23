@@ -35,6 +35,7 @@
 
 /**
  * @typedef {object} FuelStrategy
+ * @property {boolean} [turbo] the plan is for a turbo engine (boost-relative pressures)
  * @property {[number, number][]} wot full-load lambda target against rpm, [rpm, lambda]
  * @property {number} enrichFromKpa closed-loop lambda 1 at or below this manifold pressure
  *   (naturally aspirated) or, for a turbo engine, this much boost in kPa above barometric
@@ -81,6 +82,7 @@ export const FACTORY_FUEL = {
     note: 'The DE Rev-Up strategy carried to the HR\'s 7500 limit (2007-on cars read it on factory wideband sensors).',
   },
   n54: {
+    turbo: true,
     enrichFromKpa: 0, enrichFullKpa: 70,
     wot: [[1500, 0.86], [3000, 0.81], [5000, 0.79], [7000, 0.78]],
     confidence: 'reported',
@@ -88,6 +90,7 @@ export const FACTORY_FUEL = {
     note: 'Lambda 1 off boost; richening with boost to about 11.5-11.9 AFR at full boost and high rpm.',
   },
   'b58-m0': {
+    turbo: true,
     enrichFromKpa: 0, enrichFullKpa: 80,
     wot: [[1000, 1.0], [4500, 1.0], [5500, 0.96], [7000, 0.9]],
     confidence: 'logged',
@@ -95,6 +98,7 @@ export const FACTORY_FUEL = {
     note: 'Lambda 1 through most of a full-throttle pull, richening toward 13.2 AFR near redline.',
   },
   'b58-m1': {
+    turbo: true,
     enrichFromKpa: 0, enrichFullKpa: 80,
     wot: [[1000, 1.0], [4500, 1.0], [5500, 0.96], [7000, 0.9]],
     confidence: 'logged',
@@ -102,6 +106,7 @@ export const FACTORY_FUEL = {
     note: 'As the B58B30M0.',
   },
   'ea888-gti': {
+    turbo: true,
     enrichFromKpa: 0, enrichFullKpa: 80,
     wot: [[1000, 1.0], [4000, 1.0], [5500, 0.95], [6500, 0.92]],
     confidence: 'logged',
@@ -109,6 +114,7 @@ export const FACTORY_FUEL = {
     note: '14.7 for most of a full-throttle pull, tapering to the mid 13s by redline.',
   },
   'ea888-r': {
+    turbo: true,
     enrichFromKpa: 0, enrichFullKpa: 80,
     wot: [[1000, 1.0], [4000, 1.0], [5500, 0.95], [6500, 0.92]],
     confidence: 'family',
@@ -175,19 +181,22 @@ const GENERIC_NA = {
   confidence: 'family', sources: [UPREV, HPT_PE], note: 'A port-injected, naturally aspirated engine\'s usual strategy.',
 };
 const GENERIC_TURBO = {
-  enrichFromKpa: 0, enrichFullKpa: 70, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
+  turbo: true, enrichFromKpa: 0, enrichFullKpa: 70, wot: [[1500, 0.86], [3000, 0.82], [5000, 0.8], [7000, 0.79], [11000, 0.78]],
   confidence: 'family', sources: [JB4_N54], note: 'A turbo engine\'s usual strategy: lambda 1 off boost, rich under it.',
 };
 
 /**
- * The strategy for an engine: its own when it has one, otherwise the usual one for how it
- * breathes.
- * @param {{id?: string}} preset
+ * The strategy for an engine: its own when it has one and still breathes the way it left
+ * the factory, otherwise the usual one for how it breathes now (a turbo fitted to a
+ * naturally aspirated engine is fuelled as a turbo engine, not on the factory's NA plan).
+ * @param {string|null|undefined} id the factory engine's id, when it is one
  * @param {boolean} turbo
  * @returns {FuelStrategy}
  */
-export function fuelStrategyFor(preset, turbo) {
-  return FACTORY_FUEL[preset.id ?? ''] ?? (turbo ? GENERIC_TURBO : GENERIC_NA);
+export function fuelStrategyFor(id, turbo) {
+  const own = FACTORY_FUEL[id ?? ''];
+  if (own && !!own.turbo === turbo) return own;
+  return turbo ? GENERIC_TURBO : GENERIC_NA;
 }
 
 /** @param {[number, number][]} pts @param {number} x */

@@ -105,7 +105,9 @@ describe('what it does to the engine', () => {
     const gains = [50, 100, 150].map((shot) => (at(pull(kit(shot)), 4500).hp - base) / S.DRIVETRAIN_EFF / shot);
     for (const g of gains) {
       expect(g).toBeGreaterThan(0.85);
-      expect(g).toBeLessThan(1.05);
+      // 1.05 plus the counting of molar expansion (thermo.js, molarExpansion): the rich
+      // spray's products gain the most moles of any mixture, and the 150 shot reads 1.051.
+      expect(g).toBeLessThan(1.06);
     }
     expect(Math.max(...gains) - Math.min(...gains)).toBeLessThan(0.1);
   });

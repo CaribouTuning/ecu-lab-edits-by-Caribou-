@@ -286,6 +286,29 @@ export function productsPerKgCharge(phi, fuel) {
   return /** @type {{CO2: number, CO: number, H2O: number, H2: number, O2: number, N2: number, phi: number, stoich: number}} */ ({ ...out, phi, stoich: fuel.stoich });
 }
 
+/**
+ * Molar expansion: moles of burned products over moles of the unburned charge (air and
+ * fuel vapour) they came from, per kg of charge. Burning C8H15-like fuel turns fewer,
+ * heavier molecules into more, lighter ones (CO2 and water from fuel and O2; rich, CO and
+ * H2 in place of some of them), so at the same temperature the products push harder than
+ * the charge did. Heywood 1988, section 4.2 (the molar expansion ratio): about 1.05 for a
+ * stoichiometric gasoline mixture, rising on the rich side. It is one of the reasons a real
+ * engine makes its best power a little rich (section 7.2.2, power against equivalence ratio).
+ *
+ * @param {ReturnType<typeof productsPerKgCharge>} pr productsPerKgCharge's result
+ * @returns {number} products' moles over the charge's, about 1.04-1.12
+ */
+export function molarExpansion(pr) {
+  const phi = pr.phi ?? 1;
+  const stoich = pr.stoich ?? COEFF.STOICH_GASOLINE;
+  const e = clamp((COEFF.STOICH_GASOLINE - stoich) / (COEFF.STOICH_GASOLINE - COEFF.STOICH_ETHANOL), 0, 1);
+  const fuelShare = 1 / (1 + stoich / Math.max(0.05, phi));
+  const fuelMolarG = 1 / ((1 - e) / COEFF.GASOLINE_MOLAR_G + e / COEFF.ETHANOL_MOLAR_G);
+  const reactantMol = ((1 - fuelShare) * 1000) / COEFF.AIR_MOLAR_G + (fuelShare * 1000) / fuelMolarG;
+  const productMol = pr.CO2 + pr.CO + pr.H2O + pr.H2 + pr.O2 + pr.N2;
+  return productMol / reactantMol;
+}
+
 /** ln Kp at a temperature, linear in 1/T between the tabulated points (ln Kp is near-linear in 1/T). */
 const lnKpAt = (table, tK, T = COEFF.DISSOC_T_K) => {
   const inv = 1 / tK;

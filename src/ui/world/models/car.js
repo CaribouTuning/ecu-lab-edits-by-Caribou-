@@ -249,6 +249,10 @@ export function makeCar(spec = {}) {
   if (spec.interior) {
     inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat, body: spec.body ?? 'coupe', name: spec.model ?? '', open: !!S.open });
     inside.group.userData.dynamic = true;
+    // Only from the driver's seat: the cabin is built for the view from inside, and seen
+    // from the chase camera its arms and headrests came up through the roof. From outside the
+    // shell's own seats show through the glass.
+    inside.group.visible = false;
     car.add(inside.group);
   } else {
     car.add(box(Wd * 0.8, 0.14, 0.18, W.wallBlack, { y: belt - 0.05, z: zf0 - 0.2, edge: false }));
@@ -257,7 +261,7 @@ export function makeCar(spec = {}) {
     car.add(wheel);
   }
   /** Hide the roof, glass and pillars, for a camera inside the cabin. @param {boolean} on */
-  rig.setCockpit = (on) => { if (spec.interior) shell.visible = !on; };
+  rig.setCockpit = (on) => { if (spec.interior) shell.visible = !on; if (inside) inside.group.visible = on; };
   /** Turn the steering wheel inside, radians. @param {number} a */
   rig.setWheel = (a) => inside?.setWheel(a);
   /** The driver's eye, car-local, for the first-person camera. */

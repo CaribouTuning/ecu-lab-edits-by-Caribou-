@@ -31,7 +31,8 @@ export function useStage(setup, opts = {}) {
     let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     try {
-      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch });
+      // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
+      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false });
     } catch {
       setFailed(true);
       return undefined;

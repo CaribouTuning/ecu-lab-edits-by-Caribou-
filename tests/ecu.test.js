@@ -154,10 +154,14 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
   });
 
   it('leans out under boost on a returnless rail, and compensation brings it back', () => {
-    const base = { preset: 'b58-m1', build: { fuelSystem: { regulator: 'returnless', basePressureKpa: 300, pumpIdx: 3 } } };
-    const ret = at(makeEngine({ preset: 'b58-m1' }).pull(), 4500);
+    // The B58's factory fuel runs lambda 1 under boost (factoryFuel.js), so leaning it 8%
+    // trips the ECU's lean protection, which cuts the boost this test is about. The rail's
+    // physics is what is under test here, so the protection is off on all three.
+    const noCut = { 'protect.leanEnabled': false };
+    const base = { preset: 'b58-m1', build: { fuelSystem: { regulator: 'returnless', basePressureKpa: 300, pumpIdx: 3 } }, cal: noCut };
+    const ret = at(makeEngine({ preset: 'b58-m1', cal: noCut }).pull(), 4500);
     const raw = at(makeEngine(base).pull(), 4500);
-    const comp = at(makeEngine({ ...base, cal: { 'injector.pressureComp': 'manifold' } }).pull(), 4500);
+    const comp = at(makeEngine({ ...base, cal: { ...noCut, 'injector.pressureComp': 'manifold' } }).pull(), 4500);
     expect(raw.railDp).toBeLessThan(250);
     expect(raw.lambda).toBeGreaterThan(ret.lambda * 1.08);
     expect(Math.abs(comp.lambda - ret.lambda)).toBeLessThan(0.02);
@@ -175,12 +179,15 @@ describe('fuel: what the ECU believes about fuel reaches the cylinder', () => {
   });
 
   it('starves the rail when the pump is too small for the demand', () => {
-    // The stock pump, and a tired one at that, against E85's fuel volume under boost.
-    const eng = makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850, fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: 0 } }, faults: { pump: 'weak' } });
+    // The stock pump, and a tired one at that, against E85's fuel volume under boost. Lean
+    // protection off: the B58's lambda-1 factory fuel sits close enough to its threshold
+    // that it would cut the boost, and the demand with it, before the pump runs short.
+    const noCut = { 'protect.leanEnabled': false };
+    const eng = makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850, fuelSystem: { regulator: 'return', basePressureKpa: 300, pumpIdx: 0 } }, faults: { pump: 'weak' }, cal: noCut });
     const pull = eng.pull();
     expect(pull.points.some((p) => p.fuelStarved)).toBe(true);
     const starved = pull.points.find((p) => p.fuelStarved);
-    const healthy = at(makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850 } }).pull(), starved.rpm);
+    const healthy = at(makeEngine({ preset: 'b58-m1', build: { octaneIdx: 3, injIdx: 4, ecuInjectorCc: 850 }, cal: noCut }).pull(), starved.rpm);
     expect(starved.lambda).toBeGreaterThan(healthy.lambda);
   });
 
