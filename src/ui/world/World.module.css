@@ -362,9 +362,10 @@
   .padBrake { width: 64px; height: 70px; }
   .padAct { width: 64px; height: 64px; }
   .objective { top: calc(var(--edge-t) + 36px); font-size: var(--fs-micro); }
-  .toasts { top: calc(var(--edge-t) + 40px); }
+  .toasts { top: calc(var(--edge-t) + 76px); }
   .drawer { width: min(60%, 460px); }
-  .prompt { padding: 5px 10px 5px 5px; bottom: calc(var(--edge-b) + 2px); }
+  /* Over the row of small driving buttons along the bottom, not on it. */
+  .prompt { padding: 5px 10px 5px 5px; bottom: calc(var(--edge-b) + 56px); }
   .prompt i { display: none; }
   .gmeter { width: 44px; height: 44px; }
   .sheet { padding: var(--sp-lg); }
@@ -566,9 +567,13 @@
 .mapTarget { fill: none; stroke: var(--warn); stroke-width: 4; }
 @media (max-height: 480px), (orientation: portrait) and (max-width: 560px) { .miniMap { width: 96px; height: 96px; } }
 
-/* Out on a drive from the desk: the way back. */
+/* Out on a drive from the desk: the way back, top centre, clear of the prompt and the pedals. */
 .homeBtn {
-  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(14px + var(--edge-b, 0px)); z-index: 6;
+  position: absolute; left: 50%; transform: translateX(-50%); top: calc(8px + var(--edge-t, 0px)); z-index: 6;
   padding: 10px 16px; border: 2px solid var(--pen, var(--line-hi)); border-radius: var(--hand-a, 10px);
   background: var(--panel); color: var(--ink); font-weight: 800; font-size: var(--fs-sm); letter-spacing: 0.04em; cursor: pointer;
+}
+/* On a phone the top centre holds the status chips: the way back goes under the objective. */
+@media (max-height: 520px), (orientation: portrait) and (max-width: 560px) {
+  .homeBtn { left: var(--edge); transform: none; top: calc(var(--edge-t) + 76px); padding: 6px 12px; font-size: var(--fs-xs); }
 }

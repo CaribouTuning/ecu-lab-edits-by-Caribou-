@@ -65,9 +65,11 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
         const scene = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'board';
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
         const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0));
-        if (l.mode === 'page' || (scene && !busy)) {
+        // While it runs, thirty frames a second is plenty for a turning engine or wheels,
+        // and leaves the readouts over it the rest of the machine.
+        if (l.mode === 'page' || scene) {
           idle += dt;
-          if (idle < 0.25) return false;
+          if (idle < (busy ? 1 / 30 : 0.25)) return false;
           dt = idle;
           idle = 0;
         }
