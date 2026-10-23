@@ -21,7 +21,7 @@
 }
 
 .canvasWrap { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; background: var(--bg); }
-.canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; image-rendering: pixelated; touch-action: none; }
+.canvas { display: block; touch-action: none; }
 .fade { position: absolute; inset: 0; background: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.35s ease; z-index: 30; }
 .fade[data-on='true'] { opacity: 1; pointer-events: auto; }
 

@@ -27,8 +27,8 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
  *   outlines on the model's own colours, for a close-up such as the Build engine.
  *   `sketch` draws the scene as if doodled by hand instead of pixel art: full resolution,
  *   its own colours and light, ink outlines, pencil hatching in the shade and paper
- *   grain, all held still. The sandbox's shop is drawn this way; the career's town stays
- *   pixel art.
+ *   grain, all held still. The shop is drawn this way, and the town too unless its quality
+ *   is set to CHUNKY.
  */
 export function createStage(canvas, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });

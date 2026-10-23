@@ -648,6 +648,7 @@ export default function World({ career, update, onWork, onDyno, onMenu, onLearn,
   const objective = useMemo(() => {
     if (!settings.hints) return null;
     if (racing) return null;
+    if (onHome && !driving) return 'Out in town. Get in and drive, or press BACK TO THE SHOP to go back to your desk.';
     if (driving && outJob?.startsWith('own:')) return 'Your car, your town. The drag strip is off the highway to the north, the Raceway to the south: drive to the start and press E. The map shows the way.';
     if (driving) return 'Feel what your tune did. When you are done, drive to the shop and park it.';
     if (outJob && onHome) return 'Drive back into your shop, or press BACK TO THE SHOP, to go back to your desk.';

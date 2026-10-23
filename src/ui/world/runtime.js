@@ -126,7 +126,8 @@ function clampToBounds(x, z, rects) {
  * @param {boolean} [o.preserve] keep the drawing buffer, for screenshots
  */
 export function createWorld({ canvas, onEvent, getCareer, getLook, levels, quality = 'normal', preserve = false }) {
-  const stage = createStage(canvas, { quality, preserve });
+  // Drawn like the shop: full resolution with clean ink outlines (CHUNKY keeps big pixels).
+  const stage = createStage(canvas, { quality, preserve, sketch: quality !== 'chunky', hatch: false });
   // Test hook: a browser test can draw debug shapes with the same three.js the scene uses.
   if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__THREE = THREE;
   const rig = createRig(stage.camera);
