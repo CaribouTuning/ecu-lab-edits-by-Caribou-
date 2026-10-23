@@ -5,7 +5,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, ball, box, cone, glow, loftMesh, patternMaterial, rbox, sign, texBox, toon } from '../gfx.js';
+import { THREE, ball, box, cone, cyl, glow, loftMesh, patternMaterial, rbox, sign, texBox, toon } from '../gfx.js';
 
 /**
  * @typedef {object} BuildingSpec
@@ -45,15 +45,27 @@ export function makeBuilding(s) {
   // Plinth and cornice.
   g.add(box(w + 0.2, 0.5, d + 0.2, trim, { y: 0.25, edge: false }));
   g.add(box(w + 0.4, 0.35, d + 0.4, trim, { y: h + 0.17 }));
+  // Pilasters up the corners, a band between the storeys and a rain pipe down one side:
+  // the lines a drawing of a building is made of.
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(0.45, h, 0.45, trim, { x: sx * (w / 2 - 0.1), y: h / 2, z: sz * (d / 2 - 0.1) }));
+  if (h > 5.2) g.add(box(w + 0.12, 0.22, d + 0.12, trim, { y: 2.95 }));
+  g.add(cyl(0.08, 0.08, h, W.metalDark, { x: w / 2 - 0.45, y: h / 2, z: d / 2 + 0.12, edge: false }));
   // Roof.
   if (s.roofKind === 'gable') {
-    const slab = loftMesh({ y: h + 0.35, z0: -d / 2 - 0.4, z1: d / 2 + 0.4, w: w + 0.8 }, { y: h + 0.35 + Math.min(3, w * 0.18), z0: -d / 2 - 0.4, z1: d / 2 + 0.4, w: 0.4 }, roof, { edge: true, mat: patternMaterial('shingle', roof, 2) });
+    const rise = Math.min(3, w * 0.18);
+    const slab = loftMesh({ y: h + 0.35, z0: -d / 2 - 0.4, z1: d / 2 + 0.4, w: w + 0.8 }, { y: h + 0.35 + rise, z0: -d / 2 - 0.4, z1: d / 2 + 0.4, w: 0.4 }, roof, { edge: true, mat: patternMaterial('shingle', roof, 2) });
     g.add(slab);
+    // A brick chimney through the roof, a cap on it.
+    g.add(texBox(0.8, rise + 1.2, 0.8, 'brick', W.brick, { x: w * 0.28, y: h + 0.35 + rise / 2 + 0.3, z: -d * 0.2, tile: 1.2 }));
+    g.add(box(1.0, 0.16, 1.0, trim, { x: w * 0.28, y: h + 0.35 + rise + 0.95, z: -d * 0.2 }));
   } else if (s.roofKind === 'sawtooth') {
     for (let i = 0; i < Math.floor(w / 4); i += 1) g.add(box(3.6, 0.9, d - 1, roof, { x: -w / 2 + 2 + i * 4, y: h + 0.8, edge: false }));
     g.add(box(w, 0.25, d, roof, { y: h + 0.4, edge: false }));
   } else {
     g.add(texBox(w - 0.2, 0.3, d - 0.2, 'slate', roof, { y: h + 0.5, tile: 1.6 }));
+    // A parapet round the flat roof, capped.
+    for (const sz of [-1, 1]) g.add(box(w + 0.4, 0.7, 0.25, trim, { y: h + 0.7, z: sz * (d / 2 + 0.07) }));
+    for (const sx of [-1, 1]) g.add(box(0.25, 0.7, d + 0.4, trim, { x: sx * (w / 2 + 0.07), y: h + 0.7 }));
     // A little rooftop clutter: an air-conditioner and a vent.
     g.add(box(1.6, 0.8, 1.2, W.metal, { x: w * 0.25, y: h + 0.9, z: -d * 0.15 }));
     g.add(box(0.5, 0.9, 0.5, W.metalDark, { x: -w * 0.3, y: h + 0.95, z: d * 0.1, edge: false }));
@@ -73,6 +85,9 @@ export function makeBuilding(s) {
   if (s.shopfront) {
     const side = (cx, cw) => {
       g.add(box(cw, 2.3, 0.12, W.metalDark, { x: cx, y: 1.7, z: d / 2 + 0.02, edge: false }));
+      // The stall riser under the glass, and a transom bar across the top.
+      g.add(box(cw + 0.1, 0.55, 0.2, trim, { x: cx, y: 0.55, z: d / 2 + 0.06 }));
+      g.add(box(cw + 0.1, 0.12, 0.16, W.metalDark, { x: cx, y: 2.45, z: d / 2 + 0.1, edge: false }));
       const m = new THREE.Mesh(new THREE.BoxGeometry(cw - 0.25, 2.05, 0.1), winMat);
       m.position.set(cx, 1.7, d / 2 + 0.07);
       g.add(m);
@@ -91,6 +106,8 @@ export function makeBuilding(s) {
         if (y > h - 1) continue;
         if (r === 0 && Math.abs(x - doorX) < doorW) continue;
         g.add(rbox(1.7, 1.7, 0.16, trim, { x, y, z: d / 2 + 0.02, r: 0.05 }));
+        // A lintel over it.
+        g.add(box(2.0, 0.24, 0.26, trim, { x, y: y + 0.98, z: d / 2 + 0.08 }));
         const m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.1), (c + r * 3) % 3 === 0 && !s.night ? dark : winMat);
         m.position.set(x, y, d / 2 + 0.1);
         g.add(m);

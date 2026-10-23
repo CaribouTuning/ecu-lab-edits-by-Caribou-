@@ -38,11 +38,12 @@ export function tone(c, dl) {
 
 /**
  * Light from the top left: each colour run gets a darker right and bottom edge and a
- * brighter top-left texel, then the figure gets a one-texel dark outline. This is what
- * makes a flat drawing read as a rounded figure.
+ * brighter top-left texel, then (unless `outline` is false) the figure gets a one-texel
+ * dark outline. This is what makes a flat drawing read as a rounded figure.
  * @param {ReturnType<typeof raster>} r
+ * @param {boolean} [outline]
  */
-export function finish(r) {
+export function finish(r, outline = true) {
   const { w, h } = r;
   const src = r.px.slice();
   const at = (x, y) => (x >= 0 && y >= 0 && x < w && y < h ? src[y * w + x] : null);
@@ -54,6 +55,7 @@ export function finish(r) {
       else if (!at(x, y - 1) && at(x - 1, y)) r.set(x, y, tone(c, 0.07));
     }
   }
+  if (!outline) return;
   const shaded = r.px.slice();
   for (let y = 0; y < h; y += 1) {
     for (let x = 0; x < w; x += 1) {
@@ -67,31 +69,92 @@ export function finish(r) {
   }
 }
 
+/** How many times bigger a sheet is drawn than it is painted: two doublings. */
+const INK_SCALE = 4;
+
 /**
- * Bakes painted frames into a texture: `paint(r, row, col)` paints one frame.
+ * One doubling of a painted frame with the corners rounded (EPX): a staircase of texels
+ * becomes a slope, so the figure's outline reads as a pen line, not as pixels.
+ * @param {(string|null)[]} px @param {number} w @param {number} h
+ * @returns {(string|null)[]} twice the width and height
+ */
+function epx(px, w, h) {
+  const out = new Array(w * h * 4).fill(null);
+  const at = (x, y) => (x >= 0 && y >= 0 && x < w && y < h ? px[y * w + x] : null);
+  const W2 = w * 2;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const P = at(x, y); const A = at(x, y - 1); const B = at(x + 1, y); const C = at(x - 1, y); const D = at(x, y + 1);
+      let p1 = P; let p2 = P; let p3 = P; let p4 = P;
+      if (C === A && C !== D && A !== B) p1 = A;
+      if (A === B && A !== C && B !== D) p2 = B;
+      if (D === C && D !== B && C !== A) p3 = C;
+      if (B === D && B !== A && D !== C) p4 = D;
+      const i = (y * 2) * W2 + x * 2;
+      out[i] = p1; out[i + 1] = p2; out[i + W2] = p3; out[i + W2 + 1] = p4;
+    }
+  }
+  return out;
+}
+
+/**
+ * A painted frame drawn up as an inked cartoon: smoothed, a bold pen line round the figure
+ * and a fine one where its colours meet, the way the rest of the game is drawn.
+ * @param {(string|null)[]} px @param {number} w @param {number} h
+ * @param {(s: string) => number} lum how light a colour is, 0..1
+ * @returns {(string|null)[]} INK_SCALE times the width and height
+ */
+function inkFrame(px, w, h, lum) {
+  let big = px; let bw = w; let bh = h;
+  for (let k = 1; k < INK_SCALE; k *= 2) { big = epx(big, bw, bh); bw *= 2; bh *= 2; }
+  const out = big.slice();
+  const at = (x, y) => (x >= 0 && y >= 0 && x < bw && y < bh ? big[y * bw + x] : null);
+  for (let y = 0; y < bh; y += 1) {
+    for (let x = 0; x < bw; x += 1) {
+      const c = big[y * bw + x];
+      if (!c) {
+        // The outer line: outside the figure, hugging it, two drawn pixels wide.
+        if (at(x + 1, y) || at(x - 1, y) || at(x, y + 1) || at(x, y - 1) || at(x + 2, y) || at(x - 2, y) || at(x, y + 2) || at(x, y - 2)) out[y * bw + x] = W.sketch.ink;
+        continue;
+      }
+      // An inner line where two clearly different colours meet (not a shade of one).
+      const r = at(x + 1, y); const d = at(x, y + 1);
+      if ((r && r !== c && Math.abs(lum(r) - lum(c)) > 0.14) || (d && d !== c && Math.abs(lum(d) - lum(c)) > 0.14)) out[y * bw + x] = W.sketch.ink;
+    }
+  }
+  return out;
+}
+
+/**
+ * Bakes painted frames into a texture: `paint(r, row, col)` paints one frame. The frames
+ * are painted small, texel by texel, then drawn up INK_SCALE times as inked cartoons.
  * @param {{cw: number, ch: number, cols: number, rows: number, paint: (r: ReturnType<typeof raster>, row: number, col: number) => void}} o
  * @returns {THREE.CanvasTexture}
  */
 export function bakeSheet({ cw, ch, cols, rows, paint }) {
+  const S = INK_SCALE;
   const c = document.createElement('canvas');
-  c.width = cw * cols;
-  c.height = ch * rows;
+  c.width = cw * cols * S;
+  c.height = ch * rows * S;
   const g = c.getContext('2d');
   const img = g.createImageData(c.width, c.height);
   const rgb = new Map();
   const srgb = { r: 0, g: 0, b: 0 };
   const toRgb = (s) => { let v = rgb.get(s); if (!v) { new THREE.Color(s).getRGB(srgb, THREE.SRGBColorSpace); v = [srgb.r, srgb.g, srgb.b].map((k) => Math.round(Math.min(1, Math.max(0, k)) * 255)); rgb.set(s, v); } return v; };
+  const lum = (s) => { const [R, G, B] = toRgb(s); return (0.299 * R + 0.587 * G + 0.114 * B) / 255; };
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       const r = raster(cw, ch);
       paint(r, row, col);
-      finish(r);
-      for (let y = 0; y < ch; y += 1) {
-        for (let x = 0; x < cw; x += 1) {
-          const s = r.px[y * cw + x];
+      finish(r, false);
+      const px = inkFrame(r.px, cw, ch, lum);
+      const fw = cw * S;
+      for (let y = 0; y < ch * S; y += 1) {
+        for (let x = 0; x < fw; x += 1) {
+          const s = px[y * fw + x];
           if (!s) continue;
           const [R, G, B] = toRgb(s);
-          const i = ((row * ch + y) * c.width + col * cw + x) * 4;
+          const i = ((row * ch * S + y) * c.width + col * fw + x) * 4;
           img.data[i] = R; img.data[i + 1] = G; img.data[i + 2] = B; img.data[i + 3] = 255;
         }
       }
@@ -99,8 +162,9 @@ export function bakeSheet({ cw, ch, cols, rows, paint }) {
   }
   g.putImageData(img, 0, 0);
   const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+  // Smooth, as ink on paper is: the drawing is big enough not to need hard texels.
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;

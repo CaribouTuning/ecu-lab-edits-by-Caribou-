@@ -222,25 +222,66 @@ export function profileMesh(pts, width, color, o = {}) {
   return edged(m, 28);
 }
 
+/** How many times bigger a painted texture is drawn than it is painted: two doublings. */
+const DRAW_UP = 4;
+
 /**
- * A small canvas texture with nearest-neighbour sampling, for faces, plates, signs and
- * shirts. The canvas is drawn at its real tiny size so the pixels stay big.
+ * One doubling of a painted picture with its staircases rounded off (EPX), wrapping round
+ * at the edges so a repeating pattern still meets itself.
+ * @param {Uint32Array} px @param {number} w @param {number} h
+ * @returns {Uint32Array}
+ */
+function epx(px, w, h) {
+  const out = new Uint32Array(w * h * 4);
+  const at = (x, y) => px[((y + h) % h) * w + ((x + w) % w)];
+  const W2 = w * 2;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const P = at(x, y); const A = at(x, y - 1); const B = at(x + 1, y); const C = at(x - 1, y); const D = at(x, y + 1);
+      const i = y * 2 * W2 + x * 2;
+      out[i] = C === A && C !== D && A !== B ? A : P;
+      out[i + 1] = A === B && A !== C && B !== D ? B : P;
+      out[i + W2] = D === C && D !== B && C !== A ? C : P;
+      out[i + W2 + 1] = B === D && B !== A && D !== C ? D : P;
+    }
+  }
+  return out;
+}
+
+/**
+ * A small painted canvas texture, for faces, plates, signs, shirts and the patterns on
+ * walls and ground. It is painted at its tiny size, then drawn up DRAW_UP times with the
+ * corners rounded and sampled smoothly: marker on paper, not pixels.
  *
  * @param {number} w @param {number} h
  * @param {(g: CanvasRenderingContext2D) => void} draw
  * @returns {THREE.CanvasTexture}
  */
 export function pixelTexture(w, h, draw) {
+  const small = document.createElement('canvas');
+  small.width = w;
+  small.height = h;
+  const g = small.getContext('2d');
+  if (g) g.imageSmoothingEnabled = false;
+  if (g) draw(g);
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d');
-  g.imageSmoothingEnabled = false;
-  draw(g);
+  c.width = w * DRAW_UP;
+  c.height = h * DRAW_UP;
+  const big = c.getContext('2d');
+  if (g && big && typeof Uint32Array !== 'undefined') {
+    /** @type {Uint32Array} */
+    let px = new Uint32Array(new Uint8Array(g.getImageData(0, 0, w, h).data).buffer);
+    let bw = w; let bh = h;
+    for (let k = 1; k < DRAW_UP; k *= 2) { px = epx(px, bw, bh); bw *= 2; bh *= 2; }
+    const img = big.createImageData(bw, bh);
+    new Uint32Array(img.data.buffer).set(px);
+    big.putImageData(img, 0, 0);
+  }
   const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;
-  t.minFilter = THREE.NearestFilter;
-  t.generateMipmaps = false;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.anisotropy = 4;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }

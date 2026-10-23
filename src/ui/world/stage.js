@@ -72,13 +72,13 @@ export function createStage(canvas, opts = {}) {
       tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
       strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
-      sketch: { value: opts.sketch ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 },
+      sketch: { value: opts.sketch ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 }, lw: { value: 1 },
       inkCol: { value: new THREE.Color(W.sketch.ink) },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
       uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
-      uniform float sketch; uniform float hatch; uniform vec3 inkCol;
+      uniform float sketch; uniform float hatch; uniform vec3 inkCol; uniform float lw;
       varying vec2 vUv;
       float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float lum(vec3 c){ return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -99,6 +99,14 @@ export function createStage(canvas, opts = {}) {
         float l = invZ(uv - vec2(tx.x, 0.0)); float r = invZ(uv + vec2(tx.x, 0.0));
         float u = invZ(uv - vec2(0.0, tx.y)); float d = invZ(uv + vec2(0.0, tx.y));
         float lap = max((l + r) - 2.0 * w, (u + d) - 2.0 * w);
+        // A sketch's line is a pen's, a couple of pixels wide: look again a step further out
+        // and keep whichever finds the edge, so the line is drawn on both sides of it.
+        if (sketch > 0.5) {
+          vec2 t2 = tx * lw;
+          float l2 = invZ(uv - vec2(t2.x, 0.0)); float r2 = invZ(uv + vec2(t2.x, 0.0));
+          float u2 = invZ(uv - vec2(0.0, t2.y)); float d2 = invZ(uv + vec2(0.0, t2.y));
+          lap = max(lap, max(abs((l2 + r2) - 2.0 * w), abs((u2 + d2) - 2.0 * w)) * 0.5);
+        }
         // Positive when the neighbours are nearer: this pixel is the far side of the edge, so the
         // line sits on the farther surface and a model keeps its full silhouette.
         float edge = smoothstep(thresh, thresh * 2.0, lap / max(w, 1e-5));
@@ -110,26 +118,37 @@ export function createStage(canvas, opts = {}) {
           return;
         }
         // Ink also goes where the colour changes sharply: panel lines, a stripe, a window.
-        float cl = lum(texture2D(tColor, uv - vec2(tx.x, 0.0)).rgb); float cr = lum(texture2D(tColor, uv + vec2(tx.x, 0.0)).rgb);
-        float cu = lum(texture2D(tColor, uv - vec2(0.0, tx.y)).rgb); float cd = lum(texture2D(tColor, uv + vec2(0.0, tx.y)).rgb);
-        edge = max(edge, smoothstep(0.10, 0.22, abs(cl - cr) + abs(cu - cd)) * 0.8);
+        vec2 tc = tx * max(1.0, lw * 0.6);
+        float cl = lum(texture2D(tColor, uv - vec2(tc.x, 0.0)).rgb); float cr = lum(texture2D(tColor, uv + vec2(tc.x, 0.0)).rgb);
+        float cu = lum(texture2D(tColor, uv - vec2(0.0, tc.y)).rgb); float cd = lum(texture2D(tColor, uv + vec2(0.0, tc.y)).rgb);
+        edge = max(edge, smoothstep(0.08, 0.18, abs(cl - cr) + abs(cu - cd)) * 0.85);
         // The room keeps its own colours and light, dark walls and all: a real space,
         // doodled over rather than washed out. What makes it drawn is the hand on top.
         float L = pow(max(lum(c.rgb), 0.0), 1.0 / 2.2); // as the eye sees it, not linear light
         vec3 wash = c.rgb;
+        // Flat washes, not a render's smooth falloff: the light lies in a few bands, the way
+        // a colourist fills a drawing in with marker.
+        float Lb = (floor(L * 5.0 + 0.5)) / 5.0;
+        wash *= mix(1.0, pow(max(Lb, 0.02), 2.2) / max(pow(max(L, 0.02), 2.2), 1e-3), 0.55 * hatch);
         // A light, uneven wash: the colour lies a little patchily, nothing that moves or waves.
         vec2 fc = gl_FragCoord.xy;
-        wash *= 0.95 + 0.1 * vnoise(fc / 90.0);
-        // Pencil hatching in the shade, and cross-hatching where it is darkest.
-        vec2 f = gl_FragCoord.xy;
-        float h1 = step(0.7, fract((f.x + f.y) / 7.0));
-        float h2 = step(0.7, fract((f.x - f.y) / 7.0));
-        float shade = smoothstep(0.34, 0.18, L);
-        float deep = smoothstep(0.18, 0.07, L);
-        wash = mix(wash, inkCol * 0.6, hatch * (h1 * shade * 0.45 + h2 * deep * 0.45));
-        // Paper grain, then the ink line on top: near black, so it reads on dark walls too.
-        wash *= 1.0 - hatch * (0.03 - 0.05 * hash(floor(f / 2.0)));
-        wash = mix(wash, inkCol * 0.35, clamp(edge, 0.0, 1.0) * 0.95);
+        wash *= 0.93 + 0.14 * vnoise(fc / 70.0);
+        // Pencil hatching in the shade, and cross-hatching where it is darkest: strokes of
+        // pencil, a little uneven in weight, held still on the page.
+        vec2 f = gl_FragCoord.xy / max(1.0, lw * 0.5);
+        float wob = vnoise(f / 23.0) * 2.0;
+        float h1 = smoothstep(0.62, 0.8, fract((f.x + f.y + wob) / 6.0));
+        float h2 = smoothstep(0.62, 0.8, fract((f.x - f.y - wob) / 6.0));
+        float pres = 0.75 + 0.5 * vnoise(f / 9.0);
+        float shade = smoothstep(0.5, 0.26, L);
+        float deep = smoothstep(0.26, 0.1, L);
+        wash *= 1.0 - hatch * pres * (h1 * shade * 0.42 + h2 * deep * 0.42);
+        // Paper grain: fine tooth and a coarser mottle, both fixed to the page.
+        float tooth = hash(floor(gl_FragCoord.xy / max(1.0, lw * 0.5)));
+        wash *= 1.0 - hatch * (0.07 * tooth + 0.05 * vnoise(fc / 6.0) - 0.05);
+        // The ink line on top, near black, its weight varying a little along the stroke.
+        float ink = clamp(edge, 0.0, 1.0) * (0.85 + 0.15 * vnoise(fc / 13.0));
+        wash = mix(wash, inkCol * 0.3, ink);
         gl_FragColor = linearToOutputTexel(vec4(wash, 1.0));
       }`,
     depthTest: false, depthWrite: false,
@@ -165,6 +184,8 @@ export function createStage(canvas, opts = {}) {
       renderer.setSize(iw, ih, false);
       target.setSize(iw, ih);
       post.uniforms.texel.value.set(1 / iw, 1 / ih);
+      // The pen's width in drawn pixels: about two of the screen's own, whatever its density.
+      post.uniforms.lw.value = opts.sketch ? 2 / factor : 1;
       canvas.style.width = `${cssW}px`;
       canvas.style.height = `${cssH}px`;
       camera.aspect = iw / ih;
