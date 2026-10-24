@@ -23,11 +23,11 @@
 import React, { useMemo, useEffect, useRef, useCallback, useDeferredValue, useState } from 'react';
 import {
   Grid3x3, Zap, Droplets, Activity,
-  Settings, TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind, Flame, Lock,
+  TrendingUp, Fuel, Gauge, RotateCw, Timer, ShieldAlert, Crosshair, Wind, Flame, Lock,
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS, compressorWithCount,
+  BARO_KPA, COMPRESSOR_OPTS, FUEL_CHOICES, SWEEP_START_RPM, compressorWithCount,
   EXHAUST_DIA_OPTS,
   INJ_DEADTIME_MS, INJECTOR_OPTS,
   PSI_TO_KPA,
@@ -47,7 +47,7 @@ import { BUILD_VERSION } from '../version.js';
 import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
-import { BuildTop } from './desk/BuildTop.jsx';
+import { BuildBench } from './desk/BuildBench.jsx';
 import { CarPicker } from './desk/CarPicker.jsx';
 import { MessagesApp } from './desk/MessagesApp.jsx';
 import { advanceSaga, openChapter, unreadCount } from './career/story.js';
@@ -76,7 +76,6 @@ import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
-import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { Computer, Station, Surface } from './desk/Station.jsx';
 import { DynoConsole, StandConsole, StandStatus } from './desk/Consoles.jsx';
@@ -178,7 +177,7 @@ export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
 
 /** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
  *  out in the shop: the dyno, the engine stand, the job board, the door outside. */
-const CAREER_APPS = ['build', 'tune', 'messages'];
+const CAREER_APPS = ['tune', 'messages'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state. `appView`, `tab` and the four section
@@ -247,6 +246,8 @@ export function EcuLabApp() {
   // pull's live channels on the dyno's; the engine stand's are all its own.
   const [dynoExtra, setDynoExtra] = useState(/** @type {null|'ve'|'3d'|'live'} */ (null));
   const [standScreen, setStandScreen] = useState('bars');
+  // The part of the engine the stand's build software was last open on.
+  const lastBuildPart = useRef('engine');
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
@@ -1191,8 +1192,6 @@ export function EcuLabApp() {
   // CAREER: the TUNE pages and ECU settings a shop can use grow with its training. A
   // locked page still shows in the nav, with a padlock, so the player can see what
   // there is to learn; opening one says which course opens it.
-  // At the dyno or the engine stand the computer's own title bar says what the strip would.
-  const atStation = appView === 'app' && (tab === 'dyno' || tab === 'live');
   const tuneOpen = tab === 'tune' && !engineMissing && (!inCareer || !!career.working);
   const lockedPage = inCareer && tuneView != null && !pageUnlocked(career, tuneView) ? tuneView : null;
   const tunePage = tuneOpen && !lockedPage;
@@ -1402,7 +1401,7 @@ export function EcuLabApp() {
             section on HOME, several taps down and easy never to find. It is a page, not
             an accordion card, so nothing about it reads as a HOME section. */}
         {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
-        {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live'
+        {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live' || tab === 'build'
           ? (
             <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}>
               <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
@@ -1410,72 +1409,56 @@ export function EcuLabApp() {
           )
           : <EngineStart />)}
 
-        {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
+        {/* ---------- THE ENGINE STAND: build the engine on it, then start it and run it ---------- */}
+        {/* One place, as a real engine shop has it: the engine on its stand in front of you,
+            its computer beside it. BUILD is that computer's build software (one part at a
+            time, the engine on the stand changing as you choose); LIVE is the same computer's
+            run screens, with the start switch and the throttle on its control box. */}
+        {(tab === 'live' || tab === 'build') && !engineMissing && (!inCareer || career.working) && (
           <Station kind="stand">
-            <Surface name="standMonitor" kind="monitor" label="Engine computer">
+            <Surface name="standMonitor" kind="monitor" label={tab === 'build' ? 'Build' : 'Engine computer'}>
               <Computer
-                label="Engine computer" current={standScreen} onScreen={setStandScreen}
+                label="Engine computer" current={tab === 'build' ? 'build' : standScreen}
+                onScreen={(id) => {
+                  if (id === 'build') { goSection('build', lastBuildPart.current); return; }
+                  setStandScreen(id);
+                  if (tab !== 'live') goTab('live');
+                }}
                 title="Engine stand" status={<StandStatus />}
-                screens={[{ id: 'bars', label: 'Live' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
+                screens={[{ id: 'build', label: 'Build' }, { id: 'bars', label: 'Run' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
               >
-                {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
-                {standScreen === 'sensors' && <LiveGauges />}
-                {standScreen === 'ecu' && <LiveEcuPanel />}
-                {standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
+                {tab === 'build' && (
+                  <BuildLocked.Provider value={inCareer && !buildOpen}>
+                    <BuildBench
+                      part={buildSection ?? 'engine'} onPart={(id) => { lastBuildPart.current = id; goSection('build', id); }}
+                      preset={activePreset}
+                      notice={inCareer ? (buildOpen
+                        ? <><b>Build it.</b> This is an engine-building job: every part is yours to choose, and the customer pays for them. Build to the list on their ticket, then run it and tune it.</>
+                        : <><b>The customer&apos;s car.</b> Look through what is fitted. The parts are theirs: the job is the calibration, so nothing here can be changed.</>) : null}
+                    >
+                      {(buildSection ?? 'engine') === 'engine' || buildSection === 'block' || buildSection === 'head' ? (
+                        <EngineScreen
+                          active onToggle={toggleBuildSection} part={/** @type {any} */ (buildSection ?? 'engine')}
+                          engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
+                          onResetToStock={resetToStock}
+                        />
+                      ) : null}
+                      {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
+                      {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
+                      {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
+                    </BuildBench>
+                  </BuildLocked.Provider>
+                )}
+                {tab === 'live' && standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
+                {tab === 'live' && standScreen === 'sensors' && <LiveGauges />}
+                {tab === 'live' && standScreen === 'ecu' && <LiveEcuPanel />}
+                {tab === 'live' && standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
               </Computer>
             </Surface>
             <Surface name="standConsole" kind="console" label="Engine controls">
-              <StandConsole onStart={startEngine} onStop={stopEngine} onToggleSound={toggleSound} onThrottle={setThrottleInput} onTestSound={testSound} />
+              <StandConsole onStart={() => { if (tab !== 'live') goTab('live'); startEngine(); }} onStop={stopEngine} onToggleSound={toggleSound} onThrottle={setThrottleInput} onTestSound={testSound} />
             </Surface>
           </Station>
-        )}
-
-        {/* ---------- BUILD: engine architecture, induction, fuel system, exhaust ---------- */}
-        {/* One component per section, each reading the store for itself. `engineDerived`,
-            `activePreset` and `veAdvice` are the shell's: each feeds a second consumer
-            elsewhere (the tach/dyno chart, the header's engine label, the AIR screen's
-            advisory), so they stay here and are passed down rather than recomputed.
-            `idealExhaustDia` stays for the same reason — it is the input to
-            `exhaustDiaError`, which the score breakdown and the dyno payload also read. */}
-        {tab === 'build' && !engineMissing && (!inCareer || career.working) && (
-          <div style={{ padding: 16 }}>
-            {!inCareer && <BuildTop onAsk={() => goSection('build', 'engine')} />}
-            {inCareer && (
-              <Panel tight style={{ marginBottom: 14, fontSize: 12.5, color: T.ink2, lineHeight: 1.6 }}>
-                {buildOpen ? (
-                  <><b style={{ color: T.ink }}>Build it.</b> This is an engine-building job: every part here is yours to choose, and the
-                    customer pays for them. Build to their list on the job ticket, then log and tune what you built.</>
-                ) : (
-                  <><b style={{ color: T.ink }}>The customer&apos;s car.</b> Open any section to see what is fitted. The parts are theirs:
-                    the job is the calibration, so nothing here can be changed.</>
-                )}
-              </Panel>
-            )}
-            <BuildLocked.Provider value={inCareer && !buildOpen}>
-            <Eyebrow icon={Settings}>Garage</Eyebrow>
-            {!inCareer && (
-              <p style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginTop: 0, marginBottom: 14 }}>
-                Design the car before you tune it. Tap a section to open it — every choice inside changes real physics elsewhere in the sandbox.
-              </p>
-            )}
-
-            <EngineScreen
-              active={buildSection === 'engine'} onToggle={toggleBuildSection}
-              engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
-              onResetToStock={resetToStock}
-            />
-            <InductionScreen
-              active={buildSection === 'induction'} onToggle={toggleBuildSection}
-            />
-            <FuelSystemScreen
-              active={buildSection === 'fuel'} onToggle={toggleBuildSection}
-            />
-            <ExhaustScreen
-              active={buildSection === 'exhaust'} onToggle={toggleBuildSection}
-              idealExhaustDia={idealExhaustDia}
-            />
-            </BuildLocked.Provider>
-          </div>
         )}
 
         {/* ---------- TUNE: a Mac app's window, a sidebar of the ECU's tables beside the open one ---------- */}
@@ -1621,10 +1604,22 @@ export function EcuLabApp() {
                 status={running ? `${Math.round(currentRpm)} rpm` : result && !roadTest ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
               >
                 {!result && !(runs.length > 0 && dynoView === 'history') && (
-                  <div style={{ fontSize: 13, color: T.ink2, lineHeight: 1.6 }}>
-                    {roadTest
-                      ? 'No dyno yet. Run a road test from the console: the logger records the wideband and the ECU through the gears.'
-                      : 'Strap the car down and run a pull from the console. The curves, the log and the score come up here.'}
+                  // The run sheet, as dyno software shows one before the first pull: what is on
+                  // the rollers and what the pull will do. The curves, the log and the score
+                  // replace it once a pull is made.
+                  <div className={deskApps.runSheet}>
+                    <div className={deskApps.runSheetHead}>{roadTest ? 'Road test: ready to log' : 'Ready to run'}</div>
+                    <dl className={deskApps.runSheetList}>
+                      <dt>Car</dt><dd>{inCareer && jobOnBay ? `${jobOnBay.customer.name}'s ${jobOnBay.customer.car}` : 'The shop car, strapped down'}</dd>
+                      <dt>Engine</dt><dd>{activePreset ? activePreset.name : 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
+                      <dt>Pull</dt><dd>{roadTest ? `Full throttle in a gear, to the ${engineDerived.redline.toLocaleString('en-US')} rpm limiter` : `${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
+                      <dt>Fuel</dt><dd>{(() => { const f = FUEL_CHOICES[build.octaneIdx] ?? FUEL_CHOICES[0]; return f.flex ? `Flex fuel, E${Math.round(build.ethanolPct ?? 0)}` : /^\d+$/.test(f.label) ? `${f.label} octane` : f.label; })()}</dd>
+                    </dl>
+                    <p className={deskApps.runSheetNote}>
+                      {roadTest
+                        ? 'The shop has no dyno yet. Run a road test from the console: you drive the pull, and the logger records the wideband and the ECU all the way up.'
+                        : 'Press Run a pull on the console. The power and torque curves draw as it sweeps; the pull log, the datalog and the score come up here after.'}
+                    </p>
                   </div>
                 )}
 
@@ -1726,7 +1721,7 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' || tab === 'build' ? 'page' : 'app';
   // CAREER: the car you are working on is the one on the dyno, and another job's car (if a
   // lift holds one) is up on the lift. SANDBOX keeps the shop's own two.
   const lookOf = (jobId) => { const c = jobId ? jobById(jobId)?.customer : null; return c ? { body: c.body, color: c.color } : null; };
@@ -1781,7 +1776,7 @@ export function EcuLabApp() {
         )}
         {/* An app's status bar is the window's own (Desk's footer); a page in the shop
             keeps the strip at its top. */}
-        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' && !atStation ? <StatusStrip actions={false} /> : null}
+        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}

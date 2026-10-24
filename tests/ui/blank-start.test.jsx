@@ -105,7 +105,11 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
+    // The cam is on the stand's Heads and cam part; the note is on its Engine part.
+    const parts = () => within(screen.getByRole('navigation', { name: 'Engine parts' }));
+    fireEvent.click(parts().getByRole('button', { name: /Heads and cam/ }));
     fireEvent.change(screen.getAllByRole('slider').find((s) => s.getAttribute('min') === '180'), { target: { value: '222' } });
+    fireEvent.click(parts().getByRole('button', { name: /^Engine/ }));
     expect(note()).not.toMatch(/cam duration/);
     expect(note()).toMatch(/valvetrain DOHC/);
   });

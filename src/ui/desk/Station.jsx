@@ -5,8 +5,8 @@
  * (ShopBackdrop.jsx lays each `Surface` onto its face). The dyno's software is on its
  * computer's monitor and the RUN button on the cart's console; the engine stand's cart has
  * its own screen and its start switch and throttle; the job board's tickets are pinned on
- * the board. From across the room a face may be too small to read: the first tap on it
- * leans you in, and Step back (the page bar) leans you out again.
+ * the board. You stand at it framed to use it: every face is full size from where you are,
+ * and a tap on it is a tap on what is under your finger.
  *
  * Where there is no WebGL (an old browser, a test runner) there is no room to put them in,
  * and the same controls are laid out flat, one after the other.
@@ -25,21 +25,11 @@ import styles from './Station.module.css';
  * @returns {React.ReactElement}
  */
 export function Surface({ name, label, kind, children }) {
-  const { surfaces, legible, focus, setFocus } = useSurfaces();
+  const { surfaces } = useSurfaces();
   const el = surfaces?.[name] ?? null;
   const face = (
-    <section
-      className={styles.face} data-kind={kind} aria-label={label}
-      // A machine's screen and a sheet of paper are not hand-drawn: no wobble, no pen line.
-      data-plain=""
-      // Too small to use from here: the tap leans in instead of pressing what is under it.
-      onClickCapture={(e) => {
-        if (!el || legible[name] === true || focus === name) return;
-        e.preventDefault();
-        e.stopPropagation();
-        setFocus(name);
-      }}
-    >
+    // A machine's screen and a sheet of paper are not hand-drawn: no wobble, no pen line.
+    <section className={styles.face} data-kind={kind} aria-label={label} data-plain="">
       {children}
     </section>
   );

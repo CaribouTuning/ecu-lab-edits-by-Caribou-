@@ -62,10 +62,10 @@ describe('CAREER in the app', () => {
     expect(window.location.hash).toBe('#/tune/airflow');
     expect(screen.getByRole('region', { name: 'Tune' })).toBeTruthy();
     expect(screen.getByText(/Marcus, 2006 Nissan 350Z/)).toBeTruthy();
-    // The same laptop as SANDBOX's, with the career's apps: Build and Tune, not the
-    // reading apps.
+    // The same laptop as SANDBOX's, with the career's apps: Tune and the messages, not the
+    // reading apps, and not Build: an engine is built on its stand in the shop.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
-    expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'BUILD' })).toBeNull();
     // The shop's paperwork is not on the laptop: it is the job board on the shop wall.
     expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
@@ -141,8 +141,7 @@ describe('CAREER in the app', () => {
     fireEvent.click(screen.getByRole('button', { name: /Work on the car/ }));
     goTo('BUILD');
     expect(screen.getByText(/The customer.s car\./)).toBeTruthy();
-    const body = screen.getByText('Engine Architecture').closest('button').nextElementSibling;
-    expect(body.querySelector('fieldset[disabled]')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Engine' }).querySelector('fieldset[disabled]')).not.toBeNull();
   });
 
   it('comes back after a reload: the shop is saved, the car on its lift with it', async () => {

@@ -8,13 +8,12 @@
  *
  * Walked up to the dyno, the stand or the board, the page's own controls are laid onto the
  * things themselves: the dyno computer's screen and console, the stand cart's, the board's
- * cork (`surfaces`). They are ordinary page elements, placed in the room with the camera's
- * own perspective (three.js's CSS3DRenderer), so they are as real to a keyboard or a screen
- * reader as anywhere else. `onSurfaces` hands them to the page, which renders into them.
+ * cork (`surfaces`). They are ordinary page elements, laid flat over where each face is on
+ * screen, so they are as real to a pointer, a keyboard or a screen reader as anywhere else.
+ * `onSurfaces` hands them to the page, which renders into them.
  */
 
 import React, { useEffect, useRef } from 'react';
-import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 
 import { THREE } from '../world/gfx.js';
 
@@ -42,19 +41,15 @@ export const HOTSPOTS = [
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
- * @param {string|null} [props.focus] the surface leaned in to, or none
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
- * @param {(legible: Record<string, boolean>) => void} [props.onLegible] which faces read at their size from where you stand
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, focus = null, onSurfaces, onLegible, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, focus, onSurfaces, onLegible });
+export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, onSurfaces, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces });
   live.current.mode = mode;
-  live.current.focus = focus;
   live.current.onSurfaces = onSurfaces;
-  live.current.onLegible = onLegible;
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
@@ -68,96 +63,67 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
   const { canvasRef, failed } = useStage((stage) => {
     const shop = buildShopScene(stage, { engineSpec: live.current.spec, cars: live.current.cars });
     live.current.carsDirty = false;
+    if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__shop = shop;
     let idle = 0;
 
     // ---- the faces the page's controls are laid on ----
+    // Each is an ordinary page element laid FLAT over where its face is on screen: placed
+    // and sized from the face's projected corners every frame, never turned in 3-D. The
+    // camera stands square on to each face, so the picture is the same; and a flat element
+    // is hit-tested like any other, where Chromium's 3-D hit testing let taps on a turned
+    // one fall through (the dyno's RUN and the stand's throttle used to miss).
     const host = stage.canvas.parentElement;
-    const css = new CSS3DRenderer();
-    css.domElement.className = styles.surfaceLayer;
-    host?.appendChild(css.domElement);
-    const cssScene = new THREE.Scene();
+    const layer = document.createElement('div');
+    layer.className = styles.surfaceLayer;
+    host?.appendChild(layer);
     /** Which place each face belongs to: it shows only there. */
     const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', board: 'board' };
-    /** How wide each face is drawn, as a share of the screen: about what it covers there. */
-    const SHARE = { dynoMonitor: 0.4, dynoConsole: 0.28, standMonitor: 0.4, standConsole: 0.28, board: 0.86 };
-    // The board is only ever seen square on, so it is laid flat over where the board is on
-    // screen rather than turned in 3-D: the same picture, and Chromium's 3-D hit testing
-    // misses a face it is looking at exactly square on, so nothing on it could be clicked.
-    const flatLayer = document.createElement('div');
-    flatLayer.className = styles.surfaceLayer;
-    host?.appendChild(flatLayer);
-    const FLAT = new Set(['board']);
     const faces = Object.entries(shop.surfaces).map(([name, sf]) => {
       const el = document.createElement('div');
       el.className = styles.surface;
       el.dataset.surface = name;
-      const flat = FLAT.has(name);
-      if (flat) { flatLayer.appendChild(el); el.style.position = 'absolute'; el.style.pointerEvents = 'auto'; el.style.transformOrigin = '0 0'; }
-      const obj = flat ? new THREE.Object3D() : new CSS3DObject(el);
-      sf.at.updateWorldMatrix(true, false);
-      sf.at.getWorldPosition(obj.position);
-      sf.at.getWorldQuaternion(obj.quaternion);
-      // A hair in front of the face, so the drawn one never shows through.
-      obj.position.add(new THREE.Vector3(0, 0, 0.004).applyQuaternion(obj.quaternion));
-      if (!flat) cssScene.add(obj);
-      return { name, sf, el, obj, px: 0, flat, shape: 0 };
+      el.style.position = 'absolute';
+      el.style.left = '0';
+      el.style.top = '0';
+      el.style.pointerEvents = 'auto';
+      el.style.transformOrigin = '0 0';
+      el.style.display = 'none';
+      layer.appendChild(el);
+      return { name, sf, el, pw: 0, ph: 0 };
     });
     let sizeW = 0; let sizeH = 0;
-    let wasMoving = true;
     const fit = () => {
-      const w = host?.clientWidth ?? 0; const h = host?.clientHeight ?? 0;
-      if (w === sizeW && h === sizeH) return;
-      wasMoving = true;
-      sizeW = w; sizeH = h;
-      css.setSize(w, h);
-      for (const f of faces) {
-        // Drawn at the size it shows at from where you stand, so its words are the page's
-        // own size there; leaning in only makes them bigger.
-        const share = SHARE[/** @type {keyof typeof SHARE} */ (f.name)];
-        const pw = Math.round(Math.min(f.name === 'board' ? 1400 : 820, Math.max(320, w * share)));
-        f.px = pw;
-        f.el.style.width = `${pw}px`;
-        f.el.style.height = `${Math.round((pw * f.sf.h) / f.sf.w)}px`;
-        f.obj.scale.setScalar(f.sf.w / pw);
-      }
+      sizeW = host?.clientWidth ?? 0;
+      sizeH = host?.clientHeight ?? 0;
     };
     fit();
     live.current.onSurfaces?.(Object.fromEntries(faces.map((f) => [f.name, f.el])));
-    const legible = {};
     const corner = new THREE.Vector3();
-    const measure = () => {
-      // A face reads where it stands if its width on screen is most of the width it is drawn at.
-      let changed = false;
-      for (const f of faces) {
-        if (!f.obj.visible) continue;
-        corner.set(-f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-        const x0 = corner.x;
-        corner.set(f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-        const onScreen = (Math.abs(corner.x - x0) / 2) * sizeW;
-        const ok = onScreen >= f.px * 0.8;
-        if (legible[f.name] !== ok) { legible[f.name] = ok; changed = true; }
-      }
-      if (changed) live.current.onLegible?.({ ...legible });
+    /** What of the view the page leaves clear at a station: below its header and the job bar. */
+    const measureFrame = () => {
+      const station = host?.parentElement?.querySelector('[data-station]');
+      const hr = host?.getBoundingClientRect();
+      if (!station || !hr) return;
+      const r = station.getBoundingClientRect();
+      shop.setFrame({ top: r.top - hr.top, bottom: hr.bottom - r.bottom, left: r.left - hr.left, right: hr.right - r.right, w: hr.width, h: hr.height });
     };
 
     return {
       dispose() {
         live.current.onSurfaces?.(null);
-        css.domElement.remove();
-        flatLayer.remove();
+        layer.remove();
       },
       update(dt) {
         const l = live.current;
         fit();
-        for (const f of faces) f.obj.visible = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
         shop.setTickets(l.mode !== 'board');
-        shop.setFocus(/** @type {any} */ (l.focus === 'wide' ? 'wide' : l.focus && PLACE[/** @type {keyof typeof PLACE} */ (l.focus)] === l.mode ? l.focus : null));
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.
         const scene = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'board';
+        if (l.mode === 'dyno' || l.mode === 'stand') measureFrame();
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
-        const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0));
+        const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,
         // and leaves the readouts over it the rest of the machine.
         if (l.mode === 'page' || scene) {
@@ -170,54 +136,35 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
         if (l.carsDirty) { l.carsDirty = false; shop.setCars(l.cars ?? { dyno: {}, lift: {} }); }
         shop.update(dt, l.rpm, l.dynoRpm);
         shop.camera.updateMatrixWorld();
-        css.render(cssScene, shop.camera);
-        // A face turned in 3-D is laid out, too, at the width it shows at from where you stand
-        // once the camera has stopped: standing at a station its monitor fills half the
-        // screen, and its words should be the page's own size there, not a fixed guess.
-        if (!shop.moving()) {
-          for (const f of faces) {
-            if (f.flat || !f.obj.visible) continue;
-            corner.set(-f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-            const xa = ((corner.x + 1) / 2) * sizeW;
-            corner.set(f.sf.w / 2, 0, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-            // Never narrower than its controls need in one row: a narrow screen shows the
-            // whole control box a little smaller rather than cutting its right end off.
-            const minPx = f.name.endsWith('Console') ? 480 : 360;
-            const pw = Math.round(Math.min(1100, Math.max(minPx, Math.abs(((corner.x + 1) / 2) * sizeW - xa))));
-            if (Math.abs(pw - f.px) > 8) {
-              f.px = pw;
+        const moving = shop.moving();
+        for (const f of faces) {
+          const on = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
+          f.el.style.display = on ? '' : 'none';
+          if (!on) continue;
+          // The face's four corners on screen, and the box round them.
+          let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
+          f.sf.at.updateWorldMatrix(true, false);
+          for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            corner.set((cx * f.sf.w) / 2, (cy * f.sf.h) / 2, 0).applyMatrix4(f.sf.at.matrixWorld).project(shop.camera);
+            const sx = ((corner.x + 1) / 2) * sizeW; const sy = ((1 - corner.y) / 2) * sizeH;
+            x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+          }
+          const bw = Math.max(1, x1 - x0); const bh = Math.max(1, y1 - y0);
+          // Laid out at the size it shows at, so its words are the page's own size there,
+          // once the camera has stopped (not again every frame on the way). Never narrower
+          // than its controls need in one row: a narrow screen shows the whole control box
+          // a little smaller rather than cutting its right end off.
+          const minPx = f.name.endsWith('Console') ? 420 : f.name === 'board' ? 300 : 340;
+          if (!moving || f.pw === 0) {
+            const pw = Math.round(Math.max(minPx, bw));
+            const ph = Math.round((pw * bh) / bw);
+            if (Math.abs(pw - f.pw) > 2 || Math.abs(ph - f.ph) > 2) {
+              f.pw = pw; f.ph = ph;
               f.el.style.width = `${pw}px`;
-              f.el.style.height = `${Math.round((pw * f.sf.h) / f.sf.w)}px`;
-              f.obj.scale.setScalar(f.sf.w / pw);
+              f.el.style.height = `${ph}px`;
             }
           }
-        }
-        for (const f of faces) {
-          if (!f.flat) continue;
-          f.el.style.display = f.obj.visible ? '' : 'none';
-          if (!f.obj.visible) continue;
-          // Where the board is now (it hangs the tall way on a phone held upright).
-          f.sf.at.getWorldPosition(f.obj.position);
-          // Its top-left and bottom-right corners on screen.
-          corner.set(-f.sf.w / 2, f.sf.h / 2, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-          const x0 = ((corner.x + 1) / 2) * sizeW; const y0 = ((1 - corner.y) / 2) * sizeH;
-          corner.set(f.sf.w / 2, -f.sf.h / 2, 0).applyQuaternion(f.obj.quaternion).add(f.obj.position).project(shop.camera);
-          const x1 = ((corner.x + 1) / 2) * sizeW;
-          // Laid out at the width it shows at, so its words are always the page's own size;
-          // only once the camera has stopped, so it is not laid out again every frame.
-          const pw = Math.round(x1 - x0);
-          if (!shop.moving() && pw > 100 && (Math.abs(pw - f.px) > 2 || f.shape !== f.sf.h / f.sf.w)) {
-            f.shape = f.sf.h / f.sf.w;
-            f.px = pw;
-            f.el.style.width = `${pw}px`;
-            f.el.style.height = `${Math.round((pw * f.sf.h) / f.sf.w)}px`;
-          }
-          f.el.style.transform = `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px) scale(${((x1 - x0) / f.px).toFixed(4)})`;
-        }
-        if (scene) {
-          const moving = shop.moving();
-          if (wasMoving && !moving) measure();
-          wasMoving = moving;
+          f.el.style.transform = `translate(${x0.toFixed(1)}px, ${y0.toFixed(1)}px) scale(${(bw / f.pw).toFixed(4)}, ${(bh / f.ph).toFixed(4)})`;
         }
         // Keep each button on its object.
         const canvas = canvasRef.current;

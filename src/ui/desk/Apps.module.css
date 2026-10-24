@@ -295,3 +295,11 @@
   .msgBack { display: inline-flex; }
   .msgView { padding: 8px 14px 24px; }
 }
+
+/* ---- the dyno computer's run sheet, before the first pull ---- */
+.runSheet { max-width: 560px; padding: 6px 4px; }
+.runSheetHead { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+.runSheetList { display: grid; grid-template-columns: max-content 1fr; gap: 7px 18px; margin: 0 0 14px; font-size: 13px; }
+.runSheetList dt { color: var(--ink2); }
+.runSheetList dd { margin: 0; color: var(--ink); font-variant-numeric: tabular-nums; }
+.runSheetNote { margin: 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink2); line-height: 1.55; }

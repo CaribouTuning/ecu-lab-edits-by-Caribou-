@@ -83,6 +83,8 @@ function launch() {
 /** Renders the app and opens the laptop's notifications, where the sandbox's record is. */
 function launchOnNotices() {
   const view = launch();
+  // The notifications are the laptop's taskbar's.
+  goTo('TUNE');
   fireEvent.click(screen.getByRole('button', { name: /notifications$/ }));
   return view;
 }
@@ -135,6 +137,8 @@ describe('the REPAIR button', () => {
       </StoreProvider>,
     );
     enterSandbox();
+    // On the laptop, where the strip and its Settings menu both are.
+    goTo('TUNE');
 
     // Wear the engine directly rather than by running pulls: how much damage a given
     // build takes is the sim's business and would make this test a physics test.

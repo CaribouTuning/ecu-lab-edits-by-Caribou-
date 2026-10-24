@@ -12,6 +12,11 @@
  *                   intercooler in that pipe when there is one), or a supercharger on top
  *   intake          the airbox pipe, or a cone filter when an aftermarket intake is fitted
  *   nitrous         a solenoid and its blue line into the intake
+ *   materials       a cast-iron block or head is darker than an aluminium one
+ *   cam phasers     a phaser on the nose of each cam
+ *   injection       direct injection's high-pressure pump on the cam cover, and its rail
+ *   twin turbos     a turbo on each bank of a V, or two along an inline's manifold
+ *   spark plugs     two coils a cylinder on a twin-plug head
  * The belt, the crank pulley and the alternator turn with the revs (`update`).
  *
  * Engine-local coordinates, metres: x across, y up, z along the crank, the front (belt end)
@@ -32,6 +37,11 @@ const E = W.engine;
  * @property {boolean} [intake] an aftermarket intake (a cone filter)
  * @property {boolean} [headers] long-tube headers
  * @property {boolean} [nitrous]
+ * @property {string} [blockMaterial] @property {string} [headMaterial] 'Cast Iron' or 'Aluminum'
+ * @property {boolean} [vvt] cam phasers fitted
+ * @property {boolean} [direct] direct injection
+ * @property {boolean} [twinTurbo]
+ * @property {number} [sparkPlugs] per cylinder
  */
 
 const PER_BANK = { I4: 4, I6: 6, V6: 3, V8: 4 };
@@ -59,9 +69,10 @@ export function makeEngine(spec = {}) {
   const sumpW = vee ? 0.32 : 0.24;
   add(box(sumpW, 0.1, len * 0.85, E.blockDark, { y: 0.05, z: -0.02 }));
   const deckY = 0.1 + blockH;
-  add(box(vee ? 0.36 : 0.22, blockH, len, E.block, { y: 0.1 + blockH / 2 }));
+  const iron = spec.blockMaterial === 'Cast Iron';
+  add(box(vee ? 0.36 : 0.22, blockH, len, iron ? E.blockIron : E.block, { y: 0.1 + blockH / 2 }));
   // Ribs cast into the block's sides.
-  for (let k = 0; k < per; k += 1) for (const s of [-1, 1]) add(box(0.012, blockH * 0.7, 0.02, E.blockDark, { x: s * ((vee ? 0.36 : 0.22) / 2 + 0.006), y: 0.1 + blockH * 0.45, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
+  for (let k = 0; k < per; k += 1) for (const s of [-1, 1]) add(box(0.012, blockH * 0.7, 0.02, iron ? E.blockIronDark : E.blockDark, { x: s * ((vee ? 0.36 : 0.22) / 2 + 0.006), y: 0.1 + blockH * 0.45, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
   add(cyl(0.2, 0.22, 0.06, E.flywheel, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.03, seg: 16 }));
 
   // ---- the banks: a head and its cover on each, the plugs or coils on top ----
@@ -73,17 +84,27 @@ export function makeEngine(spec = {}) {
     bank.position.set(b.x, b.y, 0);
     bank.rotation.z = -b.ang;
     const hw = vt === 'dohc' ? 0.2 : vt === 'sohc' ? 0.16 : 0.15;
-    bank.add(box(hw, headH, len - 0.02, E.head, { y: headH / 2 }));
+    bank.add(box(hw, headH, len - 0.02, spec.headMaterial === 'Cast Iron' ? E.headIron : E.head, { y: headH / 2 }));
     const coverH = vt === 'ohv' ? 0.05 : 0.07;
     const cover = vt === 'ohv' ? E.coverOhv : E.cover;
     bank.add(box(hw - 0.02, coverH, len - 0.06, cover, { y: headH + coverH / 2 }));
     if (vt === 'dohc') for (const cx of [-0.045, 0.045]) bank.add(box(0.045, 0.02, len - 0.1, E.coverDark, { x: cx, y: headH + coverH + 0.01 }));
     else bank.add(box(0.05, 0.015, len - 0.1, vt === 'ohv' ? E.hose : E.coverDark, { y: headH + coverH + 0.008 }));
-    // A coil (or a plug lead) for every cylinder on the bank.
-    for (let k = 0; k < per; k += 1) bank.add(box(0.03, 0.04, 0.03, E.plug, { x: vt === 'ohv' ? b.out * 0.06 : 0, y: headH + coverH + 0.03, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
+    // A coil (or a plug lead) for every cylinder on the bank: two a cylinder on a twin-plug head.
+    const coils = spec.sparkPlugs === 2 ? [-0.035, 0.035] : [0];
+    for (let k = 0; k < per; k += 1) for (const dz of coils) bank.add(box(0.03, 0.04, 0.03, E.plug, { x: vt === 'ohv' ? b.out * 0.06 : 0, y: headH + coverH + 0.03, z: -len / 2 + 0.05 + pitch * (k + 0.5) + dz * pitch * 2.4 }));
+    // Cam phasers: a disc on the nose of each cam, at the belt end.
+    if (spec.vvt && vt !== 'ohv') for (const cx of vt === 'dohc' ? [-0.045, 0.045] : [0]) bank.add(cyl(0.05, 0.05, 0.03, E.pulley, { axis: 'z', x: cx, y: headH * 0.6, z: len / 2 + 0.01, seg: 12 }));
+    // Direct injection: the cam-driven high-pressure pump on the cover, and its rail along the head.
+    if (spec.direct) {
+      bank.add(cyl(0.03, 0.03, 0.06, E.turboCold, { x: b.out * 0.04, y: headH + coverH + 0.05, z: -len / 2 + 0.08, seg: 10 }));
+      bank.add(box(0.02, 0.02, len - 0.12, E.turboCold, { x: b.out * (hw / 2 + 0.01), y: headH * 0.4 }));
+    }
     add(bank);
   }
   const topY = deckY + headH + 0.09;
+  // A pushrod engine's one cam is in the block: its phaser is on the block's nose.
+  if (spec.vvt && vt === 'ohv') add(cyl(0.06, 0.06, 0.03, E.pulley, { axis: 'z', y: deckY - 0.06, z: len / 2 + 0.015, seg: 12 }));
 
   // ---- the intake: a plenum and its runners, the throttle at the front ----
   const plenumY = vee ? topY + 0.03 : deckY + 0.06;
@@ -124,18 +145,23 @@ export function makeEngine(spec = {}) {
   }
 
   // ---- the turbo, off the exhaust at the back, its cold side piped to the throttle ----
+  // Twins: one on each bank of a V, or two along an inline's manifold.
   if (spec.turbo) {
-    const s = vee ? 1 : 1;
-    const tx = s * (vee ? 0.36 : 0.26);
     const ty = deckY - 0.05;
-    const tz = -len / 2 + 0.05;
-    const hot = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.04, 6, 12), new THREE.MeshToonMaterial({ color: E.pipeHot }));
-    hot.position.set(tx, ty, tz);
-    add(hot);
-    add(cyl(0.075, 0.075, 0.06, E.turboCold, { axis: 'x', x: tx + 0.08, y: ty, z: tz }));
-    add(cyl(0.035, 0.035, 0.06, E.turboCold, { axis: 'x', x: tx + 0.14, y: ty, z: tz }));
-    // The charge pipe forward along the side, through the intercooler if there is one.
-    add(cyl(0.03, 0.03, len * 0.9, E.hose, { axis: 'z', x: tx + 0.08, y: ty + 0.09, z: tz + len * 0.45 }));
+    const places = spec.twinTurbo
+      ? (vee ? [{ s: 1, z: -len / 2 + 0.05 }, { s: -1, z: -len / 2 + 0.05 }] : [{ s: 1, z: -len / 2 + 0.05 }, { s: 1, z: 0.02 }])
+      : [{ s: 1, z: -len / 2 + 0.05 }];
+    for (const { s, z: tz } of places) {
+      const tx = s * (vee ? 0.36 : 0.26);
+      const hot = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.04, 6, 12), new THREE.MeshToonMaterial({ color: E.pipeHot }));
+      hot.position.set(tx, ty, tz);
+      add(hot);
+      add(cyl(0.075, 0.075, 0.06, E.turboCold, { axis: 'x', x: tx + s * 0.08, y: ty, z: tz }));
+      add(cyl(0.035, 0.035, 0.06, E.turboCold, { axis: 'x', x: tx + s * 0.14, y: ty, z: tz }));
+      // The charge pipe forward along the side, to the throttle (through the intercooler).
+      const run = len / 2 + 0.05 - tz;
+      add(cyl(0.03, 0.03, run, E.hose, { axis: 'z', x: tx + s * 0.08, y: ty + 0.09, z: tz + run / 2 }));
+    }
     if (spec.intercooler) {
       add(box(0.5, 0.2, 0.06, E.cooler, { y: 0.32, z: len / 2 + 0.24 }));
       for (let k = 0; k < 8; k += 1) add(box(0.48, 0.006, 0.065, E.turbo, { y: 0.24 + k * 0.022, z: len / 2 + 0.24 }));
@@ -212,5 +238,11 @@ export function engineSpecOf(build, derived) {
     intake: !!build?.mods?.intake,
     headers: !!build?.mods?.headers,
     nitrous: !!build?.nitrous,
+    blockMaterial: cfg.blockMaterial,
+    headMaterial: cfg.headMaterial,
+    vvt: !!cfg.vvt && cfg.vvt !== 'none',
+    direct: cfg.injection === 'direct',
+    twinTurbo: !!build?.turboOn && (build?.turbineCount ?? 1) > 1,
+    sparkPlugs: cfg.sparkPlugs ?? 1,
   };
 }

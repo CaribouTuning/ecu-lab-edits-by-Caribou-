@@ -27,7 +27,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
 import styles from '../../src/ui/primitives/Button.module.css';
-import { enterSandbox, goTo } from './nav.js';
+import { buildPart, enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver, and the sweep runs a dyno pull — whose result panel
 // mounts recharts' <ResponsiveContainer>, which throws without one. Same stub as
@@ -80,15 +80,14 @@ async function sweep() {
   launch();
   collect();
 
-  // BUILD is the landing tab, and its sections arrive collapsed.
-  for (const section of ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust']) {
-    fireEvent.click(screen.getByText(section));
+  // BUILD is the landing tab: the engine stand, one part of the engine at a time.
+  for (const part of ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust']) {
+    buildPart(part);
     collect();
   }
   // Fitting a part leaves the VE table behind the hardware, so the pull below logs
   // a correction for TUNE > AIRFLOW to apply.
-  const uninstalled = screen.getAllByRole('button')
-    .filter((b) => b.textContent.includes('INSTALL') && !(/** @type {HTMLButtonElement} */ (b).disabled));
+  const uninstalled = screen.getAllByRole('button').filter((b) => b.getAttribute('data-installed') === 'false');
   fireEvent.click(uninstalled[0]);
   collect();
 

@@ -17,7 +17,7 @@
  *   - "every accordion closed" is a state the URL can hold and restore.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -59,25 +59,7 @@ function launch() {
   enterSandbox();
 }
 
-/**
- * A BuildSection renders its label inside its header button and its body in the
- * button's next sibling, collapsed with `max-height: 0` rather than unmounted. That
- * inline height is therefore the only DOM-visible difference between an open section
- * and a closed one.
- * @param {string} label e.g. 'Engine Architecture'
- * @returns {boolean}
- */
-function sectionIsOpen(label) {
-  const header = screen.getByText(label).closest('button');
-  const body = /** @type {HTMLElement} */ (header.nextElementSibling);
-  // Compare the parsed number, not the string. React writes a non-zero maxHeight as
-  // "3000px" but leaves zero as bare "0" — CSS allows a unitless zero — so a string
-  // comparison against "0px" reports every collapsed section as open, and this whole
-  // describe block fails against a working app.
-  return Number.parseFloat(body.style.maxHeight) > 0;
-}
 
-const BUILD_SECTION_LABELS = ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust'];
 
 describe('a deep link on a cold load', () => {
   it('renders the linked screen without anyone clicking first', () => {
@@ -100,7 +82,7 @@ describe('a deep link on a cold load', () => {
     window.location.hash = '#/build/supercharger';
     mount();
 
-    expect(screen.getByText('Garage')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Engine parts' })).toBeTruthy();
   });
 });
 
@@ -177,10 +159,11 @@ describe('the back button', () => {
     // jsdom dispatches hashchange from a queued task rather than synchronously, so
     // the assertion has to wait for it — as it would in a browser.
     await waitFor(() => expect(window.location.hash).toBe('#/desk'));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'BUILD' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'TUNE' })).toBeTruthy());
+    // And before the laptop, the engine stand it was opened from.
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/build'));
-    await waitFor(() => expect(screen.getByText('Garage')).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Engine parts' })).toBeTruthy());
   });
 
   it('does not have to step through dead entries for clicks that went nowhere', async () => {
@@ -191,46 +174,43 @@ describe('the back button', () => {
     // destination regardless of what the previous test in this file left on the stack.
     window.location.hash = '#/';
     launch();
-    // The taskbar's home button, pressed again and again from the desktop it already shows.
+    // From the engine stand up to the laptop, then the taskbar's home button, pressed again
+    // and again from the desktop it already shows.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open the laptop' })[0]);
     const home = () => screen.getByRole('button', { name: 'Desktop' });
     fireEvent.click(home());
     fireEvent.click(home());
     fireEvent.click(home());
     expect(window.location.hash).toBe('#/desk');
 
-    // One press, from the desktop back to the BUILD window it was on.
+    // One press, from the desktop back to the engine stand it was opened from.
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/build'));
   });
 });
 
-describe('a fully collapsed accordion', () => {
-  it('is a state the URL can hold, and a cold load restores it', () => {
-    // BuildSection's onClick is a TOGGLE: clicking the open section's own header
-    // closes it and leaves NOTHING open. That is `section: null`, and `#/build` with
-    // no second segment is how the route spells it.
-    //
-    // If a missing segment fell back to a default section instead, closing would be
-    // impossible — and not one existing test would notice, because none of them close
-    // an accordion and then look. The cold-load half below is the part that bites: a
-    // component that merely remembers `null` in React state would pass the first half
-    // and fail the second.
+describe('the engine stand\'s parts', () => {
+  it('are each a state the URL holds, and a cold load restores it', () => {
+    // The stand's build software shows one part of the engine at a time, chosen from its
+    // list, and the part is the second segment of the route. A component that merely
+    // remembered the part in React state would pass the first half and fail the second.
     launch();
-    fireEvent.click(screen.getByText('Engine Architecture'));
-    expect(window.location.hash).toBe('#/build/engine');
-    expect(sectionIsOpen('Engine Architecture')).toBe(true);
-
-    fireEvent.click(screen.getByText('Engine Architecture'));
-    expect(window.location.hash).toBe('#/build');
-    for (const label of BUILD_SECTION_LABELS) expect(sectionIsOpen(label)).toBe(false);
+    const parts = screen.getByRole('navigation', { name: 'Engine parts' });
+    fireEvent.click(within(parts).getByRole('button', { name: /Short block/ }));
+    expect(window.location.hash).toBe('#/build/block');
+    expect(screen.getByRole('region', { name: 'Short block' })).toBeTruthy();
 
     // Round trip: throw the component away and rebuild it from that URL alone.
     cleanup();
-    expect(window.location.hash).toBe('#/build');
+    expect(window.location.hash).toBe('#/build/block');
     mount();
+    expect(screen.getByRole('region', { name: 'Short block' })).toBeTruthy();
 
-    expect(screen.getByText('Garage')).toBeTruthy();
-    for (const label of BUILD_SECTION_LABELS) expect(sectionIsOpen(label)).toBe(false);
+    // No part named: the stand opens on the engine itself, never on nothing.
+    cleanup();
+    window.location.hash = '#/build';
+    mount();
+    expect(screen.getByRole('region', { name: 'Engine' })).toBeTruthy();
   });
 
   it('keeps CAREER out of SANDBOX: CAREER opens a shop of its own, SANDBOX has no customers', async () => {

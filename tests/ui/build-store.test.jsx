@@ -31,7 +31,7 @@ import EcuLab, { DYNO_PULL_MS, EcuLabApp } from '../../src/ui/EcuLab.jsx';
 import { Bar } from '../../src/ui/primitives/Bar.jsx';
 import { StoreProvider, useBuild, useTune } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
-import { enterSandbox, goTo } from './nav.js';
+import { buildPart, enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver. recharts' <ResponsiveContainer> (used on the DYNO
 // results panel) needs one to mount at all, so any test that reaches a rendered
@@ -106,6 +106,7 @@ describe('moving the boost-curve cursor', () => {
     // the wrong reason.
     expect(preset).not.toMatch(/^\d\.\dL /);
 
+    buildPart('Induction');
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     // The selected RPM appears in the editor's readout under the bars. Reading it
     // before and after proves the click actually MOVED the cursor — without that, a
@@ -330,6 +331,7 @@ describe('resetting the calibration to stock', () => {
     if (withIntake) {
       fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
     }
+    buildPart('Engine');
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
     cleanup();
     return tune.ve;
@@ -491,6 +493,7 @@ describe('the injector-duty preview call site', () => {
     fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
 
+    buildPart('Induction');
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
     fireEvent.click(columns[RPM.indexOf(6500)]);
     // Every collapsed BuildSection stays mounted (its content is hidden with
@@ -505,6 +508,7 @@ describe('the injector-duty preview call site', () => {
     // table from the CURRENT hardware (hwForVe, which reads turboOn and boostCurve),
     // which is what lets dutyPreview's own VE lookup see the boosted cylinder filling
     // instead of the naturally-aspirated baseline it started on.
+    buildPart('Engine');
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
 
     goTo('TUNE');
@@ -579,7 +583,13 @@ describe('every segmented control', () => {
     // InductionScreen (Compressor Size), one on FuelSystemScreen (Fuel Octane) and
     // one on ExhaustScreen (Exhaust Diameter) — six — regardless of which section is
     // open.
-    let total = expectEverySegHasOneSelection();
+    // BUILD is the engine stand's build software, one part of the engine at a time (its
+    // Engine part is a picker and a form, with no segmented control on it).
+    let total = 0;
+    for (const part of ['Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust']) {
+      buildPart(part);
+      total += expectEverySegHasOneSelection();
+    }
 
     // The remaining two Segs are not on BUILD. ECU Injector Scaling is on TUNE >
     // Injectors, which is not the default sub-view, so it needs an explicit click.
@@ -636,8 +646,8 @@ describe('every toggle', () => {
     // turbo switch would pass the whole suite.
     launch();
     fireEvent.click(screen.getByText('Induction'));
-    const summary = () => screen.getByText(/Not installed|turbine, peak/).textContent;
-    expect(summary()).toBe('Not installed');
+    const summary = () => screen.getByText(/Naturally aspirated|turbine, peak/).textContent;
+    expect(summary()).toBe('Naturally aspirated');
 
     fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
 

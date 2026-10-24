@@ -107,7 +107,7 @@ describe('navigation', () => {
       LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
       LEARN: () => screen.getByRole('navigation', { name: 'Learn shelves' }),
       PHYSICS: () => screen.getByText('Air in'),
-      BUILD: () => screen.getByText('Garage'),
+      BUILD: () => screen.getByRole('navigation', { name: 'Engine parts' }),
     };
     for (const tab of ['TUNE', 'DYNO', 'LIVE', 'LEARN', 'PHYSICS', 'BUILD']) {
       goTo(tab);

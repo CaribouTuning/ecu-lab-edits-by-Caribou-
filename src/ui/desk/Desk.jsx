@@ -24,11 +24,13 @@ import { ShopBackdrop } from './ShopBackdrop.jsx';
 
 import styles from './Desk.module.css';
 
-/** The desktop's apps, as the sketch lays them out: Tune and Learn, Build and Physics. */
+/**
+ * The desktop's apps: Tune and Learn, Physics, and in CAREER Pops's messages. An engine is
+ * not built on a laptop: Build is the engine stand's, in the shop (SHOP_PAGES).
+ */
 export const DESK_APPS = [
   { id: 'tune', label: 'Tune', name: 'TUNE' },
   { id: 'learn', label: 'Learn', name: 'LEARN' },
-  { id: 'build', label: 'Build', name: 'BUILD' },
   { id: 'physics', label: 'Physics', name: 'PHYSICS' },
   // CAREER: Pops's emails and texts.
   { id: 'messages', label: 'Messages', name: 'MESSAGES' },
@@ -70,22 +72,21 @@ function Wallpaper() {
 
 /**
  * The faces in the shop a page's controls are laid on (ShopBackdrop.jsx): the elements to
- * render into, which of them read at their size from where you stand, and which one you
- * have leaned in to. With no WebGL there are none, and the page lays its controls out flat.
- * @typedef {{surfaces: Record<string, HTMLElement>|null, legible: Record<string, boolean>, focus: string|null, setFocus: (name: string|null) => void}} Surfaces
+ * render into. With no WebGL there are none, and the page lays its controls out flat.
+ * @typedef {{surfaces: Record<string, HTMLElement>|null}} Surfaces
  */
 /** @type {React.Context<Surfaces>} */
-const SurfacesContext = createContext(/** @type {Surfaces} */ ({ surfaces: null, legible: {}, focus: null, setFocus: () => {} }));
+const SurfacesContext = createContext(/** @type {Surfaces} */ ({ surfaces: null }));
 
 /** @returns {Surfaces} */
 export const useSurfaces = () => useContext(SurfacesContext);
 
 /** The shop's pages, opened from the shop floor rather than the laptop. */
-export const SHOP_PAGES = { dyno: 'Dyno', live: 'Live motor', office: 'Job board' };
+export const SHOP_PAGES = { dyno: 'Dyno', build: 'Engine stand', live: 'Engine stand', office: 'Job board' };
 
 /** Where the camera goes for each page: the dyno, the engine on its stand, the board on the wall. */
 /** @type {Record<string, 'dyno'|'stand'|'board'>} */
-const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
+const PAGE_SCENES = { dyno: 'dyno', build: 'stand', live: 'stand', office: 'board' };
 
 /**
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
@@ -158,22 +159,22 @@ function Clock() {
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.footer] the open app's status bar: along the bottom of a
  *   laptop window, at the top of a phone's app
+ * @param {React.ReactNode} [props.next] where to go next, from wherever you are: one button
+ *   (the game's flow, EcuLab.jsx `nextStep`), on the shop pages' bar and over the shop floor
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, next = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
-  const [legible, setLegible] = useState(/** @type {Record<string, boolean>} */ ({}));
-  const [focus, setFocus] = useState(/** @type {string|null} */ (null));
-  useEffect(() => { setMenu(null); setFocus(null); }, [mode, app]);
-  const surfaceCtx = useMemo(() => ({ surfaces, legible, focus, setFocus }), [surfaces, legible, focus]);
+  useEffect(() => { setMenu(null); }, [mode, app]);
+  const surfaceCtx = useMemo(() => ({ surfaces }), [surfaces]);
   const appInfo = DESK_APPS.find((a) => a.id === app);
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
-    else if (id === 'stand') onOpen('live');
+    else if (id === 'stand') onOpen('build');
     else if (id === 'door') onOpen('outside');
     else if (id === 'board') onOpen('board');
     else onDesktop();
@@ -271,7 +272,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} focus={focus} onSurfaces={setSurfaces} onLegible={setLegible} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
@@ -347,20 +348,10 @@ export function Desk({
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
-            {/* At the dyno or the stand you stand at its controls; this steps back to see the
-                car on the rollers or the engine on its stand, and back again. */}
-            {(scene === 'dyno' || scene === 'stand') && (!focus || focus === 'wide') && (
-              <button type="button" className={styles.back} aria-pressed={focus === 'wide'} onClick={() => setFocus(focus === 'wide' ? null : 'wide')}>
-                {focus === 'wide' ? 'Controls' : scene === 'dyno' ? 'See the car' : 'See the engine'}
-              </button>
-            )}
-            {focus && focus !== 'wide' ? (
-              <button type="button" className={styles.back} onClick={() => setFocus(null)}>Step back</button>
-            ) : (
-              <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
-                <span>{phone ? 'Phone' : 'Laptop'}</span>
-              </button>
-            )}
+            {next}
+            <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
+              <span>{phone ? 'Phone' : 'Laptop'}</span>
+            </button>
           </header>
           <div className={styles.pageBody}><SurfacesContext.Provider value={surfaceCtx}>{children}</SurfacesContext.Provider></div>
         </div>

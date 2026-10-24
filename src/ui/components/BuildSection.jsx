@@ -31,6 +31,12 @@ import React, { createContext, useContext } from 'react';
 export const BuildLocked = createContext(false);
 
 /**
+ * True on the engine stand's build software (desk/BuildBench.jsx), which lists the parts
+ * itself and shows one at a time: there a section is its controls alone, no accordion head.
+ */
+export const BuildBenchMode = createContext(false);
+
+/**
  * @param {object} props
  * @param {boolean} props.active whether this is the tab's open section
  * @param {() => void} props.onClick toggles this section open or closed
@@ -42,6 +48,10 @@ export const BuildLocked = createContext(false);
  */
 export function BuildSection({ active, onClick, icon: Icon, label, sub, children }) {
   const locked = useContext(BuildLocked);
+  const bench = useContext(BuildBenchMode);
+  if (bench) {
+    return locked ? <fieldset disabled style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>{children}</fieldset> : <>{children}</>;
+  }
   return (
     <div style={{ marginBottom: 9 }}>
       <button onClick={onClick} style={{

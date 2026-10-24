@@ -298,7 +298,10 @@ describe('the palette in the app', () => {
     // Browser back to the start screen the palette was opened from. CommandPalette
     // unmounts with the view, but `paletteOpen` must not survive the round trip, or
     // re-entering the app reopens it at once.
-    // Two steps: BUILD was opened from the laptop's desktop, and the desktop from the start.
+    // Three steps: BUILD is the engine stand, reached from the shop floor (the laptop shut),
+    // the shop floor from the laptop's desktop, and the desktop from the start.
+    window.history.back();
+    await waitFor(() => expect(window.location.hash).toBe('#/bay'));
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/desk'));
     window.history.back();
@@ -343,6 +346,8 @@ describe('the palette in the app', () => {
     it('names Cmd-K on the strip button on a Mac', () => {
       onPlatform('MacIntel');
       launch();
+      // The search button is the laptop's: the engine stand's computer has none.
+      goTo('TUNE');
       const button = screen.getByRole('button', { name: 'Search pages and actions' });
       expect(button.title).toBe('Search (⌘K)');
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Meta+K');
@@ -351,6 +356,8 @@ describe('the palette in the app', () => {
     it('names Ctrl-K on the strip button anywhere else', () => {
       onPlatform('Win32');
       launch();
+      // The search button is the laptop's: the engine stand's computer has none.
+      goTo('TUNE');
       const button = screen.getByRole('button', { name: 'Search pages and actions' });
       expect(button.title).toBe('Search (Ctrl+K)');
       expect(button.getAttribute('aria-keyshortcuts')).toBe('Control+K');
@@ -359,6 +366,8 @@ describe('the palette in the app', () => {
 
   it('opens from the status strip button', () => {
     launch();
+    // The search button is the laptop's: the engine stand's computer has none.
+    goTo('TUNE');
     fireEvent.click(screen.getByRole('button', { name: 'Search pages and actions' }));
     expect(isOpen()).toBe(true);
     expect(document.activeElement).toBe(input());

@@ -113,9 +113,13 @@ describe('InductionScreen', () => {
     // BoltonsScreen, the card would render but the click would never flip
     // `data-installed`, and this would fail.
     mount(<InductionScreen active onToggle={noop} />);
-    const install = screen.getAllByRole('button').find((b) => b.textContent.includes('INSTALL') && !/** @type {HTMLButtonElement} */ (b).disabled);
-    fireEvent.click(install);
-    expect(screen.getByText(MOD_INFO.intake.label).closest('button').getAttribute('data-installed')).toBe('true');
+    const card = () => screen.getByText(MOD_INFO.intake.label).closest('button');
+    expect(card().getAttribute('data-installed')).toBe('false');
+    fireEvent.click(card());
+    expect(card().getAttribute('data-installed')).toBe('true');
+    // And it comes off again: a part on the stand is fitted or removed, not fitted for good.
+    fireEvent.click(card());
+    expect(card().getAttribute('data-installed')).toBe('false');
   });
 });
 

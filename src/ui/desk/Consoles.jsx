@@ -80,13 +80,21 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
         <span className={styles.cap} aria-hidden="true" />
         <span className={styles.bigLabel}>{on ? 'Stop' : 'Start engine'}</span>
       </button>
+      {/* Held to rev: by pointer (captured, so a finger that slides off still holds it, and
+          let go only when the pointer really is), or by Space or the up arrow while focused. */}
       <div
         className={styles.lever}
+        role="button" tabIndex={0} aria-label="Throttle, press and hold" aria-pressed={throttleInput > 0}
         data-open={throttleInput > 0 ? 'true' : 'false'}
         data-running={live.running ? 'true' : 'false'}
-        onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
+        onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
         onPointerUp={() => onThrottle(0)}
         onPointerCancel={() => onThrottle(0)}
+        onLostPointerCapture={() => onThrottle(0)}
+        onContextMenu={(e) => e.preventDefault()}
+        onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'ArrowUp') && !e.repeat) { e.preventDefault(); onThrottle(100); } }}
+        onKeyUp={(e) => { if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); onThrottle(0); } }}
+        onBlur={() => { if (throttleInput > 0) onThrottle(0); }}
       >
         <div className={styles.leverFill} style={{ height: `${clamp(live.effThrottle ?? 0, 0, 100)}%` }} />
         <span className={styles.leverLabel}>

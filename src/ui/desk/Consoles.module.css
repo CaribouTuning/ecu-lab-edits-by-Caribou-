@@ -29,7 +29,7 @@
 /* A big round button: the cap, and what it does under it. */
 .bigButton {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; border-radius: 0;
-  background: transparent; color: var(--ink); font: inherit; cursor: pointer;
+  background: transparent; color: var(--ink); font: inherit; cursor: pointer; touch-action: manipulation;
 }
 .cap {
   width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--panel); background: var(--ok);
@@ -45,7 +45,9 @@
 .lever {
   position: relative; width: 62px; height: 120px; border-radius: var(--r-sm); overflow: hidden; touch-action: none;
   background: var(--bg); border: 1px solid var(--line-hi); cursor: pointer; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
+.lever:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .lever[data-running='false'] { cursor: default; }
 .leverFill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--acc); opacity: 0.85; }
 .leverLabel {

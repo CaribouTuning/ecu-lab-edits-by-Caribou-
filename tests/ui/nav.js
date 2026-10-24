@@ -1,17 +1,17 @@
 /**
  * Getting round the app in a test the way a player does.
  *
- * Both modes work on a laptop in your shop (src/ui/desk/Desk.jsx): Build and Tune (and in
- * SANDBOX, Learn and Physics) are apps on its desktop, and SANDBOX's dyno and engine stand
- * (LIVE) are in the shop, reached by shutting the laptop. CAREER's laptop shuts onto the
- * town's shop instead. `goTo` takes either route to the
- * same screen, so a test says where it wants to be and not how the chrome gets there.
+ * Both modes work on a laptop in your shop (src/ui/desk/Desk.jsx): Tune (and in SANDBOX,
+ * Learn and Physics) are apps on its desktop, and the dyno and the engine stand are in the
+ * shop, reached by shutting the laptop. The engine is built on its stand (BUILD), and run
+ * there (LIVE, the stand computer's Run screen). `goTo` takes either route to the same
+ * screen, so a test says where it wants to be and not how the chrome gets there.
  */
 
 import { fireEvent, screen, within } from '@testing-library/react';
 
-const DESK_APPS = ['BUILD', 'TUNE', 'LEARN', 'PHYSICS'];
-const SHOP_PAGES = ['DYNO', 'LIVE'];
+const DESK_APPS = ['TUNE', 'LEARN', 'PHYSICS'];
+const SHOP_PAGES = ['DYNO', 'BUILD', 'LIVE'];
 
 /** @param {string} name */
 const button = (name) => screen.queryByRole('button', { name });
@@ -44,8 +44,12 @@ export function goTo(name) {
       if (desk) fireEvent.click(desk);
       fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
     }
-    // The shop's markers name the thing: the dyno, and the engine on its stand (LIVE).
+    // The shop's markers name the thing: the dyno, and the engine on its stand (BUILD).
     fireEvent.click(screen.getByRole('button', { name: tab === 'DYNO' ? 'Dyno' : 'Engine stand' }));
+    // LIVE is the stand computer's Run screen, beside its Build.
+    // With no engine chosen yet the stand's computer offers engines and nothing to run.
+    const run = tab === 'LIVE' ? button('Run') : null;
+    if (run) fireEvent.click(run);
     return;
   }
   throw new Error(`goTo: no way to ${name}`);
@@ -87,4 +91,14 @@ export async function openJobBoard() {
   fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
   fireEvent.click(screen.getByRole('button', { name: /Job board/ }));
   await screen.findByText('Your tuning shop');
+}
+
+/**
+ * On the engine stand's build software, open one part of the engine: Engine, Short block,
+ * Heads and cam, Induction, Fuel system or Exhaust.
+ * @param {string} name
+ */
+export function buildPart(name) {
+  const parts = within(screen.getByRole('navigation', { name: 'Engine parts' }));
+  fireEvent.click(parts.getByRole('button', { name: new RegExp(`^${name}`) }));
 }

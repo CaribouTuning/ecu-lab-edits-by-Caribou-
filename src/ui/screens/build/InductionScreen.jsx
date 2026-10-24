@@ -19,6 +19,7 @@ import {
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { PartRow } from '../../components/PartRow.jsx';
 import { PickList } from '../../components/PickList.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
@@ -90,12 +91,9 @@ export function InductionScreen({ active, onToggle }) {
     value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
   });
 
-  const installMod = (key) => {
-    if (mods[key]) return;
-    // Fitting a part changes airflow but does NOT edit your logged VE table — the
-    // VE tab will show the gap and let you accept it once you understand why.
-    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
-  };
+  // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
+  // table: TUNE › AIRFLOW shows the gap, and you correct it from a log once you know why.
+  const toggleMod = (key) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: !mods[key] } });
 
   const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
   // Sizing by airflow, as a turbo shop does: what the engine asks for at the rev limit
@@ -120,22 +118,9 @@ export function InductionScreen({ active, onToggle }) {
         : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${peakBoost.toFixed(0)} psi`
           : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
-      {/* The card markup below is verbatim out of the dissolved BoltonsScreen: a plain
-          `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
-          visually with `data-installed` rather than a `Button` variant — see the brief
-          for why this stays a plain button. */}
       <div className={styles.list}>
         {MODS_HERE.map((key) => (
-          <button
-            key={key} onClick={() => installMod(key)} disabled={mods[key]}
-            className={styles.card} data-installed={mods[key] ? 'true' : 'false'}
-          >
-            <div className={styles.cardHead}>
-              <span className={styles.cardLabel} data-installed={mods[key] ? 'true' : 'false'}>{MOD_INFO[key].label}</span>
-              <span className={styles.cardStatus} data-installed={mods[key] ? 'true' : 'false'}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
-            </div>
-            <div className={styles.cardBlurb}>{MOD_INFO[key].blurb}</div>
-          </button>
+          <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
         ))}
       </div>
 
