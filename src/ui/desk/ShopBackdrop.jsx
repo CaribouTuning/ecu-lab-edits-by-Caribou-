@@ -25,7 +25,8 @@ import styles from './Desk.module.css';
 /** The shop's three hotspots: what each is called and what it opens. */
 export const HOTSPOTS = [
   { id: 'dyno', label: 'Dyno', hint: 'Make a pull on the dyno' },
-  { id: 'stand', label: 'Engine stand', hint: 'Run the engine on the stand' },
+  { id: 'build', label: 'Build bench', hint: 'Build the engine, a part at a time' },
+  { id: 'stand', label: 'Engine stand', hint: 'Start the engine and run it on the stand' },
   { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
   { id: 'door', label: 'Go outside', hint: 'Take a car out into town' },
   { id: 'board', label: 'Job board', hint: 'Today, customers, upgrades, training and the books' },
@@ -33,7 +34,7 @@ export const HOTSPOTS = [
 
 /**
  * @param {object} props
- * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'board'} props.mode the laptop open, the shop with it shut, a
+ * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'build'|'board'} props.mode the laptop open, the shop with it shut, a
  *   page over it all, or walked up to one thing in it (the camera on it, the page see-through)
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
@@ -78,7 +79,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
     layer.className = styles.surfaceLayer;
     host?.appendChild(layer);
     /** Which place each face belongs to: it shows only there. */
-    const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', board: 'board' };
+    const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', buildMonitor: 'build', board: 'board' };
     const faces = Object.entries(shop.surfaces).map(([name, sf]) => {
       const el = document.createElement('div');
       el.className = styles.surface;
@@ -121,8 +122,9 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.
-        const scene = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'board';
-        if (l.mode === 'dyno' || l.mode === 'stand') measureFrame();
+        const station = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'build';
+        const scene = station || l.mode === 'board';
+        if (station) measureFrame();
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
         const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,

@@ -247,8 +247,6 @@ export function EcuLabApp() {
   // pull's live channels on the dyno's; the engine stand's are all its own.
   const [dynoExtra, setDynoExtra] = useState(/** @type {null|'ve'|'3d'|'live'} */ (null));
   const [standScreen, setStandScreen] = useState('bars');
-  // The part of the engine the stand's build software was last open on.
-  const lastBuildPart = useRef('engine');
   // Opened from the game's next step: the job ticket, open, where the car is handed back.
   const [ticketAsk, setTicketAsk] = useState(0);
   const inCareer = mode === 'career' && career != null;
@@ -903,8 +901,8 @@ export function EcuLabApp() {
         const c = career ?? reviveCareer(await loadShop());
         if (cancelled) return;
         dispatch({ type: ACTIONS.ENTER_CAREER, career: c });
-        // You start sat at your desk, the laptop open, the shop in front of you.
-        navigate({ view: 'desk', tab: null, section: null });
+        // You start stood in your shop, the laptop shut on the desk in front of you.
+        navigate({ view: 'bay', tab: null, section: null });
       })();
       return () => { cancelled = true; };
     }
@@ -1296,7 +1294,8 @@ export function EcuLabApp() {
         // back on its lift and SANDBOX's own car back on the bench.
         onStart={() => {
           dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          navigate({ view: 'desk', tab: null, section: null });
+          // Into the shop, stood looking at it: the stations and the laptop are there to pick.
+          navigate({ view: 'bay', tab: null, section: null });
         }}
         onTutorial={goTutorial}
         version={BUILD_VERSION}
@@ -1389,9 +1388,9 @@ export function EcuLabApp() {
             </div>
           );
           // At the dyno or the stand, the computer there says so.
-          if (tab === 'dyno' || tab === 'live') {
-            const where = tab === 'dyno' ? 'dynoMonitor' : 'standMonitor';
-            return <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}><Surface name={where} kind="monitor" label="The bay is empty">{empty}</Surface></Station>;
+          if (tab === 'dyno' || tab === 'live' || tab === 'build') {
+            const kind = tab === 'dyno' ? 'dyno' : tab === 'build' ? 'build' : 'stand';
+            return <Station kind={kind}><Surface name={`${kind}Monitor`} kind="monitor" label="The bay is empty">{empty}</Surface></Station>;
           }
           return empty;
         })()}
@@ -1412,60 +1411,65 @@ export function EcuLabApp() {
         {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
         {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live' || tab === 'build'
           ? (
-            <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}>
-              <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
+            <Station kind={tab === 'dyno' ? 'dyno' : tab === 'build' ? 'build' : 'stand'}>
+              <Surface name={tab === 'dyno' ? 'dynoMonitor' : tab === 'build' ? 'buildMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
             </Station>
           )
           : <EngineStart />)}
 
-        {/* ---------- THE ENGINE STAND: build the engine on it, then start it and run it ---------- */}
-        {/* One place, as a real engine shop has it: the engine on its stand in front of you,
-            its computer beside it. BUILD is that computer's build software (one part at a
-            time, the engine on the stand changing as you choose); LIVE is the same computer's
-            run screens, with the start switch and the throttle on its control box. */}
-        {(tab === 'live' || tab === 'build') && !engineMissing && (!inCareer || career.working) && (
+        {/* ---------- BUILD: the build bench, the engine on it built a part at a time ---------- */}
+        {/* The engine on its build stand in front of you, the bench computer beside it: one
+            part of the engine at a time, the engine on the stand changing as you choose. */}
+        {tab === 'build' && !engineMissing && (!inCareer || career.working) && (
+          <Station kind="build">
+            <Surface name="buildMonitor" kind="monitor" label="Build">
+              <Computer label="Build computer" current={null} onScreen={() => {}} title="Build bench" screens={[]}>
+                <BuildLocked.Provider value={inCareer && !buildOpen}>
+                  <BuildBench
+                    part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
+                    preset={activePreset}
+                    // Back to the factory engine as built: asked first when the tables hold work.
+                    onStock={(p) => dispatch(tune.tablesDirty ? { type: ACTIONS.SET_PRESET_PROMPT, value: p } : { type: ACTIONS.APPLY_PRESET, preset: applyPreset(p) })}
+                    notice={inCareer ? (buildOpen
+                      ? <><b>Build it.</b> This is an engine-building job: every part is yours to choose, and the customer pays for them. Build to the list on their ticket, then run it and tune it.</>
+                      : <><b>The customer&apos;s car.</b> Look through what is fitted. The parts are theirs: the job is the calibration, so nothing here can be changed.</>) : null}
+                  >
+                    {(buildSection ?? 'engine') === 'engine' || buildSection === 'block' || buildSection === 'head' ? (
+                      <EngineScreen
+                        active onToggle={toggleBuildSection} part={/** @type {any} */ (buildSection ?? 'engine')}
+                        engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
+                        onResetToStock={resetToStock}
+                      />
+                    ) : null}
+                    {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
+                    {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
+                    {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
+                  </BuildBench>
+                </BuildLocked.Provider>
+              </Computer>
+            </Surface>
+          </Station>
+        )}
+
+        {/* ---------- LIVE: the run stand, the engine started and run in real time ---------- */}
+        {/* The same engine on the run stand, plumbed to run: its computer's run screens, and the
+            start switch and the throttle on its control box. */}
+        {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
           <Station kind="stand">
-            <Surface name="standMonitor" kind="monitor" label={tab === 'build' ? 'Build' : 'Engine computer'}>
+            <Surface name="standMonitor" kind="monitor" label="Engine computer">
               <Computer
-                label="Engine computer" current={tab === 'build' ? 'build' : standScreen}
-                onScreen={(id) => {
-                  if (id === 'build') { goSection('build', lastBuildPart.current); return; }
-                  setStandScreen(id);
-                  if (tab !== 'live') goTab('live');
-                }}
+                label="Engine computer" current={standScreen} onScreen={setStandScreen}
                 title="Engine stand" status={<StandStatus />}
-                screens={[{ id: 'build', label: 'Build' }, { id: 'bars', label: 'Run' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
+                screens={[{ id: 'bars', label: 'Run' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
               >
-                {tab === 'build' && (
-                  <BuildLocked.Provider value={inCareer && !buildOpen}>
-                    <BuildBench
-                      part={buildSection ?? 'engine'} onPart={(id) => { lastBuildPart.current = id; goSection('build', id); }}
-                      preset={activePreset}
-                      notice={inCareer ? (buildOpen
-                        ? <><b>Build it.</b> This is an engine-building job: every part is yours to choose, and the customer pays for them. Build to the list on their ticket, then run it and tune it.</>
-                        : <><b>The customer&apos;s car.</b> Look through what is fitted. The parts are theirs: the job is the calibration, so nothing here can be changed.</>) : null}
-                    >
-                      {(buildSection ?? 'engine') === 'engine' || buildSection === 'block' || buildSection === 'head' ? (
-                        <EngineScreen
-                          active onToggle={toggleBuildSection} part={/** @type {any} */ (buildSection ?? 'engine')}
-                          engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}
-                          onResetToStock={resetToStock}
-                        />
-                      ) : null}
-                      {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
-                      {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
-                      {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
-                    </BuildBench>
-                  </BuildLocked.Provider>
-                )}
-                {tab === 'live' && standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
-                {tab === 'live' && standScreen === 'sensors' && <LiveGauges />}
-                {tab === 'live' && standScreen === 'ecu' && <LiveEcuPanel />}
-                {tab === 'live' && standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
+                {standScreen === 'bars' && <LiveBars fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline} />}
+                {standScreen === 'sensors' && <LiveGauges />}
+                {standScreen === 'ecu' && <LiveEcuPanel />}
+                {standScreen === 'physics' && <LivePhysics derived={engineDerived} />}
               </Computer>
             </Surface>
             <Surface name="standConsole" kind="console" label="Engine controls">
-              <StandConsole onStart={() => { if (tab !== 'live') goTab('live'); startEngine(); }} onStop={stopEngine} onToggleSound={toggleSound} onThrottle={setThrottleInput} onTestSound={testSound} />
+              <StandConsole onStart={startEngine} onStop={stopEngine} onToggleSound={toggleSound} onThrottle={setThrottleInput} onTestSound={testSound} />
             </Surface>
           </Station>
         )}

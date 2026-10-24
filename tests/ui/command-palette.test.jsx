@@ -298,12 +298,10 @@ describe('the palette in the app', () => {
     // Browser back to the start screen the palette was opened from. CommandPalette
     // unmounts with the view, but `paletteOpen` must not survive the round trip, or
     // re-entering the app reopens it at once.
-    // Three steps: BUILD is the engine stand, reached from the shop floor (the laptop shut),
-    // the shop floor from the laptop's desktop, and the desktop from the start.
+    // Two steps: BUILD is the build bench, reached from the shop floor, and the shop floor
+    // is where SANDBOX opens from the start.
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/bay'));
-    window.history.back();
-    await waitFor(() => expect(window.location.hash).toBe('#/desk'));
     window.history.back();
     await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy());
 

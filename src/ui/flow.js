@@ -2,7 +2,7 @@
  * Where to go next: the game's flow, as one step at a time.
  *
  * Both modes are one loop, the loop a tuner works in. SANDBOX: choose an engine and build it
- * on the stand, start it and hear it, pull it on the dyno, read what the pull's log says and
+ * on the stand, then start it and hear it on the run stand, pull it on the dyno, read what the pull's log says and
  * fix that on the laptop, pull again. CAREER: take a customer's car from the job board, pull
  * it (or road test it), fix what the log points at, pull again, and hand it back. This works
  * out which step the player is on from what is true now (no checklist to fall out of step
@@ -14,8 +14,8 @@
 
 /**
  * Where a step sends the player:
- *   build      the engine stand's build software
- *   live       the engine stand's Run screen
+ *   build      the build bench's computer
+ *   live       the run stand's computer
  *   dyno       the dyno (in CAREER without one, the road test)
  *   tune:PAGE  that page of the laptop's Tune app
  *   board      the job board on the shop wall
@@ -65,24 +65,24 @@ export function nextStep(f) {
       if (f.unread && f.newShop) return { id: 'read', text: `Pops sent you ${many ? `${f.unread} messages` : 'a message'}: how the shop works. Read ${many ? 'them' : 'it'} before the first job.`, label: 'Messages', go: 'messages' };
       return { id: 'take', text: `No car on the bay. Take a customer's car from the job board.${f.unread ? ` Pops sent you ${many ? `${f.unread} messages` : 'a message'} too.` : ''}`, label: 'Job board', go: 'board' };
     }
-    if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the engine stand.', label: 'Engine stand', go: 'build' };
+    if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the build bench.', label: 'Build bench', go: 'build' };
     if (!f.fresh) {
       if (f.roadTest) return { id: 'road', text: f.pulled ? 'You changed the car since the last road test. Take it out again.' : 'Road test it: one full-throttle pull to redline, and the logger records it.', label: 'Road test', go: 'dyno' };
       return { id: 'pull', text: f.pulled ? 'You changed the car since the last pull. Pull it again to see what it did.' : 'Strap it on the dyno and run a pull: the log says what is wrong.', label: 'Dyno', go: 'dyno' };
     }
     if (f.attention.length) return fixStep(f.attention[0]);
-    if (f.own) return { id: 'own-done', text: 'A clean pull. Fit a part on the stand, or put the car away.', label: 'Engine stand', go: 'build' };
+    if (f.own) return { id: 'own-done', text: 'A clean pull. Fit a part on the build bench, or put the car away.', label: 'Build bench', go: 'build' };
     return { id: 'hand-back', text: 'A clean pull. Check it against the ticket, then hand the car back.', label: 'Ticket', go: 'ticket' };
   }
 
-  if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the engine stand, or build your own.', label: 'Engine stand', go: 'build' };
+  if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the build bench, or build your own.', label: 'Build bench', go: 'build' };
   if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
   if (!f.fresh) return { id: 'pull', text: f.pulled ? 'It has changed since the last pull. Pull it again to see what that did.' : 'Put it on the dyno and run a pull.', label: 'Dyno', go: 'dyno' };
   if (f.attention.length) return fixStep(f.attention[0]);
   return {
     id: 'more',
-    text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the stand, or tune for more on the laptop.`,
-    label: 'Engine stand',
+    text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the bench, or tune for more on the laptop.`,
+    label: 'Build bench',
     go: 'build',
   };
 }
@@ -104,10 +104,11 @@ function fixStep(a) {
 /**
  * Which of the shop floor's places a step is at: its marker is the one lit.
  * @param {Go} go
- * @returns {'stand'|'dyno'|'laptop'|'board'}
+ * @returns {'build'|'stand'|'dyno'|'laptop'|'board'}
  */
 export function spotOf(go) {
-  if (go === 'build' || go === 'live') return 'stand';
+  if (go === 'build') return 'build';
+  if (go === 'live') return 'stand';
   if (go === 'dyno' || go === 'ticket') return 'dyno';
   if (go === 'board') return 'board';
   return 'laptop';

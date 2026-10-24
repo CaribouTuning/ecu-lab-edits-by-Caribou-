@@ -178,7 +178,8 @@ function wheel() {
 /**
  * Dress the shop. The room is 16 × 14 m (x −8…8, z −7…7); the back wall is at z −7 with
  * the door at x −1.65…4.85; the dyno is at (−4.6, −1.6), the lift at (4.6, −1.6), the
- * engine stand at (−1.3, 0.55) with its computer at (0.35, 1.7), and the desk at (0, 5.2).
+ * build bench at (−2.0, 0.6) and run stand at (1.05, 1.6), each with its computer to its
+ * right, and the desk at (0, 5.2).
  * @param {THREE.Group} root
  */
 export function dressShop(root) {
@@ -244,7 +245,7 @@ export function dressShop(root) {
   add(floorJack(), 6.9, 0, 0.9, -0.3);
   add(axleStand(), 2.3, 0, 0.6);
   add(axleStand(), 2.3, 0, -3.9);
-  add(creeper(), 3.0, 0, 1.4, 1.2);
+  add(creeper(), 3.7, 0, 0.1, 1.2);
   add(makeShelf(7), 7.5, 0, 6.0, -Math.PI / 2);
   add(windowPane(2.4, 0.9), 7.98, 3.7, -1.5, -Math.PI / 2);
   add(makePoster(5), 7.95, 2.6, 1.6, -Math.PI / 2);
@@ -262,7 +263,7 @@ export function dressShop(root) {
   for (const [x, z] of [[-0.37, -0.22], [0.37, -0.22], [-0.37, 0.22], [0.37, 0.22]]) cart.add(box(0.04, 0.8, 0.04, W.metalDark, { x, y: 0.42, z, edge: false }));
   cart.add(box(0.3, 0.12, 0.2, W.toolRed, { y: 0.88, x: -0.15, edge: false }));
   cart.add(cyl(0.06, 0.06, 0.2, W.metalLight, { y: 0.9, x: 0.2, edge: false }));
-  add(cart, -2.45, 0, 1.15, 0.3);
+  add(cart, -3.4, 0, 1.9, 0.3);
 
   // ---- ceiling: strip lights ----
   for (const x of [-4.6, 4.6]) for (const z of [-3.5, 0.5]) add(stripLight(2.4), x, 5.0, z, Math.PI / 2);

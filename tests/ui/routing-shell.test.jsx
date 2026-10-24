@@ -217,9 +217,9 @@ describe('the engine stand\'s parts', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
     expect(window.location.hash).toBe('#/shop');
-    // The save loads and you are sat at your desk; the paperwork is on the shop wall.
-    await screen.findByRole('button', { name: 'Desktop' });
-    expect(window.location.hash).toBe('#/desk');
+    // The save loads and you are stood in your shop; the paperwork is on the shop wall.
+    await screen.findByRole('button', { name: 'Open the laptop' });
+    expect(window.location.hash).toBe('#/bay');
     await openJobBoard();
     // No SANDBOX chrome in the shop, and the way back to the start screen is there.
     expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();

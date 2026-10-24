@@ -61,7 +61,7 @@ describe('CAREER, step by step', () => {
 
 describe('the shop floor marker for a step', () => {
   it('is the place the step happens', () => {
-    expect(spotOf('build')).toBe('stand');
+    expect(spotOf('build')).toBe('build');
     expect(spotOf('live')).toBe('stand');
     expect(spotOf('dyno')).toBe('dyno');
     expect(spotOf('ticket')).toBe('dyno');

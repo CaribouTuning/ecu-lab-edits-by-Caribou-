@@ -87,7 +87,7 @@ export function Computer({ label, screens, current, onScreen, title, status = nu
 
 /**
  * A place in the shop: its surfaces, in the room or (with no room) one after the other.
- * @param {{kind: 'dyno'|'stand'|'board', children: React.ReactNode}} props
+ * @param {{kind: 'dyno'|'stand'|'build'|'board', children: React.ReactNode}} props
  * @returns {React.ReactElement}
  */
 export function Station({ kind, children }) {

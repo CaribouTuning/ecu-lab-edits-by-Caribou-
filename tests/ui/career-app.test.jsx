@@ -154,7 +154,7 @@ describe('CAREER in the app', () => {
 
     window.location.hash = '#/shop';
     render(<EcuLab />);
-    await screen.findByRole('button', { name: 'Desktop' });
+    await screen.findByRole('button', { name: 'Open the laptop' });
     await openJobBoard();
     expect(screen.getByRole('button', { name: /Work on the car/ })).toBeTruthy();
   });

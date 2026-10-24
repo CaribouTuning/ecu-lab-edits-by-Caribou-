@@ -82,11 +82,11 @@ const SurfacesContext = createContext(/** @type {Surfaces} */ ({ surfaces: null 
 export const useSurfaces = () => useContext(SurfacesContext);
 
 /** The shop's pages, opened from the shop floor rather than the laptop. */
-export const SHOP_PAGES = { dyno: 'Dyno', build: 'Engine stand', live: 'Engine stand', office: 'Job board' };
+export const SHOP_PAGES = { dyno: 'Dyno', build: 'Build bench', live: 'Engine stand', office: 'Job board' };
 
-/** Where the camera goes for each page: the dyno, the engine on its stand, the board on the wall. */
-/** @type {Record<string, 'dyno'|'stand'|'board'>} */
-const PAGE_SCENES = { dyno: 'dyno', build: 'stand', live: 'stand', office: 'board' };
+/** Where the camera goes for each page: the dyno, the build bench, the run stand, the board on the wall. */
+/** @type {Record<string, 'dyno'|'stand'|'build'|'board'>} */
+const PAGE_SCENES = { dyno: 'dyno', build: 'build', live: 'stand', office: 'board' };
 
 /**
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
@@ -199,7 +199,8 @@ export function Desk({
   const appInfo = DESK_APPS.find((a) => a.id === app);
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
-    else if (id === 'stand') onOpen('build');
+    else if (id === 'build') onOpen('build');
+    else if (id === 'stand') onOpen('live');
     else if (id === 'door') onOpen('outside');
     else if (id === 'board') onOpen('board');
     else onDesktop();

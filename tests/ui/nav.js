@@ -3,9 +3,10 @@
  *
  * Both modes work on a laptop in your shop (src/ui/desk/Desk.jsx): Tune (and in SANDBOX,
  * Learn and Physics) are apps on its desktop, and the dyno and the engine stand are in the
- * shop, reached by shutting the laptop. The engine is built on its stand (BUILD), and run
- * there (LIVE, the stand computer's Run screen). `goTo` takes either route to the same
- * screen, so a test says where it wants to be and not how the chrome gets there.
+ * shop, reached by shutting the laptop. The engine is built on the build bench (BUILD) and
+ * run on the engine stand (LIVE). The game opens stood in the shop, the laptop shut. `goTo`
+ * takes either route to the same screen, so a test says where it wants to be and not how
+ * the chrome gets there.
  */
 
 import { fireEvent, screen, within } from '@testing-library/react';
@@ -39,19 +40,17 @@ export function goTo(name) {
     // Into the shop: from a page its back button; from the laptop, shut it.
     const back = button('Back to the shop');
     if (back) fireEvent.click(back);
-    else {
+    else if (!document.querySelector('[data-spot]')) {
+      // On the laptop: to its desktop, then look up past it at the shop.
       const desk = button('Desktop');
       if (desk) fireEvent.click(desk);
       fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
     }
-    // The shop's markers name the thing: the dyno, and the engine on its stand (BUILD).
-    // (The marker itself, not the next step's button, which can be named the same.)
-    const spot = screen.getAllByRole('button', { name: tab === 'DYNO' ? 'Dyno' : 'Engine stand' }).find((b) => b.dataset.spot);
+    // The shop's markers name the thing: the dyno, the build bench (BUILD), and the run stand
+    // (LIVE). The marker itself, not the next step's button, which can be named the same.
+    const label = { DYNO: 'Dyno', BUILD: 'Build bench', LIVE: 'Engine stand' }[tab];
+    const spot = screen.getAllByRole('button', { name: label }).find((b) => b.dataset.spot);
     fireEvent.click(/** @type {HTMLElement} */ (spot));
-    // LIVE is the stand computer's Run screen, beside its Build.
-    // With no engine chosen yet the stand's computer offers engines and nothing to run.
-    const run = tab === 'LIVE' ? button('Run') : null;
-    if (run) fireEvent.click(run);
     return;
   }
   throw new Error(`goTo: no way to ${name}`);
@@ -83,14 +82,16 @@ export function chrome(name) {
  */
 export async function enterCareer() {
   fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
-  await screen.findByRole('button', { name: 'Desktop' });
+  await screen.findByRole('button', { name: 'Open the laptop' });
 }
 
 /** CAREER: look up from the laptop at the shop and walk over to the job board on the wall. */
 export async function openJobBoard() {
-  const desk = button('Desktop');
-  if (desk) fireEvent.click(desk);
-  fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
+  if (!document.querySelector('[data-spot]')) {
+    const desk = button('Desktop');
+    if (desk) fireEvent.click(desk);
+    fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
+  }
   fireEvent.click(screen.getByRole('button', { name: /Job board/ }));
   await screen.findByText('Your tuning shop');
 }
