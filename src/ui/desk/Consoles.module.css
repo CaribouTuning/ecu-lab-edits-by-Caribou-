@@ -57,3 +57,8 @@
 .slider { width: 100%; accent-color: var(--acc); }
 .note { margin: 0; font-size: var(--fs-xs); color: var(--warn-ink); line-height: 1.4; }
 .note[data-ok='true'] { color: var(--ok-ink); }
+
+/* A pendant box beside the monitor, taller than wide: its controls stand in a column. */
+@container (max-aspect-ratio: 1 / 1) {
+  .plate { flex-direction: column; justify-content: space-evenly; padding: 8px; gap: 10px; }
+}

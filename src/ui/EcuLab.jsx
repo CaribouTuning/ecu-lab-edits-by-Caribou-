@@ -56,6 +56,7 @@ import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
 import { CareerBar } from './career/CareerBar.jsx';
+import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
 import { stowFromLift } from './career/ownedCars.js';
@@ -248,6 +249,8 @@ export function EcuLabApp() {
   const [standScreen, setStandScreen] = useState('bars');
   // The part of the engine the stand's build software was last open on.
   const lastBuildPart = useRef('engine');
+  // Opened from the game's next step: the job ticket, open, where the car is handed back.
+  const [ticketAsk, setTicketAsk] = useState(0);
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
@@ -609,6 +612,12 @@ export function EcuLabApp() {
     () => pullSignature(build, tune, loadKpa, { env, faults }),
     [build, tune, loadKpa, env, faults],
   );
+  // The hardware on the stand, signed, and the hardware it last ran on: the game's flow asks
+  // to hear an engine again after a part goes on it (flow.js). A cursor is not hardware.
+  const hwSig = useMemo(() => JSON.stringify({ ...build, boostSel: 0, presetPrompt: null }), [build]);
+  const [heardSig, setHeardSig] = useState(/** @type {string|null} */ (null));
+  const liveRunning = !!session.live.running;
+  useEffect(() => { if (liveRunning) setHeardSig(hwSig); }, [liveRunning, hwSig]);
 
   /**
    * Everything a dyno pull is solved from, in one place, so the drag strip's per-gear
@@ -1728,6 +1737,46 @@ export function EcuLabApp() {
   const shopCars = inCareer
     ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null), rollers: !roadTest }
     : undefined;
+  // ---- the game's flow: the next step, from what is true now (flow.js) ----
+  const attentionList = Object.entries(attention)
+    .map(([page, count]) => ({ page, count, label: tuneViews.find((v) => v.id === page)?.name ?? page }))
+    .sort((a, b) => b.count - a.count);
+  const step = nextStep({
+    mode: inCareer ? 'career' : 'sandbox',
+    engineMissing,
+    heard: heardSig === hwSig,
+    atDyno: appView === 'app' && tab === 'dyno',
+    pulled: !!result || runs.length > 0,
+    fresh: pullFresh,
+    peakHp: result?.peakHp,
+    attention: attentionList,
+    working: inCareer && !!career.working,
+    unread: inCareer ? unreadCount(career) : 0,
+    newShop: inCareer && (career.history?.length ?? 0) === 0,
+    roadTest,
+    buildJob: buildOpen,
+    own: !!jobOnBay?.own,
+  });
+  // Already where the step happens: it is only said, with nothing to press.
+  const stepHere = appView === 'app' && (
+    step.go === 'build' ? tab === 'build'
+      : step.go === 'live' ? tab === 'live'
+        : step.go === 'dyno' || step.go === 'ticket' ? tab === 'dyno'
+          : step.go.startsWith('tune:') ? tab === 'tune' && tuneView === step.go.slice(5) : false
+  ) || (step.go === 'messages' && appView === 'messages') || (step.go === 'board' && appView === 'shop');
+  const goStep = () => {
+    const g = step.go;
+    if (g === 'build') changeTab('build');
+    else if (g === 'live') { setStandScreen('bars'); goTab('live'); }
+    else if (g === 'dyno') goTab('dyno');
+    else if (g === 'board') changeTab('shop');
+    else if (g === 'messages') deskGo('messages');
+    else if (g === 'ticket') { setTicketAsk((n) => n + 1); if (!(appView === 'app' && ['dyno', 'live', 'build', 'tune'].includes(tab))) goTab('dyno'); }
+    else if (g.startsWith('tune:')) goSection('tune', g.slice(5));
+  };
+  /** @type {import('./desk/Desk.jsx').Next} */
+  const deskNext = { text: step.text, label: step.label, here: stepHere, spot: spotOf(step.go), onGo: goStep };
+
   /** @type {import('./desk/Desk.jsx').Notice[]} */
   const deskNotices = [];
   if (inCareer) {
@@ -1737,7 +1786,7 @@ export function EcuLabApp() {
     if (ch) deskNotices.push({ id: 'goal', text: `${ch.title}: ${ch.goal}`, tone: 'ok', action: 'Messages', go: () => deskGo('messages') });
   }
   if (!inCareer) {
-    if (engineMissing) deskNotices.push({ id: 'engine', text: 'No engine yet: choose one in Build.', tone: 'warn', action: 'Build', go: () => goTab('build') });
+    if (engineMissing) deskNotices.push({ id: 'engine', text: 'No engine yet: choose one on the engine stand.', tone: 'warn', action: 'Engine stand', go: () => goTab('build') });
     else {
       if (overallHealth < 60) deskNotices.push({ id: 'health', text: `Engine health is down to ${Math.round(overallHealth)}%.`, tone: overallHealth < 30 ? 'danger' : 'warn', action: 'Repair', go: repairEngine });
       for (const [page, n] of Object.entries(attention)) {
@@ -1770,13 +1819,14 @@ export function EcuLabApp() {
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}
         status={<StatusStrip actions={false} />}
         footer={appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} bar /> : null}
+        next={deskNext}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (
-          <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} />
+          <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} openAsk={ticketAsk} />
         )}
         {/* An app's status bar is the window's own (Desk's footer); a page in the shop
             keeps the strip at its top. */}
-        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} /> : null}
+        {deskMode === 'page' && appView !== 'shop' && appView !== 'messages' ? <div data-strip=""><StatusStrip actions={false} /></div> : null}
         {screen}
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}

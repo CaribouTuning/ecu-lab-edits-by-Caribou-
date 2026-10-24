@@ -14,7 +14,7 @@
  * hands over the screen for it; this decides how it is framed.
  */
 
-import { Atom, Bell, BookOpen, ChevronLeft, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
+import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
@@ -141,6 +141,31 @@ function Clock() {
  */
 
 /**
+ * Where to go next (flow.js): what to do, and the button that takes you there. Where you
+ * already are, the step is only said, with nothing to press.
+ * @typedef {{text: string, label: string, here: boolean, spot: string, onGo: () => void}} Next
+ */
+
+/**
+ * The next step, in one line.
+ * @param {{next: Next, place: 'page'|'bay'|'laptop'|'phone'}} props
+ * @returns {React.ReactElement}
+ */
+function NextStrip({ next, place }) {
+  return (
+    <div className={styles.next} data-place={place} role="status" aria-label="Next step">
+      <span className={styles.nextTag}>Next</span>
+      <span className={styles.nextText}>{next.text}</span>
+      {!next.here && (
+        <button type="button" className={styles.nextGo} onClick={next.onGo}>
+          {next.label}<ChevronRight size={14} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
  * @param {object} props
  * @param {'desktop'|'app'|'bay'|'page'} props.mode
  * @param {string|null} props.app which app or page is open
@@ -159,8 +184,8 @@ function Clock() {
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.footer] the open app's status bar: along the bottom of a
  *   laptop window, at the top of a phone's app
- * @param {React.ReactNode} [props.next] where to go next, from wherever you are: one button
- *   (the game's flow, EcuLab.jsx `nextStep`), on the shop pages' bar and over the shop floor
+ * @param {Next|null} [props.next] where to go next, from wherever you are (the game's flow,
+ *   flow.js): under a shop page's bar, over the shop floor, on the laptop and the phone
  * @param {React.ReactNode} [props.children] the open app's or page's screen
  * @returns {React.ReactElement}
  */
@@ -243,11 +268,13 @@ export function Desk({
               <Search size={17} aria-hidden="true" />
             </button>
           </header>
+          {next && <NextStrip next={next} place="phone" />}
           <div className={styles.windowBody}>{footer}{children}</div>
         </section>
       ) : (
         <div className={styles.homeScreen}>
           <Wallpaper />
+          {next && <NextStrip next={next} place="phone" />}
           <div className={styles.appGrid}>
             {shownApps.map((a) => (
               <button key={a.id} type="button" className={styles.phoneIcon} onClick={() => onOpen(a.id)} aria-label={a.name} data-tour={`nav-${a.id}`} tabIndex={open ? 0 : -1}>
@@ -272,13 +299,15 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
         <div className={styles.laptop} data-state={open ? 'open' : 'shut'} aria-hidden={!open}>
           <div className={`${styles.lid} ink-frame-lg`}>
             <div className={styles.screen}>
+              {next && <NextStrip next={next} place="laptop" />}
               <div className={styles.workspace}>
                 {mode === 'app' && appInfo ? (
                   <section className={styles.window} aria-label={appInfo.label}>
@@ -348,11 +377,11 @@ export function Desk({
               <ChevronLeft size={16} aria-hidden="true" /><span>Shop</span>
             </button>
             <span className={styles.pageTitle}>{SHOP_PAGES[/** @type {keyof typeof SHOP_PAGES} */ (app ?? '')] ?? ''}</span>
-            {next}
             <button type="button" className={styles.back} onClick={onDesktop} aria-label={phone ? 'Pick up the phone' : 'Open the laptop'}>
               <span>{phone ? 'Phone' : 'Laptop'}</span>
             </button>
           </header>
+          {next && <NextStrip next={next} place="page" />}
           <div className={styles.pageBody}><SurfacesContext.Provider value={surfaceCtx}>{children}</SurfacesContext.Provider></div>
         </div>
       )}

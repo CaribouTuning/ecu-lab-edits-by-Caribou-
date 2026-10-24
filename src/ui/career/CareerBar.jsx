@@ -7,7 +7,7 @@
  */
 
 import { ChevronDown } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import { Button } from '../primitives/Button.jsx';
 
@@ -20,10 +20,13 @@ import { jobById } from './jobs.js';
  * @param {import('./shop.js').Career} props.career
  * @param {() => void} props.onShop back to the shop, the car stays on its lift
  * @param {() => void} props.onHandBack grade the car and give it back
+ * @param {number} [props.openAsk] counts up each time the game's next step sends you to
+ *   the ticket: it opens, its checks and its Hand back button in view
  * @returns {React.ReactElement|null}
  */
-export function CareerBar({ career, onShop, onHandBack }) {
+export function CareerBar({ career, onShop, onHandBack, openAsk = 0 }) {
   const [open, setOpen] = useState(false);
+  useEffect(() => { if (openAsk > 0) setOpen(true); }, [openAsk]);
   const job = career.working ? jobById(career.working) : null;
   const roadOnly = !career.owned.includes('dyno');
 
@@ -67,7 +70,7 @@ export function CareerBar({ career, onShop, onHandBack }) {
               </ul>
             </>
           )}
-          {job.build && <p className={styles.note}>An engine-building job: BUILD is open, and every part you choose is on the customer. Build to their list, then log and tune what you built.</p>}
+          {job.build && <p className={styles.note}>An engine-building job: the engine stand's Build is open, and every part you choose is on the customer. Build to their list, then log and tune what you built.</p>}
           {roadOnly && <p className={styles.note}>No dyno yet: pulls are road tests. They log everything a wideband and the ECU see, but not horsepower.</p>}
           <div className={styles.actions}>
             <Button size="sm" onClick={onHandBack}>{job.own ? 'Put the car away' : 'Hand back the car'}</Button>

@@ -379,3 +379,34 @@
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   background: var(--bg);
 }
+
+/* ---------- the next step (flow.js): one line, wherever you are ---------- */
+.next {
+  flex: none; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--ink);
+  font-size: var(--fs-sm); line-height: 1.35;
+}
+.nextTag { flex: none; font-weight: 700; color: var(--acc-ink); }
+.nextText { flex: 1; min-width: 0; color: var(--ink); }
+.nextGo {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
+  border-radius: var(--r-sm); border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on);
+  font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.nextGo:hover { filter: brightness(1.08); }
+.nextGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* On the laptop it is the Mac's: its own greys, under the menu of the window below it. */
+.next[data-place='laptop'] { background: var(--mac-titlebar); border-bottom-color: var(--mac-separator); }
+/* Over the shop floor it sits at the top, the shop still in view round it. */
+.bayNext { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); z-index: 3; }
+.bayNext .next { border: 1px solid var(--line-hi); border-radius: var(--r-md); }
+/* The shop-floor marker of the place the next step is at. */
+.spot[data-next='true'] .spotLabel { background: var(--acc); color: var(--acc-on); }
+
+/* A short screen (a phone held sideways): the station gets the height. The engine's status
+   line is the laptop's to show here, and the next step takes one tight line. */
+@media (max-height: 500px) {
+  .page[data-scene] .pageBody > [data-strip] { display: none; }
+  .next { padding: 3px 10px; }
+  .nextGo { height: 24px; }
+}

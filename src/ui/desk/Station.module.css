@@ -63,7 +63,7 @@
 .screen { position: relative; flex: 1; min-height: 0; }
 .screenBody { position: absolute; inset: 0; overflow-y: auto; padding: 10px; overscroll-behavior: contain; }
 /* ---------- a console: a plate of switches ---------- */
-.face[data-kind='console'] { background: var(--panel3); border: 1px solid var(--line-hi); padding: 10px 12px; overflow-y: auto; }
+.face[data-kind='console'] { background: var(--panel3); border: 1px solid var(--line-hi); padding: 10px 12px; overflow-y: auto; container-type: size; }
 
 /* ---------- the job board: paper on cork ---------- */
 .face[data-kind='board'] { background: transparent; overflow-y: auto; padding: 14px; overscroll-behavior: contain; }

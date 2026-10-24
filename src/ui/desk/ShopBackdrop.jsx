@@ -42,11 +42,12 @@ export const HOTSPOTS = [
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
+ * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, onSurfaces, onPick, onLook }) {
+export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
   const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
@@ -154,7 +155,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
           // once the camera has stopped (not again every frame on the way). Never narrower
           // than its controls need in one row: a narrow screen shows the whole control box
           // a little smaller rather than cutting its right end off.
-          const minPx = f.name.endsWith('Console') ? 420 : f.name === 'board' ? 300 : 340;
+          const minPx = f.name.endsWith('Console') ? (bh > bw ? 220 : 420) : f.name === 'board' ? 300 : 340;
           if (!moving || f.pw === 0) {
             const pw = Math.round(Math.max(minPx, bw));
             const ph = Math.round((pw * bh) / bw);
@@ -200,6 +201,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
               type="button"
               className={styles.spot}
               data-spot={h.id}
+              data-next={h.id === nextSpot ? 'true' : undefined}
               onClick={() => onPick(h.id)}
               title={h.hint}
             >

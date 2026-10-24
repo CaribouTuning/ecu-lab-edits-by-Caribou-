@@ -53,22 +53,29 @@ function makeCart() {
   g.add(monitorAt);
   const monitor = { at: monitorAt, w: 1, h: 1 };
   const panel = { at: consoleAt, w: 1, h: 1 };
-  /** @param {{mw: number, mh: number, cw: number, ch: number}} d metres */
-  const shape = ({ mw, mh, cw, ch }) => {
+  /**
+   * @param {{mw: number, mh: number, cw: number, ch: number, side?: boolean}} d metres; `side`
+   *   hangs the control box beside the monitor on an arm, for a view too short for both stacked
+   */
+  const shape = ({ mw, mh, cw, ch, side = false }) => {
     body.clear();
     body.add(box(Math.max(0.95, cw + 0.1), 0.06, 0.62, W.engine.standDark, { y: 0.16 }));
     for (const [x, z] of [[-0.4, -0.25], [-0.4, 0.25], [0.4, -0.25], [0.4, 0.25]]) body.add(cyl(0.06, 0.06, 0.06, W.black, { axis: 'x', x, y: 0.06, z, edge: false }));
-    // The control box: a steel box at hand height, its panel leaning back about 24 degrees.
-    const tilt = 0.42;
+    // The control box: a steel box at hand height, its panel leaning back about 24 degrees;
+    // or, beside the monitor, a pendant box on an arm, standing nearly upright.
+    const tilt = side ? 0.12 : 0.42;
     const box0 = new THREE.Group();
-    box0.position.set(0, 0.96, 0.08);
+    const my = side ? 1.5 : 0.96 + (ch / 2) * Math.cos(tilt) + 0.12 + mh / 2;
+    if (side) {
+      box0.position.set(mw / 2 + 0.1 + cw / 2, my, -0.08);
+      body.add(box(0.12, 0.05, 0.05, W.metalDark, { x: mw / 2 + 0.06, y: my, z: -0.1 }));
+    } else box0.position.set(0, 0.96, 0.08);
     box0.rotation.x = -tilt;
     box0.add(box(cw + 0.08, ch + 0.08, 0.1, W.engine.standDark, { z: -0.05 }));
     consoleAt.position.set(0, 0, 0.002);
     box0.add(consoleAt);
     body.add(box0);
     // The post, and the monitor on it: its bottom edge just clear of the box.
-    const my = 0.96 + (ch / 2) * Math.cos(tilt) + 0.12 + mh / 2;
     body.add(box(0.08, my - 0.2, 0.08, W.metalDark, { y: 0.2 + (my - 0.2) / 2, z: -0.16 }));
     body.add(box(mw + 0.07, mh + 0.07, 0.05, W.black, { y: my, z: -0.1 }));
     monitorAt.position.set(0, my, -0.074);
@@ -80,8 +87,8 @@ function makeCart() {
 
 /** The carts' faces for each shape of view, metres: monitor, then control box. */
 const CART_SIZES = {
-  dyno: { wide: { mw: 1.32, mh: 0.8, cw: 0.92, ch: 0.3 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
-  stand: { wide: { mw: 1.24, mh: 0.86, cw: 0.78, ch: 0.26 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
+  dyno: { short: { mw: 1.32, mh: 0.8, cw: 0.4, ch: 0.66, side: true }, wide: { mw: 1.32, mh: 0.8, cw: 0.92, ch: 0.3 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
+  stand: { short: { mw: 1.24, mh: 0.86, cw: 0.4, ch: 0.7, side: true }, wide: { mw: 1.24, mh: 0.86, cw: 0.78, ch: 0.26 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
 };
 
 /**
@@ -322,9 +329,9 @@ export function buildShopScene(stage, init) {
   const standCart = makeCart();
   standCart.group.position.copy(AT.standCart);
   root.add(standCart.group);
-  /** @type {'wide'|'tall'|null} */
+  /** @type {'wide'|'tall'|'short'|null} */
   let cartShape = null;
-  /** @param {'wide'|'tall'} sh */
+  /** @param {'wide'|'tall'|'short'} sh */
   const shapeCarts = (sh) => {
     if (sh === cartShape) return;
     cartShape = sh;
@@ -421,7 +428,7 @@ export function buildShopScene(stage, init) {
    * What of the view the page leaves clear, in pixels from each edge of the canvas: the
    * page's header and the job bar cover its top. A station is fitted into what is left.
    */
-  const frame = { top: 56, bottom: 0, left: 0, right: 0, w: 1, h: 1 };
+  const frame = { top: 56, bottom: 0, left: 0, right: 0, w: 1600, h: 1000 };
   const probe = new THREE.PerspectiveCamera();
 
   /**
@@ -446,7 +453,9 @@ export function buildShopScene(stage, init) {
         pts.push(new THREE.Vector3((x * sf.w) / 2, (y * sf.h) / 2, 0).applyMatrix4(sf.at.matrixWorld));
       }
     }
-    if (name === 'stand' && cartShape === 'wide') {
+    // The engine beside its computer only where there is the height for both: on a phone
+    // held sideways the computer alone fills the view, and the software shows the engine.
+    if (name === 'stand' && cartShape === 'wide' && frame.h - frame.top - frame.bottom > 420) {
       const bb = new THREE.Box3().setFromObject(engine.group);
       for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) pts.push(new THREE.Vector3(x, y, z));
     }
@@ -508,7 +517,9 @@ export function buildShopScene(stage, init) {
     setPose(pose) {
       lastPose = pose;
       shapeBoard(cam.aspect < 1);
-      shapeCarts(cam.aspect < 0.9 ? 'tall' : 'wide');
+      // Upright, the monitor turns on its pivot; on a view too short for the box under the
+      // monitor (a phone held sideways), the box hangs beside it.
+      shapeCarts(cam.aspect < 0.9 ? 'tall' : frame.h - frame.top < 440 ? 'short' : 'wide');
       if (focusAspect !== cam.aspect) { focusCache.clear(); focusAspect = cam.aspect; }
       // The board is read square on, close enough to fill the screen. At the dyno or the
       // stand you stand at its cart, the whole of it in view: there is nothing to lean in to.

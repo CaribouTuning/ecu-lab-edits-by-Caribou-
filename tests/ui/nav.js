@@ -45,7 +45,9 @@ export function goTo(name) {
       fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
     }
     // The shop's markers name the thing: the dyno, and the engine on its stand (BUILD).
-    fireEvent.click(screen.getByRole('button', { name: tab === 'DYNO' ? 'Dyno' : 'Engine stand' }));
+    // (The marker itself, not the next step's button, which can be named the same.)
+    const spot = screen.getAllByRole('button', { name: tab === 'DYNO' ? 'Dyno' : 'Engine stand' }).find((b) => b.dataset.spot);
+    fireEvent.click(/** @type {HTMLElement} */ (spot));
     // LIVE is the stand computer's Run screen, beside its Build.
     // With no engine chosen yet the stand's computer offers engines and nothing to run.
     const run = tab === 'LIVE' ? button('Run') : null;
