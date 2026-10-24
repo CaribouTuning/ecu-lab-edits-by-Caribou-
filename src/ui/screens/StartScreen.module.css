@@ -1,4 +1,9 @@
 .screen {
+  /* The look it was liked in, kept whatever the rest of the app's colours do. */
+  --bg: var(--start-bg); --panel: var(--start-panel); --line-hi: var(--start-line-hi);
+  --ink: var(--start-ink); --ink2: var(--start-ink2); --ink3: var(--start-ink3);
+  --acc: var(--start-acc); --acc-ink: var(--start-acc-ink); --acc-bg: var(--start-acc-bg);
+  --acc-on: var(--start-acc-on); --acc-rgb: var(--start-acc-rgb);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -27,7 +32,25 @@
 
 .inner { position: relative; display: flex; flex-direction: column; align-items: center; }
 
-.dial { margin-bottom: 22px; }
+.logo { width: 168px; height: 179px; margin-bottom: 12px; object-fit: contain; }
+@media (max-height: 700px) { .logo { width: 120px; height: 128px; } }
+
+.subtitle {
+  margin-bottom: 30px;
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink2);
+}
+
+/* The picture above each way in: a clean line drawing. The start screen is the one
+   place the interface is not doodled (data-plain); everything past it is. */
+.icon {
+  width: 56px; height: 56px; margin: 0 auto 4px; color: var(--ink2);
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  overflow: visible;
+}
+.icon :global(.wash) { fill: var(--acc-bg); stroke: none; }
 
 .eyebrow {
   margin-bottom: 7px;
@@ -43,11 +66,11 @@
    one-off, not systematising a repeated value. */
 .title {
   max-width: 22ch;
-  margin-bottom: 15px;
-  font-size: 25px;
+  margin-bottom: 6px;
+  font-size: 34px;
   font-weight: 800;
   letter-spacing: 0.01em;
-  text-transform: uppercase;
+  
 }
 
 .blurb {
@@ -64,7 +87,7 @@
 
 /* Each way in says what it is for. Three unlabelled buttons make a newcomer guess
    which one is the game, and the answer is not obvious from "SANDBOX". */
-.caption { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink3); }
+.caption { font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
 
 .version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink3); }
 
@@ -73,7 +96,45 @@
    560px is the project's one breakpoint — see the note beside the scale in
    tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
 @media (min-width: 560px) {
-  .title { font-size: 34px; }
+  .title { font-size: 52px; }
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }
+
+/* An upright phone: each way in is one row, its doodle beside the button and the
+   caption under it, so all three fit on the screen with the logo. */
+@media (max-width: 559px) {
+  .screen { padding: max(var(--sp-xl), env(safe-area-inset-top)) var(--sp-xl) max(var(--sp-xl), env(safe-area-inset-bottom)); }
+  .logo { width: 128px; height: 136px; }
+  .subtitle { margin-bottom: 22px; }
+  .way { display: grid; grid-template-columns: 52px 1fr; column-gap: 12px; row-gap: 4px; align-items: center; text-align: left; }
+  .icon { width: 48px; height: 48px; margin: 0; grid-row: span 2; }
+  .caption { grid-column: 2; }
+}
+/* A phone on its side: little height, so everything a size down. */
+@media (max-height: 500px) {
+  .screen { padding: var(--sp-md) var(--sp-xl); }
+  .logo { width: 70px; height: 74px; margin-bottom: 4px; }
+  .title { font-size: 34px; margin-bottom: 0; }
+  .subtitle { margin-bottom: 12px; }
+  .icon { width: 40px; height: 40px; }
+  .version { margin-top: 8px; }
+}
+
+/* The three buttons, drawn as the app's buttons were drawn when this screen was made:
+   a heavy outline with the pen's wobble in its corners, the career's filled with the key
+   and drawn round twice. Its own copy, so restyling the app's buttons leaves it alone. */
+.btn {
+  display: flex; width: 100%; align-items: center; justify-content: center;
+  padding: 13px 22px; border: 2px solid var(--ink);
+  border-radius: 255px 12px 225px 12px / 12px 225px 12px 255px;
+  font-family: var(--sans); font-size: 13.5px; font-weight: 800; letter-spacing: 0.05em; cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.primary { background: var(--acc); color: var(--acc-on); box-shadow: 3px 4px 0 -1px var(--line-hi); }
+.primary:hover { background: var(--acc-ink); }
+.ghost { background: var(--panel); color: var(--ink); }
+.ghost:hover { border-color: var(--line-hi); }
+.quiet { background: transparent; border-color: transparent; color: var(--ink2); }
+.quiet:hover { color: var(--ink); }

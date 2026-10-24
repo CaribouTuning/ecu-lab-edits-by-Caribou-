@@ -47,7 +47,7 @@ function FindYourWay() {
           { at: '[data-tour="nav-dyno"]', text: <><K>DYNO</K>: measures it. Nothing is known until you pull.</> },
           { at: '[data-tour="strip-last-pull"]', text: 'Your last pull’s peak power, always in view.' },
         ]}
-        caption="The real frame around every screen. HOME has your stats and Learn; LIVE runs the engine in real time; DRAG puts it in a car."
+        caption="The real frame around every screen. HOME has your stats and Learn; LIVE runs the engine in real time; in CAREER your own cars go racing in the 3D town."
       >
         <div style={{ height: 290, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -105,7 +105,7 @@ function PullAndRead() {
   const d = overAdvanced();
   return (
     <>
-      <P>There is no preview. On <K>DYNO</K>, press <K>RUN DYNO PULL</K>: the engine sweeps to redline and logs everything. Then read the <b>Pull Log</b> before the power number. Here is one from an engine with too much spark:</P>
+      <P>There is no preview. On <K>DYNO</K>, press <K>Run a pull</K>: the engine sweeps to redline and logs everything. Then read the <b>Pull Log</b> before the power number. Here is one from an engine with too much spark:</P>
       <ScreenSnippet
         where="DYNO › PULL LOG"
         demo={d}

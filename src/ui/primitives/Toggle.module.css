@@ -6,7 +6,7 @@
   width: 100%;
   padding: var(--sp-md) var(--sp-lg);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border-radius: 8px;
   background: var(--panel2);
   color: inherit;
   font-family: var(--sans);
@@ -16,8 +16,8 @@
 }
 
 .row:hover { border-color: var(--line-hi); }
-.row:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
-.row[aria-checked='true'] { border-color: var(--acc); }
+.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
 
 .label { font-size: var(--fs-base); font-weight: 700; color: var(--ink); }
 .sub { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--ink2); }
@@ -38,17 +38,17 @@
   transition: background-color 0.16s ease;
 }
 
-.row[aria-checked='true'] .track { background: var(--acc); }
+.row[aria-checked='true'] .track { background: var(--mac-selected); }
 
 .knob {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--ink2);
+  background: var(--mac-label);
   transition: transform 0.16s ease, background-color 0.16s ease;
 }
 
 .row[aria-checked='true'] .knob {
   transform: translateX(16px);
-  background: var(--acc-on);
+  background: var(--mac-sel-ink);
 }

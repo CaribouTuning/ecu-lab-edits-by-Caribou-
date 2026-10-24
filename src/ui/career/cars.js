@@ -18,6 +18,7 @@ import { ACTIONS, reducer } from '../state/reducer.js';
 /**
  * @typedef {object} CarSpec
  * @property {string|null} [preset] an ENGINE_PRESETS id; null is the game's own default V6
+ * @property {object} [custom] a `customEnginePatch` for an engine described by its figures, in place of a preset
  * @property {(build: any) => object} [build] the customer's hardware changes, as a build patch
  * @property {(tune: any) => object} [tune] anything already done to the calibration
  * @property {{ambientC?: number, altitudeM?: number}} [env] where the customer drives
@@ -31,7 +32,8 @@ import { ACTIONS, reducer } from '../state/reducer.js';
  */
 export function customerCar(spec) {
   let s = makeInitialState();
-  if (spec.preset) s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: applyPreset(presetById(spec.preset)) });
+  if (spec.custom) s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: /** @type {any} */ (spec.custom) });
+  else if (spec.preset) s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: applyPreset(presetById(spec.preset)) });
   const build = { ...s.build, ...(spec.build ? spec.build(s.build) : {}), presetId: null };
   const tune = { ...s.tune, ...(spec.tune ? spec.tune(s.tune) : {}), tablesDirty: false, selection: null };
   return {

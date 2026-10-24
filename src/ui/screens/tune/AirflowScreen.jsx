@@ -83,9 +83,12 @@ export function AirflowScreen({ children, veLog }) {
             <Eyebrow icon={Grid3x3}>Volumetric Efficiency</Eyebrow>
             <UndoControls />
           </div>
-          <div className={styles.intro}>How completely the cylinder fills at each engine speed and load. Rows are manifold pressure (MAP kPa &mdash; about 100 is wide open, higher is boost); columns are RPM. Tap any cell for reference data; drag or shift-click for a range.</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          <div className={styles.intro}>How full each cylinder gets, by rpm (columns) and manifold kPa (rows; 100 is wide open). Tap a cell for its numbers.</div>
+          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+            <LayoutSwitch />
+            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          </div>
           <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
             <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} />
           </GridOrSurface>

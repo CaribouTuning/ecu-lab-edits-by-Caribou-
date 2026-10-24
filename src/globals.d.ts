@@ -15,4 +15,9 @@ interface ArtifactStorage {
 interface Window {
   storage?: ArtifactStorage;
   webkitAudioContext?: typeof AudioContext;
+  /** Set by browser tests to expose the 3-D world and the save. */
+  __ECU_E2E__?: boolean;
+  __ecuWorld?: any;
+  __ecuUpdate?: (career: any) => void;
+  __ecuCareer?: any;
 }

@@ -1,0 +1,412 @@
+/* SANDBOX's laptop on the desk, the shop behind it, and the pages over it (Desk.jsx). */
+
+.desk {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+/* ---------- the shop behind ---------- */
+.backdrop { position: absolute; inset: 0; }
+.backdropCanvas { display: block; width: 100%; height: 100%; }
+.backdropFallback { width: 100%; height: 100%; background: var(--bg); }
+/* The things in the shop the page's controls are laid on (ShopBackdrop.jsx): a layer the
+   size of the picture that lets clicks through to the picture, except on the faces. */
+.surfaceLayer { position: absolute !important; inset: 0; pointer-events: none; }
+.surface { overflow: hidden; }
+/* With the laptop open the shop is set back: dimmed, so the screen is what you read. */
+.backdrop[data-mode='desk']::after, .backdrop[data-mode='page']::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: var(--bg); opacity: 0.35;
+}
+/* The whole backdrop is the button that stands you up to look at the shop. */
+.lookUp { position: absolute; inset: 0; border: 0; background: transparent; cursor: zoom-out; }
+
+.spotLayer { position: absolute; inset: 0; pointer-events: none; }
+.spotRow { position: absolute; left: 0; right: 0; bottom: 18%; display: flex; justify-content: center; gap: var(--sp-xl); }
+.spot {
+  position: absolute; transform: translate(-50%, -100%); pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  border: 0; background: transparent; color: var(--ink); cursor: pointer; font-family: var(--sans);
+}
+.spotRow .spot { position: static; transform: none; }
+.spotLabel {
+  padding: 4px 12px; border-radius: var(--ink-a); border: 2px solid var(--pen);
+  background: var(--panel); font-size: var(--fs-md); white-space: nowrap;
+}
+.spot:hover .spotLabel, .spot:focus-visible .spotLabel { background: var(--acc); color: var(--acc-on); }
+/* A short line down from the label to the thing it names. */
+.spot::after { content: ''; width: 2px; height: 22px; background: var(--pen); }
+
+/* ---------- the laptop ---------- */
+/* Centred by margins, not by a -50% translate, and with no perspective on it: a
+   half-pixel offset or a 3D context left behind by the lid's fold renders the whole
+   screen soft, which is what made everything blurry after shutting and reopening. */
+.laptop {
+  position: absolute; inset: 0; margin: auto;
+  width: min(1180px, 96vw); height: min(780px, 92dvh);
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+}
+.lid {
+  width: 100%; flex: 1; min-height: 0;
+  padding: 12px 12px 14px; border-radius: var(--ink-a);
+  /* A black laptop: the bezel round the screen, inked like everything else. */
+  background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
+  box-shadow: var(--pencil-twice-ink);
+  /* No transform, ever: a lid folded in 3-D and back is rasterised at the folded size on
+     iOS and comes back blurry. Shutting fades it instead. */
+  transition: opacity 0.35s ease, visibility 0s linear 0.35s;
+  pointer-events: auto;
+}
+.base {
+  width: 106%; height: 16px; border-radius: var(--ink-b);
+  background: rgb(var(--shadow-rgb)); border: 3px solid var(--pen);
+  transition: opacity 0.45s ease 0.1s;
+}
+/* Shut: the lid folds down onto the base, and the shop comes forward. */
+.laptop[data-state='shut'] .lid { opacity: 0; visibility: hidden; pointer-events: none; }
+.laptop[data-state='open'] .lid { transition: opacity 0.35s ease, visibility 0s; }
+.laptop[data-state='shut'] .base { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .lid, .base { transition: none; } }
+.screen {
+  /* The software on the laptop is a Mac in dark mode with the Graphite accent: inside the
+     screen the neutral tokens are the Mac's, so every app picks them up without knowing.
+     (The laptop's body round it stays inked: see .lid.) Data colours are not remapped. */
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
+  --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
+  position: relative; height: 100%;
+  display: flex; flex-direction: column;
+  border-radius: var(--r-md); overflow: hidden;
+  background: var(--bg); border: 1px solid var(--mac-separator);
+  color: var(--ink); font-size: 13px;
+}
+.workspace { flex: 1; min-height: 0; position: relative; display: flex; }
+
+/* ---------- the desktop ---------- */
+.desktop {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--wall-sky);
+}
+.wallpaper { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wallpaperMark {
+  position: absolute; right: 28px; bottom: 22px;
+  font-size: 34px; letter-spacing: 0.12em; color: var(--ink);
+  opacity: 0.18; user-select: none; transform: rotate(-3deg);
+}
+.icons {
+  /* Down the left side, as on a real desktop, so the wallpaper's bloom shows. */
+  position: absolute; left: 36px; top: 32px;
+  display: grid; grid-template-columns: repeat(2, 128px); gap: 28px 40px;
+}
+.icon {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 8px 8px; border-radius: var(--r-md) !important;
+  border: 0; background: transparent; color: var(--ink); cursor: pointer;
+}
+.icon:hover, .icon:focus-visible { background: rgba(var(--shadow-rgb), 0.3); }
+.icon .appTile { width: 72px; height: 72px; }
+.iconLabel { color: var(--app-glyph); font-size: var(--fs-base); font-weight: 500; letter-spacing: 0.01em; }
+
+/* ---------- a window: a Mac app's ---------- */
+.window { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+.titleBar {
+  position: relative; display: flex; align-items: center; height: 30px; padding: 0 10px; flex: none;
+  background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
+}
+.lights { display: flex; gap: 8px; align-items: center; }
+.light {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 0; display: grid; place-items: center;
+  background: var(--mac-control-hi); color: transparent;
+}
+.light[data-light='close'] { background: var(--mac-red); cursor: pointer; }
+.light[data-light='min'] { background: var(--mac-yellow); }
+.light[data-light='zoom'] { background: var(--mac-green); }
+/* The cross shows only while the pointer is over the lights, as on a Mac. */
+.lights:hover .light[data-light='close'], .light[data-light='close']:focus-visible { color: var(--mac-light-ink); }
+.title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 13px; font-weight: 600; color: var(--mac-label2); pointer-events: none;
+}
+/* The status bar along the bottom of the window. */
+.windowFooter { flex: none; border-top: 1px solid var(--mac-separator); background: var(--mac-titlebar); }
+.windowBody {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y pinch-zoom;
+  scrollbar-width: auto; scrollbar-color: var(--line-hi) var(--panel);
+}
+/* The slide bar on the window's right edge: always drawn, wide enough to grab. */
+.windowBody::-webkit-scrollbar { width: 11px; }
+.windowBody::-webkit-scrollbar-track { background: transparent; }
+.windowBody::-webkit-scrollbar-thumb { background: var(--mac-control-hi); border-radius: 6px; border: 3px solid var(--bg); }
+.windowBody::-webkit-scrollbar-thumb:hover { background: var(--ink3); }
+
+/* ---------- the menu bar: along the top of the screen, as on a Mac ---------- */
+.taskbar {
+  position: relative; flex: none; height: 26px; order: -1;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; padding: 0 8px;
+  background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
+}
+.taskBtn {
+  position: relative; height: 22px; min-width: 26px; padding: 0 6px; display: inline-grid; place-items: center;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink); cursor: pointer;
+}
+.taskBtn:hover, .taskBtn[aria-expanded='true'] { background: var(--mac-control); }
+.menuLeft { justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.menuApp { font-size: 13px; font-weight: 700; color: var(--mac-label); white-space: nowrap; }
+.menuMaker { font-size: 13px; color: var(--mac-label2); white-space: nowrap; }
+/* A Mac search field: a rounded well, the magnifier and a grey placeholder. */
+.search {
+  display: inline-flex; align-items: center; gap: 6px; height: 20px; width: min(260px, 30vw); padding: 0 8px;
+  border-radius: 6px; border: 0; background: var(--mac-control); color: var(--ink2); cursor: text;
+  font-size: 12px;
+}
+.tray { justify-self: end; display: flex; align-items: center; gap: 4px; }
+.clock { padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.badge {
+  position: absolute; top: -3px; right: -6px; min-width: 20px; height: 16px; padding: 0 4px; border-radius: 8px;
+  font-family: var(--mono); font-size: 10px; line-height: 14px; text-align: center;
+  background: var(--ok-bg); color: var(--ok-ink); border: 1px solid var(--ok-line);
+}
+.badge[data-tone='warn'] { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
+.flyout {
+  position: absolute; top: 28px; right: 8px; z-index: 5; min-width: 200px; max-height: 60vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  /* A Mac menu: a rounded panel with a hairline edge and a soft shadow. */
+  background: var(--mac-titlebar); border: 1px solid var(--mac-control-hi); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.5);
+}
+.flyout[data-wide='true'] { width: min(440px, 80vw); }
+.flyout > button {
+  text-align: left; padding: 4px 10px; border-radius: 4px;
+  border: 1px solid transparent; background: transparent; color: var(--ink); cursor: pointer; font-size: var(--fs-sm);
+}
+.flyout > button:hover { background: var(--mac-row-sel); }
+.status { padding-bottom: 6px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.notice {
+  display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--panel2);
+  font-size: var(--fs-sm); line-height: 1.45; color: var(--ink2);
+}
+.notice[data-tone='warn'] { border-color: var(--warn-line); background: var(--warn-bg); color: var(--warn-ink); }
+.notice[data-tone='danger'] { border-color: var(--danger-line); background: var(--danger-bg); color: var(--danger-ink); }
+.notice button {
+  flex: none; padding: 4px 8px; border-radius: var(--r-xs); border: 1px solid currentColor;
+  background: transparent; color: inherit; font-size: var(--fs-xs); font-weight: 800; cursor: pointer;
+}
+
+/* ---------- a page over the shop (the dyno, the engine stand) ---------- */
+.page { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.pageBar {
+  flex: none; height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  background: var(--panel); border-bottom: 2px solid var(--pen);
+}
+.pageTitle { flex: 1; text-align: center; letter-spacing: 0.06em; font-size: var(--fs-lg); }
+.back {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--panel2); color: var(--ink); cursor: pointer;
+  font-weight: 700; font-size: var(--fs-sm);
+}
+.back:hover { border-color: var(--acc); }
+.pageBody { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.pageBody > * { max-width: var(--content-max); margin-left: auto; margin-right: auto; }
+/* A place in the shop rather than a page over it: the shop shows through, and the place's
+   computer and controls sit on it (Station.jsx). */
+.page[data-scene] { background: transparent; pointer-events: none; }
+.page[data-scene] > * { pointer-events: auto; }
+.page[data-scene] .pageBody { display: flex; flex-direction: column; overflow: hidden; pointer-events: none; }
+.page[data-scene] .pageBody > * { pointer-events: auto; flex: none; width: 100%; }
+.page[data-scene] .pageBody > [data-station] { flex: 1; min-height: 0; max-width: none; pointer-events: none; }
+
+/* ---------- inside the apps ---------- */
+.viewer {
+  position: relative; height: clamp(150px, 28vh, 260px); border-radius: var(--r-md); overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel2); cursor: grab; touch-action: pan-y;
+}
+.viewer canvas { display: block; width: 100%; height: 100%; }
+.viewerFallback { display: grid; place-items: center; height: 100%; color: var(--ink3); font-size: var(--fs-sm); }
+
+/* A phone: the laptop is the whole screen, and the icons come closer together. */
+/* A phone, upright or on its side: the laptop's screen is the phone's screen. */
+@media (max-width: 560px), (max-height: 500px) {
+  .menuMaker { display: none; }
+  .laptop { width: 100vw; height: 100dvh; }
+  .lid { padding: 0; border-radius: 0; border: 0; }
+  .screen { border-radius: 0; border: 0; }
+  .base { display: none; }
+  .icons { grid-template-columns: repeat(2, 104px); gap: 18px 20px; }
+  .search span { display: none; }
+  .search { width: auto; }
+  .taskbar { height: calc(30px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  .titleBar { padding-left: max(10px, env(safe-area-inset-left)); }
+  .pageBar { padding-top: env(safe-area-inset-top); height: calc(46px + env(safe-area-inset-top)); }
+}
+/* On its side there is height for one row of apps, not two. */
+@media (max-height: 500px) {
+  .icons { grid-template-columns: repeat(4, 96px); top: 18px; }
+  .icon .appTile { width: 56px; height: 56px; }
+}
+
+/* ---------- the app icons: a phone's rounded tiles, each in its own colour ---------- */
+.appTile {
+  position: relative; flex: none; display: grid; place-items: center;
+  width: 60px; height: 60px; border-radius: 22.5% !important; color: var(--app-glyph);
+  background: linear-gradient(var(--hi), var(--lo));
+}
+.appTile > svg { width: 56%; height: 56%; }
+.appTile[data-small='true'] { width: 24px; height: 24px; border-radius: 6px !important; }
+.appTile[data-app='tune'] { --hi: var(--app-tune-hi); --lo: var(--app-tune-lo); }
+.appTile[data-app='build'] { --hi: var(--app-build-hi); --lo: var(--app-build-lo); }
+.appTile[data-app='learn'] { --hi: var(--app-learn-hi); --lo: var(--app-learn-lo); }
+.appTile[data-app='physics'] { --hi: var(--app-physics-hi); --lo: var(--app-physics-lo); }
+.appTile[data-app='messages'] { --hi: var(--app-msg-hi); --lo: var(--app-msg-lo); }
+.appTile[data-app='search'] { --hi: var(--app-search-hi); --lo: var(--app-search-lo); }
+.appTile[data-app='shop'] { --hi: var(--app-shop-hi); --lo: var(--app-shop-lo); }
+
+/* ---------- the phone (a phone's screen, either way up) ---------- */
+.phone {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column;
+  background: rgb(var(--shadow-rgb)); color: var(--ink);
+  transition: opacity 0.3s ease, visibility 0s;
+}
+/* On its home screen the phone is held up in front of the shop, the shop showing round
+   it: tap the shop and you put the phone down. An app fills the screen. */
+.phone[data-home] {
+  inset: max(4%, env(safe-area-inset-top)) 6% max(4%, env(safe-area-inset-bottom));
+  border: 7px solid rgb(var(--shadow-rgb)); border-radius: 38px; overflow: hidden;
+  box-shadow: 0 0 0 2px var(--pen);
+}
+@media (max-height: 500px) { .phone[data-home] { inset: 5% 14%; border-radius: 26px; } }
+/* Put down: it fades and the shop is there (no transform: see .lid). */
+.phone[data-state='shut'] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
+@media (prefers-reduced-motion: reduce) { .phone { transition: none; } }
+.statusBar {
+  position: relative; flex: none; display: flex; align-items: center; justify-content: space-between;
+  height: calc(34px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
+  background: rgb(var(--shadow-rgb)); font-size: var(--fs-sm); font-weight: 700;
+}
+.statusBar .clock { padding: 0; color: var(--ink); font-family: var(--sans); }
+.statusRight { display: flex; align-items: center; gap: 2px; }
+.battery {
+  width: 24px; height: 12px; margin-left: 6px; border: 1.5px solid var(--ink2); border-radius: 3px; padding: 1px; position: relative;
+}
+.battery::after { content: ''; position: absolute; right: -4px; top: 3px; width: 2px; height: 4px; background: var(--ink2); border-radius: 1px; }
+.battery span { display: block; width: 72%; height: 100%; background: var(--ok); border-radius: 1px; }
+.statusBar .flyout { top: calc(100% + 4px); bottom: auto; right: 8px; }
+
+.homeScreen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--wall-sky); }
+/* Four apps to a row, as a phone lays them out; a landscape phone has room for all in one. */
+/* Four apps to a row, as a phone lays them out. */
+.appGrid {
+  position: relative; display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px 10px; justify-items: center;
+  padding: 26px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+}
+.phoneIcon {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; padding: 0;
+}
+.phoneIcon:active .appTile { filter: brightness(0.75); }
+.phoneIconLabel { color: var(--app-glyph); font-size: var(--fs-xs); font-weight: 500; }
+/* The dock: search and the shop, on a translucent shelf along the bottom. */
+.dock {
+  position: absolute; left: 10px; right: 10px; bottom: 10px;
+  display: flex; justify-content: center; gap: 30px; padding: 14px 18px;
+  border-radius: 30px !important; background: rgba(var(--glass-rgb), 0.16);
+}
+.dockBtn {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0;
+  border: 0; background: transparent; color: var(--app-glyph); font-size: var(--fs-xs); font-weight: 500; cursor: pointer;
+}
+.dockBtn span:not(.appTile) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.phoneApp { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+.phoneAppBar {
+  flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; height: 44px;
+  padding: 0 max(6px, env(safe-area-inset-right)) 0 max(6px, env(safe-area-inset-left));
+  background: var(--panel); border-bottom: 2px solid var(--pen);
+}
+.phoneAppTitle { font-size: var(--fs-md); font-weight: 800; letter-spacing: 0.02em; }
+.phoneBack {
+  display: inline-flex; align-items: center; gap: 2px; justify-self: start; height: 34px; padding: 0 8px;
+  border: 0; background: transparent; color: var(--acc-ink); font-size: var(--fs-base); font-weight: 600; cursor: pointer;
+}
+.phoneAppBar .phoneBack:last-child { justify-self: end; }
+/* The home indicator: tap it to go home. */
+.homeBar {
+  flex: none; display: grid; place-items: center; height: calc(22px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom); border: 0; background: rgb(var(--shadow-rgb)); cursor: pointer;
+}
+.homeBar span { width: 134px; height: 5px; border-radius: 3px; background: var(--ink); opacity: 0.85; }
+@media (max-height: 500px) {
+  .appGrid { grid-template-columns: repeat(4, 96px); justify-content: center; padding-top: 18px; }
+  .dock { left: auto; right: max(10px, env(safe-area-inset-right)); top: 10px; bottom: 10px; flex-direction: column; justify-content: center; padding: 14px 12px; }
+  .statusBar { height: calc(26px + env(safe-area-inset-top)); }
+  .homeBar { height: calc(14px + env(safe-area-inset-bottom)); }
+}
+
+/* ---------- CAREER: which car to take outside ---------- */
+.pickBack { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(var(--shadow-rgb), 0.55); }
+.pick { width: min(480px, 100%); max-height: 80dvh; overflow-y: auto; padding: 16px; border: 3px solid var(--pen); border-radius: var(--hand-a); background: var(--panel); color: var(--ink); }
+.pickHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.pickHead h2 { margin: 0; font-size: var(--fs-lg); }
+.pickNone { color: var(--ink2); font-size: var(--fs-sm); }
+.pickList { display: flex; flex-direction: column; gap: 10px; }
+.pickCar {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; text-align: left;
+  border: 2px solid var(--pen); background: var(--panel2); color: var(--ink); cursor: pointer;
+}
+.pickCar:hover { background: var(--acc-bg); }
+.pickCar b { display: block; font-size: var(--fs-base); }
+.pickCar small { color: var(--ink2); font-size: var(--fs-xs); }
+.pickSwatch { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: var(--hand-b); color: var(--tile-ink); border: 2px solid var(--tile-ink); }
+
+/* An unread count on an app's icon. */
+.appBadge {
+  position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+  display: grid; place-items: center; background: var(--danger); color: var(--app-glyph); font-size: var(--fs-xs); font-weight: 700;
+}
+.icon { position: relative; }
+
+/* An app open on the phone is the same software as on the laptop, so it gets the same
+   Apple dark-mode greys (see .screen). */
+.phoneApp {
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
+  --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
+  background: var(--bg);
+}
+
+/* ---------- the next step (flow.js): one line, wherever you are ---------- */
+.next {
+  flex: none; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); color: var(--ink);
+  font-size: var(--fs-sm); line-height: 1.35;
+}
+.nextTag { flex: none; font-weight: 700; color: var(--acc-ink); }
+.nextText { flex: 1; min-width: 0; color: var(--ink); }
+.nextGo {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
+  border-radius: var(--r-sm); border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on);
+  font: inherit; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.nextGo:hover { filter: brightness(1.08); }
+.nextGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* On the laptop it is the Mac's: its own greys, under the menu of the window below it. */
+.next[data-place='laptop'] { background: var(--mac-titlebar); border-bottom-color: var(--mac-separator); }
+/* Over the shop floor it sits at the top, the shop still in view round it. */
+.bayNext { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); z-index: 3; }
+.bayNext .next { border: 1px solid var(--line-hi); border-radius: var(--r-md); }
+/* The shop-floor marker of the place the next step is at. */
+.spot[data-next='true'] .spotLabel { background: var(--acc); color: var(--acc-on); }
+
+/* A short screen (a phone held sideways): the station gets the height. The engine's status
+   line is the laptop's to show here, and the next step takes one tight line. */
+@media (max-height: 500px) {
+  .page[data-scene] .pageBody > [data-strip] { display: none; }
+  .next { padding: 3px 10px; }
+  .nextGo { height: 24px; }
+}

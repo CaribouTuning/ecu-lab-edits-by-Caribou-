@@ -3,8 +3,8 @@
   min-width: 74px;
   padding: var(--sp-md) var(--sp-md);
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
+  border: 1.5px solid var(--line-hi);
+  border-radius: var(--hand-c);
   font-family: var(--sans);
 }
 

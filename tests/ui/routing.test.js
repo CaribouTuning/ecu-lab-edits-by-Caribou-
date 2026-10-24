@@ -11,7 +11,7 @@ describe('parseRoute', () => {
   it('reads a tab with no section as that tab with everything collapsed', () => {
     // `null` is a real, reachable state: clicking an open accordion's own header
     // closes it. A default section here would make a section impossible to close.
-    expect(parseRoute('#/dash')).toEqual({ view: 'app', tab: 'dash', section: null });
+    expect(parseRoute('#/learn')).toEqual({ view: 'app', tab: 'learn', section: null });
   });
 
   it('reads a tab and section', () => {
@@ -32,9 +32,9 @@ describe('parseRoute', () => {
     expect(parseRoute('#/build/engine/extra')).toEqual({ view: 'app', tab: 'build', section: 'engine' });
   });
 
-  it('routes the eleven TUNE sections and the four BUILD sections', () => {
+  it('routes the eleven TUNE sections and the six BUILD parts', () => {
     expect(ROUTES.tune).toEqual(['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous']);
-    expect(ROUTES.build).toEqual(['engine', 'induction', 'fuel', 'exhaust']);
+    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'induction', 'fuel', 'exhaust']);
   });
 
   it('namespaces `fuel` by tab so the two never collide', () => {
@@ -61,7 +61,9 @@ describe('formatRoute', () => {
       { view: 'tutorial', tab: null, section: null },
       { view: 'course', tab: null, section: null },
       { view: 'shop', tab: null, section: null },
-      { view: 'app', tab: 'dash', section: null },
+      { view: 'desk', tab: null, section: null },
+      { view: 'bay', tab: null, section: null },
+      { view: 'app', tab: 'learn', section: null },
       { view: 'app', tab: 'tune', section: 'spark' },
     ];
     cases.forEach((route) => {
@@ -77,7 +79,11 @@ describe('formatRoute', () => {
     expect(formatRoute({ view: 'tutorial', tab: null, section: null })).toBe('#/tutorial');
     expect(formatRoute({ view: 'course', tab: null, section: null })).toBe('#/course');
     expect(formatRoute({ view: 'shop', tab: null, section: null })).toBe('#/shop');
-    expect(formatRoute({ view: 'app', tab: 'dash', section: null })).toBe('#/dash');
+    expect(formatRoute({ view: 'desk', tab: null, section: null })).toBe('#/desk');
+    expect(formatRoute({ view: 'bay', tab: null, section: null })).toBe('#/bay');
+    expect(formatRoute({ view: 'outside', tab: null, section: null })).toBe('#/outside');
+    expect(parseRoute('#/outside')).toEqual({ view: 'outside', tab: null, section: null });
+    expect(formatRoute({ view: 'app', tab: 'learn', section: null })).toBe('#/learn');
     expect(formatRoute({ view: 'app', tab: 'tune', section: 'spark' })).toBe('#/tune/spark');
   });
 

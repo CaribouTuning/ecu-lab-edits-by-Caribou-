@@ -49,7 +49,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
   if (airModel === 'maf') {
     return (
       <section className={styles.panel} aria-label="Correct VE from logs">
-        <div className={styles.head}>CORRECT VE FROM LOGS</div>
+        <div className={styles.head}>Correct VE from logs</div>
         <Note>The ECU is running on the MAF, so the VE table is not in the fuel path. Mixture error on a MAF car belongs in the MAF calibration: the MAF transfer correction on this page and the MAF scalar on TUNE › SENSORS.</Note>
       </section>
     );
@@ -67,7 +67,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
 
   return (
     <section className={styles.panel} aria-label="Correct VE from logs">
-      <div className={styles.head}>CORRECT VE FROM LOGS</div>
+      <div className={styles.head}>Correct VE from logs</div>
       <p className={styles.summary}>
         {pullCount} samples from the last pull · {liveCount} from the LIVE log · <b>{corr.cells}</b> {corr.cells === 1 ? 'cell' : 'cells'} with data
       </p>
@@ -111,8 +111,8 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
               : `Largest: ${worst.pct > 0 ? '+' : ''}${worst.pct.toFixed(1)}% at ${worst.rpm} RPM, ${worst.load} kPa. Positive means the engine got more air than the table thought (it ran lean).`}
           </p>
           <div className={styles.actions} data-tour="velog-apply">
-            <Button size="sm" onClick={() => onApply(0.5)} disabled={inSync}>APPLY HALF</Button>
-            <Button size="sm" variant="ghost" onClick={() => onApply(1)} disabled={inSync}>APPLY ALL</Button>
+            <Button size="sm" onClick={() => onApply(0.5)} disabled={inSync}>Apply half</Button>
+            <Button size="sm" variant="ghost" onClick={() => onApply(1)} disabled={inSync}>Apply all</Button>
           </div>
           <p className={styles.hint}>
             Tuners apply about half, log again and repeat until every cell is within 2–3%. Only cells with data change; applying also resets the fuel trims, which had been covering the same error. A pull is used only while it matches the tune on screen.

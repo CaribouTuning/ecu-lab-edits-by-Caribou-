@@ -4,21 +4,23 @@
   width: 100%;
   /* Right padding is not on the spacing scale: it is a functional offset that
      reserves room for the chevron icon, not a rhythm step. */
-  padding: var(--sp-md) 34px var(--sp-md) var(--sp-lg);
+  /* A Mac pop-up button. */
+  padding: 4px 30px 4px 10px;
   appearance: none;
   -webkit-appearance: none;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--panel2);
-  color: var(--ink);
+  border: 0;
+  border-radius: 6px;
+  background: var(--mac-control);
+  color: var(--mac-label);
   font-family: var(--sans);
-  font-size: var(--fs-base);
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), 0.25);
   cursor: pointer;
 }
 
-.select:hover { border-color: var(--line-hi); }
-.select:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.select:hover { background: var(--mac-control-hi); }
+.select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .chevron {
   position: absolute;

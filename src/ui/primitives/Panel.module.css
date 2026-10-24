@@ -1,7 +1,8 @@
 .panel {
+  /* A Mac group box: a faintly lighter well with a hairline edge. */
   background: var(--panel2);
   border: 1px solid var(--line);
-  border-radius: var(--r-lg);
+  border-radius: 8px;
   padding: var(--sp-lg);
 }
 

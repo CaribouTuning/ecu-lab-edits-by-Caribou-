@@ -17,12 +17,13 @@
  *   - "every accordion closed" is a state the URL can hold and restore.
  */
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
 import { ROUTES } from '../../src/ui/routing.js';
+import { chrome, enterSandbox, goTo, openJobBoard } from './nav.js';
 
 // Same stub, and the same reason, as characterisation.test.jsx: recharts'
 // <ResponsiveContainer> on the DYNO panel needs a ResizeObserver to mount at all.
@@ -55,28 +56,10 @@ function launch() {
   mount();
   // The start screen offers CAREER, SANDBOX and TUTORIAL rather than a single START.
   // SANDBOX is the free-play entry the old button was.
-  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+  enterSandbox();
 }
 
-/**
- * A BuildSection renders its label inside its header button and its body in the
- * button's next sibling, collapsed with `max-height: 0` rather than unmounted. That
- * inline height is therefore the only DOM-visible difference between an open section
- * and a closed one.
- * @param {string} label e.g. 'Engine Architecture'
- * @returns {boolean}
- */
-function sectionIsOpen(label) {
-  const header = screen.getByText(label).closest('button');
-  const body = /** @type {HTMLElement} */ (header.nextElementSibling);
-  // Compare the parsed number, not the string. React writes a non-zero maxHeight as
-  // "3000px" but leaves zero as bare "0" — CSS allows a unitless zero — so a string
-  // comparison against "0px" reports every collapsed section as open, and this whole
-  // describe block fails against a working app.
-  return Number.parseFloat(body.style.maxHeight) > 0;
-}
 
-const BUILD_SECTION_LABELS = ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust'];
 
 describe('a deep link on a cold load', () => {
   it('renders the linked screen without anyone clicking first', () => {
@@ -99,20 +82,21 @@ describe('a deep link on a cold load', () => {
     window.location.hash = '#/build/supercharger';
     mount();
 
-    expect(screen.getByText('Garage')).toBeTruthy();
+    expect(screen.getByRole('navigation', { name: 'Engine parts' })).toBeTruthy();
   });
 });
 
 describe('clicking a tab', () => {
   it('writes the URL, not just React state', () => {
     launch();
-    expect(window.location.hash).toBe('#/build/engine');
+    // BUILD opens on its list of sections, all shut, so all four are in view at once.
+    expect(window.location.hash).toBe('#/build');
 
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    goTo('TUNE');
     expect(window.location.hash).toBe('#/tune/airflow');
 
     // Sub-tab strips are part of the address too, one level down.
-    fireEvent.click(screen.getByRole('button', { name: 'SPARK' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Spark' }));
     expect(window.location.hash).toBe('#/tune/spark');
     expect(screen.getByText('Ignition Timing')).toBeTruthy();
   });
@@ -122,12 +106,18 @@ describe('clicking a tab', () => {
     // Those are the heads of the ROUTES lists, and `goTab` reads them from there — so
     // this asserts the defaults did not quietly change hands during the conversion.
     launch();
-    for (const [tab, label] of [['build', 'BUILD'], ['tune', 'TUNE'], ['dyno', 'DYNO']]) {
-      fireEvent.click(screen.getByRole('button', { name: label }));
+    for (const [tab, label] of [['tune', 'TUNE'], ['dyno', 'DYNO'], ['physics', 'PHYSICS']]) {
+      goTo(label);
       expect(window.location.hash).toBe(`#/${tab}/${ROUTES[tab][0]}`);
     }
-    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
-    expect(window.location.hash).toBe(`#/dash/${ROUTES.dash[0]}`);
+    // BUILD is an accordion and opens with every section shut, so the four section
+    // headers are a list you can see whole instead of the first one's long contents.
+    goTo('BUILD');
+    expect(window.location.hash).toBe('#/build');
+    // LEARN is the exception, on purpose: the laptop opens it on "How it works", the
+    // shelf a newcomer wants, not on the reference list that heads its sidebar.
+    goTo('LEARN');
+    expect(window.location.hash).toBe('#/learn/how');
   });
 
   it('routes every TUNE sub-tab to the screen with a matching id, not just a highlighted button', () => {
@@ -141,17 +131,18 @@ describe('clicking a tab', () => {
     // tab body: it would still be there even if every mount condition were wrong. This
     // is the test that actually looks below the switcher for each of the five ids.
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    goTo('TUNE');
     const views = {
-      AIRFLOW: 'Volumetric Efficiency',
-      SPARK: 'Ignition Timing',
-      FUEL: 'Air-Fuel Ratio Target',
-      INJECTORS: 'Injectors',
-      SENSORS: 'Fuel Control & MAF Scaling',
+      'Airflow (VE)': 'Volumetric Efficiency',
+      Spark: 'Ignition Timing',
+      Fuel: 'Air-Fuel Ratio Target',
+      Injectors: 'Injectors',
+      Sensors: 'Fuel Control & MAF Scaling',
     };
     for (const [tabLabel, ownEyebrow] of Object.entries(views)) {
       fireEvent.click(screen.getByRole('button', { name: tabLabel }));
-      expect(screen.getByText(ownEyebrow)).toBeTruthy();
+      // Where the page's heading is the tab's own name, both are on screen.
+      expect(screen.getAllByText(ownEyebrow).length).toBeGreaterThan(tabLabel === ownEyebrow ? 1 : 0);
     }
   });
 });
@@ -159,15 +150,20 @@ describe('clicking a tab', () => {
 describe('the back button', () => {
   it('returns to the previous screen', async () => {
     launch();
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    goTo('TUNE');
     expect(screen.getByText('Volumetric Efficiency')).toBeTruthy();
 
+    // Tune was opened from the laptop's desktop, so that is where back goes.
     window.history.back();
 
     // jsdom dispatches hashchange from a queued task rather than synchronously, so
     // the assertion has to wait for it — as it would in a browser.
-    await waitFor(() => expect(window.location.hash).toBe('#/build/engine'));
-    await waitFor(() => expect(screen.getByText('Garage')).toBeTruthy());
+    await waitFor(() => expect(window.location.hash).toBe('#/desk'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'TUNE' })).toBeTruthy());
+    // And before the laptop, the engine stand it was opened from.
+    window.history.back();
+    await waitFor(() => expect(window.location.hash).toBe('#/build'));
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Engine parts' })).toBeTruthy());
   });
 
   it('does not have to step through dead entries for clicks that went nowhere', async () => {
@@ -178,76 +174,61 @@ describe('the back button', () => {
     // destination regardless of what the previous test in this file left on the stack.
     window.location.hash = '#/';
     launch();
-    const active = () => screen.getByRole('button', { name: 'BUILD' });
-    fireEvent.click(active());
-    fireEvent.click(active());
-    fireEvent.click(active());
-    expect(window.location.hash).toBe('#/build/engine');
+    // From the engine stand up to the laptop, then the taskbar's home button, pressed again
+    // and again from the desktop it already shows.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open the laptop' })[0]);
+    const home = () => screen.getByRole('button', { name: 'Desktop' });
+    fireEvent.click(home());
+    fireEvent.click(home());
+    fireEvent.click(home());
+    expect(window.location.hash).toBe('#/desk');
 
-    // One press, from the app back to the start screen it was launched from.
+    // One press, from the desktop back to the engine stand it was opened from.
     window.history.back();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy());
+    await waitFor(() => expect(window.location.hash).toBe('#/build'));
   });
 });
 
-describe('a fully collapsed accordion', () => {
-  it('is a state the URL can hold, and a cold load restores it', () => {
-    // BuildSection's onClick is a TOGGLE: clicking the open section's own header
-    // closes it and leaves NOTHING open. That is `section: null`, and `#/build` with
-    // no second segment is how the route spells it.
-    //
-    // If a missing segment fell back to a default section instead, closing would be
-    // impossible — and not one existing test would notice, because none of them close
-    // an accordion and then look. The cold-load half below is the part that bites: a
-    // component that merely remembers `null` in React state would pass the first half
-    // and fail the second.
+describe('the engine stand\'s parts', () => {
+  it('are each a state the URL holds, and a cold load restores it', () => {
+    // The stand's build software shows one part of the engine at a time, chosen from its
+    // list, and the part is the second segment of the route. A component that merely
+    // remembered the part in React state would pass the first half and fail the second.
     launch();
-    expect(sectionIsOpen('Engine Architecture')).toBe(true);
-
-    fireEvent.click(screen.getByText('Engine Architecture'));
-    expect(window.location.hash).toBe('#/build');
-    for (const label of BUILD_SECTION_LABELS) expect(sectionIsOpen(label)).toBe(false);
+    const parts = screen.getByRole('navigation', { name: 'Engine parts' });
+    fireEvent.click(within(parts).getByRole('button', { name: /Short block/ }));
+    expect(window.location.hash).toBe('#/build/block');
+    expect(screen.getByRole('region', { name: 'Short block' })).toBeTruthy();
 
     // Round trip: throw the component away and rebuild it from that URL alone.
     cleanup();
-    expect(window.location.hash).toBe('#/build');
+    expect(window.location.hash).toBe('#/build/block');
     mount();
+    expect(screen.getByRole('region', { name: 'Short block' })).toBeTruthy();
 
-    expect(screen.getByText('Garage')).toBeTruthy();
-    for (const label of BUILD_SECTION_LABELS) expect(sectionIsOpen(label)).toBe(false);
-  });
-
-  it('is reachable on HOME too, and reopening a section puts it back in the URL', () => {
-    launch();
-    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
-    expect(window.location.hash).toBe('#/dash/stats');
-    expect(sectionIsOpen('Sandbox Stats & Last Pull')).toBe(true);
-
-    fireEvent.click(screen.getByText('Sandbox Stats & Last Pull'));
-    expect(window.location.hash).toBe('#/dash');
-    expect(sectionIsOpen('Sandbox Stats & Last Pull')).toBe(false);
-
-    // Opening a DIFFERENT section is not a toggle-to-null — it swaps which one is open.
-    fireEvent.click(screen.getByText('Engine Health'));
-    expect(window.location.hash).toBe('#/dash/health');
-    expect(sectionIsOpen('Engine Health')).toBe(true);
-    expect(sectionIsOpen('Sandbox Stats & Last Pull')).toBe(false);
+    // No part named: the stand opens on the engine itself, never on nothing.
+    cleanup();
+    window.location.hash = '#/build';
+    mount();
+    expect(screen.getByRole('region', { name: 'Engine' })).toBeTruthy();
   });
 
   it('keeps CAREER out of SANDBOX: CAREER opens a shop of its own, SANDBOX has no customers', async () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
     expect(window.location.hash).toBe('#/shop');
-    expect(await screen.findByText('Your tuning shop')).toBeTruthy();
+    // The save loads and you are sat at your desk; the paperwork is on the shop wall.
+    await screen.findByRole('button', { name: 'Desktop' });
+    expect(window.location.hash).toBe('#/desk');
+    await openJobBoard();
     // No SANDBOX chrome in the shop, and the way back to the start screen is there.
     expect(screen.queryByRole('navigation', { name: 'Sections' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Main menu' }));
+    chrome('Main menu');
     expect(window.location.hash).toBe('#/');
 
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
+    enterSandbox();
     expect(screen.queryByText('Your tuning shop')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'SHOP' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
   });
 });
 
@@ -257,7 +238,7 @@ describe('the tutorial', () => {
     fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     expect(window.location.hash).toBe('#/tutorial');
 
-    fireEvent.click(screen.getByRole('button', { name: 'SKIP' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
     expect(window.location.hash).toBe('#/build/engine');
   });
 });

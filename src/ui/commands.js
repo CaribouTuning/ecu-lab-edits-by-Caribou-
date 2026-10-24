@@ -26,12 +26,12 @@ import { ROUTES, TAB_NAMES } from './routing.js';
  * nav's, so the palette prints exactly what the nav does.
  */
 export const TAB_KEYWORDS = {
-  dash: ['dashboard'],
-  build: ['garage', 'hardware'],
+  build: ['garage', 'hardware', 'engine model'],
   tune: ['calibration', 'tables'],
-  live: ['engine', 'sound', 'rev'],
+  live: ['engine', 'sound', 'rev', 'stand'],
   dyno: ['pull', 'power'],
-  drag: ['strip', 'quarter'],
+  learn: ['guide', 'articles', 'course'],
+  physics: ['model', 'equations', 'how it works'],
 };
 
 /**
@@ -39,13 +39,15 @@ export const TAB_KEYWORDS = {
  * headings. A tab with one section (LIVE) has no entry: its tab command is the page.
  */
 export const SECTION_LABELS = {
-  'dash/stats': { label: 'Sandbox Stats & Last Pull', keywords: ['stats', 'best'] },
-  'dash/health': { label: 'Engine Health', keywords: ['wear', 'repair'] },
-  'dash/learn': { label: 'Learn How It Works', keywords: ['guide', 'articles'] },
-  'dash/realcar': { label: 'Taking It To A Real Car', keywords: ['software', 'real'] },
-  'build/engine': { label: 'Engine Architecture', keywords: ['preset', 'cam', 'bore', 'stroke'] },
+  'learn/sources': { label: 'Sources', keywords: ['references', 'reading', 'papers'] },
+  'learn/ecu': { label: 'The ECU', keywords: ['engine computer', 'fuel', 'tables'] },
+  'learn/engine': { label: 'The Engine', keywords: ['ve', 'lambda', 'knock', 'timing'] },
+  'learn/how': { label: 'How It Works', keywords: ['guide', 'simulator', 'model'] },
+  'build/engine': { label: 'Engine', keywords: ['preset', 'factory engine', 'custom'] },
+  'build/block': { label: 'Short block', keywords: ['bore', 'stroke', 'compression', 'pistons', 'rods'] },
+  'build/head': { label: 'Heads and cam', keywords: ['cam', 'springs', 'valves', 'vvt', 'ignition'] },
   'build/induction': { label: 'Induction', keywords: ['turbo', 'boost', 'intake'] },
-  'build/fuel': { label: 'Fuel System', keywords: ['octane', 'pump'] },
+  'build/fuel': { label: 'Fuel system', keywords: ['octane', 'pump', 'injectors'] },
   'build/exhaust': { label: 'Exhaust', keywords: ['pipe', 'header'] },
   'tune/airflow': { label: 'Airflow', keywords: ['ve', 'volumetric'] },
   'tune/spark': { label: 'Spark', keywords: ['timing', 'ignition', 'knock'] },
@@ -63,9 +65,6 @@ export const SECTION_LABELS = {
   'dyno/log': { label: 'Pull Log', keywords: ['events'] },
   'dyno/score': { label: 'Score', keywords: ['grade'] },
   'dyno/history': { label: 'History', keywords: ['runs', 'previous'] },
-  'drag/body': { label: 'Car Body', keywords: ['weight', 'aero'] },
-  'drag/gearing': { label: 'Gearbox', keywords: ['gears', 'ratio'] },
-  'drag/tyres': { label: 'Tyres & Drive', keywords: ['tires', 'traction'] },
 };
 
 /** DYNO sections that render nothing until there is a pull to show. */
@@ -75,7 +74,7 @@ const RESULT_SECTIONS = new Set(['dyno/result', 'dyno/log', 'dyno/data', 'dyno/s
  * What decides which sections have anything to show.
  * @typedef {object} SectionFlags
  * @property {boolean} [career] CAREER is being played: its SHOP stands in for HOME, and it has
- *   no drag strip (see `CAREER_NAV_ITEMS` in AppShell.jsx)
+ *   the same screens as SANDBOX otherwise (see `CAREER_NAV_ITEMS` in AppShell.jsx)
  * @property {boolean} hasResult a pull is showing
  * @property {boolean} hasHistory at least one pull is banked
  * @property {boolean} hasNitrous a nitrous kit is fitted
@@ -111,13 +110,14 @@ export function sectionAvailable(key, { hasResult, hasHistory, hasNitrous, runni
 export function pageCommands(flags, go) {
   /** @type {Command[]} */
   const out = [];
-  // CAREER's nav: the shop is home and there is no drag strip, so the palette offers
+  // CAREER's nav: the shop is home, so the palette offers
   // what that nav does. `go('shop', null)` opens the shop as a nav tap does.
   if (flags.career) {
     out.push({ id: 'page:shop', label: 'SHOP', kind: 'page', keywords: ['career', 'customers', 'garage', 'jobs'], run: () => go('shop', null) });
   }
   for (const [tab, sections] of Object.entries(ROUTES)) {
-    if (flags.career && (tab === 'dash' || tab === 'drag')) continue;
+    // LEARN and PHYSICS are SANDBOX's laptop apps; CAREER's nav does not have them.
+    if (flags.career && (tab === 'learn' || tab === 'physics')) continue;
     const name = TAB_NAMES[tab];
     out.push({ id: `page:${tab}`, label: name, kind: 'page', keywords: TAB_KEYWORDS[tab], run: () => go(tab, null) });
     if (sections.length < 2) continue;

@@ -83,6 +83,164 @@ function TrimBar({ label, value }) {
 }
 
 /**
+ * What the ECU is doing right now, in a sentence: LIVE's status line, and the engine
+ * stand's computer's.
+ * @param {Record<string, any>} live the session's live engine
+ * @returns {string}
+ */
+export function liveStatus(live) {
+  if (live.cranking && !live.running) return 'Starter engaged…';
+  if (!live.running) return 'Engine off. Start it to watch the ECU work in real time.';
+  if (live.limiterCut || live.onLimiter) return 'On the rev limiter. The ECU is cutting cylinders to hold the engine at its limit. With a fuel cut those cylinders pump plain air, so the wideband reads lean here though the mixture is not.';
+  if (live.dfco) return 'Overrun fuel cut: the injectors are off while it coasts down. Real ECUs do this, and it costs nothing.';
+  if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
+  if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
+  if (live.coolantC < 80) return 'Warming up: the ECU adds fuel until the coolant reaches 80 °C.';
+  if (live.closedLoop) return 'Warm and in closed loop: the ECU trims fuel against the O2 sensor.';
+  return 'Open loop: the ECU follows your tables and ignores the O2 sensor.';
+}
+
+/**
+ * The engine's own controls: the tach and what the ECU is doing, START/STOP, the sound, the
+ * throttle pad and the volume. LIVE's page shows them over its gauges; the engine stand in
+ * the shop puts them on the stand's control box.
+ *
+ * @param {object} props
+ * @param {number} props.tachFullScaleRpm redline plus the limiter's overshoot headroom
+ * @param {() => void} props.onStart
+ * @param {() => void} props.onStop
+ * @param {() => void} props.onToggleSound
+ * @param {() => void} props.onTestSound plays one note through the engine's own graph
+ * @param {(percent: number) => void} props.onThrottle driver throttle input, 0 or 100
+ * @returns {React.ReactElement}
+ */
+export function LiveControls({ tachFullScaleRpm, onStart, onStop, onToggleSound, onTestSound, onThrottle }) {
+  const [session, dispatch] = useSession();
+  const { soundOn, throttleInput, volume, audioStatus } = session;
+  // `SessionState.live` is typed `object` because the live model it holds is built in
+  // src/sim/live.js, which has no typedef to point at. One cast, here.
+  const live = /** @type {Record<string, any>} */ (session.live);
+  return (
+    <>
+      <div className={styles.head}>
+        <div className={styles.dial} data-compact="hide">
+          <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
+          <div className={styles.dialReadout}>
+            <div className={styles.dialRpm} role="status" aria-label="Engine speed" style={{ color: live.fuelCut ? T.danger : T.ink }}>{Math.round(live.sensedRpm)}</div>
+            <div className={styles.dialCaption}>RPM</div>
+          </div>
+        </div>
+        <div className={styles.column}>
+          <div className={styles.status}>
+            {liveStatus(live)}
+          </div>
+          <div className={styles.actions}>
+            {/* START was filled with `ok`. Green here is decoration, not
+                state — the engine is not running when the button says
+                START — and spending a status colour on an action is the
+                rule Toggle's docstring closed. It takes the accent; STOP
+                is the secondary state and takes `ghost`. Not `danger`:
+                shutting an engine down destroys nothing. */}
+            <Button
+              variant={live.running || live.cranking ? 'ghost' : 'primary'}
+              style={{ flex: 1 }}
+              onClick={live.running || live.cranking ? onStop : onStart}
+            >{live.running || live.cranking ? 'Stop' : 'Start engine'}</Button>
+            {/* Plays one note through the same graph the engine uses, so a player
+                whose browser has blocked audio finds out here rather than by
+                wondering why a running engine is silent. `ghost` for the same
+                reason STOP is: it is a secondary action. */}
+            <Button variant="ghost" onClick={onTestSound}>Test sound</Button>
+            <button
+              className={styles.sound}
+              data-on={soundOn ? 'true' : 'false'}
+              title="Engine sound"
+              onClick={onToggleSound}
+            >{soundOn ? '♪' : '✕'}</button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={styles.pad}
+        data-open={throttleInput > 0 ? 'true' : 'false'}
+        data-running={live.running ? 'true' : 'false'}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
+        onPointerUp={() => onThrottle(0)}
+        onPointerCancel={() => onThrottle(0)}
+      >
+        <div className={styles.padFill} style={{ width: `${clamp(live.effThrottle ?? 0, 0, 100)}%` }} />
+        <span className={styles.padLabel}>
+          {!live.running ? 'Start the engine first' : throttleInput > 0 ? 'Wide open throttle' : 'Press and hold to rev'}
+        </span>
+      </div>
+
+      {/* An engine is the loudest thing in the app and the one a player is most
+          likely to want turned down without turning off. It writes the same session
+          field the engine audio's output level reads. */}
+      <div className={styles.volume}>
+        <span className={styles.volumeLabel}>VOL</span>
+        <input
+          type="range" min={0} max={2} step={0.05} value={volume}
+          onChange={(e) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'volume', value: Number(e.target.value) })}
+          aria-label="Engine volume"
+          className={styles.volumeSlider}
+        />
+        <span className={styles.volumeValue}>{Math.round(volume * 100)}%</span>
+      </div>
+
+      {audioStatus && (
+        <div className={styles.audioStatus} data-ok={audioStatus === 'ok' ? 'true' : 'false'}>
+          {audioStatus === 'ok'
+            ? 'Audio is running. If you heard the test beep but not the engine, start it and hold the throttle.'
+            : audioStatus === 'blocked'
+              ? 'The browser is still blocking audio — tap START, or any tab, then try TEST again.'
+              : 'This browser did not provide Web Audio, so engine sound is unavailable.'}
+          <br />On iPhone the physical ring/silent switch mutes web audio even at full volume.
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Every sensor the scan tool reads, and the two fuel trims.
+ * @returns {React.ReactElement}
+ */
+export function LiveGauges() {
+  const [session] = useSession();
+  const live = /** @type {Record<string, any>} */ (session.live);
+  const engineOff = !live.running && !live.cranking;
+  return (
+    <>
+      <div className={`${styles.gaugeRow} ${styles.gaugeRowFirst}`}>
+        <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
+        <LiveGauge label="MAP" value={Math.round(live.sensedMap)} unit="kPa" />
+        <LiveGauge label="IAT" value={Math.round(live.sensedIat)} unit="°C" warn={live.sensedIat > 65} />
+      </div>
+      <div className={styles.gaugeRow}>
+        {/* With the engine off nothing is burning, so there is no mixture, no fuel state and no
+            idle-air trim to read: a "1.00 λ" or "FUEL ON" on a dead engine is a reading nobody took. */}
+        <LiveGauge label="Lambda" value={engineOff ? '—' : live.sensedLambda.toFixed(2)} unit={engineOff ? '' : 'λ'} color={T.violet} />
+        <LiveGauge label="Coolant" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
+        <LiveGauge label="Spark timing" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && (live.ecu ? live.ecu.knockNow : live.live.knock))} />
+      </div>
+      <div className={styles.gaugeRow}>
+        <LiveGauge label="Injector pulse" value={live.live ? live.live.pw : '—'} unit="ms" />
+        <LiveGauge label="Injector duty" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
+        <LiveGauge label="Idle air" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
+        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? T.ink3 : live.fuelCut ? T.warn : T.ok} />
+      </div>
+
+      <div className={styles.trims}>
+        <TrimBar label="Short-term fuel trim" value={live.stft} />
+        <TrimBar label="Long-term fuel trim" value={live.ltft} />
+      </div>
+    </>
+  );
+}
+
+/**
  * @param {object} props
  * @param {number} props.tachFullScaleRpm redline plus the limiter's overshoot
  *   headroom. Derived from `engineConfig` in the shell because the dyno tach needs
@@ -95,15 +253,6 @@ function TrimBar({ label, value }) {
  * @returns {React.ReactElement}
  */
 export function LiveScreen({ tachFullScaleRpm, onStart, onStop, onToggleSound, onTestSound, onThrottle }) {
-  const [session, dispatch] = useSession();
-  const { soundOn, throttleInput, volume, audioStatus } = session;
-  // `SessionState.live` is typed `object` because the live model it holds is built in
-  // src/sim/live.js, which has no typedef to point at and which this PR may not touch.
-  // One cast here, named and explained, rather than a suppression on each of the
-  // thirty reads below.
-  const live = /** @type {Record<string, any>} */ (session.live);
-  const engineOff = !live.running && !live.cranking;
-
   return (
     <>
       <Eyebrow icon={Flame}>Live Engine</Eyebrow>
@@ -112,115 +261,11 @@ export function LiveScreen({ tachFullScaleRpm, onStart, onStop, onToggleSound, o
         sensors and fuel trims respond the way they would on a running car.
       </p>
       <Panel style={{ background: T.panel, marginBottom: 10 }}>
-        <div className={styles.head}>
-          <div className={styles.dial}>
-            <DialMark size={104} pct={clamp(live.sensedRpm / tachFullScaleRpm, 0, 1)} live />
-            <div className={styles.dialReadout}>
-              <div className={styles.dialRpm} role="status" aria-label="Engine speed" style={{ color: live.fuelCut ? T.danger : T.ink }}>{Math.round(live.sensedRpm)}</div>
-              <div className={styles.dialCaption}>RPM</div>
-            </div>
-          </div>
-          <div className={styles.column}>
-            <div className={styles.status}>
-              {live.running
-                ? (live.limiterCut || live.onLimiter ? 'On the rev limiter — the ECU is cutting cylinders to hold the engine at its limit. With a fuel cut those cylinders pump plain air, so the wideband reads lean here; that is not a lean mixture.'
-                  : live.dfco ? 'Overrun fuel cut — injectors off while coasting down. Real ECUs do this; it costs nothing to spin.'
-                  : live.ecu?.knockNow ? `Knock — your SPARK table asks for more advance than the engine tolerates at this RPM and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`
-                  : (live.ecu?.knockRetard ?? 0) > 0.5 ? `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`
-                  : live.coolantC < 80 ? 'Warming up — the ECU adds extra fuel until the coolant reaches 80 °C.'
-                  : live.closedLoop ? 'Warm and in closed loop — the ECU is trimming fuel against the O2 sensor.'
-                  : 'Open loop — the ECU is following your tables directly, ignoring O2 feedback.')
-                : live.cranking ? 'Starter engaged…' : 'Engine off. Start it to watch the ECU work in real time.'}
-            </div>
-            <div className={styles.actions}>
-              {/* START was filled with `ok`. Green here is decoration, not
-                  state — the engine is not running when the button says
-                  START — and spending a status colour on an action is the
-                  rule Toggle's docstring closed. It takes the accent; STOP
-                  is the secondary state and takes `ghost`. Not `danger`:
-                  shutting an engine down destroys nothing. */}
-              <Button
-                variant={live.running || live.cranking ? 'ghost' : 'primary'}
-                style={{ flex: 1 }}
-                onClick={live.running || live.cranking ? onStop : onStart}
-              >{live.running || live.cranking ? 'STOP' : 'START ENGINE'}</Button>
-              {/* Plays one note through the same graph the engine uses, so a player
-                  whose browser has blocked audio finds out here rather than by
-                  wondering why a running engine is silent. `ghost` for the same
-                  reason STOP is: it is a secondary action. */}
-              <Button variant="ghost" title="Test sound" onClick={onTestSound}>TEST</Button>
-              <button
-                className={styles.sound}
-                data-on={soundOn ? 'true' : 'false'}
-                title="Engine sound"
-                onClick={onToggleSound}
-              >{soundOn ? '♪' : '✕'}</button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={styles.pad}
-          data-open={throttleInput > 0 ? 'true' : 'false'}
-          data-running={live.running ? 'true' : 'false'}
-          onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
-          onPointerUp={() => onThrottle(0)}
-          onPointerCancel={() => onThrottle(0)}
-        >
-          <div className={styles.padFill} style={{ width: `${clamp(live.effThrottle ?? 0, 0, 100)}%` }} />
-          <span className={styles.padLabel}>
-            {!live.running ? 'START THE ENGINE FIRST' : throttleInput > 0 ? 'WIDE OPEN THROTTLE' : 'PRESS AND HOLD TO REV'}
-          </span>
-        </div>
-
-        {/* An engine is the loudest thing in the app and the one a player is most
-            likely to want turned down without turning off. It writes the same session
-            field the engine audio's output level reads. */}
-        <div className={styles.volume}>
-          <span className={styles.volumeLabel}>VOL</span>
-          <input
-            type="range" min={0} max={2} step={0.05} value={volume}
-            onChange={(e) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'volume', value: Number(e.target.value) })}
-            aria-label="Engine volume"
-            className={styles.volumeSlider}
-          />
-          <span className={styles.volumeValue}>{Math.round(volume * 100)}%</span>
-        </div>
-
-        {audioStatus && (
-          <div className={styles.audioStatus} data-ok={audioStatus === 'ok' ? 'true' : 'false'}>
-            {audioStatus === 'ok'
-              ? 'Audio is running. If you heard the test beep but not the engine, start it and hold the throttle.'
-              : audioStatus === 'blocked'
-                ? 'The browser is still blocking audio — tap START, or any tab, then try TEST again.'
-                : 'This browser did not provide Web Audio, so engine sound is unavailable.'}
-            <br />On iPhone the physical ring/silent switch mutes web audio even at full volume.
-          </div>
-        )}
-
-        <div className={`${styles.gaugeRow} ${styles.gaugeRowFirst}`}>
-          <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
-          <LiveGauge label="MAP" value={Math.round(live.sensedMap)} unit="kPa" />
-          <LiveGauge label="IAT" value={Math.round(live.sensedIat)} unit="°C" warn={live.sensedIat > 65} />
-        </div>
-        <div className={styles.gaugeRow}>
-          {/* With the engine off nothing is burning, so there is no mixture, no fuel state and no
-              idle-air trim to read: a "1.00 λ" or "FUEL ON" on a dead engine is a reading nobody took. */}
-          <LiveGauge label="LAMBDA" value={engineOff ? '—' : live.sensedLambda.toFixed(2)} unit={engineOff ? '' : 'λ'} color={T.violet} />
-          <LiveGauge label="COOLANT" value={Math.round(live.sensedCoolant)} unit="°C" warn={live.sensedCoolant > 105} />
-          <LiveGauge label="TIMING" value={live.live ? live.live.timing : '—'} unit="°" warn={!!(live.live && (live.ecu ? live.ecu.knockNow : live.live.knock))} />
-        </div>
-        <div className={styles.gaugeRow}>
-          <LiveGauge label="INJ PW" value={live.live ? live.live.pw : '—'} unit="ms" />
-          <LiveGauge label="DUTY" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
-          <LiveGauge label="IDLE AIR" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
-          <LiveGauge label="FUEL" value={engineOff ? 'OFF' : live.fuelCut ? 'CUT' : 'ON'} unit="" color={engineOff ? T.ink3 : live.fuelCut ? T.warn : T.ok} />
-        </div>
-
-        <div className={styles.trims}>
-          <TrimBar label="SHORT TERM FUEL TRIM (STFT)" value={live.stft} />
-          <TrimBar label="LONG TERM FUEL TRIM (LTFT)" value={live.ltft} />
-        </div>
+        <LiveControls
+          tachFullScaleRpm={tachFullScaleRpm} onStart={onStart} onStop={onStop}
+          onToggleSound={onToggleSound} onTestSound={onTestSound} onThrottle={onThrottle}
+        />
+        <LiveGauges />
       </Panel>
       <LiveEcuPanel />
       <ExpandableInfo title="Why these gauges jitter">

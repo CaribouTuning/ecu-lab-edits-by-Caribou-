@@ -17,6 +17,7 @@ import React from 'react';
 import { EXHAUST_DIA_OPTS, MOD_INFO } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
+import { PartRow } from '../../components/PartRow.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
@@ -40,12 +41,9 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
   const [build, dispatch] = useBuild();
   const { exhaustDiaIdx, turboOn, boostCurve, mods } = build;
 
-  const installMod = (key) => {
-    if (mods[key]) return;
-    // Fitting a part changes airflow but does NOT edit your logged VE table — the
-    // VE tab will show the gap and let you accept it once you understand why.
-    dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: true } });
-  };
+  // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
+  // table: TUNE › AIRFLOW shows the gap, and you correct it from a log once you know why.
+  const toggleMod = (key) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: !mods[key] } });
 
   return (
     <BuildSection
@@ -64,22 +62,9 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
         <br /><br />The long-standing shop rule is about <b className={styles.em}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
       </ExpandableInfo>
 
-      {/* The card markup below is verbatim out of the dissolved BoltonsScreen: a plain
-          `<button disabled={mods[key]}>` where `disabled` means *installed*, switched
-          visually with `data-installed` rather than a `Button` variant — see the brief
-          for why this stays a plain button. */}
       <div className={styles.list}>
         {MODS_HERE.map((key) => (
-          <button
-            key={key} onClick={() => installMod(key)} disabled={mods[key]}
-            className={styles.card} data-installed={mods[key] ? 'true' : 'false'}
-          >
-            <div className={styles.cardHead}>
-              <span className={styles.cardLabel} data-installed={mods[key] ? 'true' : 'false'}>{MOD_INFO[key].label}</span>
-              <span className={styles.cardStatus} data-installed={mods[key] ? 'true' : 'false'}>{mods[key] ? 'INSTALLED' : 'INSTALL'}</span>
-            </div>
-            <div className={styles.cardBlurb}>{MOD_INFO[key].blurb}</div>
-          </button>
+          <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
         ))}
       </div>
     </BuildSection>

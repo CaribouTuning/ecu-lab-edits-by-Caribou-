@@ -35,6 +35,9 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
     // its tables were written for, which only stopped being harmless once a rich flame's
     // heat began to depend on how rich it is (thermo.js, heatReleasedShare).
     mafScalar: p?.mafScalar ?? 1,
+    // Which factory engine this is, as APPLY_PRESET records it: RESET ALL TO STOCK runs
+    // that engine's own fuel strategy (factoryFuel.js).
+    presetId: p?.presetId ?? null,
     ethanolPct: 0,
     ...patch,
   };

@@ -13,9 +13,8 @@
    doing, and tuning in depth. */
 .part {
   margin: 14px 0 8px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--acc-ink);
 }
 
@@ -116,7 +115,11 @@
   text-decoration: none;
 }
 
-.courseTag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.12em; color: var(--acc-ink); }
+.courseTag { font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
 .courseTitle { font-size: var(--fs-md); font-weight: 800; }
 .courseText { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-soft); }
 .courseCta { margin-top: 4px; font-size: var(--fs-sm); font-weight: 800; color: var(--acc-ink); }
+
+/* One shelf of the Learn app: the articles alone. The reading paths, the part headings and
+   their goals describe the whole guide in order, so they step aside. */
+.shelved .paths, .shelved .intro, .shelved .part, .shelved .partGoal { display: none; }

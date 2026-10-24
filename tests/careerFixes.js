@@ -67,6 +67,17 @@ export const boostSparkAndFuel = (st, degPer20 = 4, afr = 12.0) => ({
 /** Scaling, then airflow, then mixture: the order a tuner works in. */
 const airAndFuel = (st) => veFix(mafFix(veFix(mafFix(scaleFix(st)), 2)), 2);
 
+/**
+ * The full-load rows taken to best power where the factory ran them richer. Factory fuel
+ * goes to about lambda 0.82 near redline for component protection (src/sim/factoryFuel.js);
+ * with a bigger cam that much fuel runs stock injectors out of time at the top, and the
+ * tuner's answer is the one that also makes power: best-power mixture, about 12.8:1.
+ */
+export const bestPowerTop = (st, afr = 12.8) => ({
+  ...st,
+  tune: { ...st.tune, afr: st.tune.afr.map((row, ri) => row.map((v) => (axesOf(st, 'afr').load[ri] >= 95 && v < afr ? afr : v))) },
+});
+
 /** @type {Record<string, (s: any, job: any) => any>} */
 export const TEMPLATE_FIXES = {
   // MAF first, then the VE table: on a car that blends MAF with speed-density, the
@@ -75,12 +86,15 @@ export const TEMPLATE_FIXES = {
   injectors: (s) => scaleFix(s),
   idle: (s, job) => setCal(s, 'idle.damp', customerCar({ preset: job.car.preset }).tune.ecu.idle.damp),
   headers: (s) => veFix(s, 3),
-  cam: (s) => veFix(s, 3),
+  cam: (s) => veFix(bestPowerTop(s), 3),
   retarded: (s, job) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: job.car.preset }).tune.timing } }),
   // E85's charge cooling moves the airflow too, so the real fix ends with a pass from the log.
   e85: (s) => veFix(scaleFix(s), 1),
   turbo: (s) => boostSparkAndFuel(s),
-  pair: (s) => airAndFuel(s),
+  // Then the spark checked against the log, as on any breathing change: intake and headers
+  // add charge, and with a stock VQ35HR's 2-degree factory margin a pull can knock until a
+  // degree comes out where the log says.
+  pair: (s) => sparkClean(airAndFuel(s)),
   'build-na': (s, job) => {
     const b = s.build;
     const built = setBuild(s, {

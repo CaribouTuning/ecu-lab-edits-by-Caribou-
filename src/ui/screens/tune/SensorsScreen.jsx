@@ -40,7 +40,7 @@ export function SensorsScreen({ needsMafRecal, chartData, result, children }) {
       <Panel className={styles.mafPanel} data-tour="sensors-maf">
         <div className={styles.mafHead}>
           <span>MAF RECAL STATUS</span>
-          <span className={styles.mafStatus} data-needs-recal={needsMafRecal ? 'true' : 'false'}>{needsMafRecal ? 'HARDWARE CHANGED' : 'STOCK — OK'}</span>
+          <span className={styles.mafStatus} data-needs-recal={needsMafRecal ? 'true' : 'false'}>{needsMafRecal ? 'Hardware changed' : 'STOCK — OK'}</span>
         </div>
         {needsMafRecal && (
           <div className={styles.mafNote}>

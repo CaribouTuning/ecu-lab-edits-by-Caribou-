@@ -5,11 +5,11 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
+  /* A Mac push button: a grey rounded key, no outline. */
+  border: 0;
+  border-radius: 6px;
   font-family: var(--sans);
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  font-weight: 500;
   /* No `white-space: nowrap`, and `min-width: 0` so a flex item can shrink
      below its label's content width. A row like LOAD <preset name> / CANCEL
      inside a narrow card needs somewhere to go under `nowrap`'s default
@@ -22,7 +22,7 @@
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--acc);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -32,29 +32,27 @@
    for real, at 4.59:1 (--panel3 on --ink2) instead of collapsing to 2.24:1. */
 .button:disabled {
   opacity: 1;
-  background: var(--panel3);
-  color: var(--ink2);
-  border-color: var(--line);
-  cursor: not-allowed;
+  background: var(--mac-control);
+  color: var(--mac-label3);
+  cursor: default;
 }
 
 /* --- variants --- */
 
+/* The default button: the Graphite accent, white text. */
 .primary {
-  background: var(--acc);
-  color: var(--acc-on);
+  background: var(--mac-selected);
+  color: var(--mac-sel-ink);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), 0.3);
 }
-.primary:hover:not(:disabled) { background: var(--acc-ink); }
+.primary:hover:not(:disabled) { filter: brightness(1.12); }
 
 .ghost {
-  background: transparent;
-  border-color: var(--line);
-  color: var(--ink2);
+  background: var(--mac-control);
+  color: var(--mac-label);
+  box-shadow: 0 1px 1px rgba(var(--shadow-rgb), 0.25);
 }
-.ghost:hover:not(:disabled) {
-  border-color: var(--line-hi);
-  color: var(--ink);
-}
+.ghost:hover:not(:disabled) { background: var(--mac-control-hi); }
 
 /* Reserved for genuinely destructive actions, never for emphasis. */
 /* Keeps the saturated hue rather than --danger-line: a destructive control is
@@ -74,18 +72,19 @@
 .quiet {
   background: transparent;
   border-color: transparent;
+  box-shadow: none;
   color: var(--ink2);
 }
 .quiet:hover:not(:disabled) { color: var(--ink); }
 
 /* --- sizes --- */
 
-.sm { padding: var(--sp-sm) var(--sp-md); font-size: var(--fs-xs); }
-.md { padding: var(--sp-md) var(--sp-xl); font-size: var(--fs-sm); }
+.sm { padding: 3px 10px; font-size: 12px; }
+.md { padding: 5px 14px; font-size: 13px; }
 /* 22px horizontal is not on the spacing scale: it is 2px from the nearest
    step (--sp-xxl, 24px), further than the ~1px this pass snaps, and moving it
    would visibly change the button's proportions. Left raw. */
-.lg { padding: var(--sp-lg) 22px; font-size: var(--fs-base); }
+.lg { padding: 7px 20px; font-size: 13px; }
 
 /* --- full width, opt-in only --- */
 

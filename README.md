@@ -17,8 +17,21 @@ and run a quarter mile with it.
 
 It is a teaching tool, not a game with a horsepower slider.
 
-Three ways in: **SANDBOX** is free play; **TUTORIAL** is five minutes on the basics, with
-the full Tuning Course under HOME › Learn; **CAREER** is a tuning shop of your own.
+Three ways in: **SANDBOX** is free play, on a laptop in your own shop: its desktop has
+Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide
+and the Tuning Course) and Physics (the engine model laid open on your own engine: your
+build, the curves and VE map, every calculation, and the engine running); shut the laptop
+and the dyno and the engine stand (LIVE) are in the shop behind it. Played on a phone, the
+laptop is a phone: the same apps on a home screen. CAREER is done from the same desk: Build and
+Tune on the laptop; look up at the shop for the dyno, the engine stand, the job board on the
+wall (customers, upgrades, training, the books) and the garage door, which puts you in town
+driving the car you pick. Played on a phone, the
+laptop is a phone: the same apps on a home screen, and you put it down to see the shop.
+CAREER's work is done on the same laptop (or phone).
+**TUTORIAL** is five minutes on the basics. **CAREER** is a tuning shop of your own: your
+late dad Ray's, reopened by your uncle Pops, who teaches you the trade by text and email in a
+thirteen-chapter story that ends with you a master tuner. Out in town you drive; you walk
+only inside the buildings you pull up at.
 Customers bring cars with real faults and describe what the car does, never what is wrong
 with it: a cast of named customers, and new walk-ins every day without end, generated
 from faults the simulator genuinely produces and harder as the shop's name grows. Every
@@ -128,6 +141,8 @@ src/
   ui/            presentation only — no physics below this line
     career/        CAREER: the shop, its customers and jobs, and the grading, which
                    runs the real simulator on the car handed back
+    world/         CAREER's 3D town (three.js, lazy-loaded): walk, drive, race, shop;
+                   see docs/career-world.md
   storage.js     persistence adapter (artifact host / localStorage / memory)
 tests/           physics intent tests + the behavioural fingerprint
 ```

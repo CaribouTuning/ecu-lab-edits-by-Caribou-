@@ -113,7 +113,7 @@ export function LiveEcuPanel() {
       </div>
 
       <div className={styles.sectionHead}>
-        <span>DATA LOG</span>
+        <span>Data log</span>
         <span className={styles.flex} />
         <button type="button" className={styles.chip} aria-pressed={!!frozen} onClick={() => setFrozen(frozen ? null : [...(e?.log ?? [])])}>{frozen ? 'Resume' : 'Pause'}</button>
         <button type="button" className={styles.chip} onClick={exportCsv} disabled={!e?.log?.length}>Export CSV</button>
@@ -142,7 +142,7 @@ export function LiveEcuPanel() {
 
       {e?.breakdown && live.running && live.live && (
         <>
-          <div className={styles.sectionHead}><span>WHERE THE NUMBERS COME FROM</span></div>
+          <div className={styles.sectionHead}><span>Where the numbers come from</span></div>
           <p className={styles.muted}>Each value starts from your table, then lists every adjustment the ECU made, in order. If a number surprises you, the line that moved it is here.</p>
           <CorrectionStack breakdown={{ ...e.breakdown, boost: e.boostSteps }} result={{ timing: live.live.timing, lambda: live.live.lambda }} />
         </>

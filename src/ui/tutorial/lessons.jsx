@@ -118,7 +118,7 @@ function FindYourWay() {
           { at: '[data-tour="strip-last-pull"]', text: 'LAST PULL: the peak power of your most recent dyno pull.' },
           { at: '[data-tour="strip-health"]', text: 'HEALTH: knock, heat and pressure wear the engine. The wrench next to it repairs it.' },
         ]}
-        caption="The nav and the status strip. HOME has your jobs and the Learn articles; LIVE runs the engine in real time; DRAG puts it in a car."
+        caption="The nav and the status strip. HOME has your jobs and the Learn articles; LIVE runs the engine in real time; in CAREER your own cars go racing in the 3D town."
       >
         <div style={{ height: 320, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -287,7 +287,7 @@ function FirstPull() {
   return (
     <>
       <Goal learn="run a dyno pull and read the two charts it draws." need="Chapter 2." />
-      <P>There is no preview. Press <K>RUN DYNO PULL</K> and the engine sweeps from 1500 RPM to its redline at full throttle, recording every channel at every 100 RPM. That is the only way to find out what a change did, exactly like a real dyno day.</P>
+      <P>There is no preview. Press <K>Run a pull</K> and the engine sweeps from 1500 RPM to its redline at full throttle, recording every channel at every 100 RPM. That is the only way to find out what a change did, exactly like a real dyno day.</P>
       <ScreenSnippet
         where="DYNO › CURVES"
         demo={d}
@@ -307,8 +307,8 @@ function FirstPull() {
         Power is torque times speed. That is why the power peak comes later than the torque peak: past {tq.rpm} RPM the torque falls, but more slowly than the speed rises.
       </Worked>
       <Do steps={[
-        <>Open <K>DYNO</K> and press <K>RUN DYNO PULL</K>.</>,
-        <>Check <K>LAST PULL</K> in the strip: about {hp.hp} whp on the stock engine.</>,
+        <>Open <K>DYNO</K> and press <K>Run a pull</K>.</>,
+        <>Check <K>Last pull</K> in the strip: about {hp.hp} whp on the stock engine.</>,
       ]} />
       <Did>You measured the engine. From now on every change gets a pull, and every pull gets compared with the one before.</Did>
       <Trouble items={[
@@ -503,9 +503,9 @@ function VeFromLogs() {
       )}
       <Do steps={[
         <>Fit <K>Cold Air Intake</K> on <K>BUILD › INDUCTION</K>, then run a pull.</>,
-        <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>CORRECT VE FROM LOGS</K> now has samples.</>,
+        <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>Correct VE from logs</K> now has samples.</>,
         <>Select the 5500 RPM, 100 kPa cell and open the advisor to see its maths.</>,
-        <>Press <K>APPLY HALF</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,
+        <>Press <K>Apply half</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,
       ]} />
       <Did>You corrected a speed-density table from a wideband log, the way it is done on real cars, and you can check the software&apos;s working by hand.</Did>
       <Trouble items={[
@@ -633,8 +633,8 @@ function TheRest() {
       <P>Fit a sensor on BUILD and tell the ECU a different one on TUNE › SENSORS, and it acts on a wrong number without knowing. The classic: a 1-bar MAP sensor on a turbo engine never sees boost, and fuels too little under it. Each page warns you when the two differ.</P>
       <H>LIVE</H>
       <P>The ECU running in real time. Start the engine, rev it, watch idle hold when the A/C switches on, try launch control, break a sensor on purpose and see what the protections do. Its datalog records every channel, and TUNE › AIRFLOW corrects part-throttle VE from it the same way it does from a pull.</P>
-      <H>DRAG and the scores</H>
-      <P>Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), combined with real output into a Pull Score with no ceiling. On DRAG the engine goes into a car: trap speed measures power, the 60-foot time measures traction, and the fastest engine does not always win.</P>
+      <H>Racing and the scores</H>
+      <P>Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), combined with real output into a Pull Score with no ceiling. In CAREER the engine goes into a car at the drag strip: trap speed measures power, the 60-foot time measures traction, and the fastest engine does not always win.</P>
       <Did>You have seen every part of the game and know which lesson to come back to for each.</Did>
     </>
   );
@@ -693,7 +693,7 @@ export const CHAPTERS = [
   ] },
   { id: 'beyond', title: 'Limits, and the rest of the game', minutes: 5, lessons: [
     { id: 'limits', title: 'What you cannot tune away', Body: Limits },
-    { id: 'the-rest', title: 'The rest of TUNE, LIVE and DRAG', Body: TheRest },
+    { id: 'the-rest', title: 'The rest of TUNE and LIVE', Body: TheRest },
     { id: 'next', title: 'Where to go next', Body: NextSteps },
   ] },
 ];

@@ -27,6 +27,7 @@ import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import EcuLab, { DYNO_PULL_MS } from '../../src/ui/EcuLab.jsx';
 import styles from '../../src/ui/primitives/Button.module.css';
+import { buildPart, enterSandbox, goTo } from './nav.js';
 
 // jsdom has no ResizeObserver, and the sweep runs a dyno pull — whose result panel
 // mounts recharts' <ResponsiveContainer>, which throws without one. Same stub as
@@ -51,7 +52,7 @@ function launch() {
   render(<EcuLab />);
   // The start screen offers CAREER, SANDBOX and TUTORIAL on this branch rather than a
   // single START. SANDBOX is the free-play entry the old button was.
-  clickButton('SANDBOX');
+  enterSandbox();
 }
 
 /** @param {string|RegExp} name */
@@ -79,23 +80,22 @@ async function sweep() {
   launch();
   collect();
 
-  // BUILD is the landing tab, and its sections arrive collapsed.
-  for (const section of ['Engine Architecture', 'Induction', 'Fuel System', 'Exhaust']) {
-    fireEvent.click(screen.getByText(section));
+  // BUILD is the landing tab: the engine stand, one part of the engine at a time.
+  for (const part of ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust']) {
+    buildPart(part);
     collect();
   }
   // Fitting a part leaves the VE table behind the hardware, so the pull below logs
   // a correction for TUNE > AIRFLOW to apply.
-  const uninstalled = screen.getAllByRole('button')
-    .filter((b) => b.textContent.includes('INSTALL') && !(/** @type {HTMLButtonElement} */ (b).disabled));
+  const uninstalled = screen.getAllByRole('button').filter((b) => b.getAttribute('data-installed') === 'false');
   fireEvent.click(uninstalled[0]);
   collect();
 
-  clickButton(/TUNE/);
+  goTo('TUNE');
   collect();
   // INJECTORS visited last: the scaling-mismatch step right after this loop needs
   // to still be on TUNE > Injectors, where ECU Injector Scaling and RESCALE live.
-  for (const view of ['AIRFLOW', 'SPARK', 'FUEL', 'SENSORS', 'INJECTORS']) {
+  for (const view of ['Airflow (VE)', 'Spark', 'Fuel', 'Sensors', 'Injectors']) {
     clickButton(view);
     collect();
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
@@ -112,35 +112,38 @@ async function sweep() {
   fireEvent.click(scaling.find((b) => b.getAttribute('aria-pressed') === 'false'));
   collect();
 
-  clickButton(/HOME/);
+  // The laptop's two reading apps.
+  goTo('LEARN');
+  collect();
+  goTo('PHYSICS');
   collect();
   // The live engine is its own tab on this branch, not a section of HOME.
-  clickButton(/^LIVE$/);
+  goTo('LIVE');
   collect();
-  clickButton('START ENGINE'); // mounts STOP, the other branch of that variant
+  clickButton('Start engine'); // mounts STOP, the other branch of that variant
   collect();
 
-  clickButton(/DYNO/);
+  goTo('DYNO');
   collect();
-  clickButton('RUN DYNO PULL');
+  clickButton('Run a pull');
   collect();
   // `disabled={running}` is the entire mechanism behind the disabled-state
   // contrast fix, and losing it also lets a second pull fire mid-sweep. The label
   // names the PHASE while running; jsdom has no audio, so the pull is the sweep alone.
-  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'SWEEPING…' })).disabled).toBe(true);
+  expect(/** @type {HTMLButtonElement} */ (screen.getByRole('button', { name: 'Sweeping…' })).disabled).toBe(true);
   // Named from the pull sequence rather than carrying a number that has to be
   // remembered if it is retimed.
-  await waitFor(() => expect(screen.getByRole('button', { name: 'DATALOG' })).toBeTruthy(),
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Data' })).toBeTruthy(),
     { timeout: DYNO_PULL_MS + 2000 });
-  clickButton('DATALOG');
+  clickButton('Data');
   collect();
   clickButton('BUILD HISTOGRAM FROM THIS PULL'); // mounts APPLY CORRECTIONS / DISCARD
   collect();
   // The pull is what TUNE > AIRFLOW corrects VE from: APPLY HALF / APPLY ALL mount
   // only once there is a log to apply.
   // The pull's log also badges the TUNE pages it points at, so the name gains a count.
-  clickButton(/TUNE/);
-  clickButton(/^AIRFLOW/);
+  goTo('TUNE');
+  clickButton(/^Airflow \(VE\)/);
   collect();
 
   return [...seen];
@@ -157,7 +160,7 @@ function variantsOn(el) {
 // below would go on passing over the shorter list.
 const EXPECTED = [
   'RESET ALL TO STOCK', 'FLAT ACROSS ALL', 'SPOOL RAMP', 'ZERO',
-  'APPLY HALF', 'APPLY ALL', 'DONE', 'RESCALE ECU TO', 'STOP', 'TEST', 'RUN DYNO PULL',
+  'Apply half', 'Apply all', 'DONE', 'RESCALE ECU TO',
   'BUILD HISTOGRAM FROM THIS PULL', 'APPLY CORRECTIONS TO VE', 'DISCARD',
 ];
 
@@ -208,12 +211,12 @@ describe('the danger variant', () => {
     // exactly why the confirm is destructive: reaching it means there is hand-edited
     // calibration work for it to overwrite.
     launch();
-    clickButton(/TUNE/);
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
-    clickButton(/BUILD/);
+    goTo('BUILD');
 
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));

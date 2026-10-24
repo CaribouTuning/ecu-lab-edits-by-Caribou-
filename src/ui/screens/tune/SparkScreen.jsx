@@ -77,8 +77,11 @@ export function SparkScreen({ calAdvice, children }) {
             <UndoControls />
           </div>
           <div className={styles.intro}>Degrees of spark advance before top dead center (° BTDC).</div>
-          <LayoutSwitch />
-          <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          {/* One toolbar, as a table editor has: the axes, how a tap selects, what the cells show. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 6, margin: '8px 0 10px' }}>
+            <LayoutSwitch />
+            <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
+          </div>
           <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
             <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} />
           </GridOrSurface>

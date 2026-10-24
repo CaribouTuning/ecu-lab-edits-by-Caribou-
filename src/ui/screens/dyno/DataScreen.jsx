@@ -46,8 +46,8 @@ function PairRows({ point: p }) {
   const rows = [
     { id: 've', k: 'Cylinder filling', asked: `${p.veTable}% VE`, got: `${p.ve}% VE`,
       note: p.veTable !== p.ve
-        ? `${p.map} kPa manifold · table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
-        : `${p.map} kPa manifold · table and engine agree at ${p.ve}%`,
+        ? `${p.map} kPa manifold: table says ${p.veTable}% VE, engine actually flowed ${p.ve}%`
+        : `${p.map} kPa manifold: table and engine agree at ${p.ve}%`,
       ok: Math.abs(p.veTable - p.ve) / Math.max(1, p.ve) < 0.03 },
     { id: 'timing', k: 'Timing', asked: `${p.commandedTiming}°`, got: `${p.timing}°`,
       note: p.knock ? `ECU pulled ${p.knockPull.toFixed(1)}° — too advanced for this cylinder pressure` : 'ran your commanded value',
@@ -55,7 +55,7 @@ function PairRows({ point: p }) {
     { id: 'mixture', k: 'Mixture', asked: `${p.afrCommanded}:1`, got: `${p.afr}:1`,
       note: p.fuelLimited ? 'injectors out of time — mixture leaned out on its own'
         : p.richRisk ? 'far richer than commanded — check injector scaling'
-          : `lambda ${p.lambda} · best power here is ${p.bestAfr}:1`,
+          : `lambda ${p.lambda}, best power here is ${p.bestAfr}:1`,
       ok: !p.fuelLimited && !p.richRisk && !p.leanRisk },
   ];
   return (
@@ -224,7 +224,7 @@ export function DataScreen() {
       <div className={styles.card} data-tone={tone}>
         <div className={styles.cardHead}>
           <span className={styles.cardRpm}>{shown.rpm} RPM</span>
-          <span className={styles.cardStat}>{roadTest ? 'road test' : `${shown.hp} whp · ${shown.torque} lb-ft`}</span>
+          <span className={styles.cardStat}>{roadTest ? 'road test' : `${shown.hp} whp, ${shown.torque} lb-ft`}</span>
         </div>
         <div className={styles.gauges}>
           {gauges.map((g) => (
@@ -243,7 +243,7 @@ export function DataScreen() {
         <PairRows point={shown} />
         {shown.breakdown && (
           <div className={styles.ecu} data-testid="ecu-readout">
-            <div className={styles.ecuHead}>ENGINE MANAGEMENT AT THIS POINT</div>
+            <div className={styles.ecuHead}>Engine management at this point</div>
             <p className={styles.ecuNote}>
               {!shown.protect?.length && !(shown.knockPull > 0) && !(shown.knockUnheard > 0.3) && !(shown.misfire > 5)
                 ? 'Nothing stepped in here: the engine ran your tables as written.'

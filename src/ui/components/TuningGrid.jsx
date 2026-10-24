@@ -216,7 +216,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
               <button
                 key={ci}
                 aria-label={`${axes.rpm[ci]} RPM, ${loadText(axes.loadUnit, load)} ${axes.loadUnit}`}
-                aria-pressed={isSelected(ri, ci)}
+                aria-pressed={isSelected(ri, ci)} data-cell
                 onPointerDown={(e) => onCellPointerDown(e, ri, ci)}
                 onPointerEnter={(e) => onCellPointerEnter(e, ri, ci)}
                 onClick={(e) => onCellClick(e, ri, ci)}

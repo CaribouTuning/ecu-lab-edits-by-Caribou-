@@ -2,23 +2,24 @@
    tests/tokens.test.js — change one and you must change the other. */
 
 :root {
-  --bg: #0a0d14;
-  --panel: #131824;
-  --panel2: #1a2130;
-  --panel3: #212a3c;
+  --bg: #0e0e0d;
+  --panel: #161615;
+  --panel2: #1d1d1b;
+  --panel3: #272724;
 
-  --line: #262f42;
-  --line-hi: #33405a;
+  --line: #302f2b;
+  --line-hi: #46443e;
 
-  --ink: #e9eef8;
-  --ink-soft: #c8d2e2;
-  --ink2: #8792a8;
-  --ink3: #5c6880;
+  --ink: #ecebe5;
+  --ink-soft: #d2d0c8;
+  --ink2: #a6a399;
+  --ink3: #8a877f;
 
-  --acc: #4c9eff;
-  --acc-ink: #8fc2ff;
-  --acc-bg: #0f2033;
-  --acc-on: #04162e;
+  --acc: #e8e5da;
+  --acc-ink: #f6f4ee;
+  --acc-bg: #2a2925;
+  --acc-on: #121210;
+  --focus: #ffffff;
 
   --ok: #35e08a;
   --ok-ink: #7fe8b4;
@@ -40,11 +41,89 @@
   --violet: #a78bfa;
   --violet-bg: #1d1a33;
 
+  --paper-grid: #1a2130;
+  --paper-grid-major: #262f42;
+
+
+  --cut-metal: #9aa6b5;
+  --cut-metal-dark: #5d6878;
+  --cut-oil: #d9b13b;
+  --cut-coolant: #2fa3d6;
+  --cut-fresh: #5aa9ff;
+  --cut-burn: #ff7a2e;
+  --cut-exhaust: #8c8f96;
+  --tile: #f7f2e6;
+  --tile-ink: #1f1c18;
+  --tile-wash: #bcd2ee;
+  --cork: #9c7448;
+  --pin: #c8402f;
+  /* The laptop's software, drawn as a native Mac app in dark mode with the Graphite
+     accent: neutral greys, a grey selection, and the window's traffic lights. Applied by
+     remapping the neutral tokens inside a window (Desk.module.css .window). */
+  --mac-window: #1e1e1e;
+  --mac-titlebar: #2b2b2b;
+  --mac-sidebar: #262626;
+  --mac-box: #252525;
+  --mac-control: #3d3d3d;
+  --mac-control-hi: #4b4b4b;
+  --mac-selected: #6a6a6a;
+  --mac-row-sel: #474747;
+  --mac-separator: #383838;
+  --mac-label: #e6e6e6;
+  --mac-label2: #a6a6a6;
+  --mac-label3: #8c8c8c;
+  --mac-sel-ink: #ffffff;
+  --mac-red: #ff5f57;
+  --mac-yellow: #febc2e;
+  --mac-green: #28c840;
+  --mac-light-ink: #4d0000;
+  /* The start screen keeps the look it was liked in (October 2026): the navy ground and the
+     blue key, scoped to that screen (StartScreen.module.css .screen). */
+  --start-bg: #0a0d14;
+  --start-panel: #131824;
+  --start-line-hi: #33405a;
+  --start-ink: #e9eef8;
+  --start-ink2: #8792a8;
+  --start-ink3: #5c6880;
+  --start-acc: #4c9eff;
+  --start-acc-ink: #8fc2ff;
+  --start-acc-bg: #0f2033;
+  --start-acc-on: #04162e;
+  --start-acc-rgb: 76, 158, 255;
+  --wall-sky: #1a1a18;
+  --wall-sky2: #0b0b0a;
+  --chrome-hi: #ffffff;
+  --chrome-mid: #d4d2cb;
+  --chrome-lo: #7a786f;
+  --badge-ink: #121210;
+  --wall-deep: #0b3a9a;
+  --wall-mid: #2c6fe0;
+  --wall-light: #8fbdff;
+  /* The apps' icons, iOS style, and Messages' bubbles. */
+  --app-tune-hi: #5ac8fa;
+  --app-tune-lo: #0a5fd8;
+  --app-build-hi: #b8bec8;
+  --app-build-lo: #5d6470;
+  --app-learn-hi: #ffb340;
+  --app-learn-lo: #f46a00;
+  --app-physics-hi: #bf8cff;
+  --app-physics-lo: #6a35e8;
+  --app-msg-hi: #6cf57f;
+  --app-msg-lo: #0bb82a;
+  --app-search-hi: #8e8e98;
+  --app-search-lo: #48484f;
+  --app-shop-hi: #ffd84a;
+  --app-shop-lo: #f29a00;
+  --app-glyph: #ffffff;
+  --msg-sent: #1d8cff;
+  --msg-got: #2a2d34;
+
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  --acc-rgb: 76, 158, 255;
+  --acc-rgb: 232, 229, 218;
   --shadow-rgb: 0, 0, 0;
+  --glass-rgb: 255, 255, 255;
 
   /* Font-size scale, small to large. See the matching comment in tokens.js for
      why these six steps replace fifteen raw values rather than naming all of
@@ -60,10 +139,10 @@
   /* Border-radius scale, small to large. `50%` circles and one pill radius
      pinned to half its own element's height are deliberately not on this
      ramp — see the comment at that declaration (Toggle.module.css). */
-  --r-xs: 3px;
-  --r-sm: 6px;
-  --r-md: 9px;
-  --r-lg: 12px;
+  --r-xs: 2px;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
 
   /* Spacing scale, for padding. A few raw padding values stay off this ramp
      because they are pinned to something other than rhythm — a chevron's
@@ -90,4 +169,9 @@
      and src/ui/screens/dyno/DataScreen.module.css. AppShell.module.css also has
      a container query on the status strip's own width; that threshold is measured
      from what the strip holds, not a breakpoint, and is documented beside it. */
+
+  /* The inked frame's line, drawn once with the pen's shake in it (sketch.css): a mask,
+     so the colour still comes from the palette. Black here only marks what shows. */
+  --ink-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'%3E%3Cpath d='M12.0 2.2 L14.0 2.3 L16.0 2.5 L18.0 2.9 L20.0 3.3 L22.0 3.6 L24.0 3.8 L26.0 3.7 L28.0 3.6 L30.0 3.4 L32.0 3.3 L34.0 3.2 L36.0 3.2 L38.0 3.2 L40.0 3.2 L42.0 3.0 L44.0 2.9 L46.0 2.8 L48.0 2.8 L50.0 2.8 L52.0 2.8 L54.0 2.7 L56.0 2.5 L58.0 2.3 L60.0 2.2 L62.0 2.3 L64.0 2.5 L66.0 2.9 L68.0 3.3 L70.0 3.6 L72.0 3.8 L74.0 3.7 L76.0 3.6 L78.0 3.4 L80.0 3.3 L82.0 3.2 L84.0 3.2 L86.3 3.3 L88.5 4.2 L90.4 5.6 L91.8 7.5 L92.7 9.7 L93.2 12.0 L93.6 14.0 L93.8 16.0 L93.8 18.0 L93.6 20.0 L93.4 22.0 L93.3 24.0 L93.2 26.0 L93.2 28.0 L93.2 30.0 L93.2 32.0 L93.1 34.0 L92.9 36.0 L92.8 38.0 L92.8 40.0 L92.8 42.0 L92.8 44.0 L92.7 46.0 L92.6 48.0 L92.4 50.0 L92.2 52.0 L92.2 54.0 L92.4 56.0 L92.8 58.0 L93.2 60.0 L93.6 62.0 L93.8 64.0 L93.8 66.0 L93.6 68.0 L93.4 70.0 L93.3 72.0 L93.2 74.0 L93.2 76.0 L93.2 78.0 L93.2 80.0 L93.1 82.0 L92.9 84.0 L92.7 86.3 L91.8 88.5 L90.4 90.4 L88.5 91.8 L86.3 92.7 L84.0 92.8 L82.0 92.8 L80.0 92.8 L78.0 92.8 L76.0 93.0 L74.0 93.1 L72.0 93.2 L70.0 93.2 L68.0 93.2 L66.0 93.2 L64.0 93.3 L62.0 93.5 L60.0 93.7 L58.0 93.8 L56.0 93.7 L54.0 93.5 L52.0 93.1 L50.0 92.7 L48.0 92.4 L46.0 92.2 L44.0 92.3 L42.0 92.4 L40.0 92.6 L38.0 92.7 L36.0 92.8 L34.0 92.8 L32.0 92.8 L30.0 92.8 L28.0 93.0 L26.0 93.1 L24.0 93.2 L22.0 93.2 L20.0 93.2 L18.0 93.2 L16.0 93.3 L14.0 93.5 L12.0 93.7 L9.7 92.7 L7.5 91.8 L5.6 90.4 L4.2 88.5 L3.3 86.3 L2.3 84.0 L2.4 82.0 L2.6 80.0 L2.7 78.0 L2.8 76.0 L2.8 74.0 L2.8 72.0 L2.9 70.0 L3.0 68.0 L3.1 66.0 L3.2 64.0 L3.2 62.0 L3.2 60.0 L3.3 58.0 L3.3 56.0 L3.5 54.0 L3.7 52.0 L3.8 50.0 L3.7 48.0 L3.4 46.0 L3.1 44.0 L2.6 42.0 L2.3 40.0 L2.2 38.0 L2.3 36.0 L2.4 34.0 L2.6 32.0 L2.7 30.0 L2.8 28.0 L2.8 26.0 L2.8 24.0 L2.9 22.0 L3.0 20.0 L3.1 18.0 L3.2 16.0 L3.2 14.0 L3.2 12.0 L3.3 9.7 L4.2 7.5 L5.6 5.6 L7.5 4.2 L9.7 3.3Z' fill='none' stroke='%23000' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --ink-mask-lg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 192 192'%3E%3Cpath d='M18.0 3.7 L20.0 4.3 L22.0 4.8 L24.0 5.2 L26.0 5.5 L28.0 5.8 L30.0 5.9 L32.0 5.9 L34.0 5.8 L36.0 5.6 L38.0 5.4 L40.0 5.2 L42.0 5.0 L44.0 4.8 L46.0 4.7 L48.0 4.6 L50.0 4.6 L52.0 4.6 L54.0 4.6 L56.0 4.6 L58.0 4.6 L60.0 4.5 L62.0 4.4 L64.0 4.2 L66.0 4.1 L68.0 3.9 L70.0 3.7 L72.0 3.6 L74.0 3.5 L76.0 3.4 L78.0 3.4 L80.0 3.4 L82.0 3.4 L84.0 3.4 L86.0 3.4 L88.0 3.3 L90.0 3.2 L92.0 3.0 L94.0 2.8 L96.0 2.6 L98.0 2.4 L100.0 2.2 L102.0 2.1 L104.0 2.1 L106.0 2.2 L108.0 2.5 L110.0 2.8 L112.0 3.3 L114.0 3.7 L116.0 4.3 L118.0 4.8 L120.0 5.2 L122.0 5.5 L124.0 5.8 L126.0 5.9 L128.0 5.9 L130.0 5.8 L132.0 5.6 L134.0 5.4 L136.0 5.2 L138.0 5.0 L140.0 4.8 L142.0 4.7 L144.0 4.6 L146.0 4.6 L148.0 4.6 L150.0 4.6 L152.0 4.6 L154.0 4.6 L156.0 4.5 L158.0 4.4 L160.0 4.2 L162.0 4.1 L164.0 3.9 L166.0 3.7 L168.0 3.6 L170.0 3.5 L172.0 3.4 L174.0 3.4 L177.6 4.5 L181.0 5.9 L183.9 8.1 L186.1 11.0 L187.5 14.4 L189.8 18.0 L189.7 20.0 L189.5 22.0 L189.3 24.0 L189.0 26.0 L188.9 28.0 L188.7 30.0 L188.6 32.0 L188.6 34.0 L188.6 36.0 L188.6 38.0 L188.6 40.0 L188.6 42.0 L188.5 44.0 L188.4 46.0 L188.3 48.0 L188.1 50.0 L188.0 52.0 L187.8 54.0 L187.7 56.0 L187.5 58.0 L187.5 60.0 L187.4 62.0 L187.4 64.0 L187.4 66.0 L187.4 68.0 L187.4 70.0 L187.4 72.0 L187.2 74.0 L187.1 76.0 L186.9 78.0 L186.7 80.0 L186.4 82.0 L186.3 84.0 L186.1 86.0 L186.1 88.0 L186.2 90.0 L186.4 92.0 L186.7 94.0 L187.1 96.0 L187.6 98.0 L188.1 100.0 L188.6 102.0 L189.0 104.0 L189.4 106.0 L189.7 108.0 L189.9 110.0 L189.9 112.0 L189.8 114.0 L189.7 116.0 L189.5 118.0 L189.3 120.0 L189.0 122.0 L188.9 124.0 L188.7 126.0 L188.6 128.0 L188.6 130.0 L188.6 132.0 L188.6 134.0 L188.6 136.0 L188.6 138.0 L188.5 140.0 L188.4 142.0 L188.3 144.0 L188.1 146.0 L188.0 148.0 L187.8 150.0 L187.7 152.0 L187.5 154.0 L187.5 156.0 L187.4 158.0 L187.4 160.0 L187.4 162.0 L187.4 164.0 L187.4 166.0 L187.4 168.0 L187.2 170.0 L187.1 172.0 L186.9 174.0 L187.5 177.6 L186.1 181.0 L183.9 183.9 L181.0 186.1 L177.6 187.5 L174.0 186.6 L172.0 186.3 L170.0 186.1 L168.0 186.1 L166.0 186.2 L164.0 186.3 L162.0 186.5 L160.0 186.8 L158.0 187.0 L156.0 187.2 L154.0 187.3 L152.0 187.4 L150.0 187.4 L148.0 187.4 L146.0 187.4 L144.0 187.4 L142.0 187.4 L140.0 187.5 L138.0 187.6 L136.0 187.7 L134.0 187.9 L132.0 188.0 L130.0 188.2 L128.0 188.4 L126.0 188.5 L124.0 188.5 L122.0 188.6 L120.0 188.6 L118.0 188.6 L116.0 188.6 L114.0 188.6 L112.0 188.6 L110.0 188.8 L108.0 188.9 L106.0 189.1 L104.0 189.3 L102.0 189.6 L100.0 189.7 L98.0 189.9 L96.0 189.9 L94.0 189.8 L92.0 189.6 L90.0 189.3 L88.0 188.9 L86.0 188.4 L84.0 187.9 L82.0 187.4 L80.0 186.9 L78.0 186.6 L76.0 186.3 L74.0 186.1 L72.0 186.1 L70.0 186.2 L68.0 186.3 L66.0 186.5 L64.0 186.8 L62.0 187.0 L60.0 187.2 L58.0 187.3 L56.0 187.4 L54.0 187.4 L52.0 187.4 L50.0 187.4 L48.0 187.4 L46.0 187.4 L44.0 187.5 L42.0 187.6 L40.0 187.7 L38.0 187.9 L36.0 188.0 L34.0 188.2 L32.0 188.4 L30.0 188.5 L28.0 188.5 L26.0 188.6 L24.0 188.6 L22.0 188.6 L20.0 188.6 L18.0 188.6 L14.4 187.5 L11.0 186.1 L8.1 183.9 L5.9 181.0 L4.5 177.6 L5.8 174.0 L5.5 172.0 L5.2 170.0 L4.7 168.0 L4.2 166.0 L3.7 164.0 L3.2 162.0 L2.8 160.0 L2.4 158.0 L2.2 156.0 L2.1 154.0 L2.1 152.0 L2.2 150.0 L2.4 148.0 L2.6 146.0 L2.8 144.0 L3.0 142.0 L3.2 140.0 L3.3 138.0 L3.4 136.0 L3.4 134.0 L3.4 132.0 L3.4 130.0 L3.4 128.0 L3.4 126.0 L3.5 124.0 L3.6 122.0 L3.8 120.0 L3.9 118.0 L4.1 116.0 L4.3 114.0 L4.4 112.0 L4.5 110.0 L4.6 108.0 L4.6 106.0 L4.6 104.0 L4.6 102.0 L4.6 100.0 L4.6 98.0 L4.7 96.0 L4.8 94.0 L5.0 92.0 L5.2 90.0 L5.4 88.0 L5.6 86.0 L5.8 84.0 L5.9 82.0 L5.9 80.0 L5.8 78.0 L5.5 76.0 L5.2 74.0 L4.7 72.0 L4.2 70.0 L3.7 68.0 L3.2 66.0 L2.8 64.0 L2.4 62.0 L2.2 60.0 L2.1 58.0 L2.1 56.0 L2.2 54.0 L2.4 52.0 L2.6 50.0 L2.8 48.0 L3.0 46.0 L3.2 44.0 L3.3 42.0 L3.4 40.0 L3.4 38.0 L3.4 36.0 L3.4 34.0 L3.4 32.0 L3.4 30.0 L3.5 28.0 L3.6 26.0 L3.8 24.0 L3.9 22.0 L4.1 20.0 L4.3 18.0 L4.5 14.4 L5.9 11.0 L8.1 8.1 L11.0 5.9 L14.4 4.5Z' fill='none' stroke='%23000' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E");
 }

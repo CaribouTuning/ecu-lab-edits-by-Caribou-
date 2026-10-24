@@ -85,7 +85,7 @@ export function InjectorsScreen({ dutyPreview, injectorCc, children }) {
 
       <Panel tight className={styles.dutyPanel} data-tour="inj-duty">
         <div className={styles.dutyHead}>
-          <div className={styles.dutyHeadLabel}>INJECTOR DUTY PREVIEW · WOT @ 6500 RPM</div>
+          <div className={styles.dutyHeadLabel}>Injector duty at full throttle, 6500 rpm</div>
           {fuel.stoich < 14 && <div className={styles.dutyFuelNote}>{fuel.label} stoich {fuel.stoich}:1</div>}
         </div>
         <div className={styles.dutyBarWrap}>

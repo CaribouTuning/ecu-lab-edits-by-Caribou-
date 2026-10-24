@@ -18,6 +18,7 @@ import { SelectionDock } from '../../src/ui/components/SelectionDock.jsx';
 import { UndoControls } from '../../src/ui/components/UndoControls.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
 import { StoreProvider, useHistory, useTune } from '../../src/ui/state/StoreProvider.jsx';
+import { enterSandbox, goTo } from './nav.js';
 
 class ResizeObserverStub {
   observe() {}
@@ -251,7 +252,7 @@ describe('UndoControls', () => {
   it('puts the preset label back when a table edit is undone', () => {
     // The whole point of a snapshot spanning both slices, driven through the real app.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
     const picker = /** @type {HTMLSelectElement[]} */ (screen.getAllByRole('combobox'))
       .find((el) => el.querySelector('optgroup'));
@@ -262,7 +263,7 @@ describe('UndoControls', () => {
     // Loading over an untouched default asks for no confirmation, so the preset is on.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
 
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button')
       .filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
@@ -280,7 +281,7 @@ describe('UndoControls', () => {
     // group, over an untouched default store) so a restore that hands back a
     // different preset fails here instead of slipping through.
     expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up /);
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up,/);
   });
 
   it('Cmd+Z still undoes while the grid has focus (#105)', () => {
@@ -288,8 +289,8 @@ describe('UndoControls', () => {
     // shortcut must still reach EcuLab's window handler from inside it, and must not be
     // read as a nudge on its way there.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    enterSandbox();
+    goTo('TUNE');
     const gridEl = screen.getByTestId('tuning-grid');
     const cell = within(gridEl).getByRole('button', { name: '3500 RPM, 100 kPa' });
     fireEvent.click(cell);
@@ -830,8 +831,8 @@ describe('keyboard shortcuts', () => {
   // keeps the same launch path every other test in this block already exercises.
   function launchWithEdit() {
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: /TUNE/ }));
+    enterSandbox();
+    goTo('TUNE');
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button')
       .filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
@@ -1023,7 +1024,7 @@ describe('keyboard shortcuts', () => {
     };
 
     const { unmount } = render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
     const added = keydownCounts(addSpy.mock.calls);
     expect(added.size).toBeGreaterThan(0);

@@ -110,10 +110,10 @@ export function HistoryScreen() {
               <path className={styles.sparkLine} d={spark} />
             </svg>
             <div>
-              <div className={styles.peaks}>{roadTest ? 'Road test' : `${Math.round(run.peakHp)} whp · ${Math.round(run.peakTq)} lb-ft`}</div>
+              <div className={styles.peaks}>{roadTest ? 'Road test' : `${Math.round(run.peakHp)} whp, ${Math.round(run.peakTq)} lb-ft`}</div>
               <div className={styles.delta} data-tone={tone}>
                 {deltaText}
-                {run.knocks > 0 && <span className={styles.knocks}> · {run.knocks} knock{run.knocks === 1 ? '' : 's'}</span>}
+                {run.knocks > 0 && <span className={styles.knocks}>, {run.knocks} knock{run.knocks === 1 ? '' : 's'}</span>}
               </div>
             </div>
             <button

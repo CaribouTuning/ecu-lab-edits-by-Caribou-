@@ -4,22 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0a0d14" />
+    <meta name="theme-color" content="#0e0e0d" />
+    <!-- No icon file to fetch: an empty one, so the browser does not ask for /favicon.ico. -->
+    <link rel="icon" href="data:," />
     <meta
       name="description"
       content="An engine management and tuning simulator. Design an engine, edit the calibration tables a real tuner edits, run a dyno pull, and read a log explaining what went right or wrong."
     />
     <title>ECU Lab — Caribou Tuning</title>
     <style>
-      /* The app renders dark-on-dark and is laid out for mobile first. Set the page
-         background here so there is no white flash before React mounts. */
-      html, body { margin: 0; padding: 0; background: #0a0d14; }
+      /* The app is drawn in ink, on the dark, and is laid out for mobile first. Set the page
+         background here so there is no flash before React mounts. */
+      html, body { margin: 0; padding: 0; background: #0e0e0d; }
       body { -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
       /* Every control in the app is a <button>; normalise them once, globally, rather
          than repeating a reset in each inline style object. */
       button { font: inherit; cursor: pointer; color: inherit; }
       button:focus-visible, [role="gridcell"]:focus-visible {
-        outline: 2px solid #4c9eff;
+        outline: 2px solid #e8e5da;
         outline-offset: 2px;
       }
       @media (prefers-reduced-motion: reduce) {
@@ -32,6 +34,29 @@
     </style>
   </head>
   <body>
+    <!-- The pen's shake: icons and drawn outlines are displaced through this, so a
+         straight vector line reads as inked by hand. See src/ui/sketch.css. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <filter id="hand-jitter" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="2.2" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- A fast, strong shake: turns ruled hatching into a loose scribble of the brush. -->
+      <filter id="hand-scribble" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="2" seed="11" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <!-- The scribbled watercolour that fills a doodle's wash (sketch.css colours it). -->
+      <pattern id="scribble-wash" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-32)">
+        <rect class="sw-bg" width="7" height="7" />
+        <path class="sw-ln" d="M0 2.5H7" />
+      </pattern>
+      <!-- A slower, wider shake for long lines: a frame round a whole window. -->
+      <filter id="hand-jitter-lg" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="3" result="n" />
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="6" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -216,7 +216,7 @@ export function CalTable({ table, def, meta, onChange, marker, axisVars }) {
 
       {target && !show3d && (
         <div className={styles.tools} role="toolbar" aria-label={`Edit ${meta.label}`}>
-          <span className={styles.selInfo}>{selInfo.cells} cell{selInfo.cells > 1 ? 's' : ''} · mean {fmt(selInfo.mean)}</span>
+          <span className={styles.selInfo}>{selInfo.cells} cell{selInfo.cells > 1 ? 's' : ''}, mean {fmt(selInfo.mean)}</span>
           <button type="button" className={styles.tool} onClick={() => commit(mapCells(table, target, (v) => v - step, lim))} aria-label="Decrease">−{step}</button>
           <button type="button" className={styles.tool} onClick={() => commit(mapCells(table, target, (v) => v + step, lim))} aria-label="Increase">+{step}</button>
           <span className={styles.field}>

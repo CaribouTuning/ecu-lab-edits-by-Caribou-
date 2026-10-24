@@ -19,7 +19,8 @@
 .canvas {
   display: block;
   width: 100%;
-  touch-action: none;
+  /* Side to side turns the surface; up and down still scrolls the page. */
+  touch-action: pan-y;
   cursor: grab;
   outline: none;
 }
