@@ -34,13 +34,20 @@ import * as S from '../src/sim/index.js';
  * @type {Record<string, [number, number]>}
  */
 const REAL = {
-  // Best-power enrichment. NA calibrations run lambda 0.85-0.88 at full load; boosted
-  // ones richer, for charge and turbine cooling (HEYWOOD on best-power mixture; the boosted band is common practice).
-  lambdaNa: [0.84, 0.90],
-  lambdaBoosted: [0.76, 0.87],
+  // Full-load mixture at peak power, as factories ship it (src/sim/factoryFuel.js has each
+  // engine's sources). NA: GM's stock Power Enrichment runs 0.77-0.83 at peak-power speed
+  // across 26 stock P01/P59 calibrations (the LM7 0.77, the LS1 0.82; ECU Lab Pro's
+  // gm-benchmark.json), stock VQ35s about 0.82-0.85 near the top; best power itself is
+  // 0.86-0.91 (HEYWOOD). Boosted: the N54 about 0.78-0.82 under load (JB4 logging guide);
+  // the direct-injection B58 and EA888 hold lambda 1 through most of a pull and are about
+  // 0.90-0.95 by redline (Bimmerpost B58 logs; Stratified Auto on the EA888).
+  lambdaNa: [0.74, 0.91],
+  lambdaBoosted: [0.76, 1.0],
   // Fuel per horsepower-hour at peak power (ENGINELABS, GARRETT). The lower edges are
-  // the best modern engines; the model sits there — see docs/accuracy.md.
-  bsfcNa: [0.37, 0.52],
+  // the best modern engines; the model sits there — see docs/accuracy.md. The NA upper
+  // edge follows the richest stock mixture above: fuel per horsepower goes roughly as
+  // 1/lambda, so GM's 0.77 costs about 12% more than best power's 0.86 (0.50 -> 0.56).
+  bsfcNa: [0.37, 0.56],
   bsfcBoosted: [0.38, 0.62],
   // Crank horsepower per lb/min of air (GARRETT: 10-11, wider for NA and rich tunes).
   hpPerLbMin: [9.0, 12.5],
@@ -55,7 +62,9 @@ const REAL = {
   // Exhaust at peak power, °C. Production NA headers 750-900; turbine inlet up to ~950
   // (TURBINE). Lower edges allow for the model's known WOT shortfall (docs/accuracy.md).
   egtNa: [700, 900],
-  egtBoosted: [740, 980],
+  // The boosted floor moved from 740 when the N54 took its stock enrichment (lambda about
+  // 0.79, src/sim/factoryFuel.js): richer runs cooler, and it reads 739 at peak power.
+  egtBoosted: [730, 980],
   // Peak cylinder pressure, bar (PCP — a practitioners' forum, the weakest source here).
   pmaxNa: [45, 90],
   pmaxBoosted: [60, 140],

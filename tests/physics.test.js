@@ -1314,8 +1314,9 @@ describe('the spark advisor', () => {
   });
 
   it('still catches a fuel table that is genuinely off, and by the right amount', () => {
-    // The delivered-not-commanded fix must not have made the mixture check blind. A
-    // table leaned by a known offset has to come back asking for exactly that offset.
+    // The delivered-not-commanded fix must not have made the mixture check blind. A table
+    // leaned 1.5 AFR past its factory mixture has to be caught, and asked to come back to
+    // best power: richer by what it takes to deliver the best-power mixture, no more.
     const preset = S.ENGINE_PRESETS.find((p) => p.id === 'vq35hr');
     const p = S.applyPreset(preset);
     const a = S.calibrationAdvice({
@@ -1328,7 +1329,10 @@ describe('the spark advisor', () => {
       mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
     });
     expect(a.wrongMix.length).toBeGreaterThan(0);
-    for (const c of a.wrongMix) expect(c.delta).toBeCloseTo(-1.5, 1);
+    for (const c of a.wrongMix) {
+      expect(c.delta).toBeLessThan(0);
+      expect(c.current + c.delta).toBeCloseTo((c.current * c.target) / c.delivered, 0);
+    }
   });
 
   it('is self-consistent — taking its own advice leaves nothing left to complain about', () => {

@@ -292,6 +292,11 @@ export const COEFF = {
   ],
   FUEL_RVP_REF_K: 310.93,
   AIR_MOLAR_G: 28.97,
+  // Mean molar mass of the whole fuel (not its light ends, as above), for counting the moles
+  // a charge holds before and after it burns (molar expansion, cycle.js): gasoline about
+  // 110 g/mol (Heywood 1988, Appendix D, CH1.87 fuels), ethanol 46.07.
+  GASOLINE_MOLAR_G: 110,
+  ETHANOL_MOLAR_G: 46.07,
   // Ethanol mass fraction from stoichiometric ratio, for pump fuels that carry no blend
   // figure: gasoline 14.7, ethanol 9.0.
   STOICH_GASOLINE: 14.7,

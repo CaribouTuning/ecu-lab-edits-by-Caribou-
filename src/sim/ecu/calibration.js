@@ -163,8 +163,8 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
     },
     idle: {
       target: curve(ECT_AXIS, () => 800),
-      baseAir: curve(ECT_AXIS, (t) => Math.max(10, 13 - t * 0.06)),
-      startHoldS: 0.8,
+      baseAir: curve(ECT_AXIS, (t) => Math.max(6, 8.5 - t * 0.03)),
+      startHoldS: 0.4,
       gainUp: 0.003,
       gainDown: 0.001,
       damp: 0.04,
