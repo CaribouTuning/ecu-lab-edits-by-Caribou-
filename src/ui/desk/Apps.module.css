@@ -110,21 +110,6 @@
 .artFill2 { fill: var(--ok); opacity: 0.8; }
 .artDanger { fill: var(--danger); opacity: 0.8; }
 
-/* ---------- Build: the engine on its turntable, the OEM list ---------- */
-.buildTop {
-  /* Pinned while the settings below scroll, so the engine changes in view as you edit it. */
-  position: sticky; top: -16px; z-index: 5; margin: -16px -16px 14px; padding: 16px 16px 10px;
-  background: var(--bg); border-bottom: 1px solid var(--line);
-}
-.buildRow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 4px; }
-.oem {
-  padding: 4px 12px; border-radius: 6px; border: 0; background: var(--mac-control);
-  color: var(--mac-label); font-weight: 500; font-size: 13px; cursor: pointer;
-}
-.oem:hover { background: var(--mac-control-hi); }
-.oem[aria-expanded='true'] { background: var(--mac-selected); color: var(--mac-sel-ink); }
-.buildNote { font-size: var(--fs-sm); color: var(--ink2); }
-.oemList { max-height: 40vh; overflow-y: auto; margin-top: 10px; padding: 12px; border: 1px solid var(--line-hi); border-radius: var(--r-md); background: var(--panel); }
 
 /* ---------- Tune: one row of tabs, VE first ---------- */
 /* Tune as a Mac app: a source-list sidebar of the ECU's tables beside the open one. */
