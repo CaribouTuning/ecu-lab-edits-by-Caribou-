@@ -89,7 +89,7 @@
    which one is the game, and the answer is not obvious from "SANDBOX". */
 .caption { font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
 
-.version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink3); }
+.version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
 
 /* From the small-tablet breakpoint up there is room to sit the two actions side by
    side, which is also where a full-width button starts looking wrong.

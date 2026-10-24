@@ -31,8 +31,9 @@
 .slot:nth-of-type(1) { border-radius: 6px 0 0 6px; }
 .slot:last-child { border-radius: 0 6px 6px 0; margin-right: 0; }
 
-/* An empty slot is quieter than one holding a tune. */
-.slot[data-state='empty'] { color: var(--mac-label3); }
+/* An empty slot is quieter than one holding a tune: a dashed border and no stored dot,
+   not dimmer text (issue 79). Its text keeps .slot's --ink2. */
+.slot[data-state='empty'] { border-style: dashed; }
 
 /* A stored tune: a small dot, as a Mac marks an edited document. */
 .stored {
@@ -50,7 +51,7 @@
   margin: 0;
   font-size: var(--fs-xs);
   line-height: 1.45;
-  color: var(--ink3);
+  color: var(--ink2);
 }
 
 .utils {

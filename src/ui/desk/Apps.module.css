@@ -42,7 +42,7 @@
 .buildSplit { display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: start; }
 .buildList { margin: 0; display: flex; flex-direction: column; gap: 7px; }
 .buildRow2 { display: grid; grid-template-columns: 104px 1fr; gap: 8px; font-size: var(--fs-sm); }
-.buildRow2 dt { color: var(--ink3); }
+.buildRow2 dt { color: var(--ink2); }
 .buildRow2 dd { margin: 0; display: flex; flex-direction: column; }
 .buildRow2 dd b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
 .buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); line-height: 1.4; }
@@ -76,7 +76,7 @@
   font-size: var(--fs-base); font-weight: 700;
 }
 .stageTitle::-webkit-details-marker { display: none; }
-.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink3); font-weight: 800; }
+.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink2); font-weight: 800; }
 .stage[open] > .stageTitle::after { content: '−'; }
 .stageBody { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; padding: 2px 0 12px; }
 @media (max-width: 560px) { .stageBody { grid-template-columns: 1fr; } .art { max-height: 140px; } }
@@ -92,7 +92,7 @@
   background: var(--panel2); font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink); overflow-x: auto;
 }
 .nums { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); }
-.nums dt { color: var(--ink3); }
+.nums dt { color: var(--ink2); }
 .nums dd { margin: 0; font-family: var(--mono); color: var(--ink); }
 /* The pictures' strokes and fills, from the theme. */
 .artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
@@ -179,7 +179,7 @@
 .pvLoop { fill: none; stroke: var(--cut-burn); stroke-width: 1.6; }
 .pvDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
 .liveEq { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: var(--fs-xs); }
-.liveEq dt { color: var(--ink3); white-space: nowrap; }
+.liveEq dt { color: var(--ink2); white-space: nowrap; }
 .liveEq dd { margin: 0; font-family: var(--mono); color: var(--ink); line-height: 1.45; }
 .cutControls { display: flex; gap: 8px; align-items: center; }
 .cutControls button { padding: 4px 12px; border: 0; border-radius: 6px; background: var(--mac-control); color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer; }
@@ -218,7 +218,7 @@
 .ctl { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--ink2); }
 .ctl b { color: var(--ink); font-family: var(--mono); }
 .ctl input { accent-color: var(--acc); width: 100%; }
-.ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink3); }
+.ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink2); }
 .buildEngine { min-height: 0; }
 .buildEngine > div { height: 170px; }
 
@@ -252,14 +252,14 @@
 }
 .msgRowTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .msgRowTop b { font-size: var(--fs-md); font-weight: 600; }
-.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-sm); color: var(--ink3); flex: none; }
+.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-sm); color: var(--ink2); flex: none; }
 .msgRowSubject, .msgRowPreview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
 .msgRowSubject { display: flex; align-items: center; gap: 5px; color: var(--ink-soft); }
 .msgRowSubject svg { flex: none; }
 .msgRowSubject[data-unread='true'] { color: var(--ink); font-weight: 600; }
-.msgRowPreview { color: var(--ink3); }
+.msgRowPreview { color: var(--ink2); }
 .msgView { min-width: 0; padding: 14px 22px 28px; }
-.msgEmpty { color: var(--ink3); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
+.msgEmpty { color: var(--ink2); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
 .msgBack {
   display: none; align-items: center; gap: 0; margin: 0 0 6px -6px; padding: 4px 4px; border: 0;
   background: transparent; color: var(--msg-sent); font: inherit; font-size: var(--fs-md); cursor: pointer;
@@ -267,8 +267,8 @@
 /* A text: the thread, Pops's bubbles grey on the left, yours blue on the right. */
 .threadHead { display: flex; flex-direction: column; align-items: center; gap: 3px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .threadHead b { font-size: var(--fs-sm); font-weight: 600; }
-.threadHead small { font-size: var(--fs-xs); color: var(--ink3); }
-.threadDay { align-self: center; margin: 0 0 4px; font-size: var(--fs-xs); color: var(--ink3); }
+.threadHead small { font-size: var(--fs-xs); color: var(--ink2); }
+.threadDay { align-self: center; margin: 0 0 4px; font-size: var(--fs-xs); color: var(--ink2); }
 .bubbles { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 12px; max-width: 640px; margin: 0 auto; }
 .bubble { margin: 0; max-width: 78%; padding: 8px 14px; border-radius: 18px; background: var(--msg-got); color: var(--ink); font-size: var(--fs-md); line-height: 1.4; }
 .bubble[data-me='true'] { align-self: flex-end; margin-top: 8px; background: var(--msg-sent); color: var(--app-glyph); }
@@ -278,7 +278,7 @@
 .mailFrom { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .mailFrom > span { display: flex; flex-direction: column; flex: 1; }
 .mailFrom b { font-size: var(--fs-base); font-weight: 600; }
-.mailFrom small { font-size: var(--fs-xs); color: var(--ink3); }
+.mailFrom small { font-size: var(--fs-xs); color: var(--ink2); }
 .mailWhen { align-self: flex-start; }
 .msgPara { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.6; color: var(--ink); }
 .msgLesson { margin: 18px 0 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel); }

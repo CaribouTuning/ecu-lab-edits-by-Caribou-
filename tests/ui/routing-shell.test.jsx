@@ -145,6 +145,26 @@ describe('clicking a tab', () => {
       expect(screen.getAllByText(ownEyebrow).length).toBeGreaterThan(tabLabel === ownEyebrow ? 1 : 0);
     }
   });
+
+  it('marks the open TUNE page aria-current, and moves it on navigation', () => {
+    // The Tune app's sidebar lists the ECU's tables, as a Mac app lists its documents; the
+    // open one is the current page.
+    launch();
+    /** @param {string} name @returns {string[]} labels of the current buttons in that nav */
+    const current = (name) => within(screen.getByRole('navigation', { name }))
+      .getAllByRole('button')
+      .filter((b) => b.getAttribute('aria-current') === 'page')
+      .map((b) => b.textContent);
+
+    goTo('TUNE');
+    expect(current('ECU tables')).toEqual(['Airflow (VE)']);
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'ECU tables' })).getByRole('button', { name: 'Spark' }));
+    expect(current('ECU tables')).toEqual(['Spark']);
+    // Absent, not "false", on every other page.
+    const others = within(screen.getByRole('navigation', { name: 'ECU tables' }))
+      .getAllByRole('button').filter((b) => b.textContent !== 'Spark');
+    for (const b of others) expect(b.hasAttribute('aria-current')).toBe(false);
+  });
 });
 
 describe('the back button', () => {

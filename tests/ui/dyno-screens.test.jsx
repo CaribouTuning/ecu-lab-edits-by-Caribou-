@@ -1259,3 +1259,33 @@ describe('DYNO event bands during the reveal', () => {
     expect(screen.getByRole('button', { name: /1 finding applies to the whole pull/ })).toBeTruthy();
   });
 });
+
+describe('the DYNO page switcher', () => {
+  it('is a labelled nav, marks the open page, and flags the pull log when it has entries', async () => {
+    let dispatch;
+    render(
+      <StoreProvider>
+        <Capture onDispatch={(d) => { dispatch = d; }} />
+        <EcuLabApp />
+      </StoreProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    // A stock pull logs nothing; 10° of extra spark everywhere makes it knock.
+    const timing = makeInitialState().tune.timing.map((row) => row.map((v) => v + 10));
+    act(() => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value: timing }));
+    goTo('DYNO');
+    fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
+    await waitFor(
+      () => expect(screen.getByRole('button', { name: 'Run a pull' }).hasAttribute('disabled')).toBe(false),
+      { timeout: 10000 },
+    );
+
+    // The dyno computer's screens, named for the computer; the open one is the pressed one.
+    const nav = screen.getByRole('navigation', { name: 'Dyno computer screens' });
+    expect(within(nav).getByRole('button', { name: /^Pull log \(new findings\)$/ })).toBeTruthy();
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'Data' }));
+    const pressed = within(nav).getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') === 'true');
+    expect(pressed.map((b) => b.textContent)).toEqual(['Data']);
+  }, 20000);
+});

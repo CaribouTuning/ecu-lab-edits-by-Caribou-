@@ -682,14 +682,16 @@ function statTile(label) {
 describe('the engine-sound toggle', () => {
   it('switches the button between on and off', () => {
     // `soundOn` gates the audio synth's master gain, which jsdom has no way to hear.
-    // The button's own glyph is the readable half of that write.
+    // The button's pressed state is the readable half of that write.
     launchOnLive();
-    // The stand console's sound key says which way it is.
+    // The stand console's sound key says which way it is, in words and to a screen reader.
     const toggle = () => screen.getByRole('button', { name: /^Sound (on|off)$/ });
     expect(toggle().textContent).toBe('Sound on');
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
 
     fireEvent.click(toggle());
     expect(toggle().textContent).toBe('Sound off');
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
 
     fireEvent.click(toggle());
     expect(toggle().textContent).toBe('Sound on');

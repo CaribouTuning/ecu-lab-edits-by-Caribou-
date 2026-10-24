@@ -197,11 +197,11 @@
 .readout span { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.2em; color: var(--ink2); margin-top: 3px; }
 .gearBox { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; line-height: 1; }
 .gearBox b { font-family: var(--mono); font-size: 22px; font-weight: 800; color: var(--acc-ink); }
-.gearBox span { font-size: 8px; font-weight: 800; letter-spacing: 0.14em; color: var(--ink3); }
+.gearBox span { font-size: 8px; font-weight: 800; letter-spacing: 0.14em; color: var(--ink2); }
 .rpm { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
 .rpm span { color: var(--ink); font-weight: 800; }
 .lights { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); display: flex; gap: 6px; }
-.lights span { padding: 1px 5px; border: 1px solid var(--line); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink3); border-radius: var(--r-xs); }
+.lights span { padding: 1px 5px; border: 1px solid var(--line); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; color: var(--ink2); border-radius: var(--r-xs); }
 /* A warning light shows only while it is on, as a car's own do: four dark labels under the
    tach were clutter the eye had to read past every second. */
 .lights span[data-on='false'] { display: none; }
@@ -402,7 +402,7 @@
 .slip { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: var(--fs-sm); }
 .slip th, .slip td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
 .slip th:first-child, .slip td:first-child { text-align: left; font-family: var(--sans); color: var(--ink2); }
-.slip th { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--ink3); }
+.slip th { font-size: var(--fs-micro); letter-spacing: 0.12em; color: var(--ink2); }
 .facts2 { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 5px; font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-soft); }
 
 /* ---- the text box: a handheld RPG's, along the bottom ---- */

@@ -229,7 +229,7 @@ export function LiveGauges() {
         <LiveGauge label="Injector pulse" value={live.live ? live.live.pw : '—'} unit="ms" />
         <LiveGauge label="Injector duty" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
         <LiveGauge label="Idle air" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
-        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? T.ink3 : live.fuelCut ? T.warn : T.ok} />
+        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? T.ink2 : live.fuelCut ? T.warn : T.ok} />
       </div>
 
       <div className={styles.trims}>
