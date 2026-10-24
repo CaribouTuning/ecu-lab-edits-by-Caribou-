@@ -41,14 +41,15 @@ export const HOTSPOTS = [
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
  * @param {boolean} [props.phone] the device is a phone, not the laptop
- * @param {boolean} [props.outside] CAREER: the garage door is a way out into town
+ * @param {boolean} [props.outside] CAREER: the job board is on the wall
+ * @param {boolean} [props.town] CAREER with its 3-D town (features.js): the garage door is a way out into it
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
  * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
+export function ShopBackdrop({ mode, phone = false, outside = false, town = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
   const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
@@ -196,7 +197,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, engineSpec,
       )}
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer}>
-          {HOTSPOTS.filter((h) => outside || (h.id !== 'door' && h.id !== 'board')).map((h) => (
+          {HOTSPOTS.filter((h) => (h.id !== 'board' || outside) && (h.id !== 'door' || (outside && town))).map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}

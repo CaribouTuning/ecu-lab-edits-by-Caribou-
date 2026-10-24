@@ -56,6 +56,7 @@ import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
 import { CareerBar } from './career/CareerBar.jsx';
+import { TOWN_WORLD } from './features.js';
 import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
@@ -1817,7 +1818,7 @@ export function EcuLabApp() {
         apps={inCareer ? CAREER_APPS : null}
         onOpen={deskOpen}
         onDesktop={() => deskGo('desk')}
-        onBay={() => deskGo('bay')} outside={inCareer}
+        onBay={() => deskGo('bay')} outside={inCareer} town={inCareer && TOWN_WORLD}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}

@@ -173,7 +173,8 @@ function NextStrip({ next, place }) {
  * @param {() => void} props.onDesktop back to the desktop
  * @param {() => void} props.onBay shut the laptop and look at the shop (in CAREER, back out to the town's shop)
  * @param {string[]} [props.apps] which apps the desktop offers, by id (default: SANDBOX's four)
- * @param {boolean} [props.outside] CAREER: the shop's garage door leads outside
+ * @param {boolean} [props.outside] CAREER: the shop has its job board
+ * @param {boolean} [props.town] CAREER with its 3-D town: the shop's garage door leads out into it
  * @param {Record<string, number>} [props.badges] a count to show on an app's icon
  * @param {() => void} [props.onSearch] @param {() => void} [props.onMenu] @param {() => void} [props.onTutorial] @param {() => void} [props.onRepair]
  * @param {Notice[]} [props.notices] what the notifications list holds
@@ -190,7 +191,7 @@ function NextStrip({ next, place }) {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, next = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, outside = false, town = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, next = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
@@ -300,7 +301,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} outside={outside} town={town} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
 
       {mode !== 'page' && phone && device}
