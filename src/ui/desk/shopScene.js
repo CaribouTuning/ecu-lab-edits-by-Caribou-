@@ -386,7 +386,7 @@ export function buildShopScene(stage, init) {
     standCart.shape(CART_SIZES.stand[sh]);
     buildCart.shape({ ...CART_SIZES.stand[sh], cw: 0, ch: 0, side: false });
     root.updateMatrixWorld(true);
-    focusCache.clear();
+    poseCache.clear();
   };
   /** The faces the page's controls are laid on, by name. */
   const surfaces = {
@@ -408,7 +408,7 @@ export function buildShopScene(stage, init) {
     surfaces.board.w = w - 0.16;
     surfaces.board.h = h - 0.1;
     jobSign.position.y = cork.position.y + h / 2 + 0.45;
-    focusCache.clear();
+    poseCache.clear();
   };
 
   // ---- your desk, and the laptop on it ----
@@ -444,21 +444,21 @@ export function buildShopScene(stage, init) {
   const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
   /** @type {{pos: THREE.Vector3, look: THREE.Vector3, fov: number, exact?: boolean}} */
   let target = POSES.desk;
-  let focusAspect = 0;
+  let poseAspect = 0;
   let lastPose = 'desk';
   let blend = 1;
   let lid = 0; // 0 open, 1 shut
   let lidTarget = 0;
 
-  const focusCache = new Map();
+  const poseCache = new Map();
   /**
    * Square on to a face, close enough that it fills the screen with a margin: the camera
    * looks along the face's own normal from the distance that fits both its width and height.
    * @param {keyof typeof surfaces} name
    */
-  const focusPose = (name) => {
-    if (focusAspect !== cam.aspect) { focusCache.clear(); focusAspect = cam.aspect; }
-    const hit = focusCache.get(name);
+  const squareOnPose = (name) => {
+    if (poseAspect !== cam.aspect) { poseCache.clear(); poseAspect = cam.aspect; }
+    const hit = poseCache.get(name);
     if (hit) return hit;
     const sf = surfaces[name];
     root.updateMatrixWorld(true);
@@ -469,7 +469,7 @@ export function buildShopScene(stage, init) {
     const tv = Math.tan(THREE.MathUtils.degToRad(fov / 2));
     const d = Math.max(sf.w / (2 * 0.94 * tv * cam.aspect), sf.h / (2 * 0.9 * tv));
     const p = { pos: c.clone().addScaledVector(n, d), look: c, fov, exact: true };
-    focusCache.set(name, p);
+    poseCache.set(name, p);
     return p;
   };
 
@@ -491,7 +491,7 @@ export function buildShopScene(stage, init) {
    */
   const stationPose = (name) => {
     const key = `station:${name}:${cam.aspect.toFixed(3)}:${frame.top}:${frame.bottom}:${frame.left}:${frame.right}:${frame.h}`;
-    const hit = focusCache.get(key);
+    const hit = poseCache.get(key);
     if (hit) return hit;
     const cart = name === 'dyno' ? dynoCart : name === 'build' ? buildCart : standCart;
     root.updateMatrixWorld(true);
@@ -547,8 +547,7 @@ export function buildShopScene(stage, init) {
       look.addScaledVector(right, dx * dist * tv * cam.aspect).addScaledVector(up, dy * dist * tv);
     }
     const p = { pos: look.clone().addScaledVector(dir, dist), look, fov, exact: true };
-    if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__fit = { name, frame: { ...frame }, L, R, T, B, dist, aspect: cam.aspect, n: pts.length };
-    focusCache.set(key, p);
+    poseCache.set(key, p);
     return p;
   };
 
@@ -571,10 +570,10 @@ export function buildShopScene(stage, init) {
       // Upright, the monitor turns on its pivot; on a view too short for the box under the
       // monitor (a phone held sideways), the box hangs beside it.
       shapeCarts(cam.aspect < 0.9 ? 'tall' : frame.h - frame.top < 440 ? 'short' : 'wide');
-      if (focusAspect !== cam.aspect) { focusCache.clear(); focusAspect = cam.aspect; }
+      if (poseAspect !== cam.aspect) { poseCache.clear(); poseAspect = cam.aspect; }
       // The board is read square on, close enough to fill the screen. At the dyno or the
       // stand you stand at its cart, the whole of it in view: there is nothing to lean in to.
-      const p = pose === 'board' ? focusPose('board')
+      const p = pose === 'board' ? squareOnPose('board')
         : pose === 'dyno' || pose === 'stand' || pose === 'build' ? stationPose(pose)
           : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
       if (p === target) return;
@@ -608,7 +607,7 @@ export function buildShopScene(stage, init) {
       buildStand.setSpec(spec, true);
       runStand.setSpec(spec);
       // A bigger or smaller engine changes what the stands' views have to fit.
-      for (const k of [...focusCache.keys()]) if (k.startsWith('station:stand') || k.startsWith('station:build')) focusCache.delete(k);
+      for (const k of [...poseCache.keys()]) if (k.startsWith('station:stand') || k.startsWith('station:build')) poseCache.delete(k);
       if (lastPose === 'stand' || lastPose === 'build') api.setPose(lastPose);
     },
     /**
@@ -635,7 +634,7 @@ export function buildShopScene(stage, init) {
       const tall = POSES[`${lastPose}Tall`];
       if (tall && (target === tall) !== (cam.aspect < 1)) api.setPose(/** @type {any} */ (lastPose));
       // Standing at a station or the board, and the screen changed shape: frame it again.
-      if (target.exact && focusAspect !== cam.aspect) api.setPose(/** @type {any} */ (lastPose));
+      if (target.exact && poseAspect !== cam.aspect) api.setPose(/** @type {any} */ (lastPose));
       lid += (lidTarget - lid) * Math.min(1, dt * 5);
       // Open, the lid stands up a little past vertical; shut, it lies on the base.
       hinge.rotation.x = -(1 - lid) * 1.85;

@@ -66,7 +66,6 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
   const { canvasRef, failed } = useStage((stage) => {
     const shop = buildShopScene(stage, { engineSpec: live.current.spec, cars: live.current.cars });
     live.current.carsDirty = false;
-    if (typeof window !== 'undefined' && /** @type {any} */ (window).__ECU_E2E__) /** @type {any} */ (window).__shop = shop;
     let idle = 0;
 
     // ---- the faces the page's controls are laid on ----
