@@ -105,3 +105,25 @@ export function buildPart(name) {
   const parts = within(screen.getByRole('navigation', { name: 'Engine parts' }));
   fireEvent.click(parts.getByRole('button', { name: new RegExp(`^${name}`) }));
 }
+
+/**
+ * With no engine on the bench: take the factory path (if not on it already), pick the
+ * named engine, and return its "Use" (put it on the bench) button.
+ * @param {string} name
+ */
+export function factoryEngine(name) {
+  const path = screen.queryByRole('button', { name: /^Start with a factory engine/ });
+  if (path) fireEvent.click(path);
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
+  return screen.getByRole('button', { name: `Use ${name}` });
+}
+
+/** With no engine on the bench: take the custom path (from either path) and return its form. */
+export function customForm() {
+  const custom = () => screen.queryByRole('button', { name: /^Build a custom engine/ });
+  const back = button('Back');
+  if (back && !custom() && !screen.queryByRole('form', { name: 'Describe your engine' })) fireEvent.click(back);
+  const path = custom();
+  if (path) fireEvent.click(path);
+  return screen.getByRole('form', { name: 'Describe your engine' });
+}

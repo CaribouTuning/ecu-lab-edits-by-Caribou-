@@ -16,7 +16,7 @@ import { COURSE, TUTORIAL } from '../../src/ui/tutorial/books.js';
 import { MISSIONS, advance, markOf } from '../../src/ui/tutorial/missions.js';
 import { intakeFitted, intakeRetuned, overAdvanced, stock } from '../../src/ui/tutorial/scenarios.js';
 import { LOAD } from '../../src/sim/index.js';
-import { enterSandbox, goTo } from './nav.js';
+import { enterSandbox, goTo, factoryEngine } from './nav.js';
 
 // recharts' <ResponsiveContainer> needs a ResizeObserver, which jsdom lacks.
 class ResizeObserverStub {
@@ -179,7 +179,7 @@ describe('the numbers are the game’s', () => {
     render(<EcuLab blankStart />);
     enterSandbox();
     goTo('DYNO');
-    fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' }));
+    fireEvent.click(factoryEngine('Nissan VQ35DE Rev-Up'));
     fireEvent.click(screen.getByRole('button', { name: 'Run a pull' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run a pull' })).toBeTruthy(), { timeout: 10000 });
     // At the dyno the computer's title bar carries the pull's peak, where the strip would.
