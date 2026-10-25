@@ -46,14 +46,102 @@ const POSES = {
  * `shape` sizes it for the view: a wide monitor, or on a phone held upright the same
  * monitor turned on its pivot to stand the tall way, as a real one can.
  */
-function makeCart() {
+/**
+ * What a station's computer shows when nobody is at it: its own program, idling, so from
+ * across the shop you can tell the dyno's from the stand's from the bench's, and see it is
+ * a thing to walk up to. Drawn into a canvas at the screen's own shape; the page's real
+ * screen is laid over it when you are there.
+ * @param {'dyno'|'stand'|'build'} kind @param {number} aspect width over height
+ */
+function idleScreen(kind, aspect) {
+  const h = 360;
+  const w = Math.round(h * aspect);
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const g = cv.getContext('2d');
+  if (g) {
+    const tall = aspect < 1;
+    const pad = 22;
+    g.fillStyle = W.screenOff;
+    g.fillRect(0, 0, w, h);
+    // The window's title bar.
+    g.fillStyle = W.metalDark;
+    g.fillRect(0, 0, w, 34);
+    g.fillStyle = W.white;
+    g.font = '600 20px system-ui, sans-serif';
+    g.textBaseline = 'middle';
+    g.fillText({ dyno: 'Caribou Dyno', stand: 'Engine stand', build: 'Build bench' }[kind], pad, 17);
+    // Its job, drawn the way the program shows it.
+    const top = 52;
+    const bot = h - 70;
+    g.lineWidth = 4;
+    if (kind === 'dyno') {
+      // A power and a torque curve over a grid.
+      g.strokeStyle = W.metalDark;
+      g.lineWidth = 1;
+      for (let i = 0; i <= 4; i += 1) { const y = top + ((bot - top) * i) / 4; g.beginPath(); g.moveTo(pad, y); g.lineTo(w - pad, y); g.stroke(); }
+      const curve = (col, f) => {
+        g.strokeStyle = col; g.lineWidth = 4; g.beginPath();
+        for (let i = 0; i <= 40; i += 1) { const t = i / 40; const x = pad + t * (w - 2 * pad); const y = bot - f(t) * (bot - top); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+        g.stroke();
+      };
+      curve(W.screen, (t) => 0.15 + 0.75 * Math.sin(t * 1.45) ** 1.3);
+      curve(W.screenAmber, (t) => 0.55 + 0.25 * Math.sin(t * 2.6 + 0.2) - 0.2 * t * t);
+    } else if (kind === 'stand') {
+      // A tachometer: its arc, the redline, the needle at idle.
+      const cx = w / 2; const cy = top + (bot - top) * 0.62; const rad = Math.min(w * 0.38, (bot - top) * 0.6);
+      g.strokeStyle = W.metal; g.lineWidth = 6;
+      g.beginPath(); g.arc(cx, cy, rad, Math.PI * 0.8, Math.PI * 2.0); g.stroke();
+      g.strokeStyle = W.taillight;
+      g.beginPath(); g.arc(cx, cy, rad, Math.PI * 2.0, Math.PI * 2.2); g.stroke();
+      const a = Math.PI * 0.95;
+      g.strokeStyle = W.screen; g.lineWidth = 5;
+      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * rad * 0.9, cy + Math.sin(a) * rad * 0.9); g.stroke();
+      g.fillStyle = W.white; g.font = `700 ${tall ? 30 : 36}px system-ui, sans-serif`; g.textAlign = 'center';
+      g.fillText('0 rpm', cx, cy + rad * 0.35);
+      g.textAlign = 'left';
+    } else {
+      // The engine's parts, in the order it goes together.
+      const parts = ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust'];
+      const row = (bot - top) / parts.length;
+      g.font = `500 ${Math.min(22, row * 0.6)}px system-ui, sans-serif`;
+      parts.forEach((name, i) => {
+        const y = top + row * (i + 0.5);
+        g.fillStyle = W.metal; g.fillText(String(i + 1), pad, y);
+        g.fillStyle = i === 0 ? W.screen : W.white; g.fillText(name, pad + 30, y);
+      });
+    }
+    // The one thing to do here, as the program's own button.
+    g.font = '600 22px system-ui, sans-serif';
+    const label = { dyno: 'Run a pull', stand: 'Start engine', build: 'Build' }[kind];
+    const bw = g.measureText(label).width + 44;
+    g.fillStyle = W.screen;
+    g.beginPath();
+    g.roundRect(w - pad - bw, h - 56, bw, 38, 8);
+    g.fill();
+    g.fillStyle = W.screenOff;
+    g.fillText(label, w - pad - bw + 22, h - 37);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** @param {'dyno'|'stand'|'build'} kind */
+function makeCart(kind) {
   const g = new THREE.Group();
+  g.userData.spot = kind;
   const body = new THREE.Group();
   g.add(body);
   const monitorAt = new THREE.Object3D();
   const consoleAt = new THREE.Object3D();
   g.add(monitorAt);
   const monitor = { at: monitorAt, w: 1, h: 1 };
+  const idleMat = new THREE.MeshBasicMaterial({ toneMapped: false });
+  const idle = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), idleMat);
+  idle.position.z = 0.001;
+  monitorAt.add(idle);
+  let idleKey = '';
   const panel = { at: consoleAt, w: 1, h: 1 };
   /**
    * @param {{mw: number, mh: number, cw: number, ch: number, side?: boolean}} d metres; `side`
@@ -85,9 +173,14 @@ function makeCart() {
     body.add(box(mw, mh, 0.002, W.screenOff, { y: my, z: -0.0745, cast: false }));
     monitorAt.position.set(0, my, -0.074);
     monitor.w = mw; monitor.h = mh;
+    idle.scale.set(mw, mh, 1);
+    const key = (mw / mh).toFixed(2);
+    if (key !== idleKey) { idleKey = key; idleMat.map?.dispose(); idleMat.map = idleScreen(kind, mw / mh); idleMat.needsUpdate = true; }
     panel.w = cw; panel.h = ch;
   };
-  return { group: g, monitor, console: panel, shape };
+  /** Pointed at from across the shop: the screen brightens, the way a hovered thing does. @param {boolean} on */
+  const hover = (on) => { idleMat.color.setScalar(on ? 1.35 : 1); };
+  return { group: g, monitor, console: panel, shape, hover };
 }
 
 /** The carts' faces for each shape of view, metres: monitor, then control box. */
@@ -416,11 +509,13 @@ export function buildShopScene(stage, init) {
   for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group, st.duct); }
   realize(root);
   let engineSpecKey = JSON.stringify(init.engineSpec ?? {});
+  buildStand.group.userData.spot = 'build';
+  runStand.group.userData.spot = 'stand';
 
   // ---- the two carts: the dyno's computer, and the engine stand's beside the stand ----
   // The dyno's stands between its pose's camera and the car, a little to the left, turned to
   // face you, the car on the rollers behind it.
-  const dynoCart = makeCart();
+  const dynoCart = makeCart('dyno');
   {
     const pose = POSES.dyno;
     const f = new THREE.Vector3(pose.look.x - pose.pos.x, 0, pose.look.z - pose.pos.z).normalize();
@@ -429,14 +524,14 @@ export function buildShopScene(stage, init) {
     dynoCart.group.rotation.y = Math.atan2(-f.x, -f.z);
     root.add(dynoCart.group);
   }
-  const standCart = makeCart();
+  const standCart = makeCart('stand');
   standCart.group.position.copy(AT.standCart);
   // Each cart is turned in toward its engine, as one is parked to watch the engine and the
   // screen together, not lined up square to the room. The station's view turns with it.
   standCart.group.rotation.y = 0.4;
   root.add(standCart.group);
   // The build bench's computer: a monitor and no control box, for there is nothing to start.
-  const buildCart = makeCart();
+  const buildCart = makeCart('build');
   buildCart.group.position.copy(AT.buildCart);
   buildCart.group.rotation.y = 0.45;
   root.add(buildCart.group);
@@ -625,6 +720,7 @@ export function buildShopScene(stage, init) {
     board: new THREE.Vector3(-7.6, 2.3, -4.9),
   };
   let t = 0;
+  const ray = new THREE.Raycaster();
   const api = {
     anchors,
     camera: cam,
@@ -653,6 +749,28 @@ export function buildShopScene(stage, init) {
       lidTarget = pose === 'desk' ? 0 : 1;
     },
     setCars: placeCars,
+    /**
+     * Which station, if any, is at a point on the picture: its cart, its engine and stand, or
+     * the dyno and the car on it. The shop is the menu: these are what you click.
+     * @param {number} x @param {number} y normalised device coordinates
+     * @returns {'dyno'|'stand'|'build'|null}
+     */
+    pickAt(x, y) {
+      ray.setFromCamera(new THREE.Vector2(x, y), cam);
+      const targets = [dynoCart.group, standCart.group, buildCart.group, buildStand.group, runStand.group, dyno, dynoCar?.group].filter(Boolean);
+      const hit = ray.intersectObjects(/** @type {THREE.Object3D[]} */ (targets), true)[0];
+      for (let o = hit?.object ?? null; o; o = o.parent) {
+        if (o.userData.spot) return o.userData.spot;
+        if (o === dyno || o === dynoCar?.group) return 'dyno';
+      }
+      return null;
+    },
+    /** Light up the station being pointed at. @param {string|null} id */
+    hover(id) {
+      dynoCart.hover(id === 'dyno');
+      standCart.hover(id === 'stand');
+      buildCart.hover(id === 'build');
+    },
     surfaces,
     /** The painted tickets show unless the real ones are pinned over them. @param {boolean} on */
     setTickets(on) { tickets.visible = on; },

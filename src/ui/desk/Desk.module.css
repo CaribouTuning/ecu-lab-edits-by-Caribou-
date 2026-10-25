@@ -419,3 +419,6 @@
    is not covered in tags. The next place keeps its marker. */
 .spotLayer:has([data-next='true']) .spot:not([data-next='true']) .spotLabel { background: none; border-color: transparent; color: var(--ink); text-shadow: 0 1px 2px var(--bg), 0 0 6px var(--bg); opacity: 0.9; }
 .spotLayer:has([data-next='true']) .spot:not([data-next='true'])::after { display: none; }
+/* The station under the pointer in the picture names itself, as its marker would on hover. */
+.spotLayer .spot[data-hover] .spotLabel,
+.spotLayer:has([data-next='true']) .spot[data-hover]:not([data-next='true']) .spotLabel { opacity: 1; background: var(--acc); color: var(--acc-on); border-color: var(--pen); text-shadow: none; }
