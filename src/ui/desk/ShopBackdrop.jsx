@@ -186,7 +186,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
         }
       },
     };
-  }, { shadows: true });
+  }, { shadows: true, real: true });
 
   return (
     <div className={styles.backdrop} data-mode={mode}>

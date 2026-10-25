@@ -29,7 +29,7 @@ function decal(w, d, color, x, z, o = {}) {
 
 /** An oil stain: a dark blot, round-ish. */
 function stain(r, x, z) {
-  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 14), new THREE.MeshToonMaterial({ color: W.asphaltDark, transparent: true, opacity: 0.22 }));
+  const m = new THREE.Mesh(new THREE.CircleGeometry(r, 14), new THREE.MeshToonMaterial({ color: W.asphaltDark, transparent: true, opacity: 0.14, depthWrite: false }));
   m.rotation.x = -Math.PI / 2;
   m.scale.set(1, 0.7, 1);
   m.position.set(x, 0.017, z);
@@ -194,7 +194,7 @@ export function dressShop(root) {
   }
   // Hazard hatching at the door, where cars come in.
   for (let i = 0; i < 12; i += 1) root.add(decal(0.25, 0.9, i % 2 ? W.black : W.toolYellow, -1.35 + i * 0.5, -6.4, { turn: 0.6 }));
-  for (const [r, x, z] of [[0.35, -4.2, -1.0], [0.25, -5.1, -2.6], [0.3, 4.3, -0.8], [0.22, 5.2, -2.9], [0.18, -1.2, 2.8], [0.3, 3.6, 2.4], [0.2, -6.3, 4.6]]) root.add(stain(r, x, z));
+  for (const [r, x, z] of [[0.35, -4.2, -1.0], [0.25, -4.9, -2.4], [0.3, 4.3, -0.8], [0.22, 5.0, -2.7], [0.16, 1.3, 1.5]]) root.add(stain(r, x, z));
   root.add(decal(0.6, 0.6, W.metalDark, 0, -1.2, { y: 0.018 }));
   for (let i = 0; i < 5; i += 1) root.add(decal(0.04, 0.5, W.black, -0.2 + i * 0.1, -1.2, { y: 0.02 }));
   // A rubber mat in front of the bench.
