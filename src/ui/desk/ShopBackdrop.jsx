@@ -50,9 +50,10 @@ export const HOTSPOTS = [
  * @returns {React.ReactElement}
  */
 export function ShopBackdrop({ mode, phone = false, outside = false, town = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces });
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces, onPick });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
+  live.current.onPick = onPick;
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
@@ -75,6 +76,33 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
     // is hit-tested like any other, where Chromium's 3-D hit testing let taps on a turned
     // one fall through (the dyno's RUN and the stand's throttle used to miss).
     const host = stage.canvas.parentElement;
+    // In the shop view the stations themselves are what you click: a cart, an engine on its
+    // stand, the car on the dyno. Pointed at, one lights its screen and the cursor says so.
+    const ndc = (/** @type {PointerEvent} */ e) => {
+      const r = stage.canvas.getBoundingClientRect();
+      return /** @type {[number, number]} */ ([((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)]);
+    };
+    let hovered = null;
+    const onMove = (/** @type {PointerEvent} */ e) => {
+      if (live.current.mode !== 'bay' || e.pointerType === 'touch') return;
+      const id = shop.pickAt(...ndc(e));
+      if (id === hovered) return;
+      hovered = id;
+      shop.hover(id);
+      stage.canvas.style.cursor = id ? 'pointer' : '';
+      for (const [k, el] of Object.entries(spots.current)) el?.toggleAttribute('data-hover', k === id);
+    };
+    let down = null;
+    const onDown = (/** @type {PointerEvent} */ e) => { down = [e.clientX, e.clientY]; };
+    const onUp = (/** @type {PointerEvent} */ e) => {
+      // A tap or a click, not the end of a drag.
+      if (live.current.mode !== 'bay' || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
+      const id = shop.pickAt(...ndc(e));
+      if (id) live.current.onPick?.(id);
+    };
+    stage.canvas.addEventListener('pointermove', onMove);
+    stage.canvas.addEventListener('pointerdown', onDown);
+    stage.canvas.addEventListener('pointerup', onUp);
     const layer = document.createElement('div');
     layer.className = styles.surfaceLayer;
     host?.appendChild(layer);
@@ -114,6 +142,9 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
       dispose() {
         live.current.onSurfaces?.(null);
         layer.remove();
+        stage.canvas.removeEventListener('pointermove', onMove);
+        stage.canvas.removeEventListener('pointerdown', onDown);
+        stage.canvas.removeEventListener('pointerup', onUp);
       },
       update(dt) {
         const l = live.current;
