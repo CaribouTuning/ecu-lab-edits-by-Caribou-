@@ -20,7 +20,8 @@ import {
   EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf, deriveEngine,
 } from '../../sim/index.js';
 import { BuildBenchMode } from '../components/BuildSection.jsx';
-import { useBuild, useSession } from '../state/StoreProvider.jsx';
+import { EngineStart } from '../screens/build/EngineStart.jsx';
+import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 import { engineSpecOf } from '../world/models/engine.js';
 
 import { EngineViewer } from './EngineViewer.jsx';
@@ -115,12 +116,17 @@ function useTall() {
  * @param {(id: string) => void} props.onPart choose another part
  * @param {any} props.preset the factory engine it was built from, if any
  * @param {(preset: any) => void} props.onStock put it back to that factory engine as it was built
+ * @param {() => void} props.onRun the build done: over to the engine stand to start it
+ * @param {boolean} [props.locked] CAREER on a customer's car: the engine is theirs, not to be swapped
  * @param {React.ReactNode} [props.notice] a line over the sheet: in CAREER, whose parts these are
  * @param {React.ReactNode} props.children the open part's options
  * @returns {React.ReactElement}
  */
-export function BuildBench({ part, onPart, preset, onStock, notice = null, children }) {
+export function BuildBench({ part, onPart, preset, onStock, onRun, locked = false, notice = null, children }) {
   const [build] = useBuild();
+  const [tune] = useTune();
+  // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
+  const [changing, setChanging] = useState(false);
   const [session] = useSession();
   const derived = deriveEngine(build.engineConfig);
   const sums = partSummaries(build, derived, preset);
@@ -134,10 +140,10 @@ export function BuildBench({ part, onPart, preset, onStock, notice = null, child
     <div className={styles.wrap}>
     <div className={styles.bench}>
       <nav className={styles.parts} aria-label="Engine parts">
-        {BENCH_PARTS.map((p) => (
-          <button key={p.id} type="button" className={styles.part} aria-current={p.id === open.id ? 'true' : undefined} onClick={() => onPart(p.id)}>
+        {BENCH_PARTS.map((p, i) => (
+          <button key={p.id} type="button" className={styles.part} aria-current={p.id === open.id ? 'true' : undefined} onClick={() => { setChanging(false); onPart(p.id); }}>
             <span className={styles.partName}>
-              {p.label}
+              <span className={styles.step} aria-hidden="true">{i + 1}</span>{p.label}
               {p.id === 'engine' && <span className={styles.origin} data-origin={origin}>{ORIGIN_TAG[origin]}</span>}
               {changed.has(p.id) && <span className={styles.changed}>Changed</span>}
             </span>
@@ -163,12 +169,32 @@ export function BuildBench({ part, onPart, preset, onStock, notice = null, child
                 <button type="button" className={styles.originBtn} onClick={() => onStock(preset)}>Return to stock</button>
               </>
             )}
-            {origin === 'own' && <p><b>Your own engine.</b> Built from your figures, its calibration generated from the physics. Choose a factory engine below to start from one instead.</p>}
+            {origin === 'own' && <p><b>Your own engine.</b> Built from your figures, its calibration generated from the physics.</p>}
+            {!locked && !changing && <button type="button" className={styles.originBtn} onClick={() => setChanging(true)}>Change engine</button>}
           </div>
         )}
         <div className={styles.sheetBody}>
-          <BuildBenchMode.Provider value>{children}</BuildBenchMode.Provider>
+          {open.id === 'engine' && changing
+            ? <EngineStart onCancel={() => setChanging(false)} onDone={() => setChanging(false)} replacing={tune.tablesDirty} />
+            : <BuildBenchMode.Provider value>{children}</BuildBenchMode.Provider>}
         </div>
+        {/* Built up in order, block first: the next part, or, the last one done, the stand. */}
+        {!changing && (
+          <footer className={styles.steps}>
+            {BENCH_PARTS.indexOf(open) > 0 && (
+              <button type="button" className={styles.stepBtn} onClick={() => onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].id)}>
+                Back: {BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].label}
+              </button>
+            )}
+            {BENCH_PARTS.indexOf(open) < BENCH_PARTS.length - 1 ? (
+              <button type="button" className={styles.stepGo} onClick={() => onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].id)}>
+                Next: {BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].label}
+              </button>
+            ) : (
+              <button type="button" className={styles.stepGo} onClick={onRun}>Start it on the engine stand</button>
+            )}
+          </footer>
+        )}
       </section>
     </div>
     </div>

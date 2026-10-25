@@ -1430,6 +1430,8 @@ export function EcuLabApp() {
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
                     preset={activePreset}
                     // Back to the factory engine as built: asked first when the tables hold work.
+                    onRun={() => { setStandScreen('bars'); goTab('live'); }}
+                    locked={inCareer && !buildOpen}
                     onStock={(p) => dispatch(tune.tablesDirty ? { type: ACTIONS.SET_PRESET_PROMPT, value: p } : { type: ACTIONS.APPLY_PRESET, preset: applyPreset(p) })}
                     notice={inCareer ? (buildOpen
                       ? <><b>Build it.</b> This is an engine-building job: every part is yours to choose, and the customer pays for them. Build to the list on their ticket, then run it and tune it.</>
