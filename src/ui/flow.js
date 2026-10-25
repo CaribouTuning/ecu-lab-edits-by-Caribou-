@@ -4,7 +4,7 @@
  * Both modes are one loop, the loop a tuner works in. SANDBOX: choose an engine and build it
  * on the stand, then start it and hear it on the run stand, pull it on the dyno, read what the pull's log says and
  * fix that on the laptop, pull again. CAREER: take a customer's car from the job board, pull
- * it (or road test it), fix what the log points at, pull again, and hand it back. This works
+ * it on the dyno, fix what the log points at, pull again, and hand it back. This works
  * out which step the player is on from what is true now (no checklist to fall out of step
  * with the game), and the chrome shows it in the same words wherever they are: over the
  * shop floor, on the station's bar, on the laptop.
@@ -16,7 +16,7 @@
  * Where a step sends the player:
  *   build      the build bench's computer
  *   live       the run stand's computer
- *   dyno       the dyno (in CAREER without one, the road test)
+ *   dyno       the dyno
  *   tune:PAGE  that page of the laptop's Tune app
  *   board      the job board on the shop wall
  *   messages   Pops's messages, on the laptop
@@ -40,9 +40,7 @@
  * @property {number} [unread] CAREER: Pops's unread messages
  * @property {boolean} [newShop] CAREER: no job finished yet, so Pops's first messages are how
  *   the game is explained, and they come before the first job
- * @property {boolean} [roadTest] CAREER: the shop has no dyno yet
  * @property {boolean} [buildJob] CAREER: an engine-building job
- * @property {boolean} [own] CAREER: the car on the bay is the player's own
  */
 
 /**
@@ -67,11 +65,9 @@ export function nextStep(f) {
     }
     if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the build bench.', label: 'Build bench', go: 'build' };
     if (!f.fresh) {
-      if (f.roadTest) return { id: 'road', text: f.pulled ? 'You changed the car since the last road test. Take it out again.' : 'Road test it: one full-throttle pull to redline, and the logger records it.', label: 'Road test', go: 'dyno' };
       return { id: 'pull', text: f.pulled ? 'You changed the car since the last pull. Pull it again to see what it did.' : 'Strap it on the dyno and run a pull: the log says what is wrong.', label: 'Dyno', go: 'dyno' };
     }
     if (f.attention.length) return fixStep(f.attention[0]);
-    if (f.own) return { id: 'own-done', text: 'A clean pull. Fit a part on the build bench, or put the car away.', label: 'Build bench', go: 'build' };
     return { id: 'hand-back', text: 'A clean pull. Check it against the ticket, then hand the car back.', label: 'Ticket', go: 'ticket' };
   }
 

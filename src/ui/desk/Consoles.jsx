@@ -17,7 +17,6 @@ import styles from './Consoles.module.css';
 
 /**
  * @param {object} props
- * @param {boolean} props.roadTest the shop has no dyno: a pull is a run up through the gears
  * @param {number} props.loadKpa @param {(kpa: number) => void} props.onLoad
  * @param {{shotHp: number, kit: string}|null} props.nitrous the kit fitted, if any
  * @param {boolean} props.nitrousArmed @param {(on: boolean) => void} props.onNitrous
@@ -26,25 +25,19 @@ import styles from './Consoles.module.css';
  * @param {() => void} props.onRun
  * @returns {React.ReactElement}
  */
-export function DynoConsole({ roadTest, loadKpa, onLoad, nitrous, nitrousArmed, onNitrous, running, phase, rpm, onRun }) {
-  const label = !running ? (roadTest ? 'Run a road test' : 'Run a pull')
+export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous, running, phase, rpm, onRun }) {
+  const label = !running ? 'Run a pull'
     : phase === 'settle' ? 'Idling…' : phase === 'sweep' ? 'Sweeping…' : phase === 'spooldown' ? 'Coming back down…' : 'Settling…';
   return (
     <div className={styles.plate}>
       <div className={styles.group}>
-        {/* A road test is one full-throttle pull: there is no load to choose. */}
-        {!roadTest && (
-          <>
-            <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
-            {/* The number on the key, the unit engraved above: three keys fit one row. */}
-            <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
-              {[100, 70, 40].map((k) => (
-                <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
-              ))}
-            </div>
-          </>
-        )}
-        {roadTest && <span className={styles.engraved}>Full throttle to redline</span>}
+        <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
+        {/* The number on the key, the unit engraved above: three keys fit one row. */}
+        <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
+          {[100, 70, 40].map((k) => (
+            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
+          ))}
+        </div>
         {nitrous && (
           <button type="button" className={styles.toggle} aria-pressed={nitrousArmed} onClick={() => onNitrous(!nitrousArmed)} disabled={running}>
             Nitrous {nitrousArmed ? 'armed' : 'off'} <small>{nitrous.shotHp} shot, {nitrous.kit}</small>

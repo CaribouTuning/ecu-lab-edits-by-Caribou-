@@ -28,7 +28,7 @@
   cursor: pointer;
 }
 
-.tag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: var(--acc-ink); }
+.tag { font-size: var(--fs-micro); font-weight: 800; color: var(--acc-ink); }
 .title { flex: 1; font-size: var(--fs-base); font-weight: 800; }
 .count { font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink-soft); }
 .chevron { transition: transform 0.15s ease; }

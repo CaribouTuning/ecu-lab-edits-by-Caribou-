@@ -48,7 +48,6 @@ import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
-import { CarPicker } from './desk/CarPicker.jsx';
 import { MessagesApp } from './desk/MessagesApp.jsx';
 import { advanceSaga, openChapter, unreadCount } from './career/story.js';
 import { Desk } from './desk/Desk.jsx';
@@ -56,20 +55,18 @@ import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
 import { CareerBar } from './career/CareerBar.jsx';
-import { TOWN_WORLD } from './features.js';
 import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
-import { stowFromLift } from './career/ownedCars.js';
 import { advancePhase, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
-import { CareerOffice, World as TownWorld } from './career/ShopScreen.jsx';
+import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { COURSE } from './tutorial/books.js';
 import { MissionCoach } from './tutorial/MissionCoach.jsx';
 import { markOf } from './tutorial/missions.js';
-import { StoreProvider, useBuild, useCareer, useHistory, useRoadTest, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
+import { StoreProvider, useBuild, useCareer, useHistory, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
 import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
@@ -178,7 +175,7 @@ export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
 /** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
- *  out in the shop: the dyno, the engine stand, the job board, the door outside. */
+ *  out in the shop: the dyno, the build bench, the engine stand, the job board. */
 const CAREER_APPS = ['tune', 'messages'];
 
 export function EcuLabApp() {
@@ -239,11 +236,6 @@ export function EcuLabApp() {
     const next = advanceSaga(career);
     if (next !== career) dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
   }, [career, mode, dispatch]);
-  // CAREER: the car you took out into town, and whether you are choosing one.
-  const [outsideCar, setOutsideCar] = useState(/** @type {{ownId?: string, bay?: number, roadTest?: boolean}|null} */ (null));
-  const outsideCarRef = useRef(outsideCar);
-  outsideCarRef.current = outsideCar;
-  const [pickCar, setPickCar] = useState(false);
   // The bench computers' screens that are not the dyno's routed sections: VE, 3D and the
   // pull's live channels on the dyno's; the engine stand's are all its own.
   const [dynoExtra, setDynoExtra] = useState(/** @type {null|'ve'|'3d'|'live'} */ (null));
@@ -487,7 +479,6 @@ export function EcuLabApp() {
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
   const goCourse = () => navigate({ view: 'course', tab: null, section: null });
   const goMenu = () => navigate({ view: 'start', tab: null, section: null });
-  const roadTest = useRoadTest();
 
   /**
    * CAREER: the car goes back to its owner. It is graded on the simulator exactly as it
@@ -497,12 +488,6 @@ export function EcuLabApp() {
   const handBack = () => {
     const job = career?.working ? jobById(career.working) : null;
     if (!job || running) return;
-    // Your own car has no customer and no checks: handing it back puts it away.
-    if (job.own) {
-      dispatch({ type: ACTIONS.CAREER_UPDATE, career: stowFromLift(storeCar(career, job.id, { build, tune }), job.ownId) });
-      navigate({ view: 'shop', tab: null, section: null });
-      return;
-    }
     const v = evaluateJob(job, { build, tune, session });
     const boosted = build.turboOn || !!build.blowerId || !!build.nitrous;
     const delivered = deliver(storeCar(career, job.id, { build, tune }), job.id, v, { boosted });
@@ -635,25 +620,9 @@ export function EcuLabApp() {
   // at the load its throttle asks for. Stable while the setup is, so it can cache them.
   const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A road test is driven, not simulated where you sit: out in town in the car, one
-  // full-throttle pull to redline, then back at the logger with what it saw. Set while
-  // the player is on their way back, so the pull that lands is logged rather than sent
-  // out again.
-  const roadTestBackRef = useRef(false);
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
     if (engineMissing) return;
-    if (roadTest && !roadTestBackRef.current && inCareer) {
-      const bay = career.lifts.findIndex((l) => l.jobId === career.working);
-      if (bay >= 0) {
-        // The car goes out as it is on the laptop now, not as it was when it came in.
-        dispatch({ type: ACTIONS.CAREER_UPDATE, career: storeCar(career, career.working, { build, tune }) });
-        setOutsideCar({ bay, roadTest: true });
-        navigate({ view: 'outside', tab: null, section: null });
-        return;
-      }
-    }
-    roadTestBackRef.current = false;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     // The reveal animation's own state: `running` gates the RUN button's label and the
@@ -662,8 +631,7 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    // A road test was driven flat out, whatever load the dyno's keys were left on.
-    const r = simulateSweep(sweepArgs(roadTest ? 100 : loadKpa, ecuBundle));
+    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
     // Cells TUNE says are past the knock limit that THIS pull did not run: its log cannot
     // show them, so they cost the score here instead of leaving it at "Dialed In". Judged
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
@@ -748,19 +716,6 @@ export function EcuLabApp() {
     }, 55);
   };
   useEffect(() => () => { if (revealTimer.current) clearInterval(revealTimer.current); }, []);
-  // The car is put away once the town has gone, not before: cleared while the town is
-  // still the view, the guard that sends a town with no car back to the shop would win.
-  const wasOutside = useRef(false);
-  useEffect(() => {
-    if (wasOutside.current && appView !== 'outside') setOutsideCar(null);
-    wasOutside.current = appView === 'outside';
-  }, [appView]);
-  // Back from the road test, in front of the logger: the pull it recorded lands now.
-  const doRunRef = useRef(doRun);
-  doRunRef.current = doRun;
-  useEffect(() => {
-    if (roadTestBackRef.current && appView === 'app' && tab === 'dyno') doRunRef.current();
-  }, [appView, tab]);
 
   // Keep the live-engine config in a ref so the loop always uses current tuning
   // without needing to restart the interval every time a table changes.
@@ -913,11 +868,6 @@ export function EcuLabApp() {
     }
     // Pops's messages are CAREER's.
     if (appView === 'messages' && mode !== 'career') navigate({ view: 'desk', tab: null, section: null });
-    // The town needs a car to be in, and only CAREER has one: a reload there with none
-    // chosen lands in the shop.
-    if (appView === 'outside' && (mode !== 'career' || !outsideCarRef.current)) {
-      navigate({ view: mode === 'career' ? 'bay' : 'desk', tab: null, section: null });
-    }
     return undefined;
   }, [appView, mode, tab, career, dispatch, navigate]);
 
@@ -1306,21 +1256,6 @@ export function EcuLabApp() {
   // Until ENTER_CAREER has landed the bench still holds SANDBOX's car, so the shop
   // waits for it rather than offering to work on the wrong one.
   if (appView === 'shop' && !inCareer) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
-  // CAREER, out of the shop: the town, in the car you took. Going back into the shop
-  // brings you back to your desk.
-  if (appView === 'outside') {
-    if (!inCareer || !outsideCar) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
-    return (
-      <React.Suspense fallback={<div style={{ minHeight: '100dvh', background: T.bg }} />}>
-        <TownWorld
-          career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })}
-          onWork={() => goTab('tune')} onDyno={() => goTab('dyno')} onMenu={goMenu} onLearn={goCourse}
-          start={outsideCar} onHome={() => { setOutsideCar(null); navigate({ view: 'bay', tab: null, section: null }); }}
-          onRoadTest={() => { roadTestBackRef.current = true; goTab('dyno'); }}
-        />
-      </React.Suspense>
-    );
-  }
   if (appView === 'tutorial') {
     return (
       // Keyed per book: the tutorial and the course are the same component at the same
@@ -1373,7 +1308,7 @@ export function EcuLabApp() {
         )}
         {appView === 'shop' && inCareer && (
           <Station kind="board">
-            <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onMenu={goMenu} onLearn={goCourse} /></Surface>
+            <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
           </Station>
         )}
         {appView === 'app' && inCareer && !career.working && (() => {
@@ -1608,7 +1543,7 @@ export function EcuLabApp() {
             <Station kind="dyno">
               <Surface name="dynoConsole" kind="console" label="Dyno controls">
                 <DynoConsole
-                  roadTest={roadTest} loadKpa={loadKpa} onLoad={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })}
+                  loadKpa={loadKpa} onLoad={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'loadKpa', value: v })}
                   nitrous={nitrous} nitrousArmed={nitrousArmed} onNitrous={(v) => dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'liveAux', value: { ...liveAux, nitrous: v } })}
                   running={running} phase={dynoPhase} rpm={running || result ? currentRpm : 0} onRun={doRun}
                 />
@@ -1616,30 +1551,28 @@ export function EcuLabApp() {
               <Surface name="dynoMonitor" kind="monitor" label="Dyno computer">
               <Computer
                 label="Dyno computer" screens={keys} current={shown} onScreen={pick}
-                title={roadTest ? 'Road test logger' : 'Caribou Dyno'}
-                status={running ? `${Math.round(currentRpm)} rpm` : result && !roadTest ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
+                title="Caribou Dyno"
+                status={running ? `${Math.round(currentRpm)} rpm` : result ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
               >
                 {!result && !(runs.length > 0 && dynoView === 'history') && (
                   // The run sheet, as dyno software shows one before the first pull: what is on
                   // the rollers and what the pull will do. The curves, the log and the score
                   // replace it once a pull is made.
                   <div className={deskApps.runSheet}>
-                    <div className={deskApps.runSheetHead}>{roadTest ? 'Road test: ready to log' : 'Ready to run'}</div>
+                    <div className={deskApps.runSheetHead}>Ready to run</div>
                     <dl className={deskApps.runSheetList}>
                       <dt>Car</dt><dd>{inCareer && jobOnBay ? `${jobOnBay.customer.name}'s ${jobOnBay.customer.car}` : 'The shop car, strapped down'}</dd>
                       <dt>Engine</dt><dd>{activePreset ? activePreset.name : 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
-                      <dt>Pull</dt><dd>{roadTest ? `Full throttle in a gear, to the ${engineDerived.redline.toLocaleString('en-US')} rpm limiter` : `${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
+                      <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
                       <dt>Fuel</dt><dd>{(() => { const f = FUEL_CHOICES[build.octaneIdx] ?? FUEL_CHOICES[0]; return f.flex ? `Flex fuel, E${Math.round(build.ethanolPct ?? 0)}` : /^\d+$/.test(f.label) ? `${f.label} octane` : f.label; })()}</dd>
                     </dl>
                     <p className={deskApps.runSheetNote}>
-                      {roadTest
-                        ? 'The shop has no dyno yet. Run a road test from the console: you drive the pull, and the logger records the wideband and the ECU all the way up.'
-                        : 'Press Run a pull on the console. The power and torque curves draw as it sweeps; the pull log, the datalog and the score come up here after.'}
+                      Press Run a pull on the console. The power and torque curves draw as it sweeps; the pull log, the datalog and the score come up here after.
                     </p>
                   </div>
                 )}
 
-                {result && runs[1] && !running && !roadTest && shown === 'result' && (() => {
+                {result && runs[1] && !running && shown === 'result' && (() => {
                   const prev = runs[1];
                   const dHp = result.peakHp - prev.peakHp;
                   const dTq = result.peakTq - prev.peakTq;
@@ -1726,7 +1659,6 @@ export function EcuLabApp() {
   // Moving round the laptop and the shop is moving between screens, so it costs what a nav
   // tap does (`changeTab`): the tuning grid's cursor does not come back with you.
   const deskOpen = (t) => {
-    if (t === 'outside') { setPickCar(true); return; }
     if (t === 'board') { changeTab('shop'); return; }
     if (t === 'messages') { deskGo('messages'); return; }
     if (t !== 'learn') { changeTab(t); return; }
@@ -1742,7 +1674,7 @@ export function EcuLabApp() {
   // lift holds one) is up on the lift. SANDBOX keeps the shop's own two.
   const lookOf = (jobId) => { const c = jobId ? jobById(jobId)?.customer : null; return c ? { body: c.body, color: c.color } : null; };
   const shopCars = inCareer
-    ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null), rollers: !roadTest }
+    ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null) }
     : undefined;
   // ---- the game's flow: the next step, from what is true now (flow.js) ----
   const attentionList = Object.entries(attention)
@@ -1760,9 +1692,7 @@ export function EcuLabApp() {
     working: inCareer && !!career.working,
     unread: inCareer ? unreadCount(career) : 0,
     newShop: inCareer && (career.history?.length ?? 0) === 0,
-    roadTest,
     buildJob: buildOpen,
-    own: !!jobOnBay?.own,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (
@@ -1820,7 +1750,7 @@ export function EcuLabApp() {
         apps={inCareer ? CAREER_APPS : null}
         onOpen={deskOpen}
         onDesktop={() => deskGo('desk')}
-        onBay={() => deskGo('bay')} outside={inCareer} town={inCareer && TOWN_WORLD}
+        onBay={() => deskGo('bay')} board={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}
@@ -1838,13 +1768,6 @@ export function EcuLabApp() {
       </Desk>
       {/* In the top layer when open, so where it sits in the tree does not matter. */}
       <CommandPalette open={paletteOpen} onClose={closePalette} commands={paletteCommands} />
-      {pickCar && inCareer && (
-        <CarPicker
-          career={career}
-          onPick={(car) => { setPickCar(false); setOutsideCar(car); navigate({ view: 'outside', tab: null, section: null }); }}
-          onClose={() => setPickCar(false)}
-        />
-      )}
       </PullTraceContext.Provider>
     </div>
   );

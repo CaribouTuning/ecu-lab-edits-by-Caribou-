@@ -247,7 +247,7 @@ describe('the engine stand\'s parts', () => {
     expect(window.location.hash).toBe('#/');
 
     enterSandbox();
-    expect(screen.queryByText('Your tuning shop')).toBeNull();
+    expect(screen.queryByTestId('shop-money')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
   });
 });

@@ -1,10 +1,10 @@
 /**
  * Your shop, behind the laptop: the room the sandbox happens in.
  *
- * Seen from your desk, the garage door at the far end is open and the street goes past
- * outside (cars, trees, the houses opposite). The dyno is on the left with a car on its
+ * Seen from your desk, the roller door at the far end is down: the shop is the whole world
+ * of the game. The dyno is on the left with a car on its
  * rollers, a car is up on the lift on the right, and between them, nearer, the engine you
- * are building runs on its stand. The CARIBOU TUNING sign is on the back wall, left of the door.
+ * are building runs on its stand. The shop's sign is on the back wall, left of the door.
  *
  * Two camera poses: `desk`, sitting at the desk looking over the laptop, and `bay`, stood
  * up looking at the whole shop with the laptop shut. The scene glides between them.
@@ -14,13 +14,12 @@
  */
 
 import { world as W } from '../tokens.js';
-import { THREE, box, cyl, floorPlane, glow, groundPlane } from '../world/gfx.js';
+import { THREE, box, cyl, floorPlane, glow } from '../world/gfx.js';
 import { concreteFloor, realize, roomReflections } from './realize.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
 import { dressShop } from './shopDetail.js';
-import { makeDyno, makeLift, makeRollupDoor, makeRoundTree, makeTree } from '../world/models/props.js';
-import { makeBuilding } from '../world/models/buildings.js';
+import { makeDyno, makeLift } from '../world/models/props.js';
 
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
@@ -215,45 +214,70 @@ const AT = {
 };
 
 /**
- * A sign board lettered by hand: the shop's name in the interface's handwriting, inked on
- * paper with a wash underline, rather than the career town's pixel lettering. The texture
- * is redrawn once the handwriting font has loaded, so it never keeps a fallback face.
- * @param {string} text @param {number} w metres @param {number} h metres
+ * A shop sign as a sign maker would make it: a steel panel painted the shop's dark colour,
+ * the name in heavy white letters, a smaller line under it, held off the wall on four
+ * stand-off bolts. Lettered in the interface's own face, redrawn once that face has loaded.
+ * @param {string} text @param {string} sub the smaller line, or '' for none
+ * @param {number} w metres @param {number} h metres
  */
-function handSign(text, w, h) {
+function paintedSign(text, sub, w, h) {
   const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = Math.round(640 * (h / w));
+  canvas.width = 1024;
+  canvas.height = Math.round(1024 * (h / w));
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const face = "'Inter', system-ui, sans-serif";
   const draw = () => {
     const g = canvas.getContext('2d');
     if (!g) return;
     const { width: cw, height: ch } = canvas;
-    g.fillStyle = W.sketch.paper;
+    g.fillStyle = W.wallBlack;
     g.fillRect(0, 0, cw, ch);
-    g.strokeStyle = W.sketch.ink;
-    g.lineWidth = 5;
-    g.strokeRect(8, 8, cw - 16, ch - 16);
-    g.fillStyle = W.toolBlue;
-    g.globalAlpha = 0.35;
-    g.fillRect(40, ch * 0.7, cw - 80, ch * 0.12);
-    g.globalAlpha = 1;
-    g.fillStyle = W.sketch.ink;
-    g.font = `${Math.round(ch * 0.58)}px 'Patrick Hand', cursive`;
+    // A painted pinstripe a little in from the edge.
+    g.strokeStyle = W.floorStripe;
+    g.lineWidth = 4;
+    g.strokeRect(18, 18, cw - 36, ch - 36);
+    g.fillStyle = W.white;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText(text, cw / 2, ch * 0.5);
+    let size = Math.round(ch * (sub ? 0.42 : 0.55));
+    g.font = `800 ${size}px ${face}`;
+    while (g.measureText(text).width > cw - 120 && size > 10) { size -= 2; g.font = `800 ${size}px ${face}`; }
+    g.fillText(text, cw / 2, ch * (sub ? 0.42 : 0.52));
+    if (sub) {
+      g.fillStyle = W.metalLight;
+      g.font = `500 ${Math.round(ch * 0.14)}px ${face}`;
+      g.fillText(sub, cw / 2, ch * 0.74);
+    }
     tex.needsUpdate = true;
   };
   draw();
-  document.fonts?.load(`40px 'Patrick Hand'`).then(draw, () => {});
-  const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), [
-    ...Array(4).fill(new THREE.MeshToonMaterial({ color: W.sketch.ink })),
-    new THREE.MeshBasicMaterial({ map: tex }),
-    new THREE.MeshToonMaterial({ color: W.sketch.ink }),
-  ]);
-  return board;
+  document.fonts?.load(`800 40px 'Inter'`).then(draw, () => {});
+  const sign = new THREE.Group();
+  const edge = new THREE.MeshStandardMaterial({ color: W.wallBlack, roughness: 0.5, metalness: 0.3 });
+  const front = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, metalness: 0.1 });
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), [edge, edge, edge, edge, front, edge]);
+  panel.position.z = 0.05;
+  panel.castShadow = true;
+  sign.add(panel);
+  for (const x of [-1, 1]) for (const y of [-1, 1]) sign.add(cyl(0.02, 0.02, 0.06, W.metalLight, { axis: 'z', x: x * (w / 2 - 0.08), y: y * (h / 2 - 0.08), z: 0.05, edge: false }));
+  return sign;
+}
+
+/**
+ * The roller door, down: corrugated steel slats between two guide rails, a bottom rail on
+ * the floor. The shop is closed to the street; everything happens inside.
+ * @param {number} w @param {number} h metres
+ */
+function closedDoor(w, h) {
+  const g = new THREE.Group();
+  g.add(box(w, h, 0.06, W.corrugated, { y: h / 2 }));
+  // The slats' folds, every quarter metre.
+  for (let y = 0.25; y < h; y += 0.25) g.add(box(w, 0.03, 0.03, W.metal, { y, z: 0.035, cast: false, edge: false }));
+  g.add(box(w, 0.08, 0.1, W.metalDark, { y: 0.04, z: 0.02 }));
+  for (const s of [-1, 1]) g.add(box(0.12, h + 0.3, 0.16, W.metalDark, { x: s * (w / 2 + 0.06), y: (h + 0.3) / 2 }));
+  return g;
 }
 
 /**
@@ -345,9 +369,11 @@ export function buildShopScene(stage, init) {
   const root = new THREE.Group();
   scene.add(root);
   stage.setTime(0.15, false);
-  stage.setDriving(true);
-  // Lit as a shop is: overhead LED strips do the work. Daylight comes in only through the
-  // open door, the sky's fill is what the walls bounce, and the room is what metal reflects.
+  // A closed room: nothing of the sky shows round it, and there is no haze in a shop.
+  scene.background = new THREE.Color(W.wallBlack);
+  scene.fog = null;
+  // Lit as a shop is: overhead LED strips do the work, with the door down. The sky's fill is
+  // what the walls bounce, and the room is what metal reflects.
   stage.hemi.intensity = 0.3;
   stage.sun.intensity = 0.7;
   stage.sun.castShadow = false;
@@ -370,15 +396,22 @@ export function buildShopScene(stage, init) {
   root.add(box(6.35, 5, 0.3, wallC, { x: -4.825, y: 2.5, z: -7.15 }));
   root.add(box(3.15, 5, 0.3, wallC, { x: 6.425, y: 2.5, z: -7.15 }));
   root.add(box(6.5, 1.4, 0.3, wallC, { x: 1.6, y: 4.3, z: -7.15 }));
-  const door = makeRollupDoor(6.5);
-  door.position.set(1.6, 0, -7.2);
+  const door = closedDoor(6.5, 3.6);
+  door.position.set(1.6, 0, -7.12);
   root.add(door);
-  const sign = handSign('Caribou Tuning', 5.4, 1.1);
-  sign.position.set(-4.85, 3.3, -6.95);
+  const sign = paintedSign('Caribou Tuning', 'Engine building and dyno tuning', 4.6, 1.15);
+  sign.position.set(-4.85, 3.35, -7.0);
   root.add(sign);
-  // The job board on the left wall: a cork board of tickets, by the dyno.
-  const cork = box(0.12, 1.5, 2.2, W.woodLight, { x: -7.95, y: 2.1, z: -4.9 });
-  root.add(cork);
+  // The job board on the left wall, by the dyno: a whiteboard in an aluminium frame with a
+  // marker tray, the jobs' work orders held on it by magnets.
+  const whiteboard = new THREE.Group();
+  whiteboard.userData.spot = 'board';
+  whiteboard.position.set(-7.97, 2.1, -4.9);
+  whiteboard.add(box(0.06, 1.5, 2.2, W.white));
+  for (const y of [-0.77, 0.77]) whiteboard.add(box(0.08, 0.04, 2.28, W.metalLight, { x: 0.01, y }));
+  for (const z of [-1.12, 1.12]) whiteboard.add(box(0.08, 1.58, 0.04, W.metalLight, { x: 0.01, z }));
+  whiteboard.add(box(0.12, 0.03, 1.6, W.metalLight, { x: 0.07, y: -0.78 }));
+  root.add(whiteboard);
   // Its face, where the board's real tickets are pinned (the page's, ShopBackdrop.jsx); the
   // painted ones below stand in for them seen from across the shop.
   const boardAt = new THREE.Object3D();
@@ -386,20 +419,21 @@ export function buildShopScene(stage, init) {
   boardAt.rotation.y = Math.PI / 2;
   root.add(boardAt);
   const tickets = new THREE.Group();
+  tickets.userData.spot = 'board';
   root.add(tickets);
-  // Job tickets pinned up in rows, a pin in each, one in the shop's blue for today's job.
+  // Work orders up in rows, a magnet holding each, today's job in the shop's blue.
   for (let r = 0; r < 3; r += 1) {
     for (let c = 0; c < 4; c += 1) {
       if ((r * 4 + c) % 5 === 3) continue;
       const y = 2.55 - r * 0.46 + ((c * 7 + r * 3) % 3) * 0.03;
       const z = -5.75 + c * 0.56;
-      tickets.add(box(0.03, 0.36, 0.38, r === 0 && c === 1 ? W.toolBlue : W.white, { x: -7.87, y, z, edge: true }));
-      tickets.add(cyl(0.025, 0.025, 0.05, W.toolRed, { axis: 'x', x: -7.84, y: y + 0.13, z, edge: false }));
+      tickets.add(box(0.01, 0.36, 0.28, r === 0 && c === 1 ? W.toolBlue : W.plaster, { x: -7.93, y, z, edge: true }));
+      tickets.add(cyl(0.02, 0.02, 0.02, W.black, { axis: 'x', x: -7.92, y: y + 0.14, z, edge: false }));
     }
   }
-  const jobSign = handSign('Jobs', 1.2, 0.36);
+  const jobSign = paintedSign('Job board', '', 1.3, 0.3);
   jobSign.rotation.y = Math.PI / 2;
-  jobSign.position.set(-7.9, 3.1, -4.9);
+  jobSign.position.set(-8.02, 3.1, -4.9);
   root.add(jobSign);
 
   // Ceiling LED strip fixtures in rows over the work, the way a shop is lit: long, even,
@@ -429,32 +463,6 @@ export function buildShopScene(stage, init) {
     key.shadow.radius = 4;
     scene.add(key, key.target);
   }
-  // ---- outside: the street ----
-  const outside = groundPlane(160, 60, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3 });
-  outside.position.set(0, -0.02, -38);
-  root.add(outside);
-  root.add(floorPlane(160, 9, W.asphalt, { y: 0.0, z: -14 }));
-  root.add(floorPlane(160, 2.4, W.concrete, { y: 0.01, z: -8.6 }));
-  for (let i = -8; i <= 8; i += 1) root.add(box(1.6, 0.012, 0.15, W.roadLine, { x: i * 4, y: 0.02, z: -14, edge: false, cast: false }));
-  for (const [x, z, k] of [[-12, -20, 0], [-4, -22, 1], [6, -21, 2], [15, -20, 3]]) {
-    const b = makeBuilding({ w: 8, d: 7, h: 5 + (k % 2), wall: [W.plaster, W.brick, W.wallBlue, W.wallGreen][k], trim: W.concreteLight, roof: W.roof, roofKind: 'gable', doorX: 0, doorW: 1.4, winCols: 2 });
-    b.position.set(x, 0, z);
-    root.add(b);
-  }
-  for (const [x, z, k] of [[-8, -18, 1], [1, -18.5, 2], [10, -18, 3], [-17, -18, 4]]) {
-    const t = k % 2 ? makeTree(k) : makeRoundTree(k);
-    t.position.set(x, 0, z);
-    root.add(t);
-  }
-  // A few cars going by, each lane its own way, wrapping round past the edge of the view.
-  const traffic = [['blue', 'sedan', -12.6, 9, 0], ['red', 'hatch', -15.4, -7, 20], ['white', 'pickup', -12.6, 8, -24]].map(([color, body, z, v, x0]) => {
-    const c = makeCar({ body: /** @type {string} */ (body), color: /** @type {string} */ (color) });
-    c.group.position.set(/** @type {number} */ (x0), 0, /** @type {number} */ (z));
-    c.group.rotation.y = /** @type {number} */ (v) > 0 ? Math.PI / 2 : -Math.PI / 2;
-    root.add(c.group);
-    return { c, v: /** @type {number} */ (v) };
-  });
-
   // ---- the dyno, and a car on it ----
   let dyno = makeDyno(true, { monitor: false, fanZ: -2.8 });
   dyno.position.copy(AT.dyno);
@@ -561,17 +569,18 @@ export function buildShopScene(stage, init) {
     if (tall === boardTall) return;
     boardTall = tall;
     const [w, h] = tall ? [1.6, 2.3] : [2.2, 1.5];
-    cork.scale.set(1, h / 1.5, w / 2.2);
-    cork.position.y = tall ? 2.45 : 2.1;
-    boardAt.position.y = cork.position.y;
+    whiteboard.scale.set(1, h / 1.5, w / 2.2);
+    whiteboard.position.y = tall ? 2.45 : 2.1;
+    boardAt.position.y = whiteboard.position.y;
     surfaces.board.w = w - 0.16;
     surfaces.board.h = h - 0.1;
-    jobSign.position.y = cork.position.y + h / 2 + 0.45;
+    jobSign.position.y = whiteboard.position.y + h / 2 + 0.45;
     poseCache.clear();
   };
 
   // ---- your desk, and the laptop on it ----
   const desk = new THREE.Group();
+  desk.userData.spot = 'laptop';
   desk.position.copy(AT.desk);
   desk.add(box(3.2, 0.08, 1.2, W.woodLight, { y: 0.8 }));
   for (const x of [-1.5, 1.5]) desk.add(box(0.1, 0.8, 1.0, W.woodDark, { x, y: 0.4, edge: false }));
@@ -610,27 +619,6 @@ export function buildShopScene(stage, init) {
   let lidTarget = 0;
 
   const poseCache = new Map();
-  /**
-   * Square on to a face, close enough that it fills the screen with a margin: the camera
-   * looks along the face's own normal from the distance that fits both its width and height.
-   * @param {keyof typeof surfaces} name
-   */
-  const squareOnPose = (name) => {
-    if (poseAspect !== cam.aspect) { poseCache.clear(); poseAspect = cam.aspect; }
-    const hit = poseCache.get(name);
-    if (hit) return hit;
-    const sf = surfaces[name];
-    root.updateMatrixWorld(true);
-    const c = new THREE.Vector3(); const q = new THREE.Quaternion();
-    sf.at.getWorldPosition(c); sf.at.getWorldQuaternion(q);
-    const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
-    const fov = 40;
-    const tv = Math.tan(THREE.MathUtils.degToRad(fov / 2));
-    const d = Math.max(sf.w / (2 * 0.94 * tv * cam.aspect), sf.h / (2 * 0.9 * tv));
-    const p = { pos: c.clone().addScaledVector(n, d), look: c, fov, exact: true };
-    poseCache.set(name, p);
-    return p;
-  };
 
   /**
    * What of the view the page leaves clear, in pixels from each edge of the canvas: the
@@ -646,40 +634,43 @@ export function buildShopScene(stage, init) {
    * too, beside its computer, so you see each part go on as you choose it. The camera looks
    * along the monitor's own normal, tipped a little down onto the box, and is moved until
    * every corner lands inside the clear area: an exact fit, not an estimate.
-   * @param {'dyno'|'stand'|'build'} name
+   * @param {'dyno'|'stand'|'build'|'board'} name
    */
   const stationPose = (name) => {
     const key = `station:${name}:${cam.aspect.toFixed(3)}:${frame.top}:${frame.bottom}:${frame.left}:${frame.right}:${frame.h}`;
     const hit = poseCache.get(key);
     if (hit) return hit;
-    const cart = name === 'dyno' ? dynoCart : name === 'build' ? buildCart : standCart;
+    const cart = name === 'dyno' ? dynoCart : name === 'build' ? buildCart : name === 'board' ? null : standCart;
     root.updateMatrixWorld(true);
     /** @type {THREE.Vector3[]} */
     const pts = [];
-    for (const sf of [cart.monitor, cart.console]) {
+    // The board is read square on, its frame inside the clear area like a station's screen.
+    for (const sf of cart ? [cart.monitor, cart.console] : [surfaces.board]) {
       if (!sf.w) continue;
+      // The bezel round the face too: the whole screen is in view, not just its picture.
+      const bz = 0.04;
       for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-        pts.push(new THREE.Vector3((x * sf.w) / 2, (y * sf.h) / 2, 0).applyMatrix4(sf.at.matrixWorld));
+        pts.push(new THREE.Vector3(x * (sf.w / 2 + bz), y * (sf.h / 2 + bz), 0).applyMatrix4(sf.at.matrixWorld));
       }
     }
     // The engine beside its computer only where there is the height for both: on a phone
     // held sideways the computer alone fills the view, and the software shows the engine.
-    if (name !== 'dyno' && cartShape === 'wide' && frame.h - frame.top - frame.bottom > 420) {
+    if ((name === 'stand' || name === 'build') && cartShape === 'wide' && frame.h - frame.top - frame.bottom > 420) {
       // The whole stand, its feet on the floor, not only the engine on it.
       const bb = new THREE.Box3().setFromObject((name === 'build' ? buildStand : runStand).group);
       for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) pts.push(new THREE.Vector3(x, y, z));
     }
     const center = pts.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / pts.length);
-    const q = new THREE.Quaternion(); cart.monitor.at.getWorldQuaternion(q);
+    const q = new THREE.Quaternion(); (cart ? cart.monitor.at : boardAt).getWorldQuaternion(q);
     const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0).normalize();
-    const pitch = 0.14;
+    const pitch = cart ? 0.14 : 0;
     const dir = n.clone().multiplyScalar(Math.cos(pitch)).add(new THREE.Vector3(0, Math.sin(pitch), 0)).normalize();
     const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
     const up = dir.clone().cross(right).normalize();
     const fov = 38;
     probe.fov = fov; probe.aspect = cam.aspect; probe.near = 0.05; probe.far = 200; probe.updateProjectionMatrix();
     // The clear area in normalised device coordinates, with a small margin all round.
-    const m = 10;
+    const m = Math.max(12, Math.min(frame.w, frame.h - frame.top) * 0.03);
     const fw = Math.max(1, frame.w); const fh = Math.max(1, frame.h);
     const L = -1 + (2 * (frame.left + m)) / fw; const R = 1 - (2 * (frame.right + m)) / fw;
     const T = 1 - (2 * (frame.top + m)) / fh; const B = -1 + (2 * (frame.bottom + m)) / fh;
@@ -716,7 +707,6 @@ export function buildShopScene(stage, init) {
     stand: new THREE.Vector3(AT.stand.x + 0.6, 2.0, AT.stand.z),
     build: new THREE.Vector3(AT.build.x + 0.6, 2.0, AT.build.z),
     laptop: new THREE.Vector3(AT.desk.x, 1.1, AT.desk.z + 0.1),
-    door: new THREE.Vector3(1.6, 2.2, -7),
     board: new THREE.Vector3(-7.6, 2.3, -4.9),
   };
   let t = 0;
@@ -734,8 +724,7 @@ export function buildShopScene(stage, init) {
       if (poseAspect !== cam.aspect) { poseCache.clear(); poseAspect = cam.aspect; }
       // The board is read square on, close enough to fill the screen. At the dyno or the
       // stand you stand at its cart, the whole of it in view: there is nothing to lean in to.
-      const p = pose === 'board' ? squareOnPose('board')
-        : pose === 'dyno' || pose === 'stand' || pose === 'build' ? stationPose(pose)
+      const p = pose === 'dyno' || pose === 'stand' || pose === 'build' || pose === 'board' ? stationPose(pose)
           : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
       if (p === target) return;
       ceiling.visible = p !== POSES.bayTall;
@@ -750,14 +739,15 @@ export function buildShopScene(stage, init) {
     },
     setCars: placeCars,
     /**
-     * Which station, if any, is at a point on the picture: its cart, its engine and stand, or
-     * the dyno and the car on it. The shop is the menu: these are what you click.
+     * Which place, if any, is at a point on the picture: a station's cart, its engine and
+     * stand, the dyno and the car on it, the job board, or the desk with the laptop. The
+     * shop is the menu: these are what you click.
      * @param {number} x @param {number} y normalised device coordinates
-     * @returns {'dyno'|'stand'|'build'|null}
+     * @returns {'dyno'|'stand'|'build'|'board'|'laptop'|null}
      */
     pickAt(x, y) {
       ray.setFromCamera(new THREE.Vector2(x, y), cam);
-      const targets = [dynoCart.group, standCart.group, buildCart.group, buildStand.group, runStand.group, dyno, dynoCar?.group].filter(Boolean);
+      const targets = [dynoCart.group, standCart.group, buildCart.group, buildStand.group, runStand.group, dyno, dynoCar?.group, whiteboard, tickets, desk].filter(Boolean);
       const hit = ray.intersectObjects(/** @type {THREE.Object3D[]} */ (targets), true)[0];
       for (let o = hit?.object ?? null; o; o = o.parent) {
         if (o.userData.spot) return o.userData.spot;
@@ -782,7 +772,7 @@ export function buildShopScene(stage, init) {
       const r = (x) => Math.round(x);
       if (r(f.top) === frame.top && r(f.bottom) === frame.bottom && r(f.left) === frame.left && r(f.right) === frame.right && r(f.w) === frame.w && r(f.h) === frame.h) return;
       frame.top = r(f.top); frame.bottom = r(f.bottom); frame.left = r(f.left); frame.right = r(f.right); frame.w = r(f.w); frame.h = r(f.h);
-      if (lastPose === 'dyno' || lastPose === 'stand' || lastPose === 'build') api.setPose(/** @type {any} */ (lastPose));
+      if (lastPose === 'dyno' || lastPose === 'stand' || lastPose === 'build' || lastPose === 'board') api.setPose(/** @type {any} */ (lastPose));
     },
     /** @returns {boolean} the camera is still on its way somewhere */
     moving() { return blend < 1; },
@@ -828,12 +818,6 @@ export function buildShopScene(stage, init) {
       hinge.rotation.x = -(1 - lid) * 1.85;
       // Shut, the screen is face down inside: only the black lid shows.
       lidScreen.visible = lid < 0.9;
-      for (const tr of traffic) {
-        tr.c.group.position.x += tr.v * dt;
-        if (tr.c.group.position.x > 40) tr.c.group.position.x = -40;
-        if (tr.c.group.position.x < -40) tr.c.group.position.x = 40;
-        tr.c.roll?.(Math.abs(tr.v) * dt);
-      }
       buildStand.update(dt, 0);
       runStand.update(dt, rpm);
       // The dyno's rollers and the car on them idle over; the lift stays put. In a pull the

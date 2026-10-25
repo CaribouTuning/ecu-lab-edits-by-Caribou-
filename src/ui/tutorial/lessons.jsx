@@ -564,9 +564,9 @@ function Compare() {
       <Goal learn="prove a retune worked, with numbers." need="Lessons 4.1 to 4.3." />
       <P>A retune is not finished until a pull says so. Here is the whole job, measured by the game:</P>
       <Worked title="cold air intake, start to finish" rows={[
-        ['Stock', `${s.result.peakHp} whp · clean log`],
-        ['Intake fitted, nothing retuned', `${f.result.peakHp} whp · ${f.result.events.map((e) => e.type).join(', ') || 'clean'}`],
-        [`MAF scalar ${INTAKE_MAF_SCALAR.toFixed(2)} + VE from the log`, `${r.result.peakHp} whp · ${r.result.events.map((e) => e.type).join(', ') || 'clean log'}`],
+        ['Stock', `${s.result.peakHp} whp, clean log`],
+        ['Intake fitted, nothing retuned', `${f.result.peakHp} whp, ${f.result.events.map((e) => e.type).join(', ') || 'clean'}`],
+        [`MAF scalar ${INTAKE_MAF_SCALAR.toFixed(2)} + VE from the log`, `${r.result.peakHp} whp, ${r.result.events.map((e) => e.type).join(', ') || 'clean log'}`],
       ]}>
         The part was worth {r.result.peakHp - s.result.peakHp} whp.{' '}
         {r.result.peakHp > f.result.peakHp
@@ -634,7 +634,7 @@ function TheRest() {
       <H>LIVE</H>
       <P>The ECU running in real time. Start the engine, rev it, watch idle hold when the A/C switches on, try launch control, break a sensor on purpose and see what the protections do. Its datalog records every channel, and TUNE › AIRFLOW corrects part-throttle VE from it the same way it does from a pull.</P>
       <H>Racing and the scores</H>
-      <P>Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), combined with real output into a Pull Score with no ceiling. In CAREER the engine goes into a car at the drag strip: trap speed measures power, the 60-foot time measures traction, and the fastest engine does not always win.</P>
+      <P>Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), combined with real output into a Pull Score with no ceiling. In CAREER each customer’s car is judged against their ticket when it goes home: the checks on it say what the pull has to show.</P>
       <Did>You have seen every part of the game and know which lesson to come back to for each.</Did>
     </>
   );

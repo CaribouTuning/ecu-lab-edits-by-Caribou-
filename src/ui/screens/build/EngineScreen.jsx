@@ -178,7 +178,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
               else on this screen does. */}
           {ownOpen && (
             <EngineSpecForm
-              submitLabel="REPLACE THE ENGINE WITH THIS ONE"
+              submitLabel="Replace the engine with this one"
               onCreate={(patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); setOwnOpen(false); }}
             />
           )}

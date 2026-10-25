@@ -10,7 +10,6 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { makeInterior } from './interior.js';
 import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, shade, sign, toon } from '../gfx.js';
 
 /**
@@ -57,8 +56,6 @@ export const WHEEL_STYLES = {
  * @property {string|null} [underglow] a `world` neon key
  * @property {string} [plate]
  * @property {EngineBay} [engine]
- * @property {boolean} [interior] build the cabin's inside and a driver (for the car you drive)
- * @property {string} [model] what the car is called (a dealer model or a customer's car): it picks the cabin
  */
 
 /**
@@ -200,10 +197,8 @@ export function makeCar(spec = {}) {
   const top = S.top + lift - drop;
   const gw0 = Wd * 0.94;
   const gw1 = Wd * 0.8;
-  // The glass, roof and pillars. On the car you drive they are a group of their own, hidden when
-  // the camera is in the driver's seat; on every other car they are part of the merged body.
-  const shell = spec.interior ? new THREE.Group() : car;
-  if (spec.interior) { shell.userData.dynamic = true; car.add(shell); }
+  // The glass, roof and pillars, part of the merged body.
+  const shell = car;
   if (!S.open) {
     shell.add(loftMesh({ y: belt, z0: zr0, z1: zf0, w: gw0 }, { y: top - 0.04, z0: zr1, z1: zf1, w: gw1 }, W.glassDark, { mat: toon(W.glassDark, { opacity: 0.9 }) }));
     shell.add(loftMesh({ y: top - 0.045, z0: zr1 - 0.08, z1: zf1 + 0.04, w: gw1 + 0.04 }, { y: top, z0: zr1 - 0.06, z1: zf1 + 0.02, w: gw1 + 0.02 }, paint, { mat: paintMat }));
@@ -238,38 +233,15 @@ export function makeCar(spec = {}) {
   if (spec.stripes && !S.open) {
     shell.add(loftMesh({ y: top + 0.002, z0: zr1 - 0.06, z1: zf1 + 0.02, w: 0.34 }, { y: top + 0.004, z0: zr1 - 0.06, z1: zf1 + 0.02, w: 0.3 }, paintOf(spec.stripes), { edge: false }));
   }
-  // Interior: seats, dash, wheel, and the driver's head is the person's own.
+  // Interior: seats, dash and wheel.
   const seatY = belt - 0.2;
-  // Seen through the glass from outside; from the driver's seat the interior's own seats take over.
+  // Seen through the glass.
   for (const s of [-1, 1]) shell.add(box(0.42, 0.5, 0.12, W.wallBlack, { x: s * 0.4, y: seatY + 0.2, z: (zr0 + zf0) / 2 - 0.15, edge: false }));
   for (const s of [-1, 1]) shell.add(box(0.42, 0.1, 0.45, W.wallBlack, { x: s * 0.4, y: seatY, z: (zr0 + zf0) / 2 + 0.05, edge: false }));
-  rig.seat = new THREE.Vector3(0.4, seatY + 0.22, (zr0 + zf0) / 2 + 0.1);
-  /** @type {ReturnType<typeof makeInterior>|null} */
-  let inside = null;
-  if (spec.interior) {
-    inside = makeInterior({ Wd, belt, top, zr1, zf0, zf1, gw0, gw1, seat: rig.seat, body: spec.body ?? 'coupe', name: spec.model ?? '', open: !!S.open });
-    inside.group.userData.dynamic = true;
-    // Only from the driver's seat: the cabin is built for the view from inside, and seen
-    // from the chase camera its arms and headrests came up through the roof. From outside the
-    // shell's own seats show through the glass.
-    inside.group.visible = false;
-    car.add(inside.group);
-  } else {
-    car.add(box(Wd * 0.8, 0.14, 0.18, W.wallBlack, { y: belt - 0.05, z: zf0 - 0.2, edge: false }));
-    const wheel = cyl(0.14, 0.14, 0.03, W.black, { axis: 'z', x: 0.4, y: belt + 0.05, z: zf0 - 0.45, edge: false, seg: 12 });
-    wheel.rotation.x = -0.9;
-    car.add(wheel);
-  }
-  /** Hide the roof, glass and pillars, for a camera inside the cabin. @param {boolean} on */
-  rig.setCockpit = (on) => { if (spec.interior) shell.visible = !on; if (inside) inside.group.visible = on; };
-  /** Turn the steering wheel inside, radians. @param {number} a */
-  rig.setWheel = (a) => inside?.setWheel(a);
-  /** The driver's eye, car-local, for the first-person camera. */
-  rig.eye = inside?.eye ?? null;
-  rig.eyePitch = inside?.pitch ?? 0.09;
-  rig.mirror = inside?.mirror ?? null;
-  /** Move the dial needles inside. @param {number} speed @param {number} rpm @param {boolean[]} [lamps] */
-  rig.setGauges = (speed, rpm, lamps) => inside?.setGauges(speed, rpm, lamps);
+  car.add(box(Wd * 0.8, 0.14, 0.18, W.wallBlack, { y: belt - 0.05, z: zf0 - 0.2, edge: false }));
+  const wheel = cyl(0.14, 0.14, 0.03, W.black, { axis: 'z', x: 0.4, y: belt + 0.05, z: zf0 - 0.45, edge: false, seg: 12 });
+  wheel.rotation.x = -0.9;
+  car.add(wheel);
 
   // ---- lights and trim ----
   const headMat = glow(W.headlight);

@@ -117,7 +117,7 @@ describe('REVERT and the changed count', () => {
     mountAir();
     select({ type: 'range', r1: 0, c1: 0, r2: 1, c2: 1 });
     expect(revertButton()).toBeNull();
-    expect(within(dock()).getByText('Range · 800–1500 RPM × 150–200 kPa · 4 cells')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 800–1500 RPM × 150–200 kPa, 4 cells')).toBeTruthy();
   });
 
   it('titles a changed cell with what it was', () => {
@@ -125,7 +125,7 @@ describe('REVERT and the changed count', () => {
     const v0 = store.tune.ve[1][1];
     writeVe((v, ri, ci) => (ri === 1 && ci === 1 ? v - 5 : v));
     select({ type: 'cell', row: 1, col: 1 });
-    expect(within(dock()).getByText(`1500 RPM · 150 kPa MAP · was ${Math.round(v0)}`)).toBeTruthy();
+    expect(within(dock()).getByText(`1500 RPM, 150 kPa MAP, was ${Math.round(v0)}`)).toBeTruthy();
     expect(revertButton()).toBeTruthy();
   });
 
@@ -133,7 +133,7 @@ describe('REVERT and the changed count', () => {
     mountAir();
     writeVe((v, ri, ci) => (ri === 0 && ci <= 1 ? v - 5 : v));
     select({ type: 'range', r1: 0, c1: 0, r2: 1, c2: 1 });
-    expect(within(dock()).getByText('Range · 800–1500 RPM × 150–200 kPa · 4 cells · 2 changed')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 800–1500 RPM × 150–200 kPa, 4 cells, 2 changed')).toBeTruthy();
   });
 
   it('puts the changed cells back in one undo step, counting only those', () => {

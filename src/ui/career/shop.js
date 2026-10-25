@@ -5,14 +5,11 @@
  * another.
  */
 
-import { defaultLook, STARTING_WARDROBE } from '../world/appearance.js';
 
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
-import { registerCars } from './ownRegistry.js';
-import { withStarter } from './starter.js';
 
 export const SAVE_VERSION = 1;
 export const START_MONEY = 1000;
@@ -56,23 +53,7 @@ export const START_MONEY = 1000;
  * @property {string[]} offers today's walk-in customers (generated job ids)
  * @property {number} [phase] how far through the day it is, 0 morning to 3 night; each
  *   hand-back moves it on, and closing up starts the next morning
- * @property {import('../world/appearance.js').Look} [look] what the tuner wears
- * @property {string[]} [wardrobe] the clothes the tuner owns
- * @property {number[]} [found] golden spanners found in town
- * @property {import('./ownedCars.js').OwnedCar[]} [cars] the tuner's own cars
- * @property {string[]} [looks] paints, wheels and trim bought, by `kind:id`
- * @property {{won: string[], best: Record<string, number>}} [races] rivals beaten, and each car's best ET
- * @property {{day: number, n: number}} [raceDay] races run today
- * @property {number} [meetDay] the day a car was last shown at the meet
- * @property {number} [meets] cars shown at the meet
- * @property {{day: number, n: number}} [junk] digs in the scrapyard today
- * @property {{day: number, p: Record<string, number>, claimed: string[]}} [daily] progress on today's goals
- * @property {number} [streak] days in a row all three goals were done
- * @property {{wall: string, floor: string, neon: string, extras: string[]}} [decor] how the shop is dressed
- * @property {string[]} [ach] achievements earned
  * @property {boolean} [introDone] the welcome has been read
- * @property {boolean} [starterGiven] the first car has been handed over (once, ever)
- * @property {{won: string[], best: Record<string, number>}} [track] circuit rivals beaten, and each car's best lap
  * @property {{ch: number, read: string[], done: boolean}} [saga] the story: the open chapter, messages read, finished (story.js)
  */
 
@@ -94,12 +75,13 @@ export const START_MONEY = 1000;
  * @returns {Career}
  */
 export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
-  return withOffers(withStarter({
+  return withOffers({
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
-    owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
+    // The dyno is Ray's, in the bay from the first day: every job is measured on it.
+    owned: ['laptop', 'wideband', 'dyno'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [], phase: 0, look: defaultLook(), wardrobe: [...STARTING_WARDROBE], cars: [], looks: [], found: [], races: { won: [], best: {} },
-  }));
+    seed: seed >>> 0, offers: [], phase: 0,
+  });
 }
 
 /** Whether the shop has the training and equipment a template needs. @param {Career} c */
@@ -141,23 +123,16 @@ export function reviveCareer(raw) {
   const revived = {
     ...fresh, ...c,
     seed: fresh.seed,
-    owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
+    // A save from when the dyno had to be bought has it now: the shop always had Ray's.
+    owned: Array.isArray(c.owned) ? [...new Set([...c.owned, 'dyno'])] : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
     lifts: Array.isArray(c.lifts) ? c.lifts : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
-    cars: Array.isArray(c.cars) ? c.cars : [],
-    looks: Array.isArray(c.looks) ? c.looks : [],
-    found: Array.isArray(c.found) ? c.found : [],
-    races: c.races && Array.isArray(c.races.won) ? c.races : { won: [], best: {} },
-    // A save from before the starter car has no flag: it has not been given one.
-    starterGiven: !!c.starterGiven,
   };
-  // A shop from before the starter car gets it now, unless it already has cars.
-  const withCar = withStarter(revived);
-  Object.assign(revived, withCar);
-  registerCars(revived);
-  // The cars have to be known before the lifts can be checked: an owned car's job is theirs.
+  // A save from when the shop had cars of its own: those were for driving in town, which
+  // is gone, so they and any job that stood in for one go.
+  for (const k of ['cars', 'starterGiven', 'look', 'wardrobe', 'looks', 'found', 'races', 'raceDay', 'meetDay', 'meets', 'junk', 'daily', 'streak', 'decor', 'ach', 'track']) delete revived[k];
   revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
@@ -167,14 +142,13 @@ export const capacity = (c) => 1 + (c.owned.includes('lift2') ? 1 : 0) + (c.owne
 
 /**
  * What the shop costs to open for a day: rent, and the running costs of what it has
- * grown into (each extra lift is floor space and a tech, the dyno needs power and
- * servicing, the lounge its coffee). Charged every time the day moves on, so growth is
+ * grown into (each extra lift is floor space and a tech, the lounge its coffee). Charged every time the day moves on, so growth is
  * a decision, and money earned has somewhere to go. Never stops play: a shop in the red
  * can still take work, it just cannot buy anything.
  * @param {Career} c
  */
 export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
-  + (c.owned.includes('dyno') ? 60 : 0) + (c.owned.includes('lounge') ? 50 : 0)
+  + (c.owned.includes('lounge') ? 50 : 0)
   + (c.owned.includes('expansion') ? 120 : 0);
 
 /** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */

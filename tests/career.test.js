@@ -80,12 +80,12 @@ describe('grading', () => {
 describe('the shop', () => {
   const { accept, blockers, board, buy, cannotBuy, cannotTrain, capacity, deliver, newCareer, overhead, pageUnlocked, reviveCareer, storeCar, train } = /** @type {any} */ (shop);
 
-  it('starts small: a little money, no reputation, fuel basics only, one lift, no dyno', () => {
+  it('starts small: a little money, no reputation, fuel basics only, one lift, and Ray’s dyno', () => {
     const c = newCareer();
     expect(c.money).toBe(START_MONEY);
     expect(c.rep).toBe(0);
     expect(capacity(c)).toBe(1);
-    expect(c.owned).not.toContain('dyno');
+    expect(c.owned).toContain('dyno');
     expect(['airflow', 'fuel', 'injectors', 'sensors'].every((p) => pageUnlocked(c, p))).toBe(true);
     expect(['spark', 'idle', 'boost', 'vvt', 'nitrous'].some((p) => pageUnlocked(c, p))).toBe(false);
   });
@@ -141,11 +141,10 @@ describe('the shop', () => {
 
   it('money is a decision: you cannot buy what you cannot afford, and buying spends it', () => {
     const c = { ...newCareer(), rep: 20 };
-    expect(cannotBuy(c, 'dyno')).toMatch(/\$5,000 short/);
-    const rich = buy({ ...c, money: 7000 }, 'dyno');
-    expect(rich.owned).toContain('dyno');
+    expect(cannotBuy(c, 'lift2')).toMatch(/\$2,000 short/);
+    const rich = buy({ ...c, money: 4000 }, 'lift2');
+    expect(rich.owned).toContain('lift2');
     expect(rich.money).toBe(1000);
-    expect(rich.milestones).toContain('dyno');
   });
 
   it('training costs money, needs its prerequisites, and opens the real pages', () => {
@@ -163,5 +162,13 @@ describe('the shop', () => {
     const kept = reviveCareer({ ...newCareer(), money: 4321, lifts: [{ jobId: 'no-such-job', car: {} }] });
     expect(kept.money).toBe(4321);
     expect(kept.lifts).toEqual([]);
+  });
+
+  it('a save from when the dyno was bought has Ray’s, and loses the town’s cars and clothes', () => {
+    const old = reviveCareer({ ...newCareer(), owned: ['laptop', 'wideband'], cars: [{ id: 'x' }], wardrobe: ['cap'], races: { won: [], best: {} } });
+    expect(old.owned).toContain('dyno');
+    expect(old.cars).toBeUndefined();
+    expect(old.wardrobe).toBeUndefined();
+    expect(old.races).toBeUndefined();
   });
 });

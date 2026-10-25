@@ -1,10 +1,11 @@
 /**
- * Your shop, drawn behind the laptop (shopScene.js), and its things to click when the laptop
- * is shut: the dyno, the engine on its stand, the job board, the door and the laptop itself.
+ * Your shop, drawn behind the laptop (shopScene.js), and its things to use when the laptop
+ * is shut: the dyno, the build bench, the engine stand, the job board and the laptop itself.
  *
- * The markers are real buttons laid over the picture, kept on their objects as the camera
- * moves, so they work by touch, keyboard and screen reader, and with no WebGL at all (then
- * they sit in a row over a plain backdrop).
+ * The things are the buttons: a click or a tap on the dyno, an engine, a cart's screen, the
+ * desk or the board goes there (`pickAt`). Each also has a real button kept on it as the
+ * camera moves, unseen until the keyboard reaches it, for keyboard and screen reader; with
+ * no WebGL at all they are a row of plain buttons over a plain backdrop.
  *
  * Walked up to the dyno, the stand or the board, the page's own controls are laid onto the
  * things themselves: the dyno computer's screen and console, the stand cart's, the board's
@@ -28,7 +29,6 @@ export const HOTSPOTS = [
   { id: 'build', label: 'Build bench', hint: 'Build the engine, a part at a time' },
   { id: 'stand', label: 'Engine stand', hint: 'Start the engine and run it on the stand' },
   { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
-  { id: 'door', label: 'Go outside', hint: 'Take a car out into town' },
   { id: 'board', label: 'Job board', hint: 'Today, customers, upgrades, training and the books' },
 ];
 
@@ -41,19 +41,20 @@ export const HOTSPOTS = [
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
  * @param {boolean} [props.phone] the device is a phone, not the laptop
- * @param {boolean} [props.outside] CAREER: the job board is on the wall
- * @param {boolean} [props.town] CAREER with its 3-D town (features.js): the garage door is a way out into it
+ * @param {boolean} [props.board] CAREER: the job board is on the wall
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
  * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, outside = false, town = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces, onPick });
+export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces, onPick, board, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
   live.current.onPick = onPick;
+  live.current.board = board;
+  if (live.current.next !== nextSpot) { live.current.next = nextSpot; live.current.nextDirty = true; }
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
@@ -85,10 +86,11 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
     let hovered = null;
     const onMove = (/** @type {PointerEvent} */ e) => {
       if (live.current.mode !== 'bay' || e.pointerType === 'touch') return;
-      const id = shop.pickAt(...ndc(e));
+      const at = shop.pickAt(...ndc(e));
+      const id = at === 'board' && !live.current.board ? null : at;
       if (id === hovered) return;
       hovered = id;
-      shop.hover(id);
+      shop.hover(id ?? live.current.next);
       stage.canvas.style.cursor = id ? 'pointer' : '';
       for (const [k, el] of Object.entries(spots.current)) el?.toggleAttribute('data-hover', k === id);
     };
@@ -98,7 +100,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
       // A tap or a click, not the end of a drag.
       if (live.current.mode !== 'bay' || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
       const id = shop.pickAt(...ndc(e));
-      if (id) live.current.onPick?.(id);
+      if (id && (id !== 'board' || live.current.board)) live.current.onPick?.(id);
     };
     stage.canvas.addEventListener('pointermove', onMove);
     stage.canvas.addEventListener('pointerdown', onDown);
@@ -150,12 +152,14 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
         const l = live.current;
         fit();
         shop.setTickets(l.mode !== 'board');
+        // The next step's station shows itself: its screen a little brighter than the rest.
+        if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); }
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.
         const station = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'build';
         const scene = station || l.mode === 'board';
-        if (station) measureFrame();
+        if (scene) measureFrame();
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
         const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,
@@ -227,7 +231,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
       )}
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer}>
-          {HOTSPOTS.filter((h) => (h.id !== 'board' || outside) && (h.id !== 'door' || (outside && town))).map((h) => (
+          {HOTSPOTS.filter((h) => h.id !== 'board' || board).map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}
@@ -238,7 +242,7 @@ export function ShopBackdrop({ mode, phone = false, outside = false, town = fals
               onClick={() => onPick(h.id)}
               title={h.hint}
             >
-              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.id === 'dyno' && cars?.rollers === false ? 'Road test' : h.label}</span>
+              <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>
             </button>
           ))}
         </div>

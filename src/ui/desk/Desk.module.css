@@ -1,5 +1,8 @@
 /* SANDBOX's laptop on the desk, the shop behind it, and the pages over it (Desk.jsx). */
 
+/* In the shop the page itself never scrolls: a swipe that runs off the end of a screen's own
+   content must not carry on into the page and slide the header away (iOS does that). */
+:global(html):has(.desk), :global(body):has(.desk) { height: 100%; overflow: hidden; overscroll-behavior: none; }
 .desk {
   position: relative;
   height: 100dvh;
@@ -38,8 +41,13 @@
   background: var(--panel); font-size: var(--fs-md); white-space: nowrap;
 }
 .spot:hover .spotLabel, .spot:focus-visible .spotLabel { background: var(--acc); color: var(--acc-on); }
-/* A short line down from the label to the thing it names. */
-.spot::after { content: ''; width: 2px; height: 22px; background: var(--pen); }
+/* Over the 3-D shop the things themselves are what you click (ShopBackdrop.jsx): the
+   buttons stay on them for the keyboard and screen readers, unseen, and a name shows only
+   where the keyboard is, or under the pointer. No tags left standing over the shop. */
+.spotLayer .spot { pointer-events: none; }
+.spotLayer .spotLabel { opacity: 0; transition: opacity 120ms; }
+.spotLayer .spot:focus-visible .spotLabel, .spotLayer .spot[data-hover] .spotLabel { opacity: 1; }
+.spotLayer .spot:focus-visible { outline: none; }
 
 /* ---------- the laptop ---------- */
 /* Centred by margins, not by a -50% translate, and with no perspective on it: a
@@ -400,8 +408,6 @@
 /* Over the shop floor it sits at the top, the shop still in view round it. */
 .bayNext { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: min(720px, calc(100% - 24px)); z-index: 3; }
 .bayNext .next { border: 1px solid var(--line-hi); border-radius: var(--r-md); }
-/* The shop-floor marker of the place the next step is at. */
-.spot[data-next='true'] .spotLabel { background: var(--acc); color: var(--acc-on); }
 
 /* A short screen (a phone held sideways): the station gets the height. The engine's status
    line is the laptop's to show here, and the next step takes one tight line. */
@@ -410,15 +416,3 @@
   .next { padding: 3px 10px; }
   .nextGo { height: 24px; }
 }
-/* The shop floor's markers step back while one place is where the next step is: that one
-   reads in full, the rest are quiet names until the pointer or focus is on them. */
-.spotLayer:has([data-next='true']) .spot:not([data-next='true']) .spotLabel { padding: 2px 8px; font-size: var(--fs-sm); opacity: 0.62; border-width: 1px; }
-.spotLayer:has([data-next='true']) .spot:not([data-next='true'])::after { height: 12px; opacity: 0.5; }
-.spotLayer .spot:not([data-next='true']):hover .spotLabel, .spotLayer .spot:not([data-next='true']):focus-visible .spotLabel { opacity: 1; }
-/* The places that are not next are only names on the floor: no box, no stem, so the shop
-   is not covered in tags. The next place keeps its marker. */
-.spotLayer:has([data-next='true']) .spot:not([data-next='true']) .spotLabel { background: none; border-color: transparent; color: var(--ink); text-shadow: 0 1px 2px var(--bg), 0 0 6px var(--bg); opacity: 0.9; }
-.spotLayer:has([data-next='true']) .spot:not([data-next='true'])::after { display: none; }
-/* The station under the pointer in the picture names itself, as its marker would on hover. */
-.spotLayer .spot[data-hover] .spotLabel,
-.spotLayer:has([data-next='true']) .spot[data-hover]:not([data-next='true']) .spotLabel { opacity: 1; background: var(--acc); color: var(--acc-on); border-color: var(--pen); text-shadow: none; }

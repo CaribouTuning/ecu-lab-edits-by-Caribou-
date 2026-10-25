@@ -22,22 +22,20 @@ Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn
 and the Tuning Course) and Physics (the engine model laid open on your own engine: your
 build, the curves and VE map, every calculation, and the engine running); shut the laptop
 and the dyno and the engine stand (LIVE) are in the shop behind it. Played on a phone, the
-laptop is a phone: the same apps on a home screen. CAREER is done from the same desk: Build and
-Tune on the laptop; look up at the shop for the dyno, the engine stand, the job board on the
-wall (customers, upgrades, training, the books) and the garage door, which puts you in town
-driving the car you pick. Played on a phone, the
-laptop is a phone: the same apps on a home screen, and you put it down to see the shop.
-CAREER's work is done on the same laptop (or phone).
+laptop is a phone: the same apps on a home screen. CAREER is done in the same shop: Tune on the laptop;
+look up at the shop for the dyno, the build bench, the engine stand and the job board on the
+wall (customers, upgrades, training, the books). The things in the shop are what you click.
+Played on a phone, the laptop is a phone, and you put it down to see the shop.
 **TUTORIAL** is five minutes on the basics. **CAREER** is a tuning shop of your own: your
 late dad Ray's, reopened by your uncle Pops, who teaches you the trade by text and email in a
-thirteen-chapter story that ends with you a master tuner. Out in town you drive; you walk
-only inside the buildings you pull up at.
+twelve-chapter story that ends with you a master tuner. Ray's dyno is in the bay from the
+first day, and everything happens inside the shop.
 Customers bring cars with real faults and describe what the car does, never what is wrong
 with it: a cast of named customers, and new walk-ins every day without end, generated
 from faults the simulator genuinely produces and harder as the shop's name grows. Every
 job is graded on the same simulator as everything else: the car you hand back is pulled
 and idled, and power bought with knock or a lean top end is not a finished job. Money
-buys a dyno, lifts and tools and pays the running costs; training opens more of the ECU,
+buys lifts and tools and pays the running costs; training opens more of the ECU,
 and eventually engine building, where customers bring a wish list instead of a fault.
 Its save is separate from SANDBOX's, and switching between them loses nothing.
 
@@ -141,8 +139,8 @@ src/
   ui/            presentation only — no physics below this line
     career/        CAREER: the shop, its customers and jobs, and the grading, which
                    runs the real simulator on the car handed back
-    world/         CAREER's 3D town (three.js, lazy-loaded): walk, drive, race, shop;
-                   see docs/career-world.md
+    desk/          the 3D shop (three.js), its stations and the laptop's apps
+    world/         the 3D toolkit the shop is drawn with: the stage, materials and models
   storage.js     persistence adapter (artifact host / localStorage / memory)
 tests/           physics intent tests + the behavioural fingerprint
 ```

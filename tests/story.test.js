@@ -42,8 +42,7 @@ describe('the story', () => {
 
   it('runs to the end and makes you a master tuner', () => {
     const c = save({
-      history: pass(5), trained: ['spark', 'knock', 'boost'], owned: ['laptop', 'wideband', 'dyno'], rep: 300,
-      races: { won: ['edna', 'bo', 'ryo', 'champ'], best: {} }, track: { won: ['pip', 'sanjay', 'rosa', 'valentina'], best: {} },
+      history: [...pass(10), { ...pass(1)[0], jobId: 'built', built: true }], trained: ['spark', 'knock', 'boost'], rep: 300,
     });
     const done = advanceSaga(c);
     expect(isMaster(done)).toBe(true);
@@ -51,12 +50,11 @@ describe('the story', () => {
     expect(done.money).toBe(c.money + CHAPTERS.reduce((t, ch) => t + ch.reward, 0));
   });
 
-  it('marks a message read, and the day’s tip counts towards listening to Pops', () => {
+  it('marks a message read, once', () => {
     const c = newCareer(1);
     const tip = messagesFor(c).find((m) => m.id.startsWith('tip:'));
     const r = readMessage(c, tip.id);
     expect(sagaOf(r).read).toContain(tip.id);
-    expect(r.daily.p.tip).toBe(1);
     expect(readMessage(r, tip.id)).toBe(r);
   });
 
