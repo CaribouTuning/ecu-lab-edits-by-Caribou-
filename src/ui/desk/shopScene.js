@@ -14,11 +14,12 @@
  */
 
 import { world as W } from '../tokens.js';
-import { THREE, box, cyl, floorPlane, groundPlane } from '../world/gfx.js';
+import { THREE, box, cyl, floorPlane, glow, groundPlane } from '../world/gfx.js';
+import { realize, roomReflections } from './realize.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
 import { dressShop } from './shopDetail.js';
-import { makeDyno, makeLamp, makeLift, makeRollupDoor, makeRoundTree, makeTree } from '../world/models/props.js';
+import { makeDyno, makeLift, makeRollupDoor, makeRoundTree, makeTree } from '../world/models/props.js';
 import { makeBuilding } from '../world/models/buildings.js';
 
 const POSES = {
@@ -168,6 +169,9 @@ function makeEngineStand(at, run) {
   // Turned a little toward you, so you see the belt end and the intake side together.
   group.rotation.y = -0.5;
   const c = run ? W.engine.standDark : W.engine.stand;
+  const duct = new THREE.Group();
+  duct.position.copy(at);
+  duct.rotation.y = group.rotation.y;
   // An engine stand as one is built: a base on four casters, an upright post at the back,
   // and a mounting head on it whose four arms bolt to the engine's bellhousing face, so the
   // engine hangs off the head with the floor clear under it.
@@ -193,7 +197,14 @@ function makeEngineStand(at, run) {
   if (run) {
     // A run stand's radiator ahead of the belt end, and its exhaust out the back.
     group.add(box(0.08, 0.6, 0.5, W.engine.cooler, { x: 0.8, y: 0.75 }));
-    group.add(cyl(0.05, 0.05, 0.6, W.engine.pipe, { axis: 'x', x: POST_X - 0.35, y: 0.45, edge: false }));
+    // The exhaust leaves behind the head and goes up into the shop's extraction: a flexible
+    // hose dropped from the ceiling, its cone pushed over the tailpipe, as on any run stand
+    // indoors. (A pipe that ended in the air read as a log on the floor.)
+    // From the manifold side, behind the engine as you face it, so the hose stays out of the view.
+    // Its own group beside the stand's, so the station's framing fits the stand, not the hose.
+    duct.add(cyl(0.045, 0.045, 0.5, W.steel, { axis: 'z', x: 0.25, y: 0.55, z: -0.5, edge: false }));
+    duct.add(cyl(0.09, 0.055, 0.16, W.engine.hose, { axis: 'z', x: 0.25, y: 0.55, z: -0.8, edge: false }));
+    duct.add(cyl(0.075, 0.075, 3.9, W.engine.hose, { x: 0.25, y: 2.55, z: -0.92, edge: false }));
   }
   /** @type {ReturnType<typeof makeEngine>|null} */
   let engine = null;
@@ -201,6 +212,7 @@ function makeEngineStand(at, run) {
   let settle = 0;
   return {
     group,
+    duct,
     get engine() { return /** @type {ReturnType<typeof makeEngine>} */ (engine); },
     /** @param {import('../world/models/engine.js').EngineSpec} spec @param {boolean} [jolt] */
     setSpec(spec, jolt = false) {
@@ -234,11 +246,14 @@ export function buildShopScene(stage, init) {
   const root = new THREE.Group();
   scene.add(root);
   stage.setTime(0.15, false);
-  // Under its roof the sun barely reaches: the shop's own lamps light it, warm, from above.
-  const shopLight = new THREE.PointLight(W.sky.day.sun, 34, 24, 1.6);
-  shopLight.position.set(0, 4.6, 0.5);
-  scene.add(shopLight);
   stage.setDriving(true);
+  // Lit as a shop is: overhead LED strips do the work. Daylight comes in only through the
+  // open door, the sky's fill is what the walls bounce, and the room is what metal reflects.
+  stage.hemi.intensity = 0.3;
+  stage.sun.intensity = 0.7;
+  stage.sun.castShadow = false;
+  scene.environment = roomReflections(stage.renderer);
+  scene.environmentIntensity = 0.35;
 
   // ---- the room ----
   root.add(floorPlane(16, 14, W.floorEpoxy, { y: 0 }));
@@ -286,11 +301,29 @@ export function buildShopScene(stage, init) {
   jobSign.position.set(-7.9, 3.1, -4.9);
   root.add(jobSign);
 
-  // Lamps over the work, forward of the door so none hangs in front of the sign.
-  for (const x of [-4.6, 0, 4.6]) {
-    const lamp = makeLamp();
-    lamp.position.set(x, 4.9, 2.4);
-    root.add(lamp);
+  // Ceiling LED strip fixtures in rows over the work, the way a shop is lit: long, even,
+  // white light from above, each row hung on two short chains. One light per row casts the
+  // shadows that put the cars, stands and benches on the floor.
+  for (const x of [-4.2, 0.2, 4.4]) {
+    for (const z of [-3.6, 0.2, 3.4]) {
+      const fx = new THREE.Group();
+      fx.position.set(x, 4.55, z);
+      fx.add(box(0.22, 0.06, 1.8, W.metalLight, { cast: false, edge: false }));
+      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.01, 1.72), glow(W.lampWarm));
+      lens.position.y = -0.035;
+      fx.add(lens);
+      for (const cz of [-0.7, 0.7]) fx.add(cyl(0.006, 0.006, 0.42, W.metalDark, { y: 0.24, z: cz, cast: false, edge: false }));
+      root.add(fx);
+    }
+    const key = new THREE.SpotLight(W.sky.day.sun, 34, 14, 1.15, 0.9, 1.6);
+    key.position.set(x, 4.45, 0.4);
+    key.target.position.set(x, 0, 0.6);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 0.03;
+    key.shadow.radius = 4;
+    scene.add(key, key.target);
   }
   // ---- outside: the street ----
   const outside = groundPlane(160, 60, { base: W.grass, alt: W.grassDark, kind: 'blades', tile: 3 });
@@ -360,6 +393,7 @@ export function buildShopScene(stage, init) {
       liftCar.group.rotation.y = Math.PI;
       root.add(liftCar.group);
     }
+    realize(root);
   };
   placeCars(init.cars ?? { dyno: {}, lift: {} });
 
@@ -368,7 +402,8 @@ export function buildShopScene(stage, init) {
   // the bench a part at a time, started and run on the stand.
   const buildStand = makeEngineStand(AT.build, false);
   const runStand = makeEngineStand(AT.stand, true);
-  for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group); }
+  for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group, st.duct); }
+  realize(root);
   let engineSpecKey = JSON.stringify(init.engineSpec ?? {});
 
   // ---- the two carts: the dyno's computer, and the engine stand's beside the stand ----
@@ -621,6 +656,7 @@ export function buildShopScene(stage, init) {
       engineSpecKey = key;
       buildStand.setSpec(spec, true);
       runStand.setSpec(spec);
+      realize(root);
       // A bigger or smaller engine changes what the stands' views have to fit.
       for (const k of [...poseCache.keys()]) if (k.startsWith('station:stand') || k.startsWith('station:build')) poseCache.delete(k);
       if (lastPose === 'stand' || lastPose === 'build') api.setPose(lastPose);
@@ -675,5 +711,6 @@ export function buildShopScene(stage, init) {
       void t;
     },
   };
+  realize(scene);
   return api;
 }

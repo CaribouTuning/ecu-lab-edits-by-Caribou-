@@ -11,13 +11,13 @@
  */
 
 import { RotateCcw, Settings } from 'lucide-react';
-import React from 'react';
+import React, { useContext } from 'react';
 
 import {
   BOTTOM_END_OPTS, COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
   TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor, pistonMotion,
 } from '../../../sim/index.js';
-import { BuildSection } from '../../components/BuildSection.jsx';
+import { BuildBenchMode, BuildSection } from '../../components/BuildSection.jsx';
 import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Button } from '../../primitives/Button.jsx';
@@ -131,6 +131,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
 
   // The base engine, the short block, the heads and cam: one section on a phone's
   // accordion, three of the engine stand's parts (`part`).
+  // On the build bench your own engine is entered through Change engine (BuildBench.jsx),
+  // so the form here would be a second way to the same thing; the factory picker stays,
+  // for its prompt before it overwrites tuned tables.
+  const bench = useContext(BuildBenchMode);
   const baseParts = (
     <>
         <div className={styles.label}>Start from a factory engine</div>
@@ -164,6 +168,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             if (p) choosePreset(p);
           }}
         />
+      {!bench && (
         <details className={styles.ownEngine} onToggle={(e) => setOwnOpen(e.currentTarget.open)}>
           <summary>Enter my own engine&apos;s specs instead</summary>
           <p className={styles.ownLead}>
@@ -178,6 +183,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             />
           )}
         </details>
+      )}
         {activePreset && (
           // Panel builds its own className from `tight` and spreads rest props AFTER
           // it with no merge, so a caller's `className` would replace `tight` outright

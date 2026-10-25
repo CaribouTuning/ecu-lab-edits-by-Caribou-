@@ -16,7 +16,7 @@ import { createStage } from '../world/stage.js';
 
 /**
  * @param {(stage: ReturnType<typeof createStage>) => {update?: (dt: number) => (boolean|void), dispose?: () => void}} setup
- * @param {{shadows?: boolean, hatch?: boolean}} [opts]
+ * @param {{shadows?: boolean, hatch?: boolean, real?: boolean}} [opts]
  * @returns {{canvasRef: React.MutableRefObject<HTMLCanvasElement|null>, failed: boolean, stageRef: React.MutableRefObject<any>}}
  */
 export function useStage(setup, opts = {}) {
@@ -32,7 +32,7 @@ export function useStage(setup, opts = {}) {
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     try {
       // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
-      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false });
+      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false, real: !!opts.real });
     } catch {
       setFailed(true);
       return undefined;

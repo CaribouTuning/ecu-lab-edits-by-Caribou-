@@ -22,7 +22,7 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean, maxDpr?: number}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean, maxDpr?: number, real?: boolean}} [opts]
  *   `maxDpr` caps how many drawn pixels a sketch spends per screen pixel (default 2).
  *   `hatch: false` (a sketch only) leaves out the hatching and grain: clean, crisp ink
  *   outlines on the model's own colours, for a close-up such as the Build engine.
@@ -32,12 +32,15 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
  *   is set to CHUNKY.
  */
 export function createStage(canvas, opts = {}) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });
+  // `real`: a room lit as one (the shop): smoothed edges, soft shadows, film-like tone
+  // response, and no drawn outline over it.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !!opts.real, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = opts.shadows !== false;
-  renderer.shadowMap.type = THREE.BasicShadowMap;
+  renderer.shadowMap.type = opts.real ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.NoToneMapping;
+  renderer.toneMapping = opts.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.toneMappingExposure = opts.real ? 0.85 : 1;
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(SKY.day.horizon, VIEW.walk.fog[0], VIEW.walk.fog[1]);
@@ -281,6 +284,7 @@ export function createStage(canvas, opts = {}) {
   };
   function drawOutlined() {
     if (sky.group.visible) sky.follow(camera.position);
+    if (opts.real) { renderer.render(scene, camera); return; }
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
