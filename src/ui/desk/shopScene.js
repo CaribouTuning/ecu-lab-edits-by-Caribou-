@@ -520,7 +520,8 @@ export function buildShopScene(stage, init) {
     // The engine beside its computer only where there is the height for both: on a phone
     // held sideways the computer alone fills the view, and the software shows the engine.
     if (name !== 'dyno' && cartShape === 'wide' && frame.h - frame.top - frame.bottom > 420) {
-      const bb = new THREE.Box3().setFromObject((name === 'build' ? buildStand : runStand).engine.group);
+      // The whole stand, its feet on the floor, not only the engine on it.
+      const bb = new THREE.Box3().setFromObject((name === 'build' ? buildStand : runStand).group);
       for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) pts.push(new THREE.Vector3(x, y, z));
     }
     const center = pts.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / pts.length);

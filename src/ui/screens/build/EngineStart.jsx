@@ -55,17 +55,27 @@ export function PrebuiltEngines({ onPick, picked = null }) {
  * form. Both land on the same build bench with the engine loaded. The path and the engine
  * picked survive Back, for as long as this screen is up.
  */
-export function EngineStart() {
+/**
+ * @param {object} [props]
+ * @param {() => void} [props.onCancel] swapping an engine already on the bench: keep it after all
+ * @param {() => void} [props.onDone] the new engine is on the bench
+ * @param {boolean} [props.replacing] the tables on the bench hold work this replaces: said on the button
+ * @returns {React.ReactElement}
+ */
+export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
   const [, dispatch] = useBuild();
   const [path, setPath] = useState(/** @type {null|'factory'|'custom'} */ (null));
   const [picked, setPicked] = useState(/** @type {any} */ (null));
-  const load = (preset) => dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) });
-  const create = (patch) => dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch });
+  const load = (preset) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); onDone?.(); };
+  const create = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); onDone?.(); };
 
   if (!path) {
     return (
       <div className={styles.page} data-testid="engine-start">
-        <h2 className={styles.title}>Put an engine on the bench</h2>
+        <div className={styles.bar}>
+          {onCancel && <button type="button" className={styles.back} onClick={onCancel}>Keep this engine</button>}
+          <h2 className={styles.title}>{onCancel ? 'Change the engine' : 'Put an engine on the bench'}</h2>
+        </div>
         <div className={styles.paths}>
           <button type="button" className={styles.path} onClick={() => setPath('factory')}>
             <span className={styles.pathName}>Start with a factory engine</span>
@@ -101,7 +111,7 @@ export function EngineStart() {
                 <dt>Factory rating</dt><dd>{picked.factory.crankHp} hp, {picked.factory.crankTq} lb-ft</dd>
                 <dt>Years</dt><dd>{picked.years}</dd>
               </dl>
-              <button type="button" className={styles.use} onClick={() => load(picked)} aria-label={`Use ${picked.name}`}>Put it on the bench</button>
+              <button type="button" className={styles.use} onClick={() => load(picked)} aria-label={`Use ${picked.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
             </aside>
           )}
         </div>

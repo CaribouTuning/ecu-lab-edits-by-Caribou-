@@ -53,3 +53,11 @@
 .originPanel b { color: var(--ink); }
 .originBtn { flex: none; height: 28px; padding: 0 12px; border-radius: 5px; border: 1px solid var(--line-hi); background: var(--panel3); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .originBtn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* Assembly order: a number on each part, and the way on to the next part or the stand. */
+.step { display: inline-block; width: 1.4em; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.steps { display: flex; justify-content: space-between; gap: 10px; padding: 10px 16px 14px; border-top: 1px solid var(--line); margin-top: auto; }
+.stepBtn, .stepGo { height: 30px; padding: 0 12px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+.stepBtn { border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); }
+.stepGo { margin-left: auto; border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); }
+.stepBtn:focus-visible, .stepGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
