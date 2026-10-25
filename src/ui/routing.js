@@ -51,7 +51,7 @@ export const TAB_NAMES = {
 
 /**
  * @typedef {Object} Route
- * @property {'start'|'tutorial'|'course'|'shop'|'desk'|'bay'|'outside'|'messages'|'app'} view - Which top-level screen is showing:
+ * @property {'start'|'tutorial'|'course'|'shop'|'desk'|'bay'|'messages'|'app'} view - Which top-level screen is showing:
  *   the start screen, the five-minute tutorial, the Tuning Course (opened from Learn), the
  *   career's shop, SANDBOX's laptop desktop, SANDBOX's shop floor with the laptop shut, or
  *   an app (a laptop app, or the dyno or engine stand in the shop).
@@ -83,8 +83,6 @@ const BAY_ROUTE = { view: 'bay', tab: null, section: null };
 /** CAREER: Pops's messages, on the laptop or the phone. @type {Route} */
 const MESSAGES_ROUTE = { view: 'messages', tab: null, section: null };
 
-/** CAREER: out of the shop and into the town, driving. @type {Route} */
-const OUTSIDE_ROUTE = { view: 'outside', tab: null, section: null };
 
 /**
  * Parse a `window.location.hash`-shaped string into a route object.
@@ -132,10 +130,6 @@ export function parseRoute(hash) {
     return { ...BAY_ROUTE };
   }
 
-  if (first === 'outside') {
-    return { ...OUTSIDE_ROUTE };
-  }
-
   if (first === 'messages') {
     return { ...MESSAGES_ROUTE };
   }
@@ -181,9 +175,6 @@ export function formatRoute(route) {
     return '#/bay';
   }
 
-  if (view === 'outside') {
-    return '#/outside';
-  }
 
   if (view === 'messages') {
     return '#/messages';

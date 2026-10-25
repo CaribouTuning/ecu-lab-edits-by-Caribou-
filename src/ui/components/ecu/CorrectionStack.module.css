@@ -14,8 +14,6 @@
 .title {
   font-size: var(--fs-micro);
   font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink2);
   margin-bottom: 6px;
 }

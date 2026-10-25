@@ -49,13 +49,8 @@ describe('CAREER, step by step', () => {
     expect(career({ pulled: true, fresh: true }).go).toBe('ticket');
   });
 
-  it('road tests without a dyno, and builds first on an engine-building job', () => {
-    expect(career({ roadTest: true })).toMatchObject({ go: 'dyno', label: 'Road test' });
+  it('builds first on an engine-building job', () => {
     expect(career({ buildJob: true }).go).toBe('build');
-  });
-
-  it('sends a clean pull on your own car back to the stand, not to a ticket', () => {
-    expect(career({ own: true, pulled: true, fresh: true }).go).toBe('build');
   });
 });
 

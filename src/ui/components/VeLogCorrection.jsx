@@ -69,7 +69,7 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
     <section className={styles.panel} aria-label="Correct VE from logs">
       <div className={styles.head}>Correct VE from logs</div>
       <p className={styles.summary}>
-        {pullCount} samples from the last pull · {liveCount} from the LIVE log · <b>{corr.cells}</b> {corr.cells === 1 ? 'cell' : 'cells'} with data
+        {pullCount} samples from the last pull, {liveCount} from the LIVE log, <b>{corr.cells}</b> {corr.cells === 1 ? 'cell' : 'cells'} with data
       </p>
       {pullNote && <p className={styles.hint}>{pullNote}</p>}
       {Math.abs(mafPct) >= VE_LOG_GOOD_PCT && (

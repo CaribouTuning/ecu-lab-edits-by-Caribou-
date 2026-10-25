@@ -55,7 +55,7 @@ import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
 import { isApplePlatform } from './commands.js';
 import { TAB_NAMES } from './routing.js';
-import { useBuild, useRoadTest, useSession } from './state/StoreProvider.jsx';
+import { useBuild, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
 import styles from './AppShell.module.css';
@@ -242,7 +242,6 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
   const [session] = useSession();
   const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
   const { health, result } = session;
-  const roadTest = useRoadTest();
 
   // Keyed on `engineConfig` so the 20 Hz re-render does not re-derive the engine
   // twenty times a second to print the same string.
@@ -299,7 +298,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
         <div className={styles.readouts}>
           <StripField label="Boost" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
           {noEngine ? <StripField label="Health" value="—" /> : <HealthField pct={overallHealth} />}
-          <StripField label="Last pull" value={result ? (roadTest ? 'road test' : `${Math.round(result.peakHp)} whp`) : '—'} />
+          <StripField label="Last pull" value={result ? `${Math.round(result.peakHp)} whp` : '—'} />
           <EngineRunLight />
         </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a

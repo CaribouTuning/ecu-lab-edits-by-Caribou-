@@ -307,7 +307,7 @@ describe('FuelScreen', () => {
     // Singular — the pre-panel banner always read '1 HIGH-LOAD CELLS OFF BEST
     // POWER', a latent copy bug the plural helper in `fuelReport` fixes.
     expect(panel.getByText('1 high-load cell off best power')).toBeTruthy();
-    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\) · delivered 99, wants 88/)).toBeTruthy();
+    expect(panel.getByText(/888 kPa \/ 7777 RPM: 12\.3:1 → 11\.1:1 \(richen\), delivered 99, wants 88/)).toBeTruthy();
   });
 
   it('narrows to the selected cell rather than the whole table', () => {

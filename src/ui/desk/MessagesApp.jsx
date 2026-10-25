@@ -106,7 +106,7 @@ export function MessagesApp({ career, update, onCourse }) {
                   <div className={styles.msgLesson}>
                     <h4>What Ray taught me: {open.lesson.title}</h4>
                     <ul>{open.lesson.points.map((t) => <li key={t}>{t}</li>)}</ul>
-                    <p className={styles.msgSources}><b>Where it comes from:</b> {open.lesson.sources.join(' · ')}</p>
+                    <p className={styles.msgSources}><b>Where it comes from:</b> {open.lesson.sources.join('; ')}</p>
                     {open.lesson.course && onCourse && <button type="button" className={styles.msgCourse} onClick={onCourse}>Open the Tuning Course</button>}
                   </div>
                 )}

@@ -22,7 +22,7 @@ import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
-import { useBuild, useRoadTest, useSession, useTune } from '../../state/StoreProvider.jsx';
+import { useBuild, useSession, useTune } from '../../state/StoreProvider.jsx';
 import { deltaHeat, T, utilisationTone } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
@@ -83,7 +83,6 @@ export function DataScreen() {
   const { result, histogram } = session;
   const [tune] = useTune();
   const [build] = useBuild();
-  const roadTest = useRoadTest();
 
   /**
    * The pull, as a file.
@@ -224,7 +223,7 @@ export function DataScreen() {
       <div className={styles.card} data-tone={tone}>
         <div className={styles.cardHead}>
           <span className={styles.cardRpm}>{shown.rpm} RPM</span>
-          <span className={styles.cardStat}>{roadTest ? 'road test' : `${shown.hp} whp, ${shown.torque} lb-ft`}</span>
+          <span className={styles.cardStat}>{`${shown.hp} whp, ${shown.torque} lb-ft`}</span>
         </div>
         <div className={styles.gauges}>
           {gauges.map((g) => (
@@ -250,18 +249,18 @@ export function DataScreen() {
                 : 'Something stepped in here. The amber and red tiles say what; the lists below show exactly how each value was changed.'}
             </p>
             <div className={styles.gauges}>
-              <StatTile label="KNOCK RETARD" value={shown.knockPull.toFixed(1)} unit="°" tone={shown.knockPull > 0 ? 'warn' : 'neutral'} />
-              <StatTile label="UNHEARD KNOCK" value={(shown.knockUnheard ?? 0).toFixed(1)} unit="°" tone={shown.knockUnheard > 0.3 ? 'danger' : 'neutral'} />
-              {shown.boostTarget > 0 && <StatTile label="BOOST TARGET" value={shown.boostTarget} unit="psi" />}
-              {shown.boostTarget > 0 && <StatTile label="WASTEGATE" value={shown.wgDuty} unit="%" />}
-              <StatTile label="FUEL ΔP" value={shown.railDp} unit="kPa" tone={shown.fuelStarved ? 'danger' : 'neutral'} />
-              <StatTile label="MISFIRE" value={shown.misfire} unit="%" tone={shown.misfire > 5 ? 'danger' : 'neutral'} />
-              {shown.blowerRpm != null && <StatTile label="BLOWER" value={shown.blowerRpm.toLocaleString('en-US')} unit="rpm" tone={shown.blowerOverspeed ? 'danger' : 'neutral'} />}
-              {shown.blowerHp != null && <StatTile label="BLOWER DRIVE" value={shown.blowerHp} unit="hp" />}
-              {shown.nitrousLbMin > 0 && <StatTile label="NITROUS" value={shown.nitrousLbMin} unit="lb/min" />}
-              {shown.nitrousLbMin > 0 && <StatTile label="BOTTLE" value={shown.bottlePsi} unit="psi" tone={shown.bottlePsi < 850 ? 'warn' : 'neutral'} />}
-              {(shown.camIn > 0 || shown.camEx > 0) && <StatTile label="CAMS IN / EX" value={`${shown.camIn} / ${shown.camEx}`} unit="°" />}
-              <StatTile label="PROTECTIONS" value={shown.protect?.length ? shown.protect.join(', ') : 'none'} tone={shown.protect?.length ? 'warn' : 'ok'} />
+              <StatTile label="Knock retard" value={shown.knockPull.toFixed(1)} unit="°" tone={shown.knockPull > 0 ? 'warn' : 'neutral'} />
+              <StatTile label="Unheard knock" value={(shown.knockUnheard ?? 0).toFixed(1)} unit="°" tone={shown.knockUnheard > 0.3 ? 'danger' : 'neutral'} />
+              {shown.boostTarget > 0 && <StatTile label="Boost target" value={shown.boostTarget} unit="psi" />}
+              {shown.boostTarget > 0 && <StatTile label="Wastegate" value={shown.wgDuty} unit="%" />}
+              <StatTile label="Fuel ΔP" value={shown.railDp} unit="kPa" tone={shown.fuelStarved ? 'danger' : 'neutral'} />
+              <StatTile label="Misfire" value={shown.misfire} unit="%" tone={shown.misfire > 5 ? 'danger' : 'neutral'} />
+              {shown.blowerRpm != null && <StatTile label="Blower" value={shown.blowerRpm.toLocaleString('en-US')} unit="rpm" tone={shown.blowerOverspeed ? 'danger' : 'neutral'} />}
+              {shown.blowerHp != null && <StatTile label="Blower drive" value={shown.blowerHp} unit="hp" />}
+              {shown.nitrousLbMin > 0 && <StatTile label="Nitrous" value={shown.nitrousLbMin} unit="lb/min" />}
+              {shown.nitrousLbMin > 0 && <StatTile label="Bottle" value={shown.bottlePsi} unit="psi" tone={shown.bottlePsi < 850 ? 'warn' : 'neutral'} />}
+              {(shown.camIn > 0 || shown.camEx > 0) && <StatTile label="Cams in / ex" value={`${shown.camIn} / ${shown.camEx}`} unit="°" />}
+              <StatTile label="Protections" value={shown.protect?.length ? shown.protect.join(', ') : 'none'} tone={shown.protect?.length ? 'warn' : 'ok'} />
             </div>
             <CorrectionStack breakdown={shown.breakdown} result={{ timing: shown.timing, lambda: shown.lambda }} />
           </div>
@@ -271,10 +270,10 @@ export function DataScreen() {
       <ExpandableInfo title="How to read a datalog">
         Diagnosis happens in the <b className={styles.em}>asked → got</b> pairs, not in the power number.
         <br /><br /><b className={styles.em}>Timing</b>: if the two differ, the ECU overrode you. That is knock retard, and the gap is roughly how far past the limit your table was (the ECU retards in whole steps). A common rule of thumb treats anything sustained above ~2° as a problem to fix.
-        <br /><br /><b className={styles.em}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or injector scaling (TUNE › INJECTORS) that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
-        <br /><br /><b className={styles.em}>INJ PW / DUTY</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
+        <br /><br /><b className={styles.em}>Mixture</b>: if actual is not what you commanded, the cause is upstream of the fuel table — usually injectors out of duty cycle, MAF scaling, or injector scaling (Tune, Injectors) that does not match the hardware. Do not paper over it by editing fuel cells; fix the cause.
+        <br /><br /><b className={styles.em}>Injector pulse and duty</b>: duty is a time budget. At 7500 RPM there are only 16 ms in an engine cycle. Past about 90% there is no room left and the mixture goes lean regardless of what you asked for.
         <br /><br /><b className={styles.em}>EGT</b>: exhaust temperature rises with retarded timing and as the mixture leans toward stoichiometric. Sustained above about 950–1000°C cooks turbines and valves.
-        <br /><br /><b className={styles.em}>PEAK P</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. In this app a naturally aspirated engine peaks around 60–70 bar and a factory turbo engine around 75–90; practitioners quote about 100–120 for real production turbo engines, so the app runs low here (see Learn article 39). Its own limit, about 105 bar, is set on the app&apos;s scale. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
+        <br /><br /><b className={styles.em}>Peak pressure</b>: peak cylinder pressure is what the piston, rod and bearings physically carry, and it is set by compression ratio multiplied by manifold pressure, not by boost alone. In this app a naturally aspirated engine peaks around 60–70 bar and a factory turbo engine around 75–90; practitioners quote about 100–120 for real production turbo engines, so the app runs low here (see Learn article 39). Its own limit, about 105 bar, is set on the app&apos;s scale. Past that, stock pistons and rods start failing <i>without</i> any detonation to warn you — which is exactly what high-octane fuel hides, because octane buys knock margin and nothing else.
       </ExpandableInfo>
 
       <div className={styles.buildWrap}>

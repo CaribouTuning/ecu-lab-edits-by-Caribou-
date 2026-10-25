@@ -165,7 +165,7 @@ function TimingAdvisory({ report }) {
 function AfrCellLine({ cell }) {
   return (
     <div className={styles.bannerCell} data-richen={cell.delta < 0 ? 'true' : 'false'}>
-      {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'} · delivered {cell.delivered}, wants {cell.target}
+      {cell.map} kPa / {cell.rpm} RPM: {cell.current}:1 → {cell.suggested}:1 {cell.delta < 0 ? '(richen)' : '(lean out)'}, delivered {cell.delivered}, wants {cell.target}
     </div>
   );
 }
@@ -285,7 +285,7 @@ function VeMath({ cell }) {
   const newVe = cell.table * cell.ratio;
   return (
     <div className={styles.veMath} data-tour="ve-maths">
-      <div className={styles.recTitle}>{cell.rpm} RPM · {cell.load} kPa — {cell.samples} samples</div>
+      <div className={styles.recTitle}>{cell.rpm} RPM, {cell.load} kPa: {cell.samples} samples</div>
       <dl className={styles.cellStats}>
         <dt>Table VE now</dt><dd>{cell.table.toFixed(1)}%</dd>
         <dt>λ measured ÷ λ target</dt><dd>{f(cell.lambdaRatio)}</dd>

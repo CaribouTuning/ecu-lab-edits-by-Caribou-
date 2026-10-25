@@ -22,7 +22,6 @@
 .badge {
   font-size: var(--fs-micro);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--warn-ink);
   background: var(--warn-bg);
   border: 1px solid var(--warn-line);

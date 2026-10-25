@@ -144,13 +144,13 @@ describe('moving the tune-grid cursor', () => {
     const dataCells = grid.getAllByRole('button', { name: / RPM, [\d.]+ kPa$/ });
 
     // Selecting a grid cell mounts the SelectionDock, whose readout line names the
-    // selected cell's coordinates: "<rpm> RPM · <map> kPa MAP". Reading it after two
+    // selected cell's coordinates: "<rpm> RPM, <map> kPa MAP". Reading it after two
     // DIFFERENT cell clicks and confirming it changed proves the clicks actually
     // MOVED the cursor — without that, a click that hit nothing (or landed on the
     // same cell twice) would leave the header intact and the test would pass while
     // proving nothing.
     const cellLabel = () => within(screen.getByTestId('selection-dock'))
-      .getByText(/^\d+ RPM · [\d.]+ kPa MAP$/).textContent;
+      .getByText(/^\d+ RPM, [\d.]+ kPa MAP$/).textContent;
 
     fireEvent.click(dataCells[0]);
     const first = cellLabel();

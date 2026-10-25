@@ -76,7 +76,6 @@ export function StartScreen({ onCareer, onStart, onTutorial, version, logo = nul
   const handlers = { career: onCareer, sandbox: onStart, tutorial: onTutorial };
   return (
     <div className={styles.screen} data-plain>
-      <div className={styles.glow} aria-hidden="true" />
       <div className={styles.inner}>
         <LogoMark src={logo} />
         <div className={styles.eyebrow} data-keep-tracking>CARIBOU TUNING</div>

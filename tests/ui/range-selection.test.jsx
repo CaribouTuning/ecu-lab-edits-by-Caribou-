@@ -55,7 +55,7 @@ describe('SelectionDock on a range', () => {
     mountAir();
     select({ type: 'range', r1: 3, c1: 2, r2: 1, c2: 5 });
     // LOAD = [200,150,100,70,40,20], RPM = [800,...,7500]
-    expect(within(dock()).getByText('Range · 2500–5500 RPM × 70–150 kPa · 12 cells')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 2500–5500 RPM × 70–150 kPa, 12 cells')).toBeTruthy();
   });
 
   it('adds to every cell in one undo step, with a label', () => {

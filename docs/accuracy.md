@@ -571,8 +571,8 @@ broke, and the reputation ladder climbed over weeks.
 - **Damage is judged per pull on the tune handed back**, not on the health the car lost
   while it was being diagnosed: a customer's car often arrives doing damage, and that is
   why it came in.
-- **Without a dyno, a pull is a road test.** It logs everything a wideband and the ECU
-  see, and hides horsepower on every screen. Power targets need a dyno.
+- **Every job is measured on the dyno.** The shop has Ray's chassis dyno from the first
+  day, so every pull reads wheel power as well as the wideband and the ECU.
 - **What the career leaves out, and why.** There are no A/C jobs, because the A/C makes
   the stock idle noisy in this model, so an A/C complaint could not be told apart from a
   healthy car. There is no big-cam idle job, because no idle setting tried steadies a

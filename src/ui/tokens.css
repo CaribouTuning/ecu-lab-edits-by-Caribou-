@@ -55,8 +55,10 @@
   --tile: #f7f2e6;
   --tile-ink: #1f1c18;
   --tile-wash: #bcd2ee;
-  --cork: #9c7448;
-  --pin: #c8402f;
+  --board: #eceeec;
+  --board-line: #b9bec3;
+  --marker: #1f4c9a;
+  --order: #fbfaf6;
   /* The laptop's software, drawn as a native Mac app in dark mode with the Graphite
      accent: neutral greys, a grey selection, and the window's traffic lights. Applied by
      remapping the neutral tokens inside a window (Desk.module.css .window). */

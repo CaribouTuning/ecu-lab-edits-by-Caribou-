@@ -144,8 +144,8 @@ export const TRAINING = [
 /** @type {Equipment[]} */
 export const EQUIPMENT = [
   { id: 'laptop', title: 'Tuning laptop and cable', price: 0, rep: 0, does: 'Reads and flashes the ECU. Every shop starts with one.' },
-  { id: 'wideband', title: 'Handheld wideband', price: 0, rep: 0, does: 'Logs air-fuel ratio on a road test. Every shop starts with one.' },
-  { id: 'dyno', title: 'Chassis dyno', price: 6000, rep: 20, does: 'Measures power. Without it a road test logs everything except horsepower, and power jobs go elsewhere.' },
+  { id: 'wideband', title: 'Wideband oxygen sensor', price: 0, rep: 0, does: 'Logs air-fuel ratio on every pull. Every shop starts with one.' },
+  { id: 'dyno', title: 'Chassis dyno', price: 0, rep: 0, does: 'Measures wheel power and logs every pull. Ray’s, in the bay from the first day.' },
   { id: 'lift2', title: 'Second lift', price: 3000, rep: 15, does: 'Hold two customer cars at once.' },
   { id: 'flex', title: 'Ethanol content analyser', price: 500, rep: 25, does: 'Measures what is really in the tank. E85 customers will not book without it.' },
   { id: 'egt', title: 'EGT probe kit', price: 700, rep: 60, does: 'Logs exhaust temperature per pull. Boosted and nitrous customers insist on it.' },
@@ -180,7 +180,6 @@ export const nextRepTier = (rep) => REP_TIERS.find((x) => x.min > rep) ?? null;
 export const MILESTONES = [
   { id: 'first-job', title: 'First customer paid', test: (c) => c.history.some((h) => h.paid > 0) },
   { id: 'first-training', title: 'First training course', test: (c) => c.trained.length > 0 },
-  { id: 'dyno', title: 'A dyno of your own', test: (c) => c.owned.includes('dyno') },
   { id: 'five-jobs', title: 'Five happy customers', test: (c) => c.history.filter((h) => h.verdict === 'pass').length >= 5 },
   { id: 'first-boost', title: 'First boosted car', test: (c) => c.history.some((h) => h.verdict === 'pass' && h.boosted) },
   { id: 'first-build', title: 'First engine built to order', test: (c) => c.history.some((h) => h.built) },

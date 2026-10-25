@@ -158,7 +158,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
     make: ({ r, level }) => ({
       tier: 1, pay: payAt(300, level, r), rep: 4,
       says: FAULTS.intake.symptom(r), wants: 'Make it run right with the intake. I’m keeping it.',
-      work: ['Intake already fitted', 'Road test, diagnose and correct'],
+      work: ['Intake already fitted', 'Pull it, diagnose and correct'],
       carBuild: FAULTS.intake.build({}), params: {},
       checks: [...FAULTS.intake.checks(level), ...SAFE, idleAt(level)],
       hint: 'It’s still not right at full throttle, and the gauge you left says it’s off.',
@@ -207,7 +207,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
     make: ({ r, level }) => ({
       tier: 1, pay: payAt(420, level, r), rep: 5,
       says: FAULTS.headers.symptom(r), wants: 'Fix the lean condition, all the way to the limiter.',
-      work: ['Headers and exhaust already fitted', 'Road test, log and correct'],
+      work: ['Headers and exhaust already fitted', 'Pull it, read the log and correct'],
       carBuild: FAULTS.headers.build({}), params: {},
       checks: [...FAULTS.headers.checks(level), ...SAFE, idleAt(level)],
       hint: 'Better through the middle, but right at the top it still goes lean on my gauge.',
@@ -289,7 +289,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
         tier: 2, pay: payAt(1400, level, r), rep: 12,
         says: `Bolted on a turbo kit: ${psi} psi, intercooler, 550s. The kit said the ECU would “adapt”. It pulls hard, then it rattles and goes flat.`,
         wants: 'I want to use the boost, but I don’t want to blow it up.',
-        work: ['Turbo kit fitted, injectors scaled', 'Road test and tune for boost'],
+        work: ['Turbo kit fitted, injectors scaled', 'Tune for boost on the dyno'],
         carBuild: (b) => ({ turboOn: true, boostCurve: curve, injIdx: 2, ecuInjectorCc: 550, octaneIdx: 1, mods: { ...b.mods, intercooler: true } }),
         params: { psi },
         checks: [

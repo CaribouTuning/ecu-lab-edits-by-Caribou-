@@ -93,7 +93,7 @@ export async function openJobBoard() {
     fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
   }
   fireEvent.click(screen.getByRole('button', { name: /Job board/ }));
-  await screen.findByText('Your tuning shop');
+  await screen.findByTestId('shop-money');
 }
 
 /**

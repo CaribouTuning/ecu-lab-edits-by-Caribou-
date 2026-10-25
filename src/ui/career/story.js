@@ -7,13 +7,13 @@
  * text and by email, one lesson at a time, while you work.
  *
  * The story is a line of chapters. Each opens with an email from Pops that teaches one
- * real thing about tuning, and names a goal the game already has (a job done well, a
- * training course, a rival beaten, a reputation reached). Meet it and Pops texts you, pays
+ * real thing about tuning, and names a goal the shop already has (jobs done well, a
+ * training course, an engine built to order, a reputation reached). Meet it and Pops texts you, pays
  * a little towards the next step, and the next chapter opens. The last one ends it: you
  * are a master tuner, and the shop is Ray's again.
  *
  * Every lesson is something the simulator already teaches, in its own words, and says
- * where it comes from: the Tuning Course, Pops's tips (world/tips.js, checked against
+ * where it comes from: the Tuning Course, Pops's tips (tips.js, checked against
  * docs/accuracy.md), and the published sources in the Learn guide (articles 26, 27, 38).
  * The procedural customers carry on alongside, and once the story is finished, without end.
  *
@@ -21,9 +21,7 @@
  * state is `c.saga`: which chapter is open, and which messages have been read.
  */
 
-import { beaten } from './races.js';
-import { bump } from './daily.js';
-import { tipFor } from '../world/tips.js';
+import { tipFor } from './tips.js';
 
 /** @typedef {import('./shop.js').Career} Career */
 
@@ -49,7 +47,7 @@ import { tipFor } from '../world/tips.js';
  */
 
 const passed = (/** @type {Career} */ c) => (c.history ?? []).filter((h) => h.verdict === 'pass').length;
-const beat = (/** @type {Career} */ c, /** @type {'drag'|'track'} */ s, /** @type {string} */ id) => beaten(c, s).includes(id);
+const built = (/** @type {Career} */ c) => (c.history ?? []).some((h) => h.verdict === 'pass' && h.built);
 
 /** @type {Chapter[]} */
 export const CHAPTERS = [
@@ -57,7 +55,7 @@ export const CHAPTERS = [
     id: 'keys', title: 'The keys', subject: 'Ray’s shop is yours',
     body: [
       'Kid, it’s your uncle. I know you’ve wondered why the shop stayed shut all these years. After your dad passed I couldn’t bring myself to turn the key. Ray was the best tuner this town ever had, and I just fried eggs.',
-      'You keep asking how he did it. So here it is: the shop is yours. The laptop on the desk is his, the job board is on the wall, and his old hatch is out front. I’ll text you what he taught me, one thing at a time. Do the work, and you’ll know what he knew.',
+      'You keep asking how he did it. So here it is: the shop is yours. The laptop on the desk is his, the job board is on the wall, and his dyno is still in the bay. I’ll text you what he taught me, one thing at a time. Do the work, and you’ll know what he knew.',
       'Start small. Take a customer off the board, find out what’s wrong, fix it, and hand it back right.',
     ],
     lesson: {
@@ -115,22 +113,23 @@ export const CHAPTERS = [
     reward: 300,
   },
   {
-    id: 'strip', title: 'The strip', subject: 'Your dad raced there',
+    id: 'measure', title: 'Measure it', subject: 'Ray’s dyno',
     body: [
-      'There’s a drag strip off the highway, north of town. Ray ran there every Friday. He said the strip tells you the truth about a tune faster than any customer will.',
-      'Take your own car up there and beat Edna and Bo. Edna’s a sweetheart. Bo talks too much.',
+      'Your dad never guessed. Every change went on that dyno before the car went home, and he wrote the number on the ticket.',
+      'Do it his way: change one thing, pull, read the log, then the next thing.',
     ],
     lesson: {
-      title: 'The first ten metres',
+      title: 'Change one thing, measure it',
       points: [
-        'A 60-foot time says more about traction and the launch than about power. Fast cars lose races in the first ten metres.',
-        'A short first gear multiplies torque at the wheels, but a tyre can only pass so much force. Past the grip limit the extra torque just spins the wheels.',
+        'The habit that matters most: change one thing at a time and measure it, and put reliability ahead of the peak number (Driven Racing Oil, “A Complete Guide to High-Performance Engine Tuning”).',
+        'A chassis dyno reads wheel power, lower than the crank figure by the drivetrain’s losses, roughly 12 to 18 percent. A car’s advertised power is measured at the crank.',
       ],
-      sources: ['Pops’s tips: Launch, Gearing, Tyres'],
+      sources: ['The Tuning Course: “Your first pull”, “Pull again and prove it”', 'Driven Racing Oil guide (Learn, article 38)', 'Pops’s tips: Dyno'],
+      course: 'first-pull',
     },
-    goal: 'Beat Bo at the drag strip.',
-    met: (c) => beat(c, 'drag', 'bo'),
-    done: 'You beat Bo! He’ll be telling everyone it was the weather. Ray would have laughed.',
+    goal: 'Do five customer jobs well.',
+    met: (c) => passed(c) >= 5,
+    done: 'Five. I found his old ticket book in the drawer. Your numbers look like his.',
     reward: 300,
   },
   {
@@ -175,9 +174,10 @@ export const CHAPTERS = [
     reward: 400,
   },
   {
-    id: 'raceway', title: 'The Raceway', subject: 'Corners are honest too',
+    id: 'power', title: 'Torque and power', subject: 'What the customer feels',
     body: [
-      'The Raceway’s south of town. Ray said the strip tests your power and the track tests your whole car. Go and beat Rosa.',
+      'A customer told me today his car felt quicker but your sheet said it made less peak power. Ray had that conversation a hundred times.',
+      'Ten clean jobs, and you’ll be able to explain it in your sleep.',
     ],
     lesson: {
       title: 'Torque and power',
@@ -187,29 +187,10 @@ export const CHAPTERS = [
       ],
       sources: ['Pops’s tips: Power', 'HP Tuners, A Beginner’s Guide to Engine Tuning (Learn, article 38)', 'Learn, article 37: horsepower and torque'],
     },
-    goal: 'Beat Rosa at the Raceway.',
-    met: (c) => beat(c, 'track', 'rosa'),
-    done: 'Rosa! Light is right, she always says. Now you know why.',
+    goal: 'Do ten customer jobs well.',
+    met: (c) => passed(c) >= 10,
+    done: 'Ten. The curve, not the number. You get it now.',
     reward: 500,
-  },
-  {
-    id: 'dyno', title: 'Measure it', subject: 'Ray’s dyno',
-    body: [
-      'Your dad never guessed. Every change went on the dyno before it went home. Buy one when you can afford it: Gearhead Supply has them.',
-    ],
-    lesson: {
-      title: 'Change one thing, measure it',
-      points: [
-        'The habit that matters most: change one thing at a time and measure it, and put reliability ahead of the peak number (Driven Racing Oil, “A Complete Guide to High-Performance Engine Tuning”).',
-        'A chassis dyno reads wheel power, lower than the crank figure by the drivetrain’s losses, roughly 12 to 18 percent. A car’s advertised power is measured at the crank.',
-      ],
-      sources: ['The Tuning Course: “Your first pull”, “Pull again and prove it”', 'Driven Racing Oil guide (Learn, article 38)', 'Pops’s tips: Dyno'],
-      course: 'first-pull',
-    },
-    goal: 'Buy the chassis dyno.',
-    met: (c) => (c.owned ?? []).includes('dyno'),
-    done: 'A dyno in Ray’s bay again. I stood and looked at it for a while. Go make a pull.',
-    reward: 600,
   },
   {
     id: 'boost', title: 'Boost', subject: 'Free air is not free',
@@ -232,7 +213,7 @@ export const CHAPTERS = [
   {
     id: 'known', title: 'A known tuner', subject: 'The open-loop trap',
     body: [
-      'People drive in from other towns now. That’s a known tuner. Get there, and beat Ryo at the strip: he bolts parts on and never tunes them, and everyone needs to see the difference.',
+      'People drive in from other towns now. That’s a known tuner. Get there: the cars that come in with parts bolted on and never tuned are where you show the difference.',
     ],
     lesson: {
       title: 'Where a wrong table hurts',
@@ -243,53 +224,53 @@ export const CHAPTERS = [
       sources: ['Pops’s tips: Closed loop, Injectors', 'The Tuning Course: “The datalog: asked against got”'],
       course: 'datalog',
     },
-    goal: 'Reach 60 reputation and beat Ryo at the drag strip.',
-    met: (c) => (c.rep ?? 0) >= 60 && beat(c, 'drag', 'ryo'),
-    done: 'Ryo asked me who tuned your car. I said Ray’s kid. That felt good to say.',
+    goal: 'Reach 60 reputation: a Known tuner.',
+    met: (c) => (c.rep ?? 0) >= 60,
+    done: 'Someone at the diner asked me who tunes at Ray’s place now. I said Ray’s kid. That felt good to say.',
     reward: 800,
   },
   {
-    id: 'champ', title: 'King of Main Street', subject: 'The Champ',
+    id: 'engine', title: 'Ray’s engines', subject: 'He built them too',
     body: [
-      'There’s something I never told you. The Champ beat your dad the last time Ray raced. Ray was a hundredth behind. He swore he’d go back, and he never got the chance.',
-      'Go and finish it.',
+      'There’s something I never told you. Ray didn’t only tune engines, he built them, on the stand where yours sits now. The last one he built is still in a customer’s car.',
+      'Learn engine building at the Academy, and build one to order. Do it right.',
     ],
     lesson: {
       title: 'What you cannot tune away',
       points: [
-        'A tune finds what the hardware can do; it cannot add what is not there. Past the limits of air, fuel, grip and knock, the gains have to come from parts.',
-        'Reliability first, then the number: a pass is only won if the car finishes it.',
+        'A tune finds what the hardware can do; it cannot add what is not there. Past the limits of air, fuel and knock, the gains have to come from parts.',
+        'Reliability first, then the number: an engine is only finished if it survives the pull.',
       ],
       sources: ['The Tuning Course: “What you cannot tune away”', 'Driven Racing Oil guide (Learn, article 38)'],
       course: 'limits',
     },
-    goal: 'Beat The Champ at the drag strip.',
-    met: (c) => beat(c, 'drag', 'champ'),
-    done: 'You did it. I was there, by the fence. I cried like a fool. Your dad would have been so proud of you.',
+    goal: 'Build an engine to order and hand it back with the job done.',
+    met: built,
+    done: 'You built one. I stood by the stand and listened to it idle for a while. He would have been so proud of you.',
     reward: 1500,
   },
   {
-    id: 'record', title: 'The lap record', subject: 'Valentina',
+    id: 'respected', title: 'A respected shop', subject: 'The shop people talk about',
     body: [
-      'Valentina Cruz holds the Raceway lap record. Ray held it once, in ’98. Bring it home.',
+      'Ray’s shop was the one other tuners sent their hard cases to. Get it back there.',
     ],
     lesson: {
-      title: 'Four contact patches',
+      title: 'Boost, nitrous and the margin',
       points: [
-        'A road tyre holds about 0.8 to 0.9 g; a sticky race slick well over 1.5. Everything a tune does is limited by those four contact patches.',
-        'Accelerating moves weight to the rear axle; braking moves it forward, which is why the front brakes do most of the work.',
+        'Every power adder lowers the knock limit: boost by heating and compressing the charge, nitrous by the extra oxygen it burns. About 2° of timing out per 50 hp of shot is the rule of thumb.',
+        'A good tune leaves a margin to knock and to the injectors’ limit, and the log proves it.',
       ],
-      sources: ['Pops’s tips: Tyres, Weight transfer'],
+      sources: ['Pops’s tips: Boost, Knock', 'Learn, article 41: nitrous'],
     },
-    goal: 'Beat Valentina at the Raceway.',
-    met: (c) => beat(c, 'track', 'valentina'),
-    done: 'The record is back with the family. I put the old photo of Ray and his car up at the diner next to yours.',
+    goal: 'Reach 130 reputation: a Respected shop.',
+    met: (c) => (c.rep ?? 0) >= 130,
+    done: 'Respected shop. The sign out front is Ray’s again.',
     reward: 1500,
   },
   {
     id: 'master', title: 'Master tuner', subject: 'The last thing he taught me',
     body: [
-      'There’s one more step. Ray didn’t become a master because of a race. People drove across the state to have him tune their cars, because he told them the truth about their engines.',
+      'There’s one more step. Ray didn’t become a master because of a number on a sheet. People drove across the state to have him tune their cars, because he told them the truth about their engines.',
       'Make the shop a destination. When you get there, you’ll be what he was.',
     ],
     lesson: {
@@ -369,7 +350,7 @@ export function messagesFor(c) {
     if (i < s.ch) out.push({ id: `text:${ch.id}`, kind: 'text', subject: ch.title, body: [ch.done, ...(ch.reward ? [`+$${ch.reward}`] : [])], order: i * 10 + 5 });
   });
   const tip = tipFor((c.day ?? 1) * 7);
-  out.push({ id: `tip:${c.day ?? 1}`, kind: 'text', subject: `Tip of the day · ${tip.topic}`, body: [tip.text], order: 1000 + (c.day ?? 1) });
+  out.push({ id: `tip:${c.day ?? 1}`, kind: 'text', subject: `Tip of the day: ${tip.topic}`, body: [tip.text], order: 1000 + (c.day ?? 1) });
   return out.sort((a, b) => b.order - a.order);
 }
 
@@ -377,7 +358,7 @@ export function messagesFor(c) {
 export const unreadCount = (c) => { const r = sagaOf(c).read; return messagesFor(c).filter((m) => !r.includes(m.id)).length; };
 
 /**
- * Read a message. The day's tip counts towards the daily goal to listen to Pops.
+ * Read a message.
  * @param {Career} c @param {string} id
  * @returns {Career}
  */
@@ -385,7 +366,6 @@ export function readMessage(c, id) {
   const s = sagaOf(c);
   if (s.read.includes(id)) return c;
   // Only the last few hundred are kept: tips arrive every day without end.
-  const next = { ...c, saga: { ...s, read: [...s.read, id].slice(-400) } };
-  return id.startsWith('tip:') ? bump(next, 'tip') : next;
+  return { ...c, saga: { ...s, read: [...s.read, id].slice(-400) } };
 }
 
