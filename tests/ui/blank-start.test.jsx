@@ -10,7 +10,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
-import { enterSandbox, goTo, enterCareer } from './nav.js';
+import { enterSandbox, goTo, enterCareer, factoryEngine, customForm } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -35,14 +35,14 @@ describe('SANDBOX with no engine yet', () => {
       expect(screen.getByTestId('engine-start')).toBeTruthy();
       expect(screen.queryByTestId('tuning-grid')).toBeNull();
     }
-    expect(screen.getByRole('button', { name: 'Use Nissan VQ35DE Rev-Up' })).toBeTruthy();
-    expect(screen.getByRole('form', { name: 'Describe your engine' })).toBeTruthy();
+    expect(factoryEngine('Nissan VQ35DE Rev-Up')).toBeTruthy();
+    expect(customForm()).toBeTruthy();
   });
 
   it('starts on a prebuilt engine in one click, with that engine named in the header', () => {
     launchBlank();
     goTo('BUILD');
-    fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35HR' }));
+    fireEvent.click(factoryEngine('Nissan VQ35HR'));
     expect(screen.queryByTestId('engine-start')).toBeNull();
     expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35HR/);
   });
@@ -50,7 +50,7 @@ describe('SANDBOX with no engine yet', () => {
   it('refuses a spec with missing or out-of-range figures and says which', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
+    const form = within(customForm());
     fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(form.getAllByRole('alert').length).toBeGreaterThanOrEqual(5);
     expect(screen.getByTestId('engine-start')).toBeTruthy();
@@ -62,7 +62,7 @@ describe('SANDBOX with no engine yet', () => {
   it('builds an engine from the player\'s own figures, showing its displacement first', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
+    const form = within(customForm());
     fireEvent.click(form.getByRole('button', { name: /^V8/ }));
     fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '96' } });
     fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '92' } });
@@ -77,7 +77,7 @@ describe('SANDBOX with no engine yet', () => {
   it('is undone by one UNDO from BUILD, back to no engine', () => {
     launchBlank();
     goTo('BUILD');
-    fireEvent.click(screen.getByRole('button', { name: 'Use Nissan VQ35HR' }));
+    fireEvent.click(factoryEngine('Nissan VQ35HR'));
     fireEvent.click(screen.getAllByRole('button', { name: /^Undo Preset/ }).at(0));
     expect(screen.getByTestId('engine-start')).toBeTruthy();
   });
@@ -96,7 +96,7 @@ describe('figures the app assumed for the player\'s own engine', () => {
   it('lists them on BUILD until each is set, and drops each as the player sets it', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
+    const form = within(customForm());
     fireEvent.click(form.getByRole('button', { name: /^V6/ }));
     fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '95.5' } });
     fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '81.4' } });
@@ -142,7 +142,7 @@ describe('the form refuses what the simulator cannot answer for, and says why', 
   it('a redline past 11,000 rpm', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(screen.getByRole('form', { name: 'Describe your engine' }));
+    const form = within(customForm());
     fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '11500' } });
     fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     expect(form.getByText(/Between 4000 and 11000 rpm\. Past 11,000 rpm is racing-engine territory/)).toBeTruthy();

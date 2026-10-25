@@ -168,20 +168,33 @@ function makeEngineStand(at, run) {
   // Turned a little toward you, so you see the belt end and the intake side together.
   group.rotation.y = -0.5;
   const c = run ? W.engine.standDark : W.engine.stand;
-  group.add(box(1.4, 0.06, 0.12, c, { y: 0.1 }));
-  group.add(box(0.12, 0.06, 1.1, c, { x: -0.6, y: 0.1 }));
-  group.add(box(0.12, 0.06, 1.1, c, { x: 0.6, y: 0.1 }));
-  for (const [x, z] of [[-0.6, -0.5], [-0.6, 0.5], [0.6, -0.5], [0.6, 0.5]]) group.add(cyl(0.06, 0.06, 0.08, W.black, { x, y: 0.04, z, edge: false }));
-  group.add(box(0.1, 0.9, 0.1, W.engine.standDark, { y: 0.55, z: -0.1 }));
-  if (run) {
-    // A run stand's radiator ahead of the belt end, and its exhaust out the back.
-    group.add(box(0.08, 0.6, 0.5, W.engine.cooler, { x: 0.78, y: 0.75 }));
-    group.add(cyl(0.05, 0.05, 0.9, W.engine.pipe, { axis: 'x', x: -1.05, y: 0.45, edge: false }));
+  // An engine stand as one is built: a base on four casters, an upright post at the back,
+  // and a mounting head on it whose four arms bolt to the engine's bellhousing face, so the
+  // engine hangs off the head with the floor clear under it.
+  const POST_X = -0.66;
+  group.add(box(0.1, 0.06, 0.9, c, { x: POST_X, y: 0.1 }));
+  group.add(box(1.16, 0.06, 0.1, c, { x: POST_X + 0.58, y: 0.1 }));
+  group.add(box(0.1, 0.06, 0.72, c, { x: POST_X + 1.12, y: 0.1 }));
+  for (const [x, z] of [[POST_X, -0.4], [POST_X, 0.4], [POST_X + 1.12, -0.32], [POST_X + 1.12, 0.32]]) group.add(cyl(0.05, 0.05, 0.07, W.black, { axis: 'z', x, y: 0.04, z, edge: false }));
+  group.add(box(0.1, 0.9, 0.1, c, { x: POST_X, y: 0.55 }));
+  // The head: a tube off the post, a turning plate, and four arms in an X to the block.
+  group.add(cyl(0.04, 0.04, 0.16, W.engine.standDark, { axis: 'x', x: POST_X + 0.1, y: 0.95, edge: false }));
+  group.add(cyl(0.11, 0.11, 0.03, W.engine.standDark, { axis: 'x', x: POST_X + 0.19, y: 0.95, edge: false }));
+  for (const a of [Math.PI / 4, -Math.PI / 4]) {
+    const arm = box(0.03, 0.44, 0.04, c, { x: POST_X + 0.21, y: 0.95 });
+    arm.rotation.x = a;
+    group.add(arm);
   }
+  // The bellhousing face the arms bolt to; the engine runs forward of it, crank along x.
   const mount = new THREE.Group();
-  mount.position.set(0, 0.95, 0);
+  mount.position.set(POST_X + 0.24, 0.95, 0);
   mount.rotation.y = Math.PI / 2;
   group.add(mount);
+  if (run) {
+    // A run stand's radiator ahead of the belt end, and its exhaust out the back.
+    group.add(box(0.08, 0.6, 0.5, W.engine.cooler, { x: 0.8, y: 0.75 }));
+    group.add(cyl(0.05, 0.05, 0.6, W.engine.pipe, { axis: 'x', x: POST_X - 0.35, y: 0.45, edge: false }));
+  }
   /** @type {ReturnType<typeof makeEngine>|null} */
   let engine = null;
   // A part going on: the engine settles on its mount, as it does when you bolt something to it.
@@ -194,7 +207,8 @@ function makeEngineStand(at, run) {
       if (engine) mount.remove(engine.group);
       engine = makeEngine(spec);
       engine.group.scale.setScalar(1.25);
-      engine.group.position.set(0, -0.4, 0);
+      // Its back face against the head, hanging at the head's height.
+      engine.group.position.set(0, -0.4, ((engine.size.len - 0.2) / 2 + 0.06) * 1.25);
       mount.add(engine.group);
       if (jolt) settle = 1;
     },
