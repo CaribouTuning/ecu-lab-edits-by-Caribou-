@@ -28,9 +28,9 @@ const FINISHES = [
   // Powder-coated equipment: the stands, the tool chests, the dyno's frame.
   [[E.stand, E.standDark, W.toolRed, W.toolBlue, W.toolYellow, W.hazard, W.floorStripe, E.cover, E.coverDark, E.coverOhv, E.filter], { metalness: 0.05, roughness: 0.55 }],
   // A sealed epoxy floor: a dull sheen, not a mirror.
-  [[W.floorEpoxy, W.floorEpoxyAlt, W.floorGrout], { metalness: 0, roughness: 0.6 }],
+  [[W.floorEpoxy, W.floorEpoxyAlt, W.floorGrout, W.floorShop], { metalness: 0, roughness: 0.6 }],
   // Glass.
-  [[W.glass, W.glassDark, W.doorGlass], { metalness: 0, roughness: 0.08 }],
+  [[W.glass, W.glassDark, W.doorGlass, W.screenOff], { metalness: 0, roughness: 0.08 }],
 ];
 const PAINT = new Set(Object.values(W.paint).map((c) => new THREE.Color(c).getHex()));
 const finishOf = new Map();
@@ -83,6 +83,47 @@ export function realize(root) {
     if (Array.isArray(mesh.material)) mesh.material = mesh.material.map((m) => (m.type === 'MeshToonMaterial' ? realMaterial(m) : m));
     else if (mesh.material?.type === 'MeshToonMaterial') mesh.material = realMaterial(mesh.material);
   });
+}
+
+/**
+ * A sealed concrete floor: grey, mottled where it was trowelled and where it has worn, with
+ * saw-cut control joints on a grid. Drawn once into a canvas.
+ * @param {number} w @param {number} d metres the floor covers
+ * @returns {THREE.MeshStandardMaterial}
+ */
+export function concreteFloor(w, d) {
+  const px = 64; // canvas pixels a metre
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(w * px / 2);
+  cv.height = Math.round(d * px / 2);
+  const g = cv.getContext('2d');
+  const base = new THREE.Color(W.floorShop);
+  if (g) {
+    g.fillStyle = `#${base.getHexString()}`;
+    g.fillRect(0, 0, cv.width, cv.height);
+    // Mottling: soft blotches a little lighter and darker than the slab, seeded so it never changes.
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    for (let i = 0; i < 900; i += 1) {
+      const c = base.clone().offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
+      g.globalAlpha = 0.18;
+      g.fillStyle = `#${c.getHexString()}`;
+      g.beginPath();
+      g.arc(rnd() * cv.width, rnd() * cv.height, 4 + rnd() * 26, 0, Math.PI * 2);
+      g.fill();
+    }
+    // Control joints every 3 m each way, as a slab this size is cut.
+    g.globalAlpha = 0.9;
+    g.strokeStyle = W.floorShopJoint;
+    g.lineWidth = 1;
+    const step = (3 * px) / 2;
+    for (let x = step; x < cv.width; x += step) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, cv.height); g.stroke(); }
+    for (let y = step; y < cv.height; y += step) { g.beginPath(); g.moveTo(0, y); g.lineTo(cv.width, y); g.stroke(); }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.72, metalness: 0 });
 }
 
 /**

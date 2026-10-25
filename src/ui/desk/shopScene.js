@@ -15,7 +15,7 @@
 
 import { world as W } from '../tokens.js';
 import { THREE, box, cyl, floorPlane, glow, groundPlane } from '../world/gfx.js';
-import { realize, roomReflections } from './realize.js';
+import { concreteFloor, realize, roomReflections } from './realize.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
 import { dressShop } from './shopDetail.js';
@@ -81,6 +81,8 @@ function makeCart() {
     // The post, and the monitor on it: its bottom edge just clear of the box.
     body.add(box(0.08, my - 0.2, 0.08, W.metalDark, { y: 0.2 + (my - 0.2) / 2, z: -0.16 }));
     body.add(box(mw + 0.07, mh + 0.07, 0.05, W.black, { y: my, z: -0.1 }));
+    // The panel's glass, switched off: dark, but it catches the shop's lights.
+    body.add(box(mw, mh, 0.002, W.screenOff, { y: my, z: -0.0745, cast: false }));
     monitorAt.position.set(0, my, -0.074);
     monitor.w = mw; monitor.h = mh;
     panel.w = cw; panel.h = ch;
@@ -90,7 +92,11 @@ function makeCart() {
 
 /** The carts' faces for each shape of view, metres: monitor, then control box. */
 const CART_SIZES = {
-  dyno: { short: { mw: 1.32, mh: 0.8, cw: 0.4, ch: 0.66, side: true }, wide: { mw: 1.32, mh: 0.8, cw: 0.92, ch: 0.3 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
+  // Real sizes: a 32-inch screen and a control box under it. Walked up to, the view fits
+  // whatever size the cart is, so a TV-sized one only made the shop floor a wall of screens.
+  dyno: { short: { mw: 0.82, mh: 0.5, cw: 0.25, ch: 0.41, side: true }, wide: { mw: 0.82, mh: 0.5, cw: 0.57, ch: 0.19 }, tall: { mw: 0.42, mh: 0.7, cw: 0.45, ch: 0.16 } },
+  // The bench's computer has no control box under it, so its monitor takes that room: bigger.
+  build: { short: { mw: 1.5, mh: 1.12 }, wide: { mw: 1.6, mh: 1.1 }, tall: { mw: 0.8, mh: 1.3 } },
   stand: { short: { mw: 1.24, mh: 0.86, cw: 0.4, ch: 0.7, side: true }, wide: { mw: 1.24, mh: 0.86, cw: 0.78, ch: 0.26 }, tall: { mw: 0.68, mh: 1.12, cw: 0.72, ch: 0.26 } },
 };
 
@@ -256,7 +262,9 @@ export function buildShopScene(stage, init) {
   scene.environmentIntensity = 0.35;
 
   // ---- the room ----
-  root.add(floorPlane(16, 14, W.floorEpoxy, { y: 0 }));
+  const floor = floorPlane(16, 14, W.floorShop, { y: 0 });
+  floor.material = concreteFloor(16, 14);
+  root.add(floor);
   // The shop, dressed: benches, tools, racking, jacks, the hoist, lights (shopDetail.js).
   dressShop(root);
   const wallC = W.wallBase;
@@ -304,6 +312,9 @@ export function buildShopScene(stage, init) {
   // Ceiling LED strip fixtures in rows over the work, the way a shop is lit: long, even,
   // white light from above, each row hung on two short chains. One light per row casts the
   // shadows that put the cars, stands and benches on the floor.
+  // Hung from the ceiling, so they go with it when the view looks down through the roof.
+  const fixtures = new THREE.Group();
+  root.add(fixtures);
   for (const x of [-4.2, 0.2, 4.4]) {
     for (const z of [-3.6, 0.2, 3.4]) {
       const fx = new THREE.Group();
@@ -313,7 +324,7 @@ export function buildShopScene(stage, init) {
       lens.position.y = -0.035;
       fx.add(lens);
       for (const cz of [-0.7, 0.7]) fx.add(cyl(0.006, 0.006, 0.42, W.metalDark, { y: 0.24, z: cz, cast: false, edge: false }));
-      root.add(fx);
+      fixtures.add(fx);
     }
     const key = new THREE.SpotLight(W.sky.day.sun, 34, 14, 1.15, 0.9, 1.6);
     key.position.set(x, 4.45, 0.4);
@@ -352,7 +363,7 @@ export function buildShopScene(stage, init) {
   });
 
   // ---- the dyno, and a car on it ----
-  let dyno = makeDyno(true, { monitor: false });
+  let dyno = makeDyno(true, { monitor: false, fanZ: -2.8 });
   dyno.position.copy(AT.dyno);
   root.add(dyno);
   /** @type {ReturnType<typeof makeCar>|null} */
@@ -374,7 +385,7 @@ export function buildShopScene(stage, init) {
     const rollers = cars.rollers !== false;
     if (!!dyno.userData.rollers !== rollers) {
       root.remove(dyno);
-      dyno = makeDyno(rollers, { monitor: false });
+      dyno = makeDyno(rollers, { monitor: false, fanZ: -2.8 });
       dyno.position.copy(AT.dyno);
       root.add(dyno);
     }
@@ -420,10 +431,14 @@ export function buildShopScene(stage, init) {
   }
   const standCart = makeCart();
   standCart.group.position.copy(AT.standCart);
+  // Each cart is turned in toward its engine, as one is parked to watch the engine and the
+  // screen together, not lined up square to the room. The station's view turns with it.
+  standCart.group.rotation.y = 0.4;
   root.add(standCart.group);
   // The build bench's computer: a monitor and no control box, for there is nothing to start.
   const buildCart = makeCart();
   buildCart.group.position.copy(AT.buildCart);
+  buildCart.group.rotation.y = 0.45;
   root.add(buildCart.group);
   /** @type {'wide'|'tall'|'short'|null} */
   let cartShape = null;
@@ -433,7 +448,7 @@ export function buildShopScene(stage, init) {
     cartShape = sh;
     dynoCart.shape(CART_SIZES.dyno[sh]);
     standCart.shape(CART_SIZES.stand[sh]);
-    buildCart.shape({ ...CART_SIZES.stand[sh], cw: 0, ch: 0, side: false });
+    buildCart.shape({ ...CART_SIZES.build[sh], cw: 0, ch: 0, side: false });
     root.updateMatrixWorld(true);
     poseCache.clear();
   };
@@ -628,6 +643,10 @@ export function buildShopScene(stage, init) {
           : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
       if (p === target) return;
       ceiling.visible = p !== POSES.bayTall;
+      fixtures.visible = ceiling.visible;
+      // The extraction hoses hang from the ceiling too.
+      buildStand.duct.visible = ceiling.visible;
+      runStand.duct.visible = ceiling.visible;
       from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
       target = p;
       blend = 0;

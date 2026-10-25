@@ -447,6 +447,9 @@ export const world = Object.freeze({
   black: '#14161b',
   white: '#f2f4f7',
   // Shop interior.
+  // The shop's floor: sealed grey concrete, its saw-cut joints a shade darker.
+  floorShop: '#6d716f',
+  floorShopJoint: '#4c4f4e',
   floorEpoxy: '#8b9a95',
   floorEpoxyAlt: '#829089',
   floorGrout: '#6b7873',
@@ -520,7 +523,7 @@ export const world = Object.freeze({
   // An engine out of its car (world/models/engine.js): the Build app's model and the stand in the shop.
   engine: Object.freeze({
     block: '#7d838c', blockDark: '#5c6169', head: '#a9b0b9', blockIron: '#555a61', blockIronDark: '#41454b', headIron: '#696f77', cover: '#c8322c', coverDark: '#8e221e', coverOhv: '#2a2d33',
-    plenum: '#b9c0c8', pipe: '#8a6a52', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
+    plenum: '#b9c0c8', pipe: '#5f5853', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
     pulley: '#3a3e46', plug: '#2c6fd0', hose: '#22252b', filter: '#d23a3a', cooler: '#5d6470', bottle: '#3a7ad8',
     stand: '#8e3a2c', standDark: '#2f3237', flywheel: '#4a4f57', backdrop: '#1e1e1e', floor: '#2c2c2c',
   }),

@@ -37,7 +37,7 @@ export function makeLift() {
 /**
  * A chassis dyno: rollers in a pit, a big fan, and a monitor on a stand.
  * @param {boolean} [owned] false: only the painted bay where one will go
- * @param {{monitor?: boolean}} [o] `monitor: false` leaves the stand off (the shop's own
+ * @param {{monitor?: boolean, fanZ?: number}} [o] `monitor: false` leaves the stand off (the shop's own
  *   dyno has its computer on a cart beside it)
  */
 export function makeDyno(owned = true, o = {}) {
@@ -60,18 +60,27 @@ export function makeDyno(owned = true, o = {}) {
     g.add(box(1.1, 0.06, 1.5, W.rimDark, { x: s * 0.92, y: 0.13, z: 0.5, edge: false }));
   }
   g.userData.rollers = rollers;
-  // The cooling fan stands in front of the nose.
+  // The cooling fan stands in front of the nose: a drum fan, its open shroud on a yoke on a
+  // wheeled base, blowing at the radiator. `fanZ` puts it where the car's nose is.
   const fan = G();
-  fan.position.set(0, 0.9, 3.7);
-  fan.add(cyl(0.7, 0.7, 0.18, W.metalDark, { axis: 'z' }));
+  const fanZ = o.fanZ ?? 3.7;
+  fan.position.set(0, 0.62, fanZ);
+  if (fanZ < 0) fan.rotation.y = Math.PI;
+  const shroud = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.26, 28, 1, true), toon(W.metalDark, { side: THREE.DoubleSide }));
+  shroud.rotation.x = Math.PI / 2;
+  shroud.castShadow = true;
+  fan.add(shroud);
+  fan.add(cyl(0.09, 0.09, 0.2, W.black, { axis: 'z', z: -0.08, seg: 16 }));
+  for (const s of [-1, 1]) fan.add(box(0.04, 0.52, 0.04, W.metalDark, { x: s * 0.5, y: -0.26 }));
+  fan.add(box(1.04, 0.05, 0.5, W.metalDark, { y: -0.56 }));
+  for (const s of [-1, 1]) for (const z of [-0.2, 0.2]) fan.add(cyl(0.03, 0.03, 0.03, W.black, { axis: 'x', x: s * 0.44, y: -0.6, z }));
   const blades = G();
   for (let i = 0; i < 4; i += 1) {
-    const b = box(0.14, 1.1, 0.04, W.metalLight, { edge: false });
+    const b = box(0.12, 0.8, 0.02, W.metalLight, { edge: false });
     b.rotation.z = (i * Math.PI) / 2 + 0.3;
     blades.add(b);
   }
   fan.add(blades);
-  fan.add(box(0.12, 0.9, 0.12, W.metal, { y: -0.45, z: 0 }));
   g.add(fan);
   g.userData.fan = blades;
   // Monitor stand and strap anchors.
