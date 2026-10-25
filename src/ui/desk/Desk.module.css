@@ -415,3 +415,7 @@
 .spotLayer:has([data-next='true']) .spot:not([data-next='true']) .spotLabel { padding: 2px 8px; font-size: var(--fs-sm); opacity: 0.62; border-width: 1px; }
 .spotLayer:has([data-next='true']) .spot:not([data-next='true'])::after { height: 12px; opacity: 0.5; }
 .spotLayer .spot:not([data-next='true']):hover .spotLabel, .spotLayer .spot:not([data-next='true']):focus-visible .spotLabel { opacity: 1; }
+/* The places that are not next are only names on the floor: no box, no stem, so the shop
+   is not covered in tags. The next place keeps its marker. */
+.spotLayer:has([data-next='true']) .spot:not([data-next='true']) .spotLabel { background: none; border-color: transparent; color: var(--ink); text-shadow: 0 1px 2px var(--bg), 0 0 6px var(--bg); opacity: 0.9; }
+.spotLayer:has([data-next='true']) .spot:not([data-next='true'])::after { display: none; }

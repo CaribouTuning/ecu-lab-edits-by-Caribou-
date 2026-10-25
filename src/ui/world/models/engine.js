@@ -24,7 +24,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cyl } from '../gfx.js';
+import { THREE, box, cyl, rbox, toon } from '../gfx.js';
 
 const E = W.engine;
 
@@ -43,6 +43,22 @@ const E = W.engine;
  * @property {boolean} [twinTurbo]
  * @property {number} [sparkPlugs] per cylinder
  */
+
+/**
+ * A round tube from one point to another: runners, header primaries, the belt's runs.
+ * @param {[number, number, number]} a @param {[number, number, number]} b @param {number} r @param {string} color
+ */
+function tube(a, b, r, color, seg = 10) {
+  const va = new THREE.Vector3(...a);
+  const vb = new THREE.Vector3(...b);
+  const d = vb.clone().sub(va);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), seg), toon(color));
+  m.position.copy(va).add(vb).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  m.castShadow = true;
+  m.receiveShadow = true;
+  return m;
+}
 
 const PER_BANK = { I4: 4, I6: 6, V6: 3, V8: 4 };
 /** Half the V angle, radians: a 60-degree V6 and a 90-degree V8. */
@@ -66,14 +82,29 @@ export function makeEngine(spec = {}) {
   const add = (/** @type {THREE.Object3D[]} */ ...o) => { root.add(...o); };
 
   // ---- the bottom end: sump, block, bellhousing ----
-  const sumpW = vee ? 0.32 : 0.24;
-  add(box(sumpW, 0.1, len * 0.85, E.blockDark, { y: 0.05, z: -0.02 }));
+  // A pressed-steel pan: its flange, and the deeper sump at the back where the pickup sits.
+  const sumpW = vee ? 0.3 : 0.22;
+  add(rbox(sumpW + 0.03, 0.02, len * 0.92, E.blockDark, { y: 0.1, r: 0.006 }));
+  add(rbox(sumpW, 0.07, len * 0.88, E.blockDark, { y: 0.06, r: 0.02 }));
+  add(rbox(sumpW * 0.8, 0.09, len * 0.4, E.blockDark, { y: 0.045, z: -len * 0.22, r: 0.025 }));
   const deckY = 0.1 + blockH;
   const iron = spec.blockMaterial === 'Cast Iron';
-  add(box(vee ? 0.36 : 0.22, blockH, len, iron ? E.blockIron : E.block, { y: 0.1 + blockH / 2 }));
-  // Ribs cast into the block's sides.
-  for (let k = 0; k < per; k += 1) for (const s of [-1, 1]) add(box(0.012, blockH * 0.7, 0.02, iron ? E.blockIronDark : E.blockDark, { x: s * ((vee ? 0.36 : 0.22) / 2 + 0.006), y: 0.1 + blockH * 0.45, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
-  add(cyl(0.2, 0.22, 0.06, E.flywheel, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.03, seg: 16 }));
+  const blockC = iron ? E.blockIron : E.block;
+  const ribC = iron ? E.blockIronDark : E.blockDark;
+  // A V block is a V: a crankcase at the bottom and a bank of cylinders rising from it to
+  // each deck (the banks are added with the heads, below). An inline is one upright casting.
+  const caseW = vee ? 0.28 : 0.22;
+  const caseH = vee ? blockH * 0.48 : blockH;
+  add(rbox(caseW, caseH, len, blockC, { y: 0.1 + caseH / 2, r: 0.018 }));
+  // Main-bearing webs cast into the crankcase sides, one between each pair of cylinders.
+  for (let k = 0; k <= per; k += 1) for (const s of [-1, 1]) add(box(0.012, caseH * 0.8, 0.018, ribC, { x: s * (caseW / 2 + 0.005), y: 0.1 + caseH * 0.45, z: -len / 2 + 0.05 + pitch * k }));
+  // The bellhousing flange the gearbox (or the stand's head) bolts to, and the flywheel.
+  add(rbox(vee ? 0.46 : 0.34, blockH + 0.04, 0.03, blockC, { y: 0.1 + blockH / 2, z: -len / 2 + 0.01, r: 0.012 }));
+  add(cyl(0.2, 0.2, 0.035, E.flywheel, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.02, seg: 32 }));
+  add(cyl(0.21, 0.21, 0.012, E.pulley, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.042, seg: 32 }));
+  // The oil filter on its boss, low on the side, and the dipstick tube.
+  add(cyl(0.04, 0.04, 0.1, E.bottle, { axis: 'x', x: -(caseW / 2 + 0.06), y: 0.1 + caseH * 0.4, z: len * 0.15, seg: 16 }));
+  add(cyl(0.03, 0.03, 0.02, E.blockDark, { axis: 'x', x: -(caseW / 2 + 0.005), y: 0.1 + caseH * 0.4, z: len * 0.15, seg: 12 }));
 
   // ---- the banks: a head and its cover on each, the plugs or coils on top ----
   /** @type {{x: number, y: number, ang: number, out: number}[]} */
@@ -84,17 +115,21 @@ export function makeEngine(spec = {}) {
     bank.position.set(b.x, b.y, 0);
     bank.rotation.z = -b.ang;
     const hw = vt === 'dohc' ? 0.2 : vt === 'sohc' ? 0.16 : 0.15;
-    bank.add(box(hw, headH, len - 0.02, spec.headMaterial === 'Cast Iron' ? E.headIron : E.head, { y: headH / 2 }));
+    // On a V, the bank of cylinders under the head, down to the crankcase.
+    if (vee) bank.add(rbox(0.17, blockH * 0.6, len, blockC, { y: -blockH * 0.3, r: 0.015 }));
+    bank.add(rbox(hw, headH, len - 0.02, spec.headMaterial === 'Cast Iron' ? E.headIron : E.head, { y: headH / 2, r: 0.012 }));
     const coverH = vt === 'ohv' ? 0.05 : 0.07;
     const cover = vt === 'ohv' ? E.coverOhv : E.cover;
-    bank.add(box(hw - 0.02, coverH, len - 0.06, cover, { y: headH + coverH / 2 }));
-    if (vt === 'dohc') for (const cx of [-0.045, 0.045]) bank.add(box(0.045, 0.02, len - 0.1, E.coverDark, { x: cx, y: headH + coverH + 0.01 }));
-    else bank.add(box(0.05, 0.015, len - 0.1, vt === 'ohv' ? E.hose : E.coverDark, { y: headH + coverH + 0.008 }));
+    // The cam cover: a rounded casting on a gasket, held down by a row of bolts each side.
+    bank.add(rbox(hw - 0.02, coverH, len - 0.06, cover, { y: headH + coverH / 2, r: 0.022 }));
+    for (let k = 0; k <= per; k += 1) for (const bx of [-1, 1]) bank.add(cyl(0.008, 0.008, 0.012, E.pulley, { x: bx * (hw / 2 - 0.018), y: headH + coverH * 0.35, z: -len / 2 + 0.05 + pitch * k, seg: 6 }));
+    if (vt === 'dohc') for (const cx of [-0.045, 0.045]) bank.add(rbox(0.045, 0.02, len - 0.1, E.coverDark, { x: cx, y: headH + coverH + 0.006, r: 0.008 }));
+    else bank.add(rbox(0.05, 0.015, len - 0.1, vt === 'ohv' ? E.hose : E.coverDark, { y: headH + coverH + 0.004, r: 0.006 }));
     // A coil (or a plug lead) for every cylinder on the bank: two a cylinder on a twin-plug head.
     const coils = spec.sparkPlugs === 2 ? [-0.035, 0.035] : [0];
-    for (let k = 0; k < per; k += 1) for (const dz of coils) bank.add(box(0.03, 0.04, 0.03, E.plug, { x: vt === 'ohv' ? b.out * 0.06 : 0, y: headH + coverH + 0.03, z: -len / 2 + 0.05 + pitch * (k + 0.5) + dz * pitch * 2.4 }));
+    for (let k = 0; k < per; k += 1) for (const dz of coils) bank.add(rbox(0.032, 0.045, 0.032, E.plug, { r: 0.008, x: vt === 'ohv' ? b.out * 0.06 : 0, y: headH + coverH + 0.03, z: -len / 2 + 0.05 + pitch * (k + 0.5) + dz * pitch * 2.4 }));
     // Cam phasers: a disc on the nose of each cam, at the belt end.
-    if (spec.vvt && vt !== 'ohv') for (const cx of vt === 'dohc' ? [-0.045, 0.045] : [0]) bank.add(cyl(0.05, 0.05, 0.03, E.pulley, { axis: 'z', x: cx, y: headH * 0.6, z: len / 2 + 0.01, seg: 12 }));
+    if (spec.vvt && vt !== 'ohv') for (const cx of vt === 'dohc' ? [-0.045, 0.045] : [0]) bank.add(cyl(0.05, 0.05, 0.03, E.pulley, { axis: 'z', x: cx, y: headH * 0.6, z: len / 2 + 0.01, seg: 24 }));
     // Direct injection: the cam-driven high-pressure pump on the cover, and its rail along the head.
     if (spec.direct) {
       bank.add(cyl(0.03, 0.03, 0.06, E.turboCold, { x: b.out * 0.04, y: headH + coverH + 0.05, z: -len / 2 + 0.08, seg: 10 }));
@@ -109,10 +144,15 @@ export function makeEngine(spec = {}) {
   // ---- the intake: a plenum and its runners, the throttle at the front ----
   const plenumY = vee ? topY + 0.03 : deckY + 0.06;
   const plenumX = vee ? 0 : -0.2;
-  add(box(vee ? 0.16 : 0.1, 0.09, len * 0.8, E.plenum, { x: plenumX, y: plenumY }));
-  if (!vee) for (let k = 0; k < per; k += 1) add(box(0.11, 0.035, 0.035, E.plenum, { x: -0.13, y: deckY + 0.07, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
+  add(rbox(vee ? 0.16 : 0.1, 0.09, len * 0.8, E.plenum, { x: plenumX, y: plenumY, r: 0.035 }));
+  // A runner from the plenum to each intake port: across the valley on a V, down the side on an inline.
+  for (let k = 0; k < per; k += 1) {
+    const z = -len / 2 + 0.05 + pitch * (k + 0.5);
+    if (vee) for (const s of [-1, 1]) add(tube([s * 0.05, plenumY - 0.02, z + s * pitch * 0.18], [s * 0.1, deckY + 0.05, z + s * pitch * 0.18], 0.018, E.plenum));
+    else add(tube([plenumX + 0.03, plenumY, z], [-0.08, deckY + 0.06, z], 0.018, E.plenum));
+  }
   const tbZ = len * 0.4 + 0.05;
-  add(cyl(0.045, 0.045, 0.07, E.turboCold, { axis: 'z', x: plenumX, y: plenumY, z: tbZ }));
+  add(cyl(0.045, 0.045, 0.07, E.turboCold, { axis: 'z', x: plenumX, y: plenumY, z: tbZ, seg: 20 }));
   // The inlet: a cone filter, or the pipe back to the airbox.
   const inletZ = tbZ + 0.12;
   if (spec.intake) add(cyl(0.05, 0.07, 0.13, E.filter, { axis: 'z', x: plenumX, y: plenumY, z: inletZ + 0.03 }));
@@ -134,13 +174,14 @@ export function makeEngine(spec = {}) {
       // A primary from each port, dropping to a collector at the back.
       for (let k = 0; k < per; k += 1) {
         const z = -len / 2 + 0.05 + pitch * (k + 0.5);
-        add(box(0.03, 0.03, 0.08, E.pipeHot, { x: ex, y: exY, z }));
-        add(box(0.03, 0.2, 0.03, E.pipeHot, { x: ex + s * 0.04, y: exY - 0.1, z }));
+        add(tube([ex - s * 0.04, exY, z], [ex + s * 0.03, exY - 0.03, z], 0.016, E.pipeHot));
+        add(tube([ex + s * 0.03, exY - 0.03, z], [ex + s * 0.045, exY - 0.2, -len * 0.1 + (z + len * 0.1) * 0.3], 0.016, E.pipeHot));
       }
-      add(cyl(0.035, 0.035, len * 0.7, E.pipeHot, { axis: 'z', x: ex + s * 0.04, y: exY - 0.22, z: -len * 0.1 }));
+      add(cyl(0.035, 0.035, len * 0.7, E.pipeHot, { axis: 'z', x: ex + s * 0.045, y: exY - 0.22, z: -len * 0.1, seg: 16 }));
     } else {
-      add(box(0.06, 0.06, len * 0.8, E.pipe, { x: ex, y: exY }));
-      for (let k = 0; k < per; k += 1) add(box(0.04, 0.04, 0.04, E.pipe, { x: ex - s * 0.04, y: exY, z: -len / 2 + 0.05 + pitch * (k + 0.5) }));
+      // A cast log manifold: a round log along the head, a short port to each cylinder.
+      add(cyl(0.032, 0.032, len * 0.8, E.pipe, { axis: 'z', x: ex, y: exY, seg: 14 }));
+      for (let k = 0; k < per; k += 1) add(tube([ex - s * 0.05, exY + 0.01, -len / 2 + 0.05 + pitch * (k + 0.5)], [ex, exY, -len / 2 + 0.05 + pitch * (k + 0.5)], 0.022, E.pipe));
     }
   }
 
@@ -177,10 +218,14 @@ export function makeEngine(spec = {}) {
   // ---- the front: the crank pulley, the alternator, the water pump, and the belt round them ----
   const front = len / 2 + 0.03;
   const crankY = 0.1 + blockH * 0.4;
-  const crank = cyl(0.08, 0.08, 0.04, E.pulley, { axis: 'z', y: crankY, z: front, seg: 12 });
-  const alt = cyl(0.05, 0.05, 0.04, E.pulley, { axis: 'z', x: -0.16, y: crankY + 0.2, z: front, seg: 10 });
-  const pump = cyl(0.045, 0.045, 0.04, E.pulley, { axis: 'z', y: crankY + 0.16, z: front, seg: 10 });
-  add(cyl(0.065, 0.075, 0.1, E.turboCold, { axis: 'z', x: -0.16, y: crankY + 0.2, z: front - 0.07, seg: 10 }));
+  // The timing cover over the front of the block, the pulleys on the outside of it.
+  add(rbox(vee ? 0.34 : 0.24, deckY - 0.1, 0.03, E.blockDark, { y: 0.1 + (deckY - 0.1) / 2, z: len / 2 + 0.002, r: 0.012 }));
+  const crank = cyl(0.08, 0.08, 0.04, E.pulley, { axis: 'z', y: crankY, z: front, seg: 28 });
+  const alt = cyl(0.05, 0.05, 0.04, E.pulley, { axis: 'z', x: -0.16, y: crankY + 0.2, z: front, seg: 20 });
+  const pump = cyl(0.045, 0.045, 0.04, E.pulley, { axis: 'z', y: crankY + 0.16, z: front, seg: 20 });
+  // The alternator: a finned round body on a bracket, behind its pulley.
+  add(cyl(0.07, 0.07, 0.11, E.turboCold, { axis: 'z', x: -0.16, y: crankY + 0.2, z: front - 0.075, seg: 20 }));
+  add(box(0.03, 0.12, 0.03, E.blockDark, { x: -0.12, y: crankY + 0.12, z: front - 0.05 }));
   // A mark on each pulley, so it is plain when they turn.
   for (const p of [crank, alt, pump]) {
     const r = /** @type {THREE.CylinderGeometry} */ (p.geometry).parameters.radiusTop;
