@@ -22,6 +22,7 @@ import { CARIBOU_FILL, CARIBOU_INK } from '../screens/caribouLogo.js';
 
 import { ShopBackdrop } from './ShopBackdrop.jsx';
 
+import { FirstRun } from './FirstRun.jsx';
 import styles from './Desk.module.css';
 
 /**
@@ -301,6 +302,7 @@ export function Desk({
     <div className={styles.desk} data-mode={mode}>
       <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
+      {mode === 'bay' && <FirstRun career={board} />}
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (

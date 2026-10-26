@@ -1,0 +1,16 @@
+/* A card at the foot of the shop view, the shop still in sight above it. */
+.card {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 4;
+  width: min(460px, calc(100% - 32px)); padding: 14px 16px 12px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line-hi); border-radius: var(--r-md);
+  font-family: var(--sans);
+}
+.count { font-size: var(--fs-sm); color: var(--ink2); }
+.title { margin: 2px 0 6px; font-size: var(--fs-lg); font-weight: 700; }
+.text { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.5; color: var(--ink); }
+.row { display: flex; gap: 8px; align-items: center; }
+.skip, .back, .go { height: 32px; padding: 0 14px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+.skip { margin-right: auto; border: 0; background: none; color: var(--ink2); padding: 0; }
+.back { border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); }
+.go { border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); }
+.skip:focus-visible, .back:focus-visible, .go:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
