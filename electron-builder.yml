@@ -47,6 +47,14 @@ portable:
 
 mac:
   category: public.app-category.education
+  # Ad-hoc signing ('-'): no certificate, but a valid signature over the whole bundle.
+  # Left fully unsigned, the arm64 app keeps Electron's linker signature, which no
+  # longer matches the renamed bundle, and Apple Silicon reports a download as
+  # "damaged" with no way to open it. Ad-hoc signed, it gets the usual unidentified-
+  # developer prompt instead. The hardened runtime only matters for notarization,
+  # and ad-hoc signing with it on needs an extra entitlement, so it is off.
+  identity: '-'
+  hardenedRuntime: false
   target:
     - { target: dmg, arch: [x64, arm64] }
   artifactName: ECU-Lab-mac-${arch}.${ext}

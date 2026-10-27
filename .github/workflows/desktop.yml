@@ -60,7 +60,8 @@ jobs:
           - { os: ubuntu-latest, name: linux, flag: --linux }
     runs-on: ${{ matrix.os }}
     env:
-      # The installers are unsigned. Say so, rather than let the builder go looking
+      # No certificate is used: Windows and Linux are unsigned, and macOS is ad-hoc
+      # signed (electron-builder.yml). Say so, rather than let the builder go looking
       # for a certificate that is not there.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
@@ -76,6 +77,16 @@ jobs:
       # `desktop:dist` builds the web app first, then packages it.
       - name: Package
         run: npm run desktop:dist -- ${{ matrix.flag }}
+
+      # A bundle whose signature does not verify opens on a user's Mac as "damaged".
+      # One local build produced an x64 app with a broken Electron Framework signature,
+      # so check every app before its DMG is published.
+      - name: Verify macOS signatures
+        if: matrix.name == 'macos'
+        run: |
+          for app in release/mac*/*.app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+          done
 
       - uses: actions/upload-artifact@v4
         with:
