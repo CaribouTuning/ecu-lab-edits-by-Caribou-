@@ -4,9 +4,11 @@
 # Everything the app needs is already inside dist/ (Vite bundles React, recharts and
 # the rest), so node_modules is deliberately left out of the package.
 
-# Changing appId later makes installed copies look like a different app, so settle it
-# before the first public release.
-appId: dniev.ecu.lab
+# Reverse-DNS of dniev.github.io, where the site is hosted. Changing appId makes
+# installed copies look like a different app (Windows installs alongside instead of
+# upgrading), so leave it alone once a release has shipped. No punctuation in the last
+# part: macOS bundle IDs reject underscores and Linux desktop IDs discourage hyphens.
+appId: io.github.dniev.eculab
 productName: ECU Lab
 copyright: Copyright © CaribouTuning and Turtle.GTI
 
@@ -62,8 +64,10 @@ mac:
 linux:
   category: Education
   executableName: ecu-lab
-  # The .deb needs a maintainer address; this is a placeholder, so put a real one here.
-  maintainer: CaribouTuning <noreply@users.noreply.github.com>
+  # The .deb needs a maintainer address. This is the CaribouTuning account's GitHub
+  # noreply address: it names a real account without publishing an inbox, and does not
+  # receive mail. Bug reports go to GitHub issues.
+  maintainer: CaribouTuning <316645724+CaribouTuning@users.noreply.github.com>
   target:
     - { target: AppImage, arch: [x64] }
     - { target: deb, arch: [x64] }
