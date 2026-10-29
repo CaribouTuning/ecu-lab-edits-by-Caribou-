@@ -7,6 +7,9 @@
 import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
+import { ECU_COEFF } from '../src/sim/ecu/ecuCoefficients.js';
+import { oilPressureKpa } from '../src/sim/ecu/ecuHardware.js';
+
 import { makeEngine } from './ecuHarness.js';
 
 const NEW = S.healthyEngine();
@@ -57,10 +60,25 @@ describe('what worn parts do', () => {
     expect(S.wearEffects({ ...NEW, valve: 0 }, 6).cylLossFrac).toBeCloseTo(1 / 6, 12);
   });
 
-  it('wiped bearings add friction and lose oil pressure', () => {
+  it('worn bearings leak oil with the cube of their clearance, and add no friction', () => {
     const fx = S.wearEffects({ ...NEW, bearing: 20 }, 6);
-    expect(fx.bearingFmepPa).toBeGreaterThan(0);
-    expect(fx.oilPressureFactor).toBeLessThan(1);
+    expect(fx.oilConductance).toBeGreaterThan(1);
+    expect('bearingFmepPa' in fx).toBe(false);
+    // Worn to the service limit (Toyota T-SB-0030-15, 2AZ-FE: 0.08 mm against 0.024-0.048
+    // standard), the bearings' quarter of the flow (SAE 2020-28-0338) passes 2.22³ times
+    // as much: the system leaks about 3.5 times as freely.
+    expect(S.oilConductance(1)).toBeCloseTo(0.75 + 0.25 * 2.22 ** 3, 9);
+    expect(S.oilConductance(0)).toBe(1);
+    // Half worn still makes the maker's minimum share of a healthy pump; worn to the limit
+    // it does not, and starts starving itself.
+    expect(1 / S.oilConductance(0.5)).toBeGreaterThan(S.COEFF.DAMAGE_OIL_FILM_SHARE);
+    expect(1 / S.oilConductance(1)).toBeLessThan(S.COEFF.DAMAGE_OIL_FILM_SHARE);
+  });
+
+  it('worn rings cost about a percent of the charge, the order the blow-by data gives', () => {
+    // DieselNet: a worn engine's blow-by is twice a new one's, which is well under 1% of
+    // the intake flow. A leak-down figure is a static test and is not this number.
+    expect(S.wearEffects({ ...NEW, piston: 0.001 }, 6).ringLeakFrac).toBeLessThanOrEqual(0.01);
   });
 });
 
@@ -80,12 +98,11 @@ describe('a worn engine on the dyno', () => {
     expect(worn.failure).toBeNull();
   });
 
-  it('loses power to wiped bearings as friction', () => {
+  it('worn bearings cost no power: friction falls with clearance (Petroff), it does not rise', () => {
     const fresh = S.simulateSweep({ ...sweepOf(eng), health: NEW });
     const worn = S.simulateSweep({ ...sweepOf(eng), health: { ...NEW, bearing: 10 } });
-    const at = (r, rpm) => r.points.find((p) => p.rpm === rpm);
-    expect(at(worn, 5000).fmep).toBeGreaterThan(at(fresh, 5000).fmep);
-    expect(worn.peakHp).toBeLessThan(fresh.peakHp);
+    expect(worn.points.map((p) => p.fmep)).toEqual(fresh.points.map((p) => p.fmep));
+    expect(worn.peakHp).toBe(fresh.peakHp);
   });
 
   it('is unchanged by a condition of full health', () => {
@@ -182,10 +199,14 @@ describe('the live engine', () => {
     expect(rebuilt.state.running).toBe(true);
   });
 
-  it('worn bearings read as lower oil pressure', () => {
+  it('worn bearings read as lower oil pressure at idle, and the relief still caps it at speed', () => {
     const a = runLive(eng, NEW, { seconds: 5 }).state.ecu.oilKpa;
     const b = runLive(eng, { ...NEW, bearing: 10 }, { seconds: 5 }).state.ecu.oilKpa;
     expect(b).toBeLessThan(a);
+    // The pump's pressure below its relief divides by how freely the system leaks; at the
+    // relief (cold oil at speed) it is the valve that sets it, worn or not.
+    expect(oilPressureKpa(7000, 30, 1 / S.oilConductance(0.9))).toBe(ECU_COEFF.OIL_RELIEF_KPA);
+    expect(oilPressureKpa(800, 100, 1 / S.oilConductance(0.9))).toBeLessThan(oilPressureKpa(800, 100, 1));
   });
 });
 
@@ -204,6 +225,21 @@ describe('live wear from operating conditions', () => {
     expect(w.piston).toBeCloseTo(2 * S.COEFF.WEAR_KNOCK / 0.2, 9);
   });
 
+  it('spends a whole bottom end in the 28 s a dry bearing took to seize (Nissan, US 9,109,627)', () => {
+    let left = 100, t = 0;
+    while (left > 0 && t < 120) { left -= S.liveWear({ ...base, dt: 0.05, oilKpa: 0 }).bearing; t += 0.05; }
+    expect(t).toBeGreaterThan(26);
+    expect(t).toBeLessThan(30);
+  });
+
+  it('judges oil pressure against the maker\'s minimum: 29 kPa at idle, and the share of a healthy pump', () => {
+    // Toyota: 29 kPa or more at idle; 245 kPa minimum at 3000 rpm against 490-539 normal.
+    expect(S.liveWear({ ...base, rpm: 800, oilKpa: 30, healthyOilKpa: 40 }).bearing).toBe(0);
+    expect(S.liveWear({ ...base, rpm: 800, oilKpa: 25, healthyOilKpa: 40 }).bearing).toBeGreaterThan(0);
+    expect(S.liveWear({ ...base, oilKpa: 0.46 * 400 }).bearing).toBe(0);
+    expect(S.liveWear({ ...base, oilKpa: 0.40 * 400 }).bearing).toBeGreaterThan(0);
+  });
+
   it('charges oil starvation, overspeed and boiling coolant', () => {
     expect(S.liveWear({ ...base, oilKpa: 50 }).bearing).toBeGreaterThan(0);
     // Hot thin oil at idle reads low on every engine; against its own healthy pump it is
@@ -213,6 +249,9 @@ describe('live wear from operating conditions', () => {
     const hot = S.liveWear({ ...base, coolantC: 130 });
     expect(hot.piston).toBeGreaterThan(0);
     expect(hot.valve).toBeGreaterThan(0);
+    // A 50/50 glycol coolant under a 15 lb cap boils over at 265 °F (Prestone): below it,
+    // nothing.
+    expect(S.liveWear({ ...base, coolantC: 128 })).toEqual({ piston: 0, bearing: 0, valve: 0 });
   });
 });
 

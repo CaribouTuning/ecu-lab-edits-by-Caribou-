@@ -68,9 +68,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   limit exactly — and the result is identical to before the ECU layer existed.
  * @property {{intakeAdvDeg?: number, exhaustRetDeg?: number}|null} [cam] cam phaser positions
  *   to solve the cycle at when there is no `ecu` context; the ECU's own win when there is
- * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] what the
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number}|null} [wear] what the
  *   engine's worn parts do (damage.js `wearEffects`): charge lost past the rings and a
- *   burnt valve, cylinders that no longer fire, and friction from wiped bearings
+ *   burnt valve, and cylinders that no longer fire
  */
 
 /**
@@ -306,7 +306,7 @@ export function evaluatePoint({
   // a load on the engine like friction: FMEP = power ÷ (displacement × firing rate).
   const blowerPa = blower ? blower.driveW / ((derived.displacementL / 1000) * (rpm / 120)) : 0;
   // Wiped bearings rub: friction like any other.
-  const fmepPa = rubbingPa + pmepPa + blowerPa + (wear?.bearingFmepPa ?? 0);
+  const fmepPa = rubbingPa + pmepPa + blowerPa;
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.

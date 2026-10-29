@@ -9,18 +9,23 @@
  * live engine oil starvation, overspeed past the bottom end's rating and boiling coolant.
  *
  * A worn part changes the engine through the physics, never by docking power:
- * pistons and rings  blow-by. Part of the trapped charge, air and fuel together, escapes
+ *   pistons and rings  blow-by. Part of the trapped charge, air and fuel together, escapes
  *                      past the rings into the crankcase before it burns. The breather
  *                      returns it to the intake, so the MAF and the wideband read the
- *                      same mixture as before; the cylinder simply burns less of it.
- *   valves             a burnt valve leaks one cylinder's charge back into its port, and
+ *                      same mixture as before; the cylinder simply burns less of it. A
+ *                      worn-out ring pack loses about 1% of the charge this way: worn
+ *                      rings show far more as smoke and crankcase pressure than as power.
+ *   valves             a burnt valve leaks its cylinder's charge back into the port, and
  *                      past a point that cylinder stops firing. Either way it is one
  *                      cylinder's work lost, never more.
- *   bearings           wiped bearings rub, which is friction, and their opened clearances
- *                      bleed oil, so oil pressure falls at every speed.
+ *   bearings           opened clearances pass more oil (Poiseuille flow, the cube of the
+ *                      clearance), so the pump makes less pressure below its relief
+ *                      valve: low oil pressure at hot idle. They do not add friction.
  *
  * At zero a part has failed and the engine with it: the failure is a state, not a
  * number. A failed engine does not run until it is rebuilt.
+ *
+ * Every number, with its source or marked as a calibration: docs/damage-model.md.
  */
 
 import { COEFF } from './coefficients.js';
@@ -39,15 +44,15 @@ export const DAMAGE_PARTS = /** @type {Part[]} */ (['bearing', 'piston', 'valve'
 export const FAILURE_MODES = {
   piston: {
     title: 'Holed piston',
-    cause: 'A piston crown burned through and its ring lands cracked. Combustion blew straight into the crankcase, pressurised it, and pushed the oil out past the seals and the breather: the cylinder has no compression and the engine will not run.',
+    cause: 'A piston crown melted through and its ring lands fractured: what knock, a lean mixture or too much boost does to a piston (MAHLE, piston damage §2.1.2 and §3.2). Combustion blew straight into the crankcase and pressurised it, pushing oil out past the seals and the breather. The cylinder has no compression and the engine is not fit to run.',
   },
   bearing: {
     title: 'Spun rod bearing, rod through the block',
-    cause: 'A rod bearing lost its oil film, seized to the crank and spun. The rod overheated, stretched and broke, and the loose rod punched through the side of the block.',
+    cause: 'A rod bearing lost its oil film. Its overlay melted and welded to the crank journal, and the shell spun in the rod (MAHLE, bearing damage §6.8). The rod overheated and broke, and the loose rod punched through the side of the block.',
   },
   valve: {
-    title: 'Dropped valve',
-    cause: 'A burnt valve head broke off its stem at speed and was hammered between the piston and the head, wrecking both. The cylinder is open to the port and the engine will not run.',
+    title: 'Burnt-through exhaust valve',
+    cause: 'An exhaust valve that no longer sealed could not pass its heat to the seat: it cracked, and a wedge of its head melted away (MAHLE, valve damage §5.7). The cylinder has no compression, and pieces of the valve are loose in the chamber, where running on would wreck the piston and the head.',
   },
 };
 
@@ -89,7 +94,9 @@ export function applyWear(health, wear) {
  *                  misfire column)
  * @param {Health|null|undefined} health
  * @param {number} cyl cylinders
- * @returns {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number, oilPressureFactor: number}|null}
+ *   oilConductance how much more freely the oil system leaks than when new (1 new): the
+ *                  pump's pressure below its relief valve divides by it
+ * @returns {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, oilConductance: number}|null}
  */
 export function wearEffects(health, cyl) {
   if (!health) return null;
@@ -98,8 +105,9 @@ export function wearEffects(health, cyl) {
   const valve = lost('valve');
   const bearing = lost('bearing');
   if (ring === 0 && valve === 0 && bearing === 0) return null;
-  // Blow-by grows faster than linearly: the first wear seats the rings, the last opens gaps.
-  const ringLeakFrac = COEFF.DAMAGE_RING_LEAK_MAX * ring ** 1.5;
+  // Blow-by goes with the gap the rings leave: a ring's end gap opens by 2π times its
+  // radial wear, so the leak path grows in proportion to the wear.
+  const ringLeakFrac = COEFF.DAMAGE_RING_LEAK_MAX * ring;
   // One burnt valve: within its cylinder, the share of the charge it leaks, and whether
   // the cylinder still fires at all.
   const valveLeak = COEFF.DAMAGE_VALVE_LEAK_MAX * valve ** 1.5;
@@ -109,9 +117,20 @@ export function wearEffects(health, cyl) {
     ringLeakFrac,
     cylLossFrac: (1 - (1 - valveLeak) * (1 - valveDead)) / cyl,
     deadFrac: valveDead / cyl,
-    bearingFmepPa: COEFF.DAMAGE_BEARING_FMEP_PA * bearing ** 2,
-    oilPressureFactor: 1 - COEFF.DAMAGE_BEARING_OIL_LOSS * bearing,
+    oilConductance: oilConductance(bearing),
   };
+}
+
+/**
+ * How much more freely the oil system leaks with the crank bearings worn by `wear` (0 new,
+ * 1 worn to the service limit): their clearance opens linearly with wear, and their
+ * Poiseuille flow goes with its cube. 1 when new.
+ * @param {number} wear
+ * @returns {number}
+ */
+export function oilConductance(wear) {
+  const k = 1 + (COEFF.DAMAGE_BEARING_CLEARANCE_WORN - 1) * clamp(wear, 0, 1);
+  return (1 - COEFF.DAMAGE_BEARING_OIL_SHARE) + COEFF.DAMAGE_BEARING_OIL_SHARE * k ** 3;
 }
 
 /**

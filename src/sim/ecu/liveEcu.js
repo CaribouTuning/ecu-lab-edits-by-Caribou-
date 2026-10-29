@@ -373,8 +373,9 @@ export function liveStepEcu(st, dt, input, cfg) {
     const vvt = VVT_OPTS.find((o) => o.id === hw.vvt) ?? VVT_OPTS[0];
     const inT = vvt.intake ? clamp(read2(cal.vvt.intakeTarget, rpmC, e.sMap), 0, VVT_AUTHORITY.intake) : 0;
     const exT = vvt.exhaust ? clamp(read2(cal.vvt.exhaustTarget, rpmC, e.sMap), 0, VVT_AUTHORITY.exhaust) : 0;
-    // Worn bearings bleed oil through their opened clearances.
-    const oilKpa = oilPressureKpa(s.rpm, s.oilC, cond.oilHealth ?? 1) * (wearFx?.oilPressureFactor ?? 1);
+    // Worn bearings bleed oil through their opened clearances: the pump's pressure below
+    // its relief valve divides by how much more freely the system leaks.
+    const oilKpa = oilPressureKpa(s.rpm, s.oilC, (cond.oilHealth ?? 1) / (wearFx?.oilConductance ?? 1));
     const oilAuth = clamp(oilKpa / E.PHASER_FULL_OIL_KPA, 0, 1);
     const unlocked = s.oilC >= cal.vvt.minOilC && s.running;
     const phase = (pos, tgt, max) => {
