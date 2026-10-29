@@ -71,6 +71,7 @@ import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
+import { baseMapAction, buildName, offersBaseMap, originPreset } from './state/baseMap.js';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
@@ -654,7 +655,7 @@ export function EcuLabApp() {
         // `engineDerived` carries no name — it is displacement, cylinder count and
         // redline. The build's name is the loaded preset's, and a build with no preset
         // is exactly what "Custom build" means everywhere else in this app.
-        label: presetById(presetId)?.name ?? 'Custom build',
+        label: buildName(build) ?? 'Custom build',
         result: r, scores: { tuning: ts, engineer: es }, pullScore: pull,
         inputs: measuredInputs(build, tune, loadKpa, { env, faults }),
       }),
@@ -1343,7 +1344,8 @@ export function EcuLabApp() {
                   <BuildBench
                     full
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
-                    preset={activePreset} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
+                    preset={originPreset(build)} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
+                    onBaseMap={offersBaseMap(build) && !inCareer ? () => dispatch(baseMapAction(build)) : null}
                     // Back to the factory engine as built: asked first when the tables hold work.
                     onRun={() => { setStandScreen('bars'); goTab('live'); }}
                     locked={inCareer && !buildOpen}
@@ -1542,7 +1544,7 @@ export function EcuLabApp() {
                     <div className={deskApps.runSheetHead}>Ready to run</div>
                     <dl className={deskApps.runSheetList}>
                       <dt>Car</dt><dd>{inCareer && jobOnBay ? `${jobOnBay.customer.name}'s ${jobOnBay.customer.car}` : 'The shop car, strapped down'}</dd>
-                      <dt>Engine</dt><dd>{activePreset ? activePreset.name : 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
+                      <dt>Engine</dt><dd>{buildName(build) ?? 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
                       <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
                       <dt>Fuel</dt><dd>{(() => { const f = FUEL_CHOICES[build.octaneIdx] ?? FUEL_CHOICES[0]; return f.flex ? `Flex fuel, E${Math.round(build.ethanolPct ?? 0)}` : /^\d+$/.test(f.label) ? `${f.label} octane` : f.label; })()}</dd>
                     </dl>

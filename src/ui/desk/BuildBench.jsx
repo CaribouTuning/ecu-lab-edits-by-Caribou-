@@ -21,6 +21,7 @@ import {
 } from '../../sim/index.js';
 import { BuildBenchMode } from '../components/BuildSection.jsx';
 import { EngineStart } from '../screens/build/EngineStart.jsx';
+import { changedParts } from '../state/baseMap.js';
 import { useBuild, useTune } from '../state/StoreProvider.jsx';
 import { engineSpecOf } from '../world/models/engine.js';
 
@@ -40,34 +41,6 @@ export const BENCH_PARTS = [
   { id: 'fuel', label: 'Fuel system', lead: 'What is in the tank, and the pump, rail and injectors that deliver it.' },
   { id: 'exhaust', label: 'Exhaust', lead: 'The pipe, the headers and the cat-back.' },
 ];
-
-/** The engine's own figures each part decides, by part: what "changed from stock" compares. */
-const BLOCK_KEYS = ['configuration', 'bore', 'stroke', 'compression', 'blockMaterial', 'frictionLevel', 'bottomEnd'];
-const HEAD_KEYS = ['camDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'sparkPlugs', 'vvt', 'injection', 'headMaterial'];
-
-/**
- * Which of the engine's parts differ from the factory engine it started as: none on a stock
- * engine, the changed ones on a modified one. Compared against the catalogue entry itself
- * (its engine, induction, parts and bolt-ons), so nothing is calibrated to find out.
- * @param {any} build @param {any} preset the factory engine, or null for one of the player's own
- * @returns {Set<string>} part ids (BENCH_PARTS)
- */
-export function changedParts(build, preset) {
-  const out = new Set();
-  if (!preset) return out;
-  const cfg = build.engineConfig;
-  const differs = (keys) => keys.some((k) => (cfg[k] ?? null) !== (preset.engine[k] ?? null));
-  const mods = build.mods ?? {};
-  const pm = preset.mods ?? {};
-  if (differs(BLOCK_KEYS)) out.add('block');
-  if (differs(HEAD_KEYS) || (build.coil ?? 'stock') !== 'stock') out.add('head');
-  const ind = preset.induction;
-  if (!!build.turboOn !== !!ind.turboOn || !!build.blowerId || !!build.nitrous || !!mods.intake !== !!pm.intake || !!mods.intercooler !== !!pm.intercooler
-    || (build.turboOn && (build.turbineIdx !== ind.turbineIdx || (build.turbineCount ?? 1) !== (ind.turbineCount ?? 1) || build.compressorIdx !== ind.compressorIdx))) out.add('induction');
-  if (build.injIdx !== preset.parts.injectorIdx || build.octaneIdx !== preset.parts.octaneIdx) out.add('fuel');
-  if (build.exhaustDiaIdx !== preset.parts.exhaustDiaIdx || !!mods.exhaust !== !!pm.exhaust || !!mods.headers !== !!pm.headers) out.add('exhaust');
-  return out;
-}
 
 /**
  * What is on each part now, in a line: the parts list's second line.
@@ -123,11 +96,13 @@ function useTall() {
  *   derived once per build, not here on every live-engine step)
  * @param {number} [props.rpm] the engine's speed when it is running on the stand
  * @param {React.ReactNode} props.children the open part's options
+ * @param {(() => void)|null} [props.onBaseMap] load a base start-up map for the parts fitted,
+ *   offered on a factory engine with parts changed (null: not offered)
  * @param {boolean} [props.full] full screen (the bench's own page) rather than inside a
  *   monitor: the engine turns at the head of the parts list, always in view
  * @returns {React.ReactElement}
  */
-export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, full = false, children }) {
+export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, full = false, onBaseMap = null, children }) {
   const [build] = useBuild();
   const [tune] = useTune();
   // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
@@ -170,7 +145,8 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
             {origin === 'stock' && <p><b>Stock {preset.name}.</b> Every part is as the factory built it, and so is the calibration. Change any part to make it your own build of it.</p>}
             {origin === 'modified' && (
               <>
-                <p><b>Modified {preset.name}.</b> Changed from stock: {BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label).join(', ')}. The calibration is still the factory&apos;s, so log and tune what you changed.</p>
+                <p><b>Modified {preset.name}.</b> Changed from stock: {BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label).join(', ')}. The calibration is still the factory&apos;s, so log and tune what you changed{onBaseMap ? <>, or load a base start-up map: what a tuner would start from for these parts, safe and conservative, not tuned. It replaces your tables; Undo brings them back</> : null}.</p>
+                {onBaseMap && <button type="button" className={styles.originBtn} onClick={onBaseMap}>Load a base start-up map</button>}
                 <button type="button" className={styles.originBtn} onClick={() => onStock(preset)}>Return to stock</button>
               </>
             )}

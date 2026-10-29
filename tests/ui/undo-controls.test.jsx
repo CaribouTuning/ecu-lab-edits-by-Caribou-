@@ -249,7 +249,7 @@ describe('UndoControls', () => {
     expect(redoBtn().getAttribute('aria-label')).toBe('Redo Spark edit');
   });
 
-  it('puts the preset label back when a table edit is undone', () => {
+  it('names the same engine before a table edit, after it, and after its undo', () => {
     // The whole point of a snapshot spanning both slices, driven through the real app.
     render(<EcuLab />);
     enterSandbox();
@@ -270,8 +270,8 @@ describe('UndoControls', () => {
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     fireEvent.click(within(screen.getByTestId('selection-dock')).getByRole('button', { name: '+1' }));
 
-    // The edit disowned the preset: the header falls back to the derived "3.5L V6".
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^\d\.\dL /);
+    // The edit is the tune's; the build line still names the engine.
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up,/);
 
     fireEvent.click(undoBtn());
 

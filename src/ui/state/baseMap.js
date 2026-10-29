@@ -73,3 +73,16 @@ export const originPreset = (build) => (build.originPresetId ? presetById(build.
 export function offersBaseMap(build) {
   return changedParts(build, originPreset(build)).size > 0;
 }
+
+/**
+ * What to call the engine on screen and in the run history: the factory engine's name, with
+ * "modified" once its parts differ, or null for an engine of the player's own (the caller
+ * says what it calls one of those).
+ * @param {import('./initialState.js').StoreState['build']} build
+ * @returns {string|null}
+ */
+export function buildName(build) {
+  const p = originPreset(build);
+  if (!p) return null;
+  return changedParts(build, p).size ? `${p.name} (modified)` : p.name;
+}

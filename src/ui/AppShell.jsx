@@ -49,12 +49,13 @@ import {
 import React, { useMemo } from 'react';
 
 import {
-  INJECTOR_OPTS, FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, presetById, tankFuel,
+  INJECTOR_OPTS, FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, tankFuel,
 } from '../sim/index.js';
 import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
 import { isApplePlatform } from './commands.js';
 import { TAB_NAMES } from './routing.js';
+import { buildName } from './state/baseMap.js';
 import { useBuild, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
@@ -240,17 +241,15 @@ function fuelLabel(fuel, ethanolPct) {
 export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = true, bar = false }) {
   const [build] = useBuild();
   const [session] = useSession();
-  const { engineConfig, presetId, turboOn, boostCurve, octaneIdx, injIdx } = build;
+  const { engineConfig, turboOn, boostCurve, octaneIdx, injIdx } = build;
   const { health, result } = session;
 
   // Keyed on `engineConfig` so the 20 Hz re-render does not re-derive the engine
   // twenty times a second to print the same string.
   const derived = useMemo(() => deriveEngine(engineConfig), [engineConfig]);
-  const preset = presetId ? presetById(presetId) : null;
   const noEngine = build.engineReady === false;
-  const engineName = preset
-    ? preset.name
-    : `${derived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
+  // The factory engine it started as, "(modified)" once its parts differ; else its size.
+  const engineName = buildName(build) ?? `${derived.displacementL.toFixed(1)}L ${engineConfig.configuration}`;
 
   const overallHealth = Math.min(health.piston, health.bearing, health.valve);
   // Peak of the curve, not the value at any one RPM: this is "how much boost is this

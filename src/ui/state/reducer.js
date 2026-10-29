@@ -475,9 +475,11 @@ function baseReducer(state, action) {
       };
 
     case ACTIONS.CLEAR_PRESET_ID:
+      // "Custom build" chosen in the preset picker: the player disowns the factory engine,
+      // so it is no longer what this build started as either.
       return {
         ...state,
-        build: { ...state.build, presetId: null },
+        build: { ...state.build, presetId: null, originPresetId: null },
       };
 
     case ACTIONS.SET_TURBINE:

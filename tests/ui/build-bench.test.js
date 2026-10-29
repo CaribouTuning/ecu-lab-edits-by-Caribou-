@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { ENGINE_PRESETS, applyPreset } from '../../src/sim/index.js';
-import { changedParts } from '../../src/ui/desk/BuildBench.jsx';
+import { changedParts } from '../../src/ui/state/baseMap.js';
 
 describe('changedParts', () => {
   it('finds nothing changed on any factory engine as loaded', () => {

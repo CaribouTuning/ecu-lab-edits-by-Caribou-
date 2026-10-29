@@ -150,11 +150,11 @@ describe('loading a preset', () => {
 });
 
 describe('editing a calibration table', () => {
-  it('stops the header claiming the factory preset', () => {
-    // The single most important behaviour in this PR: withTableEdit crosses the
-    // build/tune boundary, clearing presetId (build) and setting tablesDirty (tune).
-    // If the extraction drops that link, the header goes on claiming a factory
-    // calibration the player has just edited away from.
+  it('keeps naming the engine after a table edit: the build line is the hardware', () => {
+    // withTableEdit crosses the build/tune boundary, clearing presetId (build) and setting
+    // tablesDirty (tune). The build line names the engine the build started as
+    // (originPresetId), which a calibration edit does not change: a retuned VQ35DE is still
+    // a VQ35DE.
     launch();
     const picker = presetPicker();
     const target = [...picker.querySelectorAll('option')]
@@ -180,8 +180,8 @@ describe('editing a calibration table', () => {
     const dock = within(screen.getByTestId('selection-dock'));
     fireEvent.click(dock.getByRole('button', { name: '+1' }));
 
-    // Header falls back to the derived "3.0L I6" form once the preset is invalidated.
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^\d\.\dL /);
+    // Still the engine's name, not the derived "3.0L I6" form.
+    expect(screen.getByTestId('build-line').textContent).not.toMatch(/^\d\.\dL /);
   });
 });
 

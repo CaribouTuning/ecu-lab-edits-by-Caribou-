@@ -12,7 +12,8 @@ import React from 'react';
 
 import { Grid3x3, Info } from 'lucide-react';
 
-import { clamp, layoutById, presetById, SWEEP_STEP_RPM, veCorrections, veSamplesFromPull } from '../../../sim/index.js';
+import { clamp, layoutById, SWEEP_STEP_RPM, veCorrections, veSamplesFromPull } from '../../../sim/index.js';
+import { buildName } from '../../state/baseMap.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { downloadCsv, dynoSheetFilename, sweepToCsv } from '../../components/dynoCsv.js';
 import { eventBands } from '../../components/eventBands.js';
@@ -92,7 +93,7 @@ export function DataScreen() {
    * reason to take the log away at all: you diff two tunes on them.
    */
   const exportSheet = () => {
-    const name = build.presetId ? presetById(build.presetId)?.name : 'custom build';
+    const name = buildName(build) ?? 'custom build';
     downloadCsv(sweepToCsv(result.points), dynoSheetFilename({ engineName: name }));
   };
   const { ve } = tune;
