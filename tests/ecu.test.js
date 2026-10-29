@@ -561,6 +561,16 @@ describe('table editor operations', () => {
     expect(r.z[1][3]).toBe(0);
   });
 
+  it('pastes into a range without writing outside it: repeating a smaller block, cutting a bigger one', () => {
+    const map = { x: [0, 1, 2, 3], y: [0, 1, 2], z: [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]] };
+    const tiled = pasteBlock(map, { r1: 0, c1: 0, r2: 1, c2: 3 }, [[1, 2]], lim);
+    expect(tiled.z).toEqual([[1, 2, 1, 2], [1, 2, 1, 2], [0, 0, 0, 0]]);
+    const cut = pasteBlock(map, { r1: 1, c1: 1, r2: 1, c2: 2 }, [[5, 6, 7], [8, 9, 10]], lim);
+    expect(cut.z).toEqual([[0, 0, 0, 0], [0, 5, 6, 0], [0, 0, 0, 0]]);
+    const one = pasteBlock(map, { r1: 2, c1: 3, r2: 2, c2: 3 }, [[4, 4], [4, 4]], lim);
+    expect(one.z[2]).toEqual([0, 0, 0, 4]);
+  });
+
   it('refuses a breakpoint that would break the axis order', () => {
     expect(setBreakpoint(t, 'x', 1, 5)).toBeNull();
     expect(setBreakpoint(t, 'x', 1, 1.5).x).toEqual([0, 1.5, 2, 3]);

@@ -117,7 +117,12 @@ export function copyBlock(t, sel) {
 }
 
 /**
- * Pastes a block with its top-left at the selection's top-left, clipped to the table.
+ * Pastes a block into the selection, keeping its values in the same arrangement.
+ *
+ * Onto one cell, the whole block goes down with its top-left there, clipped to the
+ * table. Onto a range, the range is what gets written and nothing outside it: a block
+ * the same size fills it exactly, a smaller one repeats across it (one copied cell fills
+ * the lot, one copied row fills every row), and a bigger one is cut to it.
  * @param {Table} t
  * @param {Rect} sel
  * @param {number[][]} block
@@ -127,12 +132,26 @@ export function copyBlock(t, sel) {
 export function pasteBlock(t, sel, block, lim) {
   const n = norm(sel);
   const rows = rowsOf(t);
-  const area = {
+  const bh = block.length;
+  const bw = block[0]?.length ?? 0;
+  if (!bh || !bw) return t;
+  const single = n.r1 === n.r2 && n.c1 === n.c2;
+  const area = single ? {
     r1: n.r1, c1: n.c1,
-    r2: Math.min(rows.length - 1, n.r1 + block.length - 1),
-    c2: Math.min(rows[0].length - 1, n.c1 + block[0].length - 1),
-  };
-  return mapCells(t, area, (v, r, c) => block[r - n.r1][c - n.c1], lim);
+    r2: Math.min(rows.length - 1, n.r1 + bh - 1),
+    c2: Math.min(rows[0].length - 1, n.c1 + bw - 1),
+  } : n;
+  return mapCells(t, area, (v, r, c) => block[(r - n.r1) % bh][(c - n.c1) % bw], lim);
+}
+
+/**
+ * Shape of a selection, rows by columns.
+ * @param {Rect} sel
+ * @returns {{rows: number, cols: number}}
+ */
+export function rectSize(sel) {
+  const n = norm(sel);
+  return { rows: n.r2 - n.r1 + 1, cols: n.c2 - n.c1 + 1 };
 }
 
 /**

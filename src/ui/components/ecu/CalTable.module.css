@@ -138,6 +138,16 @@
   box-shadow: inset 0 0 0 2px var(--ink);
 }
 
+/* The corner a range was started from: the one the next tap completes it against. */
+.cell[data-anchor] {
+  box-shadow: inset 0 0 0 2px var(--ink), inset 0 0 0 4px rgba(var(--acc-rgb), 0.9);
+}
+
+.hint {
+  font-size: var(--fs-xs);
+  color: var(--ink2);
+}
+
 .plot {
   width: 100%;
   height: 64px;
@@ -197,6 +207,12 @@
 }
 
 .field { display: inline-flex; }
+
+.note {
+  font-size: var(--fs-xs);
+  color: var(--ink2);
+  font-family: var(--mono);
+}
 
 .num {
   width: 58px;
