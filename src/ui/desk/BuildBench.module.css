@@ -61,3 +61,28 @@
 .stepBtn { border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); }
 .stepGo { margin-left: auto; border: 1px solid var(--acc); background: var(--acc); color: var(--acc-on); }
 .stepBtn:focus-visible, .stepGo:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Full screen (the bench's own page): the panes framed as one window, the engine turning at
+   the head of the parts list, and room for the sheet. */
+/* The page scrolls as one, the way a long settings sheet does: the parts list stays beside
+   the sheet, and the way on (Back, Next, what has changed) stays at the foot of the screen. */
+.wrap[data-full] { height: auto; margin: 0; border: 1px solid var(--line-hi); border-radius: var(--r-lg); background: var(--bg); }
+.wrap[data-full] .bench { grid-template-columns: minmax(220px, 280px) 1fr; height: auto; align-items: start; }
+.wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; border-radius: var(--r-lg) 0 0 var(--r-lg); }
+.wrap[data-full] .sheet { overflow: visible; min-height: 70vh; }
+.wrap[data-full] .steps { position: sticky; bottom: 0; z-index: 1; background: var(--bg); border-radius: 0 0 var(--r-lg) 0; }
+.wrap[data-full] .parts > [role='img'] { flex: none; height: 170px; margin: -6px -6px 6px; border-bottom: 1px solid var(--line); }
+.wrap[data-full] .sheetHead { padding: 16px 20px 12px; }
+.wrap[data-full] .sheetTitle { font-size: 18px; }
+.wrap[data-full] .sheetBody { padding: 14px 20px 24px; }
+/* What the build is against the factory, beside the way on. */
+.changes { align-self: center; font-size: 12px; color: var(--ink2); min-width: 0; }
+.changes b { color: var(--warn-ink); font-weight: 600; }
+@container (max-width: 560px) {
+  .wrap[data-full] .bench { grid-template-columns: minmax(0, 1fr); }
+  .wrap[data-full] .sheet { min-width: 0; }
+  .wrap[data-full] .parts { overflow-x: auto; overflow-y: hidden; z-index: 2; border-radius: 0; }
+  .wrap[data-full] .parts > [role='img'] { display: none; }
+  .changes { display: none; }
+  .stepName { display: none; }
+}

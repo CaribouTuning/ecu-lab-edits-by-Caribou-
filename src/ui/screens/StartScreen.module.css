@@ -20,7 +20,7 @@
 /* The wordmark as the status strip sets it: the maker small over the program. */
 .mark { display: flex; flex-direction: column; font-size: var(--fs-base); font-weight: 700; line-height: 1.15; }
 .mark small { font-size: var(--fs-xs); font-weight: 700; color: var(--ink2); }
-.version { font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink3); }
+.version { font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
 
 /* ---------- the page: who we are on the left, where to go on the right ---------- */
 .body {
@@ -62,10 +62,10 @@
 .way:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .wayHead { display: flex; align-items: baseline; gap: 10px; }
 .wayName { font-size: var(--fs-md); font-weight: 700; }
-.wayNote { font-size: var(--fs-xs); font-weight: 600; color: var(--ink3); }
+.wayNote { font-size: var(--fs-xs); font-weight: 600; color: var(--ink2); }
 .wayDoes { grid-column: 1; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
 .key, .chevron { grid-column: 2; grid-row: 1 / span 2; }
-.chevron { color: var(--ink3); }
+.chevron { color: var(--ink2); }
 .way:hover .chevron { color: var(--ink); }
 
 /* The app's key: the next step's button, the one bright control on the page. */

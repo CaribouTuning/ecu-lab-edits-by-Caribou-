@@ -1325,23 +1325,22 @@ export function EcuLabApp() {
             section on HOME, several taps down and easy never to find. It is a page, not
             an accordion card, so nothing about it reads as a HOME section. */}
         {/* SANDBOX with no engine yet: the engine screens have nothing true to show. */}
-        {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live' || tab === 'build'
+        {engineMissing && ENGINE_TABS.includes(tab) && (tab === 'dyno' || tab === 'live'
           ? (
-            <Station kind={tab === 'dyno' ? 'dyno' : tab === 'build' ? 'build' : 'stand'}>
-              <Surface name={tab === 'dyno' ? 'dynoMonitor' : tab === 'build' ? 'buildMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
+            <Station kind={tab === 'dyno' ? 'dyno' : 'stand'}>
+              <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
             </Station>
           )
-          : <EngineStart />)}
+          : tab === 'build' ? <div className={deskApps.buildPage} role="region" aria-label="Build"><EngineStart /></div> : <EngineStart />)}
 
         {/* ---------- BUILD: the build bench, the engine on it built a part at a time ---------- */}
         {/* The engine on its build stand in front of you, the bench computer beside it: one
             part of the engine at a time, the engine on the stand changing as you choose. */}
         {tab === 'build' && !engineMissing && (!inCareer || career.working) && (
-          <Station kind="build">
-            <Surface name="buildMonitor" kind="monitor" label="Build">
-              <Computer label="Build computer" current={null} onScreen={() => {}} title="Build bench" screens={[]}>
+          <div className={deskApps.buildPage} role="region" aria-label="Build">
                 <BuildLocked.Provider value={inCareer && !buildOpen}>
                   <BuildBench
+                    full
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
                     preset={activePreset} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
                     // Back to the factory engine as built: asked first when the tables hold work.
@@ -1364,9 +1363,7 @@ export function EcuLabApp() {
                     {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
                   </BuildBench>
                 </BuildLocked.Provider>
-              </Computer>
-            </Surface>
-          </Station>
+          </div>
         )}
 
         {/* ---------- LIVE: the run stand, the engine started and run in real time ---------- */}

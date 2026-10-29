@@ -123,9 +123,11 @@ function useTall() {
  *   derived once per build, not here on every live-engine step)
  * @param {number} [props.rpm] the engine's speed when it is running on the stand
  * @param {React.ReactNode} props.children the open part's options
+ * @param {boolean} [props.full] full screen (the bench's own page) rather than inside a
+ *   monitor: the engine turns at the head of the parts list, always in view
  * @returns {React.ReactElement}
  */
-export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, children }) {
+export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, full = false, children }) {
   const [build] = useBuild();
   const [tune] = useTune();
   // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
@@ -137,10 +139,12 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const changed = useMemo(() => changedParts(build, preset), [build, preset]);
   // Where the engine stands against the factory: three different things to be building.
   const origin = !preset ? 'own' : changed.size ? 'modified' : 'stock';
+  const changedNames = BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label);
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-full={full ? 'true' : undefined}>
     <div className={styles.bench}>
       <nav className={styles.parts} aria-label="Engine parts">
+        {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />}
         {BENCH_PARTS.map((p, i) => (
           <button key={p.id} type="button" className={styles.part} aria-current={p.id === open.id ? 'true' : undefined} onClick={() => { setChanging(false); onPart(p.id); }}>
             <span className={styles.partName}>
@@ -153,7 +157,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
         ))}
       </nav>
       <section className={styles.sheet} aria-label={open.label}>
-        {tall && (
+        {tall && !full && (
           <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />
         )}
         <header className={styles.sheetHead}>
@@ -182,9 +186,13 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
         {/* Built up in order, block first: the next part, or, the last one done, the stand. */}
         {!changing && (
           <footer className={styles.steps}>
+            {/* What this build is, against the factory, always in view: what has been done. */}
+            <span className={styles.changes} data-testid="build-changes">
+              {origin === 'own' ? 'Your own engine' : changedNames.length ? <>Changed from stock: <b>{changedNames.join(', ')}</b></> : 'Stock: nothing changed yet'}
+            </span>
             {BENCH_PARTS.indexOf(open) > 0 && (
               <button type="button" className={styles.stepBtn} onClick={() => onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].id)}>
-                Back: {BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].label}
+                Back<span className={styles.stepName}>: {BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].label}</span>
               </button>
             )}
             {BENCH_PARTS.indexOf(open) < BENCH_PARTS.length - 1 ? (

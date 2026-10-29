@@ -12,10 +12,11 @@
  */
 
 import { ChevronDown, Info } from 'lucide-react';
-import React, { useId, useState } from 'react';
+import React, { useContext, useId, useState } from 'react';
 
 import { T } from '../theme.js';
 
+import { BuildBenchMode } from './BuildSection.jsx';
 import { inertWhen } from './inert.js';
 
 /**
@@ -31,10 +32,17 @@ export function ExpandableInfo({ title, children, lazy = false }) {
   const [opened, setOpened] = useState(!lazy);
   if (open && !opened) setOpened(true);
   const bodyId = useId();
+  // On the build bench the sheet is controls first: the explanation is a quiet line under
+  // the control it explains, opened when wanted, not a full-width bar between every two.
+  const quiet = useContext(BuildBenchMode);
   return (
-    <div style={{ margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
-      <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
+    <div style={quiet ? { margin: '2px 0 10px' } : { margin: '10px 0', border: `1px solid ${T.line}`, borderRadius: 10, overflow: 'hidden', background: T.panel }}>
+      <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={quiet
+        ? { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 0', background: 'none', border: 'none', cursor: 'pointer' }
+        : { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
+        <span style={quiet
+          ? { display: 'flex', alignItems: 'center', gap: 6, color: T.ink2, fontSize: 12, fontWeight: 500, textAlign: 'left' }
+          : { display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
           <Info size={14} style={{ color: T.acc, flexShrink: 0 }} />{title}
         </span>
         <ChevronDown aria-hidden="true" size={15} style={{ color: T.ink2, flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
@@ -45,7 +53,7 @@ export function ExpandableInfo({ title, children, lazy = false }) {
       {/* inert while shut, as in BuildSection. */}
       <div id={bodyId} {...inertWhen(!open)} style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0, transition: 'grid-template-rows .3s ease, opacity .2s ease' }}>
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div style={{ padding: '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{opened ? children : null}</div>
+          <div style={{ padding: quiet ? '4px 0 4px 20px' : '0 13px 13px', fontSize: 12.5, color: T.ink2, lineHeight: 1.65 }}>{opened ? children : null}</div>
         </div>
       </div>
     </div>

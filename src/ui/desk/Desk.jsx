@@ -87,7 +87,9 @@ export const SHOP_PAGES = { dyno: 'Dyno', build: 'Build bench', live: 'Engine st
 
 /** Where the camera goes for each page: the dyno, the build bench, the run stand, the board on the wall. */
 /** @type {Record<string, 'dyno'|'stand'|'build'|'board'>} */
-const PAGE_SCENES = { dyno: 'dyno', build: 'build', live: 'stand', office: 'board' };
+// The build bench is reached by its place in the shop but opens full screen: its sheets have
+// too much on them for a monitor in the scene.
+const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
 
 /**
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on

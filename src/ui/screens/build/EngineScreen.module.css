@@ -135,6 +135,8 @@
    Danger replaces both the moment the springs float below redline. */
 .floatCaption { font-weight: 400; color: var(--ink2); }
 .floatCaption[data-float='true'] { color: var(--danger); }
+/* A figure the control above decides, read out in a line of its own: caption-sized. */
+.readout { margin: 6px 0 2px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
 
 .springSlider { width: 100%; accent-color: var(--cyan); }
 .springSlider[data-float='true'] { accent-color: var(--danger); }

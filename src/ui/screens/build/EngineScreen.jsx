@@ -311,7 +311,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           Pistons and rods: {bottomEndLimit.label} <span className={styles.floatCaption} data-float={pastBottomEnd ? 'true' : 'false'}>· rated to {bottomEndLimit.ratedRpm.toLocaleString('en-US')} RPM</span>
         </div>
         <Seg label="Pistons and rods" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
-        <div className={styles.floatCaption} data-testid="bottom-end-readout">
+        <div className={styles.readout} data-testid="bottom-end-readout">
           At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
           (this assembly is good for about {bottomEndLimit.limitMs.toFixed(1)} m/s) and pull {Math.round(pistonAtRedline.peakAccelMs2 / 9.81).toLocaleString('en-US')} g at top dead centre.
         </div>
