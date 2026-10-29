@@ -51,7 +51,7 @@
   padding: var(--sp-md) 0 9px;
   border: none;
   background: none;
-  color: var(--ink3);
+  color: var(--ink2);
   font-family: inherit;
   cursor: pointer;
 }
@@ -152,8 +152,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--ink2);
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--fs-sm);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -183,7 +182,7 @@
 }
 
 .fieldLabel {
-  color: var(--ink3);
+  color: var(--ink2);
   font-size: var(--fs-micro);
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -242,7 +241,7 @@
 }
 
 .run::after {
-  content: '● RUNNING';
+  content: 'Engine running';
   visibility: hidden;
 }
 
@@ -362,3 +361,17 @@
     order: 0;
   }
 }
+
+/* On a phone, either way up, the screen is too small to spend a line on the maker's
+   name: the laptop and the start screen already carry it. */
+@media (max-width: 560px), (max-height: 500px) {
+  .brand { display: none; }
+  .stripInner { padding: var(--sp-xs) var(--sp-md); }
+}
+
+/* A Mac window's status bar (StatusStrip `bar`, Desk's window footer): one quiet line of
+   small grey text, the readouts at the right. */
+.strip[data-bar='true'] { background: transparent; border-bottom: 0; }
+.strip[data-bar='true'] .stripInner { max-width: none; padding: 3px 12px; }
+.strip[data-bar='true'] .engine { font-size: 11px; color: var(--mac-label2); }
+.strip[data-bar='true'] .readouts { flex-wrap: nowrap; }

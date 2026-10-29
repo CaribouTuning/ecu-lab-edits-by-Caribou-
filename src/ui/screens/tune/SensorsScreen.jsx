@@ -40,7 +40,7 @@ export function SensorsScreen({ needsMafRecal, chartData, result, children }) {
       <Panel className={styles.mafPanel} data-tour="sensors-maf">
         <div className={styles.mafHead}>
           <span>MAF RECAL STATUS</span>
-          <span className={styles.mafStatus} data-needs-recal={needsMafRecal ? 'true' : 'false'}>{needsMafRecal ? 'HARDWARE CHANGED' : 'STOCK — OK'}</span>
+          <span className={styles.mafStatus} data-needs-recal={needsMafRecal ? 'true' : 'false'}>{needsMafRecal ? 'Hardware changed' : 'STOCK — OK'}</span>
         </div>
         {needsMafRecal && (
           <div className={styles.mafNote}>
@@ -70,8 +70,8 @@ export function SensorsScreen({ needsMafRecal, chartData, result, children }) {
           <ResponsiveContainer width="100%" height={150}>
             <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
               <CartesianGrid stroke={T.line} />
-              <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} />
-              <YAxis stroke={T.ink3} fontSize={10} unit="%" />
+              <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} />
+              <YAxis stroke={T.ink2} fontSize={10} unit="%" />
               <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
               <Line dataKey="trimPct" name="MAF trim %" stroke={T.violet} strokeWidth={2} dot={false} />
             </LineChart>

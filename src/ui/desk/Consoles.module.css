@@ -1,0 +1,64 @@
+/* The carts' control plates (Consoles.jsx): latching keys, a big round button, a lever. */
+
+/* One row, as a real control box is laid out: the face is twice as wide as it is tall, and a
+   control wrapped onto a second row went off its bottom edge. */
+.plate { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px; height: 100%; padding: 10px 14px; box-sizing: border-box; }
+.group { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.engraved { font-size: var(--fs-sm); color: var(--ink2); }
+.keys { display: flex; gap: 6px; flex-wrap: nowrap; }
+.key, .toggle {
+  min-height: 34px; padding: 4px 12px; border: 1px solid var(--line-hi); border-radius: var(--r-xs);
+  background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--fs-sm); cursor: pointer;
+  box-shadow: inset 0 -3px 0 var(--bg);
+}
+.key[aria-pressed='true'], .toggle[aria-pressed='true'] { background: var(--acc); color: var(--acc-on); border-color: var(--acc); box-shadow: inset 0 2px 0 var(--acc-ink); }
+.key:disabled, .toggle:disabled { opacity: 0.55; cursor: default; }
+.toggle { align-self: flex-start; display: inline-flex; gap: 8px; align-items: baseline; }
+.toggle small { color: inherit; opacity: 0.8; }
+.key:focus-visible, .toggle:focus-visible, .bigButton:focus-visible, .slider:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+/* What the machine reads now, in the window on the plate. */
+.readout {
+  display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: var(--r-xs);
+  background: var(--bg); border: 1px solid var(--line);
+}
+.readout, .lever, .bigButton { flex: none; }
+.readout b { font-family: var(--mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+.readout span { color: var(--ink2); font-size: var(--fs-sm); }
+
+/* A big round button: the cap, and what it does under it. */
+.bigButton {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: var(--ink); font: inherit; cursor: pointer; touch-action: manipulation;
+}
+.cap {
+  width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--panel); background: var(--ok);
+  box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--ok-line);
+}
+.bigButton[data-tone='stop'] .cap { background: var(--danger); box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--danger-line); }
+.bigButton:active .cap { transform: translateY(3px); box-shadow: 0 1px 0 var(--bg), inset 0 -3px 0 var(--ok-line); }
+.bigButton:disabled { cursor: default; }
+.bigButton:disabled .cap { background: var(--panel2); box-shadow: 0 1px 0 var(--bg); transform: translateY(3px); }
+.bigLabel { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
+
+/* The throttle: a lever you hold open; it fills as the throttle opens. */
+.lever {
+  position: relative; width: 62px; height: 120px; border-radius: var(--r-sm); overflow: hidden; touch-action: none;
+  background: var(--bg); border: 1px solid var(--line-hi); cursor: pointer; user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.lever:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.lever[data-running='false'] { cursor: default; }
+.leverFill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--acc); opacity: 0.85; }
+.leverLabel {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 6px; text-align: center;
+  font-size: var(--fs-xs); line-height: 1.25; color: var(--ink);
+}
+.slider { width: 100%; accent-color: var(--acc); }
+.note { margin: 0; font-size: var(--fs-xs); color: var(--warn-ink); line-height: 1.4; }
+.note[data-ok='true'] { color: var(--ok-ink); }
+
+/* A pendant box beside the monitor, taller than wide: its controls stand in a column. */
+@container (max-aspect-ratio: 1 / 1) {
+  .plate { flex-direction: column; justify-content: space-evenly; padding: 8px; gap: 10px; }
+}

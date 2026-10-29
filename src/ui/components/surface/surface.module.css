@@ -19,7 +19,8 @@
 .canvas {
   display: block;
   width: 100%;
-  touch-action: none;
+  /* Side to side turns the surface; up and down still scrolls the page. */
+  touch-action: pan-y;
   cursor: grab;
   outline: none;
 }
@@ -33,7 +34,7 @@
   right: 8px;
   bottom: 6px;
   font-size: var(--fs-micro);
-  color: var(--ink3);
+  color: var(--ink2);
   pointer-events: none;
 }
 
@@ -102,8 +103,7 @@
 .read dt {
   font-size: var(--fs-micro);
   letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink3);
+  color: var(--ink2);
 }
 
 .read dd {

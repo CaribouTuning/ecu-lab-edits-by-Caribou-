@@ -25,8 +25,8 @@ import styles from './Lesson.module.css';
 export function Goal({ learn, need }) {
   return (
     <div className={styles.goal}>
-      <div className={styles.goalRow}><span className={styles.goalKey}>YOU WILL</span><span>{learn}</span></div>
-      {need && <div className={styles.goalRow}><span className={styles.goalKey}>YOU NEED</span><span>{need}</span></div>}
+      <div className={styles.goalRow}><span className={styles.goalKey}>You will</span><span>{learn}</span></div>
+      {need && <div className={styles.goalRow}><span className={styles.goalKey}>You need</span><span>{need}</span></div>}
     </div>
   );
 }
@@ -58,7 +58,7 @@ export function F({ children }) {
 export function Worked({ title, rows, children }) {
   return (
     <div className={styles.worked}>
-      <div className={styles.boxHead}>WORKED EXAMPLE · {title}</div>
+      <div className={styles.boxHead}>Worked example: {title}</div>
       <dl className={styles.workedRows}>
         {rows.map(([k, v], i) => (
           <React.Fragment key={i}><dt>{k}</dt><dd>{v}</dd></React.Fragment>
@@ -73,7 +73,7 @@ export function Worked({ title, rows, children }) {
 export function Do({ steps }) {
   return (
     <div className={styles.do}>
-      <div className={styles.boxHead}>DO IT IN THE GAME</div>
+      <div className={styles.boxHead}>Do it in the game</div>
       <ol className={styles.doSteps}>
         {steps.map((s, i) => <li key={i}>{s}</li>)}
       </ol>
@@ -85,7 +85,7 @@ export function Do({ steps }) {
 export function Did({ children }) {
   return (
     <div className={styles.did}>
-      <div className={styles.boxHead}>WHAT YOU JUST DID</div>
+      <div className={styles.boxHead}>What you just did</div>
       <div className={styles.boxBody}>{children}</div>
     </div>
   );
@@ -95,7 +95,7 @@ export function Did({ children }) {
 export function Trouble({ items }) {
   return (
     <div className={styles.trouble}>
-      <div className={styles.boxHead}>IF IT GOES WRONG</div>
+      <div className={styles.boxHead}>If it goes wrong</div>
       <dl className={styles.troubleItems}>
         {items.map(([q, a], i) => (
           <React.Fragment key={i}><dt>{q}</dt><dd>{a}</dd></React.Fragment>
@@ -114,7 +114,7 @@ export function Aside({ title, children }) {
   return (
     <div className={styles.aside} data-open={open ? 'true' : 'false'}>
       <button type="button" className={styles.asideHead} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className={styles.asideTag}>GO DEEPER</span>
+        <span className={styles.asideTag}>Go deeper</span>
         <span className={styles.asideTitle}>{title}</span>
         <ChevronDown size={15} aria-hidden="true" className={styles.asideChevron} />
       </button>

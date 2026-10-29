@@ -1,0 +1,81 @@
+/*
+ * Two ways things are drawn (DESIGN.md).
+ *
+ * The physical world is inked: the 3-D shop, the laptop's and the phone's bodies, the
+ * shop's markers, paper on the job board. They keep the hand: wobbly drawn outlines
+ * (`--ink-a/b/c/round`), a second pencil stroke, an inked frame (`.ink-frame-lg`).
+ *
+ * Software on a screen is not inked. The apps, the dyno and engine computers, every
+ * control on them, are drawn as instrument software is: straight edges and small corners
+ * (`--hand-*` now resolve to those), one-pixel rules, no jitter on chart lines. Colour is
+ * data: the chrome is greyscale, a selection is a solid light key, and hue is kept for
+ * what a value means (table heat, curves, ok / warning / danger).
+ *
+ * Colours stay in tokens.css; this file only shapes how they are drawn.
+ */
+
+:root {
+  /* The pen's wobble, for physical things only: unequal elliptical corners, so no two
+     sides of a box bend the same way. */
+  --ink-a: 255px 12px 225px 12px / 12px 225px 12px 255px;
+  --ink-b: 12px 225px 12px 255px / 225px 12px 255px 12px;
+  --ink-c: 225px 14px 255px 10px / 14px 255px 10px 225px;
+  --ink-round: 255px 225px 240px 215px / 215px 240px 225px 255px;
+  /* Software corners. The old names are kept so every stylesheet that used them now
+     draws straight without a change at each call site. */
+  --hand-a: 6px;
+  --hand-b: 6px;
+  --hand-c: 6px;
+  --hand-round: 50%;
+  /* A second, offset pencil stroke behind a drawn physical box. On software, nothing. */
+  --pencil-twice-ink: 3px 4px 0 -1px var(--line-hi);
+  --pencil-twice: none;
+  /* The pen: a soft chalky light on the dark, a step under the text. */
+  --pen: var(--ink2);
+}
+
+/* A plain dark ground under everything: nothing showing round the edges, in an iPhone's
+   safe areas or when a page rubber-bands. */
+html, body { background: var(--bg); }
+
+body { font-family: var(--sans); }
+
+/* No machine polish: no glows, no frosted glass, no text shadows. */
+[class*='glow' i]:not([data-plain] *) { display: none; }
+* { backdrop-filter: none !important; text-shadow: none !important; }
+
+/*
+ * The inked frame, for physical things (the laptop's lid and base, the phone): the box
+ * keeps its border's width for layout but paints it clear, and ::after draws the line
+ * through the pen's slow shake (#hand-jitter-lg in index.html). The line sits on its own
+ * layer (will-change), so the filter runs when the frame changes size, not every time the
+ * numbers on the screen inside it change: that repaint, not the filter itself, was the lag
+ * the coarser pre-shaken mask (`--ink-mask-lg`, now unused here) had been swapped in for.
+ */
+.ink-frame-lg { position: relative; border-color: transparent !important; }
+.ink-frame-lg::after {
+  content: ''; position: absolute; inset: -3px; pointer-events: none;
+  border: 3px solid var(--pen); border-radius: inherit; filter: url(#hand-jitter-lg);
+  will-change: transform;
+}
+
+/* Sliders and ticks in the interface's own key colour rather than the browser's blue. */
+input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--acc); }
+
+/*
+ * Anything selected or current is drawn as a Mac draws it with the Graphite accent: a
+ * lighter grey chip with white text. The table's own cells keep their heat colours.
+ */
+:is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *):not([role='gridcell']):not([data-cell]) {
+  background: var(--mac-selected) !important; color: var(--mac-sel-ink) !important; border-color: var(--mac-selected) !important;
+}
+:is([aria-pressed='true'], [aria-current='page'], [aria-selected='true']):not([data-plain] *) svg { color: inherit; }
+
+/* Keyboard focus, everywhere, the instant it lands. */
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/*
+ * Labels are words, not ornament: no letter-spacing tracked out and no capitals forced on
+ * by the stylesheet, anywhere. Text keeps the case it was written in.
+ */
+*:not([data-keep-tracking]) { letter-spacing: normal !important; text-transform: none !important; }

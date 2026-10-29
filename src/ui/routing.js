@@ -20,8 +20,7 @@
  * @type {Record<string, string[]>}
  */
 export const ROUTES = {
-  dash: ['stats', 'health', 'learn', 'realcar'],
-  build: ['engine', 'induction', 'fuel', 'exhaust'],
+  build: ['engine', 'block', 'head', 'induction', 'fuel', 'exhaust'],
   // The base tables first, then the engine management's own control strategies.
   tune: ['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'],
   // LIVE is one screen, not an accordion, so it has a single section named for what it
@@ -29,7 +28,9 @@ export const ROUTES = {
   // it, and a tab absent from here is not addressable at all.
   live: ['engine'],
   dyno: ['result', 'data', 'log', 'score', 'history'],
-  drag: ['body', 'gearing', 'tyres'],
+  // The laptop's two reading apps: LEARN's four shelves, and the PHYSICS model laid open.
+  learn: ['sources', 'ecu', 'engine', 'how'],
+  physics: ['model'],
 };
 
 /**
@@ -40,19 +41,20 @@ export const ROUTES = {
  * @type {Record<keyof typeof ROUTES, string>}
  */
 export const TAB_NAMES = {
-  dash: 'HOME',
   build: 'BUILD',
   tune: 'TUNE',
   live: 'LIVE',
   dyno: 'DYNO',
-  drag: 'DRAG',
+  learn: 'LEARN',
+  physics: 'PHYSICS',
 };
 
 /**
  * @typedef {Object} Route
- * @property {'start'|'tutorial'|'course'|'shop'|'app'} view - Which top-level screen is showing:
+ * @property {'start'|'tutorial'|'course'|'shop'|'desk'|'bay'|'messages'|'app'} view - Which top-level screen is showing:
  *   the start screen, the five-minute tutorial, the Tuning Course (opened from Learn), the
- *   career's shop, or the app.
+ *   career's shop, SANDBOX's laptop desktop, SANDBOX's shop floor with the laptop shut, or
+ *   an app (a laptop app, or the dyno or engine stand in the shop).
  * @property {string|null} tab - The active tab key (a key of `ROUTES`), or
  *   `null` when `view` is not 'app'.
  * @property {string|null} section - The open accordion section within `tab`,
@@ -71,6 +73,16 @@ const COURSE_ROUTE = { view: 'course', tab: null, section: null };
 
 /** @type {Route} */
 const SHOP_ROUTE = { view: 'shop', tab: null, section: null };
+
+/** @type {Route} */
+const DESK_ROUTE = { view: 'desk', tab: null, section: null };
+
+/** @type {Route} */
+const BAY_ROUTE = { view: 'bay', tab: null, section: null };
+
+/** CAREER: Pops's messages, on the laptop or the phone. @type {Route} */
+const MESSAGES_ROUTE = { view: 'messages', tab: null, section: null };
+
 
 /**
  * Parse a `window.location.hash`-shaped string into a route object.
@@ -110,6 +122,18 @@ export function parseRoute(hash) {
     return { ...SHOP_ROUTE };
   }
 
+  if (first === 'desk') {
+    return { ...DESK_ROUTE };
+  }
+
+  if (first === 'bay') {
+    return { ...BAY_ROUTE };
+  }
+
+  if (first === 'messages') {
+    return { ...MESSAGES_ROUTE };
+  }
+
   if (!Object.prototype.hasOwnProperty.call(ROUTES, first)) {
     return { ...START_ROUTE };
   }
@@ -141,6 +165,19 @@ export function formatRoute(route) {
 
   if (view === 'shop') {
     return '#/shop';
+  }
+
+  if (view === 'desk') {
+    return '#/desk';
+  }
+
+  if (view === 'bay') {
+    return '#/bay';
+  }
+
+
+  if (view === 'messages') {
+    return '#/messages';
   }
 
   if (view === 'app' && tab != null) {

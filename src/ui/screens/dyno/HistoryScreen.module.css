@@ -41,12 +41,12 @@
 
 .when {
   font-size: 10px;
-  color: var(--ink3);
+  color: var(--ink2);
 }
 
 .label {
   font-size: 10px;
-  color: var(--ink3);
+  color: var(--ink2);
 }
 
 .spark {
@@ -100,5 +100,3 @@
   color: var(--acc-ink);
 }
 
-/* A road test measures no power, so there is no power curve to sketch. */
-.spark[data-hidden='true'] { visibility: hidden; }

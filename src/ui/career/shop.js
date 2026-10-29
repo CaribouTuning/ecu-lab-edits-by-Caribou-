@@ -5,6 +5,7 @@
  * another.
  */
 
+
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
@@ -50,6 +51,10 @@ export const START_MONEY = 1000;
  * @property {number} [lastSeen] the `seq` of the last hand-back the player has read
  * @property {number} seed this career's own random seed: its customers are its own
  * @property {string[]} offers today's walk-in customers (generated job ids)
+ * @property {number} [phase] how far through the day it is, 0 morning to 3 night; each
+ *   hand-back moves it on, and closing up starts the next morning
+ * @property {boolean} [introDone] the welcome has been read
+ * @property {{ch: number, read: string[], done: boolean}} [saga] the story: the open chapter, messages read, finished (story.js)
  */
 
 /**
@@ -72,9 +77,10 @@ export const START_MONEY = 1000;
 export function newCareer(seed = Math.floor(Math.random() * 2 ** 32)) {
   return withOffers({
     v: SAVE_VERSION, money: START_MONEY, rep: 0, day: 1,
-    owned: ['laptop', 'wideband'], trained: [], done: {}, lifts: [], working: null,
+    // The dyno is Ray's, in the bay from the first day: every job is measured on it.
+    owned: ['laptop', 'wideband', 'dyno'], trained: [], done: {}, lifts: [], working: null,
     history: [], milestones: [], storyDone: false, last: null, lastSeen: 0,
-    seed: seed >>> 0, offers: [],
+    seed: seed >>> 0, offers: [], phase: 0,
   });
 }
 
@@ -117,12 +123,17 @@ export function reviveCareer(raw) {
   const revived = {
     ...fresh, ...c,
     seed: fresh.seed,
-    owned: Array.isArray(c.owned) ? c.owned : fresh.owned,
+    // A save from when the dyno had to be bought has it now: the shop always had Ray's.
+    owned: Array.isArray(c.owned) ? [...new Set([...c.owned, 'dyno'])] : fresh.owned,
     trained: Array.isArray(c.trained) ? c.trained : [],
-    lifts: Array.isArray(c.lifts) ? c.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune) : [],
+    lifts: Array.isArray(c.lifts) ? c.lifts : [],
     history: Array.isArray(c.history) ? c.history : [],
     milestones: Array.isArray(c.milestones) ? c.milestones : [],
   };
+  // A save from when the shop had cars of its own: those were for driving in town, which
+  // is gone, so they and any job that stood in for one go.
+  for (const k of ['cars', 'starterGiven', 'look', 'wardrobe', 'looks', 'found', 'races', 'raceDay', 'meetDay', 'meets', 'junk', 'daily', 'streak', 'decor', 'ach', 'track']) delete revived[k];
+  revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 
@@ -131,18 +142,20 @@ export const capacity = (c) => 1 + (c.owned.includes('lift2') ? 1 : 0) + (c.owne
 
 /**
  * What the shop costs to open for a day: rent, and the running costs of what it has
- * grown into (each extra lift is floor space and a tech, the dyno needs power and
- * servicing, the lounge its coffee). Charged every time the day moves on, so growth is
+ * grown into (each extra lift is floor space and a tech, the lounge its coffee). Charged every time the day moves on, so growth is
  * a decision, and money earned has somewhere to go. Never stops play: a shop in the red
  * can still take work, it just cannot buy anything.
  * @param {Career} c
  */
 export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
-  + (c.owned.includes('dyno') ? 60 : 0) + (c.owned.includes('lounge') ? 50 : 0)
+  + (c.owned.includes('lounge') ? 50 : 0)
   + (c.owned.includes('expansion') ? 120 : 0);
 
 /** The day moves on: the running costs are paid, and tomorrow's customers arrive. @param {Career} c */
-const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
+const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, phase: 0, money: c.money - overhead(c) });
+
+/** A job is done and time has passed: the light moves from morning toward night. @param {Career} c */
+export const advancePhase = (c) => ({ ...c, phase: Math.min(3, (c.phase ?? 0) + 1) });
 
 /** How many customers wait on the board. @param {Career} c */
 export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);

@@ -48,6 +48,28 @@ const UNDER_ADVANCED_DEG = 3.0;
 const MIX_NOTABLE_AFR = 0.45;
 
 /**
+ * The mixtures a production calibration actually runs at full load, as lambda. A cell
+ * inside the band is a calibration choice, not an error: factories run richer than best
+ * power for exhaust and catalyst temperature, and direct-injection engines built for
+ * emissions run stoichiometric (factoryFuel.js has the sources).
+ *
+ * RICH: lambda 0.74. The richest power enrichment in 26 stock GM calibrations is the
+ * LM7's 0.749 (ECU Lab Pro, gm-benchmark.json); richer than any of those is fuel no
+ * factory spends.
+ * LEAN, port injection: best power plus MIX_NOTABLE_AFR, as before.
+ * LEAN, direct injection: stoichiometric, where stock B58 and EA888 logs sit through a
+ * full-throttle pull; in-cylinder evaporation cools the charge, and the knock model
+ * already charges the spark for it.
+ */
+const MIX_RICHEST_LAMBDA = 0.74;
+
+/** How far past stoichiometric a direct-injection cell may read before it is lean: sensor noise. */
+const MIX_DI_MARGIN_AFR = 0.15;
+
+/** Full load for the lean edge: where the factory enrichment is complete (factoryFuel.js). */
+const MIX_FULL_LOAD_KPA = 97;
+
+/**
  * Compares the player's VE table against what the current hardware would flow, and
  * turns the gap into specific, cell-level tuning advice — the same thing a tuner
  * would conclude after re-logging airflow following a parts change.
@@ -149,13 +171,23 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
  * One cell of mixture advice. Scaling the commanded value by target/delivered prices the
  * error the engine actually made, and lands on the number to type in (rule 3 below).
  */
-function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt) {
-  const suggestedAfr = current * (pt.bestAfr / Math.max(0.1, pt.afr));
+function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct) {
+  // Inside the band the factory's choice stands; outside it, the advice is best power.
+  // The lean edge ramps with load, as the factory's enrichment does: stoichiometric is a
+  // calibration's own choice where open loop begins (OPEN_LOOP_KPA), and the best-power
+  // edge applies from full load (MIX_FULL_LOAD_KPA) up.
+  const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
+  const portEdge = pt.bestAfr + MIX_NOTABLE_AFR;
+  const partEdge = 14.7 + MIX_NOTABLE_AFR;
+  // Direct injection: stoichiometric stays a factory choice at full load too.
+  const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? 14.7 + MIX_DI_MARGIN_AFR : 0);
+  const outside = pt.afr > leanEdge || pt.afr < 14.7 * MIX_RICHEST_LAMBDA;
+  const suggestedAfr = outside ? current * (pt.bestAfr / Math.max(0.1, pt.afr)) : current;
   return {
     ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current,
     suggested: Number(suggestedAfr.toFixed(1)),
     delta: Number((suggestedAfr - current).toFixed(1)),
-    delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)),
+    delivered: Number(pt.afr.toFixed(2)), target: Number(pt.bestAfr.toFixed(2)), outside,
     duty: pt.duty,
   };
 }
@@ -370,7 +402,7 @@ export function calibrationAdvice({
         knockLimited: knockCeiling < mbt,
         unbounded: pt.threshold >= COEFF.KNOCK_UNBOUNDED_BTDC,
       });
-      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt));
+      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct'));
     });
   });
 
@@ -386,7 +418,7 @@ export function calibrationAdvice({
           veVal: read('ve', rpm, rowKpa), veActualVal: truthAt ? truthAt(rpm, rowKpa) : undefined,
           timingVal: read('timing', rpm, rowKpa), afrCommanded: afr[ri][ci],
         });
-        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt));
+        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct'));
       });
     });
   }
@@ -481,8 +513,32 @@ export function calibrationAdvice({
   // ceiling and the table is over both: the cell is detonating, but the lower ceiling
   // is MBT. Classifying on ceiling order would file that cell as merely wasteful and
   // tell the player it is safe, which is the one thing this report must never do.
-  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA
-    && Math.abs(c.delta) > MIX_NOTABLE_AFR);
+  // THE LOG OVERRULES THE BREAKPOINTS. A table is judged at its breakpoints, but the engine
+  // runs between them: with few columns and a cam whose breathing bulges between two of them,
+  // both cells can read right while the pull runs lean or rich in the middle. Where the log
+  // says so, the cells either side of that speed, on the row nearest its pressure, are flagged
+  // with the correction the log itself implies.
+  if (pull) {
+    for (const p of pull.points) {
+      if (!(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
+      const near = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA);
+      if (!near.length) continue;
+      const row = near.reduce((a, c) => (Math.abs(c.map - p.map) < Math.abs(a.map - p.map) ? c : a)).map;
+      const cols = near.filter((c) => c.map === row);
+      const below = cols.filter((c) => c.rpm <= p.rpm).reduce((a, c) => (!a || c.rpm > a.rpm ? c : a), null);
+      const above = cols.filter((c) => c.rpm >= p.rpm).reduce((a, c) => (!a || c.rpm < a.rpm ? c : a), null);
+      for (const c of [below, above]) {
+        if (!c) continue;
+        const asked = Number((c.current * (c.target / p.afr)).toFixed(1));
+        if (!c.outside || Math.abs(asked - c.current) > Math.abs(c.delta)) {
+          c.outside = true;
+          c.suggested = asked;
+          c.delta = Number((asked - c.current).toFixed(1));
+        }
+      }
+    }
+  }
+  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA && c.outside);
   // SPARK CANNOT FIX EVERY CELL. Where the knock ceiling sits below the most retard the
   // table can hold, no number typed into this cell is safe at the boost being asked for:
   // the fix is less boost here (a real ECU's low-speed boost or torque limit), or better

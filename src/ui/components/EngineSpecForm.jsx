@@ -33,7 +33,7 @@ const REQUIRED = [
  * @param {string} [props.submitLabel]
  * @returns {React.ReactElement}
  */
-export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' }) {
+export function EngineSpecForm({ onCreate, submitLabel = 'Create this engine' }) {
   const [spec, setSpec] = useState(/** @type {Record<string, any>} */ ({
     configuration: '', bore: '', stroke: '', compression: '', redline: '',
     camDuration: '', valvetrain: '', valvesPerCyl: '', injection: '', blockMaterial: '', headMaterial: '', bottomEnd: '',
@@ -61,7 +61,7 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
         <div className={styles.label} id="spec-layout">Cylinder layout</div>
         <Seg
           label="Cylinder layout" equal value={spec.configuration}
-          options={CONFIG_OPTS.map((c) => ({ id: c, label: `${c} · ${CYL_COUNT[c]} cyl` }))}
+          options={CONFIG_OPTS.map((c) => ({ id: c, label: `${c} (${CYL_COUNT[c]} cyl)` }))}
           onChange={(v) => set({ configuration: v })}
         />
         {errors.configuration && <div className={styles.error} role="alert">{errors.configuration}</div>}

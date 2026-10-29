@@ -23,10 +23,9 @@
 .barActions { display: flex; gap: var(--sp-xs); }
 
 .count {
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  color: var(--acc-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink2);
 }
 
 .body {
@@ -42,9 +41,8 @@
 
 .eyebrow {
   margin-bottom: var(--sp-sm);
-  font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   color: var(--ink-soft);
 }
 

@@ -55,7 +55,7 @@ describe('SelectionDock on a range', () => {
     mountAir();
     select({ type: 'range', r1: 3, c1: 2, r2: 1, c2: 5 });
     // LOAD = [200,150,100,70,40,20], RPM = [800,...,7500]
-    expect(within(dock()).getByText('Range · 2500–5500 RPM × 70–150 kPa · 12 cells')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 2500–5500 RPM × 70–150 kPa, 12 cells')).toBeTruthy();
   });
 
   it('adds to every cell in one undo step, with a label', () => {
@@ -95,8 +95,8 @@ describe('SelectionDock on a range', () => {
   it('interpolates and smooths, one undo step each', () => {
     mountAir();
     select({ type: 'range', r1: 0, c1: 0, r2: 2, c2: 3 });
-    fireEvent.click(within(dock()).getByRole('button', { name: 'INTERPOLATE' }));
-    fireEvent.click(within(dock()).getByRole('button', { name: 'SMOOTH' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Interpolate' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Smooth' }));
     expect(store.history.past.map((e) => e.label)).toEqual([
       'VE edit · interpolate · 12 cells',
       'VE edit · smooth · 12 cells',
@@ -106,8 +106,8 @@ describe('SelectionDock on a range', () => {
   it('hides INTERPOLATE and SMOOTH for a single cell', () => {
     mountAir();
     select({ type: 'cell', row: 1, col: 1 });
-    expect(within(dock()).queryByRole('button', { name: 'SMOOTH' })).toBeNull();
-    expect(within(dock()).queryByRole('button', { name: 'INTERPOLATE' })).toBeNull();
+    expect(within(dock()).queryByRole('button', { name: 'Smooth' })).toBeNull();
+    expect(within(dock()).queryByRole('button', { name: 'Interpolate' })).toBeNull();
   });
 
   it('goes back to ADD after the dock closes', () => {
@@ -168,7 +168,7 @@ describe('selecting a range on the grid', () => {
 
   it('SELECT RANGE takes two taps, and a third starts over', () => {
     mountAir();
-    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select range' }));
     fireEvent.click(cell(1500, 150));
     expect(store.tune.selection).toEqual({ type: 'range', r1: 1, c1: 1, r2: 1, c2: 1 });
     fireEvent.click(cell(3500, 70));
@@ -179,9 +179,9 @@ describe('selecting a range on the grid', () => {
 
   it('ALL selects the whole table, and switching mode clears', () => {
     mountAir();
-    fireEvent.click(screen.getByRole('button', { name: 'ALL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
     expect(store.tune.selection).toEqual({ type: 'range', r1: 0, c1: 0, r2: 5, c2: 7 });
-    fireEvent.click(screen.getByRole('button', { name: 'SELECT RANGE' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select range' }));
     expect(store.tune.selection).toBeNull();
   });
 
@@ -194,7 +194,7 @@ describe('selecting a range on the grid', () => {
         <FuelScreen calAdvice={calAdvice} />
       </StoreProvider>,
     );
-    const [sparkRange, fuelRange] = screen.getAllByRole('button', { name: 'SELECT RANGE' });
+    const [sparkRange, fuelRange] = screen.getAllByRole('button', { name: 'Select range' });
     fireEvent.click(sparkRange);
     expect(store.tune.rangeMode).toBe(true);
     expect(fuelRange.getAttribute('aria-pressed')).toBe('true');

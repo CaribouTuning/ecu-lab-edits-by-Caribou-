@@ -16,10 +16,12 @@
  * threaded down as its own value.
  *
  * The ghost lines take each live series' own colour at half opacity rather than a
- * neutral grey. `T.ink3` — what they used to use — is also the axis, tick-label and
+ * neutral grey. `T.ink3` — what they used to use — was also the axis, tick-label and
  * `afrCommanded` colour, so the previous pull was not too dim to see so much as
- * indistinguishable from the chart's furniture. Hue now carries series identity and
- * opacity carries time.
+ * indistinguishable from the chart's furniture. The axes, tick labels and the
+ * `afrCommanded` reference line are now `T.ink2` (issue 79, text contrast): recharts
+ * colours a series' legend and tooltip text with its stroke, so a series is text too.
+ * Hue now carries series identity and opacity carries time.
  */
 
 import React from 'react';
@@ -28,7 +30,6 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 
 import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
-import { useRoadTest } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './ResultScreen.module.css';
@@ -119,28 +120,18 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
     if (rpm !== null) onSelectRpm(rpm);
   };
 
-  const roadTest = useRoadTest();
-
   return (
     <>
-      {roadTest ? (
-        <Panel tight className={styles.panel} data-tour="dyno-power">
-          <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
-          <p className={styles.roadNote}>
-            Road test: the wideband and the ECU log everything below, but nothing on a road measures power. A dyno does.
-          </p>
-        </Panel>
-      ) : (
       <Panel tight className={styles.panel} data-tour="dyno-power">
-        <div className={styles.chartLabel}>POWER &amp; TORQUE</div>
+        <div className={styles.chartLabel}>Power and torque against rpm</div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
             <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink3} fontSize={10} />
+            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
+            <YAxis stroke={T.ink2} fontSize={10} />
             <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {bands.map((b) => (
@@ -156,32 +147,31 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
           </LineChart>
         </ResponsiveContainer>
       </Panel>
-      )}
 
       <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
-        <div className={styles.chartLabel}>AFR (COMMANDED VS ACTUAL) / TIMING</div>
+        <div className={styles.chartLabel}>Air-fuel ratio, asked for and measured, and spark timing</div>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
             <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink3} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink3} fontSize={10} />
+            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
+            <YAxis stroke={T.ink2} fontSize={10} />
             <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {bands.map((b) => (
               <ReferenceArea
                 key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
                 // This chart's bands are the second copy of every event — see the
-                // POWER & TORQUE chart above for the first. Both stay visible (the
+                // power and torque chart above for the first. Both stay visible (the
                 // overlap is the intended visual), but only one copy should be a tab
                 // stop: two focusable nodes per event with identical accessible names
                 // would double every announcement in the a11y tree.
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} focusable={false} />}
               />
             ))}
-            <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink3} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+            <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink2} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
             {/* Series identity colours, not status: both lines are on screen for
                 every pull, so green and amber here reported a health this chart
                 never measures. */}

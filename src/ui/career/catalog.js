@@ -57,7 +57,7 @@ export const TRAINING = [
     deeper: 'Learn article 35, controllers',
   },
   {
-    id: 'fuel-strategy', title: 'Advanced fuel strategies', price: 700, rep: 25, requires: [],
+    id: 'fuel-strategy', title: 'Advanced fuel strategies', price: 700, rep: 10, requires: [],
     pages: [], sections: ['fuel', 'airflow'],
     summary: 'The ECU’s fuel strategy: enrichment, cold start and the air model.',
     lesson: [
@@ -67,7 +67,7 @@ export const TRAINING = [
     deeper: 'Learn articles 33 and 43',
   },
   {
-    id: 'knock', title: 'Knock control', price: 900, rep: 30, requires: ['spark'], pages: [], sections: ['spark'],
+    id: 'knock', title: 'Knock control', price: 900, rep: 12, requires: ['spark'], pages: [], sections: ['spark'],
     summary: 'The knock sensor, its threshold, and what the ECU does when it hears knock.',
     lesson: [
       'The ECU does not know knock happened: it hears vibration and compares it with a threshold. Set the threshold too low and valvetrain noise reads as knock, so the ECU pulls timing for nothing (false knock). Too high and real knock goes unheard.',
@@ -76,7 +76,7 @@ export const TRAINING = [
     deeper: 'Learn article 34',
   },
   {
-    id: 'limits', title: 'Rev limits and protections', price: 700, rep: 30, pages: ['protect'],
+    id: 'limits', title: 'Rev limits and protections', price: 700, rep: 12, pages: ['protect'],
     summary: 'Rev limiters, launch, and the protections that save an engine.',
     lesson: [
       'The protections are what stand between a mistake and a broken engine: lean, overheating, knock and pressure all have an action, from pulling timing to limp mode.',
@@ -85,7 +85,7 @@ export const TRAINING = [
     deeper: 'Learn article 36',
   },
   {
-    id: 'vvt', title: 'Variable cam timing', price: 900, rep: 60, pages: ['vvt'],
+    id: 'vvt', title: 'Variable cam timing', price: 900, rep: 25, pages: ['vvt'],
     summary: 'VVT/VTC targets: where the cams sit at each speed and load.',
     lesson: [
       'Moving the intake cam changes when the valve closes, which changes how much air the cylinder traps at each RPM. Advance helps low-speed torque; retard helps the top end.',
@@ -94,7 +94,7 @@ export const TRAINING = [
     deeper: 'Learn article 35',
   },
   {
-    id: 'boost', title: 'Boost control', price: 1500, rep: 60, requires: ['spark'], pages: ['boost'],
+    id: 'boost', title: 'Boost control', price: 1500, rep: 20, requires: ['spark'], pages: ['boost'],
     summary: 'Wastegate duty, closed-loop boost and overboost protection.',
     lesson: [
       'The ECU holds boost by opening and closing the wastegate. Base duty gets it close; the closed loop trims it to the target. Too much gain overshoots, too little and it never arrives.',
@@ -103,7 +103,7 @@ export const TRAINING = [
     deeper: 'Learn articles 22 and 35',
   },
   {
-    id: 'builder', title: 'Engine building', price: 4000, rep: 90, requires: ['spark'], pages: [], build: true,
+    id: 'builder', title: 'Engine building', price: 4000, rep: 40, requires: ['spark'], pages: [], build: true,
     summary: 'Build whole engines to a customer’s wish list: BUILD opens on engine-building jobs.',
     lesson: [
       'An engine builder is handed a wish list, not a fault: this much power, this fuel, no boost, nothing past this RPM, and it still has to idle in traffic. Every part is a trade.',
@@ -113,7 +113,7 @@ export const TRAINING = [
     deeper: 'The Tuning Course, chapter 4, and Learn articles 22, 40 and 45',
   },
   {
-    id: 'torque', title: 'Torque management', price: 800, rep: 80, pages: ['torque'],
+    id: 'torque', title: 'Torque management', price: 800, rep: 30, pages: ['torque'],
     summary: 'Torque limits by gear and speed, to protect the driveline.',
     lesson: [
       'A gearbox and clutch have a torque rating too. Torque management trims boost, throttle or spark so the engine never asks more of the driveline than it can carry.',
@@ -121,7 +121,7 @@ export const TRAINING = [
     deeper: 'Learn article 36',
   },
   {
-    id: 'nitrous', title: 'Nitrous tuning', price: 1200, rep: 80, requires: ['spark'], pages: ['nitrous'],
+    id: 'nitrous', title: 'Nitrous tuning', price: 1200, rep: 30, requires: ['spark'], pages: ['nitrous'],
     summary: 'The nitrous window, fuel while spraying, and retard per shot.',
     lesson: [
       'Nitrous is oxygen from a bottle. More oxygen burns more fuel, so it needs its own fuel while it sprays, and the extra cylinder pressure lowers the knock limit: about 2° out per 50 hp of shot is the rule of thumb.',
@@ -144,8 +144,8 @@ export const TRAINING = [
 /** @type {Equipment[]} */
 export const EQUIPMENT = [
   { id: 'laptop', title: 'Tuning laptop and cable', price: 0, rep: 0, does: 'Reads and flashes the ECU. Every shop starts with one.' },
-  { id: 'wideband', title: 'Handheld wideband', price: 0, rep: 0, does: 'Logs air-fuel ratio on a road test. Every shop starts with one.' },
-  { id: 'dyno', title: 'Chassis dyno', price: 6000, rep: 20, does: 'Measures power. Without it a road test logs everything except horsepower, and power jobs go elsewhere.' },
+  { id: 'wideband', title: 'Wideband oxygen sensor', price: 0, rep: 0, does: 'Logs air-fuel ratio on every pull. Every shop starts with one.' },
+  { id: 'dyno', title: 'Chassis dyno', price: 0, rep: 0, does: 'Measures wheel power and logs every pull. Ray’s, in the bay from the first day.' },
   { id: 'lift2', title: 'Second lift', price: 3000, rep: 15, does: 'Hold two customer cars at once.' },
   { id: 'flex', title: 'Ethanol content analyser', price: 500, rep: 25, does: 'Measures what is really in the tank. E85 customers will not book without it.' },
   { id: 'egt', title: 'EGT probe kit', price: 700, rep: 60, does: 'Logs exhaust temperature per pull. Boosted and nitrous customers insist on it.' },
@@ -180,7 +180,6 @@ export const nextRepTier = (rep) => REP_TIERS.find((x) => x.min > rep) ?? null;
 export const MILESTONES = [
   { id: 'first-job', title: 'First customer paid', test: (c) => c.history.some((h) => h.paid > 0) },
   { id: 'first-training', title: 'First training course', test: (c) => c.trained.length > 0 },
-  { id: 'dyno', title: 'A dyno of your own', test: (c) => c.owned.includes('dyno') },
   { id: 'five-jobs', title: 'Five happy customers', test: (c) => c.history.filter((h) => h.verdict === 'pass').length >= 5 },
   { id: 'first-boost', title: 'First boosted car', test: (c) => c.history.some((h) => h.verdict === 'pass' && h.boosted) },
   { id: 'first-build', title: 'First engine built to order', test: (c) => c.history.some((h) => h.built) },

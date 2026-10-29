@@ -26,22 +26,22 @@ export function LayoutSwitch() {
     ...[...new Set([own, ECU_LAYOUTS[active.id] ? active.id : null].filter(Boolean))]
       .map((id) => ({ id, label: ECU_LAYOUTS[id].ecu.split(',')[0] })),
   ];
+  // One line: the axes' size and span, the whole story in the tooltip.
+  const why = active.id === 'engine'
+    ? `The range this engine runs, at the depth of a typical standalone or factory computer. The axes follow the build: raise the limiter or the boost and they grow with it.`
+    : active.id === 'game' ? 'On the old 8 × 6 grid. Switch to tables sized to this engine.'
+      : `The breakpoints of ${active.ecu}, read from its own calibrations. ${active.note ?? ''}`;
   return (
-    <div data-testid="layout-switch" style={{ margin: '4px 0 10px' }}>
-      <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.ink3, fontWeight: 800, marginBottom: 5 }}>TABLE LAYOUT</div>
+    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }} title={why}>
       <Seg
         label="Table layout"
         options={options}
         value={active.id === 'game' ? '' : active.id}
         onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
       />
-      <div style={{ fontSize: 11, color: T.ink2, marginTop: 6, lineHeight: 1.5 }}>
-        {active.id === 'engine'
-          ? <>{active.ve.rpm.length} RPM × {active.ve.load.length} load breakpoints, from {active.ve.rpm[0]} to {active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} RPM and {active.ve.load[active.ve.load.length - 1]} to {active.ve.load[0]} kPa: the range this engine runs, at the depth of a typical standalone or factory computer. They follow the build: raise the limiter or the boost and the axes grow with it.</>
-          : active.id === 'game'
-            ? <>On the old 8 × 6 grid. Switch to tables sized to this engine.</>
-            : <>{active.label.replace(/^[^(]*\(|\)$/g, '')}: the breakpoints of {active.ecu}, read from its own calibrations. {active.note}</>}
-      </div>
+      <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums' }}>
+        {active.ve.rpm.length} × {active.ve.load.length}, {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm, {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
+      </span>
     </div>
   );
 }

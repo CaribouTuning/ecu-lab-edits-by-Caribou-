@@ -40,12 +40,12 @@ const writeVe = (fn) => act(() => {
 });
 // LOAD = [200,150,100,70,40,20], RPM = [800,1500,2500,3500,4500,5500,6500,7500]
 const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: `${rpm} RPM, ${kpa} kPa` });
-const changes = () => fireEvent.click(screen.getByRole('button', { name: 'CHANGES' }));
+const changes = () => fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
 describe('the CHANGES view', () => {
   it('starts on VALUES, showing values', () => {
     mountAir();
-    expect(screen.getByRole('button', { name: 'VALUES' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Values' }).getAttribute('aria-pressed')).toBe('true');
     expect(cell(1500, 150).textContent).toBe(String(Math.round(store.tune.ve[1][1])));
   });
 
@@ -74,7 +74,7 @@ describe('the CHANGES view', () => {
         <FuelScreen calAdvice={calAdvice} />
       </StoreProvider>,
     );
-    const [sparkChanges, fuelChanges] = screen.getAllByRole('button', { name: 'CHANGES' });
+    const [sparkChanges, fuelChanges] = screen.getAllByRole('button', { name: 'Changes' });
     fireEvent.click(sparkChanges);
     expect(store.tune.diffView).toBe(true);
     expect(fuelChanges.getAttribute('aria-pressed')).toBe('true');
@@ -110,14 +110,14 @@ describe('the CHANGES view', () => {
 });
 
 const dock = () => screen.getByTestId('selection-dock');
-const revertButton = () => within(dock()).queryByRole('button', { name: 'REVERT' });
+const revertButton = () => within(dock()).queryByRole('button', { name: 'Revert' });
 
 describe('REVERT and the changed count', () => {
   it('is hidden, and the title unchanged, when nothing differs', () => {
     mountAir();
     select({ type: 'range', r1: 0, c1: 0, r2: 1, c2: 1 });
     expect(revertButton()).toBeNull();
-    expect(within(dock()).getByText('Range · 800–1500 RPM × 150–200 kPa · 4 cells')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 800–1500 RPM × 150–200 kPa, 4 cells')).toBeTruthy();
   });
 
   it('titles a changed cell with what it was', () => {
@@ -125,7 +125,7 @@ describe('REVERT and the changed count', () => {
     const v0 = store.tune.ve[1][1];
     writeVe((v, ri, ci) => (ri === 1 && ci === 1 ? v - 5 : v));
     select({ type: 'cell', row: 1, col: 1 });
-    expect(within(dock()).getByText(`1500 RPM · 150 kPa MAP · was ${Math.round(v0)}`)).toBeTruthy();
+    expect(within(dock()).getByText(`1500 RPM, 150 kPa MAP, was ${Math.round(v0)}`)).toBeTruthy();
     expect(revertButton()).toBeTruthy();
   });
 
@@ -133,7 +133,7 @@ describe('REVERT and the changed count', () => {
     mountAir();
     writeVe((v, ri, ci) => (ri === 0 && ci <= 1 ? v - 5 : v));
     select({ type: 'range', r1: 0, c1: 0, r2: 1, c2: 1 });
-    expect(within(dock()).getByText('Range · 800–1500 RPM × 150–200 kPa · 4 cells · 2 changed')).toBeTruthy();
+    expect(within(dock()).getByText('Range: 800–1500 RPM × 150–200 kPa, 4 cells, 2 changed')).toBeTruthy();
   });
 
   it('puts the changed cells back in one undo step, counting only those', () => {

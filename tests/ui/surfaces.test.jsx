@@ -62,10 +62,13 @@ describe('Eyebrow', () => {
     expect(screen.getByText('Forced induction')).toBeTruthy();
   });
 
-  it('renders an icon when given one', () => {
+  it('is words only: an icon passed in is not drawn', () => {
+    // The label used to carry an icon and an accent rule, the stock label of a generated
+    // page; the words do the labelling now.
     const Icon = (props) => <svg data-testid="icon" {...props} />;
     render(<Eyebrow icon={Icon}>Boost</Eyebrow>);
-    expect(screen.getByTestId('icon')).toBeTruthy();
+    expect(screen.queryByTestId('icon')).toBeNull();
+    expect(screen.getByText('Boost')).toBeTruthy();
   });
 });
 

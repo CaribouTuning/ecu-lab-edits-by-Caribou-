@@ -26,7 +26,8 @@ import { engineLayout, layoutById, readEcuTable, readTable } from './layouts.js'
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { bestPowerAfr, peakMapKpaOf, reachableKpa } from './manifold.js';
+import { factoryLambda, fuelStrategyFor } from './factoryFuel.js';
+import { peakMapKpaOf, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
@@ -36,7 +37,7 @@ import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
 import { inductionAtMap } from './turbo.js';
 import {
-  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -57,6 +58,7 @@ export const FACTORY_KNOCK_MARGIN_DEG = 2;
 /**
  * @typedef {object} Preset
  * @property {string} id
+ * @property {string|null} [fuelPlanId] the factory engine whose fuel strategy this one runs, when it is not itself one (stockCalibrationFor)
  * @property {string} name
  * @property {string} manufacturer
  * @property {string} years
@@ -658,7 +660,11 @@ export const ENGINE_PRESETS = [
       // full-throttle lambda, so duration came up until power is on the rating again.
       // Back to 200 with dissociation (thermo.js, dissociatedEnergyJPerKg): at 202 the
       // power peak reached the 6000 limiter; 200 lands -2.6% and peaks before it.
-      camDuration: 200, springRate: 60,
+      // REFITTED for molar expansion (thermo.js, molarExpansion) and GM's stock power
+      // enrichment (factoryFuel.js): at 200 the power ran flat from 5500 into the 6000
+      // limiter. 196 lands -0.9% on power and +4.9% on torque, peaking at 5400 (rated 5200)
+      // and falling away before the limiter.
+      camDuration: 196, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -694,7 +700,10 @@ export const ENGINE_PRESETS = [
       // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
       // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
       // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 220, springRate: 60,
+      // REFITTED for molar expansion and the factory fuel strategy (thermo.js, factoryFuel.js):
+      // 220 now ran +4% and flat into the 6400 limiter; 212 lands -0.2%, peaking at the
+      // rated 6000 and falling away after it.
+      camDuration: 212, springRate: 60,
       redline: 6400,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -838,10 +847,12 @@ export function factoryCalibration(preset, layout = null) {
   const loadOf = (axes, rpm, kpa) => (axes.loadUnit === 'kPa' ? kpa : airAt(rpm, kpa) * (axes.loadUnit === 'mg/cyl' ? 1000 : 1));
   const grid = (axes, f) => axes.load.map((v) => axes.rpm.map((rpm) => f(rpm, kpaOf(axes, rpm, v))));
 
-  // VE: the engine's breathing at each cell. FUEL: stoichiometric where a real ECU runs
-  // closed loop, best-power enrichment above.
+  // VE: the engine's breathing at each cell. FUEL: the engine's own factory strategy
+  // (factoryFuel.js, with its sources): lambda 1 where the ECU runs closed loop, enrichment
+  // ramping in with load to a full-load target that varies with speed.
   const ve = grid(L.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
-  const afr = grid(L.afr, (rpm, kpa) => (kpa < OPEN_LOOP_KPA ? 14.7 : Number(bestPowerAfr(boostPsiAt(rpm, kpa)).toFixed(2))));
+  const fuelPlan = fuelStrategyFor(preset.fuelPlanId ?? preset.id, !!preset.induction.turboOn);
+  const afr = grid(L.afr, (rpm, kpa) => Number((14.7 * factoryLambda(fuelPlan, rpm, kpa, !!preset.induction.turboOn, BARO_KPA)).toFixed(2)));
 
   // SPARK: MBT where there is margin for it, knock-limited minus the factory safety
   // margin where there is not. That is what a production calibration is. Knock is
@@ -1185,7 +1196,7 @@ export function stockModsOf(build) {
  *
  * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
- *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null}} build the BUILD
+ *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null, presetId?: string|null}} build the BUILD
  *   slice (or the fields of it named)
  * @param {import('./layouts.js').Layout|string|null} [layout] the breakpoints to write on: the
  *   tune's own, so a reset changes the numbers and not the axes the player is looking at
@@ -1204,6 +1215,8 @@ export function stockCalibrationFor(build, layout = null) {
     parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
     mods: stockModsOf(build),
     fuel: tankFuel(/** @type {any} */ (build)),
+    // The factory engine it started as, for that engine's own fuel strategy (factoryFuel.js).
+    fuelPlanId: build.presetId ?? null,
   };
   return factoryCalibration(hardware, layout);
 }

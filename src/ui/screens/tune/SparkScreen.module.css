@@ -19,11 +19,13 @@
    fixed-width child, and a bare `1fr` track refuses to shrink below its
    content's intrinsic width, which would push the advisor rail past the
    content cap and off the screen. */
-@media (min-width: 560px) {
+/* Side by side only when Tune's own width (the `tune` container, Apps.module.css) holds the
+   whole 16-column table and the inspector; otherwise the inspector goes under the table. */
+@container tune (min-width: 990px) {
   .wrap {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: var(--sp-xl);
+    grid-template-columns: minmax(0, 1fr) 232px;
+    gap: 12px;
     align-items: start;
   }
 

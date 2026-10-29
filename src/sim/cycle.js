@@ -53,7 +53,7 @@ import { BARO_KPA, KPA_PER_BAR, R_AIR } from './constants.js';
 import { clamp } from './math.js';
 import { N2O } from './nitrous.js';
 import {
-  burnedGammaShift, dissociatedEnergyFast, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, productsPerKgCharge, residualFraction, trappedChargeK,
+  burnedGammaShift, dissociatedEnergyFast, evaporativeCoolingK, fuelDewPointK, heatReleasedShare, molarExpansion, productsPerKgCharge, residualFraction, trappedChargeK,
 } from './thermo.js';
 
 /**
@@ -232,6 +232,11 @@ export function runCycle({
   // at wall temperature and takes no part in combustion, then comes back out on
   // expansion. This is where most unburnt hydrocarbon actually comes from.
   const creviceM3 = clearanceM3 * COEFF.CREVICE_VOLUME_FRAC;
+  // MOLAR EXPANSION (thermo.js molarExpansion): the products hold more moles than the
+  // charge they came from, so each slice that burns raises the pressure by that share as
+  // well as by its heat. Without it a rich mixture, whose products gain the most moles,
+  // was charged for its unburned CO and H2 and paid nothing back.
+  const molarGain = products ? molarExpansion(products) - 1 : 0;
 
   let p = trappedPa;
   let v = cylinderVolumeM3(thetaStart, clearanceM3, sweptM3, rodRatio);
@@ -316,7 +321,8 @@ export function runCycle({
       dHeld = heldNext - heldJ;
       heldJ = heldNext;
     }
-    const dp = ((gamma - 1) / workingV) * (dQ - dHeld - dQwall) - (gamma * p * (vNext - v)) / workingV;
+    const dp = ((gamma - 1) / workingV) * (dQ - dHeld - dQwall) - (gamma * p * (vNext - v)) / workingV
+      + (p * molarGain * (burned - prevBurned)) / (1 + molarGain * prevBurned);
     const pNext = Math.max(1, p + dp);
 
     // Work on the piston, trapezoidal.

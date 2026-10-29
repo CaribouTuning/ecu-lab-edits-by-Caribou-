@@ -127,7 +127,7 @@ export function Surface3D({ x, y, z, lo, hi, xLabel, yLabel, unit = '', title, t
         onDoubleClick={() => setView(DEFAULT_VIEW)}
         onKeyDown={onKey}
       />
-      <div className={styles.hint}>Drag to turn · double-click to reset</div>
+      <div className={styles.hint}>Drag to turn, double-click to reset</div>
     </div>
   );
 }

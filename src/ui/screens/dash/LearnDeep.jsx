@@ -11,8 +11,8 @@
 
 import React from 'react';
 
-import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { COEFF } from '../../../sim/coefficients.js';
+import { Article } from './learnShelf.jsx';
 import { AirflowScreen } from '../tune/AirflowScreen.jsx';
 import { veCellMaths } from '../../tutorial/demoEngine.js';
 import {
@@ -176,13 +176,13 @@ function HowItRuns() {
 export function LearnDeep() {
   return (
     <>
-      <div className={styles.part}>PART 6 · TUNING IN DEPTH</div>
+      <div className={styles.part}>Part 6: Tuning in depth</div>
       <div className={styles.partGoal}>After this part you can run the VE-from-logs method by hand, tell a MAF error from a VE error, diagnose a pull from its symptoms, and say how the simulator gets its answers.</div>
-      <ExpandableInfo lazy title="42. Correcting VE from logs, step by step"><VeFromLogs /></ExpandableInfo>
-      <ExpandableInfo lazy title="43. MAF, speed-density, and telling their errors apart"><MafAndSd /></ExpandableInfo>
-      <ExpandableInfo lazy title="44. Troubleshooting by symptom"><Troubleshooting /></ExpandableInfo>
-      <ExpandableInfo lazy title="45. A whole session, worked through"><WorkedSession /></ExpandableInfo>
-      <ExpandableInfo lazy title="46. How the simulator runs: steps in time and crank angle"><HowItRuns /></ExpandableInfo>
+      <Article g="ecu" lazy title="42. Correcting VE from logs, step by step"><VeFromLogs /></Article>
+      <Article g="ecu" lazy title="43. MAF, speed-density, and telling their errors apart"><MafAndSd /></Article>
+      <Article g="ecu" lazy title="44. Troubleshooting by symptom"><Troubleshooting /></Article>
+      <Article g="ecu" lazy title="45. A whole session, worked through"><WorkedSession /></Article>
+      <Article g="how" lazy title="46. How the simulator runs: steps in time and crank angle"><HowItRuns /></Article>
     </>
   );
 }

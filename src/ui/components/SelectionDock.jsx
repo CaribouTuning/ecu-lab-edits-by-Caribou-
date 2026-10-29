@@ -221,15 +221,15 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   const span = (lo, hi) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
   let sel;
   const mapWord = axes.loadUnit === 'kPa' ? ' MAP' : ' air';
-  if (selection.type === 'row') sel = `Row · ${LOAD[selection.row]} ${lu}${mapWord}`;
-  else if (selection.type === 'col') sel = `Column · ${RPM[selection.col]} RPM`;
+  if (selection.type === 'row') sel = `Row: ${LOAD[selection.row]} ${lu}${mapWord}`;
+  else if (selection.type === 'col') sel = `Column: ${RPM[selection.col]} RPM`;
   else if (selection.type === 'range') {
-    sel = `Range · ${span(RPM[rect.c1], RPM[rect.c2])} RPM × ${span(LOAD[rect.r2], LOAD[rect.r1])} ${lu} · ${count} ${count === 1 ? 'cell' : 'cells'}`;
-  } else sel = `${RPM[selection.col]} RPM · ${LOAD[selection.row]} ${lu}${mapWord}`;
+    sel = `Range: ${span(RPM[rect.c1], RPM[rect.c2])} RPM × ${span(LOAD[rect.r2], LOAD[rect.r1])} ${lu}, ${count} ${count === 1 ? 'cell' : 'cells'}`;
+  } else sel = `${RPM[selection.col]} RPM, ${LOAD[selection.row]} ${lu}${mapWord}`;
   if (changed && count === 1) {
     const was = baseline[rect.r1][rect.c1];
-    sel += ` · was ${decimals ? was.toFixed(decimals) : Math.round(was)}`;
-  } else if (changed) sel += ` · ${changed} changed`;
+    sel += `, was ${decimals ? was.toFixed(decimals) : Math.round(was)}`;
+  } else if (changed) sel += `, ${changed} changed`;
 
   return (
     <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
@@ -246,7 +246,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         const ref = cellReference(kind, selection.row, selection.col, current, axes);
         return (
           <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
-            <div style={{ fontSize: 9.5, letterSpacing: 1, color: T.cyan, fontWeight: 800, marginBottom: 5 }}>REFERENCE · {RPM[selection.col]} RPM / {LOAD[selection.row]} {lu}</div>
+            <div style={{ fontSize: 11, color: T.cyan, fontWeight: 700, marginBottom: 5 }}>Reference: {RPM[selection.col]} RPM / {LOAD[selection.row]} {lu}</div>
             <div>{ref.what}</div>
             <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
             <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
@@ -297,9 +297,9 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
       )}
       {(count > 1 || changed > 0) && (
         <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
-          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(interpolateRect(data, rect, bounds), 'interpolate')}>INTERPOLATE</Button>}
-          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(smoothRect(data, rect, bounds), 'smooth')}>SMOOTH</Button>}
-          {changed > 0 && <Button variant="ghost" size="sm" onClick={revert}>REVERT</Button>}
+          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(interpolateRect(data, rect, bounds), 'interpolate')}>Interpolate</Button>}
+          {count > 1 && <Button variant="ghost" size="sm" onClick={() => write(smoothRect(data, rect, bounds), 'smooth')}>Smooth</Button>}
+          {changed > 0 && <Button variant="ghost" size="sm" onClick={revert}>Revert</Button>}
         </div>
       )}
     </div>

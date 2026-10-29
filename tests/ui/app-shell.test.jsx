@@ -27,6 +27,7 @@ import EcuLab from '../../src/ui/EcuLab.jsx';
 import { ROUTES } from '../../src/ui/routing.js';
 import { StoreProvider, useBuild, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { enterSandbox, goTo } from './nav.js';
 
 afterEach(cleanup);
 
@@ -50,7 +51,9 @@ function SessionProbe({ onReady }) {
   return null;
 }
 
-const ROUTE_DASH = { view: 'app', tab: 'dash', section: 'live' };
+const ROUTE_TUNE = { view: 'app', tab: 'tune', section: 'airflow' };
+/** The tabs CAREER's nav carries: every route but SANDBOX's two laptop reading apps. */
+const NAV_TABS = Object.keys(ROUTES).filter((t) => t !== 'learn' && t !== 'physics');
 
 /**
  * Mounts a bare `AppShell` in its own store, with a dispatch handed back through
@@ -73,19 +76,20 @@ function mountShell(route, onReady) {
 
 describe('the section nav', () => {
   it('marks only the active tab aria-current, and no other', () => {
-    mountShell(ROUTE_DASH, () => {});
+    mountShell(ROUTE_TUNE, () => {});
     const nav = screen.getByRole('navigation', { name: 'Sections' });
     const items = within(nav).getAllByRole('button');
     // Counted off ROUTES rather than written out, so the nav and the route table
     // cannot drift: a tab added to one and not the other fails here rather than
     // shipping as a destination with nothing behind it, or a screen with no way in.
-    const tabCount = Object.keys(ROUTES).length;
+    // (LEARN and PHYSICS are SANDBOX's laptop apps, not nav tabs.)
+    const tabCount = NAV_TABS.length;
     expect(items).toHaveLength(tabCount);
 
     // What would turn this red: SideNav comparing the wrong id, or marking every
     // item current (see the break-test below, which proves this exact assertion
     // catches that).
-    const home = items.find((b) => b.textContent.includes('HOME'));
+    const home = items.find((b) => b.textContent.includes('TUNE'));
     expect(home.getAttribute('aria-current')).toBe('page');
 
     const others = items.filter((b) => b !== home);
@@ -112,16 +116,16 @@ describe('onNavigate', () => {
     render(<EcuLab />);
     // The start screen offers CAREER, SANDBOX and TUTORIAL rather than a single START.
     // SANDBOX is the free-play entry the old button was.
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    enterSandbox();
+    goTo('TUNE');
 
     const grid = within(screen.getByTestId('tuning-grid'));
     const cells = grid.getAllByRole('button').filter((b) => /^-?\d+(\.\d+)?$/.test(b.textContent));
     fireEvent.click(cells[Math.floor(cells.length / 2)]);
     expect(screen.getByTestId('selection-dock')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'HOME' }));
-    fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
+    goTo('BUILD');
+    goTo('TUNE');
 
     expect(screen.queryByTestId('selection-dock')).toBeNull();
   });
@@ -131,7 +135,7 @@ describe('the status strip', () => {
   it('names the engine from the store, not from anything AppShell computes itself', () => {
     /** @type {React.Dispatch<*>} */
     let dispatch;
-    mountShell(ROUTE_DASH, (d) => { dispatch = d; });
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
 
     // A real preset's name is not a string AppShell could produce on its own — the
     // default build has no presetId at all, so this only shows up if the strip
@@ -145,7 +149,7 @@ describe('the status strip', () => {
   it('shows boost read from the store\'s boost curve, not a hardcoded figure', () => {
     /** @type {React.Dispatch<*>} */
     let dispatch;
-    mountShell(ROUTE_DASH, (d) => { dispatch = d; });
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
 
     // 37.7 psi is not a value any default state produces (turbo starts off, and no
     // stock boost curve peaks there) — seeding it is what proves the strip reads
@@ -159,7 +163,7 @@ describe('the status strip', () => {
   it('shows health read from the store, not a hardcoded 100%', () => {
     /** @type {React.Dispatch<*>} */
     let dispatch;
-    mountShell(ROUTE_DASH, (d) => { dispatch = d; });
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
 
     // The default is 100/100/100 (a healthy fresh build), so 42% cannot be anything
     // but a genuine read of `session.health` — a strip that always painted the
@@ -174,7 +178,7 @@ describe('the status strip', () => {
   it('shows the last pull read from the store, not a hardcoded dash', () => {
     /** @type {React.Dispatch<*>} */
     let dispatch;
-    mountShell(ROUTE_DASH, (d) => { dispatch = d; });
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
 
     // 12345 is not a horsepower figure the sim would ever produce — it is only
     // reachable by the strip actually reading `session.result.peakHp`.
@@ -191,23 +195,23 @@ describe('the engine-run light', () => {
   it('is present only while the live engine is running', () => {
     /** @type {React.Dispatch<*>} */
     let dispatch;
-    mountShell(ROUTE_DASH, (d) => { dispatch = d; });
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
 
     // What would turn the first assertion red: EngineRunLight rendering
     // unconditionally, or reading a field other than `session.live.running`.
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    expect(screen.queryByText('Engine running')).toBeNull();
 
     act(() => dispatch({
       type: ACTIONS.SET_SESSION_FIELD, field: 'live', value: { running: true },
     }));
     // What would turn this one red: the light never appearing at all — a dead
     // component, not just a wrongly-gated one.
-    expect(screen.getByText('● RUNNING')).toBeTruthy();
+    expect(screen.getByText('Engine running')).toBeTruthy();
 
     act(() => dispatch({
       type: ACTIONS.SET_SESSION_FIELD, field: 'live', value: { running: false },
     }));
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    expect(screen.queryByText('Engine running')).toBeNull();
   });
 });
 
@@ -225,9 +229,9 @@ describe('the app\'s name', () => {
     // find nothing at all post-click — not a leftover match from the start screen,
     // and ErrorBoundary is never mounted here since nothing throws.
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    enterSandbox();
 
-    expect(screen.getByText('CARIBOU TUNING')).toBeTruthy();
+    expect(screen.getByText('Caribou Tuning')).toBeTruthy();
     expect(screen.getByText('ECU Lab')).toBeTruthy();
   });
 });
@@ -316,10 +320,10 @@ describe('the status strip at every width', () => {
   // equals the viewport and the buttons share the first line with the brand.
 
   it('groups the readouts apart from the action buttons, so they can wrap as a unit', () => {
-    mountShell(ROUTE_DASH, () => {});
+    mountShell(ROUTE_TUNE, () => {});
     const readouts = document.querySelector(`.${shellStyles.readouts}`);
     expect(readouts).toBeTruthy();
-    for (const label of ['BOOST', 'HEALTH', 'LAST PULL']) {
+    for (const label of ['Boost', 'Health', 'Last pull']) {
       expect(within(/** @type {HTMLElement} */ (readouts)).getByText(label)).toBeTruthy();
     }
     // What would turn this red: the buttons folded into the group that drops to a
@@ -375,13 +379,13 @@ describe('the status strip at every width', () => {
   });
 
   it('holds the run light\'s width while the engine is idle, so starting it cannot reflow the strip', () => {
-    mountShell(ROUTE_DASH, () => {});
-    expect(screen.queryByText('● RUNNING')).toBeNull();
+    mountShell(ROUTE_TUNE, () => {});
+    expect(screen.queryByText('Engine running')).toBeNull();
     // The slot is mounted while idle, and its invisible stand-in is the exact text
     // the light shows, so lit and unlit are the same width.
     expect(document.querySelector(`.${shellStyles.run}`)).toBeTruthy();
     const standIn = decls(shellCss, '.run::after');
-    expect(standIn).toMatch(decl('content', "'● RUNNING'"));
+    expect(standIn).toMatch(decl('content', "'Engine running'"));
     expect(standIn).toMatch(decl('visibility', 'hidden'));
   });
 });

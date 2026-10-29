@@ -44,7 +44,7 @@ export function MissionCoach({ route, onCourse }) {
   return (
     <section className={styles.coach} aria-label="Practice mission" data-finished={finished ? 'true' : 'false'}>
       <button type="button" className={styles.head} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className={styles.tag}>PRACTICE</span>
+        <span className={styles.tag}>Practice</span>
         <span className={styles.title}>{mission.title}</span>
         <span className={styles.count}>{Math.min(progress.step, mission.steps.length)}/{mission.steps.length}</span>
         <ChevronDown size={15} aria-hidden="true" className={styles.chevron} />
@@ -72,8 +72,8 @@ export function MissionCoach({ route, onCourse }) {
             </ol>
           )}
           <div className={styles.actions}>
-            <Button size="sm" variant="ghost" onClick={onCourse}>BACK TO THE COURSE</Button>
-            <Button size="sm" variant="quiet" onClick={stop}>{finished ? 'CLOSE' : 'STOP PRACTICE'}</Button>
+            <Button size="sm" variant="ghost" onClick={onCourse}>Back to the course</Button>
+            <Button size="sm" variant="quiet" onClick={stop}>{finished ? 'CLOSE' : 'Stop practice'}</Button>
           </div>
         </div>
       )}

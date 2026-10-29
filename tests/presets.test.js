@@ -184,33 +184,21 @@ function flatTopRpm(points) {
  */
 
 /*
- * Where a preset is known to sit outside the ordinary band, and why. Each entry is the
- * measured figure against the rating, and the cause; the assertion still holds the
- * engine to its measured value (within 1.5 points), so a change that makes it worse
- * fails, and a change that brings it inside the ordinary band should DELETE the entry.
+ * Where a preset is known to sit outside the ordinary band, and why, with the measurement
+ * that says so. A change that brings it inside the ordinary band should DELETE the entry.
  *
- * The two turbo entries are direct-injection engines that the model holds far from MBT on
- * knock at full boost (10-17 degrees short at peak torque). The rich-flame chemistry
- * (thermo.js, heatReleasedShare) took the 4-6% of heat a rich flame never releases out of
- * every full-throttle point; the naturally aspirated presets had their one fitted input
- * (cam duration) refitted to their ratings, but on these two duration does not move peak
- * power, the knock limit does. docs/accuracy.md, approximation 2.
+ * The rating misses recorded here before October 2026 (VQ35DE -9%, VQ35HR, B58 M1, LS6 and
+ * the GTI's torque) closed when the cycle started counting molar expansion (thermo.js,
+ * molarExpansion) and the factory fuel tables took the engines' real full-load mixtures
+ * (factoryFuel.js): best power moved from lambda 0.94 to 0.90, as real engines have it.
  */
 const KNOWN_GAPS = {
-  // Naturally aspirated, but its fitted cam cannot rise to pay for the rich-flame heat
-  // without running power flat into the 7000 limiter (presets.js); held at the longest
-  // cam whose power still rolls off before it.
-  'vq35de-revup': { hp: -0.09 },
-  // On the edge of the band at -5%: 228 lands inside it, but then the stock spark table
-  // knocks at 5100 RPM once an intake and headers are fitted, which a factory margin does
-  // not allow (presets.js).
-  vq35hr: { hp: -0.05 },
-  'b58-m1': { hp: -0.079 },
-  // Its cam is held at 228 by the overlap advisory (a factory cam never trips it); with
-  // dissociation that lands -5.0%, on the edge of the band. Its real heads out-flow the
-  // LS1's on the same valve size, which the valve-diameter breathing model cannot see.
-  ls6: { hp: -0.05 },
-  'ea888-gti': { tq: -0.102 },
+  // The N54 is underrated: measured stock, it makes more torque than BMW publishes.
+  // Automobile magazine's stock 335i laid down 300 lb-ft at the wheels on a DynoJet
+  // (bimmerfile.com, 2010-09-14, "Automobile pits the N54 against N55"), and an owner's
+  // stock baseline read 298 (f30.bimmerpost.com). The model's wheel torque sits under those
+  // measurements, so its ceiling is the measured figure, not the rating.
+  n54: { tqHighWheel: 300 },
 };
 
 describe('factory calibration validates against real published figures', () => {
@@ -231,7 +219,7 @@ describe('factory calibration validates against real published figures', () => {
         const target = toWheel(preset.factory.crankTq);
         const lo = gap.tq === undefined ? 0.90 : 1 + gap.tq - 0.015;
         expect(r.peakTq).toBeGreaterThan(target * lo);
-        expect(r.peakTq).toBeLessThan(target * 1.10);
+        expect(r.peakTq).toBeLessThan(gap.tqHighWheel ?? target * 1.10);
       });
 
       it('peaks where the manufacturer says it does', () => {

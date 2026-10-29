@@ -1,19 +1,8 @@
+/* A group's name: the body face a step smaller, in sentence case. No rule, no tracking. */
 .eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  margin: 0 0 8px;
   font-family: var(--sans);
-  font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--acc-ink);
-}
-
-.rule {
-  width: 3px;
-  height: 13px;
-  border-radius: var(--r-xs);
-  background: var(--acc);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
 }
