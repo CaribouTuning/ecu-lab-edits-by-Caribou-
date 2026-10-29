@@ -95,6 +95,18 @@ describe('RESET ALL TO STOCK', () => {
     expect(logged(eng)).toEqual([]);
   });
 
+  it('writes no boost cells for a turbo the factory never fitted', () => {
+    // A VQ35DE with a turbo bolted on: its stock is the factory NA calibration, on axes that
+    // stop at full throttle without boost. Calculating the boost cells would tune them for
+    // the player; past the table the ECU reads the edge and the pull log says so.
+    const p = S.applyPreset(S.presetById('vq35de-revup'));
+    const boosted = { ...p, turboOn: true, boostCurve: p.boostCurve.map(() => 8), mods: { ...p.mods, intercooler: true } };
+    const stock = S.stockCalibrationFor(boosted);
+    expect(S.layoutById(stock.layout).timing.load[0]).toBeLessThanOrEqual(S.layoutById(p.layout).timing.load[0]);
+    expect(stock.timing).toEqual(p.timing);
+    expect(stock.afr).toEqual(p.afr);
+  });
+
   it('takes the bolt-ons off but leaves a turbo engine its intercooler', () => {
     const all = { intake: true, exhaust: true, headers: true, intercooler: true };
     expect(S.stockModsOf({ mods: all, turboOn: true })).toEqual({ intake: false, exhaust: false, headers: false, intercooler: true });

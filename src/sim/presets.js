@@ -976,6 +976,12 @@ export function applyPreset(preset, layout = null) {
     turbineIdx: preset.induction.turbineIdx,
     turbineCount: preset.induction.turbineCount ?? 1,
     compressorIdx: preset.induction.compressorIdx,
+    // The induction it leaves the factory with, kept apart from what is fitted now: RESET
+    // ALL TO STOCK calibrates for this (stockCalibrationFor), never for boost added since.
+    factoryInduction: {
+      turboOn: preset.induction.turboOn, turbineIdx: preset.induction.turbineIdx,
+      turbineCount: preset.induction.turbineCount ?? 1, compressorIdx: preset.induction.compressorIdx, boostCurve: boost,
+    },
     injIdx: preset.parts.injectorIdx,
     ecuInjectorCc: INJECTOR_OPTS[preset.parts.injectorIdx].cc,
     octaneIdx: preset.parts.octaneIdx,
@@ -1183,30 +1189,38 @@ export function stockModsOf(build) {
 
 /**
  * The factory-style calibration for the hardware on the bench, with its bolt-ons taken off
- * (`stockModsOf`): what RESET ALL TO STOCK writes. Generated from the physics for THIS engine, fuel and
+ * (`stockModsOf`) and on the induction it left the factory with: what RESET ALL TO STOCK
+ * writes. Generated from the physics for THIS engine, fuel and
  * boost, exactly as a catalogue preset's own is, so it is knock-safe on a turbo or a big V8
  * as much as on the Nissan V6 the generic tables were drawn for.
  *
  * @param {{engineConfig: object, turboOn: boolean, boostCurve: number[], turbineIdx: number,
  *   turbineCount?: number, compressorIdx: number, injIdx: number, exhaustDiaIdx: number,
- *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null, presetId?: string|null}} build the BUILD
+ *   octaneIdx: number, ethanolPct?: number, mods?: object, blowerId?: string|null, presetId?: string|null,
+ *   factoryInduction?: {turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null}} build the BUILD
  *   slice (or the fields of it named)
  * @param {import('./layouts.js').Layout|string|null} [layout] the breakpoints to write on: the
  *   tune's own, so a reset changes the numbers and not the axes the player is looking at
  * @returns {ReturnType<typeof factoryCalibration>}
  */
 export function stockCalibrationFor(build, layout = null) {
+  // The induction the engine left the factory with (`build.factoryInduction`, recorded when
+  // the engine is chosen; none means naturally aspirated, as every engine of the player's
+  // own starts). A turbo, supercharger or nitrous added since has no factory calibration:
+  // writing one calculated for it would be tuning the boost for the player. Its cells are
+  // left past the table for them to extend and tune (the pull log says so).
+  const f = build.factoryInduction ?? null;
+  const induction = f
+    ? { turboOn: !!f.turboOn, turbineIdx: f.turbineIdx, turbineCount: f.turbineCount ?? 1, compressorIdx: f.compressorIdx, boost: f.boostCurve }
+    : { turboOn: false, turbineIdx: build.turbineIdx, turbineCount: 1, compressorIdx: build.compressorIdx, boost: build.boostCurve.map(() => 0) };
   /** @type {Preset} */
   const hardware = {
     id: 'stock', name: 'Stock', manufacturer: '', years: '', blurb: '',
     factory: {},
     engine: /** @type {any} */ (build.engineConfig),
-    induction: {
-      turboOn: build.turboOn, turbineIdx: build.turbineIdx, turbineCount: build.turbineCount ?? 1,
-      compressorIdx: build.compressorIdx, boost: build.boostCurve,
-    },
+    induction,
     parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
-    mods: stockModsOf(build),
+    mods: stockModsOf({ ...build, turboOn: induction.turboOn, blowerId: null }),
     fuel: tankFuel(/** @type {any} */ (build)),
     // The factory engine it started as, for that engine's own fuel strategy (factoryFuel.js).
     fuelPlanId: build.presetId ?? null,

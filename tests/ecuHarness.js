@@ -38,6 +38,8 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
     // Which factory engine this is, as APPLY_PRESET records it: RESET ALL TO STOCK runs
     // that engine's own fuel strategy (factoryFuel.js).
     presetId: p?.presetId ?? null,
+    // And the induction it left the factory with: what RESET ALL TO STOCK calibrates for.
+    factoryInduction: p?.factoryInduction ?? null,
     ethanolPct: 0,
     ...patch,
   };

@@ -30,6 +30,9 @@ import {
  * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
+ * @property {{turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null} [factoryInduction]
+ *   the induction the engine left the factory with (null: naturally aspirated); what RESET
+ *   ALL TO STOCK calibrates for
  * @property {string|null} [blowerId] the supercharger fitted (a BLOWER_OPTS id), or none
  * @property {number} [blowerRatio] crank pulley ÷ blower pulley
  * @property {{kit: 'wet'|'dry', shotHp: number, heater: boolean, bottleLb: number}|null} [nitrous]
@@ -261,6 +264,9 @@ export function makeInitialState({ blank = false } = {}) {
       mods: DEFAULT_MODS,
       turboOn: false,
       boostCurve: [...DEFAULT_BOOST],
+      // The induction the engine left the factory with; none (naturally aspirated) until a
+      // factory engine is chosen (APPLY_PRESET).
+      factoryInduction: null,
       // A supercharger (a BLOWER_OPTS id) and its pulley ratio, and a nitrous kit. None
       // fitted to start; a turbo and a supercharger are never fitted together.
       blowerId: null,

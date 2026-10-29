@@ -528,9 +528,10 @@ export function EcuLabApp() {
     // hardware). Either half swapped for the other yields a perfectly plausible table
     // that is wrong.
     //
-    // The spark and fuel tables are generated for this engine, fuel and boost
-    // (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables this used to write
-    // knock on every other engine in the catalogue.
+    // The spark and fuel tables are generated for this engine and fuel on the induction it
+    // left the factory with (`stockCalibrationFor`), as a factory's are: the Nissan V6 tables
+    // this used to write knock on every other engine in the catalogue. Boost added since has
+    // no stock calibration: its cells stay past the table for the player to tune.
     // All three on breakpoints sized to this engine as it stands (its redline, its boost),
     // with the cam-phaser schedule they were written for.
     const stock = stockCalibrationFor(build);

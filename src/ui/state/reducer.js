@@ -181,6 +181,7 @@ export const ACTIONS = Object.freeze({
  *   ecuInjectorCc: number, octaneIdx: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
  *   ecu?: object, mafScalar?: number, assumed?: string[], layout?: import('../../sim/layouts.js').Layout|null,
+ *   factoryInduction?: BuildState['factoryInduction'],
  * }}} ApplyPresetAction
  */
 
@@ -614,6 +615,9 @@ function baseReducer(state, action) {
           turbineIdx: p.turbineIdx,
           turbineCount: p.turbineCount,
           compressorIdx: p.compressorIdx,
+          // The induction this engine left the factory with: what RESET ALL TO STOCK writes a
+          // calibration for (stockCalibrationFor). Boost added later has none.
+          factoryInduction: p.factoryInduction ?? null,
           injIdx: p.injIdx,
           ecuInjectorCc: p.ecuInjectorCc,
           octaneIdx: p.octaneIdx,
