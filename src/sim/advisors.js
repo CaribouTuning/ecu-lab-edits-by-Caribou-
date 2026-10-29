@@ -259,9 +259,19 @@ export function calibrationAdvice({
    *  supercharger asks for nothing — its boost is what the pulley makes — so there the
    *  pull's own boost is the answer. */
   const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
+  // A turbo makes the boost its turbine can drive, which at low speed is far below the
+  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
+  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
+  // the pull measured at that speed (never more than the target), except where a protection
+  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
+  const turboPull = turboOn && pull?.points?.length
+    ? pull.points.map((p) => ({ rpm: p.rpm, boostPsi: p.protect?.length ? (p.boostTarget ?? p.boostPsi) : p.boostPsi }))
+    : null;
   const reachAt = (rpm) => (blowerPull
     ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
-    : reachableKpa({ turboOn, boostCurve, rpm }));
+    : turboPull
+      ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: Math.min(curveAt(boostCurve, rpm), interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.boostPsi), rpm)) })
+      : reachableKpa({ turboOn, boostCurve, rpm }));
 
   /**
    * The compressor pressure and exhaust backpressure a turbo engine runs at a manifold
