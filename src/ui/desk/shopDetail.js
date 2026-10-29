@@ -39,7 +39,8 @@ function stain(r, x, z) {
 /** A pegboard on a wall facing +z, with tools hung on it. */
 function pegboard(w, h) {
   const g = new THREE.Group();
-  g.add(box(w, h, 0.05, W.toolRed, { edge: false }));
+  // Perforated galvanised steel, as pegboard in a working shop is.
+  g.add(box(w, h, 0.05, W.metalLight, { edge: false }));
   g.add(box(w + 0.1, 0.06, 0.08, W.metalDark, { y: h / 2, edge: false }));
   // Spanners in a row, smallest to largest, then a hammer, screwdrivers and pliers.
   for (let i = 0; i < 9; i += 1) {
@@ -50,7 +51,7 @@ function pegboard(w, h) {
   g.add(box(0.2, 0.08, 0.05, W.metalDark, { x: w / 2 - 0.7, y: 0.25, z: 0.05, edge: false }));
   for (let i = 0; i < 5; i += 1) {
     g.add(box(0.03, 0.2, 0.02, W.metalLight, { x: w / 2 - 0.45 + i * 0.07, y: -0.25, z: 0.04, edge: false }));
-    g.add(box(0.05, 0.12, 0.03, [W.toolYellow, W.toolRed, W.toolBlue][i % 3], { x: w / 2 - 0.45 + i * 0.07, y: -0.1, z: 0.05, edge: false }));
+    g.add(box(0.05, 0.12, 0.03, i % 4 ? W.black : W.toolYellow, { x: w / 2 - 0.45 + i * 0.07, y: -0.1, z: 0.05, edge: false }));
   }
   for (let i = 0; i < 3; i += 1) g.add(box(0.05, 0.24, 0.02, W.toolBlue, { x: -w / 2 + 0.4 + i * 0.16, y: -h / 2 + 0.28, z: 0.04, edge: false }));
   // A coil of air hose on a hook.
@@ -204,12 +205,12 @@ export function dressShop(root) {
   const band = W.wallShopDark;
   for (const s of [-1, 1]) {
     root.add(box(0.04, 1.2, 14, band, { x: s * 7.98, y: 0.6, edge: false }));
-    root.add(box(0.05, 0.12, 14, W.toolRed, { x: s * 7.97, y: 1.25, edge: false }));
+    root.add(box(0.05, 0.12, 14, W.wallBlack, { x: s * 7.97, y: 1.25, edge: false }));
   }
   root.add(box(6.3, 1.2, 0.04, band, { x: -4.8, y: 0.6, z: -6.98, edge: false }));
   root.add(box(3.1, 1.2, 0.04, band, { x: 6.4, y: 0.6, z: -6.98, edge: false }));
-  root.add(box(6.3, 0.12, 0.05, W.toolRed, { x: -4.8, y: 1.25, z: -6.97, edge: false }));
-  root.add(box(3.1, 0.12, 0.05, W.toolRed, { x: 6.4, y: 1.25, z: -6.97, edge: false }));
+  root.add(box(6.3, 0.12, 0.05, W.wallBlack, { x: -4.8, y: 1.25, z: -6.97, edge: false }));
+  root.add(box(3.1, 0.12, 0.05, W.wallBlack, { x: 6.4, y: 1.25, z: -6.97, edge: false }));
 
   // ---- back wall, left of the door: the bench, its pegboard, under the sign ----
   add(makeWorkbench(), -4.7, 0, -6.4);
@@ -224,8 +225,9 @@ export function dressShop(root) {
 
   // ---- back wall, right of the door: racking, drums, the compressor ----
   add(makeShelf(4), 6.4, 0, -6.6);
-  add(makeBarrel(W.barrelRed), 7.4, 0, -4.8);
-  add(makeBarrel(W.barrel), 6.8, 0, -4.4);
+  // Oil drums, as delivered: steel, not painted toys.
+  add(makeBarrel(W.metalDark), 7.4, 0, -4.8);
+  add(makeBarrel(W.steel), 6.8, 0, -4.4);
   add(compressor(), 7.3, 0, -3.3, Math.PI / 2);
   add(extinguisher(), 5.2, 0.9, -6.92);
   add(windowPane(1.8, 0.9), 6.4, 3.6, -6.98);
@@ -235,7 +237,7 @@ export function dressShop(root) {
   add(makeTyreStack(3), -7.3, 0, -2.2);
   const w1 = add(wheel(), -7.6, 0.34, 0.9, Math.PI / 2);
   w1.rotation.z = 0.25;
-  add(makeToolChest(W.toolBlue), -7.4, 0, 4.4, Math.PI / 2);
+  add(makeToolChest(W.wallBlack), -7.4, 0, 4.4, Math.PI / 2);
   add(makePoster(1), -7.95, 2.6, 1.2, Math.PI / 2);
   add(makePoster(3), -7.95, 2.6, 2.6, Math.PI / 2);
   add(windowPane(2.4, 0.9), -7.98, 3.7, -1.5, Math.PI / 2);

@@ -66,7 +66,11 @@ export function createStage(canvas, opts = {}) {
   // The picture is drawn into a small target first, then a full-screen pass puts a one-pixel
   // dark line wherever the depth jumps or folds: the outline every model of a pixel-art game
   // has, on everything at once, without a line mesh per box.
-  const target = new THREE.WebGLRenderTarget(8, 8, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+  // The shop (`real`) keeps its light in half floats, smoothed edges and all, so the film
+  // response is applied once, after the lines: a lit room with an engineer's drawing over it.
+  const target = new THREE.WebGLRenderTarget(8, 8, opts.real
+    ? { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, type: THREE.HalfFloatType, samples: 4 }
+    : { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
   target.depthTexture = new THREE.DepthTexture(8, 8);
   target.depthTexture.minFilter = THREE.NearestFilter;
   target.depthTexture.magFilter = THREE.NearestFilter;
@@ -75,8 +79,8 @@ export function createStage(canvas, opts = {}) {
     uniforms: {
       tColor: { value: target.texture }, tDepth: { value: target.depthTexture },
       texel: { value: new THREE.Vector2(1, 1) }, near: { value: camera.near }, far: { value: camera.far },
-      strength: { value: 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
-      sketch: { value: opts.sketch ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 }, lw: { value: 1 },
+      strength: { value: opts.real ? 0.5 : 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
+      sketch: { value: opts.sketch && !opts.real ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 }, lw: { value: 1 },
       inkCol: { value: new THREE.Color(W.sketch.ink) },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -118,6 +122,9 @@ export function createStage(canvas, opts = {}) {
         edge *= 1.0 - smoothstep(inkNear, inkFar, 1.0 / max(w, 1e-5));
         if (sketch < 0.5) {
           c.rgb *= 1.0 - edge * strength;
+          #ifdef TONE_MAPPING
+            c.rgb = toneMapping(c.rgb);
+          #endif
           gl_FragColor = linearToOutputTexel(vec4(c.rgb, 1.0));
           return;
         }
@@ -284,7 +291,6 @@ export function createStage(canvas, opts = {}) {
   };
   function drawOutlined() {
     if (sky.group.visible) sky.follow(camera.position);
-    if (opts.real) { renderer.render(scene, camera); return; }
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
