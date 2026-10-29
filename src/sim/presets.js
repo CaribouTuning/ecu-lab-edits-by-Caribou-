@@ -100,22 +100,17 @@ export const ENGINE_PRESETS = [
       // shim buckets; Tomei: 'conventional direct-acting valve train').
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat',
       // Bore, stroke, compression and redline above are published; `camDuration` and
-      // `springRate` are not — Nissan states only that the Rev-Up revised the cams and
-      // raised the limit — so they are where this preset is fitted, as `vq35hr` is.
+      // `springRate` are not (Nissan states only that the Rev-Up revised the cams and
+      // raised the limit), so they are where this preset is fitted, as `vq35hr` is.
       //
-      // REFITTED for the two-zone cycle. #38 landed 220 degrees against the model of the
-      // day; on this one that reads +8.6% on power, outside the +/-5% floor. 202 centres
-      // the fit instead: 0.0% on power and +2.3% on torque, the best simultaneous fit in
-      // the range. The band is event-free from 198 to 226, so the fit is bounded by the
-      // power tolerance rather than by any advisory.
-      //
-      // Do NOT read 210 here as a published number if you see it in the history — that
-      // was the generic custom-build default left in place, which #38 correctly called
-      // out as a coin toss rather than a fit.
+      // `camDuration` 210 is fitted with the inlet Mach index (#15) in place, which takes
+      // volumetric efficiency out of the top end: power lands on the published figure
+      // (0.0%, torque +5.0%), and the power curve's flat top (within 1 hp of peak) runs
+      // 6500-6900 against a published 6400 rather than climbing into the 7000 limiter.
       //
       // `springRate` 60 does not change power; it sets where the valvetrain gives up.
       // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline, mid-pack
-      // against the rest of the set. No pull should ever show a `float` event here — if
+      // against the rest of the set. No pull should ever show a `float` event here; if
       // one appears that is a bug, not "the character".
       //
       // REFITTED from 202 for the inlet Mach index (#15). That term takes volumetric
@@ -166,11 +161,9 @@ export const ENGINE_PRESETS = [
       // move. `camDuration` and `springRate` are not published, so they are where this
       // preset is fitted.
       //
-      // REFITTED TWICE. It was 228 degrees against the old algebraic combustion model,
-      // then 214 when work started being integrated from a pressure trace. 218 is the
-      // refit for the inlet Mach index (#15): that term takes real volumetric efficiency
-      // out of the top end, so a little more duration comes back to pay for it. Power
-      // lands on the published figure (-0.0%) and torque +1.8%.
+      // `camDuration` 218 is fitted with the inlet Mach index (#15) in place, which takes
+      // real volumetric efficiency out of the top end. Power lands on the published
+      // figure (-0.0%) and torque +1.8%.
       //
       // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
       // the 7500 redline, and the cam stays short of the overlap that trips the cam
@@ -298,20 +291,20 @@ export const ENGINE_PRESETS = [
       // PEAK is the published figure — 13 psi, ~0.9 bar — and does not move. The SHAPE
       // across RPM is not published, and it is the only thing fitted here: 13 psi held
       // to 2500, then a taper down to about 6.75 psi at the 7000 limiter (the curve's
-      // last node, 6.5, sits at 7500 and is never reached — redline cuts the pull
-      // first). That taper is steeper than the
-      // real engine's, and deliberately so. This model was calibrated on a naturally
-      // aspirated V6, and it reports more torque per unit of manifold pressure than a
-      // real high-compression boosted six makes — hold 13 psi flat to 4500 here and the
-      // pull returns about 340 wlb-ft against a 281 target. Everything above the torque peak
+      // last node, 6.5, sits at 7500 and is never reached; redline cuts the pull
+      // first). That taper is steeper than the real engine's, and deliberately so. This
+      // model was calibrated on a naturally aspirated V6, and it reports more torque per
+      // unit of manifold pressure than a real high-compression boosted six makes — hold
+      // 13 psi flat to 4500 here and the pull returns about 340 wlb-ft against a 281
+      // target. Everything above the torque peak
       // is where that error can be absorbed without contradicting a published number,
       // so that is where it is absorbed.
       //
       // WHAT THIS PRESET DOES NOT REPRODUCE: the rated torque plateau. BMW publishes
       // 330 lb-ft flat from 1380 RPM; this preset reaches 64% of its 281 wlb-ft target
       // at 1500 and its target by 3000 (180 / 238 / 285 / 293 wlb-ft at 1500 / 2000 /
-      // 2500 / 3000; measured after the turbo solve was made to spool up from zero). The line above about boost "commanded from just above idle"
-      // describes the curve this preset ASKS for, not torque it delivers down there.
+      // 2500 / 3000). The line above about boost "commanded from just above idle"
+      // describes the curve this preset asks for, not torque it delivers down there.
       // The N54 above has the same gap and no test asserts torque-peak placement, so
       // this is a shared limit of the model rather than a fault in this data — the
       // same absent term tracked as issue #31, which costs nothing for stacking

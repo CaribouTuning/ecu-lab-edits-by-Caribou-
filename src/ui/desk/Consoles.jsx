@@ -23,10 +23,11 @@ import styles from './Consoles.module.css';
  * @param {boolean} props.running @param {string} props.phase the pull's phase while it runs
  * @param {number} props.rpm the engine speed the dyno reads now
  * @param {() => void} props.onRun
+ * @param {boolean} [props.failed] the engine has failed: there is nothing to pull
  * @returns {React.ReactElement}
  */
-export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous, running, phase, rpm, onRun }) {
-  const label = !running ? 'Run a pull'
+export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous, running, phase, rpm, onRun, failed = false }) {
+  const label = failed ? 'Engine failed' : !running ? 'Run a pull'
     : phase === 'settle' ? 'Idling…' : phase === 'sweep' ? 'Sweeping…' : phase === 'spooldown' ? 'Coming back down…' : 'Settling…';
   return (
     <div className={styles.plate}>
@@ -47,7 +48,7 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
       <div className={styles.readout} role="status" aria-label="Dyno engine speed">
         <b>{Math.round(rpm)}</b><span>rpm</span>
       </div>
-      <button type="button" className={styles.bigButton} data-tone="go" onClick={onRun} disabled={running}>
+      <button type="button" className={styles.bigButton} data-tone="go" onClick={onRun} disabled={running || failed}>
         <span className={styles.cap} aria-hidden="true" />
         <span className={styles.bigLabel}>{label}</span>
       </button>
@@ -60,18 +61,19 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
  * @param {() => void} props.onStart @param {() => void} props.onStop
  * @param {() => void} props.onToggleSound @param {() => void} props.onTestSound
  * @param {(percent: number) => void} props.onThrottle driver throttle input, 0 or 100
+ * @param {boolean} [props.failed] the engine has failed: it will not turn over
  * @returns {React.ReactElement}
  */
-export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onThrottle }) {
+export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onThrottle, failed = false }) {
   const [session, dispatch] = useSession();
   const { soundOn, throttleInput, volume, audioStatus } = session;
   const live = /** @type {Record<string, any>} */ (session.live);
   const on = live.running || live.cranking;
   return (
     <div className={styles.plate} data-kind="stand">
-      <button type="button" className={styles.bigButton} data-tone={on ? 'stop' : 'go'} onClick={on ? onStop : onStart}>
+      <button type="button" className={styles.bigButton} data-tone={on ? 'stop' : 'go'} onClick={on ? onStop : onStart} disabled={failed && !on}>
         <span className={styles.cap} aria-hidden="true" />
-        <span className={styles.bigLabel}>{on ? 'Stop' : 'Start engine'}</span>
+        <span className={styles.bigLabel}>{on ? 'Stop' : failed ? 'Engine failed' : 'Start engine'}</span>
       </button>
       {/* Held to rev: by pointer (captured, so a finger that slides off still holds it, and
           let go only when the pointer really is), or by Space or the up arrow while focused. */}

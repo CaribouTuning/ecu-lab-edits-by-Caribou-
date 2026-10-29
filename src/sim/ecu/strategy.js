@@ -51,6 +51,8 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {{regulator: string, basePressureKpa: number, pumpIdx: number}} fuelSystem
  * @property {{map: string, wideband: string, iat: string, ect: string, flex: boolean}} sensorHw
  * @property {{type: string, springPsi: number}} gate
+ * @property {{leakFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] the
+ *   engine's worn parts (damage.js `wearEffects`)
  * @property {string} vvt VVT hardware id
  * @property {string} coil coil id
  * @property {number} plugGapMm
@@ -381,6 +383,8 @@ export function resolveEcuPoint({
       // A wet kit's fuel jet is an orifice on the same rail as the injectors, so it flows
       // with the pressure the pump holds.
       ...(nitrous ? { nitrous: { n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.wetFuelKgS * rail.flowScale, frac: nFrac, bottleK: cond.nitrous?.bottleK ?? env.ambientK, bottlePsi: nitrous.bottlePsi } } : {}),
+      // Worn parts (damage.js), when the engine has any.
+      ...(hw.wear ? { wear: hw.wear } : {}),
       ecu: ctx,
     },
     sensed: {

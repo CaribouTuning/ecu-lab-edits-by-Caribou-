@@ -23,7 +23,7 @@ export const FIX_STEPS = [
   { id: 'spark', label: 'Spark', types: ['knock', 'unheardknock', 'falseknock', 'knockprot', 'iatprot', 'egtprot'] },
   { id: 'boost', label: 'Boost', types: ['underboost', 'overboost', 'boostctl', 'compressor', 'blower'] },
   { id: 'nitrous', label: 'Nitrous', types: ['nitrouslean', 'nitrousknock', 'bottle', 'nitrouswindow'] },
-  { id: 'hardware', label: 'Hardware', types: ['pressure', 'bearing', 'float', 'cam', 'limiter', 'torquelimit', 'oilprot'] },
+  { id: 'hardware', label: 'Hardware', types: ['pressure', 'bearing', 'float', 'cam', 'limiter', 'torquelimit', 'oilprot', 'failure'] },
 ];
 
 /**
@@ -45,8 +45,10 @@ export function fixStep(type) {
  * @returns {(E & {type: string, impact?: number})[]}
  */
 export function inFixOrder(events) {
+  // A failed engine is read before anything else: nothing below it can be fixed until
+  // it is rebuilt.
   return events
-    .map((e, i) => ({ e, i, step: fixStep(e.type).index }))
+    .map((e, i) => ({ e, i, step: e.type === 'failure' ? 0 : fixStep(e.type).index }))
     .sort((a, b) => a.step - b.step || (b.e.impact ?? 0) - (a.e.impact ?? 0) || a.i - b.i)
     .map(({ e }) => e);
 }
