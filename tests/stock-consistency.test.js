@@ -95,6 +95,18 @@ describe('RESET ALL TO STOCK', () => {
     expect(logged(eng)).toEqual([]);
   });
 
+  it('writes no boost cells for a turbo the factory never fitted', () => {
+    // A VQ35DE with a turbo bolted on: its stock is the factory NA calibration, on axes that
+    // stop at full throttle without boost. Calculating the boost cells would tune them for
+    // the player; past the table the ECU reads the edge and the pull log says so.
+    const p = S.applyPreset(S.presetById('vq35de-revup'));
+    const boosted = { ...p, turboOn: true, boostCurve: p.boostCurve.map(() => 8), mods: { ...p.mods, intercooler: true } };
+    const stock = S.stockCalibrationFor(boosted);
+    expect(S.layoutById(stock.layout).timing.load[0]).toBeLessThanOrEqual(S.layoutById(p.layout).timing.load[0]);
+    expect(stock.timing).toEqual(p.timing);
+    expect(stock.afr).toEqual(p.afr);
+  });
+
   it('takes the bolt-ons off but leaves a turbo engine its intercooler', () => {
     const all = { intake: true, exhaust: true, headers: true, intercooler: true };
     expect(S.stockModsOf({ mods: all, turboOn: true })).toEqual({ intake: false, exhaust: false, headers: false, intercooler: true });
@@ -128,5 +140,25 @@ describe('cells the pull did not run', () => {
     // The 40 kPa pull's own log charges what it ran; the score charges the rest once each.
     const charged = S.computeTuningScore(at40, notRun);
     expect(charged.deductions.filter((d) => /did not run/.test(d))).toHaveLength(notRun.length ? 1 : 0);
+  });
+});
+
+describe('the advisor judges a turbo by the boost it makes', () => {
+  it('does not flag boost cells at speeds where the turbo cannot make that boost', () => {
+    // A VQ35DE with a turbo, flat 11 psi asked for from idle: at 1000 RPM the turbine has
+    // nothing to drive it, so a 175 kPa cell there is never run, whatever the target says.
+    const p = S.applyPreset(S.presetById('vq35de-revup'));
+    const eng = makeEngine({ preset: 'vq35de-revup', build: { turboOn: true, boostCurve: p.boostCurve.map(() => 11), mods: { ...p.mods, intercooler: true } } });
+    const extended = S.stockCalibrationFor({ ...eng.build, factoryInduction: { turboOn: true, turbineIdx: eng.build.turbineIdx, turbineCount: 1, compressorIdx: eng.build.compressorIdx, boostCurve: eng.build.boostCurve } });
+    const tables = { ve: extended.ve, timing: extended.timing.map((row) => row.map((v) => v + 6)), afr: extended.afr, layout: extended.layout };
+    const pulled = eng.pull(100);
+    const a = adviseWithPull(eng, tables);
+    const boostAt = (rpm) => S.interp1(pulled.points.map((q) => q.rpm), pulled.points.map((q) => q.boostPsi), rpm);
+    // Timing 6° past a knock-limited calibration is flagged somewhere: the test has teeth.
+    expect(a.overAdvanced.length).toBeGreaterThan(0);
+    for (const c of a.overAdvanced) {
+      // Every flagged cell is one the engine reaches: its pressure within what the pull made there.
+      expect(c.map, `${c.map} kPa at ${c.rpm} rpm`).toBeLessThanOrEqual(S.BARO_KPA + 10 + Math.max(0, Math.min(11, boostAt(c.rpm))) * S.PSI_TO_KPA + 0.5);
+    }
   });
 });

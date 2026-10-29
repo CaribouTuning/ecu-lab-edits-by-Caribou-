@@ -79,9 +79,13 @@ remaining risk is the same Node major with a different libm, which is what step 
   generates its calibration from the physics. The advisor, the pull log and the Tuning Score
   must tell one story: a stock calibration is clean on TUNE at every load, and RESET ALL TO
   STOCK writes `stockCalibrationFor` the hardware on the bench, never the Nissan V6 tables
-  (those knocked every other engine in the catalogue), and keeps an intercooler with its turbo
-  (`stockModsOf`). "Cells the pull did not run" is judged against the player's own pull
-  (`cellsNotRunBy`), never TUNE's full-throttle one. `CUSTOM_ENGINE_LIMITS` are the ranges
+  (those knocked every other engine in the catalogue), on the induction it left the factory
+  with (`build.factoryInduction`): a turbo added since gets no calculated boost cells. It keeps
+  an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
+  player: a build change leaves them alone (past the axes the ECU reads the edge), and
+  `extendAxes` carries the edge into new cells marked not tuned. "Cells the pull did not
+  run" is judged against the player's own pull (`cellsNotRunBy`), never TUNE's full-throttle
+  one. `CUSTOM_ENGINE_LIMITS` are the ranges
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.
 - **Preset fidelity is tracked in #19.** The gap is the shape of the airflow curve, not a
   missing effect such as direct injection: the DI presets already sit at MBT timing
