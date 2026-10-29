@@ -40,6 +40,7 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
     presetId: p?.presetId ?? null,
     // And the induction it left the factory with: what RESET ALL TO STOCK calibrates for.
     factoryInduction: p?.factoryInduction ?? null,
+    originPresetId: p?.presetId ?? null,
     ethanolPct: 0,
     ...patch,
   };

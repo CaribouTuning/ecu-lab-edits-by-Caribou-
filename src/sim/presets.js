@@ -1229,6 +1229,36 @@ export function stockCalibrationFor(build, layout = null) {
 }
 
 /**
+ * A base start-up map for the engine as it is built now: the parts fitted, the boost asked
+ * for, the bolt-ons on. What a tuner loads before the first pull on a modified engine, so it
+ * starts and runs and can be tuned from: generated from the physics with the same knock
+ * margin as a factory calibration, conservative rather than tuned. Never applied by itself;
+ * the player chooses it (BUILD and TUNE offer it once the engine differs from its factory
+ * build), and it replaces the tables they have.
+ *
+ * @param {Parameters<typeof stockCalibrationFor>[0] & {originPresetId?: string|null}} build
+ * @param {import('./layouts.js').Layout|string|null} [layout]
+ * @returns {ReturnType<typeof factoryCalibration>}
+ */
+export function baseMapFor(build, layout = null) {
+  /** @type {Preset} */
+  const hardware = {
+    id: 'base', name: 'Base map', manufacturer: '', years: '', blurb: '',
+    factory: {},
+    engine: /** @type {any} */ (build.engineConfig),
+    induction: {
+      turboOn: build.turboOn, turbineIdx: build.turbineIdx, turbineCount: build.turbineCount ?? 1,
+      compressorIdx: build.compressorIdx, boost: build.boostCurve,
+    },
+    parts: { injectorIdx: build.injIdx, exhaustDiaIdx: build.exhaustDiaIdx, octaneIdx: build.octaneIdx },
+    mods: { intake: !!build.mods?.intake, exhaust: !!build.mods?.exhaust, headers: !!build.mods?.headers, intercooler: !!build.mods?.intercooler },
+    fuel: tankFuel(/** @type {any} */ (build)),
+    fuelPlanId: build.originPresetId ?? build.presetId ?? null,
+  };
+  return factoryCalibration(hardware, layout);
+}
+
+/**
  * Finds a preset by id.
  * @param {string} id
  * @returns {Preset|undefined}
