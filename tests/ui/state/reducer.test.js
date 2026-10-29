@@ -543,11 +543,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 35-field
-  // contract this action documents: a stray write grows the changed set past 35, a
-  // dropped write shrinks it below 35, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 36-field
+  // contract this action documents: a stray write grows the changed set past 36, a
+  // dropped write shrinks it below 36, and the failure message names the field either
   // way.
-  it('changes exactly the 35 documented fields, plus the two history fields', () => {
+  it('changes exactly the 36 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -573,6 +573,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       // A preset's factory tables are on the ECU Lab grid (sim/layouts.js), whatever
       // layout the last calibration sat on.
       'tune.layout',
+      // A new engine's tables are its factory calibration: no cell is waiting to be tuned.
+      'tune.untuned',
       'session.result', 'session.pullScores',
       // APPLY_PRESET is undoable, so it records a snapshot in the same pass. These two
       // belong in the exact-write-surface contract like any other field it touches.

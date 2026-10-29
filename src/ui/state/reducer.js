@@ -24,7 +24,6 @@ import {
 } from './history.js';
 import { makeInitialState, stockEcuParts } from './initialState.js';
 import { pushRun, RUN_LIMIT } from './runLog.js';
-import { respanTune } from './layoutSwitch.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
 /** @typedef {import('./initialState.js').BuildState} BuildState */
@@ -125,7 +124,7 @@ export const ACTIONS = Object.freeze({
  * Moves the three main tables onto another engine computer's breakpoints, already
  * converted (state/layoutSwitch.js), with the baseline that goes with them.
  * @typedef {{type: 'SET_LAYOUT', layout: import('../../sim/layouts.js').Layout|string|null, ve: number[][], timing: number[][], afr: number[][],
- *   baseline: {ve: number[][], timing: number[][], afr: number[][]}}} SetLayoutAction
+ *   baseline: {ve: number[][], timing: number[][], afr: number[][]}, untuned?: import('./initialState.js').Untuned|null}} SetLayoutAction
  */
 
 /**
@@ -400,7 +399,24 @@ export const ACTIONS = Object.freeze({
  * @returns {import('./initialState.js').MapSlot}
  */
 function mapOf(t) {
-  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu, layout: t.layout ?? null };
+  return { ve: t.ve, timing: t.timing, afr: t.afr, ecu: t.ecu, layout: t.layout ?? null, untuned: t.untuned ?? null };
+}
+
+/**
+ * The not-tuned cells left once a table write has gone in: a cell the player changed is
+ * theirs now.
+ * @param {import('./initialState.js').Untuned|null|undefined} untuned
+ * @param {'ve'|'timing'|'afr'} table
+ * @param {number[][]} before @param {number[][]} after
+ * @returns {import('./initialState.js').Untuned|null}
+ */
+function written(untuned, table, before, after) {
+  if (!untuned?.[table]?.length) return untuned ?? null;
+  const left = untuned[table].filter((k) => {
+    const [r, c] = k.split(':').map(Number);
+    return before[r]?.[c] === after[r]?.[c];
+  });
+  return left.length === untuned[table].length ? untuned : { ...untuned, [table]: left };
 }
 
 /**
@@ -468,7 +484,10 @@ function baseReducer(state, action) {
       return {
         ...state,
         build: { ...state.build, presetId: null },
-        tune: { ...state.tune, [action.table]: action.value, tablesDirty: true },
+        tune: {
+          ...state.tune, [action.table]: action.value, tablesDirty: true,
+          untuned: written(state.tune.untuned, action.table, state.tune[action.table], action.value),
+        },
       };
 
     case ACTIONS.SET_LAYOUT:
@@ -486,6 +505,9 @@ function baseReducer(state, action) {
           timing: action.timing,
           afr: action.afr,
           baseline: action.baseline,
+          // Cells the axes were extended into, carrying the edge's values: shown as not
+          // tuned until the player writes them (layoutSwitch.js `extendAxes`).
+          untuned: action.untuned ?? null,
           selection: null,
         },
         // A datalog histogram is binned onto the old grid's cells.
@@ -629,6 +651,7 @@ function baseReducer(state, action) {
           baseline: { ve: p.ve, timing: p.timing, afr: p.afr },
           // Fresh factory calibration is not unsaved player work.
           tablesDirty: false,
+          untuned: null,
           selection: null,
         },
         session: {
@@ -668,6 +691,7 @@ function baseReducer(state, action) {
           baseline: { ve: action.ve, timing, afr },
           // A reset baseline is not unsaved player work.
           tablesDirty: false,
+          untuned: null,
         },
       };
     }
@@ -1073,22 +1097,7 @@ function onTheBay(state, career) {
  * @returns {StoreState}
  */
 export function reducer(state, action) {
-  return withSpan(state, undoableReducer(state, action));
-}
-
-/**
- * Tables sized to the engine keep spanning it: when a change to the BUILD (any action,
- * undo and redo included) moves what the engine reaches — its limiter, its boost — the
- * tables are carried onto axes that span it again (`respanTune`).
- *
- * @param {StoreState} prev
- * @param {StoreState} next
- * @returns {StoreState}
- */
-function withSpan(prev, next) {
-  if (next.build === prev.build) return next;
-  const tune = respanTune(next);
-  return tune === next.tune ? next : { ...next, tune };
+  return undoableReducer(state, action);
 }
 
 /**

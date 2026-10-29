@@ -72,6 +72,9 @@ import {
  * @property {number[][]} afr target air/fuel ratio table, indexed [LOAD][RPM]
  * @property {boolean} tablesDirty true once VE/spark/fuel has been hand-edited since
  *   the last preset load or reset-to-stock
+ * @property {Untuned|null} [untuned] the cells the axes were extended into, by table, as
+ *   `row:col` keys: they carry the old edge's values (what the ECU read there before) and
+ *   are shown as not tuned until the player writes them
  * @property {import('../components/selection.js').Selection|null} selection
  *   the currently selected calibration-grid cell, row, column or range, or null
  * @property {object} ecu the engine management calibration beyond the three base tables
@@ -98,7 +101,8 @@ import {
 
 /**
  * A stored calibration in a map slot.
- * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: import('../../sim/layouts.js').Layout|string|null}} MapSlot
+ * @typedef {{ve: number[][], timing: number[][], afr: number[][], ecu: object, layout?: import('../../sim/layouts.js').Layout|string|null, untuned?: Untuned|null}} MapSlot
+ * @typedef {{ve: string[], timing: string[], afr: string[]}} Untuned
  */
 
 /**
@@ -292,6 +296,7 @@ export function makeInitialState({ blank = false } = {}) {
       maps: [null, null, null, null],
       activeMap: 0,
       tablesDirty: false,
+      untuned: null,
       selection: null,
       rangeMode: false,
       diffView: false,

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
-import { layoutSwitch } from '../src/ui/state/layoutSwitch.js';
+import { engineOutgrowsTables, extendAxes, layoutSwitch } from '../src/ui/state/layoutSwitch.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
 import { makeEngine } from './ecuHarness.js';
@@ -114,13 +114,47 @@ describe('the layout switch', () => {
     expect(L.timing.load[0]).toBe(100);
   });
 
-  it('follows the build: more boost re-spans the load axis and carries the tables onto it', () => {
+  it('stays put when the build changes, as a real ECU\'s axes do: the player extends them', () => {
     let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) });
-    const before = S.layoutById(s.tune.layout);
+    const before = s.tune;
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map((b) => (b > 0 ? b + 8 : b)) });
-    const after = S.layoutById(s.tune.layout);
-    expect(after.timing.load[0]).toBeGreaterThan(before.timing.load[0]);
-    expect(s.tune.timing).toHaveLength(after.timing.load.length);
-    expect(s.tune.baseline.timing).toHaveLength(after.timing.load.length);
+    // More boost than the tables reach: nothing moved, and the game says so.
+    expect(s.tune.layout).toBe(before.layout);
+    expect(s.tune.timing).toBe(before.timing);
+    expect(engineOutgrowsTables(s)).toBe(true);
+    // Extended by the player: every old cell carried, the new rows the old top row's values
+    // (what the ECU read there), and marked not tuned.
+    const ext = reducer(s, extendAxes(s));
+    const from = S.layoutById(before.layout).timing;
+    const to = S.layoutById(ext.tune.layout).timing;
+    expect(to.load[0]).toBeGreaterThan(from.load[0]);
+    expect(engineOutgrowsTables(ext)).toBe(false);
+    const added = to.load.filter((l) => l > from.load[0]).length;
+    expect(ext.tune.untuned.timing).toHaveLength(added * to.rpm.length);
+    for (let ri = 0; ri < added; ri += 1) {
+      to.rpm.forEach((rpm, ci) => expect(ext.tune.timing[ri][ci]).toBeCloseTo(S.readTable(before.timing, from, rpm, from.load[0]), 1));
+    }
+    // A cell the player writes is theirs.
+    const t = ext.tune.timing.map((row) => [...row]);
+    t[0][3] -= 4;
+    const edited = reducer(ext, { type: ACTIONS.SET_TABLE, table: 'timing', value: t });
+    expect(edited.tune.untuned.timing).not.toContain('0:3');
+    expect(edited.tune.untuned.timing).toHaveLength(added * to.rpm.length - 1);
+  });
+
+  it('never writes a factory calibration for a turbo the factory did not fit', () => {
+    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35de-revup')) });
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map(() => 8) });
+    const before = s.tune;
+    const sw = layoutSwitch(s, 'engine');
+    const to = S.layoutById(sw.layout).timing;
+    const from = S.layoutById(before.layout).timing;
+    // Every boost row is the stock top row, carried, and not tuned: nothing calculated.
+    to.load.forEach((load, ri) => {
+      if (load <= from.load[0]) return;
+      to.rpm.forEach((rpm, ci) => expect(sw.timing[ri][ci]).toBeCloseTo(S.readTable(before.timing, from, rpm, from.load[0]), 1));
+    });
+    expect(sw.untuned.timing.length).toBeGreaterThan(0);
   });
 });

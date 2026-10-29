@@ -70,7 +70,7 @@ export function FuelScreen({ calAdvice, children }) {
           <LayoutSwitch />
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} />
+            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why AFR trades power for safety">
