@@ -52,7 +52,7 @@ const MIME = {
 
 // Must run before the app is ready.
 protocol.registerSchemesAsPrivileged([
-  { scheme: SCHEME, privileges: { standard: true, secure: true, supportsFetchAPI: true } },
+  { scheme: SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
 function registerAppProtocol() {
