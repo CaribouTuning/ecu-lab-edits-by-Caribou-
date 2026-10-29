@@ -72,8 +72,8 @@ export const PAGE_GUIDES = {
     leave: 'The starting settings suit a 100 shot on pump gas: on from 3,000 RPM, full throttle only, 4° out. Bigger shots need about 2° more for every 50 hp.',
   },
   torque: {
-    does: 'Limits on how much torque the engine may make, by gear and RPM, plus traction control and launch control for the drag strip.',
-    when: 'The drag strip shows wheelspin, or you want launch control or flat-foot shifting.',
+    does: 'Limits on how much torque the engine may make, by gear and RPM, and launch control.',
+    when: 'You want the engine held to a torque limit, or a two-step on the stand.',
     leave: 'The factory limits sit far above anything a build here makes, so they never act.',
   },
 };
@@ -162,7 +162,6 @@ export const FIELD_TIPS = {
   'limiter.offsetRpm': 'Where the rev limiter sits compared with the BUILD redline.',
   'limiter.softWindowRpm': 'Eases the engine onto the rev limit instead of bouncing off it.',
   'limiter.throttleCutRpm': 'Starts closing the throttle this far before the limit, for a smoother limit.',
-  'limiter.speedLimitKph': 'Cuts fuel above this road speed. Zero turns it off.',
   'protect.fanOnC': 'Coolant temperature at which the radiator fan switches on.',
   'protect.leanEnabled': 'Cuts boost or fuel if the mixture goes lean under boost. Leave on.',
   'protect.leanLambda': 'How lean the wideband must read before lean protection acts.',
@@ -186,14 +185,9 @@ export const FIELD_TIPS = {
   'torque.limitByGear': 'The most torque allowed in each gear, in newton-metres at the crank.',
   'torque.limitByRpm': 'The most torque allowed at each RPM.',
   'torque.method': 'How torque is taken away when a limit is hit. Spark is fastest but heats the exhaust.',
-  'torque.tcEnabled': 'Takes torque away when the driven tyres spin. For the drag strip.',
-  'torque.tcSlipPct': 'How much wheelspin traction control allows. Tyres grip best with a little.',
-  'torque.tcGain': 'How hard traction control reacts to extra wheelspin.',
-  'torque.tcMethod': 'How traction control takes torque away. Faster methods catch wheelspin sooner.',
   'arc.launchEnabled': 'Holds the engine at a set RPM on the start line while you hold the throttle down.',
   'arc.launchRpm': 'The RPM launch control holds.',
   'arc.launchTiming': 'Timing while launch control holds. Very late timing heats the exhaust and helps a turbo spool.',
-  'arc.ffsEnabled': 'Shift without lifting off the throttle. Makes manual shifts quicker.',
   // SENSORS
   'sensors.map': 'Must match the MAP sensor on BUILD. "Auto" always matches.',
   'sensors.wideband': 'Must match the wideband controller on BUILD.',

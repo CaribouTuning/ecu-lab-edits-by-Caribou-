@@ -9,11 +9,13 @@
  * live engine oil starvation, overspeed past the bottom end's rating and boiling coolant.
  *
  * A worn part changes the engine through the physics, never by docking power:
- *   pistons and rings  blow-by. Part of the trapped charge escapes past the rings, so
- *                      the cylinder holds less air than its VE says, and the ECU, fuelling
- *                      for the air it believes in, runs it rich.
- *   valves             a burnt valve leaks one cylinder's charge back into a port, and
- *                      past a point that cylinder stops firing.
+ * pistons and rings  blow-by. Part of the trapped charge, air and fuel together, escapes
+ *                      past the rings into the crankcase before it burns. The breather
+ *                      returns it to the intake, so the MAF and the wideband read the
+ *                      same mixture as before; the cylinder simply burns less of it.
+ *   valves             a burnt valve leaks one cylinder's charge back into its port, and
+ *                      past a point that cylinder stops firing. Either way it is one
+ *                      cylinder's work lost, never more.
  *   bearings           wiped bearings rub, which is friction, and their opened clearances
  *                      bleed oil, so oil pressure falls at every speed.
  *
@@ -63,11 +65,31 @@ export function failedPart(health) {
 }
 
 /**
+ * Health after wear: each part's life less what it wore, never below zero.
+ * @param {Health} health
+ * @param {Health} wear
+ * @returns {Health}
+ */
+export function applyWear(health, wear) {
+  return {
+    piston: clamp(health.piston - wear.piston, 0, 100),
+    bearing: clamp(health.bearing - wear.bearing, 0, 100),
+    valve: clamp(health.valve - wear.valve, 0, 100),
+  };
+}
+
+/**
  * What the wear does to the running engine, as the physical quantities `evaluatePoint`
  * takes (its `wear` input). A healthy engine returns null: nothing to apply.
+ *
+ *   ringLeakFrac   share of every cylinder's trapped charge lost past the rings
+ *   cylLossFrac    share of the engine's work lost to the burnt valve's cylinder: what
+ *                  leaks out of it, and all of it once it stops firing (counted once)
+ *   deadFrac       share of the engine's firing events that no longer fire (the log's
+ *                  misfire column)
  * @param {Health|null|undefined} health
  * @param {number} cyl cylinders
- * @returns {{leakFrac: number, deadFrac: number, bearingFmepPa: number, oilPressureFactor: number}|null}
+ * @returns {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number, oilPressureFactor: number}|null}
  */
 export function wearEffects(health, cyl) {
   if (!health) return null;
@@ -77,14 +99,16 @@ export function wearEffects(health, cyl) {
   const bearing = lost('bearing');
   if (ring === 0 && valve === 0 && bearing === 0) return null;
   // Blow-by grows faster than linearly: the first wear seats the rings, the last opens gaps.
-  const ringLeak = COEFF.DAMAGE_RING_LEAK_MAX * ring ** 1.5;
-  // One burnt valve, so one cylinder's worth of the engine.
-  const valveLeak = (COEFF.DAMAGE_VALVE_LEAK_MAX * valve ** 1.5) / cyl;
-  const deadFrac = health.valve < COEFF.DAMAGE_VALVE_DEAD_BELOW
-    ? (1 - clamp(health.valve, 0, 100) / COEFF.DAMAGE_VALVE_DEAD_BELOW) / cyl : 0;
+  const ringLeakFrac = COEFF.DAMAGE_RING_LEAK_MAX * ring ** 1.5;
+  // One burnt valve: within its cylinder, the share of the charge it leaks, and whether
+  // the cylinder still fires at all.
+  const valveLeak = COEFF.DAMAGE_VALVE_LEAK_MAX * valve ** 1.5;
+  const valveDead = health.valve < COEFF.DAMAGE_VALVE_DEAD_BELOW
+    ? 1 - clamp(health.valve, 0, 100) / COEFF.DAMAGE_VALVE_DEAD_BELOW : 0;
   return {
-    leakFrac: clamp(ringLeak + valveLeak, 0, 0.9),
-    deadFrac,
+    ringLeakFrac,
+    cylLossFrac: (1 - (1 - valveLeak) * (1 - valveDead)) / cyl,
+    deadFrac: valveDead / cyl,
     bearingFmepPa: COEFF.DAMAGE_BEARING_FMEP_PA * bearing ** 2,
     oilPressureFactor: 1 - COEFF.DAMAGE_BEARING_OIL_LOSS * bearing,
   };
@@ -138,13 +162,15 @@ export function pointWear(p) {
  * @param {Health} wear what the whole pull costs each part
  * @param {Health} health each part's life at the start of the pull
  * @param {number} bearingFreeBar the bottom end's free threshold
- * @returns {{index: number, part: Part}|null}
+ * @param {{piston: number, valve: number}[]} [per] each point's `pointWear`, if the
+ *   caller already has it
+ * @returns {{index: number, part: Part, spent: Health}|null} where it fails, and what
+ *   the pull to there cost each part
  */
-export function sweepFailure(points, wear, health, bearingFreeBar) {
+export function sweepFailure(points, wear, health, bearingFreeBar, per = points.map(pointWear)) {
   const already = failedPart(health);
-  if (already) return { index: 0, part: already };
+  if (already) return { index: 0, part: already, spent: { piston: 0, bearing: 0, valve: 0 } };
   if (!points.length) return null;
-  const per = points.map(pointWear);
   const press = points.map((p) => Math.max(0, p.peakPressure - bearingFreeBar));
   const pressSum = press.reduce((a, b) => a + b, 0);
   const pistonSum = per.reduce((a, w) => a + w.piston, 0);
@@ -156,10 +182,9 @@ export function sweepFailure(points, wear, health, bearingFreeBar) {
   };
   const spent = { piston: 0, bearing: 0, valve: 0 };
   for (let i = 0; i < points.length; i += 1) {
-    for (const part of DAMAGE_PARTS) {
-      spent[part] += wear[part] * share[part](i);
-      if (wear[part] > 0 && spent[part] >= health[part] - 1e-9) return { index: i, part };
-    }
+    for (const part of DAMAGE_PARTS) spent[part] += wear[part] * share[part](i);
+    const part = DAMAGE_PARTS.find((p) => wear[p] > 0 && spent[p] >= health[p] - 1e-9);
+    if (part) return { index: i, part, spent };
   }
   return null;
 }
@@ -176,6 +201,8 @@ export function sweepFailure(points, wear, health, bearingFreeBar) {
  * @param {number} input.dt seconds
  * @param {number} input.rpm
  * @param {number} input.oilKpa oil pressure
+ * @param {number} input.healthyOilKpa what a healthy pump and bearings give at this speed
+ *   and oil temperature
  * @param {number} input.coolantC
  * @param {number} input.ratedRpm the bottom end's rated speed
  * @param {number} input.bearingFreeBar the bottom end's free threshold
@@ -184,7 +211,7 @@ export function sweepFailure(points, wear, health, bearingFreeBar) {
  * @param {number} input.pullSeconds how long a dyno pull lasts
  * @returns {Health} wear this step
  */
-export function liveWear({ pt, dt, rpm, oilKpa, coolantC, ratedRpm, bearingFreeBar, bearingWearMult, pointSeconds, pullSeconds }) {
+export function liveWear({ pt, dt, rpm, oilKpa, healthyOilKpa, coolantC, ratedRpm, bearingFreeBar, bearingWearMult, pointSeconds, pullSeconds }) {
   const w = pointWear(pt);
   const k = dt / pointSeconds;
   let piston = w.piston * k;
@@ -192,9 +219,10 @@ export function liveWear({ pt, dt, rpm, oilKpa, coolantC, ratedRpm, bearingFreeB
   // A dyno pull charges its average peak pressure over the threshold once; a second of
   // running at it costs that over the pull's length.
   let bearing = Math.max(0, pt.peakPressure - bearingFreeBar) * COEFF.WEAR_BEARING_PER_BAR * bearingWearMult * (dt / pullSeconds);
-  // Oil starvation: the film needs pressure that grows with speed (the old rule of ten
-  // psi a thousand RPM); short of it, the bearing runs metal to metal.
-  const needKpa = Math.max(COEFF.DAMAGE_OIL_FILM_MIN_KPA, (rpm / 1000) * COEFF.DAMAGE_OIL_FILM_KPA_PER_KRPM);
+  // Oil starvation: the film holds while pressure stays within a share of what this
+  // engine's own healthy pump gives at this speed and oil temperature (hot thin oil at
+  // idle is normal, not starvation); short of it, the bearing runs metal to metal.
+  const needKpa = Math.max(COEFF.DAMAGE_OIL_FILM_MIN_KPA, healthyOilKpa * COEFF.DAMAGE_OIL_FILM_SHARE);
   if (rpm > 300 && oilKpa < needKpa) bearing += COEFF.DAMAGE_OIL_STARVE_PER_S * (1 - oilKpa / needKpa) * dt;
   // Overspeed: inertia load on the rod grows with the square of engine speed.
   if (ratedRpm > 0 && rpm > ratedRpm) bearing += COEFF.DAMAGE_OVERSPEED_PER_S * ((rpm / ratedRpm) ** 2 - 1) * dt;

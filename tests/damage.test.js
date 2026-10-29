@@ -39,16 +39,22 @@ describe('what worn parts do', () => {
   it('worn rings leak charge, more the more they are worn', () => {
     const half = S.wearEffects({ ...NEW, piston: 50 }, 6);
     const gone = S.wearEffects({ ...NEW, piston: 1 }, 6);
-    expect(half.leakFrac).toBeGreaterThan(0);
-    expect(gone.leakFrac).toBeGreaterThan(half.leakFrac);
+    expect(half.ringLeakFrac).toBeGreaterThan(0);
+    expect(gone.ringLeakFrac).toBeGreaterThan(half.ringLeakFrac);
     expect(half.deadFrac).toBe(0);
+    expect(half.cylLossFrac).toBe(0);
   });
 
   it('a burnt valve leaks one cylinder, and stops it firing near the end', () => {
-    expect(S.wearEffects({ ...NEW, valve: 60 }, 6).deadFrac).toBe(0);
+    const early = S.wearEffects({ ...NEW, valve: 60 }, 6);
+    expect(early.deadFrac).toBe(0);
+    expect(early.cylLossFrac).toBeGreaterThan(0);
     const late = S.wearEffects({ ...NEW, valve: 5 }, 6);
     expect(late.deadFrac).toBeGreaterThan(0);
-    expect(late.deadFrac).toBeLessThanOrEqual(1 / 6);
+    expect(late.ringLeakFrac).toBe(0);
+    // One cylinder's work, counted once: its leak and its misfire never add past it.
+    expect(late.cylLossFrac).toBeGreaterThanOrEqual(late.deadFrac);
+    expect(S.wearEffects({ ...NEW, valve: 0 }, 6).cylLossFrac).toBeCloseTo(1 / 6, 12);
   });
 
   it('wiped bearings add friction and lose oil pressure', () => {
@@ -61,14 +67,16 @@ describe('what worn parts do', () => {
 describe('a worn engine on the dyno', () => {
   const eng = makeEngine();
 
-  it('makes less power with worn rings, through the physics, and runs richer for it', () => {
+  it('makes less power with worn rings, through the physics, with the mixture read as metered', () => {
     const fresh = S.simulateSweep({ ...sweepOf(eng), health: NEW });
     const worn = S.simulateSweep({ ...sweepOf(eng), health: { ...NEW, piston: 20 } });
     expect(worn.peakHp).toBeLessThan(fresh.peakHp);
-    // The ECU fuels for the air its table claims; the cylinder holds less, so the mixture
-    // it burns is richer.
+    // Blow-by takes air and fuel together and the breather returns both to the intake, so
+    // the MAF and the wideband read what they did; the cylinder burns less of it.
     const at = (r, rpm) => r.points.find((p) => p.rpm === rpm);
-    expect(at(worn, 4000).lambda).toBeLessThan(at(fresh, 4000).lambda);
+    expect(at(worn, 4000).lambda).toBeCloseTo(at(fresh, 4000).lambda, 6);
+    expect(at(worn, 4000).maf).toBeCloseTo(at(fresh, 4000).maf, 6);
+    expect(at(worn, 4000).torque).toBeLessThan(at(fresh, 4000).torque);
     expect(worn.failure).toBeNull();
   });
 
@@ -105,7 +113,9 @@ describe('where in a pull the last life runs out', () => {
     const points = pts(10, (i) => (i >= 5 ? { knock: true, knockPull: 5 } : {}));
     const wear = { piston: 5 * 5 * S.COEFF.WEAR_KNOCK, bearing: 0, valve: 0 };
     const f = S.sweepFailure(points, wear, { ...NEW, piston: 3 * 5 * S.COEFF.WEAR_KNOCK }, 60);
-    expect(f).toEqual({ index: 7, part: 'piston' });
+    expect(f).toMatchObject({ index: 7, part: 'piston' });
+    // What the pull to there cost: the knock points 5, 6 and 7.
+    expect(f.spent.piston).toBeCloseTo(3 * 5 * S.COEFF.WEAR_KNOCK, 9);
   });
 
   it('a pull that does not spend a part does not fail', () => {
@@ -181,7 +191,7 @@ describe('the live engine', () => {
 
 describe('live wear from operating conditions', () => {
   const base = {
-    pt: { knock: false, knockPull: 0, peakPressure: 40 }, dt: 1, rpm: 3000, oilKpa: 400, coolantC: 90,
+    pt: { knock: false, knockPull: 0, peakPressure: 40 }, dt: 1, rpm: 3000, oilKpa: 400, healthyOilKpa: 400, coolantC: 90,
     ratedRpm: 7000, bearingFreeBar: 60, bearingWearMult: 1, pointSeconds: 0.2, pullSeconds: 12,
   };
 
@@ -196,6 +206,9 @@ describe('live wear from operating conditions', () => {
 
   it('charges oil starvation, overspeed and boiling coolant', () => {
     expect(S.liveWear({ ...base, oilKpa: 50 }).bearing).toBeGreaterThan(0);
+    // Hot thin oil at idle reads low on every engine; against its own healthy pump it is
+    // not starvation.
+    expect(S.liveWear({ ...base, rpm: 800, oilKpa: 100, healthyOilKpa: 120 }).bearing).toBe(0);
     expect(S.liveWear({ ...base, rpm: 7700 }).bearing).toBeGreaterThan(0);
     const hot = S.liveWear({ ...base, coolantC: 130 });
     expect(hot.piston).toBeGreaterThan(0);

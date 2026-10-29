@@ -17,7 +17,7 @@
  * state it already holds.
  */
 
-import { clamp, clone2D, DEFAULT_AFR, DEFAULT_TIMING, ECU_META, stockModsOf, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
+import { applyWear, clone2D, DEFAULT_AFR, DEFAULT_TIMING, ECU_META, stockModsOf, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
 
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
@@ -727,11 +727,7 @@ function baseReducer(state, action) {
           // The banked run goes in front, so runs[0] is always the pull `result` now
           // holds and runs[1] is the one before it.
           runs: pushRun(state.session.runs, action.run),
-          health: {
-            piston: clamp(state.session.health.piston - action.result.wear.piston, 0, 100),
-            bearing: clamp(state.session.health.bearing - action.result.wear.bearing, 0, 100),
-            valve: clamp(state.session.health.valve - action.result.wear.valve, 0, 100),
-          },
+          health: applyWear(state.session.health, action.result.wear),
           // Banked, not derived: see the typedef above for the re-grading bug that
           // recomputing these from current hardware caused. `wasBest` compares against
           // `state.session.bestScore` (the best before this pull), never the
@@ -816,13 +812,7 @@ function baseReducer(state, action) {
         session: {
           ...state.session,
           live,
-          ...(w ? {
-            health: {
-              piston: clamp(h.piston - w.piston, 0, 100),
-              bearing: clamp(h.bearing - w.bearing, 0, 100),
-              valve: clamp(h.valve - w.valve, 0, 100),
-            },
-          } : {}),
+          ...(w ? { health: applyWear(h, w) } : {}),
         },
       };
     }

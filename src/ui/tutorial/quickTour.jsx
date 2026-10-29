@@ -3,7 +3,7 @@
  *
  * Five cards, one idea each, about a minute apiece. Each shows at most one real game
  * screen. Everything deeper lives in the Tuning Course (lessons.jsx), opened from
- * HOME › Learn, where there is room for worked maths and practice missions.
+ * the LEARN app, where there is room for worked maths and practice missions.
  */
 
 import React from 'react';
@@ -47,7 +47,7 @@ function FindYourWay() {
           { at: '[data-tour="nav-dyno"]', text: <><K>DYNO</K>: measures it. Nothing is known until you pull.</> },
           { at: '[data-tour="strip-last-pull"]', text: 'Your last pull’s peak power, always in view.' },
         ]}
-        caption="The real frame around every screen. HOME has your stats and Learn; LIVE runs the engine in real time; in CAREER your own cars go racing in the 3D town."
+        caption="The real frame around every screen. LIVE runs the engine in real time; the laptop's LEARN app has the course and the articles; in CAREER you run a tuning shop of your own."
       >
         <div style={{ height: 290, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -134,7 +134,7 @@ function TheLoop() {
         <><b>Repeat.</b></>,
       ]} />
       <P>Some problems are parts, not tables (injectors that run out of time, valves that float), and the log says which. When it does, change the part on <K>BUILD</K> or ask less of it.</P>
-      <P><b>Want the full course?</b> <K>HOME › Learn</K> has <b>The Tuning Course</b>: 16 lessons, about 40 minutes, with live screens, worked maths, a real bolt-on retune and practice missions that tick themselves off in the game. Take it any time.</P>
+      <P><b>Want the full course?</b> The laptop&apos;s <K>LEARN</K> app has <b>The Tuning Course</b>: 16 lessons, about 40 minutes, with live screens, worked maths, a real bolt-on retune and practice missions that tick themselves off in the game. Take it any time.</P>
     </>
   );
 }

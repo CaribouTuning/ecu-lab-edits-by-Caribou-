@@ -106,7 +106,7 @@ import { EngineStart } from './screens/build/EngineStart.jsx';
 import { ResultScreen } from './screens/dyno/ResultScreen.jsx';
 import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 
-/** The tabs that need an engine; HOME (stats, health, Learn) does not. */
+/** The tabs that need an engine; the laptop's reading apps do not. */
 const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'physics'];
 
 /** The engine a practice mission is built around, put on the bench when the player has none yet. */
@@ -379,23 +379,28 @@ export function EcuLabApp() {
   // (or the reverse) is a table read off the wrong breakpoints.
   const advisorTables = useMemo(() => ({ ve, timing, afr, layout }), [ve, timing, afr, layout]);
   const deferredTables = useDeferredValue(advisorTables);
+  // Judged on the engine as worn, to the whole percent: health moves every LIVE step,
+  // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
+  const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
+  const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
   const advisorPull = useMemo(() => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
+    health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor, turbine, camAt,
-    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull,
+    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull]);
+       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
@@ -585,8 +590,7 @@ export function EcuLabApp() {
   useEffect(() => { if (liveRunning) setHeardSig(hwSig); }, [liveRunning, hwSig]);
 
   /**
-   * Everything a dyno pull is solved from, in one place, so the drag strip's per-gear
-   * pulls are the same pull at a different gear and nothing else.
+   * Everything a dyno pull is solved from, in one place.
    * @param {number} load
    * @param {object} ecu
    */
@@ -829,7 +833,7 @@ export function EcuLabApp() {
   // Opening the shop, from the start screen or straight from a `#/shop` link: load the
   // save (or start one) and put its car on the bay. SANDBOX's car is set aside, whole,
   // until the player goes back to it. A CAREER screen reached any other way (a link
-  // to HOME or DRAG, which the career has no use for) goes to the shop instead.
+  // to a reading app, which the career has no use for) goes to the shop instead.
   useEffect(() => {
     if (appView === 'shop' && mode !== 'career') {
       let cancelled = false;

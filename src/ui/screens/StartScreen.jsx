@@ -13,7 +13,7 @@ import styles from './StartScreen.module.css';
  * your own shop, every tool and no objective. The tutorial is the standard walk through.
  */
 const WAYS_IN = [
-  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'The 3D career: run a tuning shop in town' },
+  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'Run a tuning shop: customers, their cars, your reputation' },
   { key: 'sandbox', label: 'SANDBOX', variant: 'ghost', caption: 'Your laptop and your shop: build and tune anything' },
   { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];

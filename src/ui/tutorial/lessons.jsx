@@ -1,6 +1,6 @@
 /**
  * The Tuning Course: five chapters of lessons, each teaching one thing, about forty
- * minutes in all. Opened from HOME › Learn; the five-minute tutorial (quickTour.jsx)
+ * minutes in all. Opened from the LEARN app; the five-minute tutorial (quickTour.jsx)
  * is the way in for someone new, and points here.
  *
  * Every number a lesson quotes is worked out when the lesson opens, from the same
@@ -118,7 +118,7 @@ function FindYourWay() {
           { at: '[data-tour="strip-last-pull"]', text: 'LAST PULL: the peak power of your most recent dyno pull.' },
           { at: '[data-tour="strip-health"]', text: 'HEALTH: knock, heat and pressure wear the engine. The wrench next to it repairs it.' },
         ]}
-        caption="The nav and the status strip. HOME has your jobs and the Learn articles; LIVE runs the engine in real time; in CAREER your own cars go racing in the 3D town."
+        caption="The nav and the status strip. LIVE runs the engine in real time; the laptop's LEARN app has this course and the articles; in CAREER you run a tuning shop of your own."
       >
         <div style={{ height: 320, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -128,7 +128,7 @@ function FindYourWay() {
       </ScreenSnippet>
       <Do steps={[
         <>Tap each of <K>BUILD</K>, <K>TUNE</K> and <K>DYNO</K> once, to see where things live.</>,
-        <>This course is always on <K>HOME › Learn</K>; the <K>(i)</K> button at the right of the strip opens the five-minute tutorial.</>,
+        <>This course is always in the laptop&apos;s <K>LEARN</K> app; the <K>(i)</K> button at the right of the strip opens the five-minute tutorial.</>,
       ]} />
       <Did>You know the working order a tuner uses: build it, tune it, measure it. The tabs run in that order, left to right.</Did>
     </>
@@ -514,7 +514,7 @@ function VeFromLogs() {
         ['The error came back after I applied it.', 'Applying half leaves half: that is the point. Pull again and apply again. It converges in two or three passes.'],
       ]} />
       <Aside title="Why only half?">
-        <p>Each logged point is shared among the four cells around it, and the mixture itself moves a little between cells. Trusting one pass completely tends to overshoot. Half-steps converge without overshooting, and the game resets the fuel trims when you apply, because they had been covering the same error. Learn article 42 goes through the whole method.</p>
+        <p>Each logged point is shared among the four cells around it, and the mixture itself moves a little between cells. Trusting one pass completely tends to overshoot. Half-steps converge without overshooting, and the game resets the fuel trims when you apply, because they had been covering the same error. Learn article 37 goes through the whole method.</p>
       </Aside>
     </>
   );
@@ -633,7 +633,7 @@ function TheRest() {
       <P>Fit a sensor on BUILD and tell the ECU a different one on TUNE › SENSORS, and it acts on a wrong number without knowing. The classic: a 1-bar MAP sensor on a turbo engine never sees boost, and fuels too little under it. Each page warns you when the two differ.</P>
       <H>LIVE</H>
       <P>The ECU running in real time. Start the engine, rev it, watch idle hold when the A/C switches on, try launch control, break a sensor on purpose and see what the protections do. Its datalog records every channel, and TUNE › AIRFLOW corrects part-throttle VE from it the same way it does from a pull.</P>
-      <H>Racing and the scores</H>
+      <H>The scores</H>
       <P>Every pull is graded on Tuning (how clean the calibration is) and Engineer (how sound the build is), combined with real output into a Pull Score with no ceiling. In CAREER each customer’s car is judged against their ticket when it goes home: the checks on it say what the pull has to show.</P>
       <Did>You have seen every part of the game and know which lesson to come back to for each.</Did>
     </>
@@ -648,7 +648,7 @@ function NextSteps() {
       <H>Practise</H>
       <P>The practice missions (below) put you in the real game with a checklist that ticks itself as you go. Start with <b>Your first pull</b>.</P>
       <H>Go deeper</H>
-      <P>HOME › Learn How It Works has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 42 (correcting VE from logs, in depth), 44 (troubleshooting by symptom) and 45 (a full worked session).</P>
+      <P>The laptop&apos;s LEARN app has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 37 (correcting VE from logs, in depth), 39 (troubleshooting by symptom) and 40 (a full worked session).</P>
       <H>Real cars</H>
       <P>CAREER gives you a tuning shop of your own. Customers bring cars with real faults and describe what the car does, not what is wrong with it. Every fault is one this course taught you to diagnose. Training opens more of the ECU, and a dyno, more lifts and better tools open bigger jobs.</P>
       <Did>That is the course done. The loop is always the same: build it, set the tables, pull it, read the log, change one thing.</Did>

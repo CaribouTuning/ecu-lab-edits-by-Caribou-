@@ -24,7 +24,7 @@ import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
 import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
-import { DAMAGE_PARTS, FAILURE_MODES, failedPart, liveWear, wearEffects } from '../damage.js';
+import { FAILURE_MODES, applyWear, failedPart, liveWear, wearEffects } from '../damage.js';
 import { SWEEP_START_RPM, SWEEP_STEP_RPM } from '../sweep.js';
 import { CURVE_RPM, RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
@@ -516,14 +516,14 @@ export function liveStepEcu(st, dt, input, cfg) {
     // takes a part's last life, the engine fails here and stops making power.
     if (s.running && health) {
       s.wear = liveWear({
-        pt, dt, rpm: s.rpm, oilKpa, coolantC: s.coolantC,
+        pt, dt, rpm: s.rpm, oilKpa, healthyOilKpa: oilPressureKpa(s.rpm, s.oilC, 1), coolantC: s.coolantC,
         ratedRpm: derived.bottomEnd?.ratedRpm ?? 0,
         bearingFreeBar: derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR,
         bearingWearMult: derived.bearingWearMult ?? 1,
         pointSeconds: SWEEP_STEP_RPM / E.DYNO_SWEEP_RPM_PER_S,
         pullSeconds: (redline - SWEEP_START_RPM) / E.DYNO_SWEEP_RPM_PER_S,
       });
-      const gone = DAMAGE_PARTS.find((part) => health[part] - (s.wear?.[part] ?? 0) <= 0);
+      const gone = failedPart(applyWear(health, s.wear));
       if (gone) {
         s.failure = { part: gone, rpm: Math.round(s.rpm), t: s.elapsed, ...FAILURE_MODES[gone] };
         s.running = false;

@@ -33,7 +33,6 @@ export * from './damage.js';
 export * from './presets.js';
 export * from './live.js';
 export * from './acoustics.js';
-export * from './drivetrain.js';
 export * from './advisors.js';
 export * from './veLearn.js';
 export * from './scoring.js';

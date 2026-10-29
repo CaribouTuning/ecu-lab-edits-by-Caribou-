@@ -71,7 +71,7 @@ import styles from './AppShell.module.css';
  * Keep that rule: an item here with nothing behind it is a destination that goes nowhere.
  *
  * The order is the order the guided first run walks: design it, calibrate it, hear
- * it, measure it. The racing is in CAREER's 3D town.
+ * it, measure it.
  *
  * @type {Array<{id: string, label: string, icon: React.ElementType}>}
  */

@@ -118,8 +118,8 @@ describe('the Learn guide', () => {
 
   it('explains what the dyno\'s two numbers are before its reading list', () => {
     render(<LearnScreen active onToggle={() => {}} />);
-    expect(screen.getByText('37. Horsepower and torque: two views of one number')).toBeTruthy();
-    expect(screen.getByText('38. Further reading on engine management')).toBeTruthy();
-    expect(screen.getByText('39. What this simulator simplifies')).toBeTruthy();
+    expect(screen.getByText('32. Horsepower and torque: two views of one number')).toBeTruthy();
+    expect(screen.getByText('33. Further reading on engine management')).toBeTruthy();
+    expect(screen.getByText('34. What this simulator simplifies')).toBeTruthy();
   });
 });

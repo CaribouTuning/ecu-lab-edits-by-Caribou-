@@ -1,6 +1,6 @@
 /**
  * The lesson reader, for both books (tutorial/books.js): the five-minute tutorial and
- * the Tuning Course that HOME › Learn opens.
+ * the Tuning Course that the LEARN app opens.
  *
  * A contents page first, doing what the best tutorials do first: what the reader will
  * be able to do by the end, what they need, how long it takes, and (for the course)

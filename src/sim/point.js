@@ -68,7 +68,7 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   limit exactly — and the result is identical to before the ECU layer existed.
  * @property {{intakeAdvDeg?: number, exhaustRetDeg?: number}|null} [cam] cam phaser positions
  *   to solve the cycle at when there is no `ecu` context; the ECU's own win when there is
- * @property {{leakFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] what the
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] what the
  *   engine's worn parts do (damage.js `wearEffects`): charge lost past the rings and a
  *   burnt valve, cylinders that no longer fire, and friction from wiped bearings
  */
@@ -153,10 +153,7 @@ export function evaluatePoint({
   //              oracle and fuels from this and nothing else.
   // The gap between them IS the fuel-trim histogram's entire signal. Share one VE and the
   // gap is identically zero, the histogram reads nothing, and no iteration can close it.
-  // A worn engine traps less than it breathes: part of the charge leaves past worn rings
-  // or a burnt valve before it burns. The ECU's table knows nothing of it.
-  const veBreathed = veActualVal ?? veVal;
-  const veActual = wear ? veBreathed * (1 - wear.leakFrac) : veBreathed;
+  const veActual = veActualVal ?? veVal;
   const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
   // NITROUS in the intake: liquid flashing to vapour takes its latent heat from the air,
   // so the charge arrives colder and denser; the vapour then fills room the air would
@@ -265,9 +262,14 @@ export function evaluatePoint({
   const cycDerived = E?.chamberOffsetK
     ? { ...derived, chamberOffsetK: (derived.chamberOffsetK || 0) + E.chamberOffsetK }
     : derived;
+  // A worn engine burns less than it breathes: part of every cylinder's charge, air and
+  // fuel alike, leaves past worn rings before it burns. The breather returns it to the
+  // intake, so the MAF and the wideband above see the mixture as it was metered.
+  const held = wear ? 1 - wear.ringLeakFrac : 1;
   const cyc = cycleInputsFor({
     rpm, mapKpa, empKpa, intakeK: cylChargeK,
-    airChargeG, burnedFuelG, fuelMassG: totalFuelG, lambda: lambdaActual, fuel,
+    airChargeG: airChargeG * held, burnedFuelG: burnedFuelG * held, fuelMassG: totalFuelG * held,
+    lambda: lambdaActual, fuel,
     ...(n2o ? { n2oG: n2o.n2oG, kitFuelG: n2o.fuelG } : {}),
     // Cam phasers move intake valve close, and with it effective compression: the ECU's
     // own phaser position when it is running, else the position the caller states (the
@@ -290,9 +292,10 @@ export function evaluatePoint({
   // outside what a flame will cross). Both cost the whole event's work.
   const ign = E ? ignitionState({ cyc, usedTiming, lambda: lambdaActual, E }) : null;
   const deadFrac = ign ? clamp((E.cutFrac ?? 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac, 0, 1) : 0;
-  // A burnt valve's cylinder that no longer fires is lost work like a misfire.
+  // A burnt valve's cylinder: the work its leak costs, or all of it once it stops firing.
   const wearDead = wear?.deadFrac ?? 0;
-  const imepPa = cycle.imepGrossPa * (wearDead > 0 ? (1 - deadFrac) * (1 - wearDead) : 1 - deadFrac);
+  const cylLoss = wear?.cylLossFrac ?? 0;
+  const imepPa = cycle.imepGrossPa * (cylLoss > 0 ? (1 - deadFrac) * (1 - cylLoss) : 1 - deadFrac);
 
   // The engine must pay for its own rubbing friction, and for the gas-exchange loop.
   // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and

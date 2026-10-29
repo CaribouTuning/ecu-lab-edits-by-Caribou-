@@ -51,7 +51,7 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {{regulator: string, basePressureKpa: number, pumpIdx: number}} fuelSystem
  * @property {{map: string, wideband: string, iat: string, ect: string, flex: boolean}} sensorHw
  * @property {{type: string, springPsi: number}} gate
- * @property {{leakFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] the
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] the
  *   engine's worn parts (damage.js `wearEffects`)
  * @property {string} vvt VVT hardware id
  * @property {string} coil coil id

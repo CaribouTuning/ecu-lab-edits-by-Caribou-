@@ -48,7 +48,7 @@ describe('the default calibration is the original model', () => {
 });
 
 describe('the dyno\'s two numbers', () => {
-  // Learn article 37 teaches hp = lb-ft × RPM ÷ 5252 on this app's own figures. Both are
+  // Learn article 32 teaches hp = lb-ft × RPM ÷ 5252 on this app's own figures. Both are
   // wheel numbers (crank × the same drivetrain efficiency), so the identity must hold
   // on every logged point, rounding aside — and the curves must cross at 5252 RPM.
   it('logs power as torque times speed, on every point', () => {
@@ -483,34 +483,6 @@ describe('the live engine runs its controllers in time', () => {
     const eng = makeEngine({ faults: { oil: 'low' } });
     const { rows } = runLive(eng, { seconds: 12, pedal: (t) => (t > 5 ? 100 : 0) });
     expect(rows.some((r) => r.protect.includes('oil pressure'))).toBe(true);
-  });
-});
-
-describe('the drag strip sees the torque strategy', () => {
-  const tq = (rpm) => 300 + rpm * 0.03;
-  const car = { ...S.DEFAULT_CAR };
-  const drag = (cal) => S.simulateDragRun({ car, torqueCurveNm: tq, redline: 7000, ecu: cal ? { cal, cyl: 6 } : null });
-  const def = S.defaultEcuCalibration({});
-
-  it('is unchanged with the default calibration', () => {
-    expect(drag(def).et).toBe(drag(null).et);
-  });
-
-  it('caps trap speed at the road-speed limiter', () => {
-    const r = drag(S.setCal(def, 'limiter.speedLimitKph', 150));
-    expect(r.trapMph).toBeLessThan(150 / 1.609 + 2);
-  });
-
-  it('shifts quicker flat-foot on a manual box', () => {
-    expect(drag(S.setCal(def, 'arc.ffsEnabled', true)).et).toBeLessThan(drag(def).et);
-  });
-
-  it('holds crank torque to the same limit the dyno does', () => {
-    // The drag curve is torque after the transmission's loss; the limit is crank torque.
-    // A 250 Nm crank limit must drive exactly like an engine that only ever made 250 Nm.
-    const limited = S.setCal(def, 'torque.limitByGear', { ...def.torque.limitByGear, z: def.torque.limitByGear.z.map(() => 250) });
-    const capped = S.simulateDragRun({ car, torqueCurveNm: () => 250 * S.DRIVETRAIN_EFF, redline: 7000, ecu: { cal: def, cyl: 6 } });
-    expect(drag(limited).et).toBeCloseTo(capped.et, 3);
   });
 });
 
