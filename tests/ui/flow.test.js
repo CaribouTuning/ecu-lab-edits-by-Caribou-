@@ -20,6 +20,9 @@ describe('SANDBOX, step by step', () => {
     expect(sandbox({ heard: true, pulled: true, fresh: true, attention: fault })).toMatchObject({ go: 'tune:spark', label: 'Spark' });
     // The fix changed the tune, so the pull is no longer of this setup: pull again.
     expect(sandbox({ heard: true, pulled: true, fresh: false }).text).toMatch(/again/);
+    // After a reload the runs come back without the last result: same setup, not a change.
+    expect(sandbox({ heard: true, pulled: true, fresh: false, changed: false }).text).not.toMatch(/changed/);
+    expect(career({ pulled: true, fresh: false, changed: false }).text).not.toMatch(/changed/);
     expect(sandbox({ heard: true, pulled: true, fresh: true, peakHp: 251.4 })).toMatchObject({ id: 'more', go: 'build' });
     expect(sandbox({ heard: true, pulled: true, fresh: true, peakHp: 251.4 }).text).toMatch(/251 whp/);
   });

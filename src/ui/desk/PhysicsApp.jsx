@@ -21,7 +21,7 @@
  *   6 Heat      where the rest of the fuel's energy goes         BSFC, EGT
  */
 
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 
 import { TableSurface } from '../components/surface/TableSurface.jsx';
 
@@ -111,12 +111,17 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   // the advisor's own pull; any other is solved here, once per load, and kept.
   const [load, setLoad] = useState(100);
   const deferredLoad = useDeferredValue(load);
-  const cache = useRef(/** @type {Map<number, any[]>} */ (new Map()));
-  useEffect(() => { cache.current = new Map(); }, [points, sweepAt]);
+  // Kept for the engine and tables it was solved for. Checked here, in the same render,
+  // not cleared by an effect afterwards: an undo or a map-slot change would otherwise draw
+  // one frame (or, with the load unchanged, every frame) from the old tables.
+  const cache = useRef(/** @type {{points: any, sweepAt: any, map: Map<number, any[]>}} */ ({ points: null, sweepAt: null, map: new Map() }));
   const pts = useMemo(() => {
     if (deferredLoad >= 100 || !sweepAt) return points ?? [];
-    if (!cache.current.has(deferredLoad)) cache.current.set(deferredLoad, sweepAt(deferredLoad)?.points ?? []);
-    return cache.current.get(deferredLoad) ?? [];
+    const c = cache.current;
+    if (c.points !== points || c.sweepAt !== sweepAt) cache.current = { points, sweepAt, map: new Map() };
+    const map = cache.current.map;
+    if (!map.has(deferredLoad)) map.set(deferredLoad, sweepAt(deferredLoad)?.points ?? []);
+    return map.get(deferredLoad) ?? [];
   }, [points, sweepAt, deferredLoad]);
   const peakIdx = useMemo(() => pts.reduce((b, q, j) => (q.torque > (pts[b]?.torque ?? -1) ? j : b), 0), [pts]);
   const [idx, setIdx] = useState(/** @type {number|null} */ (null));

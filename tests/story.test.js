@@ -58,6 +58,19 @@ describe('the story', () => {
     expect(readMessage(r, tip.id)).toBe(r);
   });
 
+  it('keeps a chapter read however many days of tips are read after it', () => {
+    let c = newCareer(1);
+    const mail = messagesFor(c).find((m) => m.kind === 'email');
+    c = readMessage(c, mail.id);
+    for (let day = 2; day < 1000; day += 1) {
+      c = { ...c, day };
+      c = readMessage(c, messagesFor(c).find((m) => m.id.startsWith('tip:')).id);
+    }
+    expect(sagaOf(c).read).toContain(mail.id);
+    // Old tips are gone from the inbox, so they are not kept either.
+    expect(sagaOf(c).read.length).toBeLessThan(10);
+  });
+
   it('survives a save with a broken story field', () => {
     const c = save({ saga: { ch: 'x', read: 3 } });
     expect(sagaOf(c)).toEqual({ ch: 0, read: [], done: false });

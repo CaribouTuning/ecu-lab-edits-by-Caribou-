@@ -20,13 +20,17 @@ import { jobById } from './jobs.js';
  * @param {import('./shop.js').Career} props.career
  * @param {() => void} props.onShop back to the shop, the car stays on its lift
  * @param {() => void} props.onHandBack grade the car and give it back
- * @param {number} [props.openAsk] counts up each time the game's next step sends you to
+ * @param {number} [props.openAsk] above zero when the game's next step has sent you to
  *   the ticket: it opens, its checks and its Hand back button in view
+ * @param {() => void} [props.onAsked] the ask is answered: the owner sets it back to zero,
+ *   so a bar that mounts again later (back from the shop) does not open by itself
  * @returns {React.ReactElement|null}
  */
-export function CareerBar({ career, onShop, onHandBack, openAsk = 0 }) {
+export function CareerBar({ career, onShop, onHandBack, openAsk = 0, onAsked }) {
   const [open, setOpen] = useState(false);
-  useEffect(() => { if (openAsk > 0) setOpen(true); }, [openAsk]);
+  useEffect(() => {
+    if (openAsk > 0) { setOpen(true); onAsked?.(); }
+  }, [openAsk, onAsked]);
   const job = career.working ? jobById(career.working) : null;
 
   if (!job) {

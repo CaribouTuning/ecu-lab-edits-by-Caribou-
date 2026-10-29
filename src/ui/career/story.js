@@ -365,7 +365,10 @@ export const unreadCount = (c) => { const r = sagaOf(c).read; return messagesFor
 export function readMessage(c, id) {
   const s = sagaOf(c);
   if (s.read.includes(id)) return c;
-  // Only the last few hundred are kept: tips arrive every day without end.
-  return { ...c, saga: { ...s, read: [...s.read, id].slice(-400) } };
+  // Kept only for messages still in the inbox: a tip is there for its day alone and
+  // arrives every day without end, so old ones are dropped rather than counted against a
+  // cap that would, one day, push out a chapter's mail and show it unread again.
+  const shown = new Set(messagesFor(c).map((m) => m.id));
+  return { ...c, saga: { ...s, read: [...s.read.filter((r) => shown.has(r)), id] } };
 }
 

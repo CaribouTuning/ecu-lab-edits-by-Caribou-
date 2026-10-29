@@ -19,7 +19,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LearnScreen } from '../../src/ui/screens/dash/LearnScreen.jsx';
-import { LiveScreen } from '../../src/ui/screens/dash/LiveScreen.jsx';
+import { StandConsole, StandStatus } from '../../src/ui/desk/Consoles.jsx';
 import { StoreProvider } from '../../src/ui/state/StoreProvider.jsx';
 
 afterEach(cleanup);
@@ -37,47 +37,41 @@ function mount(node) {
 const noop = () => {};
 
 
-describe('LiveScreen', () => {
+describe('the engine stand\'s controls', () => {
+  // The stand's control box is the only place the engine is started and revved: its
+  // console reads the live engine off the store, never off a prop.
+  const stand = (o = {}) => (
+    <>
+      <StandStatus />
+      <StandConsole onStart={noop} onStop={noop} onToggleSound={noop} onTestSound={noop} onThrottle={noop} {...o} />
+    </>
+  );
+
   it('reads the live engine off the store rather than off a prop', () => {
-    mount(
-      <LiveScreen
-        tachFullScaleRpm={7500}
-        onStart={noop} onStop={noop} onToggleSound={noop} onTestSound={noop} onThrottle={noop}
-      />,
-    );
+    mount(stand());
     // The engine's own state machine, straight from `session.live`: nothing above this
     // component told it the engine was off.
-    expect(screen.getByText('Engine off. Start it to watch the ECU work in real time.')).toBeTruthy();
+    expect(screen.getByText('Engine off')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
     expect(screen.getByText('Start the engine first')).toBeTruthy();
   });
 
-  it('is a page, not an accordion: the controls are there without opening anything', () => {
-    // It used to be HOME's collapsible card moved to its own tab, which still read as a
-    // HOME section and hid START behind one more tap. v4.8 laid it out as a page.
-    mount(
-      <LiveScreen
-        tachFullScaleRpm={7500}
-        onStart={noop} onStop={noop} onToggleSound={noop} onTestSound={noop} onThrottle={noop}
-      />,
-    );
-    expect(screen.getByText('Live Engine').closest('button')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Start engine' })).toBeTruthy();
-    expect(screen.getByRole('status', { name: 'Engine speed' }).textContent).toBe('0');
-  });
-
   it('opens and closes the throttle through the shell, which owns the ref the loop reads', () => {
     const onThrottle = vi.fn();
-    mount(
-      <LiveScreen
-        tachFullScaleRpm={7500}
-        onStart={noop} onStop={noop} onToggleSound={noop} onTestSound={noop} onThrottle={onThrottle}
-      />,
-    );
-    const pad = screen.getByText('Start the engine first').parentElement;
-    fireEvent.pointerDown(pad);
-    fireEvent.pointerUp(pad);
-    expect(onThrottle.mock.calls).toEqual([[100], [0]]);
+    mount(stand({ onThrottle }));
+    const lever = screen.getByRole('button', { name: 'Throttle, press and hold' });
+    fireEvent.pointerDown(lever);
+    fireEvent.pointerUp(lever);
+    expect(onThrottle.mock.calls.slice(0, 2)).toEqual([[100], [0]]);
+  });
+
+  it('a failed engine will not turn over: START is disabled and says why', () => {
+    const onStart = vi.fn();
+    mount(stand({ onStart, failed: true }));
+    const start = screen.getByRole('button', { name: 'Engine failed' });
+    expect(/** @type {HTMLButtonElement} */ (start).disabled).toBe(true);
+    fireEvent.click(start);
+    expect(onStart).not.toHaveBeenCalled();
   });
 });
 

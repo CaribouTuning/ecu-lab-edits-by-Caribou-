@@ -58,7 +58,7 @@ import { CareerBar } from './career/CareerBar.jsx';
 import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
-import { advancePhase, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
+import { deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -228,10 +228,16 @@ export function EcuLabApp() {
   }, [career, mode, dispatch]);
   // The bench computers' screens that are not the dyno's routed sections: VE, 3D and the
   // pull's live channels on the dyno's; the engine stand's are all its own.
-  const [dynoExtra, setDynoExtra] = useState(/** @type {null|'ve'|'3d'|'live'} */ (null));
+  // One belongs to the route it was picked on: go anywhere (the palette, a notification,
+  // a fix link) and the routed section shows again, not the screen picked before.
+  const [dynoPick, setDynoPick] = useState(/** @type {null|{id: 've'|'3d'|'live', at: object}} */ (null));
+  const dynoExtra = dynoPick && dynoPick.at === route ? dynoPick.id : null;
+  /** @param {null|'ve'|'3d'|'live'} id */
+  const setDynoExtra = (id) => setDynoPick(id ? { id, at: route } : null);
   const [standScreen, setStandScreen] = useState('bars');
   // Opened from the game's next step: the job ticket, open, where the car is handed back.
   const [ticketAsk, setTicketAsk] = useState(0);
+  const ticketAsked = useCallback(() => setTicketAsk(0), []);
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
@@ -479,9 +485,7 @@ export function EcuLabApp() {
     const v = evaluateJob(job, { build, tune, session });
     const boosted = build.turboOn || !!build.blowerId || !!build.nitrous;
     const delivered = deliver(storeCar(career, job.id, { build, tune }), job.id, v, { boosted });
-    // A job that leaves the shop takes time: the light moves on toward evening.
-    const next = delivered.lifts.length < career.lifts.length ? advancePhase(delivered) : delivered;
-    dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
+    dispatch({ type: ACTIONS.CAREER_UPDATE, career: delivered });
     navigate({ view: 'shop', tab: null, section: null });
   };
   // `AppShell`'s `SideNav` is `React.memo`'d and reads no store, so at 20 Hz it only
@@ -1118,7 +1122,7 @@ export function EcuLabApp() {
     { id: 'vvt', label: 'VVT', name: 'Cam timing', icon: RotateCw, row: 1 },
     { id: 'idle', label: 'IDLE', name: 'Idle', icon: Timer, row: 1 },
     { id: 'protect', label: 'PROTECT', name: 'Protection', icon: ShieldAlert, row: 1 },
-    { id: 'torque', label: 'Torque', name: 'Torque', icon: Crosshair, row: 1 },
+    { id: 'torque', label: 'TORQUE', name: 'Torque', icon: Crosshair, row: 1 },
     // Its own row, and only with a kit fitted — the way real ECU software shows its
     // nitrous tables once nitrous is enabled.
     { id: 'nitrous', label: 'NITROUS', name: 'Nitrous', icon: Flame, row: 2 },
@@ -1339,7 +1343,7 @@ export function EcuLabApp() {
                 <BuildLocked.Provider value={inCareer && !buildOpen}>
                   <BuildBench
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
-                    preset={activePreset}
+                    preset={activePreset} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
                     // Back to the factory engine as built: asked first when the tables hold work.
                     onRun={() => { setStandScreen('bars'); goTab('live'); }}
                     locked={inCareer && !buildOpen}
@@ -1679,6 +1683,9 @@ export function EcuLabApp() {
     atDyno: appView === 'app' && tab === 'dyno',
     pulled: !!result || runs.length > 0,
     fresh: pullFresh,
+    // After a reload the runs are back but the last pull's result is not: the setup may
+    // be exactly the one pulled, and saying it changed would be wrong.
+    changed: !result && runs[0]?.inputs ? diffMeasuredInputs(runs[0].inputs, measuredInputs(build, tune, loadKpa)).length > 0 : true,
     peakHp: result?.peakHp,
     attention: attentionList,
     working: inCareer && !!career.working,
@@ -1753,7 +1760,7 @@ export function EcuLabApp() {
         next={deskNext}
       >
         {inCareer && appView !== 'shop' && appView !== 'messages' && (deskMode === 'app' || deskMode === 'page') && (
-          <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} openAsk={ticketAsk} />
+          <CareerBar career={career} onShop={() => changeTab('shop')} onHandBack={handBack} openAsk={ticketAsk} onAsked={ticketAsked} />
         )}
         {/* An app's status bar is the window's own (Desk's footer); a page in the shop
             keeps the strip at its top. */}

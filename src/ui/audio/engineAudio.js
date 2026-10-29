@@ -466,7 +466,7 @@ function scheduleSleep(a, seconds) {
  * resuming here is only ever undoing this function's own suspend.
  *
  * @param {object} a the graph from {@link createEngineAudio}
- * @param {boolean} active whether an engine (or the drag tree) should be audible now
+ * @param {boolean} active whether an engine should be audible now
  */
 export function setEngineAudioActive(a, active) {
   if (active) {

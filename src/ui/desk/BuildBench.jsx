@@ -14,14 +14,14 @@
  * factory engine with parts changed (modified, each changed part marked), or the player's own.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import {
-  EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf, deriveEngine,
+  EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf,
 } from '../../sim/index.js';
 import { BuildBenchMode } from '../components/BuildSection.jsx';
 import { EngineStart } from '../screens/build/EngineStart.jsx';
-import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
+import { useBuild, useTune } from '../state/StoreProvider.jsx';
 import { engineSpecOf } from '../world/models/engine.js';
 
 import { EngineViewer } from './EngineViewer.jsx';
@@ -119,21 +119,22 @@ function useTall() {
  * @param {() => void} props.onRun the build done: over to the engine stand to start it
  * @param {boolean} [props.locked] CAREER on a customer's car: the engine is theirs, not to be swapped
  * @param {React.ReactNode} [props.notice] a line over the sheet: in CAREER, whose parts these are
+ * @param {any} props.derived the engine on the bench, derived (the shell's `engineDerived`:
+ *   derived once per build, not here on every live-engine step)
+ * @param {number} [props.rpm] the engine's speed when it is running on the stand
  * @param {React.ReactNode} props.children the open part's options
  * @returns {React.ReactElement}
  */
-export function BuildBench({ part, onPart, preset, onStock, onRun, locked = false, notice = null, children }) {
+export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, children }) {
   const [build] = useBuild();
   const [tune] = useTune();
   // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
   const [changing, setChanging] = useState(false);
-  const [session] = useSession();
-  const derived = deriveEngine(build.engineConfig);
-  const sums = partSummaries(build, derived, preset);
+  const sums = useMemo(() => partSummaries(build, derived, preset), [build, derived, preset]);
   const open = BENCH_PARTS.find((p) => p.id === part) ?? BENCH_PARTS[0];
   const tall = useTall();
-  const spec = engineSpecOf(build, derived);
-  const changed = changedParts(build, preset);
+  const spec = useMemo(() => engineSpecOf(build, derived), [build, derived]);
+  const changed = useMemo(() => changedParts(build, preset), [build, preset]);
   // Where the engine stands against the factory: three different things to be building.
   const origin = !preset ? 'own' : changed.size ? 'modified' : 'stock';
   return (
@@ -153,7 +154,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, locked = fals
       </nav>
       <section className={styles.sheet} aria-label={open.label}>
         {tall && (
-          <EngineViewer spec={spec} rpm={session.live.running ? session.live.rpm : 0} label={`The engine on the stand: ${sums.engine}`} />
+          <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />
         )}
         <header className={styles.sheetHead}>
           <h2 className={styles.sheetTitle}>{open.label}</h2>

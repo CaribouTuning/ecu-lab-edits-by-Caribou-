@@ -33,6 +33,8 @@
  *   a walk back to the stand to hear it first
  * @property {boolean} pulled there is a pull at all
  * @property {boolean} fresh the last pull is of the setup on the bench now
+ * @property {boolean} [changed] the setup differs from the last pull's (false: the pull is the
+ *   same setup, only its curves are gone, as after a reload)
  * @property {number} [peakHp] that pull's peak, at the wheels
  * @property {{page: string, label: string, count: number}[]} attention the pages the fresh
  *   pull's log points at, most entries first
@@ -71,7 +73,7 @@ export function nextStep(f) {
     }
     if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the build bench.', label: 'Build bench', go: 'build' };
     if (!f.fresh) {
-      return { id: 'pull', text: f.pulled ? 'You changed the car since the last pull. Pull it again to see what it did.' : 'Strap it on the dyno and run a pull: the log says what is wrong.', label: 'Dyno', go: 'dyno' };
+      return { id: 'pull', text: !f.pulled ? 'Strap it on the dyno and run a pull: the log says what is wrong.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'You changed the car since the last pull. Pull it again to see what it did.', label: 'Dyno', go: 'dyno' };
     }
     if (f.attention.length) return fixStep(f.attention[0]);
     return { id: 'hand-back', text: 'A clean pull. Check it against the ticket, then hand the car back.', label: 'Ticket', go: 'ticket' };
@@ -79,7 +81,7 @@ export function nextStep(f) {
 
   if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the build bench, or build your own.', label: 'Build bench', go: 'build' };
   if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
-  if (!f.fresh) return { id: 'pull', text: f.pulled ? 'It has changed since the last pull. Pull it again to see what that did.' : 'Put it on the dyno and run a pull.', label: 'Dyno', go: 'dyno' };
+  if (!f.fresh) return { id: 'pull', text: !f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.', label: 'Dyno', go: 'dyno' };
   if (f.attention.length) return fixStep(f.attention[0]);
   return {
     id: 'more',
