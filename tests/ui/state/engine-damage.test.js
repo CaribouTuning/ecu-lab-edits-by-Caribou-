@@ -13,7 +13,11 @@ import { makeEngine } from '../../ecuHarness.js';
 
 const eng = makeEngine();
 
-/** Steps the store's live engine the way the app's 20 Hz loop does. */
+/**
+ * Steps the store's live engine the way the app's 20 Hz loop does.
+ * @param {any} state @param {number} n steps
+ * @param {{throttle?: number, oilHealth?: number}} [opts]
+ */
 function step(state, n, { throttle = 0, oilHealth } = {}) {
   const cfg = eng.liveCfg();
   if (oilHealth != null) cfg.ecu = { ...cfg.ecu, cond: { ...cfg.ecu.cond, oilHealth } };
