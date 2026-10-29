@@ -10,7 +10,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, shade, sign, toon } from '../gfx.js';
+import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, shade, sign, toon, tyreGeometry } from '../gfx.js';
 
 /**
  * Body shapes. Dimensions in metres; z is along the car, front positive. `belt` is the
@@ -202,18 +202,6 @@ export function makeCar(spec = {}) {
   if (!S.open) {
     shell.add(loftMesh({ y: belt, z0: zr0, z1: zf0, w: gw0 }, { y: top - 0.04, z0: zr1, z1: zf1, w: gw1 }, W.glassDark, { mat: toon(W.glassDark, { opacity: 0.9 }) }));
     shell.add(loftMesh({ y: top - 0.045, z0: zr1 - 0.08, z1: zf1 + 0.04, w: gw1 + 0.04 }, { y: top, z0: zr1 - 0.06, z1: zf1 + 0.02, w: gw1 + 0.02 }, paint, { mat: paintMat }));
-    // Light on the roof and a glint on the screen: what makes a car read as glossy from above.
-    if (!spec.stripes) shell.add(box(gw1 * 0.62, 0.012, Math.max(0.2, zf1 - zr1 - 0.3), paint, { y: top + 0.004, z: (zr1 + zf1) / 2, mat: toon(shade(paint, 0.1)), edge: false, cast: false }));
-    const glint = toon(W.white, { opacity: 0.55 });
-    const wsMid = (zf0 + zf1) / 2;
-    const wsY = (belt + top) / 2;
-    const tilt = Math.atan2(zf0 - zf1, top - belt);
-    for (const [dx, w] of [[-0.18, 0.09], [0.02, 0.05]]) {
-      const g = box(w, Math.hypot(zf0 - zf1, top - belt) * 0.8, 0.01, W.white, { x: dx * Wd, y: wsY, z: wsMid + 0.02, mat: glint, edge: false, cast: false });
-      g.rotation.x = -tilt;
-      g.rotation.z = 0.5;
-      shell.add(g);
-    }
     // Pillars: body-coloured cross-slabs that tie the roof to the shoulder line, so the
     // roof reads as part of the car rather than a lid floating over a hole.
     const slab = (f0, f1, w) => {
@@ -325,15 +313,15 @@ export function makeCar(spec = {}) {
     hub.position.set(sx * track / 2, wr, sz * wheelbase / 2);
     const steer = new THREE.Group();
     const spin = new THREE.Group();
-    const tyre = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, tw, 14).rotateZ(Math.PI / 2), toon(W.tyre));
+    const tyre = new THREE.Mesh(tyreGeometry(wr, tw).rotateZ(Math.PI / 2), toon(W.tyre));
     tyre.castShadow = true;
     edged(tyre, 60);
     spin.add(tyre);
     const out = sx * (tw / 2 + 0.002);
-    const face = new THREE.Mesh(new THREE.CylinderGeometry(wr * wstyle.dish, wr * wstyle.dish, 0.03, 14).rotateZ(Math.PI / 2), toon(rimCol));
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(wr * wstyle.dish, wr * wstyle.dish, 0.03, 24).rotateZ(Math.PI / 2), toon(rimCol));
     face.position.x = out;
     spin.add(face);
-    const lip = new THREE.Mesh(new THREE.CylinderGeometry(wr * (wstyle.dish + 0.1), wr * (wstyle.dish + 0.1), 0.02, 14).rotateZ(Math.PI / 2), toon(W.tyreWall));
+    const lip = new THREE.Mesh(new THREE.CylinderGeometry(wr * (wstyle.dish + 0.1), wr * (wstyle.dish + 0.1), 0.02, 24).rotateZ(Math.PI / 2), toon(W.tyreWall));
     lip.position.x = out - sx * 0.01;
     spin.add(lip);
     if (wstyle.spokes) {
@@ -353,7 +341,7 @@ export function makeCar(spec = {}) {
       spin.add(cap);
     }
     // Brake disc and a coloured caliper that does not turn with the wheel.
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.5, wr * 0.5, 0.025, 12).rotateZ(Math.PI / 2), toon(W.brake));
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.5, wr * 0.5, 0.025, 20).rotateZ(Math.PI / 2), toon(W.brake));
     disc.position.x = -sx * (tw / 2 - 0.05);
     spin.add(disc);
     steer.add(spin);
@@ -362,7 +350,7 @@ export function makeCar(spec = {}) {
     car.add(hub);
     wheels.push({ hub, steer, spin, front });
     // Wheel-arch shadow disc on the bodywork.
-    const arch = new THREE.Mesh(new THREE.CylinderGeometry(wr * 1.18, wr * 1.18, 0.02, 14).rotateZ(Math.PI / 2), toon(W.black));
+    const arch = new THREE.Mesh(new THREE.CylinderGeometry(wr * 1.18, wr * 1.18, 0.02, 24).rotateZ(Math.PI / 2), toon(W.black));
     arch.position.set(sx * (Wd / 2 + 0.003), wr, sz * wheelbase / 2);
     car.add(arch);
   }

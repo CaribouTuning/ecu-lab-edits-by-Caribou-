@@ -436,6 +436,8 @@ export const world = Object.freeze({
   roofGreen: '#3f6b57',
   glass: '#7fb7de',
   glassDark: '#2f4a63',
+  // Wired, frosted glass high in a shop wall: the day comes through it as a pale grey, not a sky.
+  glassFrost: '#c3ccd0',
   glassNight: '#ffe29a',
   door: '#7a5232',
   doorGlass: '#a5d3ec',

@@ -89,13 +89,48 @@ export function edged(mesh, angle = 35) {
 }
 
 /**
+ * How much a box's edges are broken, metres: nothing made is knife-edged, and a small
+ * chamfer that catches the light is what tells a modelled part from a placeholder block.
+ * Scaled down on small parts, and left off sheet-thin ones (a decal, a screen's glass).
+ * @param {number} w @param {number} h @param {number} d
+ */
+function chamfer(w, h, d) {
+  const m = Math.min(w, h, d);
+  return m < 0.012 ? 0 : Math.min(0.025, m * 0.16);
+}
+
+/**
+ * A box's geometry, its edges chamfered. @param {number} w @param {number} h @param {number} d
+ * @returns {THREE.BufferGeometry}
+ */
+export function boxGeometry(w, h, d) {
+  const r = chamfer(w, h, d);
+  return r > 0 ? new RoundedBoxGeometry(w, h, d, 1, r) : new THREE.BoxGeometry(w, h, d);
+}
+
+/**
+ * A tyre's geometry: tread and sidewalls with rounded shoulders, turned on a lathe, open
+ * in the middle where the wheel sits. Its axis is y, like a cylinder's.
+ * @param {number} r outer radius @param {number} w width @param {number} [seg] around
+ */
+export function tyreGeometry(r, w, seg = 28) {
+  const s = Math.min(w * 0.3, r * 0.18);
+  const hw = w / 2;
+  const pts = [
+    [r * 0.55, -hw * 0.9], [r - s * 1.2, -hw], [r - s * 0.35, -hw + s * 0.25], [r, -hw + s],
+    [r, hw - s], [r - s * 0.35, hw - s * 0.25], [r - s * 1.2, hw], [r * 0.55, hw * 0.9],
+  ].map(([x, y]) => new THREE.Vector2(x, y));
+  return new THREE.LatheGeometry(pts, seg);
+}
+
+/**
  * A box at a position, in one colour.
  * @param {number} w @param {number} h @param {number} d size
  * @param {string} color
  * @param {{x?: number, y?: number, z?: number, edge?: boolean, cast?: boolean, receive?: boolean, mat?: THREE.Material}} [o]
  */
 export function box(w, h, d, color, o = {}) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), o.mat ?? toon(color));
+  const m = new THREE.Mesh(boxGeometry(w, h, d), o.mat ?? toon(color));
   m.position.set(o.x ?? 0, o.y ?? 0, o.z ?? 0);
   m.castShadow = o.cast !== false;
   m.receiveShadow = o.receive !== false;
@@ -120,7 +155,8 @@ export function rbox(w, h, d, color, o = {}) {
 
 /** A cylinder standing up, or lying on its X axis. @param {number} rTop @param {number} rBot @param {number} h @param {string} color */
 export function cyl(rTop, rBot, h, color, o = {}) {
-  const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? 10);
+  // Round things read as round: more sides the bigger they are.
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, o.seg ?? (Math.max(rTop, rBot) > 0.06 ? 20 : 12));
   if (o.axis === 'x') g.rotateZ(Math.PI / 2);
   if (o.axis === 'z') g.rotateX(Math.PI / 2);
   const m = new THREE.Mesh(g, o.mat ?? toon(color));
@@ -128,6 +164,26 @@ export function cyl(rTop, rBot, h, color, o = {}) {
   m.castShadow = o.cast !== false;
   m.receiveShadow = true;
   return o.edge === false ? m : edged(m, 50);
+}
+
+/**
+ * A square-section member from one point to another: a brace, a swing arm, a strap.
+ * @param {[number, number, number]} a @param {[number, number, number]} b ends
+ * @param {number} w @param {number} d section across, metres
+ * @param {string} color
+ * @param {{cast?: boolean, round?: boolean}} [o] `round`: a tube rather than box section
+ */
+export function strut(a, b, w, d, color, o = {}) {
+  const va = new THREE.Vector3(...a);
+  const vb = new THREE.Vector3(...b);
+  const dir = vb.clone().sub(va);
+  const g = o.round ? new THREE.CylinderGeometry(w / 2, w / 2, dir.length(), 12) : boxGeometry(w, dir.length(), d);
+  const m = new THREE.Mesh(g, toon(color));
+  m.position.copy(va).add(vb).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  m.castShadow = o.cast !== false;
+  m.receiveShadow = true;
+  return m;
 }
 
 /** A cone/pyramid. @param {number} r @param {number} h @param {string} color */

@@ -14,7 +14,7 @@
  */
 
 import { world as W } from '../tokens.js';
-import { THREE, box, cyl, floorPlane, glow } from '../world/gfx.js';
+import { THREE, box, cyl, floorPlane, glow, mergeStatic, strut } from '../world/gfx.js';
 import { concreteFloor, realize, roomReflections } from './realize.js';
 import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
@@ -126,7 +126,26 @@ function idleScreen(kind, aspect) {
   return tex;
 }
 
-/** @param {'dyno'|'stand'|'build'} kind */
+/**
+ * A swivel caster: its top plate, the fork, the wheel. Origin on the floor.
+ * @param {number} x @param {number} z @param {number} [r] wheel radius
+ */
+function caster(x, z, r = 0.045) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.add(box(0.08, 0.012, 0.08, W.metalDark, { y: 2 * r + 0.03, edge: false }));
+  for (const s of [-1, 1]) g.add(box(0.008, r + 0.03, 0.05, W.metalDark, { x: s * 0.022, y: r + 0.012, z: -0.012, edge: false }));
+  g.add(cyl(r, r, 0.03, W.rubber, { axis: 'x', y: r, z: -0.02, seg: 14, edge: false }));
+  return g;
+}
+
+/**
+ * A station's computer, as a shop has it: a steel workstation on casters with the PC in
+ * its cabinet, a worktop at hand height with the control box on it, and the monitor on a
+ * column off the back. The build bench's is the same with no control box: there is
+ * nothing to start.
+ * @param {'dyno'|'stand'|'build'} kind
+ */
 function makeCart(kind) {
   const g = new THREE.Group();
   g.userData.spot = kind;
@@ -142,32 +161,52 @@ function makeCart(kind) {
   monitorAt.add(idle);
   let idleKey = '';
   const panel = { at: consoleAt, w: 1, h: 1 };
+  const steel = W.engine.standDark;
   /**
    * @param {{mw: number, mh: number, cw: number, ch: number, side?: boolean}} d metres; `side`
    *   hangs the control box beside the monitor on an arm, for a view too short for both stacked
    */
   const shape = ({ mw, mh, cw, ch, side = false }) => {
     body.clear();
-    body.add(box(Math.max(0.95, cw + 0.1), 0.06, 0.62, W.engine.standDark, { y: 0.16 }));
-    for (const [x, z] of [[-0.4, -0.25], [-0.4, 0.25], [0.4, -0.25], [0.4, 0.25]]) body.add(cyl(0.06, 0.06, 0.06, W.black, { axis: 'x', x, y: 0.06, z, edge: false }));
+    const top = 0.86;
+    const tilt = side ? 0.12 : 0.42;
+    const my = side ? 1.5 : 0.96 + (ch / 2) * Math.cos(tilt) + 0.12 + mh / 2;
+    {
+      // The workstation: plinth on casters, the cabinet with its door and vents, the worktop.
+      const bw = Math.max(0.8, cw + 0.12);
+      body.add(box(bw, 0.05, 0.56, steel, { y: 0.135 }));
+      for (const x of [-1, 1]) for (const z of [-1, 1]) body.add(caster(x * (bw / 2 - 0.07), z * 0.2));
+      body.add(box(bw - 0.04, top - 0.2, 0.5, steel, { y: 0.16 + (top - 0.2) / 2 }));
+      body.add(box(0.006, top - 0.28, 0.01, W.black, { y: 0.2 + (top - 0.28) / 2, z: 0.252, edge: false, cast: false }));
+      body.add(box(0.02, 0.14, 0.03, W.metalLight, { x: -0.04, y: 0.55, z: 0.26, edge: false }));
+      for (let i = 0; i < 5; i += 1) body.add(box(bw * 0.3, 0.008, 0.008, W.black, { x: bw * 0.22, y: 0.26 + i * 0.03, z: 0.252, edge: false, cast: false }));
+      body.add(box(bw + 0.04, 0.035, 0.6, W.rubber, { y: top - 0.02 }));
+      // A handle along the side, to push it by.
+      body.add(cyl(0.012, 0.012, 0.44, W.metalLight, { axis: 'z', x: bw / 2 + 0.05, y: top - 0.08, edge: false }));
+      for (const z of [-0.2, 0.2]) body.add(box(0.05, 0.02, 0.02, W.metalLight, { x: bw / 2 + 0.03, y: top - 0.08, z, edge: false }));
+    }
     // The control box: a steel box at hand height, its panel leaning back about 24 degrees;
     // or, beside the monitor, a pendant box on an arm, standing nearly upright.
-    const tilt = side ? 0.12 : 0.42;
     const box0 = new THREE.Group();
-    const my = side ? 1.5 : 0.96 + (ch / 2) * Math.cos(tilt) + 0.12 + mh / 2;
     if (side) {
       box0.position.set(mw / 2 + 0.1 + cw / 2, my, -0.08);
       body.add(box(0.12, 0.05, 0.05, W.metalDark, { x: mw / 2 + 0.06, y: my, z: -0.1 }));
     } else box0.position.set(0, 0.96, 0.08);
     box0.rotation.x = -tilt;
-    box0.add(box(cw + 0.08, ch + 0.08, 0.1, W.engine.standDark, { z: -0.05 }));
-    consoleAt.position.set(0, 0, 0.002);
+    box0.add(box(cw + 0.08, ch + 0.08, 0.1, steel, { z: -0.05 }));
+    box0.add(box(cw + 0.04, ch + 0.04, 0.004, W.black, { z: 0.001, cast: false, edge: false }));
+    consoleAt.position.set(0, 0, 0.004);
     box0.add(consoleAt);
     // A cart with no control box (the build bench's) has only its monitor.
     if (cw > 0) body.add(box0);
-    // The post, and the monitor on it: its bottom edge just clear of the box.
-    body.add(box(0.08, my - 0.2, 0.08, W.metalDark, { y: 0.2 + (my - 0.2) / 2, z: -0.16 }));
-    body.add(box(mw + 0.07, mh + 0.07, 0.05, W.black, { y: my, z: -0.1 }));
+    // The column off the worktop's back, and the monitor on its mount: a thin bezel, the
+    // housing behind it deeper, so the screen has the thickness a real one has.
+    {
+      body.add(box(0.08, my - top, 0.06, W.metalDark, { y: top + (my - top) / 2, z: -0.24 }));
+      body.add(box(0.1, 0.1, 0.12, W.metalDark, { y: my, z: -0.18 }));
+    }
+    body.add(box(mw + 0.05, mh + 0.05, 0.03, W.black, { y: my, z: -0.09 }));
+    body.add(box(mw * 0.86, mh * 0.8, 0.05, W.black, { y: my, z: -0.13 }));
     // The panel's glass, switched off: dark, but it catches the shop's lights.
     body.add(box(mw, mh, 0.002, W.screenOff, { y: my, z: -0.0745, cast: false }));
     monitorAt.position.set(0, my, -0.074);
@@ -176,6 +215,7 @@ function makeCart(kind) {
     const key = (mw / mh).toFixed(2);
     if (key !== idleKey) { idleKey = key; idleMat.map?.dispose(); idleMat.map = idleScreen(kind, mw / mh); idleMat.needsUpdate = true; }
     panel.w = cw; panel.h = ch;
+    realize(body);
   };
   /** Pointed at from across the shop: the screen brightens, the way a hovered thing does. @param {boolean} on */
   const hover = (on) => { idleMat.color.setScalar(on ? 1.35 : 1); };
@@ -212,6 +252,8 @@ const AT = {
   standCart: new THREE.Vector3(2.45, 0, 1.9),
   desk: new THREE.Vector3(0, 0, 5.2),
 };
+/** Where on the dyno its rollers are: under the driven (rear) wheels. */
+const ROLLER_Z = 1.0;
 
 /**
  * A shop sign as a sign maker would make it: a steel panel painted the shop's dark colour,
@@ -284,51 +326,112 @@ function closedDoor(w, h) {
  * An engine on a stand: the build bench's, where it is built a part at a time, or the run
  * stand's, plumbed to a radiator and an exhaust so it can be started. Both hold the same
  * engine, drawn from the build (`setSpec`); only the run stand's turns (`update`).
- * @param {THREE.Vector3} at @param {boolean} run
+ *
+ * In the stand's own frame the engine hangs off a mounting head at `MOUNT`, its crank
+ * along +x, belt end outward. `turn` is the stand's heading on the floor.
+ * @param {THREE.Vector3} at @param {boolean} run @param {number} turn
  */
-function makeEngineStand(at, run) {
+function makeEngineStand(at, run, turn) {
   const group = new THREE.Group();
   group.position.copy(at);
-  // Turned a little toward you, so you see the belt end and the intake side together.
-  group.rotation.y = -0.5;
-  const c = run ? W.engine.standDark : W.engine.stand;
+  group.rotation.y = turn;
   const duct = new THREE.Group();
   duct.position.copy(at);
-  duct.rotation.y = group.rotation.y;
-  // An engine stand as one is built: a base on four casters, an upright post at the back,
-  // and a mounting head on it whose four arms bolt to the engine's bellhousing face, so the
-  // engine hangs off the head with the floor clear under it.
+  duct.rotation.y = turn;
   const POST_X = -0.66;
-  group.add(box(0.1, 0.06, 0.9, c, { x: POST_X, y: 0.1 }));
-  group.add(box(1.16, 0.06, 0.1, c, { x: POST_X + 0.58, y: 0.1 }));
-  group.add(box(0.1, 0.06, 0.72, c, { x: POST_X + 1.12, y: 0.1 }));
-  for (const [x, z] of [[POST_X, -0.4], [POST_X, 0.4], [POST_X + 1.12, -0.32], [POST_X + 1.12, 0.32]]) group.add(cyl(0.05, 0.05, 0.07, W.black, { axis: 'z', x, y: 0.04, z, edge: false }));
-  group.add(box(0.1, 0.9, 0.1, c, { x: POST_X, y: 0.55 }));
-  // The head: a tube off the post, a turning plate, and four arms in an X to the block.
-  group.add(cyl(0.04, 0.04, 0.16, W.engine.standDark, { axis: 'x', x: POST_X + 0.1, y: 0.95, edge: false }));
-  group.add(cyl(0.11, 0.11, 0.03, W.engine.standDark, { axis: 'x', x: POST_X + 0.19, y: 0.95, edge: false }));
-  for (const a of [Math.PI / 4, -Math.PI / 4]) {
-    const arm = box(0.03, 0.44, 0.04, c, { x: POST_X + 0.21, y: 0.95 });
-    arm.rotation.x = a;
-    group.add(arm);
+  const MOUNT = new THREE.Vector3(POST_X + 0.24, 0.95, 0);
+  /** Sized to the engine on it: the run stand's frame and radiator. */
+  const fitted = new THREE.Group();
+  group.add(fitted);
+  if (!run) {
+    // An engine stand as one is built: a crossbar under the post on two casters, two legs
+    // splayed forward under the engine to two more, the post braced to them, and on top
+    // the head, a sleeve the faceplate turns in, its four arms bolted to the bellhousing.
+    const c = W.toolRed;
+    const legY = 0.13;
+    group.add(box(0.07, 0.07, 0.78, c, { x: POST_X, y: legY }));
+    for (const s of [-1, 1]) {
+      group.add(strut([POST_X, legY, s * 0.08], [POST_X + 1.0, legY, s * 0.36], 0.07, 0.07, c));
+      group.add(caster(POST_X, s * 0.36, 0.04), caster(POST_X + 1.0, s * 0.36, 0.04));
+    }
+    group.add(box(0.08, 0.8, 0.08, c, { x: POST_X, y: legY + 0.4 }));
+    group.add(strut([POST_X + 0.04, 0.55, 0], [POST_X + 0.42, legY + 0.03, 0], 0.05, 0.05, c));
+    group.add(cyl(0.05, 0.05, 0.22, c, { axis: 'x', x: POST_X + 0.08, y: MOUNT.y, edge: false }));
+    // The locking pin's T-handle on the sleeve, and the faceplate.
+    group.add(cyl(0.012, 0.012, 0.12, W.metalLight, { x: POST_X + 0.12, y: MOUNT.y + 0.1, edge: false }));
+    group.add(cyl(0.012, 0.012, 0.1, W.metalLight, { axis: 'z', x: POST_X + 0.12, y: MOUNT.y + 0.16, edge: false }));
+    group.add(cyl(0.1, 0.1, 0.025, W.metalDark, { axis: 'x', x: POST_X + 0.2, y: MOUNT.y, seg: 18, edge: false }));
+    for (const [dy, dz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const end = [POST_X + 0.215, MOUNT.y + dy * 0.2, dz * 0.2];
+      group.add(strut([POST_X + 0.215, MOUNT.y, 0], /** @type {[number, number, number]} */ (end), 0.04, 0.012, W.metalDark));
+      group.add(cyl(0.014, 0.014, 0.06, W.metalLight, { axis: 'x', x: end[0] + 0.02, y: end[1], z: end[2], edge: false }));
+    }
+  } else {
+    // A run stand: a welded frame on casters that carries the engine on its own mounts, a
+    // plate at the back that takes the bellhousing and the starter, the radiator and its
+    // fan in front, the fuel cell and battery low in the frame.
+    const c = W.engine.standDark;
+    group.add(box(0.06, 1.05, 0.06, c, { x: POST_X + 0.1, y: 0.75, z: 0.3 }));
+    group.add(box(0.06, 1.05, 0.06, c, { x: POST_X + 0.1, y: 0.75, z: -0.3 }));
+    group.add(box(0.06, 0.06, 0.66, c, { x: POST_X + 0.1, y: 1.28 }));
+    group.add(box(0.025, 0.56, 0.6, W.metalDark, { x: POST_X + 0.2, y: MOUNT.y }));
+    group.add(cyl(0.05, 0.05, 0.2, W.black, { axis: 'x', x: POST_X + 0.08, y: MOUNT.y - 0.2, z: 0.17, seg: 12 }));
+    group.add(box(0.26, 0.2, 0.17, W.black, { x: POST_X - 0.02, y: 0.3, z: -0.16 }));
+    for (const [z, col] of /** @type {Array<[number, string]>} */ ([[-0.21, W.taillight], [-0.11, W.black]])) group.add(cyl(0.015, 0.015, 0.03, col, { x: POST_X + 0.05, y: 0.41, z, edge: false }));
+    group.add(box(0.32, 0.24, 0.3, W.metal, { x: POST_X + 0.5, y: 0.34 }));
+    group.add(cyl(0.035, 0.035, 0.03, W.metalLight, { x: POST_X + 0.6, y: 0.47, z: 0.08, edge: false }));
   }
-  // The bellhousing face the arms bolt to; the engine runs forward of it, crank along x.
   const mount = new THREE.Group();
-  mount.position.set(POST_X + 0.24, 0.95, 0);
+  mount.position.copy(MOUNT);
   mount.rotation.y = Math.PI / 2;
   group.add(mount);
   if (run) {
-    // A run stand's radiator ahead of the belt end, and its exhaust out the back.
-    group.add(box(0.08, 0.6, 0.5, W.engine.cooler, { x: 0.8, y: 0.75 }));
     // The exhaust leaves behind the head and goes up into the shop's extraction: a flexible
     // hose dropped from the ceiling, its cone pushed over the tailpipe, as on any run stand
-    // indoors. (A pipe that ended in the air read as a log on the floor.)
-    // From the manifold side, behind the engine as you face it, so the hose stays out of the view.
-    // Its own group beside the stand's, so the station's framing fits the stand, not the hose.
+    // indoors. From the manifold side, behind the engine as you face it, so the hose stays
+    // out of the view. Its own group beside the stand's, so the station's framing fits the
+    // stand, not the hose.
     duct.add(cyl(0.045, 0.045, 0.5, W.steel, { axis: 'z', x: 0.25, y: 0.55, z: -0.5, edge: false }));
     duct.add(cyl(0.09, 0.055, 0.16, W.engine.hose, { axis: 'z', x: 0.25, y: 0.55, z: -0.8, edge: false }));
-    duct.add(cyl(0.075, 0.075, 3.9, W.engine.hose, { x: 0.25, y: 2.55, z: -0.92, edge: false }));
+    // Aluminium flex, its ribs every hand's width.
+    duct.add(cyl(0.075, 0.075, 3.9, W.metal, { x: 0.25, y: 2.55, z: -0.92, edge: false }));
+    for (let y = 0.7; y < 4.5; y += 0.12) duct.add(cyl(0.08, 0.08, 0.025, W.metalDark, { x: 0.25, y, z: -0.92, edge: false, cast: false }));
   }
+  /**
+   * The run stand's frame and cooling, built to the engine's length: base rails under it,
+   * the front mounts where its block is, the radiator a hand's width off its pulleys.
+   * @param {number} front x of the engine's front face in the stand's frame
+   */
+  const fit = (front) => {
+    fitted.clear();
+    if (!run) return;
+    const c = W.engine.standDark;
+    const x0 = POST_X - 0.15;
+    const x1 = front + 0.42;
+    for (const z of [-0.36, 0.36]) {
+      fitted.add(box(x1 - x0, 0.08, 0.08, c, { x: (x0 + x1) / 2, y: 0.17, z }));
+      fitted.add(caster(x0 + 0.06, z, 0.05), caster(x1 - 0.06, z, 0.05));
+    }
+    for (const x of [x0 + 0.04, POST_X + 0.5, x1 - 0.04]) fitted.add(box(0.08, 0.06, 0.64, c, { x, y: 0.17 }));
+    // Front mounts: a post each side up to a rubber mount on a bracket to the block.
+    const mx = MOUNT.x + (front - MOUNT.x) * 0.72;
+    fitted.add(box(0.08, 0.06, 0.64, c, { x: mx, y: 0.17 }));
+    for (const s of [-1, 1]) {
+      fitted.add(box(0.06, 0.48, 0.06, c, { x: mx, y: 0.44, z: s * 0.3 }));
+      fitted.add(cyl(0.04, 0.04, 0.05, W.rubber, { x: mx, y: 0.7, z: s * 0.3, edge: false }));
+      fitted.add(strut([mx, 0.72, s * 0.3], [mx, 0.78, s * 0.19], 0.05, 0.02, W.metalDark));
+    }
+    // The radiator on two uprights, its fan's shroud on the engine side, the hoses over.
+    const rx = front + 0.24;
+    for (const s of [-1, 1]) fitted.add(box(0.05, 0.86, 0.05, c, { x: rx, y: 0.6, z: s * 0.34 }));
+    fitted.add(box(0.06, 0.56, 0.62, W.engine.cooler, { x: rx, y: 0.92 }));
+    for (let k = 0; k < 9; k += 1) fitted.add(box(0.062, 0.006, 0.58, W.metalDark, { x: rx, y: 0.68 + k * 0.06, edge: false, cast: false }));
+    fitted.add(box(0.05, 0.5, 0.54, W.black, { x: rx - 0.055, y: 0.92 }));
+    fitted.add(cyl(0.05, 0.05, 0.05, W.black, { axis: 'x', x: rx - 0.1, y: 0.92, seg: 12 }));
+    fitted.add(cyl(0.025, 0.025, 0.04, W.metalLight, { x: rx, y: 1.22, z: 0.2, edge: false }));
+    fitted.add(strut([rx - 0.03, 1.12, -0.18], [front - 0.02, 1.15, -0.04], 0.045, 0.045, W.engine.hose, { round: true }));
+    fitted.add(strut([rx - 0.03, 0.72, 0.18], [front - 0.02, 0.92, 0.04], 0.045, 0.045, W.engine.hose, { round: true }));
+  };
   /** @type {ReturnType<typeof makeEngine>|null} */
   let engine = null;
   // A part going on: the engine settles on its mount, as it does when you bolt something to it.
@@ -345,6 +448,7 @@ function makeEngineStand(at, run) {
       // Its back face against the head, hanging at the head's height.
       engine.group.position.set(0, -0.4, ((engine.size.len - 0.2) / 2 + 0.06) * 1.25);
       mount.add(engine.group);
+      fit(MOUNT.x + (engine.size.len - 0.2 + 0.12) * 1.25);
       if (jolt) settle = 1;
     },
     /** @param {number} dt @param {number} rpm */
@@ -384,8 +488,13 @@ export function buildShopScene(stage, init) {
   const floor = floorPlane(16, 14, W.floorShop, { y: 0 });
   floor.material = concreteFloor(16, 14);
   root.add(floor);
-  // The shop, dressed: benches, tools, racking, jacks, the hoist, lights (shopDetail.js).
-  dressShop(root);
+  // The shop, dressed: its frames, benches, tools, racking, jacks, the hoist (shopDetail.js).
+  // None of it moves, so it is drawn as a few merged meshes, one per material.
+  const dressing = new THREE.Group();
+  root.add(dressing);
+  dressShop(dressing);
+  realize(dressing);
+  mergeStatic(dressing);
   const wallC = W.wallBase;
   // A ceiling, so it is a room: from inside you see its roof, not the street's.
   const ceiling = box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 });
@@ -464,7 +573,7 @@ export function buildShopScene(stage, init) {
     scene.add(key, key.target);
   }
   // ---- the dyno, and a car on it ----
-  let dyno = makeDyno(true, { monitor: false, fanZ: -2.8 });
+  let dyno = makeDyno(true, { monitor: false, fanZ: -2.8, rollerZ: ROLLER_Z });
   dyno.position.copy(AT.dyno);
   root.add(dyno);
   /** @type {ReturnType<typeof makeCar>|null} */
@@ -477,6 +586,36 @@ export function buildShopScene(stage, init) {
   root.add(lift);
   /** @type {ReturnType<typeof makeCar>|null} */
   let liftCar = null;
+  /** What holds the car on the dyno: its straps, the extraction on its tailpipe. */
+  const rigging = new THREE.Group();
+  root.add(rigging);
+  /**
+   * Strap the car down and put the extraction on its exhaust, as nobody runs a car on the
+   * rollers without both: a ratchet strap from each corner of the car to a ring in the
+   * deck, and a hose from the tailpipe along the floor to the duct in the wall.
+   * @param {number} len the car's length @param {number} z its centre
+   */
+  const rigDynoCar = (len, z) => {
+    const x = AT.dyno.x;
+    for (const e of [-1, 1]) {
+      // e: -1 the nose (toward the door), 1 the tail.
+      const ringZ = AT.dyno.z + e * 2.25;
+      for (const sd of [-1, 1]) {
+        const a = /** @type {[number, number, number]} */ ([x + sd * 1.05, 0.04, ringZ]);
+        const b = /** @type {[number, number, number]} */ ([x + sd * 0.62, 0.3, z + e * (len / 2 - 0.55)]);
+        rigging.add(strut(a, b, 0.035, 0.006, W.toolYellow, { cast: false }));
+        const r = strut([a[0] + (b[0] - a[0]) * 0.35, a[1] + (b[1] - a[1]) * 0.35, a[2] + (b[2] - a[2]) * 0.35], [a[0] + (b[0] - a[0]) * 0.45, a[1] + (b[1] - a[1]) * 0.45, a[2] + (b[2] - a[2]) * 0.45], 0.06, 0.04, W.metalDark);
+        rigging.add(r);
+      }
+    }
+    // The tailpipe is left of centre, seen from behind the car.
+    const tx = x - 0.5;
+    const tz = z + len / 2 + 0.04;
+    rigging.add(cyl(0.09, 0.06, 0.18, W.engine.hose, { axis: 'z', x: tx, y: 0.28, z: tz + 0.12, edge: false }));
+    rigging.add(strut([tx, 0.28, tz + 0.2], [tx, 0.05, tz + 0.4], 0.08, 0.08, W.engine.hose, { round: true }));
+    rigging.add(strut([tx, 0.05, tz + 0.4], [-7.78, 0.05, tz + 0.4], 0.08, 0.08, W.engine.hose, { round: true }));
+    rigging.add(box(0.14, 0.34, 0.26, W.metalDark, { x: -7.9, y: 0.22, z: tz + 0.4 }));
+  };
   /**
    * Put the cars in: the one on the dyno and the one up on the lift, each a look (a body
    * and a colour) or nothing, which leaves the rollers bare or the lift down.
@@ -486,17 +625,24 @@ export function buildShopScene(stage, init) {
     const rollers = cars.rollers !== false;
     if (!!dyno.userData.rollers !== rollers) {
       root.remove(dyno);
-      dyno = makeDyno(rollers, { monitor: false, fanZ: -2.8 });
+      dyno = makeDyno(rollers, { monitor: false, fanZ: -2.8, rollerZ: ROLLER_Z });
       dyno.position.copy(AT.dyno);
       root.add(dyno);
     }
     if (dynoCar) root.remove(dynoCar.group);
     if (liftCar) root.remove(liftCar.group);
+    rigging.clear();
     dynoCar = cars.dyno ? makeCar({ body: 'coupe', color: 'orange', ...cars.dyno }) : null;
     if (dynoCar) {
-      dynoCar.group.position.copy(AT.dyno);
+      // Its rear wheels cradled on the rollers, the fan a stride off its nose.
+      const { len, wheelbase } = dynoCar.dims;
+      const z = AT.dyno.z + ROLLER_Z - wheelbase / 2;
+      dynoCar.group.position.set(AT.dyno.x, 0, z);
       dynoCar.group.rotation.y = Math.PI;
       root.add(dynoCar.group);
+      const fan = dyno.userData.fan?.parent;
+      if (fan) fan.position.z = z - AT.dyno.z - len / 2 - 0.42;
+      if (rollers) rigDynoCar(len, z);
     }
     liftCar = cars.lift ? makeCar({ body: 'hatch', color: 'teal', ...cars.lift }) : null;
     lift.userData.setHeight?.(liftCar ? 1.5 : 0.1);
@@ -512,8 +658,9 @@ export function buildShopScene(stage, init) {
   // ---- the engine: on the build bench, and on the run stand ----
   // The same engine on both, as the shop's one engine moves from one to the other: built on
   // the bench a part at a time, started and run on the stand.
-  const buildStand = makeEngineStand(AT.build, false);
-  const runStand = makeEngineStand(AT.stand, true);
+  // Each turned a little toward you, so you see the belt end and the intake side together.
+  const buildStand = makeEngineStand(AT.build, false, -0.5);
+  const runStand = makeEngineStand(AT.stand, true, -0.5);
   for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group, st.duct); }
   realize(root);
   let engineSpecKey = JSON.stringify(init.engineSpec ?? {});
@@ -582,17 +729,28 @@ export function buildShopScene(stage, init) {
   const desk = new THREE.Group();
   desk.userData.spot = 'laptop';
   desk.position.copy(AT.desk);
-  desk.add(box(3.2, 0.08, 1.2, W.woodLight, { y: 0.8 }));
-  for (const x of [-1.5, 1.5]) desk.add(box(0.1, 0.8, 1.0, W.woodDark, { x, y: 0.4, edge: false }));
-  desk.add(box(0.36, 0.02, 0.26, W.black, { x: 0.9, y: 0.85, z: 0.1 }));
-  const mug = cyl(0.05, 0.05, 0.12, W.toolRed, { x: -1.1, y: 0.9, z: 0.2, edge: false });
+  // A shop desk, not an office one: a hardwood top on a steel frame, a drawer pedestal under
+  // one end, and on it what the day's work needs: the laptop, the job's paperwork, a mug.
+  desk.add(box(2.2, 0.05, 0.85, W.woodLight, { y: 0.795 }));
+  desk.add(box(2.2, 0.06, 0.03, W.metalDark, { y: 0.74, z: 0.41, edge: false }));
+  for (const x of [-1.05, 1.05]) for (const z of [-0.37, 0.37]) desk.add(box(0.05, 0.77, 0.05, W.metalDark, { x, y: 0.385, z }));
+  for (const x of [-1.05, 1.05]) desk.add(box(0.04, 0.04, 0.7, W.metalDark, { x, y: 0.12 }));
+  desk.add(box(0.45, 0.66, 0.72, W.engine.standDark, { x: 0.74, y: 0.4 }));
+  for (const y of [0.62, 0.42, 0.2]) desk.add(box(0.26, 0.02, 0.02, W.metalLight, { x: 0.74, y, z: 0.37, edge: false }));
+  // A work order on a clipboard, and a printed dyno sheet beside it.
+  desk.add(box(0.24, 0.012, 0.32, W.woodDark, { x: -0.62, y: 0.826, z: 0.12 }));
+  desk.add(box(0.21, 0.004, 0.28, W.white, { x: -0.62, y: 0.834, z: 0.13, edge: false }));
+  desk.add(box(0.08, 0.02, 0.03, W.metalLight, { x: -0.62, y: 0.84, z: -0.01, edge: false }));
+  const sheet = box(0.21, 0.003, 0.29, W.white, { x: -0.92, y: 0.822, z: 0.06, edge: false });
+  sheet.rotation.y = 0.25;
+  desk.add(sheet);
+  const mug = cyl(0.045, 0.04, 0.1, W.plaster, { x: 0.82, y: 0.87, z: -0.1, edge: false });
   desk.add(mug);
   // The laptop: a base, and a lid on a hinge at its back edge.
   const laptop = new THREE.Group();
-  laptop.position.set(0, 0.84, 0.1);
-  // Black, and unlit so the shop's light cannot grey it: the sketch pass keeps a black
-  // thing black, inked in.
-  const black = new THREE.MeshBasicMaterial({ color: W.black });
+  laptop.position.set(0, 0.835, 0.1);
+  // Space grey aluminium, lit like everything else on the desk.
+  const black = new THREE.MeshStandardMaterial({ color: W.engine.coverDark, metalness: 0.6, roughness: 0.38 });
   const slab = (w, h, d, z = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), black); m.position.z = z; return m; };
   laptop.add(slab(0.7, 0.03, 0.48));
   const hinge = new THREE.Group();

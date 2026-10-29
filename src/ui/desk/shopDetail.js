@@ -14,8 +14,8 @@
  */
 
 import { world as W } from '../tokens.js';
-import { THREE, box, cyl, glow } from '../world/gfx.js';
-import { makeBarrel, makePoster, makeShelf, makeToolChest, makeTyreStack, makeWorkbench } from '../world/models/props.js';
+import { THREE, box, cyl, glow, strut, toon, tyreGeometry } from '../world/gfx.js';
+import { makeBarrel, makeShelf, makeToolChest, makeTyreStack, makeWorkbench } from '../world/models/props.js';
 
 /** A flat thing laid on the floor (a stain, a line, a mat). */
 function decal(w, d, color, x, z, o = {}) {
@@ -78,7 +78,7 @@ function floorJack() {
 /** An axle stand. */
 function axleStand() {
   const g = new THREE.Group();
-  g.add(cyl(0.06, 0.18, 0.4, W.toolBlue, { y: 0.2, seg: 4 }));
+  g.add(cyl(0.06, 0.18, 0.4, W.toolRed, { y: 0.2, seg: 4 }));
   g.add(cyl(0.03, 0.03, 0.25, W.metalLight, { y: 0.5, edge: false }));
   g.add(box(0.12, 0.03, 0.06, W.metalDark, { y: 0.63, edge: false }));
   return g;
@@ -149,7 +149,7 @@ function clock() {
 function windowPane(w, h) {
   const g = new THREE.Group();
   g.add(box(w + 0.16, h + 0.16, 0.08, W.metalDark, { edge: false }));
-  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glow(W.glass, 0.9));
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glow(W.glassFrost));
   pane.position.z = 0.05;
   g.add(pane);
   for (let i = 1; i < 3; i += 1) g.add(box(0.04, h, 0.03, W.metalDark, { x: -w / 2 + (w / 3) * i, z: 0.06, edge: false }));
@@ -157,20 +157,32 @@ function windowPane(w, h) {
   return g;
 }
 
-/** A strip light in the ceiling. */
-function stripLight(len) {
+/**
+ * One of the building's steel portal frames: an I-section column up each side wall and a
+ * rafter across under the roof, haunched where they meet. The frames are what give a
+ * shop its rhythm; the walls are only cladding between them.
+ */
+function portalFrame() {
   const g = new THREE.Group();
-  g.add(box(len, 0.08, 0.3, W.metalDark, { edge: false }));
-  const tube = new THREE.Mesh(new THREE.BoxGeometry(len - 0.1, 0.04, 0.16), glow(W.headlight));
-  tube.position.y = -0.05;
-  g.add(tube);
+  const H = 4.9;
+  for (const s of [-1, 1]) {
+    const x = s * 7.88;
+    g.add(box(0.02, H, 0.22, W.steel, { x: x - s * 0.12, y: H / 2 }));
+    g.add(box(0.24, H, 0.02, W.steel, { x, y: H / 2 }));
+    g.add(box(0.36, 0.02, 0.32, W.metalDark, { x, y: 0.01, edge: false }));
+    g.add(strut([x - s * 0.12, H - 0.7, 0], [x - s * 1.1, H - 0.12, 0], 0.22, 0.02, W.steel));
+  }
+  g.add(box(15.5, 0.24, 0.02, W.steel, { y: H - 0.06 }));
+  g.add(box(15.5, 0.02, 0.18, W.steel, { y: H - 0.17 }));
   return g;
 }
 
 /** A loose wheel, leaning or lying. */
 function wheel() {
   const g = new THREE.Group();
-  g.add(cyl(0.34, 0.34, 0.22, W.tyre, { axis: 'z' }));
+  const tyre = new THREE.Mesh(tyreGeometry(0.34, 0.22).rotateX(Math.PI / 2), toon(W.tyre));
+  tyre.castShadow = true;
+  g.add(tyre);
   g.add(cyl(0.22, 0.22, 0.23, W.rim, { axis: 'z', edge: false }));
   g.add(cyl(0.06, 0.06, 0.24, W.rimDark, { axis: 'z', edge: false }));
   return g;
@@ -185,6 +197,9 @@ function wheel() {
  */
 export function dressShop(root) {
   const add = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = ry; root.add(o); return o; };
+
+  // ---- the building: its steel frames, the ceiling's lights hung from their rafters ----
+  for (const z of [-3.55, 0.15, 3.5]) add(portalFrame(), 0, 0, z);
 
   // ---- floor: sealed concrete, bay lines, stains, a drain ----
   for (const [cx, cz] of [[-4.6, -1.6], [4.6, -1.6]]) {
@@ -216,12 +231,13 @@ export function dressShop(root) {
   add(makeWorkbench(), -4.7, 0, -6.4);
   add(makeWorkbench(), -2.4, 0, -6.4);
   add(pegboard(4.4, 1.2), -3.55, 1.85, -6.96);
+  // A bench vice: its body, the fixed and moving jaws, the screw's handle.
   const vice = new THREE.Group();
-  vice.add(box(0.2, 0.16, 0.3, W.toolBlue));
-  vice.add(box(0.06, 0.06, 0.4, W.metalLight, { y: 0.02, z: 0.15, edge: false }));
-  add(vice, -5.6, 1.08, -6.3);
-  add(cyl(0.12, 0.1, 0.2, W.toolYellow, { edge: false }), -1.8, 1.09, -6.3);
-  add(box(0.4, 0.04, 0.3, W.metalLight, { edge: false }), -3.0, 1.0, -6.3);
+  vice.add(box(0.12, 0.08, 0.18, W.toolBlue, { y: -0.02 }));
+  vice.add(box(0.2, 0.16, 0.12, W.toolBlue, { y: 0.08, z: -0.04 }));
+  vice.add(box(0.2, 0.14, 0.06, W.toolBlue, { y: 0.08, z: 0.08 }));
+  vice.add(cyl(0.012, 0.012, 0.3, W.metalLight, { axis: 'z', y: 0.06, z: 0.2, edge: false }));
+  add(vice, -5.6, 1.02, -6.3);
 
   // ---- back wall, right of the door: racking, drums, the compressor ----
   add(makeShelf(4), 6.4, 0, -6.6);
@@ -232,14 +248,10 @@ export function dressShop(root) {
   add(extinguisher(), 5.2, 0.9, -6.92);
   add(windowPane(1.8, 0.9), 6.4, 3.6, -6.98);
 
-  // ---- left wall: tyres, wheels, a second chest, posters, a window ----
+  // ---- left wall: tyres, a second chest, a window ----
   add(makeTyreStack(4), -7.3, 0, -3.0);
   add(makeTyreStack(3), -7.3, 0, -2.2);
-  const w1 = add(wheel(), -7.6, 0.34, 0.9, Math.PI / 2);
-  w1.rotation.z = 0.25;
   add(makeToolChest(W.wallBlack), -7.4, 0, 4.4, Math.PI / 2);
-  add(makePoster(1), -7.95, 2.6, 1.2, Math.PI / 2);
-  add(makePoster(3), -7.95, 2.6, 2.6, Math.PI / 2);
   add(windowPane(2.4, 0.9), -7.98, 3.7, -1.5, Math.PI / 2);
   add(clock(), -7.95, 3.6, 3.8, Math.PI / 2);
 
@@ -250,7 +262,6 @@ export function dressShop(root) {
   add(creeper(), 3.7, 0, 0.1, 1.2);
   add(makeShelf(7), 7.5, 0, 6.0, -Math.PI / 2);
   add(windowPane(2.4, 0.9), 7.98, 3.7, -1.5, -Math.PI / 2);
-  add(makePoster(5), 7.95, 2.6, 1.6, -Math.PI / 2);
   for (const [x, z, r] of [[6.9, -4.6, 0], [6.4, 2.0, 0.4]]) {
     const wl = add(wheel(), x, 0.11, z, r);
     wl.rotation.x = Math.PI / 2;
@@ -260,13 +271,21 @@ export function dressShop(root) {
   add(makeToolChest(), -7.4, 0, 2.6, Math.PI / 2);
   add(engineHoist(), 6.3, 0, 3.4, -Math.PI / 2);
   const cart = new THREE.Group();
-  cart.add(box(0.8, 0.05, 0.5, W.metal, { y: 0.8 }));
-  cart.add(box(0.8, 0.05, 0.5, W.metal, { y: 0.4 }));
-  for (const [x, z] of [[-0.37, -0.22], [0.37, -0.22], [-0.37, 0.22], [0.37, 0.22]]) cart.add(box(0.04, 0.8, 0.04, W.metalDark, { x, y: 0.42, z, edge: false }));
-  cart.add(box(0.3, 0.12, 0.2, W.toolRed, { y: 0.88, x: -0.15, edge: false }));
-  cart.add(cyl(0.06, 0.06, 0.2, W.metalLight, { y: 0.9, x: 0.2, edge: false }));
+  for (const y of [0.42, 0.82]) {
+    cart.add(box(0.8, 0.03, 0.5, W.metal, { y }));
+    cart.add(box(0.8, 0.05, 0.02, W.metal, { y: y + 0.03, z: 0.25, edge: false }));
+    cart.add(box(0.8, 0.05, 0.02, W.metal, { y: y + 0.03, z: -0.25, edge: false }));
+  }
+  for (const [x, z] of [[-0.37, -0.22], [0.37, -0.22], [-0.37, 0.22], [0.37, 0.22]]) {
+    cart.add(box(0.03, 0.8, 0.03, W.metalDark, { x, y: 0.47, z, edge: false }));
+    cart.add(cyl(0.04, 0.04, 0.03, W.rubber, { axis: 'x', x, y: 0.04, z, edge: false }));
+  }
+  // On it, what goes on next: pistons on their rods, a timing set, a torque wrench.
+  for (let i = 0; i < 4; i += 1) {
+    cart.add(cyl(0.045, 0.045, 0.06, W.metalLight, { x: -0.28 + i * 0.11, y: 0.88, z: -0.08, seg: 12, edge: false }));
+    cart.add(box(0.02, 0.12, 0.02, W.metal, { x: -0.28 + i * 0.11, y: 0.92, z: 0.04, edge: false }));
+  }
+  cart.add(box(0.2, 0.04, 0.16, W.crate, { x: 0.24, y: 0.86, z: -0.05 }));
+  cart.add(box(0.6, 0.06, 0.08, W.wallBlack, { y: 0.47, z: 0.05 }));
   add(cart, -3.4, 0, 1.9, 0.3);
-
-  // ---- ceiling: strip lights ----
-  for (const x of [-4.6, 4.6]) for (const z of [-3.5, 0.5]) add(stripLight(2.4), x, 5.0, z, Math.PI / 2);
 }

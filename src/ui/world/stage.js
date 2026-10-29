@@ -82,7 +82,11 @@ export function createStage(canvas, opts = {}) {
       strength: { value: opts.real ? 0.5 : 0.62 }, thresh: { value: 0.035 }, inkNear: { value: VIEW.walk.ink[0] }, inkFar: { value: VIEW.walk.ink[1] },
       sketch: { value: opts.sketch && !opts.real ? 1 : 0 }, hatch: { value: opts.hatch === false ? 0 : 1 }, lw: { value: 1 },
       inkCol: { value: new THREE.Color(W.sketch.ink) },
+      projScale: { value: 1 },
     },
+    // The shop on a desktop: contact shading where things meet (see `ao` in the shader).
+    // A phone or tablet goes without; its frame rate matters more.
+    defines: opts.real && !(typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches) ? { AO: 1 } : {},
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
       uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 texel; uniform float near; uniform float far; uniform float strength; uniform float thresh; uniform float inkNear; uniform float inkFar;
@@ -97,6 +101,34 @@ export function createStage(canvas, opts = {}) {
       // Inverse view depth is linear across a flat surface at any angle, so its second difference is
       // zero on a floor or a wall and spikes only on a silhouette or a fold.
       float invZ(vec2 uv){ float d = texture2D(tDepth, uv).x; return (far - d * (far - near)) / (near * far); }
+      #ifdef AO
+      uniform float projScale;
+      // Ambient occlusion from the depth alone: light that cannot reach into a corner, under
+      // a car, where a stand's foot meets the floor. Each pair of samples either side of the
+      // pixel predicts, from one, where the other would be if the surface were flat (inverse
+      // depth is linear across a plane); a sample nearer than that is something in the way.
+      // A plane at any slope is left alone, and an occluder far in front (a cart against the
+      // back wall) is not counted, so nothing grows a halo.
+      float ao(vec2 uv, float w){
+        float z0 = 1.0 / w;
+        const float R = 0.32;
+        float rp = clamp(R * projScale / z0, 2.0, 90.0);
+        float occ = 0.0;
+        for (int i = 0; i < 8; i++) {
+          float a = float(i) * 0.3927;
+          for (int k = 1; k <= 2; k++) {
+            vec2 o = vec2(cos(a), sin(a)) * rp * (float(k) * 0.5) * texel;
+            float wa = invZ(uv + o); float wb = invZ(uv - o);
+            float pa = 2.0 * w - wb; float pb = 2.0 * w - wa;
+            float ha = pa > 1e-5 ? 1.0 / pa - 1.0 / wa : 0.0;
+            float hb = pb > 1e-5 ? 1.0 / pb - 1.0 / wb : 0.0;
+            occ += smoothstep(0.0, R * 0.35, ha) * (1.0 - smoothstep(R, R * 3.0, ha));
+            occ += smoothstep(0.0, R * 0.35, hb) * (1.0 - smoothstep(R, R * 3.0, hb));
+          }
+        }
+        return occ / 32.0;
+      }
+      #endif
       void main(){
         // The world holds still: edges are found where they are, so walls and floors stay
         // straight. (A shaking pen here made the whole room look drunk.)
@@ -121,6 +153,9 @@ export function createStage(canvas, opts = {}) {
         // Far scenery sits in the haze: no ink on it, or the hills turn to wire.
         edge *= 1.0 - smoothstep(inkNear, inkFar, 1.0 / max(w, 1e-5));
         if (sketch < 0.5) {
+          #ifdef AO
+            c.rgb *= 1.0 - 0.75 * ao(uv, w);
+          #endif
           c.rgb *= 1.0 - edge * strength;
           #ifdef TONE_MAPPING
             c.rgb = toneMapping(c.rgb);
@@ -291,6 +326,8 @@ export function createStage(canvas, opts = {}) {
   };
   function drawOutlined() {
     if (sky.group.visible) sky.follow(camera.position);
+    // Drawn pixels a metre covers at a metre away: how wide the contact shading reaches.
+    post.uniforms.projScale.value = target.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
