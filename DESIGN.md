@@ -89,8 +89,8 @@ direction 6: the laptop's software should look like a native Mac app.
   the player's other tools use, and it costs nothing to load.
 - **Mono only for numbers** (`--mono`): readouts, axis ticks, table cells, the version.
   Prose is never mono.
-- **Scale** (`--fs-*`): 9, 10.5, 12, 13.5, 14.5 and 18 px. The start screen's 30 px
-  title is the one exception, and it is written down where it is used.
+- **Scale** (`--fs-*`): 9, 10.5, 12, 13.5, 14.5 and 18 px. The start screen's 34 px
+  (48 px from the breakpoint) title is the one exception, and it is written down where it is used.
 - **Sentence case.** No letter-spacing and no forced capitals anywhere: `sketch.css`
   turns both off globally (`[data-keep-tracking]` opts out, for real engraved labels
   only). Acronyms that are real stay capitals (VE, AFR, MAP, ECU). Page names in the
@@ -127,11 +127,12 @@ colours out of components, keep the accent from being a status colour, and keep
 ## Layout
 
 - **Desktop**: the laptop or the shop fills the window, and apps open in it as windows.
-- **Phone, portrait**: one column. The start screen puts its dyno sheet under the ways in.
+- **Phone, portrait**: one column. On the start screen each way in is one row, its drawing
+  beside the button.
 - **Phone, landscape** (height under 520 px): two columns again, with the blurbs dropped.
 - Spacing comes from `--sp-*` (3 to 24 px). Software corners are 6 to 8 px, as a Mac's.
-- Left-aligned. Nothing is centred for effect. The start screen's columns are centred as
-  a block, but their contents read from the left edge.
+- Left-aligned. Nothing is centred for effect. The start screen is the one exception: a
+  single graphite window, like the laptop's, with its badge, name and three ways in centred.
 
 ## Components
 
