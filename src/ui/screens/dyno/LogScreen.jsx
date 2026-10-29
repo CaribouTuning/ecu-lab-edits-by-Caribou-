@@ -14,9 +14,27 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { coversRpm, eventTone } from '../../components/eventBands.js';
 import { fixLinks } from '../../components/fixLinks.js';
-import { fixStep, inFixOrder } from '../../components/fixOrder.js';
+import { fixStep, groupByCause } from '../../components/fixOrder.js';
 
 import styles from './LogScreen.module.css';
+
+/**
+ * The screens a fix names, as links.
+ * @param {{fix?: string}} props
+ */
+function EventLinks({ fix }) {
+  const links = fixLinks(fix);
+  if (!links.length) return null;
+  return (
+    <div className={styles.eventLinks} data-tour="log-links">
+      {links.map((l) => (
+        <a key={l.href} href={l.href} className={styles.eventLink}>
+          {l.label}<ArrowUpRight size={12} aria-hidden="true" />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 /**
  * @param {object} props
@@ -63,18 +81,21 @@ export function LogScreen({ flagged = [] }) {
         <div className={styles.events}>
           {result.events.length > 1 && (
             <div className={styles.order} data-testid="log-order">
-              Listed in the order a tuner fixes them: setup, then fuel, then spark, then boost. Each step changes what the next one reads, so fix the top entry and pull again.
+              Grouped by cause, in the order a tuner fixes them: setup, then fuel, then spark, then boost. Each entry is a cause and the symptoms it produced; fix the top one and pull again, and what it caused clears with it.
             </div>
           )}
-          {inFixOrder(result.events).map((e, i) => {
+          {groupByCause(result.events).map(({ root: e, effects }, i) => {
             const step = fixStep(e.type);
             const tone = eventTone(e);
+            // Focus is per entry: the cause's card, or a symptom under it. The first entry
+            // covering the focused RPM, in reading order, is the one scrolled to.
             const focused = coversRpm(e, logFocusRpm);
-            let ref;
-            if (focused && !firstFocusedSeen) {
+            const refFor = (on) => {
+              if (!on || firstFocusedSeen) return undefined;
               firstFocusedSeen = true;
-              ref = firstFocusedRef;
-            }
+              return firstFocusedRef;
+            };
+            const ref = refFor(focused);
             return (
               <div
                 key={i}
@@ -97,12 +118,24 @@ export function LogScreen({ flagged = [] }) {
                 {e.fix && <div className={styles.eventFix} data-tour="log-try"><b className={styles.eventLabel}>Try: </b>{e.fix}</div>}
                 {/* Crosslinks: the screens the fix names, one tap away rather than found
                     by name. */}
-                {fixLinks(e.fix).length > 0 && (
-                  <div className={styles.eventLinks} data-tour="log-links">
-                    {fixLinks(e.fix).map((l) => (
-                      <a key={l.href} href={l.href} className={styles.eventLink}>
-                        {l.label}<ArrowUpRight size={12} aria-hidden="true" />
-                      </a>
+                <EventLinks fix={e.fix} />
+                {/* What this cause also produced in the same part of the pull. Read on its
+                    own each would send the player somewhere else; it clears with the fix
+                    above, and its own detail is there for when it does not. */}
+                {effects.length > 0 && (
+                  <div className={styles.effects} data-testid="log-effects">
+                    <div className={styles.effectsHead}>Caused by this, and cleared by the same fix:</div>
+                    {effects.map((x, j) => (
+                      <details key={j} ref={refFor(coversRpm(x, logFocusRpm))} className={styles.effect} data-tone={eventTone(x)} data-focused={String(coversRpm(x, logFocusRpm))}>
+                        <summary>
+                          <span className={styles.eventStep} data-step={fixStep(x.type).id}>{fixStep(x.type).label}</span>
+                          {x.msg}
+                          {x.impact != null && <span className={styles.eventImpact}> -{x.impact}</span>}
+                        </summary>
+                        {x.cause && <div className={styles.eventCause}><b className={styles.eventLabel}>Why: </b>{x.cause}</div>}
+                        {x.fix && <div className={styles.eventFix}><b className={styles.eventLabel}>If it is still there after the fix above: </b>{x.fix}</div>}
+                        <EventLinks fix={x.fix} />
+                      </details>
                     ))}
                   </div>
                 )}

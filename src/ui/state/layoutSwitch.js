@@ -7,12 +7,17 @@
  * player's own work, so it is carried across cell by cell: every new cell is read off the
  * old table. Where one axis is manifold pressure and the other air per cylinder, the
  * conversion is the ECU's own: the air its VE table traps at that pressure.
+ *
+ * A BUILD change never moves the tables. More boost or a higher limiter than the tables
+ * reach is what a real ECU meets too: past its last breakpoint it reads the edge. The
+ * player extends the axes when they are ready (`extendAxes`), and the new cells are
+ * marked not tuned until they write them.
  */
 
 import {
   BARO_KPA, ECU_LAYOUTS, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
   factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
-  sameLayout, tankFuel, trappedAirGrams,
+  tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
 
 /**
@@ -47,28 +52,57 @@ export function layoutFor(build, choice) {
 }
 
 /**
- * The tune after a BUILD change, on breakpoints that still span the engine: when the
- * engine reaches further (a higher limiter, more boost) or less far than its tables, they
- * are carried onto new axes cell by cell, as tuning software's rescale-axis does — new
- * cells past the old edge take the edge's values, for the player (and the advisor) to
- * work out. Untouched for an engine computer's own breakpoints, which do not move, and
- * when the new axes come out the same.
- *
- * @param {Pick<StoreState, 'build'|'tune'>} state the state AFTER the build change
- * @returns {StoreState['tune']}
+ * Whether the engine reaches past its tables' breakpoints: more boost than the top load
+ * row, or a limiter past the last RPM column. A real ECU reads the edge there; the player
+ * extends the axes when they are ready to tune the new cells (`extendAxes`). Only for
+ * breakpoints sized to the engine: an engine computer's own do not move.
+ * @param {Pick<StoreState, 'build'|'tune'>} state
+ * @returns {boolean}
  */
-export function respanTune(state) {
+export function engineOutgrowsTables(state) {
   const { build, tune } = state;
-  if (!tune.layout || typeof tune.layout !== 'object' || tune.layout.id !== 'engine') return tune;
-  const to = buildLayout(build);
-  if (sameLayout(to, tune.layout)) return tune;
-  const from = tune.layout;
+  if (!tune.layout || typeof tune.layout !== 'object' || tune.layout.id !== 'engine') return false;
+  const want = buildLayout(build).ve;
+  const have = tune.layout.ve;
+  return want.load[0] > have.load[0] + 0.5 || want.rpm[want.rpm.length - 1] > have.rpm[have.rpm.length - 1] + 0.5;
+}
+
+/**
+ * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches
+ * now, as tuning software's rescale-axis does: every cell is carried across, and the
+ * cells past the old edge take the edge's values — exactly what the ECU read there
+ * before, so the engine runs the same until the player tunes them. Those cells are
+ * returned as not tuned. Nothing is calculated for the player.
+ * @param {Pick<StoreState, 'build'|'tune'>} state
+ * @returns {import('./reducer.js').SetLayoutAction}
+ */
+export function extendAxes(state) {
+  return carried(state, buildLayout(state.build));
+}
+
+/**
+ * The SET_LAYOUT carrying the tables cell by cell onto `to`, with the cells past the old
+ * edge (kPa and RPM axes) marked not tuned.
+ * @param {Pick<StoreState, 'build'|'tune'>} state
+ * @param {import('../../sim/layouts.js').Layout} to
+ * @returns {import('./reducer.js').SetLayoutAction}
+ */
+function carried(state, to) {
+  const { tune } = state;
+  const from = layoutById(tune.layout);
   const conv = airmassConversion(state);
+  const past = (axes, fromAxes) => {
+    if (axes.loadUnit !== 'kPa' || fromAxes.loadUnit !== 'kPa') return [];
+    const keys = [];
+    axes.load.forEach((load, ri) => axes.rpm.forEach((rpm, ci) => {
+      if (load > fromAxes.load[0] + 0.5 || rpm > fromAxes.rpm[fromAxes.rpm.length - 1] + 0.5) keys.push(`${ri}:${ci}`);
+    }));
+    return keys;
+  };
   return {
-    ...tune,
-    layout: to,
-    ...moveTables(tune, from, to, conv),
+    type: /** @type {const} */ ('SET_LAYOUT'), layout: to, ...moveTables(tune, from, to, conv),
     baseline: moveTables(tune.baseline, from, to, conv),
+    untuned: { ve: past(to.ve, from.ve), timing: past(to.timing, from.timing), afr: past(to.afr, from.afr) },
   };
 }
 
@@ -105,20 +139,23 @@ export function airmassConversion(state) {
  * The SET_LAYOUT payload that puts the tune on `layoutId`'s breakpoints.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @param {string|null} layoutId an ECU_LAYOUTS id, or `engine` (or null) for breakpoints sized to the engine
- * @returns {{type: 'SET_LAYOUT', layout: import('../../sim/layouts.js').Layout, ve: number[][], timing: number[][], afr: number[][], baseline: {ve: number[][], timing: number[][], afr: number[][]}}}
+ * @returns {import('./reducer.js').SetLayoutAction}
  */
 export function layoutSwitch(state, layoutId) {
   const { build, tune } = state;
   const to = layoutFor(build, layoutId ?? 'engine');
   const preset = build.presetId ? presetById(build.presetId) : null;
-  if (preset && !tune.tablesDirty) {
+  // Untouched tables on a factory engine are its factory calibration, generated afresh on
+  // the new breakpoints. Not once its induction has changed: the factory never wrote a
+  // calibration for a turbo it did not fit, and generating one would be tuning it for the
+  // player. Then the tables are carried across like anyone's.
+  const stockInduction = preset && !!build.turboOn === !!preset.induction.turboOn && !build.blowerId && !build.nitrous;
+  if (preset && !tune.tablesDirty && stockInduction) {
     const f = factoryCalibrationOn(preset, to);
     const tables = { ve: f.ve, timing: f.timing, afr: f.afr };
-    return { type: 'SET_LAYOUT', layout: to, ...tables, baseline: tables };
+    return { type: 'SET_LAYOUT', layout: to, ...tables, baseline: tables, untuned: null };
   }
-  const from = layoutById(tune.layout);
-  const conv = airmassConversion(state);
-  return { type: 'SET_LAYOUT', layout: to, ...moveTables(tune, from, to, conv), baseline: moveTables(tune.baseline, from, to, conv) };
+  return carried(state, to);
 }
 
 /**

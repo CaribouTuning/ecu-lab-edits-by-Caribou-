@@ -83,7 +83,7 @@ export function SparkScreen({ calAdvice, children }) {
             <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} />
+            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">

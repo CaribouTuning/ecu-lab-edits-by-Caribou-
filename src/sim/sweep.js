@@ -12,6 +12,7 @@ import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
+import { bestPowerAfr } from './manifold.js';
 import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
 import { loadFor, needsAirmass, readEcuTable, truthReader } from './layouts.js';
@@ -491,6 +492,24 @@ export function simulateSweep({
       });
     });
   }
+
+  // Manifold pressure past the top of the tables. A real ECU does not extrapolate: past its
+  // last load breakpoint it reads that row, so boost on an NA calibration is fuelled and
+  // timed off the full-throttle naturally aspirated row. Nothing has been filled in for the
+  // boost; the tuner extends the axis and writes those rows. Load-in-kPa axes only: an
+  // air-per-cylinder axis is sized by the ECU's own air estimate, not by boost.
+  const kpaAxes = [layout?.ve, layout?.timing, layout?.afr].filter((a) => a && a.loadUnit === 'kPa');
+  const topKpa = layout ? (kpaAxes.length ? Math.min(...kpaAxes.map((a) => a.load[0])) : Infinity) : LOAD[0];
+  groupRuns(points, (p) => p.map > topKpa + 0.5).forEach((run) => {
+    const peak = run.reduce((a, b) => (b.map > a.map ? b : a));
+    events.push({
+      type: 'pastTable', severity: 3, impact: Math.round(clamp((peak.map - topKpa) / 4, 6, 30)),
+      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+      msg: `Boost past the top of the tables across ${rangeLabel(run)}: up to ${peak.map} kPa, and the tables stop at ${topKpa} kPa`,
+      cause: `An ECU does not guess past its last load breakpoint: above ${topKpa} kPa it reads the ${topKpa} kPa row, so every psi of boost here is fuelled and timed as if it were full throttle without it. That row was written for no boost: its timing is too far advanced for the denser, hotter charge and its fuel target too lean for it. Nobody has tuned these cells yet.`,
+      fix: `On TUNE → SPARK, press Extend the axes to this engine (above the table; it extends all three tables), then tune the new boost rows: on TUNE → FUEL, the best-power target for ${peak.boostPsi.toFixed(0)} psi is about ${bestPowerAfr(peak.boostPsi).toFixed(1)}:1 on gasoline; on TUNE → SPARK, start well below the ${topKpa} kPa row and add timing from the log. The new rows start as a copy of the ${topKpa} kPa row, marked Not tuned, which is exactly what the ECU reads there now.`,
+    });
+  });
 
   groupRuns(points, (p) => p.compressorOver).forEach((run) => {
     const peak = run.reduce((a, b) => (b.boostPsi > a.boostPsi ? b : a));
