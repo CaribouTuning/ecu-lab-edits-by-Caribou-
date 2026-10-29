@@ -34,7 +34,7 @@ import {
   R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
   computeEngineerScore, computePullScore, computeTuningScore,
   applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
-  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount,
+  simulateDragRun, simulateSweep, torqueCurveFromSweep, turbineWithCount, failedPart, FAILURE_MODES,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, read1, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
@@ -66,6 +66,7 @@ import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
 import { Button } from './primitives/Button.jsx';
+import { Note } from './primitives/Note.jsx';
 import { Eyebrow } from './primitives/Eyebrow.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { StatTile } from './primitives/StatTile.jsx';
@@ -300,6 +301,8 @@ export function EcuLabApp() {
   const inCareer = mode === 'career' && career != null;
   // SANDBOX opens with no engine: the engine screens ask for one (EngineStart) until it is chosen.
   const engineMissing = !inCareer && build.engineReady === false;
+  // A failed engine (src/sim/damage.js): it neither pulls nor starts until it is rebuilt.
+  const blown = failedPart(health);
   // An engine-building job opens BUILD: the customer pays for parts. Every other job's
   // car is the customer's as it came in, and BUILD is for looking.
   const jobOnBay = inCareer && career.working ? jobById(career.working) : null;
@@ -489,7 +492,6 @@ export function EcuLabApp() {
     const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
     return clamp((pw / (120000 / rpm)) * 100, 0, 220);
   }, [ve, timing, afr, layout, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
-  }, [ve, afr, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
   // `dutyPreview` is computed here, not in InjectorsScreen, because the score breakdown
   // and dyno payload below read it too.
 
@@ -665,7 +667,7 @@ export function EcuLabApp() {
 
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
-    if (engineMissing) return;
+    if (engineMissing || blown) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     // The reveal animation's own state: `running` gates the RUN button's label and the
@@ -674,7 +676,9 @@ export function EcuLabApp() {
     // owns), so they stay plain field writes.
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
     dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'revealCount', value: 0 });
-    const r = simulateSweep(sweepArgs(loadKpa, ecuBundle));
+    // On the engine as it is: worn parts act on the pull, and one that runs out of life
+    // fails it part way (result.failure).
+    const r = simulateSweep({ ...sweepArgs(loadKpa, ecuBundle), health });
     // Cells TUNE says are past the knock limit that THIS pull did not run: its log cannot
     // show them, so they cost the score here instead of leaving it at "Dialed In". Judged
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
@@ -923,7 +927,7 @@ export function EcuLabApp() {
   // gas temperature — and `audio/engineAudio.js` renders them.
   // These two functions only start and stop the engine.
   const startEngine = () => {
-    if (engineMissing) return;
+    if (engineMissing || blown) return;
     const a = ensureAudio();
     if (a && a.ctx.state === 'suspended') a.ctx.resume();
     dispatch({ type: ACTIONS.LIVE_PATCH, patch: { cranking: true } });
@@ -1521,6 +1525,7 @@ export function EcuLabApp() {
 
         {tab === 'live' && !engineMissing && (!inCareer || career.working) && (
           <div style={{ padding: 16 }}>
+            {blown && <EngineFailed part={blown} onRepair={repairEngine} />}
             <LiveScreen
               tachFullScaleRpm={tachFullScaleRpm}
               onStart={startEngine} onStop={stopEngine}
@@ -1732,8 +1737,9 @@ export function EcuLabApp() {
                 The label names the PHASE, because the pull is now a sequence rather
                 than a single sweep and the button is the only thing on screen that
                 says which part of it you are listening to. */}
+            {blown && <EngineFailed part={blown} onRepair={repairEngine} />}
             <div style={{ marginBottom: 16 }}>
-              <Button size="lg" onClick={doRun} disabled={running}>
+              <Button size="lg" onClick={doRun} disabled={running || !!blown}>
                 <Play size={16} aria-hidden="true" />
                 {!running ? (roadTest ? 'RUN A ROAD TEST' : 'RUN DYNO PULL')
                   : dynoPhase === 'settle' ? 'IDLING…'
@@ -1897,5 +1903,23 @@ export default function EcuLab({ blankStart = false }) {
     <StoreProvider blank={blankStart}>
       <EcuLabApp />
     </StoreProvider>
+  );
+}
+
+/**
+ * What a failed engine says where it would be run: what broke, and the way back.
+ * @param {{part: import('../sim/damage.js').Part, onRepair: () => void}} props
+ */
+function EngineFailed({ part, onRepair }) {
+  const mode = FAILURE_MODES[part];
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <Note tone="danger">
+        <strong>Engine failed: {mode.title.toLowerCase()}.</strong> {mode.cause}
+        <div style={{ marginTop: 8 }}>
+          <Button size="sm" onClick={onRepair}>Rebuild the engine</Button>
+        </div>
+      </Note>
+    </div>
   );
 }

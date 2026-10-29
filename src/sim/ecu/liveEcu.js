@@ -24,6 +24,8 @@ import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
 import { bottlePressurePsi, stepBottle } from '../nitrous.js';
 import { evaluatePoint } from '../point.js';
+import { DAMAGE_PARTS, FAILURE_MODES, failedPart, liveWear, wearEffects } from '../damage.js';
+import { SWEEP_START_RPM, SWEEP_STEP_RPM } from '../sweep.js';
 import { CURVE_RPM, RPM } from '../tables.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
 import { solveInduction } from '../turbo.js';
@@ -132,6 +134,9 @@ export function liveStepEcu(st, dt, input, cfg) {
   const env = cond.env;
   const baro = env.baroKpa;
   const { derived, mods, turboOn, boostCurve, turbine, compressor } = cfg;
+  // The engine's condition (damage.js): what its worn parts do, and whether one has failed.
+  const health = cfg.health ?? null;
+  const wearFx = wearEffects(health, derived.cyl);
   const tables = { ve: cfg.ve, timing: cfg.timing, afr: cfg.afr, layout: cfg.layout ?? null };
   const hw = {
     ...cfg.ecu.hw, derived, mods, turboOn, boostCurve, turbine, compressor,
@@ -139,6 +144,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     injectorCc: cfg.injectorCc, ecuInjectorCc: cfg.ecuInjectorCc, mafScalar: cfg.mafScalar,
     mafErrorBase: cfg.mafErrorBase, fuel: cfg.fuel,
     veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [truthReader(cfg.veTruth, tables.layout?.ve ?? null) ?? ((r, m) => readEcuTable(tables, 've', r, { mapKpa: m }))],
+    ...(wearFx ? { wear: wearFx } : {}),
   };
   const redline = derived.redline ?? 7500;
   // Fuel trims reset from the tuning software — done after a VE correction takes the
@@ -162,6 +168,15 @@ export function liveStepEcu(st, dt, input, cfg) {
   s.elapsed = (s.elapsed ?? 0) + dt;
   e.rpmPrev = st.ecu?.rpmSeen ?? st.rpm;
   e.rpmSeen = st.rpm;
+
+  // ---- a failed engine: it does not turn over until it is rebuilt.
+  s.wear = null;
+  const broken = failedPart(health);
+  if (broken) {
+    s.cranking = false;
+    s.running = false;
+    s.failure = s.failure ?? { part: broken, rpm: Math.round(s.rpm), t: s.elapsed, ...FAILURE_MODES[broken] };
+  } else s.failure = null;
 
   // ---- starter and stall
   const wasRunning = s.running;
@@ -358,7 +373,8 @@ export function liveStepEcu(st, dt, input, cfg) {
     const vvt = VVT_OPTS.find((o) => o.id === hw.vvt) ?? VVT_OPTS[0];
     const inT = vvt.intake ? clamp(read2(cal.vvt.intakeTarget, rpmC, e.sMap), 0, VVT_AUTHORITY.intake) : 0;
     const exT = vvt.exhaust ? clamp(read2(cal.vvt.exhaustTarget, rpmC, e.sMap), 0, VVT_AUTHORITY.exhaust) : 0;
-    const oilKpa = oilPressureKpa(s.rpm, s.oilC, cond.oilHealth ?? 1);
+    // Worn bearings bleed oil through their opened clearances.
+    const oilKpa = oilPressureKpa(s.rpm, s.oilC, cond.oilHealth ?? 1) * (wearFx?.oilPressureFactor ?? 1);
     const oilAuth = clamp(oilKpa / E.PHASER_FULL_OIL_KPA, 0, 1);
     const unlocked = s.oilC >= cal.vvt.minOilC && s.running;
     const phase = (pos, tgt, max) => {
@@ -494,6 +510,26 @@ export function liveStepEcu(st, dt, input, cfg) {
     }
     if (actualKnockDeg > 0) s.knockCount += actualKnockDeg * dt * E.KNOCK_COUNT_PER_DEG_S;
     e.knockV = knockV;
+
+    // Wear: what this step cost each part, at the dyno's own rates per second, plus what
+    // only a running engine does to itself. Whoever holds the health takes it off; if it
+    // takes a part's last life, the engine fails here and stops making power.
+    if (s.running && health) {
+      s.wear = liveWear({
+        pt, dt, rpm: s.rpm, oilKpa, coolantC: s.coolantC,
+        ratedRpm: derived.bottomEnd?.ratedRpm ?? 0,
+        bearingFreeBar: derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR,
+        bearingWearMult: derived.bearingWearMult ?? 1,
+        pointSeconds: SWEEP_STEP_RPM / E.DYNO_SWEEP_RPM_PER_S,
+        pullSeconds: (redline - SWEEP_START_RPM) / E.DYNO_SWEEP_RPM_PER_S,
+      });
+      const gone = DAMAGE_PARTS.find((part) => health[part] - (s.wear?.[part] ?? 0) <= 0);
+      if (gone) {
+        s.failure = { part: gone, rpm: Math.round(s.rpm), t: s.elapsed, ...FAILURE_MODES[gone] };
+        s.running = false;
+        crankNm = 0;
+      }
+    }
 
     // Protections that act on the next step.
     const prot = [];

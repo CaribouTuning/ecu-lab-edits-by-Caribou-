@@ -29,6 +29,7 @@ export * from './cycle.js';
 export * from './airflow.js';
 export * from './point.js';
 export * from './sweep.js';
+export * from './damage.js';
 export * from './presets.js';
 export * from './live.js';
 export * from './acoustics.js';

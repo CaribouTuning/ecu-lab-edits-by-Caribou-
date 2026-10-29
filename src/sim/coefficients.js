@@ -613,6 +613,42 @@ export const COEFF = {
   BEARING_PRESSURE_FREE_BAR: 60,
   BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 80,
   WEAR_BEARING_PER_BAR: 0.075,
+
+  // --- Damage: what worn parts do to the engine, and live-only wear (damage.js) ---
+  // Blow-by at zero piston health, as a share of the trapped charge. A leak-down tester
+  // reads a healthy engine at 5-10% and calls 20-30% worn out; blow-by while running is
+  // a fraction of that leak, because the rings seal harder under combustion pressure.
+  // 12% of the charge is a worn-out engine that still runs, before it fails.
+  DAMAGE_RING_LEAK_MAX: 0.12,
+  // A burnt valve at zero: the charge the burnt cylinder loses back into its port. Half,
+  // because a valve burns at its edge and still seats over most of its face.
+  DAMAGE_VALVE_LEAK_MAX: 0.5,
+  // Below this valve health the burnt cylinder stops firing, down to dead at zero: a
+  // misfire a tuner hears as a miss at idle long before it fails.
+  DAMAGE_VALVE_DEAD_BELOW: 25,
+  // Extra friction from wiped bearings at zero bearing health, Pa of FMEP: about a fifth
+  // of a healthy engine's rubbing friction at speed, the drag of metal touching metal.
+  DAMAGE_BEARING_FMEP_PA: 30000,
+  // Oil pressure a fully worn bottom end loses through its opened clearances. Bearing
+  // clearance doubling roughly halves pressure at a fixed pump, which is what a worn
+  // engine's oil light at hot idle is.
+  DAMAGE_BEARING_OIL_LOSS: 0.5,
+  // The oil film a running bearing needs: the rule of thumb of ten psi a thousand RPM
+  // (69 kPa), and never less than what holds it at idle.
+  DAMAGE_OIL_FILM_KPA_PER_KRPM: 69,
+  DAMAGE_OIL_FILM_MIN_KPA: 70,
+  // Bearing life per second with no oil pressure at all. A dry bearing lasts seconds to
+  // tens of seconds under load: 4% a second spends a whole bottom end in 25 s.
+  DAMAGE_OIL_STARVE_PER_S: 4,
+  // Bearing life per second per unit of overspeed inertia load, (rpm / rated)² − 1:
+  // 10% over the rated speed costs about 2% a second, so a held limiter set past the
+  // rating kills the bottom end in under a minute.
+  DAMAGE_OVERSPEED_PER_S: 10,
+  // Coolant past where a pressurised system boils, and piston and valve life per second
+  // per degree over it: a boiled engine at 135 °C scuffs its pistons and burns valves
+  // over a couple of minutes, as one with a dead fan does.
+  DAMAGE_OVERHEAT_C: 120,
+  DAMAGE_OVERHEAT_PER_C_S: 0.05,
   // Average peak pressure that raises the bottom-end advisory. It means "boosted or
   // high-compression loading", not "you drove it", so it sits above every bolt-on
   // naturally aspirated pull on a 10.3:1 engine (stock V6 59 bar; intake, headers and

@@ -85,6 +85,8 @@ export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env,
       ...sweepArgs(loadKpa),
       ...(legacy ? {} : { ecu: gear ? { ...ecu(), cond: { ...ecu().cond, gear } } : ecu() }),
     }),
+    /** A dyno pull's arguments with the ECU in the loop, for a caller adding its own. */
+    pullArgs: (loadKpa = 100) => ({ ...sweepArgs(loadKpa), ecu: ecu() }),
     /** The live engine config, as EcuLab builds it. */
     liveCfg: (aux = {}) => ({
       ...sweepArgs(), ve: tables.ve, timing: tables.timing, afr: tables.afr, layout: tables.layout,

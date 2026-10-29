@@ -805,11 +805,24 @@ function baseReducer(state, action) {
       // when they match, so React still bails out of `StoreProvider`'s subtree and no
       // consumer re-renders.
       if (!(prev.running || prev.cranking || prev.rpm > 1)) return state;
+      // The engine runs on the condition it is in, and what the step wore off it comes
+      // off the health here, in the same pass: the health bar, the next pull and the
+      // next step all see it. A part that reaches zero has failed (src/sim/damage.js).
+      const h = state.session.health;
+      const live = liveStep(prev, action.dt, action.input, { ...action.cfg, health: h });
+      const w = live.wear;
       return {
         ...state,
         session: {
           ...state.session,
-          live: liveStep(prev, action.dt, action.input, action.cfg),
+          live,
+          ...(w ? {
+            health: {
+              piston: clamp(h.piston - w.piston, 0, 100),
+              bearing: clamp(h.bearing - w.bearing, 0, 100),
+              valve: clamp(h.valve - w.valve, 0, 100),
+            },
+          } : {}),
         },
       };
     }

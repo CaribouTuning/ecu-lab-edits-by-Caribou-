@@ -12,6 +12,7 @@ import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
+import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
 import { loadFor, needsAirmass, readEcuTable, truthReader } from './layouts.js';
 import { CURVE_RPM, LOAD, RPM, SPARK_MIN_DEG } from './tables.js';
@@ -113,14 +114,22 @@ function tableRowsAt(mapKpa, layout = null, airmassG = 0) {
  * `input.ecu`, when given, is `{cal, hw, cond}` — the calibration, the
  * `EcuHardware` and the `EcuConditions` of `src/sim/ecu/strategy.js`.
  *
+ * `input.health`, when given, is the engine's condition at the start of the pull
+ * (damage.js): its worn parts act on every point, and if the pull spends a part's last
+ * life the engine fails at that point. The pull ends there, and the result's `failure`
+ * says where, which part and how. Without it the engine is new, and the result is
+ * exactly what it always was.
+ *
  * @param {object} input
- * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean}}
+ * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean,
+ *   failure?: {rpm: number, part: import('./damage.js').Part, title: string, cause: string}|null}}
  */
 export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
-  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null,
+  turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
 }) {
+  const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
   const mafErrorBase = mafErrorFactor(mods, turboOn);
   const needsMafRecal = mods.intake || turboOn;
@@ -139,6 +148,7 @@ export function simulateSweep({
     ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
     injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
     veTruthByPhase: ecu.hw.veTruthByPhase ?? [flowAt],
+    ...(wearFx ? { wear: wearFx } : {}),
   } : null;
   // A nitrous bottle through the pull: what each point sprays makes the liquid left boil
   // and cool, and the pressure falls with it — a heater is too slow to hold it mid-pass.
@@ -191,6 +201,7 @@ export function simulateSweep({
         mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
         turbine: turboOn ? turbine : null, empKpa: man.empKpa,
         ...(man.blower ? { blower: man.blower } : {}),
+        ...(wearFx ? { wear: wearFx } : {}),
       }),
       ...(turboOn ? { boostTarget: Number(boostTarget.toFixed(1)) } : {}),
     });
@@ -198,33 +209,9 @@ export function simulateSweep({
 
   let pistonWear = 0, valveWear = 0;
   points.forEach((p) => {
-    // Only knock that happened wears the piston. When the retard came from valvetrain
-    // noise read as knock (the controller sits at the larger of the two, see
-    // knockRetard in point.js), the engine ran further from its limit, not into it: that
-    // costs power, which the pull log reports as false knock, but it hammers nothing.
-    // It was once charged as detonation, so a big cam with the factory knock threshold
-    // lost half its pistons to a noise.
-    // `knockFalse` is logged to a tenth of a degree and `knockPull` is not, so the
-    // comparison allows for that rounding.
-    const realKnockDeg = p.knockPull > (p.knockFalse ?? 0) + 0.05 ? p.knockPull : 0;
-    if (p.knock) pistonWear += realKnockDeg * COEFF.WEAR_KNOCK;
-    if (p.leanRisk) {
-      if (p.valveRisk) valveWear += COEFF.WEAR_VALVE_LEAN_BOOST;
-      else pistonWear += COEFF.WEAR_LEAN;
-    }
-    // Bore wash: unburnt fuel stripping the cylinder film is a ring/bore wear mode.
-    if (p.richRisk) pistonWear += (COEFF.RICH_DAMAGE_LAMBDA - p.lambda) * COEFF.WEAR_RICH_BORE_WASH;
-    // Mechanical overload: past a certain peak cylinder pressure the piston crown, the
-    // ring lands and the rod are simply out of strength. This is a SEPARATE failure
-    // mode from knock — a tune can be perfectly knock-free and still be pounding the
-    // bottom end apart, which is what happens when a high-octane fuel is used to make
-    // high static compression survivable under boost.
-    if (p.pressureRisk) {
-      pistonWear += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
-    }
-    // Knock nobody corrected: the ECU could not hear it, so it ran on, and it is charged
-    // at twice the rate of knock the controller caught and pulled.
-    if (p.knockUnheard > 0) pistonWear += p.knockUnheard * COEFF.WEAR_KNOCK * 2;
+    const w = pointWear(p);
+    pistonWear += w.piston;
+    valveWear += w.valve;
   });
   const avgBoost = points.reduce((s, p) => s + p.boostPsi, 0) / points.length;
   const avgPeakPressure = points.reduce((s, p) => s + p.peakPressure, 0) / points.length;
@@ -235,7 +222,29 @@ export function simulateSweep({
   // than an aluminium one, which is `bearingWearMult`'s whole job.
   const bearingWear = Math.max(0, avgPeakPressure - (derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR))
     * COEFF.WEAR_BEARING_PER_BAR * derived.bearingWearMult;
-  const wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
+  let wear = { piston: pistonWear, bearing: bearingWear, valve: valveWear };
+
+  // A part that runs out of life fails where it does: the pull ends at that point, and
+  // the failed part is spent to nothing. What the others wore is what the pull to there
+  // cost them.
+  let failure = null;
+  if (health) {
+    const freeBar = derived.bearingFreeBar ?? COEFF.BEARING_PRESSURE_FREE_BAR;
+    const at = sweepFailure(points, wear, health, freeBar);
+    if (at) {
+      const n = at.index + 1;
+      const kept = points.slice(0, n);
+      const frac = n / points.length;
+      wear = {
+        piston: kept.reduce((a, p) => a + pointWear(p).piston, 0),
+        bearing: bearingWear * frac,
+        valve: kept.reduce((a, p) => a + pointWear(p).valve, 0),
+      };
+      wear[at.part] = Math.max(wear[at.part], health[at.part]);
+      points.length = n;
+      failure = { rpm: points[at.index].rpm, part: at.part, ...FAILURE_MODES[at.part] };
+    }
+  }
 
   const events = [];
   const rangeLabel = (run) => (run[0].rpm === run[run.length - 1].rpm
@@ -598,12 +607,20 @@ export function simulateSweep({
   if (ecu) {
     events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm }));
   }
+  if (failure) {
+    events.push({
+      type: 'failure', severity: 3, impact: 100, rpm: failure.rpm,
+      msg: `Engine failure at ${failure.rpm} RPM: ${failure.title.toLowerCase()}`,
+      cause: failure.cause,
+      fix: 'The engine has to be rebuilt before it runs again. What killed it is in the health history: the pulls before this one wore that part down, and the same tune will wear the rebuilt one the same way.',
+    });
+  }
 
   events.sort((a, b) => (b.impact ?? b.severity) - (a.impact ?? a.severity));
 
   const peakHp = Math.max(...points.map((p) => p.hp));
   const peakTq = Math.max(...points.map((p) => p.torque));
-  return { points, events, wear, peakHp, peakTq, loadKpa, needsMafRecal };
+  return { points, events, wear, peakHp, peakTq, loadKpa, needsMafRecal, ...(health ? { failure } : {}) };
 }
 
 /**

@@ -68,6 +68,9 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   limit exactly — and the result is identical to before the ECU layer existed.
  * @property {{intakeAdvDeg?: number, exhaustRetDeg?: number}|null} [cam] cam phaser positions
  *   to solve the cycle at when there is no `ecu` context; the ECU's own win when there is
+ * @property {{leakFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] what the
+ *   engine's worn parts do (damage.js `wearEffects`): charge lost past the rings and a
+ *   burnt valve, cylinders that no longer fire, and friction from wiped bearings
  */
 
 /**
@@ -131,7 +134,7 @@ export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
-  empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null,
+  empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
@@ -150,7 +153,10 @@ export function evaluatePoint({
   //              oracle and fuels from this and nothing else.
   // The gap between them IS the fuel-trim histogram's entire signal. Share one VE and the
   // gap is identically zero, the histogram reads nothing, and no iteration can close it.
-  const veActual = veActualVal ?? veVal;
+  // A worn engine traps less than it breathes: part of the charge leaves past worn rings
+  // or a burnt valve before it burns. The ECU's table knows nothing of it.
+  const veBreathed = veActualVal ?? veVal;
+  const veActual = wear ? veBreathed * (1 - wear.leakFrac) : veBreathed;
   const vCylM3 = (derived.displacementL / derived.cyl) / 1000;
   // NITROUS in the intake: liquid flashing to vapour takes its latent heat from the air,
   // so the charge arrives colder and denser; the vapour then fills room the air would
@@ -284,7 +290,9 @@ export function evaluatePoint({
   // outside what a flame will cross). Both cost the whole event's work.
   const ign = E ? ignitionState({ cyc, usedTiming, lambda: lambdaActual, E }) : null;
   const deadFrac = ign ? clamp((E.cutFrac ?? 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac, 0, 1) : 0;
-  const imepPa = cycle.imepGrossPa * (1 - deadFrac);
+  // A burnt valve's cylinder that no longer fires is lost work like a misfire.
+  const wearDead = wear?.deadFrac ?? 0;
+  const imepPa = cycle.imepGrossPa * (wearDead > 0 ? (1 - deadFrac) * (1 - wearDead) : 1 - deadFrac);
 
   // The engine must pay for its own rubbing friction, and for the gas-exchange loop.
   // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and
@@ -294,7 +302,8 @@ export function evaluatePoint({
   // A supercharger is driven off the crank, so the power it takes to compress the air is
   // a load on the engine like friction: FMEP = power ÷ (displacement × firing rate).
   const blowerPa = blower ? blower.driveW / ((derived.displacementL / 1000) * (rpm / 120)) : 0;
-  const fmepPa = rubbingPa + pmepPa + blowerPa;
+  // Wiped bearings rub: friction like any other.
+  const fmepPa = rubbingPa + pmepPa + blowerPa + (wear?.bearingFmepPa ?? 0);
   const bmepPa = imepPa - fmepPa;
 
   // T = BMEP × Vd / (4π) for a four-stroke; power follows from torque.
@@ -355,7 +364,7 @@ export function evaluatePoint({
     lambdaExhaust: Number((E.cutType === 'fuel' && (E.cutFrac ?? 0) > 0
       ? lambdaActual / Math.max(0.05, 1 - E.cutFrac) : lambdaActual).toFixed(3)),
     knockUnheard: Number(Math.max(0, -(margin + knockPull)).toFixed(2)),
-    misfire: Number((ign.misfireFrac * 100).toFixed(1)),
+    misfire: Number(((wearDead > 0 ? 1 - (1 - ign.misfireFrac) * (1 - wearDead) : ign.misfireFrac) * 100).toFixed(1)),
     cutPct: Number(((E.cutFrac ?? 0) * 100).toFixed(0)),
     sparkKvNeed: Number(ign.kvNeeded.toFixed(1)),
     sparkKvHave: Number(ign.kvAvailable.toFixed(1)),
