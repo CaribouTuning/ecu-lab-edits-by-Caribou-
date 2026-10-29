@@ -13,9 +13,9 @@ import styles from './StartScreen.module.css';
  * your own shop, every tool and no objective. The tutorial is the standard walk through.
  */
 const WAYS_IN = [
-  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'Run a tuning shop: customers, their cars, your reputation' },
-  { key: 'sandbox', label: 'SANDBOX', variant: 'ghost', caption: 'Your laptop and your shop: build and tune anything' },
-  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
+  { key: 'career', label: 'Career', variant: 'primary', caption: 'Run a tuning shop: customers, their cars, your reputation' },
+  { key: 'sandbox', label: 'Sandbox', variant: 'ghost', caption: 'Your laptop and your shop: build and tune anything' },
+  { key: 'tutorial', label: 'Tutorial', variant: 'ghost', caption: 'Tuning and the game, in five minutes' },
 ];
 
 /** The three ways in, as clean line drawings over a flat wash (48-unit square). */
@@ -56,8 +56,8 @@ function LogoMark({ src }) {
   if (src) return <img className={styles.logo} src={src} alt="Caribou Tuning" />;
   return (
     <svg className={styles.logo} viewBox={CARIBOU_VIEWBOX} role="img" aria-label="Caribou Tuning">
-      <path d={CARIBOU_FILL} fill="var(--acc-bg)" fillRule="evenodd" />
-      <path d={CARIBOU_INK} fill="var(--ink)" fillRule="evenodd" />
+      <path d={CARIBOU_FILL} fill="var(--mac-control)" fillRule="evenodd" />
+      <path d={CARIBOU_INK} fill="var(--mac-label)" fillRule="evenodd" />
     </svg>
   );
 }
@@ -78,16 +78,16 @@ export function StartScreen({ onCareer, onStart, onTutorial, version, logo = nul
     <div className={styles.screen} data-plain>
       <div className={styles.inner}>
         <LogoMark src={logo} />
-        <div className={styles.eyebrow} data-keep-tracking>CARIBOU TUNING</div>
-        <h1 className={styles.title} data-keep-tracking>ECU Lab</h1>
-        <p className={styles.subtitle} data-keep-tracking>Engine + ECU Simulator</p>
+        <div className={styles.eyebrow}>Caribou Tuning</div>
+        <h1 className={styles.title}>ECU Lab</h1>
+        <p className={styles.subtitle}>Engine and ECU simulator</p>
         <div className={styles.actions}>
           {WAYS_IN.map((way) => (
             <div key={way.key} className={styles.way}>
               <svg className={styles.icon} viewBox="0 0 48 48" aria-hidden="true">
                 {ICONS[/** @type {keyof typeof ICONS} */ (way.key)]}
               </svg>
-              <button type="button" className={`${styles.btn} ${styles[way.variant]}`} onClick={handlers[way.key]} data-keep-tracking>
+              <button type="button" className={`${styles.btn} ${styles[way.variant]}`} onClick={handlers[way.key]}>
                 {way.label}
               </button>
               <div className={styles.caption}>{way.caption}</div>

@@ -336,7 +336,7 @@ describe('the palette in the app', () => {
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/bay'));
     window.history.back();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sandbox' })).toBeTruthy());
 
     enterSandbox();
     expect(isOpen()).toBe(false);
@@ -468,7 +468,7 @@ describe('the palette in the app', () => {
 
   it('does nothing on Cmd-K from the tutorial view', () => {
     render(<EcuLab />);
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     cmdK();
     expect(isOpen()).toBe(false);
   });

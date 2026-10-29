@@ -22,21 +22,21 @@ describe('StartScreen', () => {
   it('opens the job board', () => {
     const onCareer = vi.fn();
     start({ onCareer });
-    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Career' }));
     expect(onCareer).toHaveBeenCalledTimes(1);
   });
 
   it('opens the sandbox', () => {
     const onStart = vi.fn();
     start({ onStart });
-    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
   it('opens the tutorial', () => {
     const onTutorial = vi.fn();
     start({ onTutorial });
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     expect(onTutorial).toHaveBeenCalledTimes(1);
   });
 

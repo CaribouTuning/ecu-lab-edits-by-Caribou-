@@ -71,7 +71,7 @@ describe('a deep link on a cold load', () => {
     window.location.hash = '#/tune/spark';
     mount();
 
-    expect(screen.queryByRole('button', { name: 'SANDBOX' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sandbox' })).toBeNull();
     expect(screen.getByText('Ignition Timing')).toBeTruthy();
   });
 
@@ -235,7 +235,7 @@ describe('the engine stand\'s parts', () => {
 
   it('keeps CAREER out of SANDBOX: CAREER opens a shop of its own, SANDBOX has no customers', async () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Career' }));
     expect(window.location.hash).toBe('#/shop');
     // The save loads and you are stood in your shop; the paperwork is on the shop wall.
     await screen.findByRole('button', { name: 'Open the laptop' });
@@ -255,7 +255,7 @@ describe('the engine stand\'s parts', () => {
 describe('the tutorial', () => {
   it('has its own address, and leaving it lands back on BUILD', () => {
     mount();
-    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
     expect(window.location.hash).toBe('#/tutorial');
 
     fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
