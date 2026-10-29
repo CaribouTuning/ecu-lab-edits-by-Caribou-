@@ -40,6 +40,8 @@ export const HOTSPOTS = [
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift (default: the shop's own two)
+ * @param {{piston: number, bearing: number, valve: number, failed: 'piston'|'bearing'|'valve'|null, where: 'stand'|'dyno'|null, key: string|null}|null} [props.damage]
+ *   the engine's condition, drawn on it; `key` names a failure, which plays once where it happened
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.board] CAREER: the job board is on the wall
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
@@ -48,8 +50,8 @@ export const HOTSPOTS = [
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, rpm, dynoRpm = 0, cars, nextSpot = null, onSurfaces, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, onSurfaces, onPick, board, next: nextSpot, nextDirty: true });
+export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
   live.current.onPick = onPick;
@@ -59,6 +61,8 @@ export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, r
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
   useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const damageKey = JSON.stringify(damage);
+  useEffect(() => { live.current.damage = damage; live.current.damageDirty = true; }, [damageKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const carsKey = JSON.stringify(cars ?? null);
   useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
@@ -161,7 +165,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, r
         const scene = station || l.mode === 'board';
         if (scene) measureFrame();
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
-        const busy = scene && (shop.moving() || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
+        const busy = scene && (shop.moving() || shop.busy() || l.damageDirty || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,
         // and leaves the readouts over it the rest of the machine.
         if (l.mode === 'page' || scene) {
@@ -172,6 +176,11 @@ export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, r
         }
         if (l.specDirty) { l.specDirty = false; shop.setEngine(l.spec); }
         if (l.carsDirty) { l.carsDirty = false; shop.setCars(l.cars ?? { dyno: {}, lift: {} }); }
+        if (l.damageDirty) {
+          l.damageDirty = false;
+          const d = l.damage;
+          shop.setDamage(d ? { piston: d.piston, bearing: d.bearing, valve: d.valve, failed: d.failed } : null, d?.where ?? null, d?.key ?? null);
+        }
         shop.update(dt, l.rpm, l.dynoRpm);
         shop.camera.updateMatrixWorld();
         const moving = shop.moving();

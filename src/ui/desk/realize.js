@@ -15,22 +15,29 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { THREE } from '../world/gfx.js';
 
 const E = W.engine;
-/** @type {Array<[string[], {metalness: number, roughness: number, clearcoat?: number}]>} */
+/**
+ * `env` is how strongly the surface mirrors the room: a matte rubber barely, cast metal
+ * dimly, glass and a clear-coated panel clearly. It is what makes a material read as what
+ * it is when the colour alone cannot (black rubber against black plastic).
+ * @type {Array<[string[], {metalness: number, roughness: number, env: number, clearcoat?: number}]>}
+ */
 const FINISHES = [
   // Machined and cast aluminium, bright steel, chrome-ish trim.
-  [[W.metal, W.metalLight, W.rim, W.brake, E.block, E.head, E.plenum, E.turbo, E.turboCold], { metalness: 0.75, roughness: 0.42 }],
+  [[W.metal, W.metalLight, W.rim, W.brake, E.block, E.head, E.plenum, E.turbo, E.turboCold], { metalness: 0.75, roughness: 0.42, env: 1.1 }],
   // Dull steel, cast iron, pulleys, a flywheel, a radiator core: metal, but dirty and rough.
-  [[W.metalDark, W.steel, W.rimDark, W.corrugated, E.blockDark, E.blockIron, E.blockIronDark, E.headIron, E.pulley, E.flywheel, E.cooler], { metalness: 0.6, roughness: 0.62 }],
+  [[W.metalDark, W.steel, W.rimDark, W.corrugated, E.blockDark, E.blockIron, E.blockIronDark, E.headIron, E.pulley, E.flywheel, E.cooler], { metalness: 0.6, roughness: 0.62, env: 0.8 }],
   // Exhaust: heat-coloured mild steel.
-  [[E.pipe, E.pipeHot], { metalness: 0.5, roughness: 0.7 }],
+  [[E.pipe, E.pipeHot], { metalness: 0.5, roughness: 0.7, env: 0.6 }],
   // Rubber: tyres, belts, hoses, casters, the black of things.
-  [[W.tyre, W.tyreWall, W.rubber, W.black, E.belt, E.hose], { metalness: 0, roughness: 0.92 }],
+  [[W.tyre, W.tyreWall, W.rubber, W.black, E.belt, E.hose], { metalness: 0, roughness: 0.92, env: 0.25 }],
+  // Moulded plastic: a sheen rubber does not have.
+  [[W.plastic, E.plug], { metalness: 0, roughness: 0.42, env: 0.7 }],
   // Powder-coated equipment: the stands, the tool chests, the dyno's frame.
-  [[E.stand, E.standDark, W.toolRed, W.toolBlue, W.toolYellow, W.hazard, W.floorStripe, E.cover, E.coverDark, E.coverOhv, E.filter], { metalness: 0.05, roughness: 0.55 }],
+  [[E.stand, E.standDark, W.toolRed, W.toolBlue, W.toolYellow, W.hazard, W.floorStripe, E.cover, E.coverDark, E.coverOhv, E.filter], { metalness: 0.05, roughness: 0.55, env: 0.6 }],
   // A sealed epoxy floor: a dull sheen, not a mirror.
-  [[W.floorEpoxy, W.floorEpoxyAlt, W.floorGrout, W.floorShop], { metalness: 0, roughness: 0.6 }],
+  [[W.floorEpoxy, W.floorEpoxyAlt, W.floorGrout, W.floorShop], { metalness: 0, roughness: 0.6, env: 0.6 }],
   // Glass.
-  [[W.glass, W.glassDark, W.doorGlass, W.screenOff], { metalness: 0, roughness: 0.08 }],
+  [[W.glass, W.glassDark, W.doorGlass, W.screenOff], { metalness: 0, roughness: 0.06, env: 1.8 }],
 ];
 const PAINT = new Set(Object.values(W.paint).map((c) => new THREE.Color(c).getHex()));
 const finishOf = new Map();
@@ -58,15 +65,16 @@ function realMaterial(m) {
   const t = /** @type {THREE.MeshToonMaterial} */ (m);
   const hex = t.color.getHex();
   const paint = PAINT.has(hex);
-  const f = paint ? { metalness: 0.1, roughness: 0.32, clearcoat: 0.6 } : finishOf.get(hex) ?? { metalness: 0, roughness: 0.82 };
+  // Car paint: a metallic base coat under a hard clear coat, which is what mirrors the room.
+  const f = paint ? { metalness: 0.35, roughness: 0.4, clearcoat: 1, env: 1.3 } : finishOf.get(hex) ?? { metalness: 0, roughness: 0.82, env: 0.5 };
   const o = {
-    color: settle(t.color.clone()), map: t.map, roughness: f.roughness, metalness: f.metalness,
+    color: settle(t.color.clone()), map: t.map, roughness: f.roughness, metalness: f.metalness, envMapIntensity: f.env,
     emissive: t.emissive, emissiveIntensity: t.emissiveIntensity,
     transparent: t.transparent, opacity: t.opacity, side: t.side, depthWrite: t.depthWrite,
     // No outline is drawn over it here, so it need not be pushed back from one.
     polygonOffset: false,
   };
-  r = f.clearcoat ? new THREE.MeshPhysicalMaterial({ ...o, clearcoat: f.clearcoat, clearcoatRoughness: 0.2 }) : new THREE.MeshStandardMaterial(o);
+  r = f.clearcoat ? new THREE.MeshPhysicalMaterial({ ...o, clearcoat: f.clearcoat, clearcoatRoughness: 0.06 }) : new THREE.MeshStandardMaterial(o);
   swapped.set(m, r);
   return r;
 }

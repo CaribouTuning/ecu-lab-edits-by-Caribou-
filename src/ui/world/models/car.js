@@ -10,7 +10,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, shade, sign, toon, tyreGeometry } from '../gfx.js';
+import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, sign, toon, tyreGeometry } from '../gfx.js';
 
 /**
  * Body shapes. Dimensions in metres; z is along the car, front positive. `belt` is the
@@ -232,8 +232,9 @@ export function makeCar(spec = {}) {
   car.add(wheel);
 
   // ---- lights and trim ----
-  const headMat = glow(W.headlight);
-  const tailMat = glow(W.taillight);
+  // Lamps as glass over a reflector, switched off: they catch the light, they do not make it.
+  const headMat = new THREE.MeshStandardMaterial({ color: W.headlight, metalness: 0.8, roughness: 0.12, emissive: W.headlight, emissiveIntensity: 0.06 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: W.taillight, metalness: 0.2, roughness: 0.18, emissive: W.taillight, emissiveIntensity: 0.15 });
   const lights = [];
   for (const s of [-1, 1]) {
     const h = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.05), headMat);
@@ -245,7 +246,9 @@ export function makeCar(spec = {}) {
     lights.push(t);
     car.add(box(0.12, 0.05, 0.05, W.indicator, { x: s * (Wd / 2 - 0.08), y: S.nose + lift - drop - 0.28, z: nz + 0.005, edge: false }));
   }
-  car.add(box(Wd * 0.5, 0.1, 0.04, W.black, { y: S.nose + lift - drop - 0.32, z: nz + 0.015, edge: false })); // grille
+  // The grille: a dark opening and its slats.
+  car.add(box(Wd * 0.5, 0.1, 0.04, W.black, { y: S.nose + lift - drop - 0.32, z: nz + 0.015, edge: false }));
+  for (let k = 0; k < 3; k += 1) car.add(box(Wd * 0.48, 0.012, 0.02, W.plastic, { y: S.nose + lift - drop - 0.36 + k * 0.035, z: nz + 0.035, edge: false }));
   car.add(box(Wd - 0.04, 0.12, 0.2, W.black, { y: y0 + 0.1, z: nz - 0.05, edge: false })); // bumper lip
   car.add(box(Wd - 0.04, 0.1, 0.16, W.black, { y: y0 + 0.1, z: -nz + 0.05, edge: false }));
   // Number plates.
@@ -285,16 +288,13 @@ export function makeCar(spec = {}) {
   }
 
   // ---- body lines: the detail that stops a flank being one flat colour ----
-  const lite = toon(shade(paint, 0.12));
-  const deep = toon(shade(paint, -0.16));
   const doorFront = zf0 - 0.12;
   const doorMid = (zr0 + zf0) / 2 - 0.1;
   const doorRear = zr0 + 0.1;
   for (const sd of [-1, 1]) {
     const x = sd * (Wd / 2 + 0.004);
-    // A shoulder highlight along the belt, a darker sill below, and the door cuts.
-    car.add(box(0.02, 0.035, L - 0.9, paint, { x, y: belt - 0.14, mat: lite, edge: false, cast: false }));
-    car.add(box(0.03, 0.11, wheelbase - 0.5, paint, { x, y: y0 + 0.13, mat: deep, edge: false, cast: false }));
+    // The sill trim along the rocker, and the door cuts. (The light does the highlights.)
+    car.add(box(0.03, 0.09, wheelbase - 0.55, W.plastic, { x, y: y0 + 0.12, edge: false, cast: false }));
     for (const z of [doorFront, doorMid, doorRear]) if (z > -nz + 0.5 && z < hoodZ0 + 0.4) car.add(box(0.012, belt - y0 - 0.38, 0.018, W.black, { x, y: (belt + y0) / 2 + 0.02, z, edge: false, cast: false }));
     car.add(box(0.03, 0.035, 0.16, W.metalLight, { x: x + sd * 0.01, y: belt - 0.08, z: doorMid + 0.32, edge: false, cast: false }));
   }
@@ -349,9 +349,9 @@ export function makeCar(spec = {}) {
     hub.add(steer);
     car.add(hub);
     wheels.push({ hub, steer, spin, front });
-    // Wheel-arch shadow disc on the bodywork.
-    const arch = new THREE.Mesh(new THREE.CylinderGeometry(wr * 1.18, wr * 1.18, 0.02, 24).rotateZ(Math.PI / 2), toon(W.black));
-    arch.position.set(sx * (Wd / 2 + 0.003), wr, sz * wheelbase / 2);
+    // The arch's liner: the dark well the tyre sits in, set back inside the body.
+    const arch = new THREE.Mesh(new THREE.CylinderGeometry(wr * 1.12, wr * 1.12, 0.02, 24).rotateZ(Math.PI / 2), toon(W.black));
+    arch.position.set(sx * (Wd / 2 - 0.08), wr, sz * wheelbase / 2);
     car.add(arch);
   }
   rig.wheels = wheels;

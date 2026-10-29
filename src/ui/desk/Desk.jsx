@@ -181,6 +181,7 @@ function NextStrip({ next, place }) {
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand in the shop
  * @param {number} [props.rpm] that engine's speed while it runs
  * @param {number} [props.dynoRpm] the car on the dyno's engine speed during a pull, 0 between
+ * @param {Parameters<typeof ShopBackdrop>[0]['damage']} [props.damage] the engine's condition, for the shop to draw
  * @param {import('./shopScene.js').ShopCars} [props.cars] who is on the dyno and the lift
  * @param {React.ReactNode} [props.status] the engine's status readouts, for the notifications panel
  * @param {React.ReactNode} [props.footer] the open app's status bar: along the bottom of a
@@ -191,7 +192,7 @@ function NextStrip({ next, place }) {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, board = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, status = null, footer = null, next = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, board = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
@@ -300,7 +301,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
       {mode === 'bay' && <FirstRun career={board} />}
 

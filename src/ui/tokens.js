@@ -482,6 +482,8 @@ export const world = Object.freeze({
   cone: '#ee7a1c',
   hazard: '#f2c200',
   rubber: '#23262c',
+  // Moulded plastic: monitor bezels, battery cases, coil packs. Black like rubber, but with a sheen.
+  plastic: '#1c1e23',
   screen: '#3be0b0',
   screenOff: '#10151c',
   screenAmber: '#f0b020',
@@ -530,6 +532,9 @@ export const world = Object.freeze({
     plenum: '#b9c0c8', pipe: '#5f5853', pipeHot: '#c46a3a', turbo: '#9aa1aa', turboCold: '#c9ced5', belt: '#18191c',
     pulley: '#3a3e46', plug: '#1b1c1f', hose: '#22252b', filter: '#3b3f45', cooler: '#5d6470', bottle: '#3a7ad8',
     stand: '#4f555c', standDark: '#2f3237', flywheel: '#4a4f57', backdrop: '#1e1e1e', floor: '#2c2c2c',
+    // Damage: engine oil where it should not be, exhaust steel blued by heat, blow-by and
+    // burning-oil smoke, and the flash of an engine letting go.
+    oil: '#15120d', pipeBurnt: '#4a3d5e', smoke: '#7d8186', smokeDark: '#2e2f31', flash: '#ffd59a',
   }),
   // What every cabin shares: the roof, the pillars, the mirror, the driver's skin and sleeves, the lamps.
   cockpit: Object.freeze({

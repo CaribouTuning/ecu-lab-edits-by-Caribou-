@@ -41,6 +41,8 @@
  * @property {boolean} [newShop] CAREER: no job finished yet, so Pops's first messages are how
  *   the game is explained, and they come before the first job
  * @property {boolean} [buildJob] CAREER: an engine-building job
+ * @property {string|null} [failed] what failed, when the engine has: nothing else can be done
+ *   with it until it is rebuilt
  */
 
 /**
@@ -57,6 +59,10 @@
  * @returns {Step}
  */
 export function nextStep(f) {
+  // A failed engine comes before everything: it will not run, pull or be tuned until it is rebuilt.
+  if (f.failed && !f.engineMissing && (f.mode !== 'career' || f.working)) {
+    return { id: 'rebuild', text: `The engine has failed: ${f.failed}. Rebuild it on the stand before anything else.`, label: 'Engine stand', go: 'live' };
+  }
   if (f.mode === 'career') {
     if (!f.working) {
       const many = (f.unread ?? 0) > 1;

@@ -65,3 +65,16 @@ describe('the shop floor marker for a step', () => {
     expect(spotOf('messages')).toBe('laptop');
   });
 });
+
+describe('a failed engine', () => {
+  it('comes before every other step: rebuild it on the stand', () => {
+    const s = sandbox({ failed: 'spun rod bearing', heard: true, pulled: true, fresh: true });
+    expect(s.id).toBe('rebuild');
+    expect(s.go).toBe('live');
+    expect(s.text).toContain('spun rod bearing');
+  });
+
+  it('does not stand in for choosing an engine', () => {
+    expect(sandbox({ failed: 'dropped valve', engineMissing: true }).id).toBe('choose');
+  });
+});

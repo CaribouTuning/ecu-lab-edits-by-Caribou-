@@ -20,6 +20,7 @@ import { makeCar } from '../world/models/car.js';
 import { makeEngine } from '../world/models/engine.js';
 import { dressShop } from './shopDetail.js';
 import { makeDyno, makeLift } from '../world/models/props.js';
+import { makeDebris, makeFlash, makeSmoke } from '../world/models/damageFx.js';
 
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
@@ -205,8 +206,8 @@ function makeCart(kind) {
       body.add(box(0.08, my - top, 0.06, W.metalDark, { y: top + (my - top) / 2, z: -0.24 }));
       body.add(box(0.1, 0.1, 0.12, W.metalDark, { y: my, z: -0.18 }));
     }
-    body.add(box(mw + 0.05, mh + 0.05, 0.03, W.black, { y: my, z: -0.09 }));
-    body.add(box(mw * 0.86, mh * 0.8, 0.05, W.black, { y: my, z: -0.13 }));
+    body.add(box(mw + 0.05, mh + 0.05, 0.03, W.plastic, { y: my, z: -0.09 }));
+    body.add(box(mw * 0.86, mh * 0.8, 0.05, W.plastic, { y: my, z: -0.13 }));
     // The panel's glass, switched off: dark, but it catches the shop's lights.
     body.add(box(mw, mh, 0.002, W.screenOff, { y: my, z: -0.0745, cast: false }));
     monitorAt.position.set(0, my, -0.074);
@@ -376,7 +377,7 @@ function makeEngineStand(at, run, turn) {
     group.add(box(0.06, 0.06, 0.66, c, { x: POST_X + 0.1, y: 1.28 }));
     group.add(box(0.025, 0.56, 0.6, W.metalDark, { x: POST_X + 0.2, y: MOUNT.y }));
     group.add(cyl(0.05, 0.05, 0.2, W.black, { axis: 'x', x: POST_X + 0.08, y: MOUNT.y - 0.2, z: 0.17, seg: 12 }));
-    group.add(box(0.26, 0.2, 0.17, W.black, { x: POST_X - 0.02, y: 0.3, z: -0.16 }));
+    group.add(box(0.26, 0.2, 0.17, W.plastic, { x: POST_X - 0.02, y: 0.3, z: -0.16 }));
     for (const [z, col] of /** @type {Array<[number, string]>} */ ([[-0.21, W.taillight], [-0.11, W.black]])) group.add(cyl(0.015, 0.015, 0.03, col, { x: POST_X + 0.05, y: 0.41, z, edge: false }));
     group.add(box(0.32, 0.24, 0.3, W.metal, { x: POST_X + 0.5, y: 0.34 }));
     group.add(cyl(0.035, 0.035, 0.03, W.metalLight, { x: POST_X + 0.6, y: 0.47, z: 0.08, edge: false }));
@@ -426,7 +427,7 @@ function makeEngineStand(at, run, turn) {
     for (const s of [-1, 1]) fitted.add(box(0.05, 0.86, 0.05, c, { x: rx, y: 0.6, z: s * 0.34 }));
     fitted.add(box(0.06, 0.56, 0.62, W.engine.cooler, { x: rx, y: 0.92 }));
     for (let k = 0; k < 9; k += 1) fitted.add(box(0.062, 0.006, 0.58, W.metalDark, { x: rx, y: 0.68 + k * 0.06, edge: false, cast: false }));
-    fitted.add(box(0.05, 0.5, 0.54, W.black, { x: rx - 0.055, y: 0.92 }));
+    fitted.add(box(0.05, 0.5, 0.54, W.plastic, { x: rx - 0.055, y: 0.92 }));
     fitted.add(cyl(0.05, 0.05, 0.05, W.black, { axis: 'x', x: rx - 0.1, y: 0.92, seg: 12 }));
     fitted.add(cyl(0.025, 0.025, 0.04, W.metalLight, { x: rx, y: 1.22, z: 0.2, edge: false }));
     fitted.add(strut([rx - 0.03, 1.12, -0.18], [front - 0.02, 1.15, -0.04], 0.045, 0.045, W.engine.hose, { round: true }));
@@ -436,6 +437,10 @@ function makeEngineStand(at, run, turn) {
   let engine = null;
   // A part going on: the engine settles on its mount, as it does when you bolt something to it.
   let settle = 0;
+  /** @type {import('../world/models/engine.js').EngineDamage|null} */
+  let damage = null;
+  // The floor, in the engine's own frame: it hangs 0.4 under the head and is drawn 1.25 up.
+  const FLOOR = -(MOUNT.y - 0.4) / 1.25;
   return {
     group,
     duct,
@@ -449,8 +454,14 @@ function makeEngineStand(at, run, turn) {
       engine.group.position.set(0, -0.4, ((engine.size.len - 0.2) / 2 + 0.06) * 1.25);
       mount.add(engine.group);
       fit(MOUNT.x + (engine.size.len - 0.2 + 0.12) * 1.25);
+      engine.setDamage(damage, FLOOR);
       if (jolt) settle = 1;
     },
+    /** What wear and a failure have done to it. @param {import('../world/models/engine.js').EngineDamage|null} d */
+    setDamage(d) { damage = d; engine?.setDamage(d, FLOOR); },
+    /** The failure, played: once, when it happens. */
+    blowUp() { engine?.blowUp(); },
+    busy() { return !!engine?.busy(); },
     /** @param {number} dt @param {number} rpm */
     update(dt, rpm) {
       if (!engine) return;
@@ -478,11 +489,12 @@ export function buildShopScene(stage, init) {
   scene.fog = null;
   // Lit as a shop is: overhead LED strips do the work, with the door down. The sky's fill is
   // what the walls bounce, and the room is what metal reflects.
-  stage.hemi.intensity = 0.3;
+  // Less fill than before: the light is where the fixtures are, and the corners fall away.
+  stage.hemi.intensity = 0.2;
   stage.sun.intensity = 0.7;
   stage.sun.castShadow = false;
   scene.environment = roomReflections(stage.renderer);
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0.45;
 
   // ---- the room ----
   const floor = floorPlane(16, 14, W.floorShop, { y: 0 });
@@ -511,6 +523,13 @@ export function buildShopScene(stage, init) {
   const sign = paintedSign('Caribou Tuning', 'Engine building and dyno tuning', 4.6, 1.15);
   sign.position.set(-4.85, 3.35, -7.0);
   root.add(sign);
+  // The sign lit from above by its own lamp, as a shop's name is: warm, and the one place on
+  // the back wall the eye goes first.
+  const signLamp = new THREE.SpotLight(W.lampWarm, 14, 4, 0.6, 0.6, 1.5);
+  signLamp.position.set(-4.85, 4.7, -6.2);
+  signLamp.target.position.set(-4.85, 3.2, -7.0);
+  scene.add(signLamp, signLamp.target);
+  root.add(box(0.5, 0.06, 0.14, W.metalDark, { x: -4.85, y: 4.72, z: -6.25, edge: false }));
   // The job board on the left wall, by the dyno: a whiteboard in an aluminium frame with a
   // marker tray, the jobs' work orders held on it by magnets.
   const whiteboard = new THREE.Group();
@@ -562,7 +581,9 @@ export function buildShopScene(stage, init) {
       for (const cz of [-0.7, 0.7]) fx.add(cyl(0.006, 0.006, 0.42, W.metalDark, { y: 0.24, z: cz, cast: false, edge: false }));
       fixtures.add(fx);
     }
-    const key = new THREE.SpotLight(W.sky.day.sun, 34, 14, 1.15, 0.9, 1.6);
+    // Narrower than the room, so each row of fixtures leaves a pool of light on the floor
+    // under it rather than one even wash from wall to wall.
+    const key = new THREE.SpotLight(W.sky.day.sun, 40, 14, 1.0, 0.75, 1.6);
     key.position.set(x, 4.45, 0.4);
     key.target.position.set(x, 0, 0.6);
     key.castShadow = true;
@@ -586,6 +607,15 @@ export function buildShopScene(stage, init) {
   root.add(lift);
   /** @type {ReturnType<typeof makeCar>|null} */
   let liftCar = null;
+  // A failure on the dyno: it happens in the car's engine bay, not on the stands.
+  const dynoFx = { smoke: makeSmoke(40), debris: makeDebris(), flash: makeFlash() };
+  root.add(dynoFx.smoke.group, dynoFx.debris.group, dynoFx.flash.group);
+  const dynoBay = new THREE.Vector3(AT.dyno.x, 0.75, AT.dyno.z - 1.4);
+  /** @type {THREE.Mesh|null} */
+  let dynoOil = null;
+  let dynoBroken = false;
+  let dynoWreckAge = 0;
+  let dynoPuffT = 0;
   /** What holds the car on the dyno: its straps, the extraction on its tailpipe. */
   const rigging = new THREE.Group();
   root.add(rigging);
@@ -640,6 +670,8 @@ export function buildShopScene(stage, init) {
       dynoCar.group.position.set(AT.dyno.x, 0, z);
       dynoCar.group.rotation.y = Math.PI;
       root.add(dynoCar.group);
+      // Its engine bay: under the bonnet, which faces the door.
+      dynoBay.set(AT.dyno.x, 0.75, z - len / 2 + 0.75);
       const fan = dyno.userData.fan?.parent;
       if (fan) fan.position.z = z - AT.dyno.z - len / 2 - 0.42;
       if (rollers) rigDynoCar(len, z);
@@ -664,6 +696,9 @@ export function buildShopScene(stage, init) {
   for (const st of [buildStand, runStand]) { st.setSpec(init.engineSpec); root.add(st.group, st.duct); }
   realize(root);
   let engineSpecKey = JSON.stringify(init.engineSpec ?? {});
+  /** @type {string|null} the failure last shown */
+  let damageKey = null;
+  let damagePrimed = false;
   buildStand.group.userData.spot = 'build';
   runStand.group.userData.spot = 'stand';
 
@@ -815,7 +850,17 @@ export function buildShopScene(stage, init) {
     // held sideways the computer alone fills the view, and the software shows the engine.
     if ((name === 'stand' || name === 'build') && cartShape === 'wide' && frame.h - frame.top - frame.bottom > 420) {
       // The whole stand, its feet on the floor, not only the engine on it.
-      const bb = new THREE.Box3().setFromObject((name === 'build' ? buildStand : runStand).group);
+      // The stand and its engine: not the smoke, debris and flash a damaged engine carries,
+      // which would push the camera back by however far they could fly.
+      const bb = new THREE.Box3();
+      const solid = (/** @type {THREE.Object3D} */ o) => {
+        if (o.userData.fx) return;
+        if (/** @type {THREE.Mesh} */ (o).isMesh) bb.expandByObject(o, false);
+        else for (const c of o.children) solid(c);
+      };
+      const stand = (name === 'build' ? buildStand : runStand).group;
+      stand.updateWorldMatrix(true, true);
+      solid(stand);
       for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) pts.push(new THREE.Vector3(x, y, z));
     }
     const center = pts.reduce((acc, v) => acc.add(v), new THREE.Vector3()).multiplyScalar(1 / pts.length);
@@ -934,6 +979,51 @@ export function buildShopScene(stage, init) {
     },
     /** @returns {boolean} the camera is still on its way somewhere */
     moving() { return blend < 1; },
+    /** Whether smoke, debris or a flash is still moving and has to be drawn. */
+    busy() { return buildStand.busy() || runStand.busy() || dynoFx.smoke.busy() || dynoFx.debris.busy() || dynoFx.flash.busy(); },
+    /**
+     * The engine's condition, drawn on it, and its failure played where it happened. Both
+     * stands hold the shop's one engine, so both show the wear and the wreck; the failure
+     * plays once, on the run stand if it failed running there, or in the car on the dyno
+     * if it failed in a pull. `key` names the failure: a new one plays, the same one
+     * again does not, and one already there when the shop is first drawn is shown
+     * wrecked without playing.
+     * @param {import('../world/models/engine.js').EngineDamage|null} d
+     * @param {'stand'|'dyno'|null} where @param {string|null} key
+     */
+    setDamage(d, where, key) {
+      buildStand.setDamage(d);
+      runStand.setDamage(d);
+      realize(root);
+      const failed = !!d?.failed;
+      if (failed && key && key !== damageKey && damagePrimed) {
+        if (where === 'dyno') {
+          dynoFx.flash.fire(dynoBay);
+          dynoFx.debris.burst(dynoBay, new THREE.Vector3(0, 1, -0.6), 14, [glow(W.engine.flash), ...['block', 'turbo', 'blockDark'].map((c) => new THREE.MeshStandardMaterial({ color: W.engine[c], metalness: 0.6, roughness: 0.5 }))], 0);
+          for (let i = 0; i < 24; i += 1) dynoFx.smoke.emit(dynoBay, { color: i % 3 ? W.engine.smokeDark : W.engine.smoke, size: 0.18, rise: 0.6 + Math.random() * 0.5, life: 4 + Math.random() * 3, opacity: 0.75, spread: 0.5 });
+        } else runStand.blowUp();
+      }
+      damageKey = key;
+      damagePrimed = true;
+      const wasBroken = dynoBroken;
+      dynoBroken = failed && where === 'dyno';
+      if (dynoBroken && !wasBroken) {
+        dynoWreckAge = 0;
+        // Oil out of the car onto the dyno's deck and the floor in front of it.
+        dynoOil = new THREE.Mesh(new THREE.CircleGeometry(0.75, 24), new THREE.MeshStandardMaterial({ color: W.engine.oil, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.85, depthWrite: false }));
+        dynoOil.rotation.x = -Math.PI / 2;
+        dynoOil.scale.set(1, 0.7, 1);
+        dynoOil.position.set(dynoBay.x, 0.04, dynoBay.z);
+        root.add(dynoOil);
+      }
+      if (!dynoBroken && dynoOil) {
+        root.remove(dynoOil);
+        dynoOil.geometry.dispose();
+        dynoOil = null;
+        dynoFx.smoke.clear();
+        dynoFx.debris.clear();
+      }
+    },
     /** @param {import('../world/models/engine.js').EngineSpec} spec */
     setEngine(spec) {
       const key = JSON.stringify(spec ?? {});
@@ -978,6 +1068,15 @@ export function buildShopScene(stage, init) {
       lidScreen.visible = lid < 0.9;
       buildStand.update(dt, 0);
       runStand.update(dt, rpm);
+      // A car that failed on the dyno smoulders under its bonnet, thinning to a wisp.
+      if (dynoBroken) {
+        dynoWreckAge += dt;
+        dynoPuffT += dt * (10 * Math.exp(-dynoWreckAge / 3) + 0.8);
+        while (dynoPuffT > 1) { dynoPuffT -= 1; dynoFx.smoke.emit(dynoBay, { color: W.engine.smokeDark, size: 0.12, rise: 0.4, life: 2.8, opacity: 0.4, spread: 0.4 }); }
+      }
+      dynoFx.smoke.update(dt);
+      dynoFx.debris.update(dt);
+      dynoFx.flash.update(dt);
       // The dyno's rollers and the car on them idle over; the lift stays put. In a pull the
       // wheels turn with the engine, through a gear (a picture, not the drivetrain model:
       // about 3.6 turns of the crank to one of the wheels in the gear a pull is made in).

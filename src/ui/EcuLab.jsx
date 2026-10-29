@@ -1650,6 +1650,20 @@ export function EcuLabApp() {
   const shopCars = inCareer
     ? { dyno: lookOf(career.working), lift: lookOf((career.lifts ?? []).find((l) => l.jobId !== career.working)?.jobId ?? null) }
     : undefined;
+  // The engine's condition for the shop to draw on it (engine.js `setDamage`), in whole
+  // percent so the shop redraws its wear when it moves, not twenty times a second. A
+  // failure is named once it has happened where it happened: in the car on the dyno when
+  // the pull that killed it has drawn to its end, or on the stand when it died running
+  // (a dead engine refusing to start is not a new failure, and plays nothing).
+  const liveFailure = /** @type {any} */ (session.live).failure;
+  const pullFailure = result?.failure && revealCount >= result.points.length ? result.failure : null;
+  const failedWhere = /** @type {'stand'|'dyno'|null} */ (!blown ? null : result?.failure ? 'dyno' : liveFailure?.rpm > 300 ? 'stand' : null);
+  const shopDamage = {
+    piston: Math.floor(health.piston), bearing: Math.floor(health.bearing), valve: Math.floor(health.valve),
+    failed: blown, where: failedWhere,
+    key: failedWhere === 'dyno' ? (pullFailure ? `dyno:${runs[0]?.id ?? ''}` : null)
+      : failedWhere === 'stand' ? `stand:${liveFailure.t}` : null,
+  };
   // ---- the game's flow: the next step, from what is true now (flow.js) ----
   const attentionList = Object.entries(attention)
     .map(([page, count]) => ({ page, count, label: tuneViews.find((v) => v.id === page)?.name ?? page }))
@@ -1667,6 +1681,7 @@ export function EcuLabApp() {
     unread: inCareer ? unreadCount(career) : 0,
     newShop: inCareer && (career.history?.length ?? 0) === 0,
     buildJob: buildOpen,
+    failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (
@@ -1728,7 +1743,7 @@ export function EcuLabApp() {
         onBay={() => deskGo('bay')} board={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
-        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars}
+        engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars} damage={shopDamage}
         status={<StatusStrip actions={false} />}
         footer={appView !== 'shop' && appView !== 'messages' ? <StatusStrip actions={false} bar /> : null}
         next={deskNext}
