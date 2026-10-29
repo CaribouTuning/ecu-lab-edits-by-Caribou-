@@ -216,3 +216,12 @@
 .officeScreen .card button[data-variant='ghost'], .officeScreen .card button[data-variant='quiet'] { background: transparent; color: var(--tile-ink); }
 .officeScreen .card button:disabled { opacity: 0.45; }
 .officeScreen .card button::after { display: none; }
+/* The training lesson opened from the board is a printed sheet like the work orders: the
+   board inks every text dark, so the sheet has to be paper, or it reads dark on dark. */
+.officeScreen .lesson { border: 1px solid var(--board-line); border-radius: 0; background: var(--order); color: var(--tile-ink); }
+.officeScreen .lesson .cardTag { margin: 0 0 4px; padding: 0 0 8px; }
+.officeScreen .lesson button {
+  border: 1.5px solid var(--tile-ink); border-radius: 3px; background: var(--tile-ink); color: var(--order);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; box-shadow: none;
+}
+.officeScreen .lesson button[data-variant='ghost'], .officeScreen .lesson button[data-variant='quiet'] { background: transparent; color: var(--tile-ink); }

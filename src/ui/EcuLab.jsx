@@ -1666,8 +1666,12 @@ export function EcuLabApp() {
   const liveFailure = /** @type {any} */ (session.live).failure;
   const pullFailure = result?.failure && revealCount >= result.points.length ? result.failure : null;
   const failedWhere = /** @type {'stand'|'dyno'|null} */ (!blown ? null : result?.failure ? 'dyno' : liveFailure?.rpm > 300 ? 'stand' : null);
+  // The damage as drawn moves in 20% steps: health falls a little every live-engine step,
+  // and redrawing the engine's wear (geometry, materials) on each whole percent made the
+  // running engine stutter. Rounded up, so a new engine stays clean until it is a fifth worn.
+  const drawn = (h) => Math.ceil(h / 20) * 20;
   const shopDamage = {
-    piston: Math.floor(health.piston), bearing: Math.floor(health.bearing), valve: Math.floor(health.valve),
+    piston: drawn(health.piston), bearing: drawn(health.bearing), valve: drawn(health.valve),
     failed: blown, where: failedWhere,
     key: failedWhere === 'dyno' ? (pullFailure ? `dyno:${runs[0]?.id ?? ''}` : null)
       : failedWhere === 'stand' ? `stand:${liveFailure.t}` : null,
