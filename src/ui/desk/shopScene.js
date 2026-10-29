@@ -25,9 +25,13 @@ import { makeDebris, makeFlash, makeSmoke } from '../world/models/damageFx.js';
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
   bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
-  // The same, on a screen taller than wide (a phone held upright): high above the room,
-  // its ceiling lifted off, looking down over the whole floor so it fits the narrow frame.
-  bayTall: { pos: new THREE.Vector3(0, 15, 5.2), look: new THREE.Vector3(0, 0, -0.4), fov: 40 },
+  // The same, on a screen taller than wide (a phone held upright): above the front of the
+  // room, its ceiling and rafters lifted off, looking down and in at the floor. Framed by
+  // its WIDTH (`hfov`, degrees across): the stations from the dyno's car to the lift's fill
+  // the phone's width, and the back wall and the floor in front of the desk fill its height,
+  // whatever the phone's shape. Seen from straight above, the whole 16 m room had to fit
+  // the width, and left the phone's height half empty.
+  bayTall: { pos: new THREE.Vector3(0, 13, 10.6), look: new THREE.Vector3(0, 0.4, -0.6), fov: 60, hfov: 33 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart, the job board on the wall.
   dyno: { pos: new THREE.Vector3(-1.6, 2.2, 4.4), look: new THREE.Vector3(-4.2, 0.3, -0.8), fov: 48 },
@@ -503,10 +507,10 @@ export function buildShopScene(stage, init) {
   // The shop, dressed: its frames, benches, tools, racking, jacks, the hoist (shopDetail.js).
   // None of it moves, so it is drawn as a few merged meshes, one per material.
   const dressing = new THREE.Group();
-  root.add(dressing);
-  dressShop(dressing);
-  realize(dressing);
-  mergeStatic(dressing);
+  const rafters = new THREE.Group();
+  root.add(dressing, rafters);
+  dressShop(dressing, rafters);
+  for (const g of [dressing, rafters]) { realize(g); mergeStatic(g); }
   const wallC = W.wallBase;
   // A ceiling, so it is a room: from inside you see its roof, not the street's.
   const ceiling = box(16.6, 0.2, 15, wallC, { y: 5.1, z: 0.3 });
@@ -803,7 +807,7 @@ export function buildShopScene(stage, init) {
   const cam = stage.camera;
   const from = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
   const now = { pos: POSES.desk.pos.clone(), look: POSES.desk.look.clone(), fov: POSES.desk.fov };
-  /** @type {{pos: THREE.Vector3, look: THREE.Vector3, fov: number, exact?: boolean}} */
+  /** @type {{pos: THREE.Vector3, look: THREE.Vector3, fov: number, exact?: boolean, hfov?: number}} */
   let target = POSES.desk;
   let poseAspect = 0;
   let lastPose = 'desk';
@@ -932,6 +936,7 @@ export function buildShopScene(stage, init) {
       if (p === target) return;
       ceiling.visible = p !== POSES.bayTall;
       fixtures.visible = ceiling.visible;
+      rafters.visible = ceiling.visible;
       // The extraction hoses hang from the ceiling too.
       buildStand.duct.visible = ceiling.visible;
       runStand.duct.visible = ceiling.visible;
@@ -1052,8 +1057,13 @@ export function buildShopScene(stage, init) {
       // keep about the same width of shop in view: open the lens vertically to match, up
       // to the point where it would see out past the room; the markers stay on screen.
       const wide = 1.6;
-      const fov = cam.aspect >= wide || target.exact ? now.fov
-        : Math.min(80, 2 * THREE.MathUtils.radToDeg(Math.atan(Math.tan(THREE.MathUtils.degToRad(now.fov / 2)) * wide / cam.aspect)));
+      const deg = THREE.MathUtils.degToRad, rad = THREE.MathUtils.radToDeg;
+      // A pose framed by its width eases toward the lens that width needs on this screen.
+      const fov = target.hfov ? from.fov + (Math.min(80, 2 * rad(Math.atan(Math.tan(deg(target.hfov / 2)) / cam.aspect))) - from.fov) * k
+        : cam.aspect >= wide || target.exact ? now.fov
+          : Math.min(80, 2 * rad(Math.atan(Math.tan(deg(now.fov / 2)) * wide / cam.aspect)));
+      // What is shown is this pose's lens: the next move eases on from it, not from `fov`.
+      if (target.hfov) now.fov = fov;
       if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
       cam.lookAt(now.look);
       // The phone turned: frame the shop for its new shape.

@@ -161,9 +161,14 @@ function windowPane(w, h) {
  * One of the building's steel portal frames: an I-section column up each side wall and a
  * rafter across under the roof, haunched where they meet. The frames are what give a
  * shop its rhythm; the walls are only cladding between them.
+ *
+ * The rafter is returned on its own: it spans the room under the roof, so it goes with the
+ * ceiling when the view looks down through it (a phone held upright).
+ * @returns {{frame: THREE.Group, rafter: THREE.Group}}
  */
 function portalFrame() {
   const g = new THREE.Group();
+  const rafter = new THREE.Group();
   const H = 4.9;
   for (const s of [-1, 1]) {
     const x = s * 7.88;
@@ -172,9 +177,9 @@ function portalFrame() {
     g.add(box(0.36, 0.02, 0.32, W.metalDark, { x, y: 0.01, edge: false }));
     g.add(strut([x - s * 0.12, H - 0.7, 0], [x - s * 1.1, H - 0.12, 0], 0.22, 0.02, W.steel));
   }
-  g.add(box(15.5, 0.24, 0.02, W.steel, { y: H - 0.06 }));
-  g.add(box(15.5, 0.02, 0.18, W.steel, { y: H - 0.17 }));
-  return g;
+  rafter.add(box(15.5, 0.24, 0.02, W.steel, { y: H - 0.06 }));
+  rafter.add(box(15.5, 0.02, 0.18, W.steel, { y: H - 0.17 }));
+  return { frame: g, rafter };
 }
 
 /** A loose wheel, leaning or lying. */
@@ -194,12 +199,19 @@ function wheel() {
  * build bench at (−2.0, 0.6) and run stand at (1.05, 1.6), each with its computer to its
  * right, and the desk at (0, 5.2).
  * @param {THREE.Group} root
+ * @param {THREE.Group} overhead what spans the room under the roof (the frames' rafters),
+ *   kept apart so it can be hidden with the ceiling
  */
-export function dressShop(root) {
+export function dressShop(root, overhead) {
   const add = (o, x, y, z, ry = 0) => { o.position.set(x, y, z); o.rotation.y = ry; root.add(o); return o; };
 
   // ---- the building: its steel frames, the ceiling's lights hung from their rafters ----
-  for (const z of [-3.55, 0.15, 3.5]) add(portalFrame(), 0, 0, z);
+  for (const z of [-3.55, 0.15, 3.5]) {
+    const { frame, rafter } = portalFrame();
+    add(frame, 0, 0, z);
+    rafter.position.z = z;
+    overhead.add(rafter);
+  }
 
   // ---- floor: sealed concrete, bay lines, stains, a drain ----
   for (const [cx, cz] of [[-4.6, -1.6], [4.6, -1.6]]) {
