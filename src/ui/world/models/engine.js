@@ -103,7 +103,7 @@ export function makeEngine(spec = {}) {
   add(cyl(0.2, 0.2, 0.035, E.flywheel, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.02, seg: 32 }));
   add(cyl(0.21, 0.21, 0.012, E.pulley, { axis: 'z', y: 0.1 + blockH * 0.45, z: -len / 2 - 0.042, seg: 32 }));
   // The oil filter on its boss, low on the side, and the dipstick tube.
-  add(cyl(0.04, 0.04, 0.1, E.bottle, { axis: 'x', x: -(caseW / 2 + 0.06), y: 0.1 + caseH * 0.4, z: len * 0.15, seg: 16 }));
+  add(cyl(0.04, 0.04, 0.1, E.blockDark, { axis: 'x', x: -(caseW / 2 + 0.06), y: 0.1 + caseH * 0.4, z: len * 0.15, seg: 16 }));
   add(cyl(0.03, 0.03, 0.02, E.blockDark, { axis: 'x', x: -(caseW / 2 + 0.005), y: 0.1 + caseH * 0.4, z: len * 0.15, seg: 12 }));
 
   // ---- the banks: a head and its cover on each, the plugs or coils on top ----
