@@ -76,7 +76,7 @@ const HALF_V = { V6: Math.PI / 6, V8: Math.PI / 4 };
  * oil down the block and onto the floor, and worn rings blow smoke out of the oil filler
  * while it runs; worn bearings knock, which shakes it. A failed engine is a wreck, by what
  * failed: a rod out through a hole in the block, a holed piston's oil blown over
- * everything, a dropped valve's head with its cover split off. The failure itself plays
+ * everything, a burnt-through valve's port sooted black. The failure itself plays
  * once (`blowUp`): a flash, pieces thrown across the floor, and smoke that thins out to
  * wisps and stays until the engine is rebuilt.
  * @param {EngineSpec} spec
@@ -354,7 +354,14 @@ export function makeEngine(spec = {}) {
     damage = d;
     // What the last condition drew is thrown away, geometry and all: wear moves a percent
     // at a time while the engine runs, and each step redraws it.
-    dmg.traverse((o) => { const m = /** @type {THREE.Mesh} */ (o); if (m.isMesh) m.geometry.dispose(); });
+    dmg.traverse((o) => {
+      const m = /** @type {THREE.Mesh} */ (o);
+      if (!m.isMesh) return;
+      m.geometry.dispose();
+      // Materials made for one drawing of the damage are its own; the shared ones are not.
+      const mat = /** @type {THREE.Material} */ (m.material);
+      if (mat.userData.own) mat.dispose();
+    });
     dmg.clear();
     if (pool) { loose.remove(pool); pool.geometry.dispose(); pool = null; }
     for (const c of covers) { c.mesh.position.copy(/** @type {THREE.Vector3} */ (lifted.get(c.mesh))); c.mesh.rotation.set(0, 0, 0); }
@@ -398,6 +405,7 @@ export function makeEngine(spec = {}) {
         if (k) hole.lineTo(Math.cos(a) * r, Math.sin(a) * r); else hole.moveTo(Math.cos(a) * r, Math.sin(a) * r);
       }
       const holeM = new THREE.Mesh(new THREE.ShapeGeometry(hole), new THREE.MeshBasicMaterial({ color: W.black }));
+      /** @type {THREE.Material} */ (holeM.material).userData.own = true;
       holeM.position.set(-(caseW / 2 + 0.012), 0.1 + caseH * 0.45, -len * 0.15);
       holeM.rotation.y = -Math.PI / 2;
       dmg.add(holeM);
@@ -406,11 +414,16 @@ export function makeEngine(spec = {}) {
       rod.rotation.x = 0.3;
       dmg.add(rod);
     } else if (d.failed === 'valve') {
-      // The head that ate a valve: its cover split off and lifted on one bank.
-      const c = covers[0];
-      c.mesh.position.y += 0.035;
-      c.mesh.rotation.z = c.out * 0.35;
-      c.mesh.rotation.x = 0.08;
+      // A burnt-through exhaust valve (MAHLE, valve damage §5.7): from outside, the port it
+      // let combustion straight into is sooted black where the manifold meets the head.
+      const port = exhaustParts[0];
+      if (port) {
+        const soot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 12), new THREE.MeshBasicMaterial({ color: E.smokeDark, transparent: true, opacity: 0.85, depthWrite: false }));
+        soot.position.copy(inRoot(port, 0, 0.02, 0));
+        soot.lookAt(soot.position.clone().add(new THREE.Vector3(Math.sign(soot.position.x) || 1, 0.4, 0)));
+        /** @type {THREE.Material} */ (soot.material).userData.own = true;
+        dmg.add(soot);
+      }
     } else if (d.failed === 'piston') {
       // Crankcase pressure blew the oil out of the filler and over the top of the engine.
       for (const c of covers) {

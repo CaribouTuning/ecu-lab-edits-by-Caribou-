@@ -78,6 +78,6 @@ describe('a failed engine', () => {
   });
 
   it('does not stand in for choosing an engine', () => {
-    expect(sandbox({ failed: 'dropped valve', engineMissing: true }).id).toBe('choose');
+    expect(sandbox({ failed: 'burnt-through exhaust valve', engineMissing: true }).id).toBe('choose');
   });
 });
