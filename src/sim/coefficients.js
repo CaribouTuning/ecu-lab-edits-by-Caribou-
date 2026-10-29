@@ -584,6 +584,13 @@ export const COEFF = {
   PEAK_PRESSURE_LIMIT_BAR: 105,
 
   // --- Wear rates (percent of component life per pull) ---
+  // The MECHANISMS are sourced (MAHLE, "Engine components. Damage scenarios: causes,
+  // remedies, and avoidance", 2024): knock erodes the crown and fractures ring lands and
+  // rings (§2.1.2, §3.2); a lean mixture, low octane or too much boost melts the crown
+  // and top land (§2.1.2); fuel washing the oil off the bore "increases wear on the
+  // piston, piston rings, and cylinder surface dramatically" (§1.2); a valve that runs
+  // hot burns through (§5.7). The RATES are calibrations: no source gives life lost per
+  // degree of knock or per pull. docs/damage-model.md lists each.
   WEAR_KNOCK: 0.06,            // per degree of retard, per logged point
   WEAR_LEAN: 0.15,
   WEAR_VALVE_LEAN_BOOST: 0.4,
@@ -615,44 +622,78 @@ export const COEFF = {
   WEAR_BEARING_PER_BAR: 0.075,
 
   // --- Damage: what worn parts do to the engine, and live-only wear (damage.js) ---
-  // Blow-by at zero piston health, as a share of the trapped charge. A leak-down tester
-  // reads a healthy engine at 5-10% and calls 20-30% worn out; blow-by while running is
-  // a fraction of that leak, because the rings seal harder under combustion pressure.
-  // 12% of the charge is a worn-out engine that still runs, before it fails.
-  DAMAGE_RING_LEAK_MAX: 0.12,
-  // A burnt valve at zero: the charge the burnt cylinder loses back into its port. Half,
-  // because a valve burns at its edge and still seats over most of its face.
+  // Every value here is listed with its source, or marked as a calibration, in
+  // docs/damage-model.md. A SOURCED value comes from a cited measurement or
+  // specification; a CALIBRATION is this model's choice where no published figure exists,
+  // set to give the order of magnitude the sources describe.
+  //
+  // Extra blow-by of a worn-out ring pack, as a share of the trapped charge. SOURCED as
+  // an order of magnitude: DieselNet's rules of thumb put a worn engine's blow-by at twice
+  // a new one's (rated kW/90 against kW/180, dm³/s), and a new spark-ignition engine's at
+  // well under 1% of its intake flow (kW/180 dm³/s is about 0.5% of the air a gasoline
+  // engine breathes at rated power). So wearing out the rings adds about 1% of the charge.
+  // Leak-down percentages are a static test at cranking pressure and are NOT this number:
+  // in a running engine the leak has a few milliseconds per cycle.
+  DAMAGE_RING_LEAK_MAX: 0.01,
+  // A burnt valve at zero: the share of its own cylinder's charge it loses back into the
+  // port. CALIBRATION: MAHLE describes the mechanism (a valve that no longer seals cannot
+  // shed its heat, cracks and melts through; damage brochure §5.7), but no source gives a
+  // running leak fraction.
   DAMAGE_VALVE_LEAK_MAX: 0.5,
-  // Below this valve health the burnt cylinder stops firing, down to dead at zero: a
-  // misfire a tuner hears as a miss at idle long before it fails.
+  // Below this valve health the burnt cylinder stops firing, down to dead at zero.
+  // CALIBRATION: a burnt-through valve leaves a cylinder with no compression (MAHLE §5.7);
+  // where along the way it stops firing is this model's choice.
   DAMAGE_VALVE_DEAD_BELOW: 25,
-  // Extra friction from wiped bearings at zero bearing health, Pa of FMEP: about a fifth
-  // of a healthy engine's rubbing friction at speed, the drag of metal touching metal.
-  DAMAGE_BEARING_FMEP_PA: 30000,
-  // Oil pressure a fully worn bottom end loses through its opened clearances. Bearing
-  // clearance doubling roughly halves pressure at a fixed pump, which is what a worn
-  // engine's oil light at hot idle is.
-  DAMAGE_BEARING_OIL_LOSS: 0.5,
-  // The oil film a running bearing needs, as a share of what this engine's healthy pump
-  // gives at the same speed and oil temperature, and never less than an oil-pressure
-  // light's switch point (about 5 psi). The share sits under what a fully worn bottom end
-  // still makes on its own (1 − DAMAGE_BEARING_OIL_LOSS), so worn clearances lower the
-  // gauge without starving the bearings by themselves: starvation takes a failing pump
-  // or low oil on top. Judging against the healthy pump, not a fixed psi-per-RPM rule,
-  // keeps hot thin oil at idle, which every engine shows, from counting as starvation.
+  // Worn main and rod bearings: their clearance opens, and oil escapes through them
+  // faster. A pressure-fed bearing passes oil as laminar Poiseuille flow, which goes with
+  // the CUBE of the clearance (the pressure-fed journal bearing model in MathWorks
+  // Simscape Fluids; any lubrication text). The pump is positive displacement, so below
+  // its relief valve the pressure falls in proportion to how much more the system leaks.
+  //   share of the oil flow the crank bearings take: SOURCED, about 25% (SAE 2020-28-0338,
+  //   a 1-D model of a 1.5 L four-cylinder diesel's lubrication circuit; the rest goes to
+  //   the head, the chain, piston cooling and the relief);
+  //   clearance of a worn-out bearing against a new one: SOURCED from a service limit,
+  //   Toyota 2AZ-FE rod bearings, standard 0.024-0.048 mm, maximum 0.08 mm (Toyota
+  //   T-SB-0030-15): 0.08 against the middle of the standard range is 2.22 times.
+  // Together: a bottom end worn to the limit leaks (0.75 + 0.25 × 2.22³) = 3.5 times as
+  // freely, so the pump makes under a third of the pressure below its relief, and the
+  // relief still caps it at speed: the low hot-idle pressure that is a worn engine's
+  // classic symptom.
+  // Wear does NOT add friction: hydrodynamic friction falls as clearance grows (Petroff's
+  // law, torque ∝ 1/c), and the drag of a seizing bearing is the failure itself.
+  DAMAGE_BEARING_OIL_SHARE: 0.25,
+  DAMAGE_BEARING_CLEARANCE_WORN: 2.22,
+  // The oil pressure a running bearing needs, as a share of what this engine's healthy
+  // pump gives at the same speed and oil temperature, and never less than a floor.
+  // SOURCED from Toyota's service specifications, which give a minimum and a normal
+  // range: at idle 29 kPa or more; at 3000 rpm 245 kPa minimum against a range topping
+  // out at 490-539 kPa (Hilux, 1MZ-FE and 3MZ-FE manuals), so the minimum is 45-50% of a
+  // healthy engine's pressure. Below the maker's minimum is short of oil. Judged against
+  // the healthy pump, so hot thin oil at idle, which every engine shows, is not
+  // starvation. A bottom end past about two-thirds worn falls below it on its own (the
+  // clearance figures above put it at 45% of healthy there) and starts starving itself:
+  // the accelerating last stage of a worn bearing, before it knocks and spins.
   DAMAGE_OIL_FILM_SHARE: 0.45,
-  DAMAGE_OIL_FILM_MIN_KPA: 35,
-  // Bearing life per second with no oil pressure at all. A dry bearing lasts seconds to
-  // tens of seconds under load: 4% a second spends a whole bottom end in 25 s.
-  DAMAGE_OIL_STARVE_PER_S: 4,
-  // Bearing life per second per unit of overspeed inertia load, (rpm / rated)² − 1:
-  // 10% over the rated speed costs about 2% a second, so a held limiter set past the
-  // rating kills the bottom end in under a minute.
+  DAMAGE_OIL_FILM_MIN_KPA: 29,
+  // Bearing life per second with no oil pressure at all. SOURCED: with its oil supply
+  // stopped, a motored 2.5 L four-cylinder on conventional bearings seized in 28 s (Nissan,
+  // US 9,109,627 B2, Comparative Example 4). 100% / 28 s. A firing engine under load
+  // loads its bearings harder, so this is the gentle end; short of oil rather than dry, it
+  // is charged in proportion to the shortfall.
+  DAMAGE_OIL_STARVE_PER_S: 3.6,
+  // Bearing life per second per unit of overspeed inertia load. The load is SOURCED
+  // physics: a reciprocating mass on a slider crank pulls on its rod with m r ω²
+  // (cos θ + cos 2θ / n), so past the rated speed it grows as (rpm / rated)² and the
+  // excess is (rpm / rated)² − 1. The rate is a CALIBRATION: 10% over the rated speed
+  // costs about 2% a second, so a limiter held past the rating wears the bottom end out in
+  // about a minute; no published rate of rod-bearing wear with overspeed exists.
   DAMAGE_OVERSPEED_PER_S: 10,
-  // Coolant past where a pressurised system boils, and piston and valve life per second
-  // per degree over it: a boiled engine at 135 °C scuffs its pistons and burns valves
-  // over a couple of minutes, as one with a dead fan does.
-  DAMAGE_OVERHEAT_C: 120,
+  // Where the coolant boils. SOURCED: a 50/50 ethylene glycol coolant under a 15 lb
+  // pressure cap boils over at 265 °F, 129 °C (Prestone's rating for its 50/50 premix).
+  // Past it the head and bores lose their coolant contact and scuff and burn (MAHLE,
+  // piston seizure from overheating, §2.2.1). The rate per degree is a CALIBRATION: an
+  // engine at 135 °C, a dead fan, spends its pistons and valves in a few minutes.
+  DAMAGE_OVERHEAT_C: 129,
   DAMAGE_OVERHEAT_PER_C_S: 0.05,
   // Average peak pressure that raises the bottom-end advisory. It means "boosted or
   // high-compression loading", not "you drove it", so it sits above every bolt-on

@@ -51,7 +51,7 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {{regulator: string, basePressureKpa: number, pumpIdx: number}} fuelSystem
  * @property {{map: string, wideband: string, iat: string, ect: string, flex: boolean}} sensorHw
  * @property {{type: string, springPsi: number}} gate
- * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, bearingFmepPa: number}|null} [wear] the
+ * @property {{ringLeakFrac: number, cylLossFrac: number, deadFrac: number, oilConductance?: number}|null} [wear] the
  *   engine's worn parts (damage.js `wearEffects`)
  * @property {string} vvt VVT hardware id
  * @property {string} coil coil id
@@ -481,6 +481,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   // the log say "λ 0.96, leaner than the λ 1.02 limit".
   let leanTripLambda = 0;
   const mod = { boostCutPsi: 0, extraFuelPct: 0, extraRetardDeg: 0, cutFrac: 0, cutType: 'fuel', loadScale: 1, highDet: false, nitrousFrac: 0 };
+  // The pump's delivery against how freely the system leaks: a weak pump or low oil, and
+  // worn crank bearings (damage.js `oilConductance`).
+  const oilFlow = (cond.oilHealth ?? 1) / (hw.wear?.oilConductance ?? 1);
 
   // Nitrous: the controller's window and, on the dyno, its progressive ramp in RPM — the
   // pull sweeps at a known rate, so seconds since the window opened are RPM travelled.
@@ -561,7 +564,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     if (P.sensorLimp && resolved.sensed.fault && hw.turboOn && mod.boostCutPsi < E.BOOST_CUT_ALL_PSI) {
       protect.add('limp'); mod.boostCutPsi = E.BOOST_CUT_ALL_PSI; changed = true;
     }
-    if (P.oilEnabled && oilPressureKpa(rpm, cond.oilC, cond.oilHealth ?? 1) < read1(P.oilMinKpa, rpm) && mod.cutFrac < 1) {
+    if (P.oilEnabled && oilPressureKpa(rpm, cond.oilC, oilFlow) < read1(P.oilMinKpa, rpm) && mod.cutFrac < 1) {
       protect.add('oil'); mod.cutFrac = 1; mod.cutType = 'fuel'; changed = true;
     }
     // ---- TORQUE LIMIT, reduced by the calibrated method until it fits.
@@ -579,7 +582,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
   // Intake-temperature protection acts inside the spark resolve, not in the loop above,
   // so it is named here — a retard the player cannot see the reason for teaches nothing.
   if (cal.protect.iatEnabled && pt.sensedIat > cal.protect.iatLimitC) protect.add('iat');
-  const oil = oilPressureKpa(rpm, cond.oilC, cond.oilHealth ?? 1);
+  const oil = oilPressureKpa(rpm, cond.oilC, oilFlow);
   return {
     ...pt,
     boostTarget: Number(solved.target.toFixed(1)),
