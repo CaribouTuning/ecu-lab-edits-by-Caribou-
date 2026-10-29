@@ -543,11 +543,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 37-field
-  // contract this action documents: a stray write grows the changed set past 37, a
-  // dropped write shrinks it below 37, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 38-field
+  // contract this action documents: a stray write grows the changed set past 38, a
+  // dropped write shrinks it below 38, and the failure message names the field either
   // way.
-  it('changes exactly the 37 documented fields, plus the two history fields', () => {
+  it('changes exactly the 38 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -560,7 +560,7 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       // An engine now exists: SANDBOX's first launch has none until one is chosen.
       'build.engineReady', 'build.assumed',
       // The induction the engine left the factory with, for RESET ALL TO STOCK.
-      'build.factoryInduction',
+      'build.factoryInduction', 'build.originPresetId',
       // The factory car's ECU-side parts, which its factory calibration is set up for.
       'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
       'build.plugGapMm', 'build.ethanolPct',

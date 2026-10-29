@@ -30,6 +30,8 @@ import {
  * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
+ * @property {string|null} [originPresetId] the factory engine this build started as, kept
+ *   through part changes (presetId is not); null for an engine of the player's own
  * @property {{turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null} [factoryInduction]
  *   the induction the engine left the factory with (null: naturally aspirated); what RESET
  *   ALL TO STOCK calibrates for
@@ -267,6 +269,9 @@ export function makeInitialState({ blank = false } = {}) {
       // The induction the engine left the factory with; none (naturally aspirated) until a
       // factory engine is chosen (APPLY_PRESET).
       factoryInduction: null,
+      // The factory engine this build started as (APPLY_PRESET), kept through part changes;
+      // null for an engine of the player's own.
+      originPresetId: null,
       // A supercharger (a BLOWER_OPTS id) and its pulley ratio, and a nitrous kit. None
       // fitted to start; a turbo and a supercharger are never fitted together.
       blowerId: null,
