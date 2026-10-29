@@ -70,7 +70,7 @@ describe('entry', () => {
   it('opens on the start screen', () => {
     render(<EcuLab />);
     // Three ways in, not one: a career of customer cars, free play, and the tutorial.
-    for (const way of ['CAREER', 'SANDBOX', 'TUTORIAL']) {
+    for (const way of ['Career', 'Sandbox', 'Tutorial']) {
       expect(screen.getByRole('button', { name: way })).toBeTruthy();
     }
   });
