@@ -203,6 +203,7 @@ export function createStage(canvas, opts = {}) {
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post));
   const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
+  let maxDpr = opts.maxDpr ?? 2;
   let quality = opts.quality ?? 'normal';
   let cssW = 0;
   let cssH = 0;
@@ -225,7 +226,7 @@ export function createStage(canvas, opts = {}) {
       // A sketch is drawn at full resolution: pen lines, not pixels.
       // A sketch is drawn at the screen's own resolution, retina included (to 2x): pen
       // lines, not pixels, and sharp on a phone.
-      factor = opts.sketch ? 1 / Math.min(opts.maxDpr ?? 2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
+      factor = opts.sketch ? 1 / Math.min(maxDpr, (typeof window !== 'undefined' && window.devicePixelRatio) || 1) : Math.max(1, Math.round(cssH / PIXEL_ROWS[quality]));
       const { w: iw, h: ih } = stage.size;
       renderer.setSize(iw, ih, false);
       target.setSize(iw, ih);
@@ -242,6 +243,14 @@ export function createStage(canvas, opts = {}) {
 
     /** @param {keyof typeof PIXEL_ROWS} q */
     setQuality(q) { quality = q; stage.resize(cssW, cssH); },
+
+    /**
+     * Cap the drawn pixels per screen pixel (a sketch only) and redraw at that size: how a
+     * stage that cannot hold its frame rate gives up resolution instead of smoothness
+     * (useStage.js).
+     * @param {number} n
+     */
+    setMaxDpr(n) { maxDpr = n; stage.resize(cssW, cssH); },
 
     /**
      * Light and sky for a time of day. `t` runs 0 (noon) to 3 (the dead of night) and

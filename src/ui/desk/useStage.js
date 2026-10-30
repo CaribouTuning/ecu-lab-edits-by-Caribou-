@@ -13,6 +13,22 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { createStage } from '../world/stage.js';
+import { createGovernor } from './stageGovernor.js';
+
+const RUNG_KEY = 'ecu-lab-stage-rung';
+
+/** The rung a previous visit settled on, so a slow device does not relearn it every time. */
+function savedRung() {
+  try {
+    const n = Number(window.localStorage.getItem(RUNG_KEY));
+    return Number.isInteger(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+function saveRung(n) {
+  try { window.localStorage.setItem(RUNG_KEY, String(n)); } catch { /* private window: it just relearns */ }
+}
 
 /**
  * @param {(stage: ReturnType<typeof createStage>) => {update?: (dt: number) => (boolean|void), dispose?: () => void}} setup
@@ -38,6 +54,9 @@ export function useStage(setup, opts = {}) {
       return undefined;
     }
     stageRef.current = stage;
+    // Only the lit shop (`real`) is heavy enough to need it; the small engine views are not.
+    const governor = createGovernor(opts.real ? savedRung() : 0);
+    if (governor.rung > 0) stage.setMaxDpr(governor.dpr);
     const scene = setupRef.current(stage) ?? {};
     // A resize clears the canvas, so the next frame is drawn whatever update says.
     let dirty = true;
@@ -46,9 +65,15 @@ export function useStage(setup, opts = {}) {
     let raf = 0;
     let last = 0;
     const frame = (now) => {
-      const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
+      const ms = last ? now - last : 0;
+      const dt = last ? Math.min(0.1, ms / 1000) : 0;
       last = now;
-      if (scene.update?.(dt) !== false || dirty) { stage.render(); dirty = false; }
+      const draw = scene.update?.(dt) !== false || dirty;
+      if (draw) { stage.render(); dirty = false; }
+      if (opts.real && governor.frame(ms, draw)) {
+        stage.setMaxDpr(governor.dpr); dirty = true;
+        saveRung(governor.rung);
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
