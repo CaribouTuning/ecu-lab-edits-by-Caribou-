@@ -149,7 +149,7 @@
   .tuneTabs {
     flex-direction: row; flex-wrap: nowrap; gap: 0; overflow-x: auto; overscroll-behavior-x: contain;
     scrollbar-width: none; border-bottom: 1px solid var(--line); padding: 0 6px;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent); mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
   }
   .tuneTabs::-webkit-scrollbar { display: none; }
   .tuneTab {
