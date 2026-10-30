@@ -164,9 +164,9 @@ export function pointWear(p) {
   // bottom end apart, which is what happens when a high-octane fuel is used to make
   // high static compression survivable under boost.
   if (p.pressureRisk) piston += (p.peakPressure - COEFF.PEAK_PRESSURE_LIMIT_BAR) * COEFF.WEAR_PISTON_PER_BAR;
-  // Knock nobody corrected: the ECU could not hear it, so it ran on, and it is charged
-  // at twice the rate of knock the controller caught and pulled.
-  if (p.knockUnheard > 0) piston += p.knockUnheard * COEFF.WEAR_KNOCK * 2;
+  // Knock nobody corrected: the ECU could not hear it, so it ran on. This is the knock
+  // that destroys pistons, charged far above knock the controller caught and pulled.
+  if (p.knockUnheard > 0) piston += p.knockUnheard * COEFF.WEAR_KNOCK_UNHEARD;
   return { piston, valve };
 }
 
@@ -236,15 +236,21 @@ export function liveWear({ pt, dt, rpm, oilKpa, healthyOilKpa, coolantC, ratedRp
   let piston = w.piston * k;
   let valve = w.valve * k;
   // A dyno pull charges its average peak pressure over the threshold once; a second of
-  // running at it costs that over the pull's length.
-  let bearing = Math.max(0, pt.peakPressure - bearingFreeBar) * COEFF.WEAR_BEARING_PER_BAR * bearingWearMult * (dt / pullSeconds);
+  // running at it costs that over the pull's length. The threshold is for a pull's
+  // average, so one instant is judged against it plus the spread a stock pull shows
+  // between its average and its highest point.
+  const pointFreeBar = bearingFreeBar + COEFF.BEARING_LIVE_POINT_SPREAD_BAR;
+  let bearing = Math.max(0, pt.peakPressure - pointFreeBar) * COEFF.WEAR_BEARING_PER_BAR * bearingWearMult * (dt / pullSeconds);
   // Oil starvation: the film holds while pressure stays within a share of what this
   // engine's own healthy pump gives at this speed and oil temperature (hot thin oil at
   // idle is normal, not starvation); short of it, the bearing runs metal to metal.
   const needKpa = Math.max(COEFF.DAMAGE_OIL_FILM_MIN_KPA, healthyOilKpa * COEFF.DAMAGE_OIL_FILM_SHARE);
   if (rpm > 300 && oilKpa < needKpa) bearing += COEFF.DAMAGE_OIL_STARVE_PER_S * (1 - oilKpa / needKpa) * dt;
-  // Overspeed: inertia load on the rod grows with the square of engine speed.
-  if (ratedRpm > 0 && rpm > ratedRpm) bearing += COEFF.DAMAGE_OVERSPEED_PER_S * ((rpm / ratedRpm) ** 2 - 1) * dt;
+  // Overspeed: inertia load on the rod grows with the square of engine speed. Up to a
+  // margin over the rating it is carried without wear: a factory engine is rated at its
+  // own limiter, and bouncing off it is not abuse.
+  const overLoad = ratedRpm > 0 ? (rpm / ratedRpm) ** 2 - COEFF.DAMAGE_OVERSPEED_FREE_LOAD : 0;
+  if (overLoad > 0) bearing += COEFF.DAMAGE_OVERSPEED_PER_S * overLoad * dt;
   // Boiling coolant: the head and the bores lose their cooling and scuff and burn.
   const hot = coolantC - COEFF.DAMAGE_OVERHEAT_C;
   if (hot > 0) {

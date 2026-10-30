@@ -55,7 +55,10 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
     () => defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate }),
     [build],
   );
-  const fields = ECU_META.filter((m) => m.section === section && (showPro || !m.pro));
+  // A field for one kind of nitrous kit only (a dry kit's fuel) is not offered on the
+  // other: on a wet kit it does nothing, and a tuner reaching for it is chasing nothing.
+  const fitsKit = (m) => !m.nitrousKit || m.nitrousKit === build.nitrous?.kit;
+  const fields = ECU_META.filter((m) => m.section === section && (showPro || !m.pro) && fitsKit(m));
   const hiddenPro = ECU_META.filter((m) => m.section === section && m.pro).length;
   const groups = [];
   for (const f of fields) {

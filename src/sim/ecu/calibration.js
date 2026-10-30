@@ -278,6 +278,7 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
  * @property {{id: string, label: string}[]} [options]
  * @property {string} help what it physically does — never a promise of power
  * @property {boolean} [pro] an advanced setting, collapsed until asked for
+ * @property {'wet'|'dry'} [nitrousKit] offered only for this kind of nitrous kit
  */
 
 const onOff = [{ id: 'true', label: 'On' }, { id: 'false', label: 'Off' }];
@@ -495,10 +496,10 @@ export const ECU_META = [
     help: 'Nitrous stays off on a cold engine: cold fuel does not atomise, the mixture runs uneven between cylinders, and the rings and pistons are not up to size.' },
   { path: 'nitrous.retardDeg', section: 'nitrous', group: 'Spark', label: 'Retard while spraying', kind: 'number', unit: '°', min: 0, max: 20, step: 0.5, decimals: 1,
     help: 'Degrees pulled from the whole spark table while nitrous flows. The extra oxygen burns faster and hotter and the cylinder pressure rises, so the knock limit drops. The rule of thumb is about 2° per 50 hp of shot; the pull log shows whether this engine needs more.' },
-  { path: 'nitrous.dryFuelPct', section: 'nitrous', group: 'Fuel', label: 'Dry kit fuel', kind: 'number', unit: '%', min: 0, max: 200, step: 5,
+  { path: 'nitrous.dryFuelPct', section: 'nitrous', group: 'Fuel', label: 'Dry kit fuel', kind: 'number', unit: '%', min: 0, max: 200, step: 5, nitrousKit: 'dry',
     help: 'A dry kit sprays only nitrous; the ECU must add the fuel through the injectors. 100% adds what the kit is made for: the fuel for its rated shot, a little rich. Less runs the nitrous lean, which melts pistons. It has no effect on a wet kit, which brings its own fuel.' },
   { path: 'nitrous.fuelTrimPct', section: 'nitrous', group: 'Fuel', label: 'Fuel correction while spraying', kind: 'number', unit: '%', min: -100, max: 100, step: 1,
-    help: 'Injector fuel added or taken out while the nitrous flows, as a share of the fuel the shot needs, so it follows the dose and the rev range. On a wet kit this is usually a reduction: the kit brings its own fuel, and the nitrous vapour takes up room the air would have had, which a speed-density ECU cannot see, so it keeps fuelling for air that is not there. The pull log suggests a number when the mixture goes rich or lean on the spray.' },
+    help: 'Injector fuel added or taken out while the nitrous flows, as a share of the fuel the shot needs, so it follows the dose and the rev range. On a wet kit this is usually a reduction: the kit is jetted rich on purpose (about λ 0.80 on its own), and the nitrous vapour takes up room the air would have had, which a speed-density ECU cannot see, so it keeps fuelling for air that is not there. Together they run a 50 shot about 6% richer than your AFR table asks for. This is the setting that brings the spray back to your target: the AFR table moves the spray and the no-spray mixture together, so leaning it to fix the spray leaves the engine lean when the nitrous stops. Take out too much and the lean cut shuts the nitrous off. The pull log suggests a number when the mixture goes rich or lean on the spray.' },
   { path: 'nitrous.startPct', section: 'nitrous', group: 'Progressive', label: 'Start at', kind: 'number', unit: '%', min: 10, max: 100, step: 5,
     help: 'How much of the shot is sprayed the moment the window opens. A progressive controller pulses the solenoids to ramp the shot in rather than hit the tyres and the crank with all of it at once. 100% is on/off.' },
   { path: 'nitrous.rampS', section: 'nitrous', group: 'Progressive', label: 'Ramp to full over', kind: 'number', unit: 's', min: 0, max: 5, step: 0.1, decimals: 1,

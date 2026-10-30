@@ -245,7 +245,10 @@ describe('live wear from operating conditions', () => {
     // Hot thin oil at idle reads low on every engine; against its own healthy pump it is
     // not starvation.
     expect(S.liveWear({ ...base, rpm: 800, oilKpa: 100, healthyOilKpa: 120 }).bearing).toBe(0);
-    expect(S.liveWear({ ...base, rpm: 7700 }).bearing).toBeGreaterThan(0);
+    // A factory engine bounces off its own limiter without harm: within 12% of the rated
+    // speed (1.25 times its inertia load) costs nothing; past it, the bearings wear.
+    expect(S.liveWear({ ...base, rpm: 7700 }).bearing).toBe(0);
+    expect(S.liveWear({ ...base, rpm: 8000 }).bearing).toBeGreaterThan(0);
     const hot = S.liveWear({ ...base, coolantC: 130 });
     expect(hot.piston).toBeGreaterThan(0);
     expect(hot.valve).toBeGreaterThan(0);
@@ -257,3 +260,35 @@ describe('live wear from operating conditions', () => {
 
 /** The harness's dyno pull arguments, with the ECU in the loop, as the app runs them. */
 const sweepOf = (eng) => eng.pullArgs(100);
+
+describe('a stock engine run as its maker meant lasts', () => {
+  it('two minutes on the stand, idling, blipped to the limiter and held flat out, costs it nothing', () => {
+    // A stock VQ35DE once lost 12% of its life in five minutes on the stand: every bounce
+    // off its own limiter was charged as overspeed, and every instant at its torque peak
+    // against the bearing threshold that was set for a whole pull's average.
+    const eng = makeEngine({ preset: 'vq35de-revup' });
+    const pedal = (t) => (t % 20 < 4 ? 100 : t % 20 < 8 ? 60 : 0);
+    const { state } = runLive(eng, NEW, { seconds: 120, pedal: 0 });
+    let s = state, health = NEW;
+    const cfg = { ...eng.liveCfg({}), health };
+    for (let i = 0; i < 120 / 0.05; i++) {
+      s = S.liveStep(s, 0.05, { throttle: pedal(i * 0.05), load: 0 }, { ...cfg, health });
+      if (s.wear) health = S.applyWear(health, s.wear);
+    }
+    expect(s.running).toBe(true);
+    expect(health.bearing).toBe(100);
+    expect(health.valve).toBe(100);
+    expect(health.piston).toBeGreaterThan(99.9);
+  });
+
+  it('a turbo bolted on before the tables are tuned costs a little per pull, not half the engine', () => {
+    // The ECU's knock control hears it and pulls timing: knock at the limit, which is what
+    // knock control is for. It once cost 19% of the pistons per pull.
+    const eng = makeEngine({ preset: 'vq35hr', build: { turboOn: true, boostCurve: Array(8).fill(7), injIdx: 3, ecuInjectorCc: 650 } });
+    const r = S.simulateSweep({ ...sweepOf(eng), health: NEW });
+    expect(r.points.some((p) => p.knockPull > 3)).toBe(true);
+    expect(r.wear.piston).toBeGreaterThan(0);
+    expect(r.wear.piston).toBeLessThan(3);
+    expect(r.failure).toBeNull();
+  });
+});

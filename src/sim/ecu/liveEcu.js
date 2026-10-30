@@ -543,7 +543,14 @@ export function liveStepEcu(st, dt, input, cfg) {
       else if (P.leanAction === 'torque') e.torqueRetard = Math.min(E.LEAN_RETARD_MAX_DEG, e.torqueRetard + E.LEAN_RETARD_RATE_DEG_S * dt);
       else e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi);
     }
-    if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) {
+    // The lean cut judges the mixture the nitrous makes, so it waits for the wideband to
+    // read the spray and then for the reading to hold, as the lean protection does. Judged
+    // on the first step, it read the mixture from before the shot's fuel arrived, and a
+    // base tune near the limit (or a correction that brought the spray to its target) shut
+    // the nitrous off the instant it opened.
+    if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) e.nitrousLeanT = (e.nitrousLeanT ?? 0) + dt;
+    else e.nitrousLeanT = 0;
+    if (e.nitrousLeanT > E.LEAN_CONFIRM_S) {
       prot.push('nitrous lean');
       e.nitrousCut = true;
     }

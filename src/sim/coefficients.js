@@ -591,10 +591,25 @@ export const COEFF = {
   // piston, piston rings, and cylinder surface dramatically" (§1.2); a valve that runs
   // hot burns through (§5.7). The RATES are calibrations: no source gives life lost per
   // degree of knock or per pull. docs/damage-model.md lists each.
-  WEAR_KNOCK: 0.06,            // per degree of retard, per logged point
+  //
+  // Knock the ECU heard and pulled timing for is charged far below knock nobody
+  // corrected. Closed-loop knock control exists so an engine can run AT its knock limit:
+  // the controller retards on the first light events and creeps back until it hears them
+  // again, so a production engine meets its limit routinely on poor fuel or a hot day
+  // (Bosch Automotive Handbook, "Knock control"). The heavy, sustained knock that erodes
+  // crowns and cracks ring lands is the knock the controller did not hear. At the old
+  // shared rate (0.06) a turbo bolted onto a stock VQ35HR at 7 psi, on its own knock
+  // control, spent 19% of its pistons in one dyno pull before it could be tuned, and a
+  // few pulls finished it; at 0.005 that pull costs about 1.6%, and the same knock unheard
+  // still costs what it did.
+  WEAR_KNOCK: 0.005,           // per degree of retard the ECU pulled, per logged point
+  WEAR_KNOCK_UNHEARD: 0.12,    // per degree of knock nobody corrected, per logged point
   WEAR_LEAN: 0.15,
   WEAR_VALVE_LEAN_BOOST: 0.4,
-  WEAR_RICH_BORE_WASH: 0.9,    // per unit of lambda below the rich threshold
+  // Fuel dilution washes the bore over hours of running (cold starts, a leaking
+  // injector), not over seconds: at the old 0.9, injectors fitted without rescaling the
+  // ECU (twice the fuel, lambda 0.42) cost 18% of the rings in one pull.
+  WEAR_RICH_BORE_WASH: 0.09,   // per unit of lambda below the rich threshold
   // Piston, rod and rod-bolt damage per bar of peak pressure past
   // PEAK_PRESSURE_LIMIT_BAR, per logged point. A build sitting 20 bar over the limit
   // across a whole sweep spends about 5% of piston life per pull — serious, but slower
@@ -620,6 +635,15 @@ export const COEFF = {
   BEARING_PRESSURE_FREE_BAR: 60,
   BEARING_PRESSURE_FREE_BAR_BOOST_RATED: 80,
   WEAR_BEARING_PER_BAR: 0.075,
+  // The thresholds above are for a pull's AVERAGE peak pressure. The live engine is
+  // judged one instant at a time, and a stock pull's highest point sits 6-11 bar above
+  // its average across the catalogue (VQ35HR 58 average, 69 at its torque peak; EA888 R
+  // 76 and 85). DERIVED from those pulls: an instant is free up to the threshold plus
+  // the widest of those spreads, so no factory engine on its factory tune wears its
+  // bearings anywhere in its range, as none does on the dyno. Judged against the bare
+  // average threshold, a stock VQ35DE held at full throttle on the stand lost 2% of its
+  // bearings in five minutes.
+  BEARING_LIVE_POINT_SPREAD_BAR: 11,
 
   // --- Damage: what worn parts do to the engine, and live-only wear (damage.js) ---
   // Every value here is listed with its source, or marked as a calibration, in
@@ -688,6 +712,14 @@ export const COEFF = {
   // costs about 2% a second, so a limiter held past the rating wears the bottom end out in
   // about a minute; no published rate of rod-bearing wear with overspeed exists.
   DAMAGE_OVERSPEED_PER_S: 10,
+  // The overspeed load a bottom end carries without wear, as a multiple of the load at its
+  // rated speed. CALIBRATION: the rating is a practice band, not a failure point
+  // (bottomEnd.js), and a factory engine is rated at its own limiter, which every engine
+  // bounces off and overshoots by a hundred RPM or so without harm. Charged from the
+  // rated speed itself, a stock VQ35DE revved on the stand lost 3-6% of its bearings in
+  // five minutes, all of it on its own factory limiter. Wear starts at 1.25 times the
+  // rated load, 12% over the rated speed.
+  DAMAGE_OVERSPEED_FREE_LOAD: 1.25,
   // Where the coolant boils. SOURCED: a 50/50 ethylene glycol coolant under a 15 lb
   // pressure cap boils over at 265 °F, 129 °C (Prestone's rating for its 50/50 premix).
   // Past it the head and bores lose their coolant contact and scuff and burn (MAHLE,
