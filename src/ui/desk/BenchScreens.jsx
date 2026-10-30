@@ -8,7 +8,7 @@
 
 import React from 'react';
 
-import { useSession } from '../state/StoreProvider.jsx';
+import { useBuild, useSession } from '../state/StoreProvider.jsx';
 import { liveStatus } from '../screens/dash/LiveScreen.jsx';
 
 import styles from './BenchScreens.module.css';
@@ -75,6 +75,7 @@ function Bar({ label, value, unit = '', pct, tone = 'acc', big = false }) {
  */
 export function LiveBars({ fullScaleRpm, redline }) {
   const [session] = useSession();
+  const [build] = useBuild();
   const live = /** @type {Record<string, any>} */ (session.live);
   const off = !live.running && !live.cranking;
   const lam = off ? NaN : live.sensedLambda;
@@ -93,7 +94,7 @@ export function LiveBars({ fullScaleRpm, redline }) {
   ];
   return (
     <>
-      <p className={styles.status}>{liveStatus(live)}</p>
+      <p className={styles.status}>{liveStatus(live, build)}</p>
       <BarGraph rpm={live.sensedRpm} fullScaleRpm={fullScaleRpm} redline={redline} throttle={live.effThrottle ?? 0} cut={!!live.fuelCut} meters={meters} />
     </>
   );

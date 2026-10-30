@@ -11,7 +11,7 @@
 
 import React from 'react';
 
-import { clamp } from '../../../sim/index.js';
+import { INJECTOR_OPTS, clamp } from '../../../sim/index.js';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
@@ -72,12 +72,32 @@ function TrimBar({ label, value }) {
 }
 
 /**
+ * The injectors fitted against the size the ECU is set for, when they differ by more than
+ * the 5% the pull log flags (point.js `injMismatch`).
+ * @param {{injIdx?: number, ecuInjectorCc?: number}|undefined} build
+ * @returns {{fitted: number, set: number}|null}
+ */
+function injectorMismatch(build) {
+  const fitted = INJECTOR_OPTS[build?.injIdx ?? -1]?.cc;
+  const set = build?.ecuInjectorCc;
+  if (!fitted || !set || Math.abs(fitted / set - 1) <= 0.05) return null;
+  return { fitted, set };
+}
+
+/**
  * What the ECU is doing right now, in a sentence: LIVE's status line, and the engine
  * stand's computer's.
  * @param {Record<string, any>} live the session's live engine
+ * @param {{injIdx?: number, ecuInjectorCc?: number}} [build] the injectors fitted and the
+ *   size the ECU is set for, to say why an engine will not start
  * @returns {string}
  */
-export function liveStatus(live) {
+export function liveStatus(live, build) {
+  const inj = injectorMismatch(build);
+  // A cylinder far too rich to light: the plugs are wet and it cranks without firing.
+  const flooded = live.cranking && !live.running && (live.live?.lambda ?? 1) < 0.5;
+  if (flooded && inj && inj.fitted > inj.set) return `Cranking, not firing: flooded. The ECU is set for ${inj.set} cc injectors and ${inj.fitted} cc are fitted, so every pulse is ${(inj.fitted / inj.set).toFixed(1)}× the fuel it means to give. Set the injector flow on TUNE → Injectors to ${inj.fitted} cc, then start it again.`;
+  if (flooded) return 'Cranking, not firing: flooded. The cylinders are far too rich to light. Check the cranking fuel and the injector flow on TUNE → Injectors.';
   if (live.cranking && !live.running) return 'Starter engaged…';
   if (!live.running) return 'Engine off. Start it to watch the ECU work in real time.';
   if (live.limiterCut || live.onLimiter) return 'On the rev limiter. The ECU is cutting cylinders to hold the engine at its limit. With a fuel cut those cylinders pump plain air, so the wideband reads lean here though the mixture is not.';
@@ -85,6 +105,7 @@ export function liveStatus(live) {
   if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
   if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
   if (live.coolantC < 80) return 'Warming up: the ECU adds fuel until the coolant reaches 80 °C.';
+  if (inj) return `The ECU is set for ${inj.set} cc injectors and ${inj.fitted} cc are fitted, so it is ${inj.fitted > inj.set ? 'over' : 'under'}fuelling everywhere by ${Math.round(Math.abs(inj.fitted / inj.set - 1) * 100)}%. Set the injector flow on TUNE → Injectors to ${inj.fitted} cc.`;
   if (live.closedLoop) return 'Warm and in closed loop: the ECU trims fuel against the O2 sensor.';
   return 'Open loop: the ECU follows your tables and ignores the O2 sensor.';
 }
