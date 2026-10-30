@@ -29,12 +29,11 @@ const POSES = {
   // room, its ceiling and rafters lifted off, looking down and in at the floor. Framed by
   // its WIDTH (`hfov`, degrees across): the stations from the dyno's car to the lift's fill
   // the phone's width, and the back wall and the floor in front of the desk fill its height,
-  // whatever the phone's shape. Seen from straight above, the whole 16 m room had to fit
-  // the width, and left the phone's height half empty. It looks in along the room's diagonal
-  // from the front right, toward the back left corner, so the job board's wall (x = -8, the
-  // far left, and 8 m left of where a camera on the centre line sees) is in the picture and
-  // the long way through the room fills the phone's height.
-  bayTall: { pos: new THREE.Vector3(6.4, 13, 11.4), look: new THREE.Vector3(-2.7, 0.4, -0.6), fov: 60, hfov: 40 },
+  // whatever the phone's shape. On the room's centre line, so the shop sits in the middle of
+  // the screen, and wide enough that both side walls are in the picture: the job board hangs
+  // on the left wall (x = -8), 8 m out, and a frame that held only the stations (about 5 m
+  // either side) left it out of the picture entirely.
+  bayTall: { pos: new THREE.Vector3(0, 15.8, 13.1), look: new THREE.Vector3(0, 0.4, -0.6), fov: 60, hfov: 66 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart, the job board on the wall.
   dyno: { pos: new THREE.Vector3(-1.6, 2.2, 4.4), look: new THREE.Vector3(-4.2, 0.3, -0.8), fov: 48 },
