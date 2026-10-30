@@ -114,8 +114,9 @@ describe('the layout switch', () => {
     expect(L.timing.load[0]).toBe(100);
   });
 
-  it('stays put when the build changes, as a real ECU\'s axes do: the player extends them', () => {
+  it('in CAREER stays put when the build changes, as a real ECU\'s axes do: the player extends them', () => {
     let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) });
+    s = { ...s, session: { ...s.session, mode: 'career' } };
     const before = s.tune;
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map((b) => (b > 0 ? b + 8 : b)) });
     // More boost than the tables reach: nothing moved, and the game says so.
@@ -140,6 +141,28 @@ describe('the layout switch', () => {
     const edited = reducer(ext, { type: ACTIONS.SET_TABLE, table: 'timing', value: t });
     expect(edited.tune.untuned.timing).not.toContain('0:3');
     expect(edited.tune.untuned.timing).toHaveLength(added * to.rpm.length - 1);
+  });
+
+  it('in SANDBOX gets the rows for more boost as the boost is raised: the edge carried, not tuned, and kept marked', () => {
+    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    const na = s.tune;
+    const naAxes = S.layoutById(na.layout).timing;
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+    // A turbo at 0 psi reaches nothing new.
+    expect(s.tune.layout).toBe(na.layout);
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map(() => 7) });
+    const seven = S.layoutById(s.tune.layout).timing;
+    expect(seven.load[0]).toBeGreaterThanOrEqual(S.BARO_KPA + 7 * S.PSI_TO_KPA);
+    expect(engineOutgrowsTables(s)).toBe(false);
+    // The boost rows hold what the ECU read there before (the NA top row), not tuned.
+    const added = seven.load.filter((l) => l > naAxes.load[0]).length;
+    expect(added).toBeGreaterThan(0);
+    expect(s.tune.untuned.timing).toHaveLength(added * seven.rpm.length);
+    seven.rpm.forEach((rpm, ci) => expect(s.tune.timing[0][ci]).toBeCloseTo(S.readTable(na.timing, naAxes, rpm, naAxes.load[0]), 1));
+    // More boost again: the rows added the first time are still not tuned.
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map(() => 14) });
+    const fourteen = S.layoutById(s.tune.layout).timing;
+    expect(s.tune.untuned.timing).toHaveLength(fourteen.load.filter((l) => l > naAxes.load[0]).length * fourteen.rpm.length);
   });
 
   it('never writes a factory calibration for a turbo the factory did not fit', () => {

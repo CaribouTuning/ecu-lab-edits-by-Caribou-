@@ -18,7 +18,7 @@
 
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { COEFF } from '../coefficients.js';
-import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
+import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../liveCore.js';
 import { trappedAirGrams } from '../cycle.js';
 import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
@@ -37,7 +37,7 @@ import { read1, read2 } from './ecuTables.js';
 import { knockDetection, knockNoiseV, knockSignalPerDegV, knockThresholdAt } from './knockSensor.js';
 import { nitrousFraction } from './nitrousControl.js';
 import { readSensor, readTps } from './sensors.js';
-import { resolveEcuPoint } from './strategy.js';
+import { ambientNormalized, resolveEcuPoint } from './strategy.js';
 import { VVT_AUTHORITY, VVT_OPTS, veAtPhase } from './vvt.js';
 
 /**
@@ -448,10 +448,11 @@ export function liveStepEcu(st, dt, input, cfg) {
     const crankingPct = s.cranking ? read1(cal.fuel.cranking, e.sEct) : 0;
     // Target lookup delay: a move to a richer target is eased in over the delay; a move
     // leaner is immediate.
+    const afrLoad = ambientNormalized(e.sMap, baro);
     const afrTable = readEcuTable(tables, 'afr', rpmC, {
-      mapKpa: e.sMap,
+      mapKpa: afrLoad.mapKpa,
       airmassG: needsAirmass(tables.layout)
-        ? trappedAirGrams({ veActual: readEcuTable(tables, 've', rpmC, { mapKpa: e.sMap }), mapKpa: e.sMap, chargeK: e.sIat + KELVIN_OFFSET, sweptM3: (derived.displacementL / derived.cyl) / 1000 })
+        ? afrLoad.scale * trappedAirGrams({ veActual: readEcuTable(tables, 've', rpmC, { mapKpa: e.sMap }), mapKpa: e.sMap, chargeK: e.sIat + KELVIN_OFFSET, sweptM3: (derived.displacementL / derived.cyl) / 1000 })
         : 0,
     });
     if (e.afrTargetF == null || cal.fuel.targetDelayS <= 0 || afrTable > e.afrTargetF) e.afrTargetF = afrTable;
@@ -543,7 +544,14 @@ export function liveStepEcu(st, dt, input, cfg) {
       else if (P.leanAction === 'torque') e.torqueRetard = Math.min(E.LEAN_RETARD_MAX_DEG, e.torqueRetard + E.LEAN_RETARD_RATE_DEG_S * dt);
       else e.boostCutPsi = Math.max(e.boostCutPsi, P.boostCutPsi);
     }
-    if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) {
+    // The lean cut judges the mixture the nitrous makes, so it waits for the wideband to
+    // read the spray and then for the reading to hold, as the lean protection does. Judged
+    // on the first step, it read the mixture from before the shot's fuel arrived, and a
+    // base tune near the limit (or a correction that brought the spray to its target) shut
+    // the nitrous off the instant it opened.
+    if (nitrousFrac > 0 && cal.nitrous.leanCutEnabled && e.sLambda > cal.nitrous.leanCutLambda) e.nitrousLeanT = (e.nitrousLeanT ?? 0) + dt;
+    else e.nitrousLeanT = 0;
+    if (e.nitrousLeanT > E.LEAN_CONFIRM_S) {
       prot.push('nitrous lean');
       e.nitrousCut = true;
     }

@@ -23,6 +23,7 @@ import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
 } from './history.js';
 import { makeInitialState, stockEcuParts } from './initialState.js';
+import { engineOutgrowsTables, extendAxes } from './layoutSwitch.js';
 import { pushRun, RUN_LIMIT } from './runLog.js';
 
 /** @typedef {import('./initialState.js').StoreState} StoreState */
@@ -1141,6 +1142,25 @@ export function reducer(state, action) {
   return undoableReducer(state, action);
 }
 
+/** The hardware writes that can take an engine past the top of its tables. */
+const BUILD_WRITES = new Set([ACTIONS.SET_BUILD_FIELD, ACTIONS.SET_TURBINE, ACTIONS.SET_ENGINE_CONFIG_PATCH]);
+
+/**
+ * In SANDBOX, a build that now reaches past its tables (boost past the top load row, a
+ * limiter past the last RPM column) gets the rows and columns to tune it, as the same
+ * write: the axes extend (`extendAxes`), the new cells carry the edge's values, which is
+ * what the ECU read there anyway, and are marked not tuned. Nothing is calculated for
+ * the player. TUNE fades the cells the engine does not reach yet (state/reach.js).
+ * In CAREER the customer's tables are the job, so the player extends them on TUNE.
+ * @param {any} action
+ * @param {StoreState} next
+ * @returns {StoreState}
+ */
+function withRowsForTheBuild(action, next) {
+  if (!BUILD_WRITES.has(action.type) || next.session.mode === 'career' || !engineOutgrowsTables(next)) return next;
+  return baseReducer(next, extendAxes(next));
+}
+
 /**
  * @param {StoreState} state
  * @param {any} action
@@ -1176,7 +1196,7 @@ function undoableReducer(state, action) {
     };
   }
 
-  const next = baseReducer(state, action);
+  const next = withRowsForTheBuild(action, baseReducer(state, action));
   if (UNDOABLE.has(action.type)) {
     return {
       ...next,

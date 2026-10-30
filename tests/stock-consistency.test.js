@@ -151,14 +151,54 @@ describe('the advisor judges a turbo by the boost it makes', () => {
     const eng = makeEngine({ preset: 'vq35de-revup', build: { turboOn: true, boostCurve: p.boostCurve.map(() => 11), mods: { ...p.mods, intercooler: true } } });
     const extended = S.stockCalibrationFor({ ...eng.build, factoryInduction: { turboOn: true, turbineIdx: eng.build.turbineIdx, turbineCount: 1, compressorIdx: eng.build.compressorIdx, boostCurve: eng.build.boostCurve } });
     const tables = { ve: extended.ve, timing: extended.timing.map((row) => row.map((v) => v + 6)), afr: extended.afr, layout: extended.layout };
-    const pulled = eng.pull(100);
     const a = adviseWithPull(eng, tables);
-    const boostAt = (rpm) => S.interp1(pulled.points.map((q) => q.rpm), pulled.points.map((q) => q.boostPsi), rpm);
+    // What the turbo makes with no protection cutting it: a cell held out of reach only by
+    // a knock or injector-duty cut is still the tune's to fix, and is reached once the knock
+    // (or the injector) is sorted.
+    const uncut = makeEngine({ preset: 'vq35de-revup', build: eng.build, cal: { 'protect.knockEnabled': false, 'protect.dutyEnabled': false } }).pull(100);
+    const boostAt = (rpm) => S.interp1(uncut.points.map((q) => q.rpm), uncut.points.map((q) => q.boostPsi), rpm);
     // Timing 6° past a knock-limited calibration is flagged somewhere: the test has teeth.
     expect(a.overAdvanced.length).toBeGreaterThan(0);
     for (const c of a.overAdvanced) {
       // Every flagged cell is one the engine reaches: its pressure within what the pull made there.
       expect(c.map, `${c.map} kPa at ${c.rpm} rpm`).toBeLessThanOrEqual(S.BARO_KPA + 10 + Math.max(0, Math.min(11, boostAt(c.rpm))) * S.PSI_TO_KPA + 0.5);
     }
+  });
+});
+
+describe('a turbo bolted onto a factory engine can be tuned by following the advice', () => {
+  it('one round of TUNE\'s advice on the extended tables clears the knock, and the knock cut with it', async () => {
+    // SANDBOX: a stock VQ35HR, a turbo at 7 psi, 650 cc injectors scaled, the axes extended
+    // (the new boost cells carry the edge row, marked not tuned). Knock past 4300 RPM
+    // tripped the knock protection, which cut the boost below 4300 RPM; the advisor read the
+    // cut target as the turbo's reach, never advised the cells that knocked, and the cut
+    // came back on every pull however closely the player followed it.
+    const { reducer, ACTIONS } = await import('../src/ui/state/reducer.js');
+    const { makeInitialState } = await import('../src/ui/state/initialState.js');
+    const { pullInputs } = await import('../src/ui/state/pullInputs.js');
+    const { extendAxes } = await import('../src/ui/state/layoutSwitch.js');
+    let st = reducer(makeInitialState({ blank: true }), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    const set = (field, value) => { st = reducer(st, { type: ACTIONS.SET_BUILD_FIELD, field, value }); };
+    set('turboOn', true); set('boostCurve', st.build.boostCurve.map(() => 7)); set('injIdx', 3); set('ecuInjectorCc', 650);
+    st = reducer(st, extendAxes(st));
+    const { args, derived, veTruth, fuel, mafErrorBase } = pullInputs(st);
+    const first = S.simulateSweep({ ...args, loadKpa: 100 });
+    expect(first.events.some((e) => e.type === 'knockprot')).toBe(true);
+    const a = S.calibrationAdvice({
+      ve: st.tune.ve, veTruth, timing: st.tune.timing, afr: st.tune.afr, layout: args.layout, derived,
+      camAt: S.intakeCamAt(st.build.engineConfig, st.tune.ecu?.vvt), octaneBonus: fuel.bonus, fuel, mods: st.build.mods,
+      turboOn: true, boostCurve: st.build.boostCurve, compressor: args.compressor, turbine: args.turbine,
+      injectorCc: args.injectorCc, ecuInjectorCc: st.build.ecuInjectorCc, mafScalar: st.build.mafScalar, mafErrorBase, pull: first,
+    });
+    const timing = st.tune.timing.map((row) => [...row]);
+    const afr = st.tune.afr.map((row) => [...row]);
+    for (const c of a.spark) timing[c.ri][c.ci] = c.suggested;
+    for (const c of a.fuelAdv) afr[c.ri][c.ci] = c.suggested;
+    st = reducer(st, { type: ACTIONS.SET_TABLE, table: 'timing', value: timing });
+    st = reducer(st, { type: ACTIONS.SET_TABLE, table: 'afr', value: afr });
+    const after = S.simulateSweep(pullInputs(st).args);
+    expect(after.events.filter((e) => e.type === 'knock' || e.type === 'knockprot')).toEqual([]);
+    // And the boost is the 7 psi asked for, no longer cut.
+    for (const p of after.points.filter((q) => q.rpm >= 2000)) expect(p.boostPsi).toBeGreaterThan(6.5);
   });
 });

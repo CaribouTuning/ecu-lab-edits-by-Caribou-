@@ -235,6 +235,24 @@ describe('fuel while spraying', () => {
     }
   });
 
+  it('on LIVE the lean cut judges the spray, not the mixture from before it opened', () => {
+    // A base tune at λ 0.97 at full throttle, past the λ 0.95 cut: before the shot's fuel
+    // arrives the wideband reads that. Judged on the first step, the cut shut the nitrous
+    // off the moment it opened, whatever the spray itself ran at.
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(50) } });
+    eng.tables.afr = eng.tables.afr.map((row) => row.map((v) => v + 1.5));
+    const { rows } = runLive(eng, { seconds: 10, pedal: (t) => (t > 3 ? 100 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 5000 });
+    const spraying = rows.slice(-40).filter((r) => r.nitrous > 0);
+    expect(spraying.length).toBe(40);
+    for (const r of spraying) expect(r.lambda).toBeLessThan(0.95);
+    expect(rows.some((r) => r.protect.includes('nitrous lean'))).toBe(false);
+  });
+
+  it('a dry kit\'s fuel is offered only for a dry kit: on a wet kit it does nothing', () => {
+    expect(S.ECU_META.find((m) => m.path === 'nitrous.dryFuelPct').nitrousKit).toBe('dry');
+    expect(S.ECU_META.find((m) => m.path === 'nitrous.fuelTrimPct').nitrousKit).toBeUndefined();
+  });
+
   it('the pump feeds the kit too: a weak one sags the rail and a wet kit\'s fuel falls with it', () => {
     const healthy = pull(kit(200));
     const weak = pull(kit(200), { faults: { pump: 'weak' } });
