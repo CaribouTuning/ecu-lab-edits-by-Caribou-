@@ -33,6 +33,7 @@
 /* A Mac window's title bar: the lights on the left, the app's name centred, and what the
    machine is doing now on the right. */
 .titleBar {
+  container-type: inline-size;
   position: relative; flex: none; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-md);
   height: 30px; padding: 0 10px; background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
 }
@@ -41,9 +42,10 @@
 .light[data-light='close'] { background: var(--mac-red); }
 .light[data-light='min'] { background: var(--mac-yellow); }
 .light[data-light='zoom'] { background: var(--mac-green); }
-/* The name takes the room between the lights and the status, centred in it, and gives way
-   (ellipsis) before it would run under the status: centred on the whole bar, a phone's
-   narrow window drew "Caribou Dyno" over "Peak 317 whp, 295 lb-ft". */
+/* The name takes the room between the lights and the status, centred in it. Centred on the
+   whole bar, a phone's narrow window drew "Caribou Dyno" over "Peak 317 whp, 295 lb-ft"; and
+   squeezed with an ellipsis it became a stub ("Caribou D…"). The reading matters more than
+   the name, so below the width where both fit, the name goes (see the query below). */
 .appName {
   flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center;
   font-size: 13px; font-weight: 600; color: var(--mac-label2); white-space: nowrap; pointer-events: none;
@@ -73,3 +75,5 @@
 .station[data-flat='true'] .face[data-kind='board'] { background: var(--board); height: auto; }
 
 @media (prefers-reduced-motion: reduce) { .face * { transition: none !important; } }
+
+@container (max-width: 360px) { .appName { display: none; } .titleBar { justify-content: space-between; } }
