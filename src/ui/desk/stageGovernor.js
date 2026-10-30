@@ -18,6 +18,12 @@ export const SLOW_FRAME_MS = 25;
 export const SLOW_RUN = 40;
 /** A gap longer than this (ms) is a hidden tab or a stall, not a slow frame. */
 export const STALL_MS = 500;
+/**
+ * Drawn frames not judged at the start. A scene's first seconds compile shaders and upload
+ * textures, which is slow on every device; judged, a fast phone would step down on load and
+ * stay down, since it never steps back up.
+ */
+export const WARMUP_FRAMES = 120;
 
 /**
  * @param {number} [start] the rung a previous visit settled on
@@ -29,6 +35,7 @@ export function createGovernor(start = 0) {
   let rung = Math.min(Math.max(0, Math.floor(start)), DPR_LADDER.length - 1);
   let slow = 0;
   let lastDrew = false;
+  let drawn = 0;
   return {
     get rung() { return rung; },
     get dpr() { return DPR_LADDER[rung]; },
@@ -38,7 +45,8 @@ export function createGovernor(start = 0) {
       const judged = drew && lastDrew && ms > 0 && ms < STALL_MS;
       lastDrew = drew;
       if (!drew) { slow = 0; return false; }
-      if (!judged) return false;
+      drawn += 1;
+      if (!judged || drawn <= WARMUP_FRAMES) return false;
       slow = ms > SLOW_FRAME_MS ? slow + 1 : Math.max(0, slow - 2);
       if (slow >= SLOW_RUN && rung < DPR_LADDER.length - 1) {
         rung += 1;

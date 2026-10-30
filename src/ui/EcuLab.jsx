@@ -1406,9 +1406,11 @@ export function EcuLabApp() {
                 other ECU page, and under them the ECU's four map slots. CAREER's locked pages
                 keep their padlock. A count on a page is how many of the last pull's log entries
                 send you there, shown only while that pull still describes this setup. */}
-            <nav className={deskApps.tuneSidebar} aria-label="ECU tables" data-plain="">
+            <nav className={deskApps.tuneSidebar} aria-label="ECU tables">
               <div className={deskApps.sideHead}>Tables</div>
-              <div className={deskApps.tuneTabs}>
+              {/* data-plain: the page tabs draw their own open state; the map slots below must keep the
+                  selection style, or the running map looks like the idle ones. */}
+              <div className={deskApps.tuneTabs} data-plain="">
                 {tuneViews.map((v) => {
                   const on = tuneView === v.id;
                   const locked = inCareer && !pageUnlocked(career, v.id);

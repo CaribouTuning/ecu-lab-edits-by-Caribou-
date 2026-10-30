@@ -16,18 +16,20 @@ import { createStage } from '../world/stage.js';
 import { createGovernor } from './stageGovernor.js';
 
 const RUNG_KEY = 'ecu-lab-stage-rung';
+/** A remembered rung is trusted for this long (ms): a phone changes, an update changes the scene. */
+const RUNG_TTL_MS = 14 * 24 * 3600 * 1000;
 
 /** The rung a previous visit settled on, so a slow device does not relearn it every time. */
 function savedRung() {
   try {
-    const n = Number(window.localStorage.getItem(RUNG_KEY));
-    return Number.isInteger(n) && n >= 0 ? n : 0;
+    const [n, at] = String(window.localStorage.getItem(RUNG_KEY)).split('@').map(Number);
+    return Number.isInteger(n) && n >= 0 && Date.now() - at < RUNG_TTL_MS ? n : 0;
   } catch {
     return 0;
   }
 }
 function saveRung(n) {
-  try { window.localStorage.setItem(RUNG_KEY, String(n)); } catch { /* private window: it just relearns */ }
+  try { window.localStorage.setItem(RUNG_KEY, `${n}@${Date.now()}`); } catch { /* private window: it just relearns */ }
 }
 
 /**
