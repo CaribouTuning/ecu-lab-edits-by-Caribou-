@@ -206,6 +206,12 @@ Contributions from anyone else are very welcome — see
 
 [MIT](LICENSE) — copyright Caribou Tuning and Turtle.GTI.
 
+## Trademarks
+
+Nissan, BMW, Volkswagen, General Motors, Chrysler and the engine and model names in the
+catalogue are the names and marks of their owners. They are used here only to say which
+real engine a preset is built from; no owner makes, endorses or supports this project.
+
 ## A note on real engines
 
 This is a simulator. The physics is real enough to teach the shape of the problem and

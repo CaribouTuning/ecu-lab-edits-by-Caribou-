@@ -111,6 +111,11 @@ export function StartScreen({ onCareer, onStart, onTutorial, version, logo = nul
           </ul>
         </nav>
       </main>
+      <footer className={styles.legal}>
+        A simulator, for learning how engines and their computers work. Do not take a tune from
+        it to a real car. The engines are named for what they are: their makers do not make,
+        endorse or support this game, and their names and marks are theirs.
+      </footer>
     </div>
   );
 }
