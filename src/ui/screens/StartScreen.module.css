@@ -103,3 +103,6 @@
   .blurb { display: none; }
   .way { padding: 9px 14px; }
 }
+
+/* The small print: a simulator, not a tuning tool for a car; and whose names these are. */
+.legal { max-width: 720px; margin: 0 auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); font-size: var(--fs-xs); line-height: 1.55; color: var(--ink2); }

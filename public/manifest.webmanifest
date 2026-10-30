@@ -1,0 +1,16 @@
+{
+  "name": "ECU Lab — Caribou Tuning",
+  "short_name": "ECU Lab",
+  "description": "An engine management and tuning simulator: build an engine, edit the calibration tables a real tuner edits, run a dyno pull, and read why it went the way it did.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0e0e0d",
+  "theme_color": "#0e0e0d",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

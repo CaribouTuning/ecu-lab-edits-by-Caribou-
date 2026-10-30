@@ -5,8 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#0e0e0d" />
-    <!-- No icon file to fetch: an empty one, so the browser does not ask for /favicon.ico. -->
-    <link rel="icon" href="data:," />
+    <!-- The badge, from public/: a tab icon, the icon an iPhone puts on its home screen, and
+         the manifest that lets either platform install the game as an app. Relative, so it
+         works from any folder the game is served from. -->
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ECU Lab" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta
       name="description"
       content="An engine management and tuning simulator. Design an engine, edit the calibration tables a real tuner edits, run a dyno pull, and read a log explaining what went right or wrong."
