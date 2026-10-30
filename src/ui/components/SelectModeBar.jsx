@@ -36,10 +36,11 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
     <>
       {/* Wraps: at phone width the view toggle drops to its own line rather than
           pushing the row off the side of the screen. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 18, rowGap: 0, alignItems: 'center' }}>
         {/* Changing mode clears the selection: a half-taken range means nothing in
             single-cell mode, and a single cell is not an anchor. */}
         <Seg
+          variant="tabs"
           label="Selection mode"
           value={rangeMode ? 'range' : 'cell'}
           onChange={(id) => { setRangeMode(id === 'range'); setSelection(null); }}
@@ -47,13 +48,14 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
         />
         {/* Changing VIEW keeps the selection: it is the same cells, drawn differently. */}
         <Seg
+          variant="tabs"
           label="Table view"
           value={diffView ? 'changes' : 'values'}
           onChange={(id) => setDiffView(id === 'changes')}
           options={[{ id: 'values', label: 'Values' }, { id: 'changes', label: 'Changes' }]}
         />
         <Button
-          variant="ghost" size="sm"
+          variant="quiet" size="sm"
           onClick={() => setSelection({ type: 'range', r1: 0, c1: 0, r2: dims.rows - 1, c2: dims.cols - 1 })}
         >Select all</Button>
       </div>

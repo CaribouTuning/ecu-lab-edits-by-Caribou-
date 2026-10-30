@@ -423,33 +423,6 @@ export function patternMaterial(kind, base, tile = 2) {
 }
 
 /**
- * A box covered in a pattern at true scale: the texture repeats every `tile` metres on every
- * face however big the box is, so a long wall gets more bricks, not bigger ones.
- *
- * @param {number} w @param {number} h @param {number} d
- * @param {Parameters<typeof patternMaterial>[0]} kind @param {string} base
- * @param {{x?: number, y?: number, z?: number, tile?: number, cast?: boolean}} [o]
- */
-export function texBox(w, h, d, kind, base, o = {}) {
-  const tile = o.tile ?? 2;
-  const g = new THREE.BoxGeometry(w, h, d);
-  const uv = g.attributes.uv;
-  // BoxGeometry builds four vertices per face in this order: +x, -x, +y, -y, +z, -z.
-  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
-  for (let f = 0; f < 6; f += 1) {
-    for (let v = 0; v < 4; v += 1) {
-      const i = f * 4 + v;
-      uv.setXY(i, (uv.getX(i) * dims[f][0]) / tile, (uv.getY(i) * dims[f][1]) / tile);
-    }
-  }
-  const m = new THREE.Mesh(g, patternMaterial(kind, base, tile));
-  m.position.set(o.x ?? 0, o.y ?? 0, o.z ?? 0);
-  m.castShadow = o.cast !== false;
-  m.receiveShadow = true;
-  return m;
-}
-
-/**
  * A soft ball of leaves, a bush, a lamp globe: smooth-shaded, a handful of segments.
  * @param {number} r @param {string} color
  * @param {{x?: number, y?: number, z?: number, sy?: number, seg?: number, mat?: THREE.Material}} [o]
@@ -481,24 +454,6 @@ export function groundPlane(w, d, o) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }));
   m.rotation.x = -Math.PI / 2;
   m.receiveShadow = true;
-  return m;
-}
-
-const groundMats = new Map();
-
-/**
- * The same pixel ground as `groundPlane`, as one shared material for geometry whose UVs are
- * world metres divided by the tile: roads laid as ribbons all share it, so a town of roads
- * is one draw call, and two pieces that overlap show the same texels and never flicker.
- * @param {Parameters<typeof groundPlane>[2]} o
- */
-export function groundMaterial(o) {
-  const key = `${o.base}|${o.alt}|${o.line}|${o.kind}|${o.flowers ?? ''}`;
-  let m = groundMats.get(key);
-  if (!m) {
-    m = new THREE.MeshToonMaterial({ map: groundTexture(o), gradientMap: RAMP });
-    groundMats.set(key, m);
-  }
   return m;
 }
 
@@ -599,26 +554,6 @@ export function sign(text, o = {}) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
   m.castShadow = false;
   return m;
-}
-
-/**
- * Frees a model's geometry and any per-instance materials. Shared (cached) toon materials
- * are left alone.
- * @param {THREE.Object3D} root
- */
-export function disposeTree(root) {
-  root.traverse((o) => {
-    const mesh = /** @type {THREE.Mesh} */ (o);
-    if (mesh.geometry) mesh.geometry.dispose();
-  });
-}
-
-/** Sets cast/receive shadow on every mesh under a node. @param {THREE.Object3D} root */
-export function shadowAll(root, cast = true, receive = true) {
-  root.traverse((o) => {
-    const m = /** @type {THREE.Mesh} */ (o);
-    if (m.isMesh) { m.castShadow = cast; m.receiveShadow = receive; }
-  });
 }
 
 /**

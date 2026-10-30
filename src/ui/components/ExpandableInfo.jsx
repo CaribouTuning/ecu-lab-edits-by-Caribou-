@@ -40,7 +40,7 @@ export function ExpandableInfo({ title, children, lazy = false }) {
       <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={quiet
         // On the build bench: a plain link to the explanation, no icon and no chevron. One of
         // these sits under many controls, and an icon on each made a column of identical rows.
-        ? { display: 'inline', padding: '2px 0', background: 'none', border: 'none', cursor: 'pointer', color: T.ink2, fontSize: 12, fontWeight: 500, textAlign: 'left', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }
+        ? { display: 'inline-block', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: T.ink2, fontSize: 12, fontWeight: 500, textAlign: 'left', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }
         : { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
         {quiet ? title : (
           <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: T.ink, fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>

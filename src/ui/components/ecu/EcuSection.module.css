@@ -46,24 +46,27 @@
 .group {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-sm);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: var(--sp-lg);
+  gap: 0;
+  padding: 0 0 var(--sp-lg);
 }
 
+/* A heading ruled out across the page, as in the engine builder's sheet. */
 .groupName {
-  font-size: var(--fs-micro);
-  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
   color: var(--ink2);
 }
+.groupName::after { content: ''; flex: 1; height: 1px; background: var(--line-hi); }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 6px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -77,7 +80,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-sm);
-  padding: 6px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -90,8 +93,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--fs-base);
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -262,11 +265,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 13px;
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--acc);
-  border-radius: var(--r-md);
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .guideDoes {
@@ -287,9 +288,8 @@
 }
 
 .guideList dt {
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--acc-ink);
+  font-weight: 600;
+  color: var(--ink);
   white-space: nowrap;
 }
 
@@ -369,4 +369,12 @@
   padding-left: 8px;
   border-left: 2px solid var(--line-hi);
   color: var(--ink2);
+}
+
+/* A finger: the steppers and their box are as tall as a thumb. */
+@media (pointer: coarse) {
+  .step { width: 40px; height: 40px; }
+  .numInput { height: 40px; }
+  .numCompact .step { width: 32px; height: 36px; }
+  .numCompact .numInput { height: 36px; }
 }

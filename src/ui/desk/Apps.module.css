@@ -138,16 +138,28 @@
 }
 .sideMaps { padding: 2px 8px 8px; }
 .tuneMain { min-width: 0; container: tune / inline-size; }
-/* On a phone there is no room for a sidebar: the tables are one scrolling row above the
-   open one, and the map slots sit beside them. */
+/* On a phone there is no room for a sidebar: the pages are one line of tabs that scrolls
+   sideways (the open page underscored, a count on a page the log points at), and the map
+   slots sit on a line under it. Two rows of grey pills ahead of every table pushed the
+   table itself past half the screen. */
 @media (max-width: 560px) {
   .tuneLayout { grid-template-columns: minmax(0, 1fr); }
-  .tuneSidebar { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--mac-separator); }
+  .tuneSidebar { position: static; flex-direction: column; align-items: stretch; gap: 0; padding: 0; border-right: 0; border-bottom: 1px solid var(--mac-separator); }
   .sideHead { display: none; }
-  .tuneTabs { flex-direction: row; flex-wrap: wrap; gap: 4px; }
-  .tuneTab { width: auto; height: 28px; padding: 0 10px; background: var(--mac-control); }
+  .tuneTabs {
+    flex-direction: row; flex-wrap: nowrap; gap: 0; overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none; border-bottom: 1px solid var(--line); padding: 0 6px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .tuneTabs::-webkit-scrollbar { display: none; }
+  .tuneTab {
+    flex: none; width: auto; height: 44px; padding: 0 11px; border-radius: 0; background: transparent;
+    border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--mac-label2); font-size: 13.5px; white-space: nowrap;
+  }
   .tuneTab svg { display: none; }
-  .sideMaps { padding: 0; }
+  .tuneTab[aria-current='page'] { background: transparent !important; color: var(--mac-label) !important; font-weight: 700; border-bottom: 2px solid var(--acc) !important; }
+  .tuneTab:hover:not([aria-current='page']) { background: transparent; color: var(--mac-label); }
+  .sideMaps { padding: 4px 12px; }
 }
 
 /* ---------- Physics: the engine cutaway ---------- */

@@ -66,15 +66,20 @@ export function LayoutSwitch() {
   return (
     <>
     {extend}
-    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }} title={why}>
-      <Seg
-        label="Table layout"
-        options={options}
-        value={active.id === 'game' ? '' : active.id}
-        onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
-      />
-      <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums' }}>
-        {active.ve.rpm.length} × {active.ve.load.length}, {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm, {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
+    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 0 }} title={why}>
+      {/* A choice of one is not a choice: the only layout is named in the caption, and a
+          switch appears when the engine's computer offers another. */}
+      {options.length > 1 && (
+        <Seg
+          variant="tabs"
+          label="Table layout"
+          options={options}
+          value={active.id === 'game' ? '' : active.id}
+          onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
+        />
+      )}
+      <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
+        {active.ve.rpm.length} × {active.ve.load.length} · {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm · {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
       </span>
     </div>
     </>

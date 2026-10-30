@@ -41,9 +41,11 @@ export const DESK_APPS = [
  * The wallpaper: the Caribou Tuning badge in chrome on a plain graphite ground. Drawn from
  * the traced badge (screens/caribouLogo.js), so it is sharp at any size. (It used to stand
  * on a glossy floor with a reflection; that was decoration, and it went.)
+ * @param {object} props
+ * @param {boolean} [props.whole] draw all of it, with the ground showing around it, not cropped to fill
  * @returns {React.ReactElement}
  */
-function Wallpaper() {
+function Wallpaper({ whole = false }) {
   const badge = (
     <>
       <path d={CARIBOU_FILL} fill="url(#wall-chrome)" fillRule="evenodd" stroke="var(--badge-ink)" strokeWidth="10" />
@@ -51,7 +53,7 @@ function Wallpaper() {
     </>
   );
   return (
-    <svg className={styles.wallpaper} viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <svg className={styles.wallpaper} viewBox="0 0 1600 900" preserveAspectRatio={whole ? 'xMidYMid meet' : 'xMidYMid slice'} aria-hidden="true">
       <defs>
         <linearGradient id="wall-sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" style={{ stopColor: 'var(--wall-sky)' }} />
@@ -277,7 +279,9 @@ export function Desk({
         </section>
       ) : (
         <div className={styles.homeScreen}>
-          <Wallpaper />
+          {/* The badge whole: a phone is taller than the picture is wide, and filling it
+              cropped the name ("CARIBO") off both sides. */}
+          <Wallpaper whole />
           {next && <NextStrip next={next} place="phone" />}
           <div className={styles.appGrid}>
             {shownApps.map((a) => (

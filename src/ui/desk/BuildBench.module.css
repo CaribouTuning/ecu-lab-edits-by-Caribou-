@@ -21,6 +21,8 @@
 }
 .part:hover { background: var(--panel2); }
 .part[aria-current='true'] { background: var(--mac-row-sel, var(--panel3)); }
+/* The summary line on the chosen row is body text on a lighter grey: 3.7:1 in ink2, so ink. */
+.part[aria-current='true'] .partNow { color: var(--ink); }
 .part:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
 .partName { font-size: 13px; font-weight: 600; }
 .partNow { font-size: 11.5px; color: var(--ink2); line-height: 1.35; font-variant-numeric: tabular-nums; }
@@ -112,4 +114,11 @@
   .ticks i[data-state='done'] { background: var(--ink2); }
   .ticks i[data-state='now'] { background: var(--ink); }
   .ticks i[data-changed='true'] { box-shadow: 0 -2px 0 var(--warn); }
+}
+
+/* A finger, not a pointer: the way on and the part's own buttons are at least as tall as a
+   thumb (Apple and Google both ask for 44 px; WCAG 2.2 allows 24 as the floor). */
+@media (pointer: coarse) {
+  .stepBtn, .stepGo { min-height: 44px; }
+  .originBtn { min-height: 40px; }
 }

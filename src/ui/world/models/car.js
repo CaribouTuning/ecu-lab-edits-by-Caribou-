@@ -398,21 +398,3 @@ export function makeCar(spec = {}) {
   return rig;
 }
 
-/**
- * The spec a build implies: the bits of the car that are real hardware.
- * @param {object} build the store's `build` slice
- * @returns {EngineBay}
- */
-export function engineBayOf(build) {
-  const cfg = String(build?.engineConfig?.configuration ?? 'V6');
-  const layout = ['I4', 'I6', 'V6', 'V8'].includes(cfg) ? cfg : 'V6';
-  const m = build?.mods ?? {};
-  return {
-    layout,
-    turbo: !!build?.turboOn,
-    supercharger: !build?.turboOn && !!build?.blowerId,
-    intercooler: !!m.intercooler,
-    intake: !!m.intake,
-    nitrous: !!build?.nitrous,
-  };
-}

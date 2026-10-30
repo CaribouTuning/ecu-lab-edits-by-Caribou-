@@ -13,6 +13,7 @@
  */
 
 import React from 'react';
+import { Seg } from '../../primitives/Seg.jsx';
 
 import { Surface3D, readSurface } from './Surface3D.jsx';
 import styles from './surface.module.css';
@@ -45,10 +46,8 @@ export function useTableView() {
 /** @param {{mode: 'table'|'3d', onChange: (m: 'table'|'3d') => void}} props */
 export function ViewToggle({ mode, onChange }) {
   return (
-    <div className={styles.toggle} role="group" aria-label="Show as">
-      <button type="button" aria-pressed={mode === 'table'} onClick={() => onChange('table')}>Table</button>
-      <button type="button" aria-pressed={mode === '3d'} onClick={() => onChange('3d')}>3-D</button>
-    </div>
+    <Seg variant="tabs" label="Show as" value={mode} onChange={(id) => onChange(/** @type {'table'|'3d'} */ (id))}
+      options={[{ id: 'table', label: 'Table' }, { id: '3d', label: '3-D' }]} />
   );
 }
 

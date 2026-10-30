@@ -30,18 +30,19 @@ import styles from './Seg.module.css';
  * @param {boolean} [props.equal] lay options out at equal width, wrapping as needed,
  *   instead of the default content-width row. For pickers with enough options that
  *   an inline row would crowd or wrap raggedly (e.g. injector sizes).
- * @param {'well'|'rule'} [props.variant] `rule`: no well and no raised chip, the options
+ * @param {'well'|'rule'|'tabs'} [props.variant] `tabs`: the same underline, at the options'
+ *   own width and in a row with its neighbours, for a toolbar's view switches. `rule`: no well and no raised chip, the options
  *   run across at equal width over a hairline and the chosen one is underscored, the way
  *   a datasheet's column choice reads. The engine builder uses it, where a stack of
  *   grey wells made every choice look the same weight.
  * @returns {React.ReactElement}
  */
 export function Seg({ label, options, value, onChange, equal = false, variant = 'well' }) {
-  const cls = [styles.seg, equal && styles.equal, variant === 'rule' && styles.rule].filter(Boolean).join(' ');
+  const cls = [styles.seg, equal && styles.equal, variant === 'rule' && styles.rule, variant === 'tabs' && styles.tabs].filter(Boolean).join(' ');
   return (
     <div
       className={cls}
-      data-plain={variant === 'rule' ? '' : undefined}
+      data-plain={variant === 'rule' || variant === 'tabs' ? '' : undefined}
       role="group"
       aria-label={label}
     >
