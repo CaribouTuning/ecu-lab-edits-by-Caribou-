@@ -91,18 +91,32 @@ function carried(state, to) {
   const { tune } = state;
   const from = layoutById(tune.layout);
   const conv = airmassConversion(state);
-  const past = (axes, fromAxes) => {
-    if (axes.loadUnit !== 'kPa' || fromAxes.loadUnit !== 'kPa') return [];
-    const keys = [];
-    axes.load.forEach((load, ri) => axes.rpm.forEach((rpm, ci) => {
-      if (load > fromAxes.load[0] + 0.5 || rpm > fromAxes.rpm[fromAxes.rpm.length - 1] + 0.5) keys.push(`${ri}:${ci}`);
-    }));
-    return keys;
+  // The edge of what has been tuned: the old axes' last row and column, less any that an
+  // earlier extension added and nobody has written yet. A second extension keeps those
+  // marked instead of passing their copied values off as tuned.
+  const tunedEdge = (fromAxes, keys) => {
+    const open = new Set(keys ?? []);
+    const whole = (n, at) => Array.from({ length: n }, (_, i) => at(i)).every((k) => open.has(k));
+    const rows = fromAxes.load.filter((_, ri) => !whole(fromAxes.rpm.length, (ci) => `${ri}:${ci}`));
+    const cols = fromAxes.rpm.filter((_, ci) => !whole(fromAxes.load.length, (ri) => `${ri}:${ci}`));
+    return { load: rows.length ? Math.max(...rows) : fromAxes.load[0], rpm: cols.length ? Math.max(...cols) : fromAxes.rpm[fromAxes.rpm.length - 1] };
   };
+  const past = (axes, fromAxes, keys) => {
+    if (axes.loadUnit !== 'kPa' || fromAxes.loadUnit !== 'kPa') return [];
+    const edge = tunedEdge(fromAxes, keys);
+    const out = [];
+    axes.load.forEach((load, ri) => axes.rpm.forEach((rpm, ci) => {
+      if (load > edge.load + 0.5 || rpm > edge.rpm + 0.5) out.push(`${ri}:${ci}`);
+    }));
+    return out;
+  };
+  const was = /** @type {{ve?: string[], timing?: string[], afr?: string[]}} */ (tune.untuned ?? {});
   return {
     type: /** @type {const} */ ('SET_LAYOUT'), layout: to, ...moveTables(tune, from, to, conv),
     baseline: moveTables(tune.baseline, from, to, conv),
-    untuned: { ve: past(to.ve, from.ve), timing: past(to.timing, from.timing), afr: past(to.afr, from.afr) },
+    untuned: {
+      ve: past(to.ve, from.ve, was.ve), timing: past(to.timing, from.timing, was.timing), afr: past(to.afr, from.afr, was.afr),
+    },
   };
 }
 

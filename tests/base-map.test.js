@@ -37,8 +37,17 @@ describe('the base start-up map', () => {
     expect(offersBaseMap(stock.build)).toBe(false);
     const turbo = set(set(stock, 'turboOn', true), 'boostCurve', stock.build.boostCurve.map(() => 8));
     expect(offersBaseMap(turbo.build)).toBe(true);
-    // The tables are exactly as they were: the build change filled nothing in.
-    expect(turbo.tune.timing).toBe(stock.tune.timing);
+    // The build change filled nothing in. In SANDBOX the axes extend for the boost, but the
+    // engine reads the same timing everywhere it ran before, and the new boost rows only
+    // carry the edge, marked not tuned.
+    const was = S.layoutById(stock.tune.layout).timing;
+    const now = S.layoutById(turbo.tune.layout).timing;
+    for (const rpm of [1000, 3000, 5000, 6500]) {
+      for (const kpa of [40, 70, 100, 140]) {
+        expect(S.readTable(turbo.tune.timing, now, rpm, kpa)).toBeCloseTo(S.readTable(stock.tune.timing, was, rpm, kpa), 0);
+      }
+    }
+    expect(turbo.tune.untuned.timing.length).toBeGreaterThan(0);
   });
 
   it('is written for the parts fitted, boost cells and all, and undoes back to the player\'s tables', () => {

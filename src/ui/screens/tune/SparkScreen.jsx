@@ -23,6 +23,7 @@ import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
+import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './SparkScreen.module.css';
@@ -50,6 +51,7 @@ export function SparkScreen({ calAdvice, children }) {
   // The breakpoints this table sits on (sim/layouts.js): the ECU Lab grid unless TUNE's
   // layout switch has put it on the engine computer's own.
   const axes = layoutById(tune.layout).timing;
+  const unreached = useUnreached(axes);
   const dims = { rows: axes.load.length, cols: axes.rpm.length };
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
@@ -83,7 +85,7 @@ export function SparkScreen({ calAdvice, children }) {
             <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} />
+            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">

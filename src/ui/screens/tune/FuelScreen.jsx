@@ -22,6 +22,7 @@ import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { ACTIONS } from '../../state/reducer.js';
+import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './FuelScreen.module.css';
@@ -41,6 +42,7 @@ export function FuelScreen({ calAdvice, children }) {
   const { afr, selection, rangeMode, baseline, diffView } = tune;
   // The breakpoints this table sits on (sim/layouts.js); see SparkScreen.jsx.
   const axes = layoutById(tune.layout).afr;
+  const unreached = useUnreached(axes);
   const dims = { rows: axes.load.length, cols: axes.rpm.length };
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
@@ -73,7 +75,7 @@ export function FuelScreen({ calAdvice, children }) {
             <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} />
+            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} />
           </GridOrSurface>
 
           <ExpandableInfo title="Why AFR trades power for safety">
