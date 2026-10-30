@@ -49,7 +49,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label}, ${INJECTOR_OPTS[injIdx].label}`}
     >
       <div className={styles.label}>Fuel Octane</div>
-      <Seg label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
+      <Seg variant="rule" equal label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
       <SetupNote paths={['config.stoichMode']} />
       <ExpandableInfo title="What Fuel Octane actually does — and what E85 costs you">
         Octane measures a fuel's resistance to auto-igniting under heat and pressure before the spark fires it — not energy content or "power." Higher octane tolerates more cylinder pressure and temperature before knock, letting a tuner run more advance or more boost safely. It does not add power on its own; it raises the ceiling for how much timing/boost you can use before knock becomes the limit. The number on the pump is the average of two lab tests, (RON + MON) ÷ 2; how your engine weighs them depends on how hot its charge runs for its pressure (Learn article 5), which is why boosted, direct-injected engines get more from a high-octane fuel than its pump number suggests.
@@ -75,10 +75,10 @@ export function FuelSystemScreen({ active, onToggle }) {
       <div className={styles.labelSpaced}>Fuel Pump</div>
       <PickList options={PUMP_OPTS.map((o) => ({ label: o.label, value: o.id }))} value={PUMP_OPTS[fuelSystem.pumpIdx]?.id} onChange={(v) => setFs({ pumpIdx: PUMP_OPTS.findIndex((o) => o.id === v) })} />
       <div className={styles.labelSpaced}>Pressure Regulation</div>
-      <Seg label="Pressure regulation" options={REGULATOR_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={fuelSystem.regulator} onChange={(v) => setFs({ regulator: v })} equal />
+      <Seg variant="rule" label="Pressure regulation" options={REGULATOR_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={fuelSystem.regulator} onChange={(v) => setFs({ regulator: v })} equal />
       <SetupNote paths={['injector.pressureComp']} />
       <div className={styles.labelSpaced}>Base Fuel Pressure</div>
-      <Seg label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
+      <Seg variant="rule" label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
       <SetupNote paths={['injector.refPressureKpa']} />
       <ExpandableInfo title="Pump, regulator and why pressure is fuel">
         An injector is a calibrated hole: it passes fuel as the <b className={styles.em}>square root of the pressure across it</b>. Its flow rating is only true at the pressure it was measured at — 3 bar, 43.5 psi.
@@ -87,7 +87,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Wideband Controller</div>
-      <Seg label="Wideband controller" options={Object.entries(LINEAR_SCALES.wideband).map(([id, s]) => ({ id, label: s.short ?? s.label }))} value={sensorHw.wideband} onChange={(v) => setSensors({ wideband: v })} equal />
+      <Seg variant="rule" label="Wideband controller" options={Object.entries(LINEAR_SCALES.wideband).map(([id, s]) => ({ id, label: s.short ?? s.label }))} value={sensorHw.wideband} onChange={(v) => setSensors({ wideband: v })} equal />
       <SetupNote paths={['sensors.wideband']} okText="The ECU is set up for this sensor." />
     </BuildSection>
   );

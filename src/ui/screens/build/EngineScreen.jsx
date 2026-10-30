@@ -22,9 +22,10 @@ import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
-import { Panel } from '../../primitives/Panel.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { Select } from '../../primitives/Select.jsx';
+import { SpecField, SpecGroup, SpecReadouts, SpecSlider } from '../../primitives/Spec.jsx';
+import { originPreset } from '../../state/baseMap.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
 
@@ -129,6 +130,14 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
     ? { bottomEnd: undefined, bottomEndRatedRpm: factoryRatedRpm }
     : { bottomEnd: id, bottomEndRatedRpm: undefined });
 
+  // What the factory engine this started as had, to show beside a figure that has moved.
+  // A player's own engine has no factory figure, so nothing is shown.
+  const origin = originPreset(build);
+  const factory = activePreset ?? origin;
+  const stockCfg = origin?.engine ?? null;
+  const camStock = stockCfg?.camDuration ?? null;
+  const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
+
   // The base engine, the short block, the heads and cam: one section on a phone's
   // accordion, three of the engine stand's parts (`part`).
   // On the build bench your own engine is entered through Change engine (BuildBench.jsx),
@@ -184,28 +193,18 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           )}
         </details>
       )}
-        {activePreset && (
-          // Panel builds its own className from `tight` and spreads rest props AFTER
-          // it with no merge, so a caller's `className` would replace `tight` outright
-          // rather than adding to it — `style` is the only safe way to add margin here.
-          <Panel tight style={{ marginBottom: 13 }}>
-            <div className={styles.blurb}>{activePreset.blurb}</div>
-            <div className={styles.statRow}>
-              <span>Factory rating</span>
-              <span className={styles.statValue}>
-                {activePreset.factory.crankHp} hp, {activePreset.factory.crankTq} lb-ft
-              </span>
-            </div>
-            <div className={styles.statRowLast}>
-              <span>Your last pull</span>
-              <span className={styles.pullValue} data-have={result ? 'true' : 'false'}>
-                {result ? `${result.peakHp} whp, ${result.peakTq} lb-ft` : 'no pull logged'}
-              </span>
-            </div>
-            <div className={styles.footnote}>
+        {factory && (
+          <>
+            <SpecReadouts items={[
+              { label: 'Factory rating', value: String(factory.factory.crankHp), unit: ' hp', note: `${factory.factory.crankTq} lb-ft at the crank` },
+              { label: 'Your last pull', value: result ? String(result.peakHp) : '—', unit: result ? ' whp' : '', note: result ? `${result.peakTq} lb-ft at the wheels` : 'no pull logged' },
+              { label: 'Redline', value: factory.engine.redline.toLocaleString('en-US'), unit: ' rpm', note: `${factory.factory.displacementL.toFixed(1)} L ${factory.engine.configuration}${factory.induction.turboOn ? ' turbo' : ''}` },
+            ]} />
+            <p className={styles.blurb}>{factory.blurb}</p>
+            <ExpandableInfo title="Crank power against wheel power">
               Factory figures are at the crank; the dyno here reads at the wheels, so expect roughly 15% less. The factory calibration is deliberately conservative — beating it is the exercise.
-            </div>
-          </Panel>
+            </ExpandableInfo>
+          </>
         )}
         {(build.assumed?.length ?? 0) > 0 && (
           <Note tone="warn">
@@ -255,11 +254,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             </span>
           </Note>
         )}
-        <Panel tight style={{ marginBottom: 13 }}>
-          <div className={styles.displacementRow}><span>Displacement</span><span className={styles.statValue}>{engineDerived.displacementL.toFixed(2)} L</span></div>
-          <div className={styles.displacementRow}><span>Bore : stroke</span><span className={styles.statValue}>{engineDerived.ratio.toFixed(3)}</span></div>
-          <div className={styles.character}>{engineDerived.character}</div>
-        </Panel>
 
         {!veAdvice.inSync && (
           <div className={styles.callout}>
@@ -287,42 +281,51 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   );
   const blockParts = (
     <>
-        <div className={styles.labelSpaced}>Configuration</div>
-        <Seg label="Configuration" options={CONFIG_OPTS.map((c) => ({ label: `${c} (${CYL_COUNT[c]} cyl)`, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
-        <ExpandableInfo title="Why cylinder count and layout matter">
+        <SpecReadouts items={[
+          { label: 'Displacement', value: engineDerived.displacementL.toFixed(2), unit: ' L', note: `${engineConfig.configuration}, ${CYL_COUNT[engineConfig.configuration]} cylinders` },
+          { label: 'Bore : stroke', value: engineDerived.ratio.toFixed(3), note: engineDerived.character },
+          {
+            label: 'Piston speed', value: pistonAtRedline.meanSpeedMs.toFixed(1), unit: ' m/s',
+            share: pistonAtRedline.meanSpeedMs / bottomEndLimit.limitMs, tone: pastBottomEnd ? 'warn' : undefined,
+            note: `at ${engineDerived.redline.toLocaleString('en-US')} rpm, rated ${bottomEndLimit.limitMs.toFixed(1)}`,
+          },
+        ]} />
+
+        <SpecGroup title="Cylinders" aside={`${CYL_COUNT[engineConfig.configuration]} cylinders`}>
+          <Seg label="Configuration" variant="rule" equal options={CONFIG_OPTS.map((c) => ({ label: c, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
+          <ExpandableInfo title="Why cylinder count and layout matter">
           For the same total displacement, spreading it across more, smaller cylinders means a shorter flame path in each, so the burn finishes sooner and the end gas has less time to knock — a small real knock-margin benefit — and more, smaller firing pulses smooth the delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
         </ExpandableInfo>
+        </SpecGroup>
 
-        <div className={styles.labelSpaced}>Bore: {engineConfig.bore.toFixed(1)} mm</div>
-        <input type="range" min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} value={engineConfig.bore} onChange={(e) => setCfg({ bore: Number(e.target.value) })} className={styles.slider} />
-        <div className={styles.labelSpaced}>Stroke: {engineConfig.stroke.toFixed(1)} mm</div>
-        <input type="range" min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} value={engineConfig.stroke} onChange={(e) => setCfg({ stroke: Number(e.target.value) })} className={styles.slider} />
-        <ExpandableInfo title="Bore, stroke, and engine character">
+        <SpecGroup title="Geometry" aside={`${engineDerived.displacementL.toFixed(2)} L`}>
+          <SpecSlider label="Bore" unit=" mm" decimals={1} value={engineConfig.bore} stock={stockCfg?.bore ?? null} min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} onChange={(v) => setCfg({ bore: v })} />
+          <SpecSlider label="Stroke" unit=" mm" decimals={1} value={engineConfig.stroke} stock={stockCfg?.stroke ?? null} min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} onChange={(v) => setCfg({ stroke: v })} />
+          <ExpandableInfo title="Bore, stroke, and engine character">
           Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
         </ExpandableInfo>
-
-        <div className={styles.labelSpaced}>Compression Ratio: {engineConfig.compression.toFixed(1)}:1</div>
-        <input type="range" min={CUSTOM_ENGINE_LIMITS.compression.min} max={CUSTOM_ENGINE_LIMITS.compression.max} step={CUSTOM_ENGINE_LIMITS.compression.step} value={engineConfig.compression} onChange={(e) => setCfg({ compression: Number(e.target.value) })} className={styles.slider} />
-        <ExpandableInfo title="Compression ratio's trade-off">
+          <SpecSlider label="Compression ratio" unit=":1" decimals={1} value={engineConfig.compression} stock={stockCfg?.compression ?? null} min={CUSTOM_ENGINE_LIMITS.compression.min} max={CUSTOM_ENGINE_LIMITS.compression.max} step={CUSTOM_ENGINE_LIMITS.compression.step} onChange={(v) => setCfg({ compression: v })} />
+          <ExpandableInfo title="Compression ratio's trade-off">
           Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
         </ExpandableInfo>
+        </SpecGroup>
 
-        <div className={styles.labelSpaced}>
-          Pistons and rods: {bottomEndLimit.label} <span className={styles.floatCaption} data-float={pastBottomEnd ? 'true' : 'false'}>· rated to {bottomEndLimit.ratedRpm.toLocaleString('en-US')} RPM</span>
-        </div>
-        <Seg label="Pistons and rods" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
-        <div className={styles.readout} data-testid="bottom-end-readout">
-          At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
-          (this assembly is good for about {bottomEndLimit.limitMs.toFixed(1)} m/s) and pull {Math.round(pistonAtRedline.peakAccelMs2 / 9.81).toLocaleString('en-US')} g at top dead centre.
-        </div>
-        {pastBottomEnd && (
+        <SpecGroup title="Bottom end" aside={`rated to ${bottomEndLimit.ratedRpm.toLocaleString('en-US')} rpm`}>
+          <SpecField label="Pistons and rods" tone={pastBottomEnd ? 'warn' : undefined} aside={bottomEndLimit.label}>
+            <Seg label="Pistons and rods" variant="rule" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
+          </SpecField>
+          <div className={styles.readout} data-testid="bottom-end-readout">
+            At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
+            (this assembly is good for about {bottomEndLimit.limitMs.toFixed(1)} m/s) and pull {Math.round(pistonAtRedline.peakAccelMs2 / 9.81).toLocaleString('en-US')} g at top dead centre.
+          </div>
+          {pastBottomEnd && (
           <div className={styles.floatWarning}>
             The redline is past what these pistons and rods are built for. The dyno will still show the power; the rod
             bearings, pins and rings wear out of proportion, and the inertia load that throws a rod grows with the square
             of engine speed. Fit a stronger assembly, or keep the limiter at or below {bottomEndLimit.ratedRpm.toLocaleString('en-US')} RPM.
           </div>
         )}
-        <ExpandableInfo title="Why the bottom end sets how far an engine can rev">
+          <ExpandableInfo title="Why the bottom end sets how far an engine can rev">
           Every revolution the piston stops dead twice and starts again, and the rod carries all of it. Engine designers rate an
           assembly by its <b className={styles.em}>mean piston speed</b>, twice the stroke times revs per second: medium-speed car
           engines run about 16 m/s, sports engines 20-25, Formula One and NASCAR about 25, and the Audi R8 V10 at 26.9 m/s is the
@@ -330,92 +333,108 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           like a short-stroke motorcycle engine even with the same parts. Past the band nothing breaks at once; the parts simply
           stop lasting, and the risk climbs with the square of the speed.
         </ExpandableInfo>
-
-        <div className={styles.labelSpaced}>Block Material</div>
-        <Seg label="Block Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
-        <div className={styles.labelSpaced}>Friction level</div>
-        <Seg label="Friction level" options={FRICTION_LEVEL_OPTS} value={engineConfig.frictionLevel ?? 'modern'} onChange={(v) => setCfg({ frictionLevel: v })} equal />
+          <SpecField label="Block material">
+            <Seg label="Block Material" variant="rule" equal options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.blockMaterial} onChange={(v) => setCfg({ blockMaterial: v })} />
+          </SpecField>
+          <SpecField label="Friction level" aside="the engine's technology, not its layout">
+            <Seg label="Friction level" variant="rule" equal options={FRICTION_LEVEL_OPTS} value={engineConfig.frictionLevel ?? 'modern'} onChange={(v) => setCfg({ frictionLevel: v })} />
+          </SpecField>
+        </SpecGroup>
         <Note>Changing bore, stroke, or configuration does not retroactively rewrite your VE/timing/AFR tables — you will feel the shift on your next dyno pull and can re-tune from there, just like swapping a real short block.</Note>
     </>
   );
   const headParts = (
     <>
-        <div className={styles.labelSpaced}>
-          Camshaft Duration: {engineConfig.camDuration}° <span className={styles.overlapNote}>· overlap {Math.round(engineDerived.overlapDeg)}°</span>
-        </div>
-        <input type="range" min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} value={engineConfig.camDuration} onChange={(e) => setCfg({ camDuration: Number(e.target.value) })} className={styles.slider} />
-        <div className={styles.rangeCaption}>
-          <span>mild, low-end torque</span><span>wild, top-end power</span>
-        </div>
-        <ExpandableInfo title="What camshaft duration actually does">
+        <SpecReadouts items={[
+          { label: 'Cam overlap', value: String(Math.round(engineDerived.overlapDeg)), unit: '°', note: `${engineConfig.camDuration}° duration` },
+          {
+            label: 'Valve float', value: Math.round(engineDerived.floatRpm).toLocaleString('en-US'), unit: ' rpm',
+            share: engineDerived.floatRpm / Math.max(engineDerived.redline, 1), tone: floating ? 'warn' : undefined,
+            note: floating ? 'below the redline' : `clear of the ${engineDerived.redline.toLocaleString('en-US')} redline`,
+          },
+          { label: 'Intake valve', value: intakeValveMm.toFixed(1), unit: ` mm × ${intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}`, note: engineConfig.intakeValveMm == null ? 'typical for this head' : 'as set' },
+        ]} />
+
+        <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
+          <SpecSlider label="Duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Camshaft duration" />
+          <ExpandableInfo title="What camshaft duration actually does">
           Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
           <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. This sandbox models it by sampling the breathing curve at a cam-shifted engine speed, which is the honest way to represent it.
           <br /><br /><b className={styles.em}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
         </ExpandableInfo>
-
-        <div className={styles.labelSpaced}>
-          Valve Spring Rate: {engineConfig.springRate} <span className={styles.floatCaption} data-float={floating ? 'true' : 'false'}>· float at {Math.round(engineDerived.floatRpm)} RPM</span>
-        </div>
-        <input type="range" min={20} max={100} step={1} value={engineConfig.springRate} onChange={(e) => setCfg({ springRate: Number(e.target.value) })} className={styles.springSlider} data-float={floating ? 'true' : 'false'} />
-        {floating && (
+          <SpecSlider label="Valve spring rate" value={engineConfig.springRate} stock={stockCfg?.springRate ?? null} min={20} max={100} step={1} onChange={(v) => setCfg({ springRate: v })} aside={`float at ${Math.round(engineDerived.floatRpm)} rpm`} tone={floating ? 'warn' : undefined} lo="soft" hi="stiff" ariaLabel="Valve spring rate" />
+          {floating && (
           <div className={styles.floatWarning}>
             Springs float below redline — cylinder filling collapses above {Math.round(engineDerived.floatRpm)} RPM. Stiffen them or fit a milder cam.
           </div>
         )}
-        <ExpandableInfo title="Why springs decide how far a cam can go">
+          <ExpandableInfo title="Why springs decide how far a cam can go">
           The cam pushes the valve open; only the spring closes it. As RPM rises the valve has less and less time to follow the closing ramp, and past the spring's limit it stops following the lobe entirely — <b className={styles.em}>valve float</b>. The cylinder cannot fill, and power falls off a cliff rather than tapering.
           <br /><br />Bigger cams open valves further and faster, so they need stiffer springs. That is why "cam and springs" are sold together: fit an aggressive cam on stock springs and you will make <i>less</i> power than stock up top, because you float before you reach the RPM the cam was designed for.
           <br /><br />Stiffness is not free either — every cycle the engine compresses those springs, and that parasitic loss shows up in FMEP. Over-spring a mild cam and you simply lose a little power for nothing.
         </ExpandableInfo>
+        </SpecGroup>
 
-        <div className={styles.labelSpaced}>Valvetrain</div>
-        <Seg label="Valvetrain layout" options={VALVETRAIN_OPTS} value={engineConfig.valvetrain ?? 'dohc'} onChange={(v) => setCfg({ valvetrain: v, follower: undefined })} equal />
-        <div className={styles.labelSpaced}>Valves per cylinder</div>
-        <Seg label="Valves per cylinder" options={VALVES_PER_CYL_OPTS.map((n) => ({ id: n, label: String(n) }))} value={engineConfig.valvesPerCyl ?? 4} onChange={(v) => setCfg({ valvesPerCyl: Number(v), intakeValveMm: null })} equal />
-        <div className={styles.labelSpaced}>Cam followers</div>
-        <Seg label="Cam followers" options={FOLLOWER_OPTS} value={engineConfig.follower ?? ((engineConfig.valvetrain ?? 'dohc') === 'dohc' ? 'flat' : 'roller')} onChange={(v) => setCfg({ follower: v })} equal />
-        <div className={styles.labelSpaced}>
-          Intake valve: {(engineConfig.intakeValveMm ?? TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore).toFixed(1)} mm × {intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}
-          {engineConfig.intakeValveMm == null && <span className={styles.overlapNote}>, typical for this head</span>}
-        </div>
-        <input type="range" aria-label="Intake valve diameter" min={25} max={60} step={0.5} value={engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2} onChange={(e) => setCfg({ intakeValveMm: Number(e.target.value) })} className={styles.slider} />
-        <div className={styles.labelSpaced}>Spark plugs per cylinder</div>
-        <Seg label="Spark plugs per cylinder" options={[{ id: 1, label: '1' }, { id: 2, label: '2' }]} value={engineConfig.sparkPlugs ?? 1} onChange={(v) => setCfg({ sparkPlugs: Number(v) })} equal />
-        <ExpandableInfo title="Pushrods, overhead cams, and how many valves">
+        <SpecGroup title="Valvetrain" aside={`${(engineConfig.valvetrain ?? 'dohc').toUpperCase()}, ${engineConfig.valvesPerCyl ?? 4} valves`}>
+          <SpecField label="Layout">
+            <Seg label="Valvetrain layout" variant="rule" equal options={VALVETRAIN_OPTS} value={engineConfig.valvetrain ?? 'dohc'} onChange={(v) => setCfg({ valvetrain: v, follower: undefined })} />
+          </SpecField>
+          <SpecField label="Valves per cylinder">
+            <Seg label="Valves per cylinder" variant="rule" equal options={VALVES_PER_CYL_OPTS.map((n) => ({ id: n, label: String(n) }))} value={engineConfig.valvesPerCyl ?? 4} onChange={(v) => setCfg({ valvesPerCyl: Number(v), intakeValveMm: null })} />
+          </SpecField>
+          <SpecField label="Cam followers">
+            <Seg label="Cam followers" variant="rule" equal options={FOLLOWER_OPTS} value={engineConfig.follower ?? ((engineConfig.valvetrain ?? 'dohc') === 'dohc' ? 'flat' : 'roller')} onChange={(v) => setCfg({ follower: v })} />
+          </SpecField>
+          <SpecSlider label="Intake valve" unit=" mm" decimals={1} value={intakeValveMm} min={25} max={60} step={0.5} onChange={(v) => setCfg({ intakeValveMm: v })} aside={`× ${intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}${engineConfig.intakeValveMm == null ? ', typical for this head' : ''}`} ariaLabel="Intake valve diameter" />
+          <ExpandableInfo title="Pushrods, overhead cams, and how many valves">
           A <b className={styles.em}>pushrod</b> (OHV) engine has one camshaft in the block, working the valves through lifters, pushrods and rockers; GM&apos;s small-blocks and the modern Hemi are built this way. An <b className={styles.em}>overhead-cam</b> engine carries its cams in the head, one per bank (SOHC) or two (DOHC), working the valves directly or through short followers.
           <br /><br />What changes here is real: <b className={styles.em}>friction</b> and <b className={styles.em}>breathing</b>. Every cam bearing and every follower on its lobe costs work: a pushrod V8 turns one cam on five bearings where a DOHC V8 turns four on twenty, and four valves per cylinder are twice the followers of two. A flat tappet or bucket slides where a roller rolls and costs more; that difference is not priced yet, because the published coefficient for it could not be obtained, so a flat-follower engine is charged as a roller one for now. Four valves give the charge more valve area than two in the same bore, so the engine keeps filling to a higher piston speed; that is why a four-valve head revs. Give the valve size if you know it: a GM LS head runs a single valve about half the bore across, almost as much area as a typical four-valve head.
           <br /><br /><b className={styles.em}>Friction level</b> is the engine&apos;s technology rather than its layout: ring tension, coatings and oil thickness cut friction a long way between the 1990s and the 2010s. &ldquo;Older&rdquo; is what GM&apos;s own engine computers say their 2002 truck engines lose to friction: 1.6 times the published model, which matches what an independent laboratory measured on its own engine. &ldquo;Modern&rdquo; is the published model as printed, which is where the factory engines here fit their ratings; whether modern engines really run that low is not yet measured.
           <br /><br />A <b className={styles.em}>second spark plug</b> lights the charge in two places, so each flame has less of the chamber to cross and the burn is shorter: the modern Hemi runs two for that reason.
         </ExpandableInfo>
+        </SpecGroup>
 
-        <div className={styles.label}>Cam Phasers</div>
-        <Seg label="Cam phasers" options={VVT_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={engineConfig.vvt ?? 'none'} onChange={(v) => setCfg({ vvt: v })} equal />
-        <ExpandableInfo title="What a cam phaser does — and what it does not">
+        <SpecGroup title="Ignition">
+          <SpecField label="Spark plugs per cylinder">
+            <Seg label="Spark plugs per cylinder" variant="rule" equal options={[{ id: 1, label: '1' }, { id: 2, label: '2' }]} value={engineConfig.sparkPlugs ?? 1} onChange={(v) => setCfg({ sparkPlugs: Number(v) })} />
+          </SpecField>
+          <SpecField label="Coils">
+            <Seg label="Ignition coils" variant="rule" equal options={COIL_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={build.coil ?? 'stock'} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'coil', value: v })} />
+          </SpecField>
+          <SpecField label="Plug gap" aside="mm">
+            <Seg label="Spark plug gap" variant="rule" equal options={[0.6, 0.7, 0.8, 0.9, 1.0, 1.1].map((g) => ({ id: g, label: g.toFixed(1) }))} value={build.plugGapMm ?? 1.0} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'plugGapMm', value: Number(v) })} />
+          </SpecField>
+          <ExpandableInfo title="Why boosted engines close the plug gap">
+          Before a spark can do anything, the gap has to break down — and the voltage that takes rises with the density of the gas across it. Boost and advance both mean denser gas at the plug when it fires. Past what the coil can make, some events never light: a misfire that feels like a stutter and costs power exactly where the engine is working hardest. A smaller gap, a longer dwell or a stronger coil all buy it back.
+        </ExpandableInfo>
+        </SpecGroup>
+
+        <SpecGroup title="Air and fuel">
+          <SpecField label="Cam phasers">
+            <Seg label="Cam phasers" variant="rule" equal options={VVT_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={engineConfig.vvt ?? 'none'} onChange={(v) => setCfg({ vvt: v })} />
+          </SpecField>
+          <ExpandableInfo title="What a cam phaser does — and what it does not">
           A phaser turns the camshaft against the crank with oil pressure, moving every event on that cam by the same angle. It does not change the lobe: duration and lift are the grind's. What it changes is <i>when</i> — and that is enough to move the torque curve, because the intake valve closing is what decides how much charge is trapped.
           <br /><br />Advance the intake and it closes earlier: at low speed the charge has no momentum to keep filling after bottom dead centre, so closing early traps more of it; at high speed it cuts the ramming short. Every move also changes overlap, and overlap decides how much burned gas stays in the cylinder. The targets live on <b className={styles.em}>TUNE › VVT</b>; parked at zero, a phased engine is exactly the fixed-cam one.
         </ExpandableInfo>
-
-        <div className={styles.labelSpaced}>Fuel Injection</div>
-        <Seg label="Fuel injection" options={INJECTION_OPTS} value={engineConfig.injection ?? 'port'} onChange={(v) => setCfg({ injection: v })} equal />
-        <ExpandableInfo title="Port injection versus direct injection">
+          <SpecField label="Fuel injection">
+            <Seg label="Fuel injection" variant="rule" equal options={INJECTION_OPTS} value={engineConfig.injection ?? 'port'} onChange={(v) => setCfg({ injection: v })} />
+          </SpecField>
+          <ExpandableInfo title="Port injection versus direct injection">
           <b className={styles.em}>Port injection</b> (multi-point manifold injection) puts one injector in each intake runner, aimed at the back of the intake valve. The fuel boils off that hot valve, so it cools the metal, not the air: the charge reaches the cylinder barely colder than it left the manifold. The Nissan VQs here are port-injected.
           <br /><br /><b className={styles.em}>Direct injection</b> sprays into the cylinder itself, at far higher pressure. The fuel takes its heat of evaporation from the air, and measured on the same engine that is about 14 °C colder on gasoline and 49 °C on E85. Colder air is denser, so more of it gets in (about 6% on gasoline here), and colder end gas takes longer to light itself, so the knock limit rises. That is how the BMW and VW turbo engines here run their compression under boost. There is no port wall for fuel to soak into, either, so a direct-injected engine needs far less acceleration enrichment.
           <br /><br />Swap one for the other and the fuel tables stay the engine&apos;s own: re-tune after the change, as you would on a real conversion.
         </ExpandableInfo>
+        </SpecGroup>
 
-        <div className={styles.labelSpaced}>Ignition</div>
-        <Seg label="Ignition coils" options={COIL_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={build.coil ?? 'stock'} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'coil', value: v })} equal />
-        <div className={styles.labelSpaced}>Plug Gap</div>
-        <Seg label="Spark plug gap" options={[0.6, 0.7, 0.8, 0.9, 1.0, 1.1].map((g) => ({ id: g, label: `${g.toFixed(1)} mm` }))} value={build.plugGapMm ?? 1.0} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'plugGapMm', value: Number(v) })} equal />
-        <ExpandableInfo title="Why boosted engines close the plug gap">
-          Before a spark can do anything, the gap has to break down — and the voltage that takes rises with the density of the gas across it. Boost and advance both mean denser gas at the plug when it fires. Past what the coil can make, some events never light: a misfire that feels like a stutter and costs power exactly where the engine is working hardest. A smaller gap, a longer dwell or a stronger coil all buy it back.
-        </ExpandableInfo>
-
-        <div className={styles.labelSpaced}>Head Material</div>
-        <Seg label="Head Material" options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
-        <ExpandableInfo title="Why block and head material matter">
+        <SpecGroup title="Head">
+          <SpecField label="Material">
+            <Seg label="Head Material" variant="rule" equal options={MATERIAL_OPTS.map((m) => ({ label: m, id: m }))} value={engineConfig.headMaterial} onChange={(v) => setCfg({ headMaterial: v })} />
+          </SpecField>
+          <ExpandableInfo title="Why block and head material matter">
           Aluminum conducts heat roughly three times faster than cast iron, so an aluminum head pulls heat away from the combustion chamber faster — a real, measurable knock-margin benefit. Cast iron is heavier and a worse conductor, but stiffer under heat, which is part of why some high-output blocks still use it.
         </ExpandableInfo>
+        </SpecGroup>
     </>
   );
 

@@ -23,9 +23,11 @@ import styles from './EngineStart.module.css';
 /**
  * The factory engines, by maker, as cards: the start screen's first choice and the Build
  * app's Factory engines list.
- * @param {{onPick: (preset: any) => void, picked?: any}} props
+ * @param {{onPick: (preset: any) => void, picked?: any, detail?: (preset: any) => React.ReactNode}} props
+ *   `detail` is drawn under the picked engine, in place: what is chosen and what to do with
+ *   it stay together, not a screen's length apart.
  */
-export function PrebuiltEngines({ onPick, picked = null }) {
+export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
   return (
     <>
       {PRESET_GROUPS.map((g) => (
@@ -33,13 +35,16 @@ export function PrebuiltEngines({ onPick, picked = null }) {
           <div className={styles.maker}>{g.manufacturer}</div>
           <div className={styles.cards}>
             {g.presets.map((p) => (
-              <button key={p.id} type="button" className={styles.card} onClick={() => onPick(p)} aria-pressed={picked ? picked.id === p.id : undefined}>
-                <span className={styles.name}>{p.name}</span>
-                <span className={styles.spec}>
-                  {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
-                  {p.induction.turboOn ? ' turbo' : ''}, {p.factory.crankHp} hp, {p.years}
-                </span>
-              </button>
+              <React.Fragment key={p.id}>
+                <button type="button" className={styles.card} onClick={() => onPick(p)} aria-pressed={picked ? picked.id === p.id : undefined}>
+                  <span className={styles.name}>{p.name}</span>
+                  <span className={styles.spec}>
+                    {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
+                    {p.induction.turboOn ? ' turbo' : ''}, {p.factory.crankHp} hp, {p.years}
+                  </span>
+                </button>
+                {detail && picked?.id === p.id && detail(p)}
+              </React.Fragment>
             ))}
           </div>
         </div>
@@ -97,23 +102,23 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
         <h2 className={styles.title}>{path === 'factory' ? 'Factory engines' : 'Custom engine'}</h2>
       </div>
       {path === 'factory' ? (
-        <div className={styles.catalog}>
-          <div><PrebuiltEngines onPick={setPicked} picked={picked} /></div>
-          {picked && (
-            <aside className={styles.sheet} aria-label={`${picked.name} specifications`}>
-              <div className={styles.sheetName}>{picked.name}</div>
-              <dl className={styles.specs}>
-                <dt>Layout</dt><dd>{picked.engine.configuration}{picked.induction.turboOn ? ', turbocharged' : ''}</dd>
-                <dt>Displacement</dt><dd>{picked.factory.displacementL.toFixed(1)} L</dd>
-                <dt>Bore × stroke</dt><dd>{picked.engine.bore} × {picked.engine.stroke} mm</dd>
-                <dt>Compression</dt><dd>{picked.engine.compression}:1</dd>
-                <dt>Redline</dt><dd>{picked.engine.redline.toLocaleString('en-US')} rpm</dd>
-                <dt>Factory rating</dt><dd>{picked.factory.crankHp} hp, {picked.factory.crankTq} lb-ft</dd>
-                <dt>Years</dt><dd>{picked.years}</dd>
-              </dl>
-              <button type="button" className={styles.use} onClick={() => load(picked)} aria-label={`Use ${picked.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
-            </aside>
-          )}
+        <div className={styles.catalog} data-plain="">
+          <PrebuiltEngines
+            onPick={(p) => setPicked(picked?.id === p.id ? null : p)} picked={picked}
+            detail={(p) => (
+              <div className={styles.sheet} role="region" aria-label={`${p.name} specifications`}>
+                <dl className={styles.specs}>
+                  <div><dt>Layout</dt><dd>{p.engine.configuration}{p.induction.turboOn ? ', turbo' : ''}</dd></div>
+                  <div><dt>Displacement</dt><dd>{p.factory.displacementL.toFixed(1)} L</dd></div>
+                  <div><dt>Bore × stroke</dt><dd>{p.engine.bore} × {p.engine.stroke} mm</dd></div>
+                  <div><dt>Compression</dt><dd>{p.engine.compression}:1</dd></div>
+                  <div><dt>Redline</dt><dd>{p.engine.redline.toLocaleString('en-US')} rpm</dd></div>
+                  <div><dt>Factory rating</dt><dd>{p.factory.crankHp} hp / {p.factory.crankTq} lb-ft</dd></div>
+                </dl>
+                <button type="button" className={styles.use} onClick={() => load(p)} aria-label={`Use ${p.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
+              </div>
+            )}
+          />
         </div>
       ) : (
         <Panel>

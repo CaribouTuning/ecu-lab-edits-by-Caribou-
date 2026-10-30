@@ -125,7 +125,7 @@ export function InductionScreen({ active, onToggle }) {
       </div>
 
       <div className={styles.labelTight}>MAP Sensor</div>
-      <Seg label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
+      <Seg variant="rule" label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
         value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />
       <div className={styles.hint}>A sensor reads up to its rating and no further: a 1-bar sensor tops out at atmospheric and never sees boost.</div>
       <SetupNote paths={['sensors.map']} okText="The ECU is set up for this sensor."
@@ -145,10 +145,10 @@ export function InductionScreen({ active, onToggle }) {
           <div className={styles.label}>Turbine Size</div>
           <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.labelTight}>Compressor Size</div>
-          <Seg label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
+          <Seg variant="rule" equal label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{ceiling} psi</div>
           <div className={styles.labelTight}>Turbos</div>
-          <Seg label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />
+          <Seg variant="rule" label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />
           <div className={styles.hint} data-testid="turbo-airflow" data-over={chokes ? 'true' : 'false'}>
             At {redline} RPM and {peakPsi} psi this engine needs about {Math.round(needLbMin)} lb/min of air. {turbineCount > 1 ? 'The two compressors choke' : 'This compressor chokes'} at about {Math.round(chokeLbMin)} lb/min.
             {chokes && ' It cannot feed that: boost will fall away near redline while exhaust back-pressure climbs. Fit a bigger compressor or a second turbo.'}
@@ -161,11 +161,11 @@ export function InductionScreen({ active, onToggle }) {
           </ExpandableInfo>
 
           <div className={styles.labelTight}>Wastegate Actuator</div>
-          <Seg label="Wastegate actuator" options={WASTEGATE_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={gate.type} onChange={(v) => setGate({ type: v })} equal />
+          <Seg variant="rule" label="Wastegate actuator" options={WASTEGATE_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={gate.type} onChange={(v) => setGate({ type: v })} equal />
           {gate.type === 'pneumatic' && (
             <>
               <div className={styles.labelTight}>Spring Pressure</div>
-              <Seg label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: `${p} psi` }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
+              <Seg variant="rule" label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: `${p} psi` }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
               <div className={styles.hint}>The gate opens at its spring pressure on its own. The boost solenoid can hold it shut longer — it can never open it sooner.</div>
             </>
           )}
@@ -329,15 +329,15 @@ export function InductionScreen({ active, onToggle }) {
       )}
 
       <div className={styles.labelTight}>Nitrous Kit</div>
-      <Seg label="Nitrous kit" options={[{ id: 'none', label: 'None' }, { id: 'wet', label: 'Wet' }, { id: 'dry', label: 'Dry' }]}
+      <Seg variant="rule" label="Nitrous kit" options={[{ id: 'none', label: 'None' }, { id: 'wet', label: 'Wet' }, { id: 'dry', label: 'Dry' }]}
         value={nitrous ? nitrous.kit : 'none'} onChange={(v) => setNitrous(v === 'none' ? null : { kit: v })} equal />
       {nitrous && (
         <>
           <div className={styles.labelTight}>Shot</div>
-          <Seg label="Nitrous shot" options={[50, 75, 100, 150, 200].map((h) => ({ id: h, label: `${h} hp` }))}
+          <Seg variant="rule" label="Nitrous shot" options={[50, 75, 100, 150, 200].map((h) => ({ id: h, label: `${h} hp` }))}
             value={nitrous.shotHp} onChange={(v) => setNitrous({ shotHp: Number(v) })} equal />
           <div className={styles.labelTight}>Bottle</div>
-          <Seg label="Bottle size" options={[10, 15].map((lb) => ({ id: lb, label: `${lb} lb` }))}
+          <Seg variant="rule" label="Bottle size" options={[10, 15].map((lb) => ({ id: lb, label: `${lb} lb` }))}
             value={nitrous.bottleLb} onChange={(v) => setNitrous({ bottleLb: Number(v) })} equal />
           <Toggle label="Bottle heater" sub="Holds the bottle at 85 °F — about 920 psi" checked={!!nitrous.heater} onChange={(v) => setNitrous({ heater: v })} />
           <div className={styles.hint}>

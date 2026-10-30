@@ -14,6 +14,7 @@
  * factory engine with parts changed (modified, each changed part marked), or the player's own.
  */
 
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -107,6 +108,9 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const [tune] = useTune();
   // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
   const [changing, setChanging] = useState(false);
+  // Where the parts are narrow (a phone), they fold to one line, the step you are on, and
+  // open to the whole list on a tap.
+  const [railOpen, setRailOpen] = useState(false);
   const sums = useMemo(() => partSummaries(build, derived, preset), [build, derived, preset]);
   const open = BENCH_PARTS.find((p) => p.id === part) ?? BENCH_PARTS[0];
   const tall = useTall();
@@ -118,10 +122,21 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   return (
     <div className={styles.wrap} data-full={full ? 'true' : undefined}>
     <div className={styles.bench}>
-      <nav className={styles.parts} aria-label="Engine parts">
+      <nav className={styles.parts} aria-label="Engine parts" data-open={railOpen ? 'true' : undefined}>
         {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />}
+        {/* Narrow only (BuildBench.module.css): the step you are on, and where you are in the six. */}
+        <button type="button" className={styles.rail} aria-label="Choose a part" aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
+          <span className={styles.railStep}>{BENCH_PARTS.indexOf(open) + 1}<span className={styles.railOf}>/{BENCH_PARTS.length}</span></span>
+          <span className={styles.railName}>{open.label}</span>
+          <span className={styles.ticks} aria-hidden="true">
+            {BENCH_PARTS.map((p, i) => (
+              <i key={p.id} data-state={i < BENCH_PARTS.indexOf(open) ? 'done' : i === BENCH_PARTS.indexOf(open) ? 'now' : 'todo'} data-changed={changed.has(p.id) ? 'true' : undefined} />
+            ))}
+          </span>
+          {railOpen ? <ChevronUp aria-hidden="true" size={16} className={styles.railChevron} /> : <ChevronDown aria-hidden="true" size={16} className={styles.railChevron} />}
+        </button>
         {BENCH_PARTS.map((p, i) => (
-          <button key={p.id} type="button" className={styles.part} aria-current={p.id === open.id ? 'true' : undefined} onClick={() => { setChanging(false); onPart(p.id); }}>
+          <button key={p.id} type="button" className={styles.part} aria-current={p.id === open.id ? 'true' : undefined} onClick={() => { setChanging(false); setRailOpen(false); onPart(p.id); }}>
             <span className={styles.partName}>
               <span className={styles.step} aria-hidden="true">{i + 1}</span>{p.label}
               {p.id === 'engine' && <span className={styles.origin} data-origin={origin}>{ORIGIN_TAG[origin]}</span>}
@@ -167,12 +182,12 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
               {origin === 'own' ? 'Your own engine' : changedNames.length ? <>Changed from stock: <b>{changedNames.join(', ')}</b></> : 'Stock: nothing changed yet'}
             </span>
             {BENCH_PARTS.indexOf(open) > 0 && (
-              <button type="button" className={styles.stepBtn} onClick={() => onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].id)}>
+              <button type="button" className={styles.stepBtn} onClick={() => { setRailOpen(false); onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].id); }}>
                 Back<span className={styles.stepName}>: {BENCH_PARTS[BENCH_PARTS.indexOf(open) - 1].label}</span>
               </button>
             )}
             {BENCH_PARTS.indexOf(open) < BENCH_PARTS.length - 1 ? (
-              <button type="button" className={styles.stepGo} onClick={() => onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].id)}>
+              <button type="button" className={styles.stepGo} onClick={() => { setRailOpen(false); onPart(BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].id); }}>
                 Next: {BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].label}
               </button>
             ) : (
