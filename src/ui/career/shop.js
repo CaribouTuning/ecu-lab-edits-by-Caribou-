@@ -12,6 +12,37 @@ import { dayOffers } from './generate.js';
 import { JOBS, jobById } from './jobs.js';
 
 export const SAVE_VERSION = 1;
+
+/**
+ * How a save of one version becomes the next: `MIGRATIONS[n]` takes a version-n save and
+ * returns a version-(n + 1) one. RAISING `SAVE_VERSION` WITHOUT ADDING ITS STEP HERE WIPES
+ * EVERY PLAYER'S SHOP: money, reputation, equipment, history. `reviveCareer` used to start a
+ * new career for any save that was not exactly the current version.
+ * @type {Record<number, (save: any) => any>}
+ */
+export const MIGRATIONS = {};
+
+/**
+ * A save brought up to the current version through `MIGRATIONS`, or as it was if there is
+ * no way to (a newer build's, or damaged).
+ * @param {unknown} raw
+ * @returns {unknown}
+ */
+export function migrateCareer(raw) {
+  let c = /** @type {any} */ (raw);
+  while (c && typeof c === 'object' && Number.isInteger(c.v) && c.v < SAVE_VERSION && MIGRATIONS[c.v]) c = MIGRATIONS[c.v](c);
+  return c;
+}
+
+/**
+ * Whether this build can read a save: it is a shop save, and of this version once migrated.
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function canReadCareer(raw) {
+  const c = /** @type {any} */ (migrateCareer(raw));
+  return !!c && typeof c === 'object' && c.v === SAVE_VERSION;
+}
 export const START_MONEY = 1000;
 
 /**
@@ -115,7 +146,7 @@ export function nextDay(c) {
  * @returns {Career}
  */
 export function reviveCareer(raw) {
-  const c = /** @type {any} */ (raw);
+  const c = /** @type {any} */ (migrateCareer(raw));
   if (!c || typeof c !== 'object' || c.v !== SAVE_VERSION) return newCareer();
   const fresh = newCareer(typeof c.seed === 'number' ? c.seed : undefined);
   const revived = {

@@ -136,6 +136,25 @@ export async function loadShop() {
 }
 
 /**
+ * Keeps a save this build cannot read, under a key of its own, before the shop starts anew
+ * over it: a player who opens an older build, or one whose save a bug damaged, does not lose
+ * it for good. One backup, the latest. Best-effort.
+ *
+ * @param {unknown} raw the unreadable save, as `loadShop` parsed it
+ * @returns {Promise<void>}
+ */
+export async function backupShop(raw) {
+  try {
+    const text = JSON.stringify(raw);
+    switch (storageBackend()) {
+      case 'artifact': await window.storage.set(`${SHOP_KEY}-backup`, text); break;
+      case 'local': localStorage.setItem(`${SHOP_KEY}-backup`, text); break;
+      default: memory.set(`${SHOP_KEY}-backup`, text);
+    }
+  } catch { /* best-effort */ }
+}
+
+/**
  * Writes the career shop's save. Best-effort, like `saveCareer`.
  *
  * @param {unknown} shop

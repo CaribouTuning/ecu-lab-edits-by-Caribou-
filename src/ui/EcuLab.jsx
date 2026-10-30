@@ -44,7 +44,7 @@ import {
 } from './audio/engineAudio.js';
 import { T } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
-import { loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
+import { backupShop, loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
@@ -58,7 +58,7 @@ import { CareerBar } from './career/CareerBar.jsx';
 import { nextStep, spotOf } from './flow.js';
 import { evaluateJob } from './career/evaluate.js';
 import { jobById } from './career/jobs.js';
-import { deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
+import { canReadCareer, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -844,7 +844,13 @@ export function EcuLabApp() {
     if (appView === 'shop' && mode !== 'career') {
       let cancelled = false;
       (async () => {
-        const c = career ?? reviveCareer(await loadShop());
+        let c = career;
+        if (!c) {
+          const saved = await loadShop();
+          // A save this build cannot read is set aside, not written over.
+          if (saved && !canReadCareer(saved)) backupShop(saved);
+          c = reviveCareer(saved);
+        }
         if (cancelled) return;
         dispatch({ type: ACTIONS.ENTER_CAREER, career: c });
         // You start stood in your shop, the laptop shut on the desk in front of you.
