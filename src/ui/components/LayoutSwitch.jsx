@@ -60,7 +60,7 @@ export function LayoutSwitch() {
   ];
   // One line: the axes' size and span, the whole story in the tooltip.
   const why = active.id === 'engine'
-    ? `The range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, the axes stay put when the build changes: past them the ECU reads the edge, and you extend them yourself.`
+    ? `The range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, they never move a value you have tuned: a build that reaches past them adds rows and columns (in SANDBOX as you build; in CAREER when you extend them), and past the edge the ECU reads the edge.`
     : active.id === 'game' ? 'On the old 8 × 6 grid. Switch to tables sized to this engine.'
       : `The breakpoints of ${active.ecu}, read from its own calibrations. ${active.note ?? ''}`;
   return (
@@ -75,7 +75,9 @@ export function LayoutSwitch() {
           label="Table layout"
           options={options}
           value={active.id === 'game' ? '' : active.id}
-          onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
+          // The layout already in use is not a change: switching to it would re-sample the tables
+          // onto a fresh grid and blur what the player has tuned.
+          onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
         />
       )}
       <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>

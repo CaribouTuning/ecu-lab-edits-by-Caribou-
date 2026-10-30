@@ -195,6 +195,32 @@ export function engineLayout(spec) {
 }
 
 /**
+ * Axes that reach `want`, made by ADDING breakpoints to `axes`: new load rows above the top
+ * and new RPM columns past the last, every existing breakpoint kept exactly where it was.
+ * This is what tuning software's "extend axis" does, and why it is safe on a table someone
+ * has tuned: a cell's breakpoints do not move, so no value is re-sampled or blurred (a new
+ * evenly spaced grid, re-reading the old one at its points, turned a single tuned cell into
+ * the average of its neighbours).
+ *
+ * New load rows step by the old top spacing, or 10 kPa if that is finer: boost is not tuned
+ * at the 5 kPa a vacuum table is. New columns step by the last two columns' spacing.
+ * @param {TableAxes} axes in kPa on the load axis (descending) and RPM (ascending)
+ * @param {{loadKpa: number, rpm: number}} want the top load and last RPM to reach
+ * @returns {{axes: TableAxes, addRows: number, addCols: number}} the new axes, and how many
+ *   rows were put above and columns after
+ */
+export function extendAxesTo(axes, want) {
+  if (axes.loadUnit !== 'kPa') return { axes, addRows: 0, addCols: 0 };
+  const load = [...axes.load];
+  const rpm = [...axes.rpm];
+  const rowStep = Math.max(10, load.length > 1 ? load[0] - load[1] : 10);
+  while (load[0] < want.loadKpa - 0.5) load.unshift(Number((load[0] + rowStep).toFixed(3)));
+  const colStep = rpm.length > 1 ? rpm[rpm.length - 1] - rpm[rpm.length - 2] : 500;
+  while (rpm[rpm.length - 1] < want.rpm - 0.5) rpm.push(Number((rpm[rpm.length - 1] + colStep).toFixed(3)));
+  return { axes: { ...axes, load, rpm }, addRows: load.length - axes.load.length, addCols: rpm.length - axes.rpm.length };
+}
+
+/**
  * An engine computer's own layout, with any table it does not give breakpoints for put on
  * the engine's own axes rather than the old fixed grid.
  *
