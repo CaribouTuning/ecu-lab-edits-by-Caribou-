@@ -25,6 +25,9 @@
 .partName { font-size: 13px; font-weight: 600; }
 .partNow { font-size: 11.5px; color: var(--ink2); line-height: 1.35; font-variant-numeric: tabular-nums; }
 
+/* The folded form of the list, for a narrow window: hidden where the list is beside the sheet. */
+.rail { display: none; }
+
 /* ---- the sheet ---- */
 .sheet { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .sheetHead { padding: 12px 16px 10px; border-bottom: 1px solid var(--line); }
@@ -40,9 +43,10 @@
 /* A narrow window (the computer on a phone held upright): the parts run across the top. */
 @container (max-width: 560px) {
   .bench { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .parts { flex-direction: row; overflow-x: auto; overflow-y: hidden; border-right: 0; border-bottom: 1px solid var(--line); gap: 2px; }
-  .part { flex: none; max-width: 150px; }
-  .partNow { display: none; }
+  .parts { overflow: visible; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; padding: 0; }
+  .part { display: none; }
+  .rail { display: grid; }
+  .parts[data-open] .part { display: flex; padding: 9px 14px; border-radius: 0; border-top: 1px solid var(--line); }
 }
 
 /* Stock, modified or the player's own: a word on the Engine part, and a panel on its sheet. */
@@ -70,19 +74,42 @@
 .wrap[data-full] .bench { grid-template-columns: minmax(220px, 280px) 1fr; height: auto; align-items: start; }
 .wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; border-radius: var(--r-lg) 0 0 var(--r-lg); }
 .wrap[data-full] .sheet { overflow: visible; min-height: 70vh; }
-.wrap[data-full] .steps { position: sticky; bottom: 0; z-index: 1; background: var(--bg); border-radius: 0 0 var(--r-lg) 0; }
+.wrap[data-full] .steps { position: sticky; bottom: 0; z-index: 1; background: var(--bg); border-radius: 0 0 var(--r-lg) 0; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
 .wrap[data-full] .parts > [role='img'] { flex: none; height: 170px; margin: -6px -6px 6px; border-bottom: 1px solid var(--line); }
 .wrap[data-full] .sheetHead { padding: 16px 20px 12px; }
 .wrap[data-full] .sheetTitle { font-size: 18px; }
-.wrap[data-full] .sheetBody { padding: 14px 20px 24px; }
+.wrap[data-full] .sheetBody { padding: 14px 20px 32px; }
 /* What the build is against the factory, beside the way on. */
 .changes { align-self: center; font-size: 12px; color: var(--ink2); min-width: 0; }
 .changes b { color: var(--warn-ink); font-weight: 600; }
 @container (max-width: 560px) {
   .wrap[data-full] .bench { grid-template-columns: minmax(0, 1fr); }
   .wrap[data-full] .sheet { min-width: 0; }
-  .wrap[data-full] .parts { overflow-x: auto; overflow-y: hidden; z-index: 2; border-radius: 0; }
+  .wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; z-index: 2; border-radius: 0; }
   .wrap[data-full] .parts > [role='img'] { display: none; }
   .changes { display: none; }
   .stepName { display: none; }
+  /* The rail above already names the part: the title stays for screen readers, the lead shows. */
+  .sheetTitle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .wrap[data-full] .sheetHead { padding: 12px 16px 10px; }
+}
+
+/* The folded list: "2/6  Short block", six ticks for where you are in the build, and a
+   chevron. Ticks fill as parts are passed; a part changed from stock carries a warm tick. */
+@container (max-width: 560px) {
+  .rail {
+    grid-template-columns: auto 1fr auto; grid-template-areas: 'step name chev' 'ticks ticks ticks';
+    align-items: center; column-gap: 10px; row-gap: 7px; width: 100%; padding: 9px 14px 8px;
+    border: 0; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  }
+  .rail:focus-visible { outline: 2px solid var(--acc); outline-offset: -2px; }
+  .railStep { grid-area: step; font-family: var(--mono); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .railOf { font-size: 11px; font-weight: 500; color: var(--ink2); }
+  .railName { grid-area: name; font-size: 14px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .railChevron { grid-area: chev; color: var(--ink2); }
+  .ticks { grid-area: ticks; display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+  .ticks i { display: block; height: 3px; background: var(--line-hi); }
+  .ticks i[data-state='done'] { background: var(--ink2); }
+  .ticks i[data-state='now'] { background: var(--ink); }
+  .ticks i[data-changed='true'] { box-shadow: 0 -2px 0 var(--warn); }
 }
