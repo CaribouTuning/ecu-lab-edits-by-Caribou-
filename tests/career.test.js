@@ -183,3 +183,28 @@ describe('the shop', () => {
     expect(old.races).toBeUndefined();
   });
 });
+
+describe('a save from another version', () => {
+  it('is migrated, not wiped, when its step exists; and is reported unreadable when it does not', async () => {
+    const shop = await import('../src/ui/career/shop.js');
+    const old = { ...shop.newCareer(), v: 0, money: 4321, rep: 7 };
+    // No step from version 0 yet: nothing to migrate it with, so it is unreadable and a new career starts.
+    expect(shop.canReadCareer(old)).toBe(false);
+    expect(shop.reviveCareer(old).money).toBe(shop.START_MONEY);
+    // With a step registered (as a future version bump must), the same save is kept.
+    shop.MIGRATIONS[0] = (s) => ({ ...s, v: 1 });
+    try {
+      expect(shop.canReadCareer(old)).toBe(true);
+      expect(shop.reviveCareer(old).money).toBe(4321);
+      expect(shop.reviveCareer(old).rep).toBe(7);
+    } finally {
+      delete shop.MIGRATIONS[0];
+    }
+    // Garbage and a newer build's save are not readable either, and never throw.
+    for (const bad of [null, 'x', 7, [], { v: shop.SAVE_VERSION + 1 }]) {
+      expect(shop.canReadCareer(bad)).toBe(false);
+      expect(() => shop.reviveCareer(bad)).not.toThrow();
+    }
+    expect(shop.canReadCareer(shop.newCareer())).toBe(true);
+  });
+});
