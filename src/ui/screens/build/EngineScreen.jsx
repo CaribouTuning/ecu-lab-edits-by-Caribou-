@@ -24,7 +24,7 @@ import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { Select } from '../../primitives/Select.jsx';
-import { SpecField, SpecGroup, SpecReadouts, SpecSlider } from '../../primitives/Spec.jsx';
+import { SpecField, SpecGroup, SpecMeter, SpecSlider, SpecTable } from '../../primitives/Spec.jsx';
 import { originPreset } from '../../state/baseMap.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
@@ -121,7 +121,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
     || (activePreset ? (activePreset.bottomEndRatedRpm ?? activePreset.engine.redline) : null);
   const bottomEndOpts = [
     ...(factoryRatedRpm ? [{ id: 'factory', label: 'Factory' }] : []),
-    ...BOTTOM_END_OPTS.map((o) => ({ id: o.id, label: o.label.split(' (')[0] })),
+    ...BOTTOM_END_OPTS.map((o) => ({ id: o.id, label: o.label.split(' (')[0].replace(' pistons and rods', '') })),
   ];
   const bottomEndLimit = engineDerived.bottomEnd;
   const pistonAtRedline = pistonMotion(engineConfig.stroke, engineDerived.redline);
@@ -195,10 +195,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
       )}
         {factory && (
           <>
-            <SpecReadouts items={[
-              { label: 'Factory rating', value: String(factory.factory.crankHp), unit: ' hp', note: `${factory.factory.crankTq} lb-ft at the crank` },
-              { label: 'Your last pull', value: result ? String(result.peakHp) : '—', unit: result ? ' whp' : '', note: result ? `${result.peakTq} lb-ft at the wheels` : 'no pull logged' },
-              { label: 'Redline', value: factory.engine.redline.toLocaleString('en-US'), unit: ' rpm', note: `${factory.factory.displacementL.toFixed(1)} L ${factory.engine.configuration}${factory.induction.turboOn ? ' turbo' : ''}` },
+            <SpecTable rows={[
+              { label: 'Factory rating', value: `${factory.factory.crankHp} hp, ${factory.factory.crankTq} lb-ft`, note: 'at the crank' },
+              { label: 'Your last pull', value: result ? `${result.peakHp} whp, ${result.peakTq} lb-ft` : 'none logged', note: result ? 'at the wheels' : undefined },
+              { label: 'Redline', value: `${factory.engine.redline.toLocaleString('en-US')} rpm`, note: `${factory.factory.displacementL.toFixed(1)} L ${factory.engine.configuration}${factory.induction.turboOn ? ' turbo' : ''}` },
             ]} />
             <p className={styles.blurb}>{factory.blurb}</p>
             <ExpandableInfo title="Crank power against wheel power">
@@ -241,18 +241,16 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           </div>
         )}
         {undoable && (
-          <Note tone="warn">
-            <span className={styles.undoRow}>
-              <span>{top.label} replaced your tune. Undo restores the tables and hardware as they were before it.</span>
-              <Button
-                variant="quiet" size="sm"
-                aria-label={`Undo ${top.label}`}
-                onClick={() => dispatch({ type: ACTIONS.UNDO })}
-              >
-                UNDO
-              </Button>
-            </span>
-          </Note>
+          <div className={styles.undoLine}>
+            <span>{top.label} replaced your tune. Undo restores the tables and hardware as they were before it.</span>
+            <Button
+              variant="quiet" size="sm"
+              aria-label={`Undo ${top.label}`}
+              onClick={() => dispatch({ type: ACTIONS.UNDO })}
+            >
+              UNDO
+            </Button>
+          </div>
         )}
 
         {!veAdvice.inSync && (
@@ -281,16 +279,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   );
   const blockParts = (
     <>
-        <SpecReadouts items={[
-          { label: 'Displacement', value: engineDerived.displacementL.toFixed(2), unit: ' L', note: `${engineConfig.configuration}, ${CYL_COUNT[engineConfig.configuration]} cylinders` },
-          { label: 'Bore : stroke', value: engineDerived.ratio.toFixed(3), note: engineDerived.character },
-          {
-            label: 'Piston speed', value: pistonAtRedline.meanSpeedMs.toFixed(1), unit: ' m/s',
-            share: pistonAtRedline.meanSpeedMs / bottomEndLimit.limitMs, tone: pastBottomEnd ? 'warn' : undefined,
-            note: `at ${engineDerived.redline.toLocaleString('en-US')} rpm, rated ${bottomEndLimit.limitMs.toFixed(1)}`,
-          },
-        ]} />
-
         <SpecGroup title="Cylinders" aside={`${CYL_COUNT[engineConfig.configuration]} cylinders`}>
           <Seg label="Configuration" variant="rule" equal options={CONFIG_OPTS.map((c) => ({ label: c, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
           <ExpandableInfo title="Why cylinder count and layout matter">
@@ -298,9 +286,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         </ExpandableInfo>
         </SpecGroup>
 
-        <SpecGroup title="Geometry" aside={`${engineDerived.displacementL.toFixed(2)} L`}>
+        <SpecGroup title="Geometry" aside={`${engineDerived.displacementL.toFixed(2)} L, bore:stroke ${engineDerived.ratio.toFixed(2)}`}>
           <SpecSlider label="Bore" unit=" mm" decimals={1} value={engineConfig.bore} stock={stockCfg?.bore ?? null} min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} onChange={(v) => setCfg({ bore: v })} />
           <SpecSlider label="Stroke" unit=" mm" decimals={1} value={engineConfig.stroke} stock={stockCfg?.stroke ?? null} min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} onChange={(v) => setCfg({ stroke: v })} />
+          <p className={styles.character}>{engineDerived.character}</p>
           <ExpandableInfo title="Bore, stroke, and engine character">
           Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
         </ExpandableInfo>
@@ -314,6 +303,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <SpecField label="Pistons and rods" tone={pastBottomEnd ? 'warn' : undefined} aside={bottomEndLimit.label}>
             <Seg label="Pistons and rods" variant="rule" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
           </SpecField>
+          <SpecMeter share={pistonAtRedline.meanSpeedMs / bottomEndLimit.limitMs} label="Mean piston speed at the redline against what this assembly is rated for" />
           <div className={styles.readout} data-testid="bottom-end-readout">
             At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
             (this assembly is good for about {bottomEndLimit.limitMs.toFixed(1)} m/s) and pull {Math.round(pistonAtRedline.peakAccelMs2 / 9.81).toLocaleString('en-US')} g at top dead centre.
@@ -345,16 +335,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   );
   const headParts = (
     <>
-        <SpecReadouts items={[
-          { label: 'Cam overlap', value: String(Math.round(engineDerived.overlapDeg)), unit: '°', note: `${engineConfig.camDuration}° duration` },
-          {
-            label: 'Valve float', value: Math.round(engineDerived.floatRpm).toLocaleString('en-US'), unit: ' rpm',
-            share: engineDerived.floatRpm / Math.max(engineDerived.redline, 1), tone: floating ? 'warn' : undefined,
-            note: floating ? 'below the redline' : `clear of the ${engineDerived.redline.toLocaleString('en-US')} redline`,
-          },
-          { label: 'Intake valve', value: intakeValveMm.toFixed(1), unit: ` mm × ${intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}`, note: engineConfig.intakeValveMm == null ? 'typical for this head' : 'as set' },
-        ]} />
-
         <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
           <SpecSlider label="Duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Camshaft duration" />
           <ExpandableInfo title="What camshaft duration actually does">

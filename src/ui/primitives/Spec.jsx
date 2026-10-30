@@ -104,23 +104,37 @@ export function SpecSlider({ label, value, unit = '', decimals = 0, min, max, st
 }
 
 /**
- * A strip of the figures the parameters above add up to, so the effect of a change shows
- * where it is made. An item with a `share` draws a bar: how far it is toward a limit.
+ * Facts about the thing being built, as a datasheet table: a name, its figure, a note, one
+ * ruled row each. For what is known rather than set (a factory rating, a redline).
  * @param {object} props
- * @param {Array<{label: string, value: string, unit?: string, note?: React.ReactNode, share?: number, tone?: 'warn'}>} props.items
+ * @param {Array<{label: string, value: string, note?: React.ReactNode}>} props.rows
  * @returns {React.ReactElement}
  */
-export function SpecReadouts({ items }) {
+export function SpecTable({ rows }) {
   return (
-    <dl className={styles.readouts}>
-      {items.map((it) => (
-        <div key={it.label} className={styles.readout} data-tone={it.tone}>
-          <dt>{it.label}</dt>
-          <dd><span className={styles.big}>{it.value}</span>{it.unit && <span className={styles.unit}>{it.unit}</span>}</dd>
-          {it.share != null && <span className={styles.meter} aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, it.share * 100))}%` }} /></span>}
-          {it.note && <small>{it.note}</small>}
+    <dl className={styles.table}>
+      {rows.map((r) => (
+        <div key={r.label} className={styles.tableRow}>
+          <dt>{r.label}</dt>
+          <dd><span className={styles.tableValue}>{r.value}</span>{r.note && <small>{r.note}</small>}</dd>
         </div>
       ))}
     </dl>
+  );
+}
+
+/**
+ * How far a figure is toward its limit: a thin rule filled to `share`, warm past it. Only
+ * where there is a real limit to be toward (a bottom end's rating, the redline).
+ * @param {object} props
+ * @param {number} props.share 0..1+, the figure over its limit
+ * @param {string} props.label what it measures, for assistive technology
+ * @returns {React.ReactElement}
+ */
+export function SpecMeter({ share, label }) {
+  return (
+    <span className={styles.meter} role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)} data-over={share > 1 ? 'true' : undefined}>
+      <i style={{ width: `${Math.min(100, Math.max(0, share * 100))}%` }} />
+    </span>
   );
 }
