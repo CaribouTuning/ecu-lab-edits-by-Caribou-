@@ -75,7 +75,9 @@ export function LayoutSwitch() {
           label="Table layout"
           options={options}
           value={active.id === 'game' ? '' : active.id}
-          onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
+          // The layout already in use is not a change: switching to it would re-sample the tables
+          // onto a fresh grid and blur what the player has tuned.
+          onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
         />
       )}
       <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
