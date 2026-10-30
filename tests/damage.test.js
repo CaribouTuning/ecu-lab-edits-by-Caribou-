@@ -32,6 +32,13 @@ function runLive(eng, health, { seconds, pedal = 0, from, aux = {}, faults }) {
   return { state: s, states };
 }
 
+describe('applyWear', () => {
+  it('only takes life: a negative figure never heals a part, and nothing goes past either end', () => {
+    expect(S.applyWear({ piston: 1, bearing: 0.5, valve: 99 }, { piston: 5, bearing: -3, valve: 0 })).toEqual({ piston: 0, bearing: 0.5, valve: 99 });
+    expect(S.applyWear(NEW, { piston: 0, bearing: 0, valve: 0 })).toEqual(NEW);
+  });
+});
+
 describe('what worn parts do', () => {
   it('a new engine has nothing to apply', () => {
     expect(S.wearEffects(NEW, 6)).toBeNull();

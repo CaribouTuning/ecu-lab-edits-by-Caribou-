@@ -18,7 +18,7 @@
 
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { COEFF } from '../coefficients.js';
-import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../live.js';
+import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../liveCore.js';
 import { trappedAirGrams } from '../cycle.js';
 import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
@@ -37,7 +37,7 @@ import { read1, read2 } from './ecuTables.js';
 import { knockDetection, knockNoiseV, knockSignalPerDegV, knockThresholdAt } from './knockSensor.js';
 import { nitrousFraction } from './nitrousControl.js';
 import { readSensor, readTps } from './sensors.js';
-import { resolveEcuPoint } from './strategy.js';
+import { ambientNormalized, resolveEcuPoint } from './strategy.js';
 import { VVT_AUTHORITY, VVT_OPTS, veAtPhase } from './vvt.js';
 
 /**
@@ -448,10 +448,11 @@ export function liveStepEcu(st, dt, input, cfg) {
     const crankingPct = s.cranking ? read1(cal.fuel.cranking, e.sEct) : 0;
     // Target lookup delay: a move to a richer target is eased in over the delay; a move
     // leaner is immediate.
+    const afrLoad = ambientNormalized(e.sMap, baro);
     const afrTable = readEcuTable(tables, 'afr', rpmC, {
-      mapKpa: e.sMap,
+      mapKpa: afrLoad.mapKpa,
       airmassG: needsAirmass(tables.layout)
-        ? trappedAirGrams({ veActual: readEcuTable(tables, 've', rpmC, { mapKpa: e.sMap }), mapKpa: e.sMap, chargeK: e.sIat + KELVIN_OFFSET, sweptM3: (derived.displacementL / derived.cyl) / 1000 })
+        ? afrLoad.scale * trappedAirGrams({ veActual: readEcuTable(tables, 've', rpmC, { mapKpa: e.sMap }), mapKpa: e.sMap, chargeK: e.sIat + KELVIN_OFFSET, sweptM3: (derived.displacementL / derived.cyl) / 1000 })
         : 0,
     });
     if (e.afrTargetF == null || cal.fuel.targetDelayS <= 0 || afrTable > e.afrTargetF) e.afrTargetF = afrTable;

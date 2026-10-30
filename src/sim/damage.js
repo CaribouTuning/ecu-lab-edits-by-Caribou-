@@ -76,11 +76,9 @@ export function failedPart(health) {
  * @returns {Health}
  */
 export function applyWear(health, wear) {
-  return {
-    piston: clamp(health.piston - wear.piston, 0, 100),
-    bearing: clamp(health.bearing - wear.bearing, 0, 100),
-    valve: clamp(health.valve - wear.valve, 0, 100),
-  };
+  // Wear only takes life: a negative figure (a bad input, never a rate) must not heal a part.
+  const take = (part) => clamp(health[part] - Math.max(0, wear[part]), 0, 100);
+  return { piston: take('piston'), bearing: take('bearing'), valve: take('valve') };
 }
 
 /**
