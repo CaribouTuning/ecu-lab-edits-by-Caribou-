@@ -38,6 +38,10 @@ export const VE_NOTABLE_PCT = 2.5;
 
 /** Safety left under the calculated knock limit when advising, degrees. */
 const KNOCK_SAFETY_DEG = 1.5;
+/** Protections (strategy.js) that take boost or load away, so a pull under them did not
+ *  reach the boost its tune asks for. IAT and EGT protection pull timing or add fuel and
+ *  leave the boost alone. */
+const BOOST_CUTTING = new Set(['knock', 'duty', 'overboost', 'lean', 'torque', 'oil', 'fuelpressure', 'limp']);
 
 /** A cell must sit more than this far past a ceiling before it is worth reporting. */
 const ADVANCE_TOLERANCE_DEG = 1.0;
@@ -194,6 +198,48 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
 }
 
 /**
+ * The most manifold pressure the engine reaches at each speed, kPa absolute: the cells the
+ * advisor judges, and the ones TUNE draws as reached.
+ *
+ * Highest manifold pressure the boost controller is even asking for at this speed. A
+ * supercharger asks for nothing (its boost is what the pulley makes), so there the pull's
+ * own boost is the answer.
+ *
+ * @param {object} input
+ * @param {boolean} input.turboOn
+ * @param {number[]} input.boostCurve
+ * @param {{points?: object[]}|null} [input.pull] a full-throttle dyno pull, if one was made
+ * @returns {(rpm: number) => number}
+ */
+export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
+  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
+  // A turbo makes the boost its turbine can drive, which at low speed is far below the
+  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
+  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
+  // the pull measured at that speed (never more than the target), except where a protection
+  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
+  // The pull's logged target is the target AFTER the protection's cut, so where a
+  // protection cut the boost the cell is judged at the BUILD curve's own target. Read from
+  // the pull's target, a knock cut hid the cells whose knock tripped it: they were never
+  // advised, kept their knock, and the cut came back on every pull. Below the pull's first
+  // speed nothing was measured, so there the boost it achieved at that speed stands.
+  const turboPull = turboOn && pull?.points?.length
+    ? pull.points.map((p) => ({
+      rpm: p.rpm,
+      boostPsi: p.protect?.some((x) => BOOST_CUTTING.has(x)) ? curveAt(boostCurve, p.rpm) : p.boostPsi,
+    }))
+    : null;
+  const turboPullAt = (rpm) => (rpm < turboPull[0].rpm
+    ? pull.points[0].boostPsi
+    : interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.boostPsi), rpm));
+  return (rpm) => (blowerPull
+    ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
+    : turboPull
+      ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: Math.min(curveAt(boostCurve, rpm), turboPullAt(rpm)) })
+      : reachableKpa({ turboOn, boostCurve, rpm }));
+}
+
+/**
  * Reports, cell by cell, what the current hardware would actually tolerate for spark
  * and mixture — so the player can see where their tune has gone stale and fix it
  * themselves. Spark and fuel are never auto-changed.
@@ -255,23 +301,8 @@ export function calibrationAdvice({
   const kpaOf = (axes, rpm, v) => kpaForLoad(axes, rpm, v, ecuAirAt);
   const loadOf = (axes, rpm, kpa) => loadForKpa(axes, rpm, kpa, ecuAirAt);
 
-  /** Highest manifold pressure the boost controller is even asking for at this speed. A
-   *  supercharger asks for nothing — its boost is what the pulley makes — so there the
-   *  pull's own boost is the answer. */
-  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null) ? pull.points : null;
-  // A turbo makes the boost its turbine can drive, which at low speed is far below the
-  // target: judged by the target alone, a 175 kPa cell at 750 RPM, which this engine never
-  // reaches, was flagged as past the knock limit. With a pull to read, a turbo reaches what
-  // the pull measured at that speed (never more than the target), except where a protection
-  // cut the boost there: that shortfall is the tune's, and the cell is reached once it is fixed.
-  const turboPull = turboOn && pull?.points?.length
-    ? pull.points.map((p) => ({ rpm: p.rpm, boostPsi: p.protect?.length ? (p.boostTarget ?? p.boostPsi) : p.boostPsi }))
-    : null;
-  const reachAt = (rpm) => (blowerPull
-    ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
-    : turboPull
-      ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: Math.min(curveAt(boostCurve, rpm), interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.boostPsi), rpm)) })
-      : reachableKpa({ turboOn, boostCurve, rpm }));
+  const reachAt = reachKpaAt({ turboOn, boostCurve, pull });
+  const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null);
 
   /**
    * The compressor pressure and exhaust backpressure a turbo engine runs at a manifold

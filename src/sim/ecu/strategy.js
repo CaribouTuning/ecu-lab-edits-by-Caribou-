@@ -90,6 +90,28 @@ const NM_PER_LBFT = 1 / 0.7376;
  */
 
 /**
+ * A manifold pressure, read against the table as a factory ECU's "normalized load" does:
+ * as a share of the air pressure outside, so a wide-open throttle is a wide-open throttle
+ * at any altitude. The fuel table is indexed by absolute pressure, and its enrichment rows
+ * sit at the top of it: wide open at 2000 m the engine sees 78 kPa, which an unnormalized
+ * lookup reads as a cruise cell, and a stock engine went to lambda 1.00 at full throttle
+ * and lost far more power than the air alone takes. Above ambient (boost) the table is read
+ * as it is, from ambient up. At sea level the scale is exactly 1.
+ *
+ * Only for the fuel lookup. VE is physical, indexed by the pressure the cylinder sees, and
+ * spark has its own barometric correction (`ignition.baroCorr`).
+ * @param {number} mapKpa sensed manifold pressure
+ * @param {number} baroKpa the barometric pressure the ECU saw at key-on
+ * @returns {{mapKpa: number, scale: number}} the pressure to read at, and the factor it
+ *   was scaled by (1 above ambient, or at sea level)
+ */
+export function ambientNormalized(mapKpa, baroKpa) {
+  if (!(baroKpa < BARO_KPA)) return { mapKpa, scale: 1 };
+  const scale = BARO_KPA / baroKpa;
+  return mapKpa <= baroKpa ? { mapKpa: mapKpa * scale, scale } : { mapKpa: BARO_KPA + (mapKpa - baroKpa), scale: 1 };
+}
+
+/**
  * The fuel the ECU believes is in the tank.
  * @param {object} cal
  * @param {EcuHardware} hw
@@ -209,7 +231,8 @@ export function resolveEcuPoint({
     ? trappedAirGrams({ veActual: veVal, mapKpa: sMap, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
     : 0;
   const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: sMap, airmassG: ecuAirG });
-  const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: sMap, airmassG: ecuAirG });
+  const afrLoad = ambientNormalized(sMap, env.baroKpa);
+  const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: afrLoad.mapKpa, airmassG: ecuAirG * afrLoad.scale });
 
   // ---- SPARK: base, then every correction in the order the ECU stacks them.
   const timingSteps = [{ label: 'Base table', value: timingBase }];
