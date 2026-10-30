@@ -16,7 +16,7 @@
 
 import {
   BARO_KPA, ECU_LAYOUTS, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
-  factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
+  extendAxesTo, factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
   tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
 
@@ -69,20 +69,67 @@ export function engineOutgrowsTables(state) {
 
 /**
  * The SET_LAYOUT that extends breakpoints sized to the engine to reach what it reaches
- * now, as tuning software's rescale-axis does: every cell is carried across, and the
- * cells past the old edge take the edge's values — exactly what the ECU read there
- * before, so the engine runs the same until the player tunes them. Those cells are
- * returned as not tuned. Nothing is calculated for the player.
+ * now, as tuning software's "extend axis" does: new rows and columns are ADDED, and every
+ * existing breakpoint and cell stays exactly as it was (nothing is re-sampled, so a value the
+ * player typed is the value that is there). The new cells hold the edge's values: exactly
+ * what the ECU read past the edge before, so the engine runs the same until the player tunes
+ * them. They are marked not tuned. Nothing is calculated for the player.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {import('./reducer.js').SetLayoutAction}
  */
 export function extendAxes(state) {
-  return carried(state, buildLayout(state.build));
+  const { build, tune } = state;
+  const from = layoutById(tune.layout);
+  const want = buildLayout(build).ve;
+  const wantAt = { loadKpa: want.load[0], rpm: want.rpm[want.rpm.length - 1] };
+  const names = /** @type {const} */ (['ve', 'timing', 'afr']);
+  /** @type {Record<string, ReturnType<typeof extendAxesTo>>} */
+  const grown = {};
+  for (const n of names) grown[n] = extendAxesTo(from[n], wantAt);
+  const to = { ...from, ve: grown.ve.axes, timing: grown.timing.axes, afr: grown.afr.axes };
+  const grow = (table, n) => {
+    const { addRows, addCols } = grown[n];
+    return table.length && (addRows || addCols) ? extendTable(table, addRows, addCols) : table;
+  };
+  const was = /** @type {{ve?: string[], timing?: string[], afr?: string[]}} */ (tune.untuned ?? {});
+  const untuned = Object.fromEntries(names.map((n) => {
+    const { addRows } = grown[n];
+    const cols = from[n].rpm.length;
+    // What was marked keeps its mark, on its new row; every new row and column is marked.
+    const keys = new Set((was[n] ?? []).map((k) => { const [r, c] = k.split(':').map(Number); return `${r + addRows}:${c}`; }));
+    to[n].load.forEach((_, ri) => to[n].rpm.forEach((__, ci) => { if (ri < addRows || ci >= cols) keys.add(`${ri}:${ci}`); }));
+    return [n, [...keys]];
+  }));
+  const base = tune.baseline;
+  return {
+    type: /** @type {const} */ ('SET_LAYOUT'), layout: to,
+    ve: grow(tune.ve, 've'), timing: grow(tune.timing, 'timing'), afr: grow(tune.afr, 'afr'),
+    baseline: base ? { ve: grow(base.ve, 've'), timing: grow(base.timing, 'timing'), afr: grow(base.afr, 'afr') } : base,
+    untuned: /** @type {any} */ (untuned),
+  };
+}
+
+/**
+ * A table with `addRows` rows put above and `addCols` columns after, every old cell where it
+ * was. A new cell is the edge cell it is beyond (the top row's, the last column's): what a
+ * table is read as past its last breakpoint.
+ * @param {number[][]} t
+ * @param {number} addRows
+ * @param {number} addCols
+ * @returns {number[][]}
+ */
+function extendTable(t, addRows, addCols) {
+  const last = t[0].length - 1;
+  return Array.from({ length: t.length + addRows }, (_, r) => {
+    const src = t[Math.max(0, r - addRows)];
+    return [...src, ...Array(addCols).fill(src[last])];
+  });
 }
 
 /**
  * The SET_LAYOUT carrying the tables cell by cell onto `to`, with the cells past the old
- * edge (kPa and RPM axes) marked not tuned.
+ * edge (kPa and RPM axes) marked not tuned. For a change of layout, where the breakpoints
+ * differ and every new cell is read off the old table; `extendAxes` does not use it.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @param {import('../../sim/layouts.js').Layout} to
  * @returns {import('./reducer.js').SetLayoutAction}
@@ -91,32 +138,18 @@ function carried(state, to) {
   const { tune } = state;
   const from = layoutById(tune.layout);
   const conv = airmassConversion(state);
-  // The edge of what has been tuned: the old axes' last row and column, less any that an
-  // earlier extension added and nobody has written yet. A second extension keeps those
-  // marked instead of passing their copied values off as tuned.
-  const tunedEdge = (fromAxes, keys) => {
-    const open = new Set(keys ?? []);
-    const whole = (n, at) => Array.from({ length: n }, (_, i) => at(i)).every((k) => open.has(k));
-    const rows = fromAxes.load.filter((_, ri) => !whole(fromAxes.rpm.length, (ci) => `${ri}:${ci}`));
-    const cols = fromAxes.rpm.filter((_, ci) => !whole(fromAxes.load.length, (ri) => `${ri}:${ci}`));
-    return { load: rows.length ? Math.max(...rows) : fromAxes.load[0], rpm: cols.length ? Math.max(...cols) : fromAxes.rpm[fromAxes.rpm.length - 1] };
-  };
-  const past = (axes, fromAxes, keys) => {
+  const past = (axes, fromAxes) => {
     if (axes.loadUnit !== 'kPa' || fromAxes.loadUnit !== 'kPa') return [];
-    const edge = tunedEdge(fromAxes, keys);
-    const out = [];
+    const keys = [];
     axes.load.forEach((load, ri) => axes.rpm.forEach((rpm, ci) => {
-      if (load > edge.load + 0.5 || rpm > edge.rpm + 0.5) out.push(`${ri}:${ci}`);
+      if (load > fromAxes.load[0] + 0.5 || rpm > fromAxes.rpm[fromAxes.rpm.length - 1] + 0.5) keys.push(`${ri}:${ci}`);
     }));
-    return out;
+    return keys;
   };
-  const was = /** @type {{ve?: string[], timing?: string[], afr?: string[]}} */ (tune.untuned ?? {});
   return {
     type: /** @type {const} */ ('SET_LAYOUT'), layout: to, ...moveTables(tune, from, to, conv),
     baseline: moveTables(tune.baseline, from, to, conv),
-    untuned: {
-      ve: past(to.ve, from.ve, was.ve), timing: past(to.timing, from.timing, was.timing), afr: past(to.afr, from.afr, was.afr),
-    },
+    untuned: { ve: past(to.ve, from.ve), timing: past(to.timing, from.timing), afr: past(to.afr, from.afr) },
   };
 }
 

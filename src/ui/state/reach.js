@@ -10,8 +10,31 @@
 
 import React from 'react';
 
-import { blowerCurve, reachKpaAt, tankFuel } from '../../sim/index.js';
+import { blowerCurve, curveAt, reachKpaAt, tankFuel } from '../../sim/index.js';
 import { useBuild, useSession } from './StoreProvider.jsx';
+
+/**
+ * Whether a pull was made on the induction the build has now, so what it measured of the
+ * boost still describes this engine: a turbo on the same boost target, a supercharger, or
+ * neither. (A pull's own signature includes the tables, which would make the fade flicker
+ * on every cell edit; the boost does not depend on those.) A turbine swapped for another
+ * of the same target is not seen until the next pull; the target it asked for is.
+ * @param {import('./initialState.js').StoreState['build']} build
+ * @param {{points?: any[]}|null} result
+ * @returns {boolean}
+ */
+export function pullDescribes(build, result) {
+  const pts = result?.points;
+  if (!pts?.length) return false;
+  if (build.turboOn) {
+    return pts.every((p) => {
+      const asked = p.boostSteps?.[0]?.value;
+      return typeof asked === 'number' && Math.abs(asked - curveAt(build.boostCurve, p.rpm)) < 0.06;
+    });
+  }
+  if (build.blowerId) return pts.some((p) => p.blowerRpm != null);
+  return !pts.some((p) => p.boostSteps?.length || p.blowerRpm != null);
+}
 
 /**
  * The most manifold pressure the engine reaches at each speed, kPa absolute.
@@ -20,7 +43,7 @@ import { useBuild, useSession } from './StoreProvider.jsx';
  * @returns {(rpm: number) => number}
  */
 export function reachOf(build, result) {
-  if (result?.points?.length) return reachKpaAt({ turboOn: build.turboOn, boostCurve: build.boostCurve, pull: result });
+  if (pullDescribes(build, /** @type {any} */ (result))) return reachKpaAt({ turboOn: build.turboOn, boostCurve: build.boostCurve, pull: /** @type {any} */ (result) });
   const wot = build.blowerId ? blowerCurve(build, tankFuel(build)) : [];
   return reachKpaAt({ turboOn: build.turboOn, boostCurve: build.boostCurve, pull: wot.length ? { points: wot } : null });
 }

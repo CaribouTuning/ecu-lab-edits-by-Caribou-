@@ -66,11 +66,13 @@ export function LayoutSwitch() {
         label="Table layout"
         options={options}
         value={active.id === 'game' ? '' : active.id}
-        onChange={(id) => dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id))))}
+        // The layout already in use is not a change: switching to it would re-sample the tables
+        // onto a fresh grid and blur what the player has tuned.
+        onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
       />
       <div style={{ fontSize: 11, color: T.ink2, marginTop: 6, lineHeight: 1.5 }}>
         {active.id === 'engine'
-          ? <>{active.ve.rpm.length} RPM × {active.ve.load.length} load breakpoints, from {active.ve.rpm[0]} to {active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} RPM and {active.ve.load[active.ve.load.length - 1]} to {active.ve.load[0]} kPa: the range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, they stay put when the build changes: past them the ECU reads the edge, and you extend them.</>
+          ? <>{active.ve.rpm.length} RPM × {active.ve.load.length} load breakpoints, from {active.ve.rpm[0]} to {active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} RPM and {active.ve.load[active.ve.load.length - 1]} to {active.ve.load[0]} kPa: the range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, they never move a value you have tuned: a build that reaches past them adds rows and columns (in SANDBOX as you build; in CAREER when you extend them), and past the edge the ECU reads the edge.</>
           : active.id === 'game'
             ? <>On the old 8 × 6 grid. Switch to tables sized to this engine.</>
             : <>{active.label.replace(/^[^(]*\(|\)$/g, '')}: the breakpoints of {active.ecu}, read from its own calibrations. {active.note}</>}

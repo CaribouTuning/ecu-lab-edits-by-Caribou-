@@ -165,8 +165,40 @@ describe('the layout switch', () => {
     expect(s.tune.untuned.timing).toHaveLength(fourteen.load.filter((l) => l > naAxes.load[0]).length * fourteen.rpm.length);
   });
 
+  it('extending the axes never moves a value the player typed, however many times it happens', () => {
+    // A boost slider writes once per notch, so the axes extend again and again. Extending
+    // used to lay a new evenly spaced grid over the table and re-read the old one at its
+    // points: a tuned 11 degrees read 21 afterwards. It now only adds rows and columns.
+    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    const was = S.layoutById(s.tune.layout).timing;
+    const typed = s.tune.timing.map((r) => [...r]);
+    const probes = [[2, 6], [5, 9], [8, 4], [11, 12], [14, 7], [0, 0], [15, 15]];
+    probes.forEach(([r, c], i) => { typed[r][c] = 11 + i * 3.5; });
+    s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: typed });
+    s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
+    for (let psi = 1; psi <= 20; psi += 1) s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map(() => psi) });
+    const now = S.layoutById(s.tune.layout).timing;
+    expect(now.load.length).toBeGreaterThan(was.load.length);
+    // Every breakpoint it had it still has, and every cell at one is exactly what it was.
+    for (const [r, c] of probes) {
+      const ri = now.load.indexOf(was.load[r]); const ci = now.rpm.indexOf(was.rpm[c]);
+      expect(ri, `${was.load[r]} kPa is still a row`).toBeGreaterThanOrEqual(0);
+      expect(ci, `${was.rpm[c]} rpm is still a column`).toBeGreaterThanOrEqual(0);
+      expect(s.tune.timing[ri][ci]).toBe(typed[r][c]);
+    }
+    was.load.forEach((kpa, r) => was.rpm.forEach((rpm, c) => {
+      expect(s.tune.timing[now.load.indexOf(kpa)][now.rpm.indexOf(rpm)]).toBe(typed[r][c]);
+    }));
+    // The rows added are the top row's values, and the engine reads the same as before there.
+    const top = now.load.findIndex((l) => l === was.load[0]);
+    for (let ri = 0; ri < top; ri += 1) now.rpm.forEach((_, ci) => { if (ci < was.rpm.length) expect(s.tune.timing[ri][ci]).toBe(typed[0][ci]); });
+    expect(s.tune.untuned.timing).toHaveLength(top * now.rpm.length);
+  });
+
   it('never writes a factory calibration for a turbo the factory did not fit', () => {
     let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35de-revup')) });
+    // CAREER, where a build change leaves the tables alone (SANDBOX extends them for the boost).
+    s = { ...s, session: { ...s.session, mode: 'career' } };
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map(() => 8) });
     const before = s.tune;
