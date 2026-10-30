@@ -221,7 +221,7 @@ function Field({ meta, value, def, onChange, liveVars }) {
     return (
       <div className={styles.field}>
         <FieldHead meta={meta} changed={changed} />
-        <Seg label={meta.label} options={meta.options} value={value} onChange={onChange} equal={meta.options.length > 2} />
+        <Seg variant="rule" label={meta.label} options={meta.options} value={value} onChange={onChange} equal />
       </div>
     );
   }

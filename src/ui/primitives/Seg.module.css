@@ -64,3 +64,14 @@
 .rule .item:hover { color: var(--ink); }
 .rule .item[aria-pressed='true'] { background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom-color: var(--acc); }
 .rule .item:focus-visible { outline-offset: -2px; }
+
+/* --- tabs, opt-in: the rule at the options' own width, several to a row --- */
+.tabs { display: inline-flex; flex-wrap: nowrap; width: auto; padding: 0; background: transparent; border-radius: 0; border-bottom: 1px solid var(--line-hi); }
+.tabs .item {
+  padding: 8px 10px 7px; margin-bottom: -1px; border-radius: 0; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--ink2); font-size: 12.5px; font-weight: 500; white-space: nowrap;
+}
+.tabs .item:hover { color: var(--ink); }
+.tabs .item[aria-pressed='true'] { background: transparent; box-shadow: none; color: var(--ink); font-weight: 700; border-bottom-color: var(--acc); }
+.tabs .item:focus-visible { outline-offset: -2px; }
+@media (pointer: coarse) { .tabs .item, .rule .item { min-height: 40px; } }
