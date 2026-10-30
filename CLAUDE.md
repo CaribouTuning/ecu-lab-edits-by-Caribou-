@@ -82,8 +82,11 @@ remaining risk is the same Node major with a different libm, which is what step 
   (those knocked every other engine in the catalogue), on the induction it left the factory
   with (`build.factoryInduction`): a turbo added since gets no calculated boost cells. It keeps
   an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
-  player: a build change leaves them alone (past the axes the ECU reads the edge), and
-  `extendAxes` carries the edge into new cells marked not tuned. "Cells the pull did not
+  player. In SANDBOX a build that reaches past its tables extends the axes as the same
+  write (`withRowsForTheBuild` in reducer.js): `extendAxes` carries the edge into new cells
+  marked not tuned, and TUNE fades the cells the engine does not reach yet
+  (`state/reach.js`, the advisor's `reachKpaAt`). In CAREER a build change leaves the
+  tables alone (past the axes the ECU reads the edge) and the player extends them. "Cells the pull did not
   run" is judged against the player's own pull (`cellsNotRunBy`), never TUNE's full-throttle
   one. `CUSTOM_ENGINE_LIMITS` are the ranges
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.

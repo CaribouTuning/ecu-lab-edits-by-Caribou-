@@ -24,6 +24,7 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { layoutById, mafErrorPct, veCorrections } from '../../../sim/index.js';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { ACTIONS } from '../../state/reducer.js';
+import { useUnreached } from '../../state/reach.js';
 import { useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './AirflowScreen.module.css';
@@ -54,6 +55,7 @@ export function AirflowScreen({ children, veLog }) {
   // The breakpoints this table sits on (sim/layouts.js); see SparkScreen.jsx. The VE log
   // bins onto them, so its advice is about these cells on either layout.
   const axes = layoutById(tune.layout).ve;
+  const unreached = useUnreached(axes);
   const dims = { rows: axes.load.length, cols: axes.rpm.length };
   /** @param {Selection|null} value */
   const setSelection = (value) => dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value });
@@ -87,7 +89,7 @@ export function AirflowScreen({ children, veLog }) {
           <LayoutSwitch />
           <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
-            <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} />
+            <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
           </GridOrSurface>
           {veLog && (
             <VeLogCorrection corr={corr} axes={axes} pullCount={veLog.pull.length} liveCount={veLog.live.length}
