@@ -44,3 +44,18 @@ export function Toggle({ label, sub, checked, onChange }) {
     </button>
   );
 }
+
+/**
+ * The switch alone, for a row that draws its own name and help beside it (an ECU setting,
+ * whose "Why?" is a button and so cannot sit inside the row's own button).
+ * @param {{label: string, checked: boolean, onChange: (next: boolean) => void}} props
+ * @returns {React.ReactElement}
+ */
+export function Switch({ label, checked, onChange }) {
+  return (
+    <button type="button" className={styles.switch} role="switch" aria-checked={checked} aria-label={label}
+      onClick={() => onChange(!checked)}>
+      <span className={styles.track}><span className={styles.knob} /></span>
+    </button>
+  );
+}

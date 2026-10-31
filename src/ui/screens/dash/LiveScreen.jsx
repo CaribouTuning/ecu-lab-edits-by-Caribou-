@@ -33,7 +33,7 @@ import styles from './LiveScreen.module.css';
  * @param {boolean} [props.warn] the reading is outside its safe range
  * @returns {React.ReactElement}
  */
-function LiveGauge({ label, value, unit, color = T.ink, warn }) {
+function LiveGauge({ label, value, unit, color = 'var(--ink)', warn }) {
   return (
     <div className={styles.gauge} data-warn={warn ? 'true' : 'false'}>
       <div className={styles.gaugeLabel}>{label}</div>
@@ -121,7 +121,7 @@ export function LiveGauges() {
   return (
     <>
       <div className={`${styles.gaugeRow} ${styles.gaugeRowFirst}`}>
-        <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color={T.cyan} />
+        <LiveGauge label="MAF" value={live.sensedMaf.toFixed(1)} unit="g/s" color="var(--cyan)" />
         <LiveGauge label="MAP" value={Math.round(live.sensedMap)} unit="kPa" />
         <LiveGauge label="IAT" value={Math.round(live.sensedIat)} unit="°C" warn={live.sensedIat > 65} />
       </div>
@@ -136,7 +136,7 @@ export function LiveGauges() {
         <LiveGauge label="Injector pulse" value={live.live ? live.live.pw : '—'} unit="ms" />
         <LiveGauge label="Injector duty" value={live.live ? live.live.duty : '—'} unit="%" warn={!!(live.live && live.live.duty > 90)} />
         <LiveGauge label="Idle air" value={engineOff ? '—' : Math.round(live.idleTrim)} unit={engineOff ? '' : '%'} />
-        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? T.ink2 : live.fuelCut ? T.warn : T.ok} />
+        <LiveGauge label="Fuel" value={engineOff ? 'off' : live.fuelCut ? 'cut' : 'on'} unit="" color={engineOff ? 'var(--ink2)' : live.fuelCut ? T.warn : T.ok} />
       </div>
 
       <div className={styles.trims}>

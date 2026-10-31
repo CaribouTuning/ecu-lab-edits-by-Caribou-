@@ -61,11 +61,14 @@ export function useStage(setup, opts = {}) {
       setFailed(true);
       return undefined;
     }
-    // Whatever stops it drawing from here (a lost context, a shader that would not compile)
-    // is the same answer: the flat shop, and the 3D stays off until the player turns it on.
-    const giveUp = () => { if (opts.real) write3d('off'); setFailed(true); };
+    // Whatever stops it drawing from here is the same answer for this visit: the flat shop.
+    // A lost context is often passing (a phone that put the tab in the background, a driver
+    // reset), so it does not stay off; a shader that would not compile will fail again, so
+    // the 3D stays off until the player turns it back on.
+    const giveUp = () => setFailed(true);
+    const shaderFailed = () => { write3d('off'); setFailed(true); };
     canvas.addEventListener('webglcontextlost', giveUp);
-    if (opts.real) stage.renderer.debug.onShaderError = giveUp;
+    if (opts.real) stage.renderer.debug.onShaderError = shaderFailed;
     stageRef.current = stage;
     // Only the lit shop (`real`) is heavy enough to need it; the small engine views are not.
     const governor = createGovernor(opts.real ? savedRung() : 0);

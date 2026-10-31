@@ -49,9 +49,10 @@ export const HOTSPOTS = [
  * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
+ * @param {() => void} [props.onFlat] the 3D could not draw and the flat shop is showing instead
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall = true, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook }) {
+export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall = true, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook, onFlat }) {
   const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, boardOnWall, moving: false, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
@@ -188,12 +189,15 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
         shop.camera.updateMatrixWorld();
         const moving = shop.moving();
         // Nothing is a button until the camera has stopped: a tap that lands as the view
-        // swings is on whatever has just arrived under the finger.
+        // swings is on whatever has just arrived under the finger. A key press (a click with no
+        // pointer, `detail` 0) cannot be mis-aimed, so a hotspot takes it even then.
+        // Written only when it changes: this runs every frame.
+        const flipped = l.moving !== moving;
         l.moving = moving;
         for (const f of faces) {
           const on = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
           f.el.style.display = on ? '' : 'none';
-          f.el.style.pointerEvents = moving ? 'none' : 'auto';
+          if (flipped) f.el.style.pointerEvents = moving ? 'none' : 'auto';
           if (!on) continue;
           // The face's four corners on screen, and the box round them.
           let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
@@ -239,6 +243,8 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
     };
   }, { shadows: true, real: true });
 
+  // Settings offers to turn the 3D back on once it has fallen back to the flat shop.
+  useEffect(() => { if (failed) onFlat?.(); }, [failed, onFlat]);
   return (
     <div className={styles.backdrop} data-mode={mode}>
       {failed ? <div className={styles.backdropFallback} /> : <canvas ref={canvasRef} className={styles.backdropCanvas} />}
@@ -256,7 +262,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
               className={styles.spot}
               data-spot={h.id}
               data-next={h.id === nextSpot ? 'true' : undefined}
-              onClick={() => { if (!live.current.moving) onPick(h.id); }}
+              onClick={(e) => { if (!live.current.moving || e.detail === 0) onPick(h.id); }}
               title={h.hint}
             >
               <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>

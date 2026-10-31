@@ -79,6 +79,10 @@ export const tokens = Object.freeze({
   // Secondary data hue, for charts that must plot two series at once (power vs
   // torque). Distinct from `acc` on purpose so a chart never looks like a control.
   cyan: '#38d9f0',
+  // The second series of a two-series chart (torque beside power), and only that: the
+  // screens in the shop give it their own hue (`screenData2`), and a remap of `cyan`
+  // itself would recolour everything else cyan on them too.
+  data2: '#38d9f0',
   cyanBg: '#0b2630',
   violet: '#a78bfa',
   violetBg: '#1d1a33',
@@ -130,6 +134,8 @@ export const tokens = Object.freeze({
   screenAccInk: '#8fc2ff',
   screenAccBg: '#0f2033',
   screenAccOn: '#04162e',
+  // `data2` on those screens: cyan beside this blue accent read as the same line.
+  screenData2: '#f28fbf',
   macRed: '#ff5f57',
   macYellow: '#febc2e',
   macGreen: '#28c840',

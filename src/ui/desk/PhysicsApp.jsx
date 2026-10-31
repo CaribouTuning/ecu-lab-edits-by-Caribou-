@@ -215,10 +215,10 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
                 <polyline points={line('ve')} className={styles.artLine} />
               ) : (
                 <>
-                  <polyline points={line('torque')} className={styles.artLine} />
-                  <polyline points={line('hp')} className={styles.artLine2} />
-                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="9" className={styles.artDot} />
-                  <text x={cx(p.rpm) + 14} y={cy(p.hp) - 10} className={styles.curveText2}>{f(p.hp, 0)} hp</text>
+                  {/* Power in the accent and torque in the second hue, as the dyno draws them. */}
+                  <polyline points={line('torque')} className={styles.artLine2} />
+                  <polyline points={line('hp')} className={styles.artLine} />
+                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="9" className={styles.artDotAcc} />
                 </>
               )}
               {graph === 've' && <circle cx={cx(p.rpm)} cy={cy(p.ve ?? 0)} r="9" className={styles.artDot} />}
@@ -226,11 +226,11 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
               <line x1={0} y1={CH - 14} x2={CW} y2={CH - 14} className={styles.artAxis} />
               {graph === 've'
                 ? <text x={14} y={24} className={styles.curveText}>VE (%)</text>
-                : <><text x={14} y={24} className={styles.curveText}>torque (lb-ft)</text><text x={130} y={24} className={styles.curveText2}>power (hp)</text></>}
+                : <><text x={14} y={24} className={styles.curveTextAcc}>power (hp)</text><text x={120} y={24} className={styles.curveText2}>torque (lb-ft)</text></>}
               <text x={CW - 40} y={CH - 22} className={styles.curveText}>RPM</text>
             </svg>
           )}
-          <div className={styles.curveNums}>{p.rpm} rpm: {f(p.torque, 0)} lb-ft, {f(p.hp, 0)} hp, VE {f(p.ve, 0)} %</div>
+          <div className={styles.curveNums}>{p.rpm} rpm: {f(p.hp, 0)} hp, {f(p.torque, 0)} lb-ft, VE {f(p.ve, 0)} %</div>
         </section>
 
         <section className={styles.physPanel} aria-label="The raw physics model">

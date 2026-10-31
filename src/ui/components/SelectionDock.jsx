@@ -232,12 +232,12 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   } else if (changed) sel += `, ${changed} changed`;
 
   return (
-    <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: T.panel, borderTop: `1px solid ${T.line}`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
+    <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: 'var(--panel)', borderTop: `1px solid var(--line)`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: T.ink2, textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
-          <div data-testid="dock-readout" style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: T.ink }}>
-            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: T.ink2, marginLeft: 4 }}>{unit}</span>
+          <div style={{ fontSize: 10, letterSpacing: 1, color: 'var(--ink2)', textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
+          <div data-testid="dock-readout" style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: 'var(--ink)' }}>
+            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: 'var(--ink2)', marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
@@ -245,10 +245,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current, axes);
         return (
-          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: T.ink2 }}>
+          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: 'var(--ink2)' }}>
             <div style={{ fontSize: 11, color: T.cyan, fontWeight: 700, marginBottom: 5 }}>Reference: {RPM[selection.col]} RPM / {LOAD[selection.row]} {lu}</div>
             <div>{ref.what}</div>
-            <div style={{ marginTop: 4, color: T.ink }}>{ref.typical}</div>
+            <div style={{ marginTop: 4, color: 'var(--ink)' }}>{ref.typical}</div>
             <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
             {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
           </Panel>
@@ -259,7 +259,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         onChange={(e) => setDraft(Number(e.target.value))}
         onPointerUp={commitDraft}
         onKeyUp={onSliderKeyUp}
-        style={{ width: '100%', accentColor: T.acc }}
+        style={{ width: '100%', accentColor: 'var(--acc)' }}
       />
       <div style={{ marginTop: 9 }}>
         <Seg
@@ -275,8 +275,8 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
             onChange={(e) => setSetText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') applySet(); }}
             style={{
-              flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: `1px solid ${T.line}`,
-              background: T.panel2, color: T.ink, fontFamily: T.mono, fontSize: 13,
+              flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: `1px solid var(--line)`,
+              background: 'var(--panel2)', color: 'var(--ink)', fontFamily: T.mono, fontSize: 13,
             }}
           />
           <Button variant="ghost" size="sm" onClick={applySet}>APPLY</Button>
@@ -289,7 +289,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
               is what teaches a player to ignore it where it means something. */}
           {(mode === 'scale' ? SCALE_STEPS : [-bigStep, -smallStep, smallStep, bigStep]).map((d, i) => (
             <button key={i} onClick={() => (mode === 'scale' ? scale(d) : apply(d))} style={{
-              flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid ${T.line}`, background: T.panel2,
+              flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid var(--line)`, background: 'var(--panel2)',
               color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
             }}>{signed(d)}{mode === 'scale' ? '%' : ''}</button>
           ))}

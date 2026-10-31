@@ -16,7 +16,7 @@
 
 import { read3d, write3d } from './render3d.js';
 import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
 import { CARIBOU_FILL, CARIBOU_INK } from '../screens/caribouLogo.js';
@@ -220,7 +220,11 @@ export function Desk({
   const surfaceCtx = useMemo(() => ({ surfaces: phone ? null : surfaces }), [surfaces, phone]);
   const [tourSpot, setTourSpot] = useState(/** @type {string|null} */ (null));
   const [threeD, setThreeD] = useState(() => read3d() !== 'off');
-  const toggle3d = () => { write3d(threeD ? 'off' : 'force'); setThreeD(!threeD); };
+  // A new shop only when the player turns the 3D on or off: a fallback to the flat shop
+  // (onFlat) just updates the menu, or the remount would try the 3D straight again.
+  const [stageKey, setStageKey] = useState(0);
+  const toggle3d = () => { write3d(threeD ? 'off' : 'force'); setThreeD(!threeD); setStageKey((k) => k + 1); };
+  const onFlat = useCallback(() => setThreeD(false), []);
   const portraitPhone = usePortraitPhone();
   const appInfo = DESK_APPS.find((a) => a.id === app) ?? (app === 'office' && portraitPhone ? JOBS_APP : undefined);
   const pick = (id) => {
@@ -241,7 +245,7 @@ export function Desk({
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onMenu?.(); }} aria-label="Main menu">Main menu</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
-      <button type="button" role="menuitem" aria-checked={threeD} onClick={() => { setMenu(null); toggle3d(); }}>{threeD ? 'Turn the 3D shop off' : 'Turn the 3D shop on'}</button>
+      <button type="button" role="menuitemcheckbox" aria-checked={threeD} onClick={() => { setMenu(null); toggle3d(); }}>{threeD ? 'Turn the 3D shop off' : 'Turn the 3D shop on'}</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onBay(); }}>{phone ? 'Put the phone down' : 'Shut the laptop'}</button>
     </div>
   );
@@ -265,7 +269,7 @@ export function Desk({
   const noticesBtn = (
     <button type="button" className={styles.taskBtn} onClick={() => setMenu(menu === 'notices' ? null : 'notices')} aria-label={`${notices.length} notifications`} aria-expanded={menu === 'notices'} tabIndex={open ? 0 : -1}>
       <Bell size={16} aria-hidden="true" />
-      {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>+{notices.length}</span>}
+      {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>{notices.length}</span>}
     </button>
   );
   const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'messages'));
@@ -334,7 +338,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop key={threeD ? '3d' : 'flat'} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop key={stageKey} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} onFlat={onFlat} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
       {mode === 'bay' && <FirstRun career={board} onSpot={setTourSpot} />}
 

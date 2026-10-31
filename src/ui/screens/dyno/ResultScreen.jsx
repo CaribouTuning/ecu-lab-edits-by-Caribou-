@@ -19,7 +19,7 @@
  * neutral grey. `T.ink3` — what they used to use — was also the axis, tick-label and
  * `afrCommanded` colour, so the previous pull was not too dim to see so much as
  * indistinguishable from the chart's furniture. The axes, tick labels and the
- * `afrCommanded` reference line are now `T.ink2` (issue 79, text contrast): recharts
+ * `afrCommanded` reference line are now `--ink2` (issue 79, text contrast): recharts
  * colours a series' legend and tooltip text with its stroke, so a series is text too.
  * Hue now carries series identity and opacity carries time.
  */
@@ -30,7 +30,6 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContai
 
 import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
-import { T } from '../../theme.js';
 
 import styles from './ResultScreen.module.css';
 
@@ -129,10 +128,10 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
-            <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink2} fontSize={10} />
-            <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
+            <CartesianGrid stroke="var(--line)" />
+            <XAxis dataKey="rpm" stroke="var(--ink2)" fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
+            <YAxis stroke="var(--ink2)" fontSize={10} />
+            <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} />
             {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
             <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: 12.5 }} />
             {bands.map((b) => (
@@ -141,10 +140,10 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} />}
               />
             ))}
-            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} WHP`} stroke={T.acc} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
-            {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke={T.cyan} strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
-            <Line dataKey="hp" name="WHP" stroke={T.acc} strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line dataKey="torque" name="Torque" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
+            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} WHP`} stroke="var(--acc)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke="var(--data2)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            <Line dataKey="hp" name="WHP" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="torque" name="Torque" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>
@@ -156,10 +155,10 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
-            <CartesianGrid stroke={T.line} />
-            <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke={T.ink2} fontSize={10} />
-            <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
+            <CartesianGrid stroke="var(--line)" />
+            <XAxis dataKey="rpm" stroke="var(--ink2)" fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
+            <YAxis stroke="var(--ink2)" fontSize={10} />
+            <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {bands.map((b) => (
               <ReferenceArea
@@ -172,12 +171,12 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} focusable={false} />}
               />
             ))}
-            <Line dataKey="afrCommanded" name="AFR commanded" stroke={T.ink2} strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+            <Line dataKey="afrCommanded" name="AFR commanded" stroke="var(--ink2)" strokeDasharray="3 3" dot={false} isAnimationActive={false} />
             {/* Series identity colours, not status: both lines are on screen for
                 every pull, so green and amber here reported a health this chart
                 never measures. */}
-            <Line dataKey="afr" name="AFR actual" stroke={T.cyan} strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line dataKey="timing" name="Timing used" stroke={T.violet} strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="afr" name="AFR actual" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="timing" name="Timing used" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>

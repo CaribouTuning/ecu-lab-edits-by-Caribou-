@@ -11,7 +11,6 @@ import React from 'react';
 import { ECU_LAYOUTS, PRESET_ECU_LAYOUT, layoutById } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Seg } from '../primitives/Seg.jsx';
-import { T } from '../theme.js';
 import { baseMapAction, offersBaseMap } from '../state/baseMap.js';
 import { engineOutgrowsTables, extendAxes, layoutSwitch } from '../state/layoutSwitch.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
@@ -35,7 +34,7 @@ export function LayoutSwitch() {
       {outgrown && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <Button size="sm" variant="primary" onClick={() => dispatch(/** @type {any} */ (extendAxes({ build, tune })))}>Extend the axes to this engine</Button>
-          <span style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5 }}>
             The engine now reaches past these tables. Past the edge the ECU reads the edge row; extending adds the cells, marked not tuned, for you to tune.
           </span>
         </div>
@@ -43,7 +42,7 @@ export function LayoutSwitch() {
       {baseMap && (
         <div data-testid="base-map-offer" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <Button size="sm" variant="ghost" onClick={() => dispatch(/** @type {any} */ (baseMapAction(build)))}>Load a base start-up map</Button>
-          <span style={{ fontSize: 12, color: T.ink2, lineHeight: 1.5 }}>
+          <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5 }}>
             These are the factory&apos;s tables, and the parts have changed. Tune them from the pull log, or load what a tuner would start from for these parts: safe and conservative, not tuned. It replaces your tables; Undo brings them back.
           </span>
         </div>
@@ -80,7 +79,7 @@ export function LayoutSwitch() {
           onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
         />
       )}
-      <span style={{ fontSize: 12, color: T.ink2, fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
+      <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
         {active.ve.rpm.length} × {active.ve.load.length} · {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm · {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
       </span>
     </div>

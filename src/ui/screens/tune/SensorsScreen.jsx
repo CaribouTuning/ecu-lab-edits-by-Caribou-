@@ -69,10 +69,10 @@ export function SensorsScreen({ needsMafRecal, chartData, result, children }) {
           <div className={styles.trimLabel}>FUEL TRIM — LAST PULL</div>
           <ResponsiveContainer width="100%" height={150}>
             <LineChart data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
-              <CartesianGrid stroke={T.line} />
-              <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} />
-              <YAxis stroke={T.ink2} fontSize={10} unit="%" />
-              <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
+              <CartesianGrid stroke="var(--line)" />
+              <XAxis dataKey="rpm" stroke="var(--ink2)" fontSize={10} />
+              <YAxis stroke="var(--ink2)" fontSize={10} unit="%" />
+              <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} />
               <Line dataKey="trimPct" name="MAF trim %" stroke={T.violet} strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>

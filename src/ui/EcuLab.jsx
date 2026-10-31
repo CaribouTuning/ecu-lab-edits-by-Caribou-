@@ -127,9 +127,9 @@ const MISSION_START = {
 function LockedSettings({ section }) {
   const course = trainingFor(section, 'section');
   return (
-    <div style={{ margin: '4px 0 16px', padding: '10px 12px', borderRadius: 10, border: `1px dashed ${T.line}`, fontSize: 12, color: T.ink2, lineHeight: 1.55, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+    <div style={{ margin: '4px 0 16px', padding: '10px 12px', borderRadius: 10, border: `1px dashed var(--line)`, fontSize: 12, color: 'var(--ink2)', lineHeight: 1.55, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
       <Lock size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
-      <span>The ECU&apos;s settings for this page are locked until the shop takes the <b style={{ color: T.ink }}>{course?.title ?? 'right'}</b> course.</span>
+      <span>The ECU&apos;s settings for this page are locked until the shop takes the <b style={{ color: 'var(--ink)' }}>{course?.title ?? 'right'}</b> course.</span>
     </div>
   );
 }
@@ -1245,7 +1245,7 @@ export function EcuLabApp() {
   }
   // Until ENTER_CAREER has landed the bench still holds SANDBOX's car, so the shop
   // waits for it rather than offering to work on the wrong one.
-  if (appView === 'shop' && !inCareer) return <div style={{ minHeight: '100dvh', background: T.bg }} />;
+  if (appView === 'shop' && !inCareer) return <div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />;
   if (appView === 'tutorial') {
     return (
       // Keyed per book: the tutorial and the course are the same component at the same
@@ -1314,7 +1314,7 @@ export function EcuLabApp() {
             <div style={{ padding: 16 }}>
               <Panel>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>The bay is empty</div>
-                <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginBottom: 12 }}>
                   There is no customer car to work on. Take one in from the job board.
                 </div>
                 <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
@@ -1452,8 +1452,8 @@ export function EcuLabApp() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>
                       <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
                     </div>
-                    <div style={{ fontSize: 12.5, color: T.ink2, lineHeight: 1.6, marginBottom: 12 }}>
-                      {course ? <>The <b style={{ color: T.ink }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
+                    <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginBottom: 12 }}>
+                      {course ? <>The <b style={{ color: 'var(--ink)' }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
                     </div>
                     <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
                   </Panel>
@@ -1577,11 +1577,11 @@ export function EcuLabApp() {
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
                   return (
                     <Panel tight style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <TrendingUp size={15} color={T.ink2} style={{ flexShrink: 0 }} />
+                      <TrendingUp size={15} color="var(--ink2)" style={{ flexShrink: 0 }} />
                       <div style={{ display: 'flex', gap: 14, fontSize: 12.5, flexWrap: 'wrap' }}>
-                        <span style={{ color: dHp === 0 ? T.ink2 : dHp > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
-                        <span style={{ color: dTq === 0 ? T.ink2 : dTq > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dTq, ' lb-ft')}</span>
-                        <span style={{ color: dKnock === 0 ? T.ink2 : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
+                        <span style={{ color: dHp === 0 ? 'var(--ink2)' : dHp > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
+                        <span style={{ color: dTq === 0 ? 'var(--ink2)' : dTq > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dTq, ' lb-ft')}</span>
+                        <span style={{ color: dKnock === 0 ? 'var(--ink2)' : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
                       </div>
                     </Panel>
                   );
@@ -1764,7 +1764,7 @@ export function EcuLabApp() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: 'var(--bg)', color: 'var(--ink)', fontFamily: T.sans, overflow: 'hidden' }}>
       {/* Both modes work on a laptop on the desk in your shop (desk/Desk.jsx): apps in
           windows, the dyno and the engine stand as pages. CAREER's laptop offers Build and
           Tune, keeps the job's bar at the top of every window, and shutting it walks you

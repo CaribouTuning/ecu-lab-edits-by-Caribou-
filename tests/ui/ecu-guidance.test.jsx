@@ -138,6 +138,20 @@ describe('the page guide', () => {
     expect(screen.getByText(/All factory settings/)).toBeTruthy();
   });
 
+  it('calls a factory engine factory on every page, its tables sized to it', () => {
+    // A factory engine's ECU tables sit on its own breakpoints. Judged against the generic
+    // grid, a freshly loaded N54 opened BOOST and TORQUE with "1 setting changed", and
+    // their Factory button moved the breakpoints off the ones RESET ALL TO STOCK writes.
+    function LoadN54() {
+      const [, dispatch] = useBuild();
+      return <button type="button" onClick={() => dispatch({ type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) })}>load-n54</button>;
+    }
+    const sections = [...new Set(S.ECU_META.map((m) => m.section))];
+    mount(<><LoadN54 />{sections.map((s) => <EcuSection key={s} section={s} title={s} />)}</>);
+    fireEvent.click(screen.getByText('load-n54'));
+    expect(screen.queryAllByText(/changed from factory/)).toEqual([]);
+  });
+
   it('records nothing for a press that changes nothing', () => {
     // A stepper at its limit, or the segment already chosen, is not an edit: it must not
     // leave an empty undo step behind.
