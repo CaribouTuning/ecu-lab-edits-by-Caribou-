@@ -6,7 +6,8 @@
   border: 0; border-bottom: 1px solid var(--line); background: transparent;
   color: inherit; font-family: var(--sans); text-align: left; cursor: pointer;
 }
-.row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.switch { flex-shrink: 0; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 11px; }
+.switch:focus-visible, .row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .label { font-size: var(--fs-base); font-weight: 600; color: var(--ink); }
 .sub { display: block; margin-top: 2px; font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
@@ -18,10 +19,10 @@
   background: var(--panel3); box-shadow: inset 0 0 0 1px var(--line-hi);
   transition: background-color 0.16s ease;
 }
-.row[aria-checked='true'] .track, .row[aria-pressed='true'] .track { background: var(--acc); box-shadow: none; }
+.row[aria-checked='true'] .track, .row[aria-pressed='true'] .track, .switch[aria-checked='true'] .track { background: var(--acc); box-shadow: none; }
 .knob {
   display: block; width: 18px; height: 18px; border-radius: 50%; background: var(--ink);
   transition: transform 0.16s ease;
 }
-.row[aria-checked='true'] .knob, .row[aria-pressed='true'] .knob { transform: translateX(18px); background: var(--acc-on); }
+.row[aria-checked='true'] .knob, .row[aria-pressed='true'] .knob, .switch[aria-checked='true'] .knob { transform: translateX(18px); background: var(--acc-on); }
 @media (prefers-reduced-motion: reduce) { .track, .knob { transition: none; } }

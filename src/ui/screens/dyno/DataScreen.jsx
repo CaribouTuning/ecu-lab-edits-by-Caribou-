@@ -24,7 +24,7 @@ import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { StatTile } from '../../primitives/StatTile.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useSession, useTune } from '../../state/StoreProvider.jsx';
-import { deltaHeat, T, utilisationTone } from '../../theme.js';
+import { deltaHeat, utilisationTone } from '../../theme.js';
 
 import styles from './DataScreen.module.css';
 
@@ -313,7 +313,7 @@ export function DataScreen() {
                   <div className={styles.loadCell}>{m}</div>
                   {veAxes.rpm.map((_, ci) => {
                     const e = histogram[ri][ci];
-                    const bg = e == null ? T.panel2 : deltaHeat(e);
+                    const bg = e == null ? 'var(--panel2)' : deltaHeat(e);
                     return (
                       <div key={ci} className={styles.dataCell} data-empty={e == null ? 'true' : 'false'} style={{ background: bg }}>
                         {e == null ? '—' : `${e > 0 ? '+' : ''}${e.toFixed(1)}`}

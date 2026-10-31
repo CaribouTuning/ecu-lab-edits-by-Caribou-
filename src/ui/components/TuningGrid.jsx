@@ -193,19 +193,19 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
       onKeyDown={onKeyDown}
       aria-label="Calibration table: arrows move, Shift+arrows select a range, plus and minus adjust"
     >
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: T.ink2, fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, color: 'var(--ink2)', fontWeight: 700, letterSpacing: 0.8, marginBottom: 4 }}>
       <span>{LOAD_UNIT_LABEL[axes.loadUnit]} &darr;</span><span>RPM &rarr;</span>
     </div>
-    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: `1px solid ${T.line}`, borderRadius: 10 }}>
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', border: `1px solid var(--line)`, borderRadius: 10 }}>
       <div style={{ display: 'inline-block', minWidth: '100%' }}>
         {/* `data-tour` hooks are for the tutorial's callouts, which point at this grid. */}
         <div style={{ display: 'flex' }} data-tour="grid-rpm-axis">
-          <div style={{ width: 44, flexShrink: 0, background: T.panel }} />
+          <div style={{ width: 44, flexShrink: 0, background: 'var(--panel)' }} />
           {axes.rpm.map((r, ci) => (
             <button key={r} onClick={() => selectCol(ci)} style={{
-              width: cw, height: 30, flexShrink: 0, border: 'none', borderBottom: `1px solid ${T.line}`, borderLeft: `1px solid ${T.line}`,
-              background: selection?.type === 'col' && selection.col === ci ? T.acc : T.panel,
-              color: selection?.type === 'col' && selection.col === ci ? T.accOn : T.ink2,
+              width: cw, height: 30, flexShrink: 0, border: 'none', borderBottom: `1px solid var(--line)`, borderLeft: `1px solid var(--line)`,
+              background: selection?.type === 'col' && selection.col === ci ? 'var(--acc)' : 'var(--panel)',
+              color: selection?.type === 'col' && selection.col === ci ? T.accOn : 'var(--ink2)',
               fontFamily: T.mono, fontSize: 10, fontWeight: 700,
             }}>{r}</button>
           ))}
@@ -213,9 +213,9 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
         {axes.load.map((load, ri) => (
           <div key={load} style={{ display: 'flex' }}>
             <button onClick={() => selectRow(ri)} data-tour={axes.loadUnit === 'kPa' ? `grid-load-${load}` : undefined} style={{
-              width: 44, height: ch, flexShrink: 0, border: 'none', borderRight: `1px solid ${T.line}`, borderTop: `1px solid ${T.line}`,
-              background: selection?.type === 'row' && selection.row === ri ? T.acc : T.panel,
-              color: selection?.type === 'row' && selection.row === ri ? T.accOn : T.ink2,
+              width: 44, height: ch, flexShrink: 0, border: 'none', borderRight: `1px solid var(--line)`, borderTop: `1px solid var(--line)`,
+              background: selection?.type === 'row' && selection.row === ri ? 'var(--acc)' : 'var(--panel)',
+              color: selection?.type === 'row' && selection.row === ri ? T.accOn : 'var(--ink2)',
               fontFamily: T.mono, fontSize: 10, fontWeight: 700,
             }}>{loadText(axes.loadUnit, load)}</button>
             {data[ri].map((val, ci) => (
@@ -230,12 +230,12 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
                 onClick={(e) => onCellClick(e, ri, ci)}
                 style={{
                   width: cw, height: ch, flexShrink: 0,
-                  border: isAnchor(ri, ci) ? `2px solid ${T.acc}` : isSelected(ri, ci) ? `2px solid ${T.ink}`
-                    : notTuned.has(`${ri}:${ci}`) ? `1px dashed ${T.ink2}` : `1px solid ${shadowAlpha(0.35)}`,
+                  border: isAnchor(ri, ci) ? `2px solid var(--acc)` : isSelected(ri, ci) ? `2px solid var(--ink)`
+                    : notTuned.has(`${ri}:${ci}`) ? `1px dashed var(--ink2)` : `1px solid ${shadowAlpha(0.35)}`,
                   // Not tuned: no heat colour, so it does not pass for a value someone chose.
-                  background: notTuned.has(`${ri}:${ci}`) && !diff ? T.panel2
-                    : !diff ? heat(val, min, max) : diff[ri][ci] === 0 ? T.panel2 : diffTint(diff[ri][ci], diffScale),
-                  color: (diff && diff[ri][ci] === 0) || notTuned.has(`${ri}:${ci}`) ? T.ink2 : T.ink,
+                  background: notTuned.has(`${ri}:${ci}`) && !diff ? 'var(--panel2)'
+                    : !diff ? heat(val, min, max) : diff[ri][ci] === 0 ? 'var(--panel2)' : diffTint(diff[ri][ci], diffScale),
+                  color: (diff && diff[ri][ci] === 0) || notTuned.has(`${ri}:${ci}`) ? 'var(--ink2)' : 'var(--ink)',
                   fontFamily: T.mono, fontSize: dense ? 11 : 12, fontWeight: 700,
                   // Past the boost the engine makes here: faded back, so the rows it runs
                   // stand out. Still a cell: a tuner may write it ahead of the boost.
@@ -250,12 +250,12 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
       </div>
     </div>
     {notReached.size > 0 && (
-      <p data-testid="unreached-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
+      <p data-testid="unreached-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink2)' }}>
         Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.
       </p>
     )}
     {notTuned.size > 0 && (
-      <p data-testid="untuned-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: T.ink2 }}>
+      <p data-testid="untuned-note" style={{ margin: '8px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--ink2)' }}>
         Dashed cells are not tuned yet: they hold the edge row&apos;s values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.
       </p>
     )}

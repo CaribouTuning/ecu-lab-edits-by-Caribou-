@@ -113,7 +113,7 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
                   <div><dt>Bore × stroke</dt><dd>{p.engine.bore} × {p.engine.stroke} mm</dd></div>
                   <div><dt>Compression</dt><dd>{p.engine.compression}:1</dd></div>
                   <div><dt>Redline</dt><dd>{p.engine.redline.toLocaleString('en-US')} rpm</dd></div>
-                  <div><dt>Factory rating</dt><dd>{p.factory.crankHp} hp / {p.factory.crankTq} lb-ft</dd></div>
+                  <div className={styles.wide}><dt>Factory rating</dt><dd>{p.factory.crankHp} hp, {p.factory.crankTq} lb-ft</dd></div>
                 </dl>
                 <button type="button" className={styles.use} onClick={() => load(p)} aria-label={`Use ${p.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
               </div>

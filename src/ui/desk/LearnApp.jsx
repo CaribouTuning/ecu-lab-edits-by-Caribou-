@@ -21,13 +21,18 @@ export function LearnApp({ shelf, onShelf }) {
   const open = shelf ?? 'how';
   const noop = React.useCallback(() => {}, []);
   return (
-    <div className={styles.split}>
-      <nav className={styles.side} aria-label="Learn shelves">
-        {SHELVES.map((s) => (
-          <button key={s.id} type="button" className={styles.sideBtn} aria-current={open === s.id ? 'page' : undefined} onClick={() => onShelf(s.id)}>
-            {s.label}
-          </button>
-        ))}
+    // The same sidebar as TUNE's (a Mac app's source list; tabs along the top on a phone),
+    // so the laptop's apps read as one piece of software.
+    <div className={styles.tuneLayout}>
+      <nav className={styles.tuneSidebar} aria-label="Learn shelves">
+        <div className={styles.sideHead}>Shelves</div>
+        <div className={styles.tuneTabs} data-plain="">
+          {SHELVES.map((s) => (
+            <button key={s.id} type="button" className={styles.tuneTab} aria-current={open === s.id ? 'page' : undefined} onClick={() => onShelf(s.id)}>
+              <span className={styles.tuneTabName}>{s.label}</span>
+            </button>
+          ))}
+        </div>
       </nav>
       <div className={styles.sideBody}>
         <LearnScreen active onToggle={noop} shelf={open} bare />

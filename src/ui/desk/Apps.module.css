@@ -3,25 +3,8 @@
 .pad { padding: 16px; }
 .lead { margin: 0 0 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); max-width: 70ch; }
 
-/* ---------- Learn: shelves down the side ---------- */
-.split { display: flex; min-height: 100%; }
-.side {
-  flex: none; width: 168px; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px;
-  background: var(--panel); border-right: 1px solid var(--line);
-  position: sticky; top: 0; align-self: flex-start; height: 100%;
-}
-.sideBtn {
-  padding: 12px 10px; border-radius: var(--r-sm); text-align: left;
-  border: 1px solid var(--line-hi); background: var(--panel2); color: var(--ink); cursor: pointer;
-  font-size: var(--fs-sm); font-weight: 800; letter-spacing: 0.03em;
-}
-.sideBtn[aria-current='page'] { border-color: var(--acc); background: var(--acc-bg); color: var(--acc-ink); }
-.sideBody { flex: 1; min-width: 0; padding: 14px 16px; }
-@media (max-width: 560px) {
-  .split { flex-direction: column; }
-  .side { width: auto; flex-direction: row; overflow-x: auto; position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
-  .sideBtn { flex: none; }
-}
+/* ---------- Learn: shelves down the side (TUNE's sidebar, below) ---------- */
+.sideBody { min-width: 0; padding: 14px 16px; }
 
 /* ---------- Physics: four panels, as drawn ---------- */
 .physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
@@ -50,6 +33,7 @@
 .piston { animation: piston 1s ease-in-out infinite alternate; }
 @keyframes piston { to { transform: translateY(var(--travel)); } }
 .artDot { fill: var(--cyan); stroke: var(--bg); stroke-width: 3; }
+.artDotAcc { fill: var(--acc); stroke: var(--bg); stroke-width: 3; }
 .strokes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .strokeStep {
   display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1.5px solid var(--line-hi);
@@ -96,14 +80,15 @@
 .nums dd { margin: 0; font-family: var(--mono); color: var(--ink); }
 /* The pictures' strokes and fills, from the theme. */
 .artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
-.artLine2 { fill: none; stroke: var(--cyan); stroke-width: 2.2; }
+.artLine2 { fill: none; stroke: var(--data2); stroke-width: 2.2; }
 .artWarn { fill: none; stroke: var(--warn); stroke-width: 2; }
 .artGrid { stroke: var(--line-hi); stroke-width: 1; stroke-dasharray: 3 3; }
 .artAxis { stroke: var(--ink3); stroke-width: 1; }
 .artText { fill: var(--ink2); font-size: 9px; font-family: var(--sans); }
 .artText2 { fill: var(--cyan); font-size: 9px; font-family: var(--sans); }
 .curveText { fill: var(--ink2); font-size: 14px; font-family: var(--sans); }
-.curveText2 { fill: var(--cyan); font-size: 14px; font-family: var(--sans); }
+.curveTextAcc { fill: var(--acc); font-size: 14px; font-family: var(--sans); }
+.curveText2 { fill: var(--data2); font-size: 14px; font-family: var(--sans); }
 .artBox { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.5; }
 .artBox2 { fill: var(--panel3); stroke: var(--ink3); stroke-width: 1.5; }
 .artFill { fill: var(--acc); opacity: 0.75; }
@@ -143,7 +128,7 @@
    slots sit on a line under it. Two rows of grey pills ahead of every table pushed the
    table itself past half the screen. */
 @media (max-width: 560px) {
-  .tuneLayout { grid-template-columns: minmax(0, 1fr); }
+  .tuneLayout { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .tuneSidebar { position: static; flex-direction: column; align-items: stretch; gap: 0; padding: 0; border-right: 0; border-bottom: 1px solid var(--mac-separator); }
   .sideHead { display: none; }
   .tuneTabs {

@@ -60,7 +60,7 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
         >Select all</Button>
       </div>
       {diffView && (
-        <div style={{ fontSize: 11, color: T.ink2, marginTop: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 6 }}>
           Change since this calibration was loaded: <span style={{ color: T.violet }}>violet up</span>, <span style={{ color: T.cyan }}>cyan down</span>
         </div>
       )}

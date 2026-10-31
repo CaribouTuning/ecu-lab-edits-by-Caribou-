@@ -14,11 +14,11 @@ import { AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import {
-  ECU_META, defaultEcuCalibration, deriveEngine, ecuHardwareOf, getCal, setCal, setupMismatches,
+  ECU_META, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, getCal, peakMapKpaOf, setCal, setupMismatches,
 } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
-import { Toggle } from '../../primitives/Toggle.jsx';
+import { Switch } from '../../primitives/Toggle.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useTune } from '../../state/StoreProvider.jsx';
 import { UndoControls } from '../UndoControls.jsx';
@@ -51,10 +51,22 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
   const [build] = useBuild();
   const cal = tune.ecu;
   const [showPro, setShowPro] = React.useState(false);
-  const def = React.useMemo(
-    () => defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate }),
-    [build],
-  );
+  // The factory setting, on the breakpoints its tables left the factory on. An engine
+  // chosen from the catalogue or built by the player has tables sized to it: the stock
+  // layout for the induction it left the factory with, as `stockCalibrationFor` sizes it
+  // and RESET ALL TO STOCK writes it, whatever the table axes have been extended or
+  // switched to since. The ready default car (no layout of its own) is on the generic
+  // grid. Judged against the generic grid regardless, a factory N54 opened BOOST with
+  // "1 setting changed", and Factory moved its breakpoints off its own.
+  const sized = tune.layout != null;
+  const def = React.useMemo(() => {
+    const f = build.factoryInduction ?? null;
+    const axes = sized ? engineLayout({
+      redline: build.engineConfig.redline ?? 7000,
+      peakMapKpa: peakMapKpaOf({ turboOn: !!f?.turboOn, boostCurve: f?.boostCurve ?? [] }),
+    }).timing : undefined;
+    return defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes });
+  }, [build, sized]);
   // A field for one kind of nitrous kit only (a dry kit's fuel) is not offered on the
   // other: on a wet kit it does nothing, and a tuner reaching for it is chasing nothing.
   const fitsKit = (m) => !m.nitrousKit || m.nitrousKit === build.nitrous?.kit;
@@ -211,9 +223,9 @@ function Field({ meta, value, def, onChange, liveVars }) {
   const changed = isChanged(meta, value, def);
   if (meta.kind === 'bool') {
     return (
-      <div className={styles.field}>
-        <Toggle label={meta.label} checked={!!value} onChange={onChange} />
-        <Help meta={meta} />
+      <div className={styles.fieldRow}>
+        <FieldHead meta={meta} changed={changed} />
+        <Switch label={meta.label} checked={!!value} onChange={onChange} />
       </div>
     );
   }

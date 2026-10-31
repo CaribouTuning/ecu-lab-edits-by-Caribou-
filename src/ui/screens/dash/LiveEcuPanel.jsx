@@ -25,7 +25,7 @@ import { T } from '../../theme.js';
 import styles from './LiveEcuPanel.module.css';
 
 /** Series colours for the logger's small multiples: data hues, never status colours. */
-const SERIES = [T.acc, T.cyan, T.violet, T.ink2];
+const SERIES = ['var(--acc)', 'var(--data2)', T.violet, 'var(--ink2)'];
 const DEFAULT_CHANNELS = ['rpm', 'lambda', 'timing', 'boost'];
 /** Seconds of log the charts show. */
 const WINDOW_S = 20;
@@ -69,7 +69,7 @@ export function LiveEcuPanel() {
   };
 
   return (
-    <Panel style={{ background: T.panel, marginBottom: 10 }}>
+    <Panel style={{ background: 'var(--panel)', marginBottom: 10 }}>
       <Eyebrow icon={Cpu}>Engine management</Eyebrow>
 
       {row && live.running ? (
@@ -131,8 +131,8 @@ export function LiveEcuPanel() {
             <ResponsiveContainer width="100%" height={64}>
               <LineChart data={shown} margin={{ top: 2, right: 6, bottom: 0, left: 0 }}>
                 <XAxis dataKey="t" type="number" domain={['dataMin', 'dataMax']} hide />
-                <YAxis stroke={T.ink2} fontSize={9} width={34} domain={['auto', 'auto']} />
-                <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} labelFormatter={(t) => `${Number(t).toFixed(1)} s`} />
+                <YAxis stroke="var(--ink2)" fontSize={9} width={34} domain={['auto', 'auto']} />
+                <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} labelFormatter={(t) => `${Number(t).toFixed(1)} s`} />
                 <Line dataKey={id} stroke={SERIES[i]} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>

@@ -1,8 +1,8 @@
 /**
  * Whether the 3D shop is drawn at all. A player can turn it off (the shop becomes the flat
  * list of places), and it turns itself off for good on a machine that could not draw it:
- * no WebGL, a software renderer (hardware acceleration off), a lost context or a shader that
- * would not compile. Kept in this browser only; a private window just asks again.
+ * a shader that would not compile. No WebGL, a software renderer (hardware acceleration off)
+ * or a lost context show the flat shop for that visit. Kept in this browser only; a private window just asks again.
  */
 
 const KEY = 'ecu-lab:3d';

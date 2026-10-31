@@ -98,7 +98,7 @@
   /* The software on the laptop is a Mac in dark mode with the Graphite accent: inside the
      screen the neutral tokens are the Mac's, so every app picks them up without knowing.
      (The laptop's body round it stays inked: see .lid.) Data colours are not remapped. */
-  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on); --data2: var(--screen-data2);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   position: relative; height: 100%;
@@ -174,7 +174,7 @@
   background: var(--mac-titlebar); border-bottom: 1px solid var(--mac-separator);
 }
 .taskBtn {
-  position: relative; height: 22px; min-width: 26px; padding: 0 6px; display: inline-grid; place-items: center;
+  position: relative; height: 22px; min-width: 26px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center;
   border: 0; border-radius: var(--r-sm); background: transparent; color: var(--ink); cursor: pointer;
 }
 .taskBtn:hover, .taskBtn[aria-expanded='true'] { background: var(--mac-control); }
@@ -190,8 +190,10 @@
 .tray { justify-self: end; display: flex; align-items: center; gap: 4px; }
 .clock { padding: 0 6px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
 .badge {
-  position: absolute; top: -3px; right: -6px; min-width: 20px; height: 16px; padding: 0 4px; border-radius: 8px;
-  font-family: var(--mono); font-size: 10px; line-height: 14px; text-align: center;
+  /* The count beside the bell, not over it: on a 22px menu bar a badge on the icon hid the
+     bell and was cut off by the bar's top edge. */
+  margin-left: 3px; min-width: 14px; height: 14px; padding: 0 4px; border-radius: 7px; box-sizing: border-box;
+  font-family: var(--sans); font-size: 9px; font-weight: 700; line-height: 11px; text-align: center;
   background: var(--ok-bg); color: var(--ok-ink); border: 1px solid var(--ok-line);
 }
 .badge[data-tone='warn'] { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-line); }
@@ -226,9 +228,12 @@
    screen palette (see .screen). */
 .page {
   --bg: var(--mac-window); --panel: var(--mac-titlebar); --panel2: var(--mac-box); --panel3: var(--mac-control);
-  --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
+  --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on); --data2: var(--screen-data2);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
+  /* The station's window runs the screen's full width; the status strip over it does too,
+     not the 1100px column it keeps on a page of its own. */
+  --content-max: none;
   position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--ink);
 }
 .pageBar {
@@ -410,7 +415,7 @@
 /* An app open on the phone is the same software as on the laptop, so it gets the same
    Apple dark-mode greys (see .screen). */
 .phoneApp {
-  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on); --data2: var(--screen-data2);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   background: var(--bg);
@@ -446,3 +451,4 @@
 }
 
 .taskBtn span { margin-left: 2px; font-size: var(--fs-sm); }
+.taskBtn .badge { margin-left: 3px; font-size: 9px; }

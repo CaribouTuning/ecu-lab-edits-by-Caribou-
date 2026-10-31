@@ -51,10 +51,14 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
           engine.group.position.z = 0;
           turntable.add(engine.group);
           // The same camera for every engine, framed for a large one, so a longer stroke or a
-          // wider bore is a bigger block on the turntable, not the same picture refitted.
+          // wider bore is a bigger block on the turntable, not the same picture refitted. Only
+          // a block bigger than that (a long six at the top of the bore range) pulls it back,
+          // so the turntable never swings an end out of the picture.
+          const len = Math.max(REF.len, engine.size.len);
+          const hgt = Math.max(REF.hgt, engine.size.hgt);
           cam.fov = 34;
-          cam.position.set(0, REF.hgt * 0.9 + REF.len * 0.55, REF.len * 2.1);
-          cam.lookAt(0, REF.hgt * 0.4, 0);
+          cam.position.set(0, hgt * 0.9 + len * 0.55, len * 2.1);
+          cam.lookAt(0, hgt * 0.4, 0);
           cam.updateProjectionMatrix();
         }
         if (l.drag == null) l.yaw += dt * 0.35;
