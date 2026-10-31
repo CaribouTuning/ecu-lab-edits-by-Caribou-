@@ -14,7 +14,7 @@
  * hands over the screen for it; this decides how it is framed.
  */
 
-import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
+import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
@@ -36,6 +36,12 @@ export const DESK_APPS = [
   // CAREER: Pops's emails and texts.
   { id: 'messages', label: 'Messages', name: 'MESSAGES' },
 ];
+
+/**
+ * CAREER's job board on an upright phone: the wall is out of the picture there, so the board
+ * is an app on the phone's home screen. Everywhere else it is the board on the shop's wall.
+ */
+const JOBS_APP = { id: 'office', label: 'Jobs', name: 'JOB BOARD' };
 
 /**
  * The wallpaper: the Caribou Tuning badge in chrome on a plain graphite ground. Drawn from
@@ -97,7 +103,7 @@ const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
  * it (Desk.module.css colours each tile by `data-app`). The same on the laptop and the phone.
  */
-const GLYPHS = { tune: Gauge, build: Wrench, learn: BookOpen, physics: Atom, messages: MessageCircle, search: Search, shop: Store };
+const GLYPHS = { tune: Gauge, build: Wrench, learn: BookOpen, physics: Atom, messages: MessageCircle, search: Search, shop: Store, jobs: ClipboardList };
 
 /**
  * @param {{id: string, badge?: number, small?: boolean}} props
@@ -116,19 +122,25 @@ function AppTile({ id, badge = 0, small = false }) {
 /** A phone's screen, either way up: where the device in your hand is a phone, not a laptop. */
 const PHONE_QUERY = '(max-width: 560px), (max-height: 500px)';
 
-/** @returns {boolean} whether the screen is a phone's */
-export function usePhone() {
-  const query = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
-  const [phone, setPhone] = useState(query);
+/** @param {string} q a media query @returns {boolean} whether it matches, kept current */
+function useMedia(q) {
+  const query = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(q).matches;
+  const [on, setOn] = useState(query);
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return undefined;
-    const mq = window.matchMedia(PHONE_QUERY);
-    const on = () => setPhone(mq.matches);
-    mq.addEventListener?.('change', on);
-    return () => mq.removeEventListener?.('change', on);
-  }, []);
-  return phone;
+    const mq = window.matchMedia(q);
+    const change = () => setOn(mq.matches);
+    mq.addEventListener?.('change', change);
+    return () => mq.removeEventListener?.('change', change);
+  }, [q]);
+  return on;
 }
+
+/** @returns {boolean} whether the screen is a phone's */
+export const usePhone = () => useMedia(PHONE_QUERY);
+
+/** @returns {boolean} whether it is a phone held upright, where the shop's left wall is out of the picture */
+export const usePortraitPhone = () => useMedia('(max-width: 560px) and (orientation: portrait)');
 
 /** The time on the taskbar, kept current. */
 function Clock() {
@@ -202,7 +214,8 @@ export function Desk({
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
   const surfaceCtx = useMemo(() => ({ surfaces }), [surfaces]);
-  const appInfo = DESK_APPS.find((a) => a.id === app);
+  const portraitPhone = usePortraitPhone();
+  const appInfo = DESK_APPS.find((a) => a.id === app) ?? (app === 'office' && portraitPhone ? JOBS_APP : undefined);
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
     else if (id === 'build') onOpen('build');
@@ -290,6 +303,12 @@ export function Desk({
                 <span className={styles.phoneIconLabel}>{a.label}</span>
               </button>
             ))}
+            {board && portraitPhone && (
+              <button type="button" className={styles.phoneIcon} onClick={() => onOpen('board')} aria-label="JOB BOARD" data-tour="nav-jobs" tabIndex={open ? 0 : -1}>
+                <AppTile id="jobs" badge={badges.jobs} />
+                <span className={styles.phoneIconLabel}>{JOBS_APP.label}</span>
+              </button>
+            )}
           </div>
           <div className={styles.dock}>
             <button type="button" className={styles.dockBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
@@ -307,7 +326,7 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
       {mode === 'bay' && <FirstRun career={board} />}
 

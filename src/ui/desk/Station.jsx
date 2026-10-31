@@ -21,12 +21,13 @@ import styles from './Station.module.css';
 
 /**
  * One face of a thing in the shop, and what is on it.
- * @param {{name: string, label: string, kind: 'monitor'|'console'|'board', children: React.ReactNode}} props
+ * @param {{name: string, label: string, kind: 'monitor'|'console'|'board', inline?: boolean, children: React.ReactNode}} props
+ * `inline`: drawn where it is rendered, not on the thing in the shop (the job board, as an app on a phone)
  * @returns {React.ReactElement}
  */
-export function Surface({ name, label, kind, children }) {
+export function Surface({ name, label, kind, inline = false, children }) {
   const { surfaces } = useSurfaces();
-  const el = surfaces?.[name] ?? null;
+  const el = inline ? null : surfaces?.[name] ?? null;
   const face = (
     // A machine's screen and a sheet of paper are not hand-drawn: no wobble, no pen line.
     <section className={styles.face} data-kind={kind} aria-label={label} data-plain="">
@@ -87,10 +88,12 @@ export function Computer({ label, screens, current, onScreen, title, status = nu
 
 /**
  * A place in the shop: its surfaces, in the room or (with no room) one after the other.
- * @param {{kind: 'dyno'|'stand'|'build'|'board', children: React.ReactNode}} props
+ * @param {{kind: 'dyno'|'stand'|'build'|'board', flat?: boolean, app?: boolean, children: React.ReactNode}} props
+ * `flat`: lay the faces out one after the other even where there is a room (see Surface `inline`)
+ * `app`: the face is an app's whole screen (a phone's job board), edge to edge
  * @returns {React.ReactElement}
  */
-export function Station({ kind, children }) {
+export function Station({ kind, flat = false, app = false, children }) {
   const { surfaces } = useSurfaces();
-  return <div className={styles.station} data-station={kind} data-flat={surfaces ? undefined : 'true'}>{children}</div>;
+  return <div className={styles.station} data-station={kind} data-flat={flat || !surfaces ? 'true' : undefined} data-app={app ? 'true' : undefined}>{children}</div>;
 }

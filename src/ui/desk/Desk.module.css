@@ -272,6 +272,7 @@
 .appTile[data-app='learn'] { --hi: var(--app-learn-hi); --lo: var(--app-learn-lo); }
 .appTile[data-app='physics'] { --hi: var(--app-physics-hi); --lo: var(--app-physics-lo); }
 .appTile[data-app='messages'] { --hi: var(--app-msg-hi); --lo: var(--app-msg-lo); }
+.appTile[data-app='jobs'] { --hi: var(--app-jobs-hi); --lo: var(--app-jobs-lo); }
 .appTile[data-app='search'] { --hi: var(--app-search-hi); --lo: var(--app-search-lo); }
 .appTile[data-app='shop'] { --hi: var(--app-shop-hi); --lo: var(--app-shop-lo); }
 

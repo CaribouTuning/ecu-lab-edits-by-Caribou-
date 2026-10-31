@@ -44,18 +44,20 @@ export const HOTSPOTS = [
  *   the engine's condition, drawn on it; `key` names a failure, which plays once where it happened
  * @param {boolean} [props.phone] the device is a phone, not the laptop
  * @param {boolean} [props.board] CAREER: the job board is on the wall
+ * @param {boolean} [props.boardOnWall] false: it is not drawn there (an upright phone has it as an app)
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
  * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
  * @param {() => void} props.onLook the backdrop was clicked with the laptop open: look up at the shop
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, next: nextSpot, nextDirty: true });
+export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall = true, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, boardOnWall, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
   live.current.onPick = onPick;
   live.current.board = board;
+  live.current.boardOnWall = boardOnWall;
   if (live.current.next !== nextSpot) { live.current.next = nextSpot; live.current.nextDirty = true; }
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
@@ -155,6 +157,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, r
       update(dt) {
         const l = live.current;
         fit();
+        shop.setBoardOnWall(l.boardOnWall);
         shop.setTickets(l.mode !== 'board');
         // The next step's station shows itself: its screen a little brighter than the rest.
         if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); }
@@ -240,7 +243,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, engineSpec, r
       )}
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer}>
-          {HOTSPOTS.filter((h) => h.id !== 'board' || board).map((h) => (
+          {HOTSPOTS.filter((h) => h.id !== 'board' || (board && boardOnWall)).map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}
