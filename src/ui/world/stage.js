@@ -22,7 +22,7 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean, maxDpr?: number, real?: boolean}} [opts]
+ * @param {{quality?: keyof typeof PIXEL_ROWS, shadows?: boolean, preserve?: boolean, sketch?: boolean, hatch?: boolean, maxDpr?: number, real?: boolean, hardwareOnly?: boolean}} [opts]
  *   `maxDpr` caps how many drawn pixels a sketch spends per screen pixel (default 2).
  *   `hatch: false` (a sketch only) leaves out the hatching and grain: clean, crisp ink
  *   outlines on the model's own colours, for a close-up such as the Build engine.

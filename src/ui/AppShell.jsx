@@ -51,7 +51,6 @@ import React, { useMemo } from 'react';
 import {
   INJECTOR_OPTS, FUEL_CHOICES, blowerCurve, blowerOf, deriveEngine, tankFuel,
 } from '../sim/index.js';
-import { BUILD_VERSION } from '../version.js';
 import { Button } from './primitives/Button.jsx';
 import { isApplePlatform } from './commands.js';
 import { TAB_NAMES } from './routing.js';
@@ -289,8 +288,8 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
             for a text-based query. */}
         <div className={styles.engine} data-testid="build-line">
           {noEngine
-            ? `No engine chosen yet, ${BUILD_VERSION}`
-            : `${engineName}, ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''}, ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)}, ${INJECTOR_OPTS[injIdx].label}, ${BUILD_VERSION}`}
+            ? 'No engine chosen yet'
+            : `${engineName}, ${induction}${build.nitrous ? ` + ${build.nitrous.shotHp} shot` : ''}, ${fuelLabel(FUEL_CHOICES[octaneIdx], build.ethanolPct)}, ${INJECTOR_OPTS[injIdx].label}`}
         </div>
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}

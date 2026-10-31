@@ -10,7 +10,7 @@
 
 import React from 'react';
 
-import styles from './PartRow.module.css';
+import styles from '../primitives/Toggle.module.css';
 
 /**
  * @param {object} props
@@ -22,13 +22,13 @@ import styles from './PartRow.module.css';
  */
 export function PartRow({ label, blurb, fitted, onToggle }) {
   return (
+    // A part is fitted or not: the same switch row as any other on-or-off setting.
     <button type="button" className={styles.row} data-installed={fitted ? 'true' : 'false'} aria-pressed={fitted} onClick={onToggle}>
-      <span className={styles.state} aria-hidden="true" />
-      <span className={styles.text}>
-        <span className={styles.name}>{label}</span>
-        <span className={styles.blurb}>{blurb}</span>
+      <span>
+        <span className={styles.label}>{label}</span>
+        <span className={styles.sub}>{blurb}</span>
       </span>
-      <span className={styles.action}>{fitted ? 'Remove' : 'Fit'}</span>
+      <span className={styles.track} aria-hidden="true"><span className={styles.knob} /></span>
     </button>
   );
 }

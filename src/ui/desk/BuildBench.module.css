@@ -88,7 +88,9 @@
   .wrap[data-full] .bench { grid-template-columns: minmax(0, 1fr); }
   .wrap[data-full] .sheet { min-width: 0; }
   .wrap[data-full] .parts { position: sticky; top: 0; overflow: visible; z-index: 2; border-radius: 0; }
-  .wrap[data-full] .parts > [role='img'] { display: none; }
+  /* The engine stays in view over the sheet, so a longer stroke or a wider bore is seen
+     growing the block as the slider moves. */
+  .wrap[data-full] .parts > [role='img'] { height: 132px; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
   .changes { display: none; }
   .stepName { display: none; }
   /* The rail above already names the part: the title stays for screen readers, the lead shows. */

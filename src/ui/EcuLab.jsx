@@ -1622,17 +1622,16 @@ export function EcuLabApp() {
                     <DataScreen />
                     {/* Every table the pull read, drawn as a surface, under the datalog. */}
                     <div className={deskApps.dataTables}>
-                      <h3 className={deskApps.dataTablesHead}>Volumetric efficiency by rpm</h3>
                       <VeCurve points={result.points} />
                       {[
-                        ['Volumetric efficiency', ve, veAxes, 10, 130, '%', 0],
-                        ['Ignition timing', timing, (layout ?? layoutById(tune.layout)).timing, -5, 45, '°', 0],
-                        ['Air-fuel ratio', afr, (layout ?? layoutById(tune.layout)).afr, 9, 18, ':1', 1],
-                      ].map(([title, tbl, ax, lo, hi, unit, decimals]) => (
-                        <div key={title}>
-                          <h3 className={deskApps.dataTablesHead}>{title}, as a surface</h3>
-                          <TableSurface x={ax.rpm} y={[...ax.load].reverse()} z={[...tbl].reverse()} lo={lo} hi={hi} xLabel="RPM" yLabel={ax.loadUnit} unit={unit} decimals={decimals}
-                            title={title} xVar="rpm" yVar={ax.loadUnit === 'kPa' ? 'map' : null} />
+                        { title: 'Volumetric efficiency', tbl: ve, ax: veAxes, lo: 10, hi: 130, unit: '%', decimals: 0 },
+                        { title: 'Ignition timing', tbl: timing, ax: (layout ?? layoutById(tune.layout)).timing, lo: -5, hi: 45, unit: '°', decimals: 0 },
+                        { title: 'Air-fuel ratio', tbl: afr, ax: (layout ?? layoutById(tune.layout)).afr, lo: 9, hi: 18, unit: ':1', decimals: 1 },
+                      ].map((t) => (
+                        <div key={t.title}>
+                          <h3 className={deskApps.dataTablesHead}>{t.title}</h3>
+                          <TableSurface x={t.ax.rpm} y={[...t.ax.load].reverse()} z={[...t.tbl].reverse()} lo={t.lo} hi={t.hi} xLabel="RPM" yLabel={t.ax.loadUnit} unit={t.unit} decimals={t.decimals}
+                            title={t.title} xVar="rpm" yVar={t.ax.loadUnit === 'kPa' ? 'map' : null} />
                         </div>
                       ))}
                     </div>
