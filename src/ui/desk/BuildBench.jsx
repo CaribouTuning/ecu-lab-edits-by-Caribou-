@@ -116,6 +116,8 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const tall = useTall();
   const spec = useMemo(() => engineSpecOf(build, derived), [build, derived]);
   const changed = useMemo(() => changedParts(build, preset), [build, preset]);
+  const cfg = build.engineConfig;
+  const caption = `${derived.displacementL.toFixed(2)} L ${cfg.configuration} · ${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm`;
   // Where the engine stands against the factory: three different things to be building.
   const origin = !preset ? 'own' : changed.size ? 'modified' : 'stock';
   const changedNames = BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label);
@@ -123,7 +125,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
     <div className={styles.wrap} data-full={full ? 'true' : undefined}>
     <div className={styles.bench}>
       <nav className={styles.parts} aria-label="Engine parts" data-open={railOpen ? 'true' : undefined}>
-        {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />}
+        {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />}
         {/* Narrow only (BuildBench.module.css): the step you are on, and where you are in the six. */}
         <button type="button" className={styles.rail} aria-label="Choose a part" aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
           <span className={styles.railStep}>{BENCH_PARTS.indexOf(open) + 1}<span className={styles.railOf}>/{BENCH_PARTS.length}</span></span>
@@ -148,7 +150,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
       </nav>
       <section className={styles.sheet} aria-label={open.label}>
         {tall && !full && (
-          <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} />
+          <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />
         )}
         <header className={styles.sheetHead}>
           <h2 className={styles.sheetTitle}>{open.label}</h2>

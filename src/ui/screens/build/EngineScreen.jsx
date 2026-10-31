@@ -90,6 +90,8 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // a control with no visible cause.
   const top = history.past[history.past.length - 1];
   const undoable = top && (top.label.startsWith('Preset · ') || top.label === 'Reset to stock');
+  // A factory engine put on an empty bench replaced nothing: "replaced your tune" was untrue.
+  const fromEmpty = top?.before?.build?.engineReady === false;
 
   const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
   const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
@@ -212,7 +214,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             {' '}These are typical values, not your engine&apos;s own. Set each on its own stage and this note goes away.
           </Note>
         )}
-        {!presetId && !build.originPresetId && (
+        {!bench && !presetId && !build.originPresetId && (
           <Note>Custom build: every value on the next stages is yours to set. Pick a factory engine from the list to start from a known-good configuration instead.</Note>
         )}
         {presetPrompt && (
@@ -242,7 +244,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         )}
         {undoable && (
           <div className={styles.undoLine}>
-            <span>{top.label} replaced your tune. Undo restores the tables and hardware as they were before it.</span>
+            <span>{fromEmpty ? `${top.label.replace('Preset · ', '')} is on the bench with its factory calibration. Undo takes it off.` : `${top.label} replaced your tune. Undo restores the tables and hardware as they were before it.`}</span>
             <Button
               variant="quiet" size="sm"
               aria-label={`Undo ${top.label}`}

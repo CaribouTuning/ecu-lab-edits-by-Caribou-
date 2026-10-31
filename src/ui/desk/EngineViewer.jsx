@@ -13,17 +13,18 @@ import { useStage } from './useStage.js';
 
 import styles from './Desk.module.css';
 
-/** The size the camera is framed for: about a V8's block, metres. */
-const REF = { len: 1.15, hgt: 0.75 };
+/** The size the camera is framed for, metres: a big six or a V8 just fills it, so a smaller block is seen smaller. */
+const REF = { len: 0.8, hgt: 0.6 };
 
 /**
  * @param {object} props
  * @param {import('../world/models/engine.js').EngineSpec} props.spec
  * @param {number} [props.rpm] engine speed when it is running, for the belt
  * @param {string} [props.label] what the picture is, for a screen reader
+ * @param {string|null} [props.caption] the block's size, printed over the picture
  * @returns {React.ReactElement}
  */
-export function EngineViewer({ spec, rpm = 0, label = 'The engine as built' }) {
+export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', caption = null }) {
   const live = useRef({ spec, rpm, yaw: 0.7, drag: /** @type {null|number} */ (null), dirty: true });
   live.current.rpm = rpm;
   const key = JSON.stringify(spec);
@@ -76,6 +77,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built' }) {
   return (
     <div className={styles.viewer} role="img" aria-label={label} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
       {failed ? <div className={styles.viewerFallback}>{label}</div> : <canvas ref={canvasRef} />}
+      {caption && <span className={styles.viewerCaption} aria-hidden="true">{caption}</span>}
     </div>
   );
 }

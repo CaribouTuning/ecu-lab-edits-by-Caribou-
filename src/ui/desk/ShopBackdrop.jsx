@@ -52,7 +52,7 @@ export const HOTSPOTS = [
  * @returns {React.ReactElement}
  */
 export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall = true, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, boardOnWall, next: nextSpot, nextDirty: true });
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, boardOnWall, moving: false, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
   live.current.onSurfaces = onSurfaces;
   live.current.onPick = onPick;
@@ -246,7 +246,8 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
         <button type="button" className={styles.lookUp} onClick={onLook} aria-label="Look up at the shop" />
       )}
       {mode === 'bay' && (
-        <div className={failed ? styles.spotRow : styles.spotLayer}>
+        <div className={failed ? styles.spotRow : styles.spotLayer} role={failed ? 'list' : undefined} aria-label={failed ? 'The shop' : undefined}>
+          {failed && <h2 className={styles.spotRowHead}>The shop</h2>}
           {HOTSPOTS.filter((h) => h.id !== 'board' || (board && boardOnWall)).map((h) => (
             <button
               key={h.id}
@@ -259,6 +260,8 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
               title={h.hint}
             >
               <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>
+              {/* With no 3D room the places are a list, each saying what it is for. */}
+              {failed && <span className={styles.spotHint} aria-hidden="true">{h.id === 'laptop' && phone ? 'Tune, messages and search' : h.hint}</span>}
             </button>
           ))}
         </div>

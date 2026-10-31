@@ -124,11 +124,6 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
     <>
       <Panel tight className={styles.panel} data-tour="dyno-power">
         <div className={styles.chartLabel}>Power and torque against rpm</div>
-        {/* The key, in words and in the lines' own colours, above the chart where it is read. */}
-        <div className={styles.key}>
-          <span><i style={{ background: T.acc }} />Power, whp</span>
-          <span><i style={{ background: T.cyan }} />Torque, lb-ft</span>
-        </div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
@@ -138,7 +133,8 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             <XAxis dataKey="rpm" stroke={T.ink2} fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
             <YAxis stroke={T.ink2} fontSize={10} />
             <Tooltip contentStyle={{ background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
+            <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: 12.5 }} />
             {bands.map((b) => (
               <ReferenceArea
                 key={b.id} x1={b.rpmStart} x2={b.rpmEnd}

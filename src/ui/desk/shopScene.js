@@ -30,11 +30,10 @@ const POSES = {
   // its WIDTH (`hfov`, degrees across): the stations from the dyno's car to the lift's fill
   // the phone's width, and the back wall and the floor in front of the desk fill its height,
   // whatever the phone's shape. Seen from straight above, the whole 16 m room had to fit
-  // the width, and left the phone's height half empty. It looks in along the room's diagonal
-  // from the front right, toward the back left corner, so the job board's wall (x = -8, the
-  // far left, and 8 m left of where a camera on the centre line sees) is in the picture and
-  // the long way through the room fills the phone's height.
-  bayTall: { pos: new THREE.Vector3(6.4, 13, 11.4), look: new THREE.Vector3(-2.7, 0.4, -0.6), fov: 60, hfov: 40 },
+  // the width, and left the phone's height half empty. On the room's centre line, so the shop
+  // sits in the middle of the screen. The left wall's job board is out of this picture: on an
+  // upright phone the board is an app (Desk.jsx), not a thing on the wall.
+  bayTall: { pos: new THREE.Vector3(0, 13, 10.6), look: new THREE.Vector3(0, 0.4, 0.5), fov: 60, hfov: 33 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart, the job board on the wall.
   dyno: { pos: new THREE.Vector3(-1.6, 2.2, 4.4), look: new THREE.Vector3(-4.2, 0.3, -0.8), fov: 48 },
@@ -507,6 +506,12 @@ export function buildShopScene(stage, init) {
   const floor = floorPlane(16, 14, W.floorShop, { y: 0 });
   floor.material = concreteFloor(16, 14);
   root.add(floor);
+  // The floor runs on past the room's open front, under the desk's side of the shop: from
+  // above on an upright phone the picture reaches past z = 7, and stopped there it showed
+  // the dark under the floor across the bottom of the screen.
+  const apron = floorPlane(16.6, 8, W.floorShop, { y: -0.002, z: 11 });
+  apron.material = concreteFloor(16.6, 8);
+  root.add(apron);
   // The shop, dressed: its frames, benches, tools, racking, jacks, the hoist (shopDetail.js).
   // None of it moves, so it is drawn as a few merged meshes, one per material.
   const dressing = new THREE.Group();
