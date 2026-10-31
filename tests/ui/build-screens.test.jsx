@@ -49,7 +49,7 @@ describe('EngineScreen', () => {
     );
     // Configuration comes straight from the store's default build, not a prop.
     expect(screen.getByRole('group', { name: 'Configuration' })).toBeTruthy();
-    expect(screen.getByText('Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.')).toBeTruthy();
+    expect(screen.getByText('Custom build: every value on the next stages is yours to set. Pick a factory engine from the list to start from a known-good configuration instead.')).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {
