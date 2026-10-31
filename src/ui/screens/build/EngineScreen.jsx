@@ -209,11 +209,11 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         {(build.assumed?.length ?? 0) > 0 && (
           <Note tone="warn">
             <b>Assumed, not entered:</b> {build.assumed.map((k) => ASSUMED_LABEL[k]?.(engineConfig) ?? k).join('; ')}.
-            {' '}These are typical values, not your engine&apos;s own. Set each below and this note goes away.
+            {' '}These are typical values, not your engine&apos;s own. Set each on its own stage and this note goes away.
           </Note>
         )}
-        {!presetId && (
-          <Note>Custom build — every value below is yours to set. Pick a real engine above to start from a known-good factory configuration instead.</Note>
+        {!presetId && !build.originPresetId && (
+          <Note>Custom build: every value on the next stages is yours to set. Pick a factory engine from the list to start from a known-good configuration instead.</Note>
         )}
         {presetPrompt && (
           <div className={styles.callout}>

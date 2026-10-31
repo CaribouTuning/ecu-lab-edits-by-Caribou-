@@ -124,6 +124,11 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
     <>
       <Panel tight className={styles.panel} data-tour="dyno-power">
         <div className={styles.chartLabel}>Power and torque against rpm</div>
+        {/* The key, in words and in the lines' own colours, above the chart where it is read. */}
+        <div className={styles.key}>
+          <span><i style={{ background: T.acc }} />Power, whp</span>
+          <span><i style={{ background: T.cyan }} />Torque, lb-ft</span>
+        </div>
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}

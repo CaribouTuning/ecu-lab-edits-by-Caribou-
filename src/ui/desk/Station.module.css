@@ -27,7 +27,7 @@
 /* The shop's computers run the same Mac in dark mode as the laptop (Desk.module.css
    .screen): the neutral tokens are the Mac's inside the screen, data colours are not. */
 .face[data-kind='monitor'] {
-  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   background: var(--bg); font-size: 13px;

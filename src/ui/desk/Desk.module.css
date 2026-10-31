@@ -84,7 +84,7 @@
   /* The software on the laptop is a Mac in dark mode with the Graphite accent: inside the
      screen the neutral tokens are the Mac's, so every app picks them up without knowing.
      (The laptop's body round it stays inked: see .lid.) Data colours are not remapped. */
-  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   position: relative; height: 100%;
@@ -383,7 +383,7 @@
 /* An app open on the phone is the same software as on the laptop, so it gets the same
    Apple dark-mode greys (see .screen). */
 .phoneApp {
-  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control);
+  --bg: var(--mac-window); --panel: var(--mac-box); --panel2: var(--mac-box); --panel3: var(--mac-control); --acc: var(--screen-acc); --acc-ink: var(--screen-acc-ink); --acc-bg: var(--screen-acc-bg); --acc-on: var(--screen-acc-on);
   --line: var(--mac-separator); --line-hi: var(--mac-control-hi); --pen: var(--mac-separator);
   --ink: var(--mac-label); --ink-soft: var(--mac-label); --ink2: var(--mac-label2); --ink3: var(--mac-label3);
   background: var(--bg);
@@ -417,3 +417,5 @@
   .next { padding: 3px 10px; }
   .nextGo { height: 24px; }
 }
+
+.taskBtn span { margin-left: 2px; font-size: var(--fs-sm); }

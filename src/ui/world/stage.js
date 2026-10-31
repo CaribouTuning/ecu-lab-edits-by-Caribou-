@@ -34,10 +34,10 @@ const mix = (a, b, t) => new THREE.Color(a).lerp(new THREE.Color(b), t);
 export function createStage(canvas, opts = {}) {
   // `real`: a room lit as one (the shop): smoothed edges, soft shadows, film-like tone
   // response, and no drawn outline over it.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !!opts.real, powerPreference: 'high-performance', alpha: false, preserveDrawingBuffer: !!opts.preserve });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !!opts.real, powerPreference: opts.real ? 'default' : 'high-performance', failIfMajorPerformanceCaveat: !!opts.hardwareOnly, alpha: false, preserveDrawingBuffer: !!opts.preserve });
   renderer.setPixelRatio(1);
   renderer.shadowMap.enabled = opts.shadows !== false;
-  renderer.shadowMap.type = opts.real ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+  renderer.shadowMap.type = opts.real ? THREE.PCFShadowMap : THREE.BasicShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = opts.real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
   renderer.toneMappingExposure = opts.real ? 0.85 : 1;
@@ -53,7 +53,7 @@ export function createStage(canvas, opts = {}) {
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(SKY.day.sun, SKY.day.sunPower);
   sun.castShadow = opts.shadows !== false;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(opts.real ? 1024 : 2048, opts.real ? 1024 : 2048);
   const sc = sun.shadow.camera;
   sc.near = 1;
   sc.far = 90;

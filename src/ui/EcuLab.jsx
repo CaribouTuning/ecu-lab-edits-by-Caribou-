@@ -1521,10 +1521,6 @@ export function EcuLabApp() {
           const keys = [];
           if (result) keys.push({ id: 'result', label: 'Curves' }, { id: 'live', label: 'Live' });
           if (!running) {
-            if (result) {
-              keys.push({ id: 've', label: 'VE' });
-              keys.push({ id: '3d', label: '3D' });
-            }
             for (const [id, label] of [['log', 'Pull log'], ['data', 'Data'], ['score', 'Score'], ['history', 'History']]) {
               if (!(id === 'history' ? (result || runs.length > 0) : result)) continue;
               if (!sectionAvailable(`dyno/${id}`, sectionFlags)) continue;
@@ -1532,7 +1528,7 @@ export function EcuLabApp() {
             }
           }
           const pick = (id) => {
-            if (id === 've' || id === '3d' || id === 'live') { setDynoExtra(id); return; }
+            if (id === 'live') { setDynoExtra(id); return; }
             setDynoExtra(null);
             goSection('dyno', id);
           };
@@ -1621,17 +1617,26 @@ export function EcuLabApp() {
                   />
                 )}
 
-                {result && !running && shown === 've' && (
-                  <VeCurve points={result.points} />
-                )}
-
-                {result && !running && shown === '3d' && (
-                  <TableSurface x={veAxes.rpm} y={[...veAxes.load].reverse()} z={[...ve].reverse()} lo={10} hi={130} xLabel="RPM" yLabel={veAxes.loadUnit} unit="%" decimals={0}
-                    title="Volumetric efficiency" xVar="rpm" yVar={veAxes.loadUnit === 'kPa' ? 'map' : null} />
-                )}
-
                 {result && !running && shown === 'data' && (
-                  <DataScreen />
+                  <>
+                    <DataScreen />
+                    {/* Every table the pull read, drawn as a surface, under the datalog. */}
+                    <div className={deskApps.dataTables}>
+                      <h3 className={deskApps.dataTablesHead}>Volumetric efficiency by rpm</h3>
+                      <VeCurve points={result.points} />
+                      {[
+                        ['Volumetric efficiency', ve, veAxes, 10, 130, '%', 0],
+                        ['Ignition timing', timing, (layout ?? layoutById(tune.layout)).timing, -5, 45, '°', 0],
+                        ['Air-fuel ratio', afr, (layout ?? layoutById(tune.layout)).afr, 9, 18, ':1', 1],
+                      ].map(([title, tbl, ax, lo, hi, unit, decimals]) => (
+                        <div key={title}>
+                          <h3 className={deskApps.dataTablesHead}>{title}, as a surface</h3>
+                          <TableSurface x={ax.rpm} y={[...ax.load].reverse()} z={[...tbl].reverse()} lo={lo} hi={hi} xLabel="RPM" yLabel={ax.loadUnit} unit={unit} decimals={decimals}
+                            title={title} xVar="rpm" yVar={ax.loadUnit === 'kPa' ? 'map' : null} />
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
 
                 {result && !running && shown === 'log' && (

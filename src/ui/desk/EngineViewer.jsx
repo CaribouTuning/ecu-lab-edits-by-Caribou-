@@ -13,6 +13,9 @@ import { useStage } from './useStage.js';
 
 import styles from './Desk.module.css';
 
+/** The size the camera is framed for: about a V8's block, metres. */
+const REF = { len: 1.15, hgt: 0.75 };
+
 /**
  * @param {object} props
  * @param {import('../world/models/engine.js').EngineSpec} props.spec
@@ -46,10 +49,11 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built' }) {
           engine = makeEngine(l.spec);
           engine.group.position.z = 0;
           turntable.add(engine.group);
-          const s = Math.max(engine.size.len, engine.size.wid);
+          // The same camera for every engine, framed for a large one, so a longer stroke or a
+          // wider bore is a bigger block on the turntable, not the same picture refitted.
           cam.fov = 34;
-          cam.position.set(0, engine.size.hgt * 0.9 + s * 0.55, s * 2.1);
-          cam.lookAt(0, engine.size.hgt * 0.4, 0);
+          cam.position.set(0, REF.hgt * 0.9 + REF.len * 0.55, REF.len * 2.1);
+          cam.lookAt(0, REF.hgt * 0.4, 0);
           cam.updateProjectionMatrix();
         }
         if (l.drag == null) l.yaw += dt * 0.35;
