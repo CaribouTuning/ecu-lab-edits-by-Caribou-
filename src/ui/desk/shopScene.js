@@ -24,9 +24,10 @@ import { makeDebris, makeFlash, makeSmoke } from '../world/models/damageFx.js';
 
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
-  // The same seat on a screen taller than wide (a phone held upright): further back and a
-  // little higher, so the dyno, the stands and the lift are all across a narrow picture.
-  deskTall: { pos: new THREE.Vector3(0, 3.4, 13.2), look: new THREE.Vector3(0, 0.1, -2.5), fov: 60 },
+  // A screen taller than wide (a phone held upright) cannot hold a room this wide from a seat,
+  // so it looks down into the room from a corner with the roof off: the whole garage, the dyno
+  // to the lift, down the length of the screen.
+  deskTall: { pos: new THREE.Vector3(5, 16, 11), look: new THREE.Vector3(0, 0, -0.5), fov: 60 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart, the job board on the wall.
   dyno: { pos: new THREE.Vector3(-1.6, 2.2, 4.4), look: new THREE.Vector3(-4.2, 0.3, -0.8), fov: 48 },
@@ -931,6 +932,14 @@ export function buildShopScene(stage, init) {
       const p = pose === 'dyno' || pose === 'stand' || pose === 'build' || pose === 'board' ? stationPose(pose)
           : (cam.aspect < 1 && POSES.deskTall) || POSES.desk;
       if (p === target) return;
+      // Looking down into the room from above its roof line: the roof and what hangs from it
+      // come off, as the lid of a model would.
+      const roofOn = p !== POSES.deskTall;
+      ceiling.visible = roofOn;
+      fixtures.visible = roofOn;
+      rafters.visible = roofOn;
+      buildStand.duct.visible = roofOn;
+      runStand.duct.visible = roofOn;
       from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
       target = p;
       blend = 0;
