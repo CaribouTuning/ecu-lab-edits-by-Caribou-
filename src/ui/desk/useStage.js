@@ -10,6 +10,7 @@
  * nothing in the app depends on the picture.
  */
 
+import { read3d, write3d } from './render3d.js';
 import { useEffect, useRef, useState } from 'react';
 
 import { createStage } from '../world/stage.js';
@@ -48,13 +49,23 @@ export function useStage(setup, opts = {}) {
     if (!canvas) return undefined;
     let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
+    // The lit shop only: a player who turned the 3D off, or a start that failed last time.
+    const choice = opts.real ? read3d() : 'on';
+    if (choice === 'off') { setFailed(true); return undefined; }
     try {
       // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
-      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false, real: !!opts.real });
+      // A software renderer (hardware acceleration off) would draw the shop at a crawl or
+      // black: ask for no context at all rather than a bad one, and the flat shop shows.
+      stage = createStage(canvas, { shadows: opts.shadows ?? false, sketch: true, hatch: opts.hatch ?? false, real: !!opts.real, hardwareOnly: !!opts.real && choice !== 'force' });
     } catch {
       setFailed(true);
       return undefined;
     }
+    // Whatever stops it drawing from here (a lost context, a shader that would not compile)
+    // is the same answer: the flat shop, and the 3D stays off until the player turns it on.
+    const giveUp = () => { if (opts.real) write3d('off'); setFailed(true); };
+    canvas.addEventListener('webglcontextlost', giveUp);
+    if (opts.real) stage.renderer.debug.onShaderError = giveUp;
     stageRef.current = stage;
     // Only the lit shop (`real`) is heavy enough to need it; the small engine views are not.
     const governor = createGovernor(opts.real ? savedRung() : 0);
@@ -81,6 +92,7 @@ export function useStage(setup, opts = {}) {
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      canvas.removeEventListener('webglcontextlost', giveUp);
       ro?.disconnect();
       scene.dispose?.();
       stage.dispose();

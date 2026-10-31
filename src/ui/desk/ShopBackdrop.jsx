@@ -104,7 +104,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
     const onDown = (/** @type {PointerEvent} */ e) => { down = [e.clientX, e.clientY]; };
     const onUp = (/** @type {PointerEvent} */ e) => {
       // A tap or a click, not the end of a drag.
-      if (live.current.mode !== 'bay' || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
+      if (live.current.mode !== 'bay' || live.current.moving || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
       const id = shop.pickAt(...ndc(e));
       if (id && (id !== 'board' || live.current.board)) live.current.onPick?.(id);
     };
@@ -187,9 +187,13 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
         shop.update(dt, l.rpm, l.dynoRpm);
         shop.camera.updateMatrixWorld();
         const moving = shop.moving();
+        // Nothing is a button until the camera has stopped: a tap that lands as the view
+        // swings is on whatever has just arrived under the finger.
+        l.moving = moving;
         for (const f of faces) {
           const on = PLACE[/** @type {keyof typeof PLACE} */ (f.name)] === l.mode;
           f.el.style.display = on ? '' : 'none';
+          f.el.style.pointerEvents = moving ? 'none' : 'auto';
           if (!on) continue;
           // The face's four corners on screen, and the box round them.
           let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
@@ -251,7 +255,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
               className={styles.spot}
               data-spot={h.id}
               data-next={h.id === nextSpot ? 'true' : undefined}
-              onClick={() => onPick(h.id)}
+              onClick={() => { if (!live.current.moving) onPick(h.id); }}
               title={h.hint}
             >
               <span className={`${styles.spotLabel} ink-frame`}>{h.id === 'laptop' && phone ? 'Pick up the phone' : h.label}</span>

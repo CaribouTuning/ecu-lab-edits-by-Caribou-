@@ -31,14 +31,12 @@
   background: transparent; cursor: pointer; touch-action: pan-y;
 }
 .range:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
-.range::-webkit-slider-runnable-track { height: 2px; border-radius: 1px; background: linear-gradient(to right, var(--ink) var(--pct), var(--ink3) var(--pct)); }
-.range::-moz-range-track { height: 2px; border-radius: 1px; background: var(--ink3); }
-.range::-moz-range-progress { height: 2px; background: var(--ink); }
-.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 8px; height: 22px; margin-top: -10px; border: 0; border-radius: 2px; background: var(--ink); }
-.range::-moz-range-thumb { width: 8px; height: 22px; border: 0; border-radius: 2px; background: var(--ink); }
-.slider[data-tone='warn'] .range::-webkit-slider-thumb { background: var(--warn); }
-.slider[data-tone='warn'] .range::-moz-range-thumb { background: var(--warn); }
-.slider[data-tone='warn'] .range::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--warn) var(--pct), var(--ink3) var(--pct)); }
+.range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--acc) var(--pct), var(--panel3) var(--pct)); }
+.range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--panel3); }
+.range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--acc); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin-top: -9px; border: 0; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 1px var(--line-hi), 0 2px 4px color-mix(in srgb, black 45%, transparent); }
+.range::-moz-range-thumb { width: 24px; height: 24px; border: 0; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 1px var(--line-hi), 0 2px 4px color-mix(in srgb, black 45%, transparent); }
+.slider[data-tone='warn'] .range::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--warn) var(--pct), var(--panel3) var(--pct)); }
 .slider[data-tone='warn'] .range::-moz-range-progress { background: var(--warn); }
 
 .rangeFoot { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--ink2); }

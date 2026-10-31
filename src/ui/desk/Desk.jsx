@@ -14,6 +14,7 @@
  * hands over the screen for it; this decides how it is framed.
  */
 
+import { read3d, write3d } from './render3d.js';
 import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
@@ -213,7 +214,13 @@ export function Desk({
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
-  const surfaceCtx = useMemo(() => ({ surfaces }), [surfaces]);
+  // A phone shows a station's screen full size, as the laptop shows an app: no faces laid on
+  // the 3D things (they are a thumb's width there).
+  const phone = usePhone();
+  const surfaceCtx = useMemo(() => ({ surfaces: phone ? null : surfaces }), [surfaces, phone]);
+  const [tourSpot, setTourSpot] = useState(/** @type {string|null} */ (null));
+  const [threeD, setThreeD] = useState(() => read3d() !== 'off');
+  const toggle3d = () => { write3d(threeD ? 'off' : 'force'); setThreeD(!threeD); };
   const portraitPhone = usePortraitPhone();
   const appInfo = DESK_APPS.find((a) => a.id === app) ?? (app === 'office' && portraitPhone ? JOBS_APP : undefined);
   const pick = (id) => {
@@ -224,16 +231,17 @@ export function Desk({
     else onDesktop();
   };
   const open = mode === 'desktop' || mode === 'app';
-  const scene = mode === 'page' ? (PAGE_SCENES[app ?? ''] ?? null) : null;
+  // A phone shows the station's screen full size, so the camera does not walk up to it.
+  const scene = mode === 'page' && !phone ? (PAGE_SCENES[app ?? ''] ?? null) : null;
   const flagged = notices.filter((n) => n.tone && n.tone !== 'ok').length;
   const apple = isApplePlatform();
-  const phone = usePhone();
 
   const settingsMenu = menu === 'settings' && (
     <div className={`${styles.flyout} ink-frame-lg`} data-side="right" role="menu" aria-label="Settings">
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onMenu?.(); }} aria-label="Main menu">Main menu</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
+      <button type="button" role="menuitem" aria-checked={threeD} onClick={() => { setMenu(null); toggle3d(); }}>{threeD ? 'Turn the 3D shop off' : 'Turn the 3D shop on'}</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onBay(); }}>{phone ? 'Put the phone down' : 'Shut the laptop'}</button>
     </div>
   );
@@ -326,9 +334,9 @@ export function Desk({
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={next && !next.here ? next.spot : null} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
+      <ShopBackdrop key={threeD ? '3d' : 'flat'} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
-      {mode === 'bay' && <FirstRun career={board} />}
+      {mode === 'bay' && <FirstRun career={board} onSpot={setTourSpot} />}
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (
@@ -373,6 +381,9 @@ export function Desk({
                 <span className={styles.menuLeft}>
                   <button type="button" className={styles.taskBtn} onClick={onDesktop} aria-label="Desktop" title="Desktop" tabIndex={open ? 0 : -1}>
                     <Home size={14} aria-hidden="true" />
+                  </button>
+                  <button type="button" className={styles.taskBtn} onClick={onBay} aria-label="Shut the laptop" title="Shut the laptop and look at the shop" tabIndex={open ? 0 : -1}>
+                    <ChevronLeft size={14} aria-hidden="true" /><span>Shop</span>
                   </button>
                   {/* The app in front, named in bold, as a Mac's menu bar does. */}
                   <span className={styles.menuApp}>ECU Lab</span>
