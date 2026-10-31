@@ -50,7 +50,7 @@ import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
 import { MessagesApp } from './desk/MessagesApp.jsx';
 import { advanceSaga, openChapter, unreadCount } from './career/story.js';
-import { Desk } from './desk/Desk.jsx';
+import { Desk, usePortraitPhone } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
@@ -184,6 +184,8 @@ export function EcuLabApp() {
   // Navigation lives in the URL, not in state: see src/ui/routing.js.
   const [route, navigate] = useRoute();
   const appView = route.view;
+  // An upright phone has CAREER's job board as an app; every other screen has it on the wall.
+  const portraitPhone = usePortraitPhone();
   const tab = route.tab;
   // The BUILD slice (hardware and ECU configuration), destructured so read sites below
   // use a bare `engineConfig` / `mods` / ...; writes go through `dispatch`.
@@ -1295,9 +1297,17 @@ export function EcuLabApp() {
           <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} onCourse={goCourse} />
         )}
         {appView === 'shop' && inCareer && (
-          <Station kind="board">
-            <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
-          </Station>
+          portraitPhone
+            ? (
+              <Station kind="board" flat app>
+                <Surface name="board" kind="board" label="Job board" inline><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
+              </Station>
+            )
+            : (
+              <Station kind="board">
+                <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
+              </Station>
+            )
         )}
         {appView === 'app' && inCareer && !career.working && (() => {
           const empty = (
@@ -1659,7 +1669,7 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? 'page' : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' || tab === 'build' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? (portraitPhone ? 'app' : 'page') : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' || tab === 'build' ? 'page' : 'app';
   // CAREER: the car you are working on is the one on the dyno, and another job's car (if a
   // lift holds one) is up on the lift. SANDBOX keeps the shop's own two.
   const lookOf = (jobId) => { const c = jobId ? jobById(jobId)?.customer : null; return c ? { body: c.body, color: c.color } : null; };

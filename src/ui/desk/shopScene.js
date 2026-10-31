@@ -6,8 +6,8 @@
  * rollers, a car is up on the lift on the right, and between them, nearer, the engine you
  * are building runs on its stand. The shop's sign is on the back wall, left of the door.
  *
- * Two camera poses: `desk`, sitting at the desk looking over the laptop, and `bay`, stood
- * up looking at the whole shop with the laptop shut. The scene glides between them.
+ * One camera for the shop floor, on every screen: `desk`, sitting at the desk looking over
+ * the laptop (or the phone). Shutting the laptop only changes the lid, not the view.
  * `anchors` are the points the shop view's buttons sit on.
  *
  * Coordinates, metres: x across the shop, y up, z toward you (the door is at z = -7).
@@ -24,17 +24,9 @@ import { makeDebris, makeFlash, makeSmoke } from '../world/models/damageFx.js';
 
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
-  bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
-  // The same, on a screen taller than wide (a phone held upright): above the front of the
-  // room, its ceiling and rafters lifted off, looking down and in at the floor. Framed by
-  // its WIDTH (`hfov`, degrees across): the stations from the dyno's car to the lift's fill
-  // the phone's width, and the back wall and the floor in front of the desk fill its height,
-  // whatever the phone's shape. Seen from straight above, the whole 16 m room had to fit
-  // the width, and left the phone's height half empty. It looks in along the room's diagonal
-  // from the front right, toward the back left corner, so the job board's wall (x = -8, the
-  // far left, and 8 m left of where a camera on the centre line sees) is in the picture and
-  // the long way through the room fills the phone's height.
-  bayTall: { pos: new THREE.Vector3(6.4, 13, 11.4), look: new THREE.Vector3(-2.7, 0.4, -0.6), fov: 60, hfov: 40 },
+  // The same seat on a screen taller than wide (a phone held upright): further back and a
+  // little higher, so the dyno, the stands and the lift are all across a narrow picture.
+  deskTall: { pos: new THREE.Vector3(0, 3.4, 13.2), look: new THREE.Vector3(0, 0.1, -2.5), fov: 60 },
   // Walked up to one thing: the car on the dyno with the dyno's computer cart in front of
   // it, the engine on its stand with its control cart, the job board on the wall.
   dyno: { pos: new THREE.Vector3(-1.6, 2.2, 4.4), look: new THREE.Vector3(-4.2, 0.3, -0.8), fov: 48 },
@@ -753,6 +745,8 @@ export function buildShopScene(stage, init) {
   };
   // Seen on a screen taller than wide, the board hangs the tall way (1.6 by 2.3 m), so its
   // tickets fill the phone rather than a strip across it.
+  let boardOn = true;
+  let ticketsOn = true;
   let boardTall = false;
   const shapeBoard = (tall) => {
     if (tall === boardTall) return;
@@ -935,14 +929,8 @@ export function buildShopScene(stage, init) {
       // The board is read square on, close enough to fill the screen. At the dyno or the
       // stand you stand at its cart, the whole of it in view: there is nothing to lean in to.
       const p = pose === 'dyno' || pose === 'stand' || pose === 'build' || pose === 'board' ? stationPose(pose)
-          : (cam.aspect < 1 && POSES[`${pose}Tall`]) || POSES[pose] || POSES.desk;
+          : (cam.aspect < 1 && POSES.deskTall) || POSES.desk;
       if (p === target) return;
-      ceiling.visible = p !== POSES.bayTall;
-      fixtures.visible = ceiling.visible;
-      rafters.visible = ceiling.visible;
-      // The extraction hoses hang from the ceiling too.
-      buildStand.duct.visible = ceiling.visible;
-      runStand.duct.visible = ceiling.visible;
       from.pos.copy(now.pos); from.look.copy(now.look); from.fov = now.fov;
       target = p;
       blend = 0;
@@ -958,7 +946,7 @@ export function buildShopScene(stage, init) {
      */
     pickAt(x, y) {
       ray.setFromCamera(new THREE.Vector2(x, y), cam);
-      const targets = [dynoCart.group, standCart.group, buildCart.group, buildStand.group, runStand.group, dyno, dynoCar?.group, whiteboard, tickets, desk].filter(Boolean);
+      const targets = [dynoCart.group, standCart.group, buildCart.group, buildStand.group, runStand.group, dyno, dynoCar?.group, ...(boardOn ? [whiteboard, tickets] : []), desk].filter(Boolean);
       const hit = ray.intersectObjects(/** @type {THREE.Object3D[]} */ (targets), true)[0];
       for (let o = hit?.object ?? null; o; o = o.parent) {
         if (o.userData.spot) return o.userData.spot;
@@ -974,7 +962,17 @@ export function buildShopScene(stage, init) {
     },
     surfaces,
     /** The painted tickets show unless the real ones are pinned over them. @param {boolean} on */
-    setTickets(on) { tickets.visible = on; },
+    setTickets(on) { ticketsOn = on; tickets.visible = on && boardOn; },
+    /**
+     * Whether the job board hangs on the wall. An upright phone has it as an app instead, so
+     * the wall is bare there, and it is not a thing to click.
+     * @param {boolean} on
+     */
+    setBoardOnWall(on) {
+      boardOn = on;
+      for (const o of [whiteboard, jobSign]) o.visible = on;
+      tickets.visible = on && ticketsOn;
+    },
     /**
      * What of the view the page leaves clear: a station is fitted into it.
      * @param {{top: number, bottom: number, left: number, right: number, w: number, h: number}} f pixels
@@ -1070,7 +1068,7 @@ export function buildShopScene(stage, init) {
       if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
       cam.lookAt(now.look);
       // The phone turned: frame the shop for its new shape.
-      const tall = POSES[`${lastPose}Tall`];
+      const tall = lastPose === 'desk' || lastPose === 'bay' ? POSES.deskTall : null;
       if (tall && (target === tall) !== (cam.aspect < 1)) api.setPose(/** @type {any} */ (lastPose));
       // Standing at a station or the board, and the screen changed shape: frame it again.
       if (target.exact && poseAspect !== cam.aspect) api.setPose(/** @type {any} */ (lastPose));

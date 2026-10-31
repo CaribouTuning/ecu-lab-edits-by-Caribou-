@@ -155,6 +155,8 @@ export const tokens = Object.freeze({
   appPhysicsLo: '#6a35e8',
   appMsgHi: '#6cf57f',
   appMsgLo: '#0bb82a',
+  appJobsHi: '#5fd4e8',
+  appJobsLo: '#0a8aa8',
   appSearchHi: '#8e8e98',
   appSearchLo: '#48484f',
   appShopHi: '#ffd84a',
