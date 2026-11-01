@@ -77,8 +77,8 @@
 
 .navLabel {
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.3px;
+  font-weight: 600;
+
 }
 
 /* ---------- The status strip ---------- */
@@ -130,14 +130,14 @@
 .brandMaker {
   color: var(--acc-ink);
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+
 }
 
 .brandProduct {
   font-size: var(--fs-sm);
-  font-weight: 800;
-  letter-spacing: 0.2px;
+  font-weight: 600;
+
 }
 
 /* 11px is off the font-size ramp deliberately: this is the header's build line moved
@@ -184,15 +184,15 @@
 .fieldLabel {
   color: var(--ink2);
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+
 }
 
 .fieldValue {
   color: var(--ink-soft);
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fieldValue[data-tone='ok'] { color: var(--ok); }
@@ -236,8 +236,8 @@
   flex-shrink: 0;
   color: var(--ok);
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+
 }
 
 .run::after {

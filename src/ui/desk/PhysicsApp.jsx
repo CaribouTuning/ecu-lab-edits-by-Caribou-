@@ -139,9 +139,17 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const maxVe = Math.max(...pts.map((q) => q.ve ?? 0), 1);
   const top = graph === 've' ? Math.max(110, maxVe * 1.1) : Math.max(maxT, maxH) * 1.1;
   const rpm0 = pts[0].rpm; const rpm1 = pts[pts.length - 1].rpm;
-  const cx = (rpm) => ((rpm - rpm0) / Math.max(1, rpm1 - rpm0)) * (CW - 20) + 10;
-  const cy = (v) => CH - 14 - (v / top) * (CH - 24);
+  // A plot area inside the frame, room left for the value axis and below for the speeds.
+  const PL = 44; const PR = 10; const PT = 12; const PB = 26;
+  const cx = (rpm) => PL + ((rpm - rpm0) / Math.max(1, rpm1 - rpm0)) * (CW - PL - PR);
+  const cy = (v) => CH - PB - (v / top) * (CH - PT - PB);
   const line = (k) => pts.map((q) => `${cx(q.rpm).toFixed(1)},${cy(q[k]).toFixed(1)}`).join(' ');
+  // Round steps for the gridlines: 1, 2 or 5 times a power of ten, about four of them.
+  const rough = top / 4; const mag = 10 ** Math.floor(Math.log10(rough));
+  const yStep = [1, 2, 5, 10].map((m) => m * mag).find((v) => v >= rough) ?? 10 * mag;
+  const yTicks = Array.from({ length: Math.floor(top / yStep) + 1 }, (_, k) => k * yStep);
+  const xTicks = [];
+  for (let r = Math.ceil(rpm0 / 1000) * 1000; r <= rpm1; r += 1000) xTicks.push(r);
 
   // The numbers each stage shows, worked from the point.
   const vCylL = derived?.perCylL ?? (derived?.displacementL ?? 3.5) / (derived?.cyl ?? 6);
@@ -159,7 +167,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const stroke = derived?.stroke ?? 0; const bore = derived?.bore ?? 0;
   const pistonSpeed = (2 * (stroke / 1000) * p.rpm) / 60;
   const buildRows = /** @type {[string, string, string][]} */ ([
-    ['Cylinders', `${derived?.cyl ?? '—'}, ${derived?.configuration ?? ''}`, 'how many slices the work is split into'],
+    ['Layout', `${derived?.configuration ?? '—'}`, `${derived?.cyl ?? '—'} cylinders: how many slices the work is split into`],
     ['Bore × stroke', `${f(bore, 1)} × ${f(stroke, 1)} mm`, `${f(vCylL * 1000, 0)} cc a cylinder, ${f(derived?.displacementL, 2)} L in all`],
     ['Compression', `${f(derived?.compression, 1)} : 1`, 'squeeze before the spark: more work per burn, closer to knock'],
     ['Cam duration', `${f(derived?.camDuration, 0)}°`, 'how long the valves stay open: shapes the VE curve'],
@@ -188,14 +196,13 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
       <div className={styles.physGrid}>
         <section className={styles.physPanel} aria-label="Your build in the model">
           <h3 className={styles.panelTitle}>Your build in the model</h3>
-          <div className={styles.buildSplit}>
-            <dl className={styles.buildList}>
-              {buildRows.map(([k, v, why]) => (
-                <div key={k} className={styles.buildRow2}><dt>{k}</dt><dd><b>{v}</b><span>{why}</span></dd></div>
-              ))}
-            </dl>
-            {spec ? <div className={styles.buildEngine}><EngineViewer spec={spec} rpm={p.rpm} label="Your engine as built" /></div> : null}
-          </div>
+          {/* The engine across the panel, framed whole at any width; the figures under it. */}
+          {spec ? <div className={styles.buildEngine}><EngineViewer spec={spec} rpm={p.rpm} label="Your engine as built" /></div> : null}
+          <dl className={styles.buildList}>
+            {buildRows.map(([k, v, why]) => (
+              <div key={k} className={styles.buildRow2}><dt>{k}</dt><dd><b>{v}</b><span>{why}</span></dd></div>
+            ))}
+          </dl>
         </section>
 
         <section className={styles.physPanel} aria-label="Graph">
@@ -211,26 +218,45 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
               title="Volumetric efficiency" xVar="rpm" yVar={veAxes.loadUnit === 'kPa' ? 'map' : null} />
           ) : (
             <svg viewBox={`0 0 ${CW} ${CH}`} className={styles.curveSvg} role="img" aria-label={graphLabel}>
+              {yTicks.map((v) => (
+                <g key={`y${v}`}>
+                  <line x1={PL} x2={CW - PR} y1={cy(v)} y2={cy(v)} className={v === 0 ? styles.plotAxis : styles.plotGrid} />
+                  <text x={PL - 6} y={cy(v) + 4} className={styles.plotTick} textAnchor="end">{v}</text>
+                </g>
+              ))}
+              {xTicks.map((r) => (
+                <text key={`x${r}`} x={cx(r)} y={CH - 8} className={styles.plotTick} textAnchor="middle">{r / 1000}k</text>
+              ))}
+              {/* The chosen speed: a neutral cursor, not the warning colour. */}
+              <line x1={cx(p.rpm)} y1={PT} x2={cx(p.rpm)} y2={CH - PB} className={styles.plotCursor} />
               {graph === 've' ? (
-                <polyline points={line('ve')} className={styles.artLine} />
+                <>
+                  <polyline points={line('ve')} className={styles.plotLine} />
+                  <circle cx={cx(p.rpm)} cy={cy(p.ve ?? 0)} r="4.5" className={styles.plotDot} />
+                </>
               ) : (
                 <>
                   {/* Power in the accent and torque in the second hue, as the dyno draws them. */}
-                  <polyline points={line('torque')} className={styles.artLine2} />
-                  <polyline points={line('hp')} className={styles.artLine} />
-                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="9" className={styles.artDotAcc} />
+                  <polyline points={line('torque')} className={styles.plotLine2} />
+                  <polyline points={line('hp')} className={styles.plotLine} />
+                  <circle cx={cx(p.rpm)} cy={cy(p.torque)} r="4.5" className={styles.plotDot2} />
+                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="4.5" className={styles.plotDot} />
                 </>
               )}
-              {graph === 've' && <circle cx={cx(p.rpm)} cy={cy(p.ve ?? 0)} r="9" className={styles.artDot} />}
-              <line x1={cx(p.rpm)} y1={6} x2={cx(p.rpm)} y2={CH - 14} className={styles.artWarn} />
-              <line x1={0} y1={CH - 14} x2={CW} y2={CH - 14} className={styles.artAxis} />
-              {graph === 've'
-                ? <text x={14} y={24} className={styles.curveText}>VE (%)</text>
-                : <><text x={14} y={24} className={styles.curveTextAcc}>power (hp)</text><text x={120} y={24} className={styles.curveText2}>torque (lb-ft)</text></>}
-              <text x={CW - 40} y={CH - 22} className={styles.curveText}>RPM</text>
             </svg>
           )}
-          <div className={styles.curveNums}>{p.rpm} rpm: {f(p.hp, 0)} hp, {f(p.torque, 0)} lb-ft, VE {f(p.ve, 0)} %</div>
+          <div className={styles.plotKey}>
+            {graph === 've'
+              ? <span><i className={styles.keyAcc} aria-hidden="true" />VE, %</span>
+              : <><span><i className={styles.keyAcc} aria-hidden="true" />Power, hp</span><span><i className={styles.key2} aria-hidden="true" />Torque, lb-ft</span></>}
+            <span className={styles.plotUnit}>engine speed, rpm</span>
+          </div>
+          <dl className={styles.readout}>
+            <div><dt>Speed</dt><dd>{p.rpm.toLocaleString('en-US')} <small>rpm</small></dd></div>
+            <div><dt>Power</dt><dd>{f(p.hp, 0)} <small>hp</small></dd></div>
+            <div><dt>Torque</dt><dd>{f(p.torque, 0)} <small>lb-ft</small></dd></div>
+            <div><dt>VE</dt><dd>{f(p.ve, 0)} <small>%</small></dd></div>
+          </dl>
         </section>
 
         <section className={styles.physPanel} aria-label="The raw physics model">

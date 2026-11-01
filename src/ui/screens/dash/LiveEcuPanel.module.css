@@ -34,8 +34,8 @@
   gap: 6px;
   margin: var(--sp-lg) 0 var(--sp-sm);
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+
   color: var(--ink2);
 }
 
@@ -84,7 +84,7 @@
 
 .chartNow {
   float: right;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 

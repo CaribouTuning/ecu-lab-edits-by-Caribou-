@@ -40,6 +40,9 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
     stage.scene.add(turntable);
     /** @type {ReturnType<typeof makeEngine>|null} */
     let engine = null;
+    /** @type {{len: number, wid: number, hgt: number}|null} */
+    let frame = null;
+    let aspect = 0;
     const cam = stage.camera;
     return {
       update(dt) {
@@ -50,15 +53,28 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
           engine = makeEngine(l.spec);
           engine.group.position.z = 0;
           turntable.add(engine.group);
-          // The same camera for every engine, framed for a large one, so a longer stroke or a
+          // The same frame for every engine, sized for a large one, so a longer stroke or a
           // wider bore is a bigger block on the turntable, not the same picture refitted. Only
-          // a block bigger than that (a long six at the top of the bore range) pulls it back,
-          // so the turntable never swings an end out of the picture.
-          const len = Math.max(REF.len, engine.size.len);
-          const hgt = Math.max(REF.hgt, engine.size.hgt);
+          // a block bigger than that (a long six at the top of the bore range) widens it.
+          frame = {
+            len: Math.max(REF.len, engine.size.len), wid: Math.max(0.6, engine.size.wid), hgt: Math.max(REF.hgt, engine.size.hgt),
+          };
+          aspect = 0;
+        }
+        // Fitted to the box as it is now, wide or tall: far enough back that the block's
+        // height fits the vertical view and its turning length (the turntable swings it
+        // through its diagonal) fits the horizontal one. A narrow box on a phone used to
+        // crop the engine to a slice of its middle.
+        if (frame && cam.aspect !== aspect) {
+          aspect = cam.aspect;
+          const vHalf = (34 / 2) * (Math.PI / 180);
+          const hHalf = Math.atan(Math.tan(vHalf) * aspect);
+          const reach = Math.hypot(frame.len, frame.wid) / 2;
+          const dist = Math.max((frame.hgt * 0.75) / Math.tan(vHalf), (reach * 1.08) / Math.tan(hHalf));
+          const dir = new THREE.Vector3(0, 0.42, 1).normalize();
           cam.fov = 34;
-          cam.position.set(0, hgt * 0.9 + len * 0.55, len * 2.1);
-          cam.lookAt(0, hgt * 0.4, 0);
+          cam.position.set(dir.x * dist, frame.hgt * 0.4 + dir.y * dist, dir.z * dist);
+          cam.lookAt(0, frame.hgt * 0.4, 0);
           cam.updateProjectionMatrix();
         }
         if (l.drag == null) l.yaw += dt * 0.35;

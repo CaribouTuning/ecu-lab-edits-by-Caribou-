@@ -1,0 +1,46 @@
+/* The page picker: shown only where a parent's stylesheet lets it (a phone); a sidebar or
+   tabs do the job wherever there is room. */
+.picker { position: relative; }
+
+.button {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px;
+  border: 0; border-bottom: 1px solid var(--line); background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: var(--fs-base); font-weight: 600; text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.button:focus-visible, .row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.button > svg:first-child { flex: none; color: var(--acc); }
+.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.more {
+  flex: none; padding: 1px 7px; border-radius: 9px; background: var(--warn-bg); color: var(--warn-ink);
+  font-size: var(--fs-xs); font-weight: 600;
+}
+.all { flex: none; font-size: var(--fs-sm); font-weight: 500; color: var(--acc-ink); }
+.chev { flex: none; color: var(--acc-ink); transition: transform 0.16s ease; }
+.chev[data-open] { transform: rotate(180deg); }
+
+/* The list drops over the page, below the button: every page at once, one tap each. */
+.list {
+  position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin: 0; padding: 4px 0;
+  list-style: none; background: var(--panel); border-bottom: 1px solid var(--line-hi);
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--bg) 70%, transparent);
+  max-height: min(70vh, 520px); overflow-y: auto; overscroll-behavior: contain;
+  animation: drop 0.14s ease-out;
+}
+@keyframes drop { from { opacity: 0; transform: translateY(-4px); } }
+.row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 46px; padding: 0 16px;
+  border: 0; background: transparent; color: var(--ink); font-family: var(--sans); font-size: var(--fs-base);
+  text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.row > svg:first-child { flex: none; color: var(--ink2); }
+.row:active { background: var(--panel3); }
+.row[aria-current='page'] { color: var(--acc-ink); font-weight: 600; }
+.row[aria-current='page'] > svg:first-child { color: var(--acc); }
+.rowName { flex: 1; min-width: 0; }
+.flag {
+  flex: none; min-width: 20px; padding: 0 6px; border-radius: 9px; background: var(--warn-bg); color: var(--warn-ink);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.check { flex: none; color: var(--acc); }
+@media (prefers-reduced-motion: reduce) { .list { animation: none; } .chev { transition: none; } }

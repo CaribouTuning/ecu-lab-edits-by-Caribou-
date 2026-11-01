@@ -102,13 +102,13 @@
 
 .read dt {
   font-size: var(--fs-micro);
-  letter-spacing: 0.06em;
+
   color: var(--ink2);
 }
 
 .read dd {
   margin: 0;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-sm);
   font-weight: 700;
   color: var(--ink);

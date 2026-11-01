@@ -56,8 +56,8 @@
 
 .eventImpact {
   font-size: 11px;
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--cyan);
   flex-shrink: 0;
 }
@@ -100,8 +100,8 @@
   background: var(--panel);
   color: var(--acc-ink);
   font-size: var(--fs-xs);
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+
   text-decoration: none;
 }
 .eventLink:hover { border-color: var(--acc); }

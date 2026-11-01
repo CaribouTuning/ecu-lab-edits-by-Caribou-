@@ -20,7 +20,7 @@
 /* The wordmark as the status strip sets it: the maker small over the program. */
 .mark { display: flex; flex-direction: column; font-size: var(--fs-base); font-weight: 700; line-height: 1.15; }
 .mark small { font-size: var(--fs-xs); font-weight: 700; color: var(--ink2); }
-.version { font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
+.version { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); color: var(--ink2); }
 
 /* ---------- the page: who we are on the left, where to go on the right ---------- */
 .body {

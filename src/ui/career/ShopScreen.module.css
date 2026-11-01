@@ -19,12 +19,12 @@
 }
 
 .brand { display: flex; flex-direction: column; margin-right: auto; }
-.brandMaker { font-size: var(--fs-micro); font-weight: 800; color: var(--acc-ink); }
-.brandName { font-size: var(--fs-md); font-weight: 800; }
+.brandMaker { font-size: var(--fs-micro); font-weight: 600; color: var(--acc-ink); }
+.brandName { font-size: var(--fs-md); font-weight: 600; }
 
-.stats { display: flex; flex-wrap: wrap; gap: var(--sp-sm) var(--sp-lg); font-family: var(--mono); font-size: var(--fs-sm); }
+.stats { display: flex; flex-wrap: wrap; gap: var(--sp-sm) var(--sp-lg); font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
 .stat { display: inline-flex; align-items: baseline; gap: 5px; }
-.statKey { font-family: var(--sans); font-size: var(--fs-micro); font-weight: 800; color: var(--ink2); }
+.statKey { font-family: var(--sans); font-size: var(--fs-micro); font-weight: 600; color: var(--ink2); }
 
 .sceneWrap { max-width: var(--content-max); margin: 0 auto; padding: var(--sp-md) var(--sp-xl) 0; }
 
@@ -50,7 +50,7 @@
   color: var(--ink2);
   font: inherit;
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -100,7 +100,7 @@
 .card[data-tone] { grid-column: 1 / -1; }
 .card[data-owned='true'] { opacity: 0.8; }
 
-.cardTag { font-size: var(--fs-micro); font-weight: 800; color: var(--ink2); }
+.cardTag { font-size: var(--fs-micro); font-weight: 600; color: var(--ink2); }
 .card[data-tone='ok'] .cardTag { color: var(--ok-ink); }
 .card[data-tone='warn'] .cardTag { color: var(--warn-ink); }
 .card[data-tone='danger'] .cardTag { color: var(--danger-ink); }
@@ -116,10 +116,10 @@
 .checks { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
 .checks li { display: flex; gap: var(--sp-sm); line-height: 1.45; }
 .checks b { font-weight: 700; }
-.mark { width: 1em; flex-shrink: 0; font-weight: 800; }
+.mark { width: 1em; flex-shrink: 0; font-weight: 600; }
 .checks li[data-pass='true'] .mark { color: var(--ok); }
 .checks li[data-pass='false'] .mark { color: var(--danger); }
-.measured { display: block; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
+.measured { display: block; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); color: var(--ink2); }
 .how { display: block; margin-top: 2px; font-size: var(--fs-xs); line-height: 1.45; color: var(--warn-ink); }
 
 .payout { display: flex; flex-wrap: wrap; gap: var(--sp-lg); font-size: var(--fs-base); }

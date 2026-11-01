@@ -16,9 +16,9 @@
 
 .value {
   margin-top: 3px;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-lg);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink);
 }
 

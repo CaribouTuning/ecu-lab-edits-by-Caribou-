@@ -7,28 +7,35 @@
 .sideBody { min-width: 0; padding: 14px 16px; }
 
 /* ---------- Physics: four panels, as drawn ---------- */
-.physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; align-items: start; }
 @media (max-width: 900px) { .physGrid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .physGrid > .physPanel:first-child { border-top: 0; padding-top: 0; } }
 .physPanel {
-  /* A group box: a hairline edge, as the rest of the software draws one. */
-  min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--panel);
+  /* A section, not a card: a rule above it and its title. Four identical boxes side by
+     side read as a template; the rule says where one subject ends and the next starts. */
+  min-width: 0; padding: 12px 0 4px; border-top: 1px solid var(--line-hi);
 }
 .panelHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.panelTitle { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.panelTitle { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink); }
 .panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
 .graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
 .graphBtns button {
   min-width: 46px; padding: 4px 10px; border: 0; border-radius: 6px; background: var(--mac-control);
   color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer;
 }
-.buildSplit { display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: start; }
-.buildList { margin: 0; display: flex; flex-direction: column; gap: 7px; }
-.buildRow2 { display: grid; grid-template-columns: 104px 1fr; gap: 8px; font-size: var(--fs-sm); }
+.buildEngine { margin: 0 0 10px; }
+.buildEngine > div { height: clamp(150px, 22vw, 200px); }
+.buildList { margin: 0; display: flex; flex-direction: column; }
+/* A spec sheet: the name, the figure, then what it does, ruled between rows. */
+.buildRow2 {
+  display: grid; grid-template-columns: 112px 1fr; gap: 12px; padding: 7px 0;
+  border-top: 1px solid var(--line); font-size: var(--fs-sm); line-height: 1.4;
+}
+.buildRow2:first-child { border-top: 0; }
 .buildRow2 dt { color: var(--ink2); }
-.buildRow2 dd { margin: 0; display: flex; flex-direction: column; }
-.buildRow2 dd b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
-.buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); line-height: 1.4; }
+.buildRow2 dd { margin: 0; display: flex; flex-direction: column; gap: 1px; }
+.buildRow2 dd b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); }
 .cylArt { width: 100%; height: auto; }
 .piston { animation: piston 1s ease-in-out infinite alternate; }
 @keyframes piston { to { transform: translateY(var(--travel)); } }
@@ -44,14 +51,34 @@
 @keyframes strokeOn { 0% { background: var(--acc-bg); border-color: var(--acc); } 25% { background: transparent; border-color: var(--line-hi); } }
 @media (prefers-reduced-motion: reduce) { .piston, .strokeStep { animation: none; } }
 @media (max-width: 560px) {
-  .buildSplit { grid-template-columns: 1fr 84px; }
-  .buildRow2 { grid-template-columns: 1fr; gap: 0; }
+  .buildRow2 { grid-template-columns: 96px 1fr; gap: 10px; }
   .strokes { grid-template-columns: repeat(2, 1fr); }
 }
 .curveSvg { display: block; width: 100%; height: auto; max-height: 240px; }
 .curveSvg path, .curveSvg polyline, .art path, .art rect, .art line { filter: url(#hand-jitter); }
 .rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
-.curveNums { font-family: var(--mono); font-size: var(--fs-sm); color: var(--ink2); }
+.curveNums { font-size: var(--fs-sm); color: var(--ink2); font-variant-numeric: tabular-nums; }
+/* The Physics graph: an instrument plot, gridlines and values on the axes, no hand jitter. */
+.plotGrid { stroke: var(--line); stroke-width: 1; }
+.plotAxis { stroke: var(--line-hi); stroke-width: 1; }
+.plotTick { fill: var(--ink2); font-family: var(--sans); font-size: 11px; font-variant-numeric: tabular-nums; }
+.plotCursor { stroke: var(--ink2); stroke-width: 1; stroke-dasharray: 3 3; }
+.plotLine { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; }
+.plotLine2 { fill: none; stroke: var(--data2); stroke-width: 2; stroke-linejoin: round; }
+.plotDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
+.plotDot2 { fill: var(--data2); stroke: var(--bg); stroke-width: 2; }
+.plotKey { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin-top: 6px; font-size: var(--fs-xs); color: var(--ink2); }
+.plotKey span { display: inline-flex; align-items: center; gap: 6px; }
+.plotKey i { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+.keyAcc { background: var(--acc); }
+.key2 { background: var(--data2); }
+.plotUnit { margin-left: auto; }
+/* The values at the chosen speed: a row of figures, each with its name above. */
+.readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
+.readout div { min-width: 0; }
+.readout dt { font-size: var(--fs-xs); color: var(--ink2); }
+.readout dd { margin: 2px 0 0; font-size: 17px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.readout small { font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }
 /* A stage of the raw model: a row that opens. */
 .stage { border-top: 1px solid var(--line); }
 .stage:first-of-type { border-top: 0; }
@@ -60,7 +87,7 @@
   font-size: var(--fs-base); font-weight: 700;
 }
 .stageTitle::-webkit-details-marker { display: none; }
-.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink2); font-weight: 800; }
+.stageTitle::after { content: '+'; margin-left: auto; color: var(--ink2); font-weight: 600; }
 .stage[open] > .stageTitle::after { content: '−'; }
 .stageBody { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; padding: 2px 0 12px; }
 @media (max-width: 560px) { .stageBody { grid-template-columns: 1fr; } .art { max-height: 140px; } }
@@ -77,7 +104,7 @@
 }
 .nums { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); }
 .nums dt { color: var(--ink2); }
-.nums dd { margin: 0; font-family: var(--mono); color: var(--ink); }
+.nums dd { margin: 0; font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
 /* The pictures' strokes and fills, from the theme. */
 .artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
 .artLine2 { fill: none; stroke: var(--data2); stroke-width: 2.2; }
@@ -105,6 +132,8 @@
 }
 .sideHead { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--mac-label3); }
 .tuneTabs { display: flex; flex-direction: column; gap: 1px; }
+/* The phone's page picker (PagePicker): hidden wherever the sidebar has room. */
+.tunePicker { display: none; }
 .tuneTab {
   display: flex; align-items: center; gap: 7px; width: 100%; height: 26px; padding: 0 8px;
   border: 0; border-radius: 6px; background: transparent; color: var(--mac-label);
@@ -131,6 +160,10 @@
   .tuneLayout { grid-template-columns: minmax(0, 1fr); align-content: start; }
   .tuneSidebar { position: static; flex-direction: column; align-items: stretch; gap: 0; padding: 0; border-right: 0; border-bottom: 1px solid var(--mac-separator); }
   .sideHead { display: none; }
+  .tunePicker { display: block; }
+  /* TUNE's pages are too many for a row of tabs: the picker above lists them. (Learn's four
+     shelves still fit as tabs.) */
+  .tuneTabsWide { display: none !important; }
   .tuneTabs {
     flex-direction: row; flex-wrap: nowrap; gap: 0; overflow-x: auto; overscroll-behavior-x: contain;
     scrollbar-width: none; border-bottom: 1px solid var(--line); padding: 0 6px;
@@ -150,7 +183,7 @@
 /* ---------- Physics: the engine cutaway ---------- */
 .cutWrap { display: flex; flex-direction: column; gap: 10px; }
 .strokeBar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.strokePill { padding: 5px 4px; text-align: center; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.04em; color: var(--ink2); border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
+.strokePill { padding: 5px 4px; text-align: center; font-size: var(--fs-xs); font-weight: 600; color: var(--ink2); border: 1.5px solid var(--line-hi); border-radius: var(--hand-c); }
 .strokePill[data-on] { background: var(--acc); color: var(--acc-on); border-color: var(--acc); }
 .cutSplit { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
 .cutSvg { width: 100%; height: auto; max-height: 560px; background: var(--bg); border-radius: var(--r-md); }
@@ -193,16 +226,15 @@
 .cutArrow { fill: var(--acc-ink); }
 .cutLabel { fill: var(--ink); font-size: 10.5px; font-family: var(--sans); font-weight: 600; letter-spacing: 0.02em; }
 .physControls {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--panel);
+  /* The two inputs every panel below follows: a band across the top, not another card. */
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; margin: -16px -16px 18px; padding: 14px 16px;
+  background: var(--panel);
 }
 @media (max-width: 700px) { .physControls { grid-template-columns: 1fr; } }
 .ctl { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); color: var(--ink2); }
-.ctl b { color: var(--ink); font-family: var(--mono); }
+.ctl b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ctl input { accent-color: var(--acc); width: 100%; }
 .ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink2); }
-.buildEngine { min-height: 0; }
-.buildEngine > div { height: 170px; }
 
 /* ---------- CAREER: Pops's messages, as the phone's Messages and Mail draw them ---------- */
 .msgs { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; min-height: 100%; background: var(--bg); font-family: var(--sans); }
@@ -293,4 +325,4 @@
 
 /* The dyno's Data page: the datalog, then the tables the pull read. */
 .dataTables { display: flex; flex-direction: column; gap: var(--sp-lg); padding-top: var(--sp-lg); }
-.dataTablesHead { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink2); }
+.dataTablesHead { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }

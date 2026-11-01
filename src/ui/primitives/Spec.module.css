@@ -9,7 +9,7 @@
 .groupHead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .groupHead::after { content: ''; order: 1; flex: 1; height: 1px; background: var(--line-hi); }
 .groupTitle { order: 0; margin: 0; font-size: 12px; font-weight: 700; color: var(--ink2); }
-.groupAside { order: 2; font-family: var(--mono); font-size: 11px; color: var(--ink2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.groupAside { order: 2; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink2); white-space: nowrap; }
 .groupBody { display: flex; flex-direction: column; gap: 16px; }
 
 /* ---- a figure: name left, value right ---- */
@@ -20,7 +20,7 @@
 .field[data-tone='warn'] .fieldAside, .slider[data-tone='warn'] .fieldAside { color: var(--warn-ink); }
 .slider .fieldLabel { flex: none; }
 .slider .fieldAside { text-align: left; }
-.value { margin-left: auto; font-family: var(--mono); font-size: 20px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.value { margin-left: auto; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 600; line-height: 1; color: var(--ink); white-space: nowrap; }
 .slider[data-tone='warn'] .value { color: var(--warn-ink); }
 .unit { font-size: 11.5px; font-weight: 500; color: var(--ink2); white-space: pre; }
 
@@ -39,7 +39,7 @@
 .slider[data-tone='warn'] .range::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--warn) var(--pct), var(--panel3) var(--pct)); }
 .slider[data-tone='warn'] .range::-moz-range-progress { background: var(--warn); }
 
-.rangeFoot { display: flex; justify-content: space-between; gap: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--ink2); }
+.rangeFoot { display: flex; justify-content: space-between; gap: 8px; font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 10.5px; color: var(--ink2); }
 .stock { color: var(--ink-soft); }
 
 /* ---- known facts: a ruled table ---- */
@@ -47,7 +47,7 @@
 .tableRow { display: grid; grid-template-columns: minmax(96px, 34%) 1fr; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .tableRow dt { font-size: 12.5px; color: var(--ink2); }
 .tableRow dd { margin: 0; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.tableValue { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tableValue { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; color: var(--ink); }
 .tableRow small { font-size: 11.5px; color: var(--ink2); line-height: 1.4; }
 
 /* ---- a figure toward its limit ---- */

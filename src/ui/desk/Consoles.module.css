@@ -23,7 +23,7 @@
   background: var(--bg); border: 1px solid var(--line);
 }
 .readout, .lever, .bigButton { flex: none; }
-.readout b { font-family: var(--mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+.readout b { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; min-width: 4ch; text-align: right; }
 .readout span { color: var(--ink2); font-size: var(--fs-sm); }
 
 /* A big round button: the cap, and what it does under it. */

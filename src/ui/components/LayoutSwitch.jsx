@@ -80,7 +80,7 @@ export function LayoutSwitch() {
         />
       )}
       <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
-        {active.ve.rpm.length} × {active.ve.load.length} · {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm · {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
+        {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm by {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa, {active.ve.rpm.length} × {active.ve.load.length} cells
       </span>
     </div>
     </>

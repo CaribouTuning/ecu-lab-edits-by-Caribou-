@@ -11,7 +11,7 @@
  * aria-controls and inert (issue 81).
  */
 
-import { ChevronDown, Info } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import React, { useContext, useId, useState } from 'react';
 
 
@@ -35,16 +35,16 @@ export function ExpandableInfo({ title, children, lazy = false }) {
   // the control it explains, opened when wanted, not a full-width bar between every two.
   const quiet = useContext(BuildBenchMode);
   return (
-    <div style={quiet ? { margin: '0 0 2px' } : { margin: '10px 0', border: `1px solid var(--line)`, borderRadius: 10, overflow: 'hidden', background: 'var(--panel)' }}>
+    // A ruled row, as a contents list draws one, not a card: a stack of these is a list of
+    // articles, and a stack of identical rounded boxes read as a template.
+    <div style={quiet ? { margin: '0 0 2px' } : { borderBottom: '1px solid var(--line)' }}>
       <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={quiet
         // On the build bench: a plain link to the explanation, no icon and no chevron. One of
         // these sits under many controls, and an icon on each made a column of identical rows.
         ? { display: 'inline-block', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink2)', fontSize: 12, fontWeight: 500, textAlign: 'left', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }
-        : { width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 13px', background: 'none', border: 'none' }}>
+        : { width: '100%', minHeight: 44, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 2px', background: 'none', border: 'none', cursor: 'pointer' }}>
         {quiet ? title : (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 9, color: 'var(--ink)', fontSize: 12.5, fontWeight: 700, textAlign: 'left' }}>
-            <Info size={14} style={{ color: 'var(--acc)', flexShrink: 0 }} />{title}
-          </span>
+          <span style={{ color: 'var(--ink)', fontSize: 13.5, fontWeight: 600, textAlign: 'left', lineHeight: 1.35 }}>{title}</span>
         )}
         {!quiet && <ChevronDown aria-hidden="true" size={15} style={{ color: 'var(--ink2)', flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />}
       </button>
@@ -54,7 +54,7 @@ export function ExpandableInfo({ title, children, lazy = false }) {
       {/* inert while shut, as in BuildSection. */}
       <div id={bodyId} {...inertWhen(!open)} style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0, transition: 'grid-template-rows .3s ease, opacity .2s ease' }}>
         <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          <div style={quiet ? { margin: '6px 0 8px', padding: '2px 0 2px 12px', borderLeft: `2px solid var(--line-hi)`, fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.65 } : { padding: '0 13px 13px', fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.65 }}>{opened ? children : null}</div>
+          <div style={quiet ? { margin: '6px 0 8px', padding: '2px 0 2px 12px', borderLeft: `2px solid var(--line-hi)`, fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.65 } : { padding: '0 2px 16px', maxWidth: '72ch', fontSize: 13, color: 'var(--ink2)', lineHeight: 1.65 }}>{opened ? children : null}</div>
         </div>
       </div>
     </div>

@@ -22,7 +22,7 @@ const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 const unit01 = (v) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
 
 /**
- * @typedef {{label: string, value: string, unit?: string, pct: number, tone?: 'ok'|'warn'|'danger'|'acc'}} Meter
+ * @typedef {{label: string, value: string, unit?: string, pct: number, tone?: 'ok'|'warn'|'danger'|'acc', centred?: boolean}} Meter
  */
 
 /**
@@ -59,11 +59,17 @@ export function BarGraph({ rpm, fullScaleRpm, redline, throttle, cut = false, me
 }
 
 /** @param {Meter & {big?: boolean}} props */
-function Bar({ label, value, unit = '', pct, tone = 'acc', big = false }) {
+function Bar({ label, value, unit = '', pct, tone = 'acc', big = false, centred = false }) {
   return (
     <div className={styles.meter} data-big={big ? 'true' : undefined}>
       <div className={styles.meterHead}><span>{label}</span><b>{value}<small>{unit}</small></b></div>
-      <div className={styles.track}><div className={styles.fill} data-tone={tone} style={{ width: `${unit01(pct) * 100}%` }} /></div>
+      {/* A value that goes either way (a fuel trim) grows from a zero in the middle: drawn
+          from the left, a trim of 0.0% was a bar half full. */}
+      <div className={styles.track} data-centred={centred || undefined}>
+        <div className={styles.fill} data-tone={tone} style={centred
+          ? { marginLeft: `${Math.min(0.5, unit01(pct)) * 100}%`, width: `${Math.abs(unit01(pct) - 0.5) * 100}%` }
+          : { width: `${unit01(pct) * 100}%` }} />
+      </div>
     </div>
   );
 }
@@ -90,7 +96,7 @@ export function LiveBars({ fullScaleRpm, redline }) {
     { label: 'Injector duty', value: f(duty, 0), unit: '%', pct: duty / 100, tone: duty > 90 ? 'danger' : 'acc' },
     { label: 'Coolant', value: f(live.sensedCoolant, 0), unit: ' °C', pct: live.sensedCoolant / 120, tone: live.sensedCoolant > 105 ? 'danger' : live.sensedCoolant < 80 ? 'warn' : 'ok' },
     { label: 'IAT', value: f(live.sensedIat, 0), unit: ' °C', pct: live.sensedIat / 90, tone: live.sensedIat > 65 ? 'danger' : 'acc' },
-    { label: 'Fuel trim', value: `${live.stft > 0 ? '+' : ''}${f(live.stft, 1)}`, unit: '%', pct: (live.stft + 25) / 50, tone: Math.abs(live.stft) > 15 ? 'danger' : Math.abs(live.stft) > 8 ? 'warn' : 'ok' },
+    { label: 'Fuel trim', value: `${live.stft > 0 ? '+' : ''}${f(live.stft, 1)}`, unit: '%', pct: (live.stft + 25) / 50, centred: true, tone: Math.abs(live.stft) > 15 ? 'danger' : Math.abs(live.stft) > 8 ? 'warn' : 'ok' },
   ];
   return (
     <>
