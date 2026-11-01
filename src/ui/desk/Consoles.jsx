@@ -7,7 +7,6 @@
  * button, a lever you hold open. The numbers on them are what the machine is reading.
  */
 
-import { Play, Square } from 'lucide-react';
 import React from 'react';
 
 import { clamp } from '../../sim/index.js';
@@ -55,8 +54,8 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
       <div className={styles.readout} role="status" aria-label="Dyno engine speed">
         <b>{Math.round(rpm)}</b><span>rpm</span>
       </div>
-      <button type="button" className={styles.bigButton} data-tone="go" onClick={onRun} disabled={running || failed}>
-        <span className={styles.cap} aria-hidden="true">{!running && !failed && <Play size={22} fill="currentColor" />}</span>
+      <button type="button" className={styles.bigButton} data-tone="go" data-busy={running || undefined} onClick={onRun} disabled={running || failed}>
+        <span className={styles.cap} aria-hidden="true" />
         <span className={styles.bigLabel}>{label}</span>
       </button>
     </div>
@@ -79,7 +78,7 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
   return (
     <div className={styles.plate} data-kind="stand">
       <button type="button" className={styles.bigButton} data-tone={on ? 'stop' : 'go'} onClick={on ? onStop : onStart} disabled={failed && !on}>
-        <span className={styles.cap} aria-hidden="true">{on ? <Square size={20} fill="currentColor" /> : !failed && <Play size={22} fill="currentColor" />}</span>
+        <span className={styles.cap} aria-hidden="true" />
         <span className={styles.bigLabel}>{on ? 'Stop' : failed ? 'Engine failed' : 'Start engine'}</span>
       </button>
       {/* Held to rev: by pointer (captured, so a finger that slides off still holds it, and
@@ -91,6 +90,8 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
           role="button" tabIndex={0} aria-label="Throttle, press and hold" aria-pressed={throttleInput > 0}
           data-open={throttleInput > 0 ? 'true' : 'false'}
           data-running={live.running ? 'true' : 'false'}
+          // How far the throttle is open, for the lit fill and the handle that slides with it.
+          style={/** @type {React.CSSProperties} */ ({ '--open': `${clamp(live.effThrottle ?? 0, 0, 100)}%` })}
           onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
           onPointerUp={() => onThrottle(0)}
           onPointerCancel={() => onThrottle(0)}
@@ -100,7 +101,7 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
           onKeyUp={(e) => { if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); onThrottle(0); } }}
           onBlur={() => { if (throttleInput > 0) onThrottle(0); }}
         >
-          <div className={styles.leverFill} style={/** @type {React.CSSProperties} */ ({ '--open': `${clamp(live.effThrottle ?? 0, 0, 100)}%` })} />
+          <div className={styles.leverFill} />
           <span className={styles.leverLabel}>
             {!live.running ? 'Start the engine first' : throttleInput > 0 ? 'Wide open throttle' : 'Press and hold to rev'}
           </span>
