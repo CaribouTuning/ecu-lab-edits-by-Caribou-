@@ -1,136 +1,207 @@
-/* The carts' control plates (Consoles.jsx): latching keys, a big round button, a lever. */
+/* The carts' control plates (Consoles.jsx), drawn as the hardware they are: a machined panel
+   with its legends engraved, latching keys with an indicator lamp, a recessed display window,
+   illuminated mushroom buttons, a throttle slot with a handle, a volume fader. One language at
+   every size; only the layout changes when the plate is wide (the full-screen station). */
 
+/* ---------- the panel ---------- */
 /* One row, as a real control box is laid out: the face is twice as wide as it is tall, and a
    control wrapped onto a second row went off its bottom edge. */
-.plate { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px; height: 100%; padding: 10px 14px; box-sizing: border-box; }
-.group { display: flex; flex-direction: column; gap: 6px; flex: none; }
-.engraved { font-size: var(--fs-sm); color: var(--ink2); }
+.plate {
+  --key-face: color-mix(in srgb, var(--panel2) 88%, var(--ink));
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 12px;
+  height: 100%; padding: 10px 18px 10px 14px; box-sizing: border-box;
+}
+.group { display: flex; flex-direction: column; gap: 7px; flex: none; }
+/* A legend engraved in the panel: small, quiet, the panel's own colour cut in. */
+.engraved {
+  font-size: var(--fs-xs); font-weight: 600; color: var(--ink2);
+  text-shadow: 0 1px 0 rgba(var(--shadow-rgb), 0.6);
+}
+
+/* ---------- latching keys ---------- */
 .keys { display: flex; gap: 6px; flex-wrap: nowrap; }
 .key, .toggle {
-  min-height: 34px; padding: 4px 12px; border: 1px solid var(--line-hi); border-radius: var(--r-xs);
-  background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--fs-sm); cursor: pointer;
-  box-shadow: inset 0 -3px 0 var(--bg);
+  position: relative; min-height: 36px; padding: 4px 12px; font: inherit; font-size: var(--fs-sm); color: var(--ink);
+  background: var(--key-face); cursor: pointer;
+  border: 1px solid rgba(var(--shadow-rgb), 0.7); border-radius: 4px;
+  /* A key standing proud of the panel: lit on its top edge, its side showing below. */
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 14%, transparent), 0 3px 0 rgba(var(--shadow-rgb), 0.55);
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
 }
-.key[aria-pressed='true'], .toggle[aria-pressed='true'] { background: var(--acc); color: var(--acc-on); border-color: var(--acc); box-shadow: inset 0 2px 0 var(--acc-ink); }
-.key:disabled, .toggle:disabled { opacity: 0.55; cursor: default; }
-.toggle { align-self: flex-start; display: inline-flex; gap: 8px; align-items: baseline; }
-.toggle small { color: inherit; opacity: 0.8; }
-.key:focus-visible, .toggle:focus-visible, .bigButton:focus-visible, .slider:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+/* Latched in: pushed down into the panel, and its lamp lit. No colour flood: the lamp says it. */
+.key[aria-pressed='true'], .toggle[aria-pressed='true'] {
+  transform: translateY(2px);
+  background: color-mix(in srgb, var(--key-face) 86%, rgba(var(--shadow-rgb), 1));
+  box-shadow: inset 0 2px 3px rgba(var(--shadow-rgb), 0.45), 0 1px 0 rgba(var(--shadow-rgb), 0.55);
+}
+/* The indicator lamp on a latching key (one with a state): dark when off, lit when latched. */
+.key[aria-pressed]::before, .toggle[aria-pressed]::before {
+  content: ''; position: absolute; top: 5px; right: 6px; width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(var(--shadow-rgb), 0.55); box-shadow: inset 0 1px 1px rgba(var(--shadow-rgb), 0.6);
+}
+.key[aria-pressed='true']::before, .toggle[aria-pressed='true']::before {
+  background: var(--acc); box-shadow: 0 0 5px color-mix(in srgb, var(--acc) 70%, transparent);
+}
+.key:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 2px 3px rgba(var(--shadow-rgb), 0.45), 0 1px 0 rgba(var(--shadow-rgb), 0.55); }
+.key:disabled, .toggle:disabled { cursor: default; color: var(--ink2); }
+.toggle { align-self: flex-start; display: inline-flex; gap: 8px; align-items: baseline; padding-right: 22px; }
+.toggle small { color: var(--ink2); }
+.keyNum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.keySub { display: none; }
+.key:focus-visible, .toggle:focus-visible, .bigButton:focus-visible, .slider:focus-visible, .lever:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 3px;
+}
 
-/* What the machine reads now, in the window on the plate. */
+/* ---------- the display window ---------- */
+/* Set into the panel: a dark recessed glass, the figure lit behind it. */
 .readout {
-  display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: var(--r-xs);
-  background: var(--bg); border: 1px solid var(--line);
+  display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border-radius: 3px;
+  background: var(--bg); border: 1px solid rgba(var(--shadow-rgb), 0.8);
+  box-shadow: inset 0 2px 6px rgba(var(--shadow-rgb), 0.7), 0 1px 0 color-mix(in srgb, var(--ink) 8%, transparent);
 }
 .readout, .lever, .bigButton { flex: none; }
-.readout b { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; min-width: 4ch; text-align: right; }
+.readout b { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; color: var(--ink); min-width: 4ch; text-align: right; }
 .readout span { color: var(--ink2); font-size: var(--fs-sm); }
 
-/* A big round button: the cap, and what it does under it. */
+/* ---------- the mushroom button ---------- */
+/* The cap in its collar, and its name engraved under it. Green to run or start, red to stop. */
 .bigButton {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; border: 0; border-radius: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 0; border: 0; border-radius: 0;
   background: transparent; color: var(--ink); font: inherit; cursor: pointer; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .cap {
-  display: grid; place-items: center; color: var(--bg);
-  width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--panel); background: var(--ok);
-  box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--ok-line);
+  --lit: var(--ok); --rim: var(--ok-line);
+  position: relative; width: 56px; height: 56px; border-radius: 50%;
+  /* The collar: a dark ring the cap sits in. */
+  box-shadow: 0 0 0 5px rgba(var(--shadow-rgb), 0.75), 0 0 0 6px color-mix(in srgb, var(--ink) 10%, transparent);
+  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--lit) 100%, var(--ink) 18%) 0%, var(--lit) 55%, color-mix(in srgb, var(--lit) 70%, rgba(var(--shadow-rgb), 1)) 100%);
+  transition: transform 0.06s ease, filter 0.12s ease;
 }
-.bigButton[data-tone='stop'] .cap { background: var(--danger); box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--danger-line); }
-.bigButton:active .cap { transform: translateY(3px); box-shadow: 0 1px 0 var(--bg), inset 0 -3px 0 var(--ok-line); }
+/* The cap's own edge, under its dome. */
+.cap::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 -5px 0 var(--rim); }
+.bigButton[data-tone='stop'] .cap { --lit: var(--danger); --rim: var(--danger-line); }
+.bigButton:hover:not(:disabled) .cap { filter: brightness(1.08); }
+.bigButton:active:not(:disabled) .cap { transform: scale(0.96); }
+.bigButton:active:not(:disabled) .cap::after { box-shadow: inset 0 -2px 0 var(--rim); }
+/* Unlit: nothing to press now (a pull running, an engine that has failed). */
 .bigButton:disabled { cursor: default; }
-.bigButton:disabled .cap { color: var(--ink2); background: var(--panel2); box-shadow: 0 1px 0 var(--bg); transform: translateY(3px); }
-.bigLabel { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
-
-/* The throttle: a lever you hold open; it fills as the throttle opens. */
-.lever {
-  position: relative; width: 62px; height: 120px; border-radius: var(--r-sm); overflow: hidden; touch-action: none;
-  background: var(--bg); border: 1px solid var(--line-hi); cursor: pointer; user-select: none; -webkit-user-select: none;
-  -webkit-touch-callout: none;
+.bigButton:disabled .cap { --lit: var(--panel2); --rim: rgba(var(--shadow-rgb), 0.5); }
+/* Running a pull: the lamp in the cap dimmed, not gone, the way a cycle-running button stays lit. */
+.bigButton[data-busy]:disabled .cap { --lit: color-mix(in srgb, var(--ok) 32%, var(--panel2)); --rim: color-mix(in srgb, var(--ok-line) 60%, rgba(var(--shadow-rgb), 1)); }
+.bigLabel {
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; color: var(--ink);
+  text-shadow: 0 1px 0 rgba(var(--shadow-rgb), 0.6);
 }
-.lever:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.bigButton:disabled .bigLabel { color: var(--ink2); }
+
+/* ---------- the throttle ---------- */
+/* A lever you hold open; it fills as the throttle opens. */
+.lever {
+  position: relative; width: 62px; height: 120px; border-radius: 6px; overflow: hidden; touch-action: none;
+  background: var(--bg); border: 1px solid rgba(var(--shadow-rgb), 0.8);
+  box-shadow: inset 0 2px 6px rgba(var(--shadow-rgb), 0.7);
+  cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
 .lever[data-running='false'] { cursor: default; }
-.leverFill { position: absolute; left: 0; right: 0; bottom: 0; height: var(--open, 0%); background: var(--acc); opacity: 0.85; }
-/* Only a wide plate names the lever; on a small one the wrapper is not a box at all. */
-.leverBox { display: contents; }
-.keyNum { font-variant-numeric: tabular-nums; }
-.keySub { display: none; }
+.leverFill {
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--open, 0%);
+  background: color-mix(in srgb, var(--acc) 28%, transparent);
+  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--acc) 70%, transparent);
+}
 .leverLabel {
   position: absolute; inset: 0; display: grid; place-items: center; padding: 6px; text-align: center;
-  font-size: var(--fs-xs); line-height: 1.25; color: var(--ink);
+  font-size: var(--fs-xs); line-height: 1.25; color: var(--ink2);
 }
-.slider { width: 100%; accent-color: var(--acc); }
+.lever[data-open='true'] .leverLabel { color: var(--ink); }
+/* Only a wide plate names the lever; on a small one the wrapper is not a box at all. */
+.leverBox { display: contents; }
+
+/* ---------- the volume fader ---------- */
+.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; margin: 0; background: transparent; cursor: pointer; }
+.slider::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 3px; background: var(--bg); box-shadow: inset 0 1px 2px rgba(var(--shadow-rgb), 0.8);
+}
+.slider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--bg); box-shadow: inset 0 1px 2px rgba(var(--shadow-rgb), 0.8); }
+/* A fader cap: a short ridged block, not a round web thumb. */
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 22px; margin-top: -8px; border-radius: 3px;
+  background: linear-gradient(var(--key-face), var(--key-face)) padding-box,
+    repeating-linear-gradient(to bottom, transparent 0 4px, rgba(var(--shadow-rgb), 0.5) 4px 5px);
+  border: 1px solid rgba(var(--shadow-rgb), 0.7);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 16%, transparent), 0 2px 0 rgba(var(--shadow-rgb), 0.5);
+}
+.slider::-moz-range-thumb {
+  width: 14px; height: 22px; border-radius: 3px; background: var(--key-face);
+  border: 1px solid rgba(var(--shadow-rgb), 0.7); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 16%, transparent), 0 2px 0 rgba(var(--shadow-rgb), 0.5);
+}
 .note { margin: 0; font-size: var(--fs-xs); color: var(--warn-ink); line-height: 1.4; }
 .note[data-ok='true'] { color: var(--ok-ink); }
 
+@media (prefers-reduced-motion: reduce) { .key, .toggle, .cap { transition: none; } }
+
 /* ---------- a wide plate: the full-screen station ---------- */
-/* Laid out as a control bar, the way a dyno's or a test cell's panel is: each function in its
-   own section, named, ruled off from its neighbours, with the one thing you press most (run the
-   pull, start the engine) as a plain button with its verb on it and room round it. The small
-   plate on a cart or a phone keeps the compact row above. */
+/* The same hardware, laid out as a test cell's operator panel: each function in its own field,
+   cut off from the next by a groove, its legend engraved at the top of the field. */
 @container (min-width: 880px) {
   .plate[data-kind='dyno'] { justify-content: flex-start; align-items: stretch; gap: 0; padding: 0; }
   .plate[data-kind='dyno'] > .group { justify-content: center; gap: 10px; padding: 14px 28px; }
-  .plate[data-kind='dyno'] .engraved { font-size: var(--fs-sm); }
-  /* Three keys as one segmented switch, each with what it is under its number. */
-  .plate[data-kind='dyno'] .keys { gap: 0; border: 1px solid var(--line-hi); border-radius: var(--r-md); overflow: hidden; }
+  .plate[data-kind='dyno'] .keys { gap: 10px; }
   .plate[data-kind='dyno'] .key {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    min-width: 104px; min-height: 54px; padding: 4px 14px; border: 0; border-radius: 0; box-shadow: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-width: 92px; min-height: 52px; padding: 6px 16px;
   }
-  .plate[data-kind='dyno'] .key + .key { border-left: 1px solid var(--line-hi); }
-  .plate[data-kind='dyno'] .key[aria-pressed='true'] { box-shadow: none; }
-  .plate[data-kind='dyno'] .keyNum { font-size: 18px; font-weight: 600; }
-  .plate[data-kind='dyno'] .keySub { display: block; font-size: var(--fs-xs); opacity: 0.85; }
-  .plate[data-kind='dyno'] .toggle { min-height: 38px; }
+  .plate[data-kind='dyno'] .keyNum { font-size: 17px; }
+  .plate[data-kind='dyno'] .keySub { display: block; font-size: var(--fs-xs); color: var(--ink2); }
   .plate[data-kind='dyno'] > .readout {
-    flex-wrap: wrap; align-content: center; align-items: baseline; min-width: 220px; padding: 14px 32px;
-    border: 0; border-left: 1px solid var(--line-hi); border-radius: 0; background: transparent;
+    flex-wrap: wrap; align-content: center; align-self: center; min-width: 210px; margin: 0 28px; padding: 10px 18px 8px;
   }
-  .plate[data-kind='dyno'] > .readout::before { content: 'Engine speed'; flex-basis: 100%; font-size: var(--fs-sm); color: var(--ink2); margin-bottom: 2px; }
-  .plate[data-kind='dyno'] > .readout b { font-size: 40px; font-weight: 600; line-height: 1.1; min-width: 0; text-align: left; }
-  .plate[data-kind='dyno'] > .readout span { font-size: var(--fs-md); }
-  .plate[data-kind='dyno'] > .bigButton { margin: 0 28px 0 auto; align-self: center; }
+  .plate[data-kind='dyno'] > .readout::before {
+    content: 'Engine speed'; flex-basis: 100%; font-size: var(--fs-xs); font-weight: 600; color: var(--ink2); margin-bottom: 2px;
+  }
+  .plate[data-kind='dyno'] > .readout b { font-size: 34px; line-height: 1.1; min-width: 5ch; }
+  .plate[data-kind='dyno'] > .bigButton { margin: 0 32px 0 auto; align-self: center; }
+  /* The groove that ends the keys' field: a dark cut with the panel's light edge beside it. */
+  .plate[data-kind='dyno'] > .group { border-right: 1px solid rgba(var(--shadow-rgb), 0.55); box-shadow: 1px 0 0 color-mix(in srgb, var(--ink) 7%, transparent); }
 }
 @container (min-width: 960px) {
   .plate[data-kind='stand'] { justify-content: flex-start; align-items: stretch; gap: 0; padding: 0; }
-  .plate[data-kind='stand'] > .bigButton { margin: 0 28px; align-self: center; }
-  /* The throttle as a bar you hold down along its length, filling as it opens. */
+  .plate[data-kind='stand'] > .bigButton { margin: 0 32px; min-width: 104px; align-self: center; }
+  /* The throttle as a slot with a handle you hold open along it; it lights behind the handle. */
   .plate[data-kind='stand'] > .leverBox {
     display: flex; flex-direction: column; justify-content: center; gap: 8px; flex: 1 1 0; min-width: 0;
-    padding: 14px 28px; border-left: 1px solid var(--line-hi);
+    padding: 14px 28px; border-left: 1px solid rgba(var(--shadow-rgb), 0.55); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--ink) 7%, transparent);
   }
-  .plate[data-kind='stand'] > .leverBox::before { content: 'Throttle'; font-size: var(--fs-sm); color: var(--ink2); }
-  .plate[data-kind='stand'] .lever { width: 100%; height: 56px; border-radius: var(--r-md); }
+  .plate[data-kind='stand'] > .leverBox::before {
+    content: 'Throttle'; font-size: var(--fs-xs); font-weight: 600; color: var(--ink2); text-shadow: 0 1px 0 rgba(var(--shadow-rgb), 0.6);
+  }
+  .plate[data-kind='stand'] .lever { width: 100%; height: 46px; border-radius: 23px; }
   .plate[data-kind='stand'] .leverFill { top: 0; right: auto; bottom: 0; width: var(--open, 0%); height: auto; }
-  .plate[data-kind='stand'] .leverLabel { font-size: var(--fs-md); white-space: nowrap; }
-  /* Sound: the volume slider with its name above, the two keys beside it. */
+  .plate[data-kind='stand'] .lever::after {
+    content: ''; position: absolute; top: 5px; bottom: 5px; width: 30px;
+    left: clamp(5px, calc(var(--open, 0%) - 15px), calc(100% - 35px));
+    border-radius: 18px; background: var(--key-face); border: 1px solid rgba(var(--shadow-rgb), 0.7);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 16%, transparent), 0 2px 3px rgba(var(--shadow-rgb), 0.6);
+  }
+  .plate[data-kind='stand'] .leverLabel { font-size: var(--fs-sm); white-space: nowrap; padding-left: 48px; }
+  /* Sound: the fader with its legend, the two keys beside it. */
   .plate[data-kind='stand'] > .soundGroup {
     display: grid; flex: none; grid-template-columns: minmax(150px, 190px) auto; align-content: center; align-items: center;
-    grid-template-areas: 'label .' 'slider keys' 'note note'; gap: 8px 18px; padding: 14px 28px; border-left: 1px solid var(--line-hi);
+    grid-template-areas: 'label .' 'slider keys' 'note note'; gap: 8px 20px; padding: 14px 32px 14px 28px;
+    border-left: 1px solid rgba(var(--shadow-rgb), 0.55); box-shadow: inset 1px 0 0 color-mix(in srgb, var(--ink) 7%, transparent);
   }
   .plate[data-kind='stand'] .soundGroup .engraved { grid-area: label; }
   .plate[data-kind='stand'] .soundGroup .slider { grid-area: slider; }
-  .plate[data-kind='stand'] .soundGroup .keys { grid-area: keys; gap: 8px; }
+  .plate[data-kind='stand'] .soundGroup .keys { grid-area: keys; gap: 10px; }
   .plate[data-kind='stand'] .soundGroup .note { grid-area: note; max-width: 44ch; }
-  .plate[data-kind='stand'] .key { min-height: 40px; padding: 4px 16px; }
+  .plate[data-kind='stand'] .key { min-height: 40px; padding: 4px 22px 4px 14px; }
 }
-/* The run and start button, wide: a plain button with its verb, not a round cap with a caption. */
+/* Wide, the legend under the mushroom is a step larger; the cap stays the size the plate's
+   height leaves room for with its collar and legend (a bigger one was cut off at the top). */
 @container (min-width: 880px) {
-  .plate > .bigButton {
-    flex-direction: row; gap: 12px; min-height: 64px; padding: 0 40px 0 32px; border-radius: var(--r-md);
-    background: var(--ok); color: var(--bg); transition: filter 0.12s ease;
-  }
-  .plate > .bigButton[data-tone='stop'] { background: var(--danger); }
-  .plate > .bigButton:hover:not(:disabled) { filter: brightness(1.1); }
-  .plate > .bigButton:active:not(:disabled) { transform: translateY(1px); }
-  .plate > .bigButton:disabled { background: var(--panel2); color: var(--ink2); }
-  .plate > .bigButton .cap, .plate > .bigButton[data-tone] .cap, .plate > .bigButton:disabled .cap, .plate > .bigButton:active .cap {
-    width: auto; height: auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: inherit; transform: none;
-  }
-  .plate > .bigButton .bigLabel { font-size: var(--fs-lg); }
+  .plate > .bigButton .cap { width: 60px; height: 60px; }
+  .plate > .bigButton .bigLabel { font-size: var(--fs-md); }
 }
-@media (prefers-reduced-motion: reduce) { .plate > .bigButton { transition: none; } }
 
 /* A pendant box beside the monitor, taller than wide: its controls stand in a column. */
 @container (max-aspect-ratio: 1 / 1) {
