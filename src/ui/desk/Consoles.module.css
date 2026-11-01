@@ -32,13 +32,14 @@
   background: transparent; color: var(--ink); font: inherit; cursor: pointer; touch-action: manipulation;
 }
 .cap {
+  display: grid; place-items: center; color: var(--bg);
   width: 64px; height: 64px; border-radius: 50%; border: 4px solid var(--panel); background: var(--ok);
   box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--ok-line);
 }
 .bigButton[data-tone='stop'] .cap { background: var(--danger); box-shadow: 0 4px 0 var(--bg), inset 0 -6px 0 var(--danger-line); }
 .bigButton:active .cap { transform: translateY(3px); box-shadow: 0 1px 0 var(--bg), inset 0 -3px 0 var(--ok-line); }
 .bigButton:disabled { cursor: default; }
-.bigButton:disabled .cap { background: var(--panel2); box-shadow: 0 1px 0 var(--bg); transform: translateY(3px); }
+.bigButton:disabled .cap { color: var(--ink2); background: var(--panel2); box-shadow: 0 1px 0 var(--bg); transform: translateY(3px); }
 .bigLabel { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; }
 
 /* The throttle: a lever you hold open; it fills as the throttle opens. */
@@ -49,7 +50,11 @@
 }
 .lever:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .lever[data-running='false'] { cursor: default; }
-.leverFill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--acc); opacity: 0.85; }
+.leverFill { position: absolute; left: 0; right: 0; bottom: 0; height: var(--open, 0%); background: var(--acc); opacity: 0.85; }
+/* Only a wide plate names the lever; on a small one the wrapper is not a box at all. */
+.leverBox { display: contents; }
+.keyNum { font-variant-numeric: tabular-nums; }
+.keySub { display: none; }
 .leverLabel {
   position: absolute; inset: 0; display: grid; place-items: center; padding: 6px; text-align: center;
   font-size: var(--fs-xs); line-height: 1.25; color: var(--ink);
@@ -57,6 +62,75 @@
 .slider { width: 100%; accent-color: var(--acc); }
 .note { margin: 0; font-size: var(--fs-xs); color: var(--warn-ink); line-height: 1.4; }
 .note[data-ok='true'] { color: var(--ok-ink); }
+
+/* ---------- a wide plate: the full-screen station ---------- */
+/* Laid out as a control bar, the way a dyno's or a test cell's panel is: each function in its
+   own section, named, ruled off from its neighbours, with the one thing you press most (run the
+   pull, start the engine) as a plain button with its verb on it and room round it. The small
+   plate on a cart or a phone keeps the compact row above. */
+@container (min-width: 880px) {
+  .plate[data-kind='dyno'] { justify-content: flex-start; align-items: stretch; gap: 0; padding: 0; }
+  .plate[data-kind='dyno'] > .group { justify-content: center; gap: 10px; padding: 14px 28px; }
+  .plate[data-kind='dyno'] .engraved { font-size: var(--fs-sm); }
+  /* Three keys as one segmented switch, each with what it is under its number. */
+  .plate[data-kind='dyno'] .keys { gap: 0; border: 1px solid var(--line-hi); border-radius: var(--r-md); overflow: hidden; }
+  .plate[data-kind='dyno'] .key {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    min-width: 104px; min-height: 54px; padding: 4px 14px; border: 0; border-radius: 0; box-shadow: none;
+  }
+  .plate[data-kind='dyno'] .key + .key { border-left: 1px solid var(--line-hi); }
+  .plate[data-kind='dyno'] .key[aria-pressed='true'] { box-shadow: none; }
+  .plate[data-kind='dyno'] .keyNum { font-size: 18px; font-weight: 600; }
+  .plate[data-kind='dyno'] .keySub { display: block; font-size: var(--fs-xs); opacity: 0.85; }
+  .plate[data-kind='dyno'] .toggle { min-height: 38px; }
+  .plate[data-kind='dyno'] > .readout {
+    flex-wrap: wrap; align-content: center; align-items: baseline; min-width: 220px; padding: 14px 32px;
+    border: 0; border-left: 1px solid var(--line-hi); border-radius: 0; background: transparent;
+  }
+  .plate[data-kind='dyno'] > .readout::before { content: 'Engine speed'; flex-basis: 100%; font-size: var(--fs-sm); color: var(--ink2); margin-bottom: 2px; }
+  .plate[data-kind='dyno'] > .readout b { font-size: 40px; font-weight: 600; line-height: 1.1; min-width: 0; text-align: left; }
+  .plate[data-kind='dyno'] > .readout span { font-size: var(--fs-md); }
+  .plate[data-kind='dyno'] > .bigButton { margin: 0 28px 0 auto; align-self: center; }
+}
+@container (min-width: 960px) {
+  .plate[data-kind='stand'] { justify-content: flex-start; align-items: stretch; gap: 0; padding: 0; }
+  .plate[data-kind='stand'] > .bigButton { margin: 0 28px; align-self: center; }
+  /* The throttle as a bar you hold down along its length, filling as it opens. */
+  .plate[data-kind='stand'] > .leverBox {
+    display: flex; flex-direction: column; justify-content: center; gap: 8px; flex: 1 1 0; min-width: 0;
+    padding: 14px 28px; border-left: 1px solid var(--line-hi);
+  }
+  .plate[data-kind='stand'] > .leverBox::before { content: 'Throttle'; font-size: var(--fs-sm); color: var(--ink2); }
+  .plate[data-kind='stand'] .lever { width: 100%; height: 56px; border-radius: var(--r-md); }
+  .plate[data-kind='stand'] .leverFill { top: 0; right: auto; bottom: 0; width: var(--open, 0%); height: auto; }
+  .plate[data-kind='stand'] .leverLabel { font-size: var(--fs-md); white-space: nowrap; }
+  /* Sound: the volume slider with its name above, the two keys beside it. */
+  .plate[data-kind='stand'] > .soundGroup {
+    display: grid; flex: none; grid-template-columns: minmax(150px, 190px) auto; align-content: center; align-items: center;
+    grid-template-areas: 'label .' 'slider keys' 'note note'; gap: 8px 18px; padding: 14px 28px; border-left: 1px solid var(--line-hi);
+  }
+  .plate[data-kind='stand'] .soundGroup .engraved { grid-area: label; }
+  .plate[data-kind='stand'] .soundGroup .slider { grid-area: slider; }
+  .plate[data-kind='stand'] .soundGroup .keys { grid-area: keys; gap: 8px; }
+  .plate[data-kind='stand'] .soundGroup .note { grid-area: note; max-width: 44ch; }
+  .plate[data-kind='stand'] .key { min-height: 40px; padding: 4px 16px; }
+}
+/* The run and start button, wide: a plain button with its verb, not a round cap with a caption. */
+@container (min-width: 880px) {
+  .plate > .bigButton {
+    flex-direction: row; gap: 12px; min-height: 64px; padding: 0 40px 0 32px; border-radius: var(--r-md);
+    background: var(--ok); color: var(--bg); transition: filter 0.12s ease;
+  }
+  .plate > .bigButton[data-tone='stop'] { background: var(--danger); }
+  .plate > .bigButton:hover:not(:disabled) { filter: brightness(1.1); }
+  .plate > .bigButton:active:not(:disabled) { transform: translateY(1px); }
+  .plate > .bigButton:disabled { background: var(--panel2); color: var(--ink2); }
+  .plate > .bigButton .cap, .plate > .bigButton[data-tone] .cap, .plate > .bigButton:disabled .cap, .plate > .bigButton:active .cap {
+    width: auto; height: auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; color: inherit; transform: none;
+  }
+  .plate > .bigButton .bigLabel { font-size: var(--fs-lg); }
+}
+@media (prefers-reduced-motion: reduce) { .plate > .bigButton { transition: none; } }
 
 /* A pendant box beside the monitor, taller than wide: its controls stand in a column. */
 @container (max-aspect-ratio: 1 / 1) {

@@ -7,6 +7,7 @@
  * button, a lever you hold open. The numbers on them are what the machine is reading.
  */
 
+import { Play, Square } from 'lucide-react';
 import React from 'react';
 
 import { clamp } from '../../sim/index.js';
@@ -14,6 +15,9 @@ import { ACTIONS } from '../state/reducer.js';
 import { useSession } from '../state/StoreProvider.jsx';
 
 import styles from './Consoles.module.css';
+
+/** What each load key is, under its number where the plate is wide enough to print it. */
+const LOAD_SUB = { 100: 'Wide open', 70: 'Part throttle', 40: 'Light' };
 
 /**
  * @param {object} props
@@ -30,13 +34,16 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
   const label = failed ? 'Engine failed' : !running ? 'Run a pull'
     : phase === 'settle' ? 'Idling…' : phase === 'sweep' ? 'Sweeping…' : phase === 'spooldown' ? 'Coming back down…' : 'Settling…';
   return (
-    <div className={styles.plate}>
+    <div className={styles.plate} data-kind="dyno">
       <div className={styles.group}>
         <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
         {/* The number on the key, the unit engraved above: three keys fit one row. */}
         <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
           {[100, 70, 40].map((k) => (
-            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>{k}</button>
+            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>
+              <span className={styles.keyNum}>{k}</span>
+              <span className={styles.keySub} aria-hidden="true">{LOAD_SUB[k]}</span>
+            </button>
           ))}
         </div>
         {nitrous && (
@@ -49,7 +56,7 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
         <b>{Math.round(rpm)}</b><span>rpm</span>
       </div>
       <button type="button" className={styles.bigButton} data-tone="go" onClick={onRun} disabled={running || failed}>
-        <span className={styles.cap} aria-hidden="true" />
+        <span className={styles.cap} aria-hidden="true">{!running && !failed && <Play size={22} fill="currentColor" />}</span>
         <span className={styles.bigLabel}>{label}</span>
       </button>
     </div>
@@ -72,31 +79,34 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
   return (
     <div className={styles.plate} data-kind="stand">
       <button type="button" className={styles.bigButton} data-tone={on ? 'stop' : 'go'} onClick={on ? onStop : onStart} disabled={failed && !on}>
-        <span className={styles.cap} aria-hidden="true" />
+        <span className={styles.cap} aria-hidden="true">{on ? <Square size={20} fill="currentColor" /> : !failed && <Play size={22} fill="currentColor" />}</span>
         <span className={styles.bigLabel}>{on ? 'Stop' : failed ? 'Engine failed' : 'Start engine'}</span>
       </button>
       {/* Held to rev: by pointer (captured, so a finger that slides off still holds it, and
           let go only when the pointer really is), or by Space or the up arrow while focused. */}
-      <div
-        className={styles.lever}
-        role="button" tabIndex={0} aria-label="Throttle, press and hold" aria-pressed={throttleInput > 0}
-        data-open={throttleInput > 0 ? 'true' : 'false'}
-        data-running={live.running ? 'true' : 'false'}
-        onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
-        onPointerUp={() => onThrottle(0)}
-        onPointerCancel={() => onThrottle(0)}
-        onLostPointerCapture={() => onThrottle(0)}
-        onContextMenu={(e) => e.preventDefault()}
-        onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'ArrowUp') && !e.repeat) { e.preventDefault(); onThrottle(100); } }}
-        onKeyUp={(e) => { if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); onThrottle(0); } }}
-        onBlur={() => { if (throttleInput > 0) onThrottle(0); }}
-      >
-        <div className={styles.leverFill} style={{ height: `${clamp(live.effThrottle ?? 0, 0, 100)}%` }} />
-        <span className={styles.leverLabel}>
-          {!live.running ? 'Start the engine first' : throttleInput > 0 ? 'Wide open throttle' : 'Press and hold to rev'}
-        </span>
+      {/* The wrapper carries the engraved name on a wide plate; on a small one it is not there (display: contents). */}
+      <div className={styles.leverBox}>
+        <div
+          className={styles.lever}
+          role="button" tabIndex={0} aria-label="Throttle, press and hold" aria-pressed={throttleInput > 0}
+          data-open={throttleInput > 0 ? 'true' : 'false'}
+          data-running={live.running ? 'true' : 'false'}
+          onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture?.(e.pointerId); onThrottle(100); }}
+          onPointerUp={() => onThrottle(0)}
+          onPointerCancel={() => onThrottle(0)}
+          onLostPointerCapture={() => onThrottle(0)}
+          onContextMenu={(e) => e.preventDefault()}
+          onKeyDown={(e) => { if ((e.key === ' ' || e.key === 'ArrowUp') && !e.repeat) { e.preventDefault(); onThrottle(100); } }}
+          onKeyUp={(e) => { if (e.key === ' ' || e.key === 'ArrowUp') { e.preventDefault(); onThrottle(0); } }}
+          onBlur={() => { if (throttleInput > 0) onThrottle(0); }}
+        >
+          <div className={styles.leverFill} style={/** @type {React.CSSProperties} */ ({ '--open': `${clamp(live.effThrottle ?? 0, 0, 100)}%` })} />
+          <span className={styles.leverLabel}>
+            {!live.running ? 'Start the engine first' : throttleInput > 0 ? 'Wide open throttle' : 'Press and hold to rev'}
+          </span>
+        </div>
       </div>
-      <div className={styles.group}>
+      <div className={`${styles.group} ${styles.soundGroup}`}>
         <label className={styles.engraved} htmlFor="stand-volume">Volume</label>
         <input
           id="stand-volume" type="range" min={0} max={2} step={0.05} value={volume} className={styles.slider}
