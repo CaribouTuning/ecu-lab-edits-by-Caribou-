@@ -85,7 +85,7 @@
 /* Flat, the page scrolls, not the screen inside it. */
 .station[data-flat='true'] .screenBody { position: static; overflow: visible; }
 /* ---------- a console: a plate of switches ---------- */
-.face[data-kind='console'] { background: var(--panel3); border: 1px solid var(--line-hi); padding: 10px 12px; overflow-y: auto; container-type: size; }
+.face[data-kind='console'] { background: var(--panel3); border: 1px solid var(--line-hi); padding: 0; overflow-y: auto; container-type: size; }
 
 /* ---------- the job board: work orders on a whiteboard ---------- */
 .face[data-kind='board'] { background: var(--board); overflow-y: auto; padding: 14px; overscroll-behavior: contain; touch-action: pan-y; }
