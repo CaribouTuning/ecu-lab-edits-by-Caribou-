@@ -101,10 +101,15 @@ export const utilisationTone = (v) => (v > 90 ? 'danger' : v > 75 ? 'warn' : 'ok
 export const utilisationColor = (v) => T[utilisationTone(v)];
 
 /**
- * Heat-map colour for a table cell, cool (low) through warm (high).
+ * Heat-map colour for a table cell, low to high: deep navy, through slate grey, to brass.
  *
  * Deliberately its own ramp rather than the status scale: a hot VE cell is not a
- * fault, and it must never compete visually with a real warning.
+ * fault, and it must never compete visually with a real warning. And not a rainbow:
+ * the old blue-green-yellow-red ramp put most of a real table in one band of green and
+ * read as decoration. This one is ordered by lightness (darker is lower, the way a
+ * cividis scale is), and it passes the hues between blue and gold almost without
+ * colour, so no band of it looks like a status. Every step keeps white text at
+ * 4.5:1 or better.
  *
  * @param {number} value cell value
  * @param {number} min low end of the scale
@@ -112,9 +117,16 @@ export const utilisationColor = (v) => T[utilisationTone(v)];
  * @returns {string} an hsl() colour
  */
 function heat(value, min, max) {
-  const t = clamp((value - min) / (max - min), 0, 1);
-  const hue = 214 - t * 214;
-  return `hsl(${hue.toFixed(0)}, 68%, ${26 + t * 12}%)`;
+  const t = max > min ? clamp((value - min) / (max - min), 0, 1) : 0.5;
+  // [t, hue, saturation %, lightness %]: navy, slate, a grey turning warm, brass.
+  const stops = [[0, 224, 46, 17], [0.5, 214, 13, 27], [0.64, 52, 3, 30], [1, 41, 58, 36]];
+  let i = 1;
+  while (i < stops.length - 1 && t > stops[i][0]) i += 1;
+  const [t0, h0, s0, l0] = stops[i - 1];
+  const [t1, h1, s1, l1] = stops[i];
+  const k = (t - t0) / (t1 - t0);
+  const mix = (a, b) => a + (b - a) * k;
+  return `hsl(${mix(h0, h1).toFixed(0)}, ${mix(s0, s1).toFixed(0)}%, ${mix(l0, l1).toFixed(1)}%)`;
 }
 
 /**

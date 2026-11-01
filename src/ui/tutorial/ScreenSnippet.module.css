@@ -25,7 +25,7 @@
   background: var(--acc-bg);
   color: var(--acc-ink);
   font-size: var(--fs-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .where {
@@ -66,7 +66,7 @@
   background: var(--warn);
   color: var(--bg);
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   flex-shrink: 0;
 }
 

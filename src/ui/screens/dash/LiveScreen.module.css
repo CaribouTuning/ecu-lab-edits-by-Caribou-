@@ -34,9 +34,9 @@
 }
 
 .dialRpm {
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 /* 7px is below the font-size ramp's smallest step and deliberately so — it is a
@@ -44,7 +44,7 @@
 .dialCaption {
   font-size: 7px;
   font-weight: 700;
-  letter-spacing: 1px;
+
   color: var(--ink2);
 }
 
@@ -69,7 +69,7 @@
   background: var(--panel2);
   color: var(--ink2);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .sound[data-on='true'] {
@@ -90,7 +90,7 @@
 .volumeLabel {
   font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: 0.5px;
+
   color: var(--ink2);
 }
 
@@ -103,7 +103,7 @@
    two digits to three. */
 .volumeValue {
   width: 34px;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-sm);
   color: var(--ink2);
   text-align: right;
@@ -132,8 +132,8 @@
   background: var(--panel2);
   color: var(--ink2);
   font-size: var(--fs-base);
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+
   text-align: center;
   /* The pad is held down, often hard, on a touchscreen. Without these a press
      selects the label, raises the callout menu, or scrolls the page instead of
@@ -195,14 +195,14 @@
 .gaugeLabel {
   font-size: 8.5px;
   font-weight: 700;
-  letter-spacing: 0.8px;
+
   color: var(--ink2);
 }
 
 .gaugeValue {
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .gaugeUnit {
@@ -226,7 +226,7 @@
   color: var(--ink2);
 }
 
-.trimValue { font-family: var(--mono); }
+.trimValue { font-family: var(--sans); font-variant-numeric: tabular-nums; }
 
 .trimTrack {
   position: relative;

@@ -49,7 +49,7 @@
 
 .cardStatus {
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--acc-ink);
 }
 
@@ -141,9 +141,9 @@
 
 .colValue {
   padding-bottom: 2px;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink2);
 }
 
@@ -161,7 +161,7 @@
 
 .colRpm {
   padding: 3px 0;
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 8px;
   color: var(--ink2);
 }
@@ -177,15 +177,15 @@
 
 .editorRpm {
   font-size: var(--fs-xs);
-  letter-spacing: 1px;
+
   font-weight: 700;
   color: var(--ink2);
 }
 
 .editorValue {
-  font-family: var(--mono);
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--acc-ink);
 }
 
@@ -208,8 +208,8 @@
   border-radius: 8px;
   background: var(--panel);
   color: var(--acc-ink);
-  font-weight: 800;
-  font-family: var(--mono);
+  font-weight: 600;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: 14px;
 }
 

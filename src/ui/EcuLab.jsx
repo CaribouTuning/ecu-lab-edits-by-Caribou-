@@ -61,6 +61,7 @@ import { jobById } from './career/jobs.js';
 import { canReadCareer, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
+import { PagePicker } from './components/PagePicker.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { COURSE } from './tutorial/books.js';
@@ -1418,9 +1419,17 @@ export function EcuLabApp() {
                 send you there, shown only while that pull still describes this setup. */}
             <nav className={deskApps.tuneSidebar} aria-label="ECU tables">
               <div className={deskApps.sideHead}>Tables</div>
+              {/* On a phone: one button naming the open page, which lists them all. */}
+              <div className={deskApps.tunePicker}>
+                <PagePicker label="Tuning pages" current={tuneView} onPick={(id) => { goSection('tune', id); setSelection(null); }}
+                  pages={tuneViews.map((v) => ({
+                    id: v.id, name: v.name ?? v.label, icon: v.icon,
+                    locked: inCareer && !pageUnlocked(career, v.id), flagged: attention[v.id] ?? 0,
+                  }))} />
+              </div>
               {/* data-plain: the page tabs draw their own open state; the map slots below must keep the
                   selection style, or the running map looks like the idle ones. */}
-              <div className={deskApps.tuneTabs} data-plain="">
+              <div className={`${deskApps.tuneTabs} ${deskApps.tuneTabsWide}`} data-plain="">
                 {tuneViews.map((v) => {
                   const on = tuneView === v.id;
                   const locked = inCareer && !pageUnlocked(career, v.id);
@@ -1449,7 +1458,7 @@ export function EcuLabApp() {
               return (
                 <div style={{ padding: 16 }}>
                   <Panel>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 800, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, marginBottom: 6 }}>
                       <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginBottom: 12 }}>
@@ -1579,9 +1588,9 @@ export function EcuLabApp() {
                     <Panel tight style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <TrendingUp size={15} color="var(--ink2)" style={{ flexShrink: 0 }} />
                       <div style={{ display: 'flex', gap: 14, fontSize: 12.5, flexWrap: 'wrap' }}>
-                        <span style={{ color: dHp === 0 ? 'var(--ink2)' : dHp > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dHp, ' whp')}</span>
-                        <span style={{ color: dTq === 0 ? 'var(--ink2)' : dTq > 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{fmtDelta(dTq, ' lb-ft')}</span>
-                        <span style={{ color: dKnock === 0 ? 'var(--ink2)' : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: T.mono, fontWeight: 800 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
+                        <span style={{ color: dHp === 0 ? 'var(--ink2)' : dHp > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dHp, ' whp')}</span>
+                        <span style={{ color: dTq === 0 ? 'var(--ink2)' : dTq > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dTq, ' lb-ft')}</span>
+                        <span style={{ color: dKnock === 0 ? 'var(--ink2)' : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
                       </div>
                     </Panel>
                   );

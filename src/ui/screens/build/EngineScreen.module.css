@@ -63,16 +63,16 @@
 }
 
 .statValue {
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--ink);
 }
 
 /* The pull figure only earns the accent once there is a pull to report; until then
    it reads as a quiet placeholder rather than a real value. */
 .pullValue {
-  font-family: var(--mono);
-  font-weight: 800;
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-weight: 600;
   color: var(--ink2);
 }
 

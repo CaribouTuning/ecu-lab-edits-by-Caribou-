@@ -49,16 +49,16 @@
 /* 21px/27px (below, at the breakpoint) are not on the font-size scale: this is
    this screen's one section headline, a deliberately different size from
    StartScreen's hero title rather than a shared repeating role. */
-.title { margin: 0 0 var(--sp-lg); font-size: 21px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.25; }
-.num { color: var(--acc-ink); font-family: var(--mono); font-size: 0.85em; margin-right: 4px; }
+.title { margin: 0 0 var(--sp-lg); font-size: 21px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.25; }
+.num { color: var(--acc-ink); font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 0.85em; margin-right: 4px; }
 
 .lede { margin: 0 0 var(--sp-xl); font-size: var(--fs-md); line-height: 1.65; color: var(--ink-soft); }
 
 .sectionHead {
   margin: var(--sp-xl) 0 var(--sp-sm);
   font-size: var(--fs-micro);
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+
   color: var(--acc-ink);
 }
 
@@ -91,7 +91,7 @@
   padding: var(--sp-sm) 0;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-base);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -117,7 +117,7 @@
 }
 
 .lessonLink:hover { color: var(--ink); }
-.lessonNum { flex: 0 0 30px; font-family: var(--mono); color: var(--acc-ink); font-size: var(--fs-sm); }
+.lessonNum { flex: 0 0 30px; font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--acc-ink); font-size: var(--fs-sm); }
 .lessonTitle { flex: 1; }
 .tick { color: var(--ok); flex-shrink: 0; }
 
@@ -142,8 +142,8 @@
   flex-wrap: wrap;
 }
 
-.practiceTag { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: var(--acc-ink); }
-.practiceTitle { margin: 2px 0; font-size: var(--fs-base); font-weight: 800; color: var(--ink); }
+.practiceTag { font-size: var(--fs-micro); font-weight: 600; color: var(--acc-ink); }
+.practiceTitle { margin: 2px 0; font-size: var(--fs-base); font-weight: 600; color: var(--ink); }
 .practiceText { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-soft); }
 
 /* Finishing a chapter is worth saying. */

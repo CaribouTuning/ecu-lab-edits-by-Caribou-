@@ -1,0 +1,78 @@
+/* A calibration table, drawn the way a tuner reads one: the axes pinned where the eye
+   finds them, hairline gridlines, the value in each cell in tabular figures, and colour
+   that carries the data rather than decorating it. */
+
+.grid {
+  --cw: 50px; --ch: 34px; --head-w: 52px;
+  outline: none;
+}
+.grid[data-dense] { --cw: 42px; --ch: 28px; }
+.grid:focus-visible .scroll { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The table scrolls sideways inside its own box, never the page; the load column stays put
+   so a row is never a run of numbers with no name. */
+.scroll {
+  overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--line);
+  scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;
+  /* The pinned axes and the selected cell layer over the cells, never over the edit panel. */
+  isolation: isolate;
+}
+.table { border-collapse: separate; border-spacing: 1px; margin: -1px; }
+.table th, .table td { padding: 0; }
+
+/* The axes: the load down the left, the speed along the top, both quieter than the data. */
+.corner, .colHead, .rowHead { background: var(--panel); }
+.corner {
+  position: sticky; left: 0; z-index: 3; width: var(--head-w); min-width: var(--head-w);
+  padding: 3px 6px; vertical-align: bottom; text-align: left;
+  font-size: 9.5px; font-weight: 600; line-height: 1.15; color: var(--ink2);
+}
+.corner span { display: block; }
+.corner span:last-child { text-align: right; }
+.rowHead { position: sticky; left: 0; z-index: 2; }
+.colHead button, .rowHead button {
+  display: block; width: var(--cw); height: 26px; padding: 0; border: 0; background: transparent;
+  color: var(--ink2); font-family: var(--sans); font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums; cursor: pointer; transition: color 0.12s ease, background-color 0.12s ease;
+}
+.rowHead button { width: var(--head-w); height: var(--ch); padding-right: 8px; text-align: right; }
+.colHead button:hover, .rowHead button:hover { color: var(--ink); }
+/* The selected cell's row and column light up on the axes: which speed, which load. */
+.colHead button[data-cross], .rowHead button[data-cross] { color: var(--ink); background: var(--panel3); }
+/* A whole row or column chosen from its header. */
+.colHead button[data-on], .rowHead button[data-on] { color: var(--acc-ink); background: var(--acc-bg); box-shadow: inset 0 -2px 0 var(--acc); }
+.rowHead button[data-on] { box-shadow: inset -2px 0 0 var(--acc); }
+
+/* A cell: its value, centred, in figures that line up down a column. */
+.cell {
+  position: relative; display: block; width: var(--cw); height: var(--ch); padding: 0; border: 0;
+  background: var(--panel2); color: var(--ink);
+  font-family: var(--sans); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em; cursor: cell; user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: box-shadow 0.1s ease, filter 0.1s ease;
+}
+.grid[data-dense] .cell { font-size: 11px; }
+.cell:hover { filter: brightness(1.18); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 55%, transparent); }
+/* Selected: a white edge inside the cell, so nothing shifts; the anchor a range grows from
+   in the accent. */
+.cell[aria-pressed='true'] { z-index: 1; filter: brightness(1.12); box-shadow: inset 0 0 0 2px var(--ink); }
+.cell[data-anchor] { box-shadow: inset 0 0 0 2px var(--acc), inset 0 0 0 3px var(--bg); }
+.cell[data-untuned] { background: var(--panel2); color: var(--ink2); box-shadow: inset 0 0 0 1px var(--panel2); outline: 1px dashed var(--ink2); outline-offset: -4px; }
+.cell[data-unchanged] { color: var(--ink2); font-weight: 500; }
+/* Past the boost the engine makes here: faded back, so the rows it runs stand out. Still a
+   cell: a tuner may write it ahead of the boost. */
+.cell[data-unreached]:not([aria-pressed='true']) { opacity: 0.35; }
+
+/* What the colours mean: the scale, from this table's lowest cell to its highest. */
+.key {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-size: var(--fs-xs); color: var(--ink2); font-variant-numeric: tabular-nums;
+}
+.ramp { width: 96px; height: 6px; border-radius: 3px; }
+.keyNote { margin-left: 4px; }
+.note { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--ink2); }
+
+@media (prefers-reduced-motion: reduce) { .cell, .colHead button, .rowHead button { transition: none; } }
+@media (max-width: 560px) { .keyNote { display: none; } }

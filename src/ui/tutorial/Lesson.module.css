@@ -20,14 +20,14 @@
 .goalKey {
   flex: 0 0 74px;
   font-size: var(--fs-micro);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--acc-ink);
 }
 
 .h {
   margin: var(--sp-xxl) 0 var(--sp-sm);
   font-size: var(--fs-lg);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--ink);
 }
@@ -87,7 +87,7 @@
 .boxHead {
   margin-bottom: var(--sp-sm);
   font-size: var(--fs-micro);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink-soft);
 }
 
@@ -164,7 +164,7 @@
 
 .asideTag {
   font-size: var(--fs-micro);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--violet);
   flex-shrink: 0;
 }

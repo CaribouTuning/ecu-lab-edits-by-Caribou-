@@ -46,7 +46,7 @@ export function useTableView() {
 /** @param {{mode: 'table'|'3d', onChange: (m: 'table'|'3d') => void}} props */
 export function ViewToggle({ mode, onChange }) {
   return (
-    <Seg variant="tabs" label="Show as" value={mode} onChange={(id) => onChange(/** @type {'table'|'3d'} */ (id))}
+    <Seg label="Show as" value={mode} onChange={(id) => onChange(/** @type {'table'|'3d'} */ (id))}
       options={[{ id: 'table', label: 'Table' }, { id: '3d', label: '3-D' }]} />
   );
 }

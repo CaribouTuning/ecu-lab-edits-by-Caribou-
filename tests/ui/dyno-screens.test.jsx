@@ -693,7 +693,7 @@ describe('ScoreScreen', () => {
   it('reads bestScore off the store, not a prop, for the figure it reports', () => {
     mountWithResult(<ScoreScreen scores={{ ...scores, wasBest: false }} />, { bestScore: 9999 });
     expect(screen.getByText('Best: 9999')).toBeTruthy();
-    expect(screen.queryByText('NEW BEST')).toBeNull();
+    expect(screen.queryByText('New best')).toBeNull();
   });
 
   it('takes NEW BEST off the run that was banked, not off a live comparison', () => {
@@ -706,7 +706,7 @@ describe('ScoreScreen', () => {
     // The store's `bestScore` here is deliberately HIGHER than the pull: any screen
     // that went back to comparing the two would print `Best: 9999` and go red.
     mountWithResult(<ScoreScreen scores={{ ...scores, pull: 10, wasBest: true }} />, { bestScore: 9999 });
-    expect(screen.getByText('NEW BEST')).toBeTruthy();
+    expect(screen.getByText('New best')).toBeTruthy();
     expect(screen.queryByText('Best: 9999')).toBeNull();
   });
 

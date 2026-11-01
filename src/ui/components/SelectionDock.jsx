@@ -62,10 +62,12 @@ function cellReference(kind, row, col, value, axes) {
     };
   }
   if (kind === 'timing') {
-    const typical = boosted ? '14-24°' : wot ? (lowRpm ? '12-20°' : highRpm ? '28-38°' : '22-32°') : '32-45°';
+    // No textbook band here: the right advance is this engine's own (its compression, its
+    // boost, its fuel), and a generic "32-45°" sat beside an advisor that had worked out a
+    // 24° knock limit for the very same cell. The advisor's figures are the ones to read.
     return {
       what: 'Spark advance before top dead center, aiming to land peak cylinder pressure ~16° after TDC.',
-      typical: `Typical here: ${typical}. Low manifold pressure tolerates far more advance; boost tolerates much less.`,
+      typical: 'This engine\'s knock limit and best-torque advance (MBT) for this cell are in the Advisor panel. Low manifold pressure tolerates more advance; boost much less.',
       affects: 'Torque rises toward MBT then flattens. Beyond the knock limit the ECU pulls it back during the pull.',
       note: boosted && value > 28 ? 'Aggressive for a boosted cell — cylinder pressure is already high here.' : null,
     };
@@ -78,6 +80,9 @@ function cellReference(kind, row, col, value, axes) {
     note: boosted && value > 12.8 ? 'Lean for a boosted cell — this is where lean mixtures burn pistons.' : cruise && value < 14 ? 'Richer than needed for cruise — wastes fuel with no power gain at this load.' : null,
   };
 }
+
+/** A phone-sized screen, where the dock has no room to spare. */
+const narrowScreen = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 560px)').matches;
 
 /**
  * Every key a range input responds to by changing its own value — the complete set
@@ -235,21 +240,25 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
     <div data-testid="selection-dock" style={{ position: 'sticky', bottom: 0, background: 'var(--panel)', borderTop: `1px solid var(--line)`, padding: '11px 14px 13px', boxShadow: `0 -8px 20px ${shadowAlpha(0.45)}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <div>
-          <div style={{ fontSize: 10, letterSpacing: 1, color: 'var(--ink2)', textTransform: 'uppercase', fontWeight: 700 }}>{sel}</div>
-          <div data-testid="dock-readout" style={{ fontFamily: T.mono, fontSize: 23, fontWeight: 800, color: 'var(--ink)' }}>
-            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 12, color: 'var(--ink2)', marginLeft: 4 }}>{unit}</span>
+          <div style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums' }}>{sel}</div>
+          <div data-testid="dock-readout" style={{ fontSize: 24, fontWeight: 600, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+            {decimals ? shown.toFixed(decimals) : Math.round(shown)}<span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink2)', marginLeft: 4 }}>{unit}</span>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onClose}>DONE</Button>
+        <Button variant="ghost" size="sm" onClick={onClose}>Done</Button>
       </div>
       {selection.type === 'cell' && kind && (() => {
         const ref = cellReference(kind, selection.row, selection.col, current, axes);
         return (
-          <Panel tight style={{ marginBottom: 9, fontSize: 11.5, lineHeight: 1.55, color: 'var(--ink2)' }}>
-            <div style={{ fontSize: 11, color: T.cyan, fontWeight: 700, marginBottom: 5 }}>Reference: {RPM[selection.col]} RPM / {LOAD[selection.row]} {lu}</div>
-            <div>{ref.what}</div>
-            <div style={{ marginTop: 4, color: 'var(--ink)' }}>{ref.typical}</div>
-            <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
+          <Panel tight style={{ marginBottom: 9, fontSize: 12, lineHeight: 1.55, color: 'var(--ink2)' }}>
+            {/* Folded on a phone, where open it covered the whole table and the cell being
+                edited with it; open wherever there is room. */}
+            <details open={!narrowScreen()}>
+              <summary style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 600, cursor: 'pointer' }}>What this cell does</summary>
+              <div style={{ marginTop: 4 }}>{ref.what}</div>
+              <div style={{ marginTop: 4, color: 'var(--ink)' }}>{ref.typical}</div>
+              <div style={{ marginTop: 4 }}><b style={{ color: T.inkSoft }}>Affects: </b>{ref.affects}</div>
+            </details>
             {ref.note && <div style={{ marginTop: 4, color: T.warn }}>{ref.note}</div>}
           </Panel>
         );
@@ -265,7 +274,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
         <Seg
           label="Edit mode" value={mode}
           onChange={(id) => setMode(/** @type {'add'|'scale'|'set'} */ (id))}
-          options={[{ id: 'add', label: 'ADD' }, { id: 'scale', label: 'SCALE' }, { id: 'set', label: 'SET' }]}
+          options={[{ id: 'add', label: 'Add' }, { id: 'scale', label: 'Scale' }, { id: 'set', label: 'Set' }]}
         />
       </div>
       {mode === 'set' ? (
@@ -276,10 +285,10 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
             onKeyDown={(e) => { if (e.key === 'Enter') applySet(); }}
             style={{
               flex: 1, minWidth: 0, padding: '9px 10px', borderRadius: 8, border: `1px solid var(--line)`,
-              background: 'var(--panel2)', color: 'var(--ink)', fontFamily: T.mono, fontSize: 13,
+              background: 'var(--panel2)', color: 'var(--ink)', fontFamily: 'var(--sans)', fontSize: 14, fontVariantNumeric: 'tabular-nums',
             }}
           />
-          <Button variant="ghost" size="sm" onClick={applySet}>APPLY</Button>
+          <Button variant="ghost" size="sm" onClick={applySet}>Apply</Button>
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 7, marginTop: 9 }}>
@@ -288,9 +297,9 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
               is not something a stepper can know — and spending the status scale on a sign
               is what teaches a player to ignore it where it means something. */}
           {(mode === 'scale' ? SCALE_STEPS : [-bigStep, -smallStep, smallStep, bigStep]).map((d, i) => (
-            <button key={i} onClick={() => (mode === 'scale' ? scale(d) : apply(d))} style={{
-              flex: 1, padding: '11px 0', borderRadius: 8, border: `1px solid var(--line)`, background: 'var(--panel2)',
-              color: T.accInk, fontWeight: 800, fontFamily: T.mono, fontSize: 13,
+            <button key={i} type="button" onClick={() => (mode === 'scale' ? scale(d) : apply(d))} style={{
+              flex: 1, minHeight: 40, padding: 0, borderRadius: 'var(--r-sm)', border: '1px solid var(--line-hi)', background: 'var(--panel2)',
+              color: 'var(--ink)', fontWeight: 600, fontFamily: 'var(--sans)', fontSize: 14, fontVariantNumeric: 'tabular-nums', cursor: 'pointer',
             }}>{signed(d)}{mode === 'scale' ? '%' : ''}</button>
           ))}
         </div>

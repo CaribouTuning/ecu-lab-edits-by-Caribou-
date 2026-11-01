@@ -160,7 +160,7 @@ function variantsOn(el) {
 // below would go on passing over the shorter list.
 const EXPECTED = [
   'RESET ALL TO STOCK', 'FLAT ACROSS ALL', 'SPOOL RAMP', 'ZERO',
-  'Apply half', 'Apply all', 'DONE', 'RESCALE ECU TO',
+  'Apply half', 'Apply all', 'Done', 'RESCALE ECU TO',
   'BUILD HISTOGRAM FROM THIS PULL', 'APPLY CORRECTIONS TO VE', 'DISCARD',
 ];
 

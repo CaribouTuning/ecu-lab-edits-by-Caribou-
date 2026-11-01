@@ -73,7 +73,7 @@ describe('SelectionDock on a range', () => {
     mountAir();
     const before = store.tune.ve.map((r) => [...r]);
     select({ type: 'row', row: 2 });
-    fireEvent.click(within(dock()).getByRole('button', { name: 'SCALE' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Scale' }));
     fireEvent.click(within(dock()).getByRole('button', { name: '+5%' }));
     expect(store.tune.ve[2][4]).toBe(Number(Math.min(before[2][4] * 1.05, 130).toFixed(2)));
     expect(undoLabel()).toBe('VE edit · scale +5% · 8 cells');
@@ -82,7 +82,7 @@ describe('SelectionDock on a range', () => {
   it('sets a typed value with Enter, and ignores an empty field', () => {
     mountAir();
     select({ type: 'range', r1: 0, c1: 0, r2: 0, c2: 2 });
-    fireEvent.click(within(dock()).getByRole('button', { name: 'SET' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Set' }));
     const field = within(dock()).getByLabelText('Set value');
     fireEvent.keyDown(field, { key: 'Enter' });
     expect(store.history.past).toHaveLength(0);
@@ -113,10 +113,10 @@ describe('SelectionDock on a range', () => {
   it('goes back to ADD after the dock closes', () => {
     mountAir();
     select({ type: 'row', row: 2 });
-    fireEvent.click(within(dock()).getByRole('button', { name: 'SCALE' }));
-    fireEvent.click(within(dock()).getByRole('button', { name: 'DONE' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Scale' }));
+    fireEvent.click(within(dock()).getByRole('button', { name: 'Done' }));
     select({ type: 'row', row: 2 });
-    expect(within(dock()).getByRole('button', { name: 'ADD' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(dock()).getByRole('button', { name: 'Add' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
 

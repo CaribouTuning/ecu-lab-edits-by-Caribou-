@@ -17,7 +17,6 @@ import { Trophy } from 'lucide-react';
 
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { Note } from '../../primitives/Note.jsx';
-import { Panel } from '../../primitives/Panel.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { statusColor } from '../../theme.js';
 
@@ -52,48 +51,56 @@ export function ScoreScreen({ scores, stale = false }) {
           against a run that never happened. Run another pull to score what you have now.
         </Note>
       )}
-      <Panel className={styles.pullPanel}>
-        <div className={styles.pullLabel}>Pull score</div>
-        <div className={styles.pullValue}>{scores.pull}</div>
-        {/* NEW BEST is a fact about the run that produced this number, decided when it
-            was banked — not a live `pull >= bestScore` comparison, which is true by
-            construction on every pull because banking has already folded this pull
-            into `bestScore` by the time this renders. `bestScore` is still read here
-            for the figure the other branch names. */}
-        <div className={styles.pullBest} data-best={scores.wasBest ? 'true' : 'false'}>
-          {scores.wasBest ? 'NEW BEST' : `Best: ${bestScore}`}
+      {/* One scorecard, read left to right: what the pull scored, then the two grades
+          that scale it. Ruled columns, not three boxes and a banner. */}
+      <section className={styles.sheet} aria-label="Scores for the last pull">
+        <div className={styles.cell} data-primary="">
+          <div className={styles.label}>Pull score</div>
+          <div className={styles.value}>{scores.pull}</div>
+          {/* "New best" is a fact about the run that produced this number, decided when it
+              was banked — not a live `pull >= bestScore` comparison, which is true by
+              construction on every pull because banking has already folded this pull
+              into `bestScore` by the time this renders. */}
+          <div className={styles.sub} data-best={scores.wasBest ? 'true' : 'false'}>
+            {scores.wasBest ? 'New best' : `Best: ${bestScore}`}
+          </div>
         </div>
-      </Panel>
-      <div className={styles.cardsRow}>
         {/** @type {Array<[string, {score: number, label: string}]>} */ (
           [['Tuning score', scores.tuning], ['Engineer score', scores.engineer]]
-        ).map(([label, s]) => {
-          const c = statusColor(s.score);
+        ).map(([label, sc]) => {
+          const c = statusColor(sc.score);
           return (
-            <Panel key={label} className={styles.scoreCard}>
-              <div className={styles.scoreLabel}>{label}</div>
-              <div className={styles.scoreValue} style={{ color: c }}>{s.score}</div>
-              <div className={styles.scoreTag} style={{ color: c }}>{s.label}</div>
-            </Panel>
+            <div key={label} className={styles.cell}>
+              <div className={styles.label}>{label}</div>
+              <div className={styles.value}>{sc.score}<span className={styles.of}> / 100</span></div>
+              <div className={styles.sub}><i className={styles.dot} style={{ background: c }} aria-hidden="true" />{sc.label}</div>
+            </div>
           );
         })}
-      </div>
-      <Note>Pull Score rewards actual output (peak whp + torque), scaled by how clean (Tuning) and how sound (Engineer) the build is — a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling; every pull is a chance to beat your best.</Note>
+      </section>
+      <p className={styles.explain}>Pull score rewards actual output (peak whp plus torque), scaled by how clean (Tuning) and how sound (Engineer) the build is, so a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling: every pull is a chance to beat your best.</p>
       {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
-        <Panel tight className={styles.deductions}>
-          {scores.tuning.deductions.map((d, i) => <div key={'t' + i}>{d}</div>)}
-          {scores.engineer.deductions.map((d, i) => <div key={'e' + i}>{d}</div>)}
-        </Panel>
+        <section className={styles.list} aria-label="What cost points">
+          <h3 className={styles.listHead}>What cost points</h3>
+          {[...scores.tuning.deductions, ...scores.engineer.deductions].map((d, i) => {
+            // "-8 Exhaust diameter..." : the points in their own column, so they line up.
+            const m = /^([+\-−]?\d+(?:\.\d+)?)\s+(.*)$/.exec(d);
+            return (
+              <div key={i} className={styles.row}>
+                <span className={styles.pts}>{m ? m[1].replace('-', '−') : ''}</span>
+                <span>{m ? m[2] : d}</span>
+              </div>
+            );
+          })}
+        </section>
       )}
       {scores.tuning.advisories?.length > 0 && (
-        <div className={styles.advisoriesWrap}>
-          <div className={styles.advisoriesLabel}>
-            Hardware trade-offs (not scored)
-          </div>
+        <section className={styles.list} aria-label="Hardware trade-offs">
+          <h3 className={styles.listHead}>Hardware trade-offs, not scored</h3>
           {scores.tuning.advisories.map((a, i) => (
-            <div key={i} className={styles.advisory}>{a}</div>
+            <div key={i} className={styles.row} data-plain-row=""><span>{a}</span></div>
           ))}
-        </div>
+        </section>
       )}
     </>
   );

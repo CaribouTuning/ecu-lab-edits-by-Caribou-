@@ -14,7 +14,10 @@
 /* Laid out flat (a phone, or no 3D) the screen is as tall as what is on it, and the
    machine's console is docked along the bottom, always in reach: Start engine and Run a
    pull were below the fold under a screen held at 80% of the phone's height. */
-.station[data-flat='true'] .face[data-kind='monitor'] { height: auto; min-height: 320px; }
+.station[data-flat='true'] .face[data-kind='monitor'] { height: auto; min-height: 320px; flex: 1 0 auto; }
+/* The screen fills down to the console, which sits on the bottom edge: a short page (a clean
+   pull's log) left a band of the shop's dark behind it. */
+.station[data-flat='true'] { background: var(--bg); }
 .station[data-flat='true'] .face[data-kind='console'] {
   order: 2; position: sticky; bottom: 0; z-index: 2; flex: none;
   /* A size container with an auto height is zero tall: the Run button went with it. */

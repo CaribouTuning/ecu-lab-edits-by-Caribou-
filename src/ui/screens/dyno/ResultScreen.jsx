@@ -94,6 +94,35 @@ function Band({ band, onSelectRpm, x, y, width, height, focusable = true }) {
   );
 }
 
+/* The dyno charts' shared drawing: gridlines across only (values are read across), speed
+   along the bottom in thousands, quiet axes, and a tooltip that names its units. */
+const GRID = { stroke: 'var(--line)', vertical: false };
+const RPM_AXIS = {
+  dataKey: 'rpm', type: /** @type {const} */ ('number'), stroke: 'var(--line-hi)', tickLine: false,
+  tick: { fill: 'var(--ink2)', fontSize: 11 }, tickFormatter: (v) => `${(Number(v) / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k`,
+};
+/** Ticks every 1000 rpm across the chart, as a dyno sheet marks them. */
+const rpmTicks = (hi) => { const t = []; for (let r = 2000; r <= hi; r += 1000) t.push(r); return t; };
+/**
+ * A value axis that ends on a round number, with round steps (1, 2 or 5 times a power of
+ * ten, about four of them): 0, 70, 140 is a scale nobody reads off.
+ * @param {number} top the largest value plotted
+ */
+function niceScale(top) {
+  const rough = Math.max(top, 1) / 4; const mag = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= rough) ?? 10 * mag;
+  const max = Math.ceil(top / step) * step;
+  return { domain: [0, max], ticks: Array.from({ length: Math.round(max / step) + 1 }, (_, k) => k * step) };
+}
+const VALUE_AXIS = { stroke: 'var(--line-hi)', tickLine: false, axisLine: false, tick: { fill: 'var(--ink2)', fontSize: 11 } };
+const TOOLTIP = {
+  contentStyle: { background: 'var(--panel2)', border: '1px solid var(--line-hi)', borderRadius: 6, fontSize: 12, padding: '6px 10px' },
+  labelStyle: { color: 'var(--ink)', fontWeight: 600, marginBottom: 2 },
+  itemStyle: { padding: 0, fontVariantNumeric: 'tabular-nums' },
+  labelFormatter: (v) => `${Number(v).toLocaleString('en-US')} rpm`,
+  cursor: { stroke: 'var(--ink2)', strokeDasharray: '3 3' },
+};
+
 /**
  * @param {object} props
  * @param {Array<object>} props.chartData the shell's, shared with TUNE's ECU screen
@@ -111,6 +140,8 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
   // match it. 1.05x redline gives the sweep's last point a little headroom
   // without the axis running away for a low-redline build.
   const dynoChartMaxRpm = engineDerived.redline * 1.05;
+  // The value axis rounded to the tallest of everything drawn, the previous pull included.
+  const powerScale = niceScale(Math.max(1, ...chartData.flatMap((d) => [d.hp, d.torque, d.prevHp, d.prevTorque].filter((v) => Number.isFinite(v)))));
 
   // Shared by both charts below — see `resolveBandRpm`'s own doc for why the decision
   // lives there rather than inline here, and why it resolves by RPM rather than by band.
@@ -128,12 +159,12 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
-            <CartesianGrid stroke="var(--line)" />
-            <XAxis dataKey="rpm" stroke="var(--ink2)" fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke="var(--ink2)" fontSize={10} />
-            <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} />
+            <CartesianGrid {...GRID} />
+            <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
+            <YAxis {...VALUE_AXIS} width={44} {...powerScale} />
+            <Tooltip {...TOOLTIP} formatter={(v, name) => [Math.round(Number(v)), /TQ$|Torque/.test(String(name)) ? `${name}, lb-ft` : `${name}, hp`]} />
             {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
-            <Legend verticalAlign="top" height={26} wrapperStyle={{ fontSize: 12.5 }} />
+            <Legend verticalAlign="top" height={26} iconType="plainline" wrapperStyle={{ fontSize: 12.5 }} />
             {bands.map((b) => (
               <ReferenceArea
                 key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
@@ -155,14 +186,17 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
             onClick={handleChartClick}
           >
-            <CartesianGrid stroke="var(--line)" />
-            <XAxis dataKey="rpm" stroke="var(--ink2)" fontSize={10} type="number" domain={[1500, dynoChartMaxRpm]} />
-            <YAxis stroke="var(--ink2)" fontSize={10} />
-            <Tooltip contentStyle={{ background: 'var(--panel2)', border: `1px solid var(--line)`, fontSize: 11 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
+            <CartesianGrid {...GRID} />
+            <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
+            {/* Mixture and spark on their own scales: on one axis, AFR around 12 against
+                timing up to 30 degrees drew the mixture as a flat line. */}
+            <YAxis {...VALUE_AXIS} yAxisId="afr" width={44} domain={['auto', 'auto']} tickFormatter={(v) => Number(v).toFixed(1)} />
+            <YAxis {...VALUE_AXIS} yAxisId="deg" orientation="right" width={36} tickFormatter={(v) => `${v}°`} />
+            <Tooltip {...TOOLTIP} formatter={(v, name) => [Number(v).toFixed(1), /Timing/.test(String(name)) ? `${name}, ° BTDC` : `${name}, :1`]} />
+            <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
             {bands.map((b) => (
               <ReferenceArea
-                key={b.id} x1={b.rpmStart} x2={b.rpmEnd}
+                key={b.id} x1={b.rpmStart} x2={b.rpmEnd} yAxisId="afr"
                 // This chart's bands are the second copy of every event — see the
                 // power and torque chart above for the first. Both stay visible (the
                 // overlap is the intended visual), but only one copy should be a tab
@@ -171,12 +205,12 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} focusable={false} />}
               />
             ))}
-            <Line dataKey="afrCommanded" name="AFR commanded" stroke="var(--ink2)" strokeDasharray="3 3" dot={false} isAnimationActive={false} />
+            <Line yAxisId="afr" dataKey="afrCommanded" name="AFR commanded" stroke="var(--ink2)" strokeDasharray="3 3" dot={false} isAnimationActive={false} />
             {/* Series identity colours, not status: both lines are on screen for
                 every pull, so green and amber here reported a health this chart
                 never measures. */}
-            <Line dataKey="afr" name="AFR actual" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line dataKey="timing" name="Timing used" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line yAxisId="afr" dataKey="afr" name="AFR actual" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line yAxisId="deg" dataKey="timing" name="Timing used" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </Panel>

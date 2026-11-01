@@ -117,7 +117,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   const spec = useMemo(() => engineSpecOf(build, derived), [build, derived]);
   const changed = useMemo(() => changedParts(build, preset), [build, preset]);
   const cfg = build.engineConfig;
-  const caption = `${derived.displacementL.toFixed(2)} L ${cfg.configuration} · ${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm`;
+  const caption = `${derived.displacementL.toFixed(2)} L ${cfg.configuration}, ${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm`;
   // Where the engine stands against the factory: three different things to be building.
   const origin = !preset ? 'own' : changed.size ? 'modified' : 'stock';
   const changedNames = BENCH_PARTS.filter((p) => changed.has(p.id)).map((p) => p.label);

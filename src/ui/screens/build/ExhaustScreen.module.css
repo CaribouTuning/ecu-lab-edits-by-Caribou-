@@ -58,7 +58,7 @@
 
 .cardStatus {
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   color: var(--acc-ink);
 }
 

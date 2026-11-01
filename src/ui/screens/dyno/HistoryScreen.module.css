@@ -35,7 +35,7 @@
 
 .ordinal {
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink-soft);
 }
 
@@ -61,7 +61,7 @@
 
 .peaks {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
 }
@@ -89,7 +89,7 @@
   padding: 6px 9px;
   border-radius: 8px;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   border: 1px solid var(--line);
   background: var(--panel3);
   color: var(--ink2);
