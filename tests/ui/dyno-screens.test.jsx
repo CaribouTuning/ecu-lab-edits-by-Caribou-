@@ -533,7 +533,8 @@ describe('LogScreen', () => {
     mountWithResult(<LogScreen flagged={[{ ri: 4, ci: 3 }, { ri: 4, ci: 4 }, { ri: 3, ci: 1 }]} />, { result: { ...FAKE_RESULT, events: [] } });
     expect(screen.getByText(/Clean pull/)).toBeTruthy();
     const note = screen.getByTestId('log-flagged-elsewhere').textContent;
-    expect(note).toMatch(/3 spark cells past the knock limit at 70 and 40 kPa/);
+    expect(note).toMatch(/3 spark cells past the knock limit in the 40 and 70 kPa rows/);
+    expect(note).toMatch(/A pull at 100% throttle never reads them/);
   });
 
   it('tones an unrecognised event type by its severity, not by a hardcoded name list', () => {

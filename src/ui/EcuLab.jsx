@@ -1648,7 +1648,7 @@ export function EcuLabApp() {
                 )}
 
                 {result && !running && shown === 'log' && (
-                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} />
+                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} axes={(layout ?? layoutById(null)).timing} />
                 )}
 
                 {result && !running && shown === 'score' && scores && (
