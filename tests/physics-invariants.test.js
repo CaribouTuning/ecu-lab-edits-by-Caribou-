@@ -223,6 +223,9 @@ describe('every lever pulls the way it does on a real engine', () => {
       const [best, lean, rich] = [12.9, 16.2, 10.3].map((afrCommanded) => at({ timingVal: safe - 2, afrCommanded }));
       if (best.fuelLimited || lean.fuelLimited || rich.fuelLimited || best.imep < 1) return null;
       if (!(lean.imep < best.imep)) return `imep ${best.imep} → ${lean.imep} going lean to 16.2`;
+      // Knock-limited, the richer charge keeps spark the leaner one had pulled: that is a
+      // real gain (why boosted tunes run rich), not the air limit this asks about.
+      if (rich.timing > best.timing + 0.5) return null;
       if (rich.imep > best.imep * 1.01) return `imep ${best.imep} → ${rich.imep} going rich to 10.3`;
       return null;
     })).toEqual([]);
