@@ -159,9 +159,23 @@ describe('the advisor judges a turbo by the boost it makes', () => {
     const boostAt = (rpm) => S.interp1(uncut.points.map((q) => q.rpm), uncut.points.map((q) => q.boostPsi), rpm);
     // Timing 6° past a knock-limited calibration is flagged somewhere: the test has teeth.
     expect(a.overAdvanced.length).toBeGreaterThan(0);
+    // A cell is read across the speeds either side of its column, as far as the next column
+    // (the ECU blends neighbouring columns): on a grid with 1000 RPM between columns, the 1500
+    // RPM cell still carries a share at 2300 RPM, where the turbo has made more boost.
+    const rpmAxis = S.layoutById(tables.layout).timing.rpm;
+    const reachAcross = (ci) => {
+      const lo = rpmAxis[Math.max(0, ci - 1)], hi = rpmAxis[Math.min(rpmAxis.length - 1, ci + 1)];
+      let most = 0;
+      for (let r = lo; r <= hi; r += 50) most = Math.max(most, boostAt(r));
+      return most;
+    };
+    const loadAxis = S.layoutById(tables.layout).timing.load;
     for (const c of a.overAdvanced) {
-      // Every flagged cell is one the engine reaches: its pressure within what the pull made there.
-      expect(c.map, `${c.map} kPa at ${c.rpm} rpm`).toBeLessThanOrEqual(S.BARO_KPA + 10 + Math.max(0, Math.min(11, boostAt(c.rpm))) * S.PSI_TO_KPA + 0.5);
+      // Every flagged cell is one the engine reads: the pull's pressure, where the cell is in
+      // force, past the row BELOW it. Between two rows the ECU blends them, so on the game
+      // grid a 200 kPa cell carries half the answer at 177 kPa although no pull reaches 200.
+      const below = c.ri + 1 < loadAxis.length ? loadAxis[c.ri + 1] : 0;
+      expect(below, `${c.map} kPa at ${c.rpm} rpm`).toBeLessThan(S.BARO_KPA + 10 + Math.max(0, Math.min(11, reachAcross(c.ci))) * S.PSI_TO_KPA + 0.5);
     }
   });
 });
@@ -176,8 +190,13 @@ describe('a turbo bolted onto a factory engine can be tuned by following the adv
     const { reducer, ACTIONS } = await import('../src/ui/state/reducer.js');
     const { makeInitialState } = await import('../src/ui/state/initialState.js');
     const { pullInputs } = await import('../src/ui/state/pullInputs.js');
-    const { extendAxes } = await import('../src/ui/state/layoutSwitch.js');
+    const { extendAxes, layoutSwitch } = await import('../src/ui/state/layoutSwitch.js');
     let st = reducer(makeInitialState({ blank: true }), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    // On the breakpoints sized to the engine, the TUNE layout switch's 16 × 16: a factory
+    // engine starts on the game's 8 × 6 grid, whose 150 and 200 kPa rows its factory
+    // calibration already fills, so the extended, untuned boost rows this guards only exist
+    // on the sized grid.
+    st = reducer(st, /** @type {any} */ (layoutSwitch(st, 'engine')));
     const set = (field, value) => { st = reducer(st, { type: ACTIONS.SET_BUILD_FIELD, field, value }); };
     set('turboOn', true); set('boostCurve', st.build.boostCurve.map(() => 7)); set('injIdx', 3); set('ecuInjectorCc', 650);
     st = reducer(st, extendAxes(st));

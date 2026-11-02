@@ -22,7 +22,7 @@ import {
 } from './hardware.js';
 import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { engineLayout, layoutById, readEcuTable, readTable } from './layouts.js';
+import { GAME_LAYOUT, engineLayout, fitsGameGrid, layoutById, readEcuTable, readTable } from './layouts.js';
 import { chargeIndexOf } from './knock.js';
 import { cycleInputsFor, knockLimitedSpark, mbtFromBurn, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
@@ -744,20 +744,24 @@ function hardwareFor(preset) {
 }
 
 /**
- * The breakpoints a preset's tables are generated on when none are asked for: sized to
- * the engine (`engineLayout`), from cranking to just past its rev limit and from overrun
- * to just past the most manifold pressure it makes.
+ * The breakpoints a preset's tables are generated on when none are asked for: the game's
+ * own 8 × 6 grid (`GAME_LAYOUT`, 800-7,500 RPM by 20-200 kPa), which is quick to read and
+ * tune on any screen, wherever the engine fits inside it. An engine that revs past its last
+ * column or makes more manifold pressure than its top row gets breakpoints sized to it
+ * (`engineLayout`), since on the game grid the ECU would read the edge for the whole of its
+ * top end. The engine-sized grid is always there on TUNE's layout switch for a tuner who
+ * wants the finer table.
  *
  * @param {Preset} preset
- * @param {{rpmCount?: number, loadCount?: number}} [depth] the target computer's table size
+ * @param {{rpmCount?: number, loadCount?: number}} [depth] the target computer's table size:
+ *   given, the breakpoints are always sized to the engine at that depth
  * @returns {import('./layouts.js').Layout}
  */
 export function presetLayout(preset, depth = {}) {
-  return engineLayout({
-    redline: preset.engine.redline ?? 7000,
-    peakMapKpa: peakMapKpaOf({ turboOn: preset.induction.turboOn, boostCurve: preset.induction.boost }),
-    ...depth,
-  });
+  const redline = preset.engine.redline ?? 7000;
+  const peakMapKpa = peakMapKpaOf({ turboOn: preset.induction.turboOn, boostCurve: preset.induction.boost });
+  if (!depth.rpmCount && !depth.loadCount && fitsGameGrid({ redline, peakMapKpa })) return GAME_LAYOUT;
+  return engineLayout({ redline, peakMapKpa, ...depth });
 }
 
 /**

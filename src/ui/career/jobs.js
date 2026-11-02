@@ -164,7 +164,9 @@ export const JOBS = [
     needs: { equipment: ['flex'] }, minRep: 20, pay: 800, rep: 9,
     checks: [
       { type: 'events', kind: 'complaint', types: ['injscale', 'rich'], label: 'Fuelling right for the injectors and the fuel' },
-      { type: 'mixture', kind: 'complaint', pct: 6, label: 'Full-throttle mixture where it should be' },
+      // 7, not 6: on the game's 8 × 6 the VQ35HR's airflow bulges between the 4500 and 5500
+      // RPM columns, so even a table corrected from the logs runs about 6.3% lean at 5000.
+      { type: 'mixture', kind: 'complaint', pct: 7, label: 'Full-throttle mixture where it should be' },
       ...SAFE, IDLES,
     ],
     hint: 'Still bucks a little and I can still smell it. Something about the fuel is still off.',

@@ -36,19 +36,19 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 258 lb-ft | 6400 / 6500 | 0.830 | 29.4° | 0.453 | 10.9 | 738 | 62 | 12.5 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 306 hp / 266 lb-ft | 6800 / 6900 | 0.852 | 29.7° | 0.438 | 10.9 | 742 | 65 | 12.9 |
-| BMW N54 | 302 hp / 295 lb-ft | 302 hp / 322 lb-ft | 5800 / 5500 | 0.788 | 17.7° | 0.475 | 10.9 | 739 | 73 | 18.4 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 322 hp / 340 lb-ft | 5500–6500 / 5600 | 0.969 | 13.4° | 0.387 | 10.9 | 802 | 73 | 19.3 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 256 lb-ft | 6400 / 6500 | 0.830 | 29.4° | 0.453 | 10.9 | 738 | 62 | 12.5 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 304 hp / 264 lb-ft | 6800 / 6700 | 0.853 | 29.4° | 0.435 | 11.0 | 740 | 66 | 12.8 |
+| BMW N54 | 302 hp / 295 lb-ft | 305 hp / 322 lb-ft | 5800 / 5500 | 0.823 | 17.4° | 0.451 | 11.0 | 753 | 74 | 18.4 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 321 hp / 339 lb-ft | 5500–6500 / 5700 | 0.967 | 13.3° | 0.389 | 10.9 | 804 | 71 | 19.3 |
 | BMW B58B30M1 | 382 hp / 369 lb-ft | 375 hp / 378 lb-ft | 5800 / 5700 | 0.952 | 10.2° | 0.395 | 10.9 | 820 | 77 | 21.4 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 226 hp / 239 lb-ft | 4700–6200 / 5900 | 0.948 | 15.6° | 0.407 | 10.6 | 823 | 71 | 20.5 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 224 hp / 239 lb-ft | 4700–6200 / 5700 | 0.958 | 13.6° | 0.407 | 10.5 | 827 | 71 | 20.5 |
 | VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 301 hp / 289 lb-ft | 5400–6500 / 6400 | 0.923 | 13.9° | 0.399 | 11.1 | 814 | 84 | 24.9 |
-| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 362 hp / 380 lb-ft | 5600 / 5500 | 0.819 | 28.7° | 0.497 | 10.0 | 741 | 59 | 11.4 |
-| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 400 hp / 388 lb-ft | 6000 / 6000 | 0.825 | 29.8° | 0.492 | 10.1 | 739 | 62 | 11.7 |
-| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 336 hp / 386 lb-ft | 5200 / 5000 | 0.803 | 29.4° | 0.517 | 9.8 | 745 | 55 | 11.0 |
-| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 302 hp / 346 lb-ft | 5200 / 5100 | 0.762 | 28.6° | 0.548 | 9.8 | 723 | 56 | 11.1 |
-| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 282 hp / 309 lb-ft | 5200 / 5400 | 0.809 | 28.9° | 0.518 | 9.8 | 744 | 55 | 10.9 |
-| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 474 hp / 481 lb-ft | 6000 / 6000 | 0.827 | 22.2° | 0.445 | 11.1 | 744 | 67 | 12.8 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 362 hp / 382 lb-ft | 5600 / 5500 | 0.819 | 28.5° | 0.497 | 10.0 | 742 | 59 | 11.5 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 398 hp / 379 lb-ft | 6000 / 6100 | 0.823 | 29.4° | 0.497 | 10.0 | 741 | 60 | 11.4 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 333 hp / 380 lb-ft | 5200 / 5000 | 0.811 | 28.3° | 0.513 | 9.8 | 750 | 53 | 10.8 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 301 hp / 338 lb-ft | 5200 / 5400 | 0.769 | 29.0° | 0.552 | 9.6 | 731 | 55 | 10.8 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 282 hp / 304 lb-ft | 5200 / 5500 | 0.809 | 29.1° | 0.521 | 9.7 | 745 | 55 | 10.8 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 472 hp / 479 lb-ft | 6000 / 5900 | 0.828 | 20.5° | 0.444 | 11.1 | 746 | 64 | 12.7 |
 
 Each engine's one fitted input is its cam duration, set where peak power lands on the
 rating; torque and the peak speeds are predictions. The cams were refitted after the
@@ -185,7 +185,7 @@ Each of these is measured, written down in the code where it arises, and taught 
 Learn article 34. None of them changes the direction of any lesson.
 
 1. **Air per horsepower is close; fuel per horsepower now in the real band.** The presets
-   burn 0.39–0.55 lb/hp·h at peak power and make 9.8–11.1 crank hp per lb/min of air,
+   burn 0.39–0.55 lb/hp·h at peak power and make 9.6–11.1 crank hp per lb/min of air,
    against 0.45–0.60 and about 10–11 for real engines of their kind. The spread is the
    factories' own mixtures: the GM trucks run GM's stock enrichment, lambda 0.76–0.81, and
    burn the most (the LM7 0.55); the direct-injection B58 and EA888 hold near stoichiometric
@@ -222,8 +222,8 @@ Learn article 34. None of them changes the direction of any lesson.
    rating on three of the five turbo presets. The N54 reads 9% over its rating, and so do
    real ones: a stock 335i measured 300 lb-ft at the wheels on a DynoJet (Automobile, via
    bimmerfile.com, 2010-09-14) against 295 rated at the crank. The GTI peaks about 7% under.
-3. **Exhaust temperature reads low at full throttle.** The gauge reads about 720–745 °C (NA;
-   the GM trucks' rich stock mixture the coolest) and 740–825 °C (boosted; the
+3. **Exhaust temperature reads low at full throttle.** The gauge reads about 730–750 °C (NA;
+   the GM trucks' rich stock mixture the coolest) and 750–830 °C (boosted; the
    direct-injection engines, near stoichiometric, the hottest) at peak power. Production turbo engines run up to about 950 °C
    at the turbine inlet before enrichment holds them there (ASME source above). The
    exhaust-port cooling that sets it is fitted to the cruise and part-throttle bands, and
@@ -260,7 +260,7 @@ Learn article 34. None of them changes the direction of any lesson.
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
 7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 71–85 bar
-   (NA presets about 54–67) against about 100–120 bar quoted for production turbo engines
+   (NA presets about 53–67) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
 8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor

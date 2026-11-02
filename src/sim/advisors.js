@@ -36,8 +36,9 @@ const INDUCTION_MEMO = new WeakMap();
 /** A cell delta below this (percent) is not worth reporting. */
 export const VE_NOTABLE_PCT = 2.5;
 
-/** Safety left under the calculated knock limit when advising, degrees. */
-const KNOCK_SAFETY_DEG = 1.5;
+/** Safety left under the calculated knock limit when advising, degrees. The pull log's
+ *  lazy-spark entry (sweep.js) measures against the same target. */
+export const KNOCK_SAFETY_DEG = 1.5;
 /** Protections (strategy.js) that take boost or load away, so a pull under them did not
  *  reach the boost its tune asks for. IAT and EGT protection pull timing or add fuel and
  *  leave the boost alone. */
@@ -47,7 +48,7 @@ const BOOST_CUTTING = new Set(['knock', 'duty', 'overboost', 'lean', 'torque', '
 const ADVANCE_TOLERANCE_DEG = 1.0;
 
 /** A cell has to be leaving this much advance on the table before it is worth chasing. */
-const UNDER_ADVANCED_DEG = 3.0;
+export const UNDER_ADVANCED_DEG = 3.0;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 const MIX_NOTABLE_AFR = 0.45;
@@ -549,6 +550,19 @@ export function calibrationAdvice({
       // suggestion without the warning would leave the player with a number to type and
       // no reason for it.
       here.knockCeiling = Math.min(here.knockCeiling, Number(judged.toFixed(1)));
+      // AND THE SUGGESTION MAY NOT CARRY MORE THAN THE JUDGEMENT ALLOWS. Following the
+      // advice means typing in the flagged cells; a neighbour that is not flagged keeps
+      // its number. Suggesting against the neighbour's SUGGESTED value alone handed a
+      // flagged cell a number past its own judged ceiling (70 kPa at 2,500 RPM on a turbo
+      // V6: ceiling 24.8, suggestion 27.5), so it stayed flagged however many times the
+      // player typed it, and once suggested MORE advance for a cell it had just called
+      // over-advanced. The lower of the two is safe whether or not the neighbour is
+      // changed too, and it only ever lowers a suggestion.
+      if (judged < here.suggested) {
+        here.suggested = clamp(Math.floor(judged * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
+        here.delta = Number((here.suggested - here.current).toFixed(1));
+        here.interpolationLimited = true;
+      }
     }
   });
 
@@ -586,7 +600,10 @@ export function calibrationAdvice({
       }
     }
   }
-  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA && c.outside);
+  // Not in the idle columns: full throttle at idle speed is a tip-in, not a point any pull
+  // holds (a dyno sweep starts at 1500 RPM), and a factory fuel strategy is written for the
+  // idle there, not for power (GM's LQ4 asks 13.5:1 at 800 RPM, 100 kPa).
+  const wrongMix = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA && c.outside && c.rpm > IDLE_COLUMN_MAX_RPM);
   // SPARK CANNOT FIX EVERY CELL. Where the knock ceiling sits below the most retard the
   // table can hold, no number typed into this cell is safe at the boost being asked for:
   // the fix is less boost here (a real ECU's low-speed boost or torque limit), or better
