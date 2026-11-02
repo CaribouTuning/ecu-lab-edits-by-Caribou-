@@ -107,19 +107,9 @@ describe('InductionScreen', () => {
     expect(onToggle).toHaveBeenCalledWith('induction');
   });
 
-  it('installs the intake bolt-on through the store when its card is clicked', () => {
-    // `boltons` dissolved into this screen and ExhaustScreen — this is the induction
-    // half's only card. If `installMod` were dropped or mis-wired on the move out of
-    // BoltonsScreen, the card would render but the click would never flip
-    // `data-installed`, and this would fail.
+  it('holds only what forces air in: the intake is a bolt-on, not on this stage', () => {
     mount(<InductionScreen active onToggle={noop} />);
-    const card = () => screen.getByText(MOD_INFO.intake.label).closest('button');
-    expect(card().getAttribute('data-installed')).toBe('false');
-    fireEvent.click(card());
-    expect(card().getAttribute('data-installed')).toBe('true');
-    // And it comes off again: a part on the stand is fitted or removed, not fitted for good.
-    fireEvent.click(card());
-    expect(card().getAttribute('data-installed')).toBe('false');
+    expect(screen.queryByText(MOD_INFO.intake.label)).toBeNull();
   });
 });
 
@@ -173,19 +163,23 @@ describe('ExhaustScreen', () => {
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
     mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
-    fireEvent.click(screen.getByText('Exhaust'));
+    fireEvent.click(screen.getByText('Bolt-ons'));
     expect(onToggle).toHaveBeenCalledWith('exhaust');
   });
 
-  it('installs the exhaust and headers bolt-ons through the store when their cards are clicked', () => {
-    // The exhaust half of the dissolved BoltonsScreen — both remaining cards land
-    // here. Clicking each in turn and reading `data-installed` back off the DOM
-    // catches either card losing its `installMod` wiring on the move.
+  it('installs the intake, headers and cat-back bolt-ons through the store when their cards are clicked', () => {
+    // Every bolt-on lives on this stage. Clicking each in turn and reading
+    // `data-installed` back off the DOM catches a card losing its wiring.
     mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} />);
-    fireEvent.click(screen.getByText(MOD_INFO.exhaust.label).closest('button'));
-    fireEvent.click(screen.getByText(MOD_INFO.headers.label).closest('button'));
-    expect(screen.getByText(MOD_INFO.exhaust.label).closest('button').getAttribute('data-installed')).toBe('true');
-    expect(screen.getByText(MOD_INFO.headers.label).closest('button').getAttribute('data-installed')).toBe('true');
+    const card = (k) => screen.getByText(MOD_INFO[k].label).closest('button');
+    for (const k of ['intake', 'exhaust', 'headers']) {
+      expect(card(k).getAttribute('data-installed')).toBe('false');
+      fireEvent.click(card(k));
+      expect(card(k).getAttribute('data-installed')).toBe('true');
+    }
+    // And it comes off again: a part on the stand is fitted or removed, not fitted for good.
+    fireEvent.click(card('intake'));
+    expect(card('intake').getAttribute('data-installed')).toBe('false');
   });
 
 });

@@ -6,6 +6,7 @@
 
 import { baseMapFor, defaultEcuCalibration, deriveEngine, ecuHardwareOf, layoutById, presetById } from '../../sim/index.js';
 
+import { layoutFor } from './layoutSwitch.js';
 import { ACTIONS } from './reducer.js';
 
 /**
@@ -49,11 +50,11 @@ export function changedParts(build, preset) {
   if (differs(HEAD_KEYS) || (build.coil ?? 'stock') !== 'stock') out.add('head');
   const ind = preset.induction;
   const factoryBoost = build.factoryInduction?.boostCurve ?? null;
-  if (!!build.turboOn !== !!ind.turboOn || !!build.blowerId || !!build.nitrous || !!mods.intake !== !!pm.intake || !!mods.intercooler !== !!pm.intercooler
+  if (!!build.turboOn !== !!ind.turboOn || !!build.blowerId || !!build.nitrous || !!mods.intercooler !== !!pm.intercooler
     || (build.turboOn && (build.turbineIdx !== ind.turbineIdx || (build.turbineCount ?? 1) !== (ind.turbineCount ?? 1) || build.compressorIdx !== ind.compressorIdx))
     || (build.turboOn && factoryBoost && build.boostCurve.some((b, i) => Math.abs(b - (factoryBoost[i] ?? 0)) > 0.05))) out.add('induction');
   if (build.injIdx !== preset.parts.injectorIdx || build.octaneIdx !== preset.parts.octaneIdx) out.add('fuel');
-  if (build.exhaustDiaIdx !== preset.parts.exhaustDiaIdx || !!mods.exhaust !== !!pm.exhaust || !!mods.headers !== !!pm.headers) out.add('exhaust');
+  if (build.exhaustDiaIdx !== preset.parts.exhaustDiaIdx || !!mods.exhaust !== !!pm.exhaust || !!mods.headers !== !!pm.headers || !!mods.intake !== !!pm.intake) out.add('exhaust');
   return out;
 }
 
@@ -85,4 +86,41 @@ export function buildName(build) {
   const p = originPreset(build);
   if (!p) return null;
   return changedParts(build, p).size ? `${p.name} (modified)` : p.name;
+}
+
+/**
+ * Whether the engine on the bench is one of the player's own: built from their figures,
+ * no factory engine behind it.
+ * @param {import('./initialState.js').StoreState['build']} build
+ * @returns {boolean}
+ */
+export function isOwnEngine(build) {
+  return build.engineReady !== false && !build.originPresetId && !build.presetId;
+}
+
+/**
+ * The safe base map for an engine of the player's own as its block and head now stand, on
+ * the induction it was created with (naturally aspirated: `build.factoryInduction`), with
+ * the bolt-ons fitted. What a tuner loads so a new engine starts and survives a first pull:
+ * generated from the physics with a factory's knock margin, conservative, not tuned. A
+ * turbo, a supercharger, nitrous, a fuel or an injector change is not in it: no tuner
+ * would calculate boost cells for a customer, so those cells are the player's to tune.
+ * @param {import('./initialState.js').StoreState['build']} build
+ * @param {string|null} [layoutChoice] the tables' layout id now: a player on the finer grid,
+ *   or an engine computer's own, stays on it (left out, or the game grid: the grid a new
+ *   engine of this size starts on)
+ * @returns {Omit<import('./reducer.js').LoadBaseMapAction, 'type'>}
+ */
+export function ownEngineBaseMap(build, layoutChoice = null) {
+  const f = build.factoryInduction ?? null;
+  const asCreated = f
+    ? { turboOn: !!f.turboOn, turbineIdx: f.turbineIdx, turbineCount: f.turbineCount ?? 1, compressorIdx: f.compressorIdx, boostCurve: f.boostCurve }
+    : { turboOn: false, boostCurve: build.boostCurve.map(() => 0) };
+  const m = baseMapFor(/** @type {any} */ ({ ...build, ...asCreated }), layoutChoice && layoutChoice !== 'game' ? layoutFor(build, layoutChoice) : null);
+  const derived = deriveEngine(build.engineConfig);
+  const gate = ecuHardwareOf(build).gate;
+  return {
+    ve: m.ve, timing: m.timing, afr: m.afr, mafScalar: m.mafScalar, layout: m.layout,
+    ecu: { ...defaultEcuCalibration({ derived, gate, axes: layoutById(m.layout).timing }), vvt: m.ecu.vvt },
+  };
 }

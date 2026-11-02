@@ -582,9 +582,9 @@ describe('banking a pull', () => {
       };
       expect(Number(measured.pull)).toBeGreaterThan(0);
 
-      // BUILD > EXHAUST > fit a 4.0" pipe, then back to the scorecard.
+      // BUILD > BOLT-ONS > fit a 4.0" pipe, then back to the scorecard.
       goTo('BUILD');
-      fireEvent.click(screen.getByText('Exhaust'));
+      fireEvent.click(screen.getByText('Bolt-ons'));
       fireEvent.click(screen.getByRole('button', { name: '4.0"' }));
       // Guard the interaction, not just the outcome: an equality assertion passes
       // trivially if the pipe was never actually changed.

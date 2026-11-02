@@ -12,14 +12,13 @@ import { Wind } from 'lucide-react';
 import React from 'react';
 
 import {
-  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES, MOD_INFO, RPM,
+  BLOWER_OPTS, COEFF, COMPRESSOR_OPTS, DEFAULT_ECU_HW, ECU_COEFF, KELVIN_OFFSET, LINEAR_SCALES, RPM,
   TURBINE_OPTS, WASTEGATE_OPTS, blowerCurve, blowerOf, bottlePressurePsi, clamp, compressorWithCount, deriveEngine,
   envFrom, starterRatio, tankFuel, turboAirflowNeedKgS,
 } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
-import { PartRow } from '../../components/PartRow.jsx';
 import { PickList } from '../../components/PickList.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
@@ -31,10 +30,9 @@ import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 
 import styles from './InductionScreen.module.css';
 
-// `boltons` dissolved into this screen and ExhaustScreen — this is the induction
-// half. Keep reading label/blurb off MOD_INFO rather than copying the strings, or
-// this list forks from the catalogue it is meant to be a view onto.
-const MODS_HERE = ['intake'];
+// What forces air in, and only that: the turbo, the supercharger, their intercooler, and
+// nitrous. The cold air intake is a bolt-on, with the headers and the cat-back
+// (ExhaustScreen, BUILD › BOLT-ONS).
 
 /** kg/s to lb/min, the unit turbo compressor maps are sold in. */
 const LB_MIN_PER_KG_S = 132.277;
@@ -91,9 +89,6 @@ export function InductionScreen({ active, onToggle }) {
     value: RPM.map((_, idx) => clamp(Number(idx === i ? value : boostCurve[idx]) || 0, 0, 25)),
   });
 
-  // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
-  // table: TUNE › AIRFLOW shows the gap, and you correct it from a log once you know why.
-  const toggleMod = (key) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, [key]: !mods[key] } });
 
   const ceiling = COMPRESSOR_OPTS[compressorIdx].boostCeiling;
   // Sizing by airflow, as a turbo shop does: what the engine asks for at the rev limit
@@ -118,12 +113,6 @@ export function InductionScreen({ active, onToggle }) {
         : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${peakBoost.toFixed(0)} psi`
           : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
-      <div className={styles.list}>
-        {MODS_HERE.map((key) => (
-          <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
-        ))}
-      </div>
-
       <div className={styles.labelTight}>MAP Sensor</div>
       <Seg variant="rule" label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
         value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />

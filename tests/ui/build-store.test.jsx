@@ -326,9 +326,9 @@ describe('resetting the calibration to stock', () => {
     // and the only difference between them is the mod set.
     fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
-    // the DOM once this section is mounted.
+    // The intake is a bolt-on, on its own stage.
     if (withIntake) {
+      buildPart('Bolt-ons');
       fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
     }
     buildPart('Engine');
@@ -382,6 +382,7 @@ describe('correcting VE from a logged pull', () => {
     enterSandbox();
     fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
+    buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     goTo('DYNO');
@@ -426,9 +427,8 @@ describe('applying a fuel-trim histogram', () => {
 
     fireEvent.click(screen.getByText('Induction'));
     fireEvent.click(toggleFor('Turbo kit'));
-    // `boltons` dissolved into Induction and Exhaust — the intake card is already in
-    // the DOM once this section is mounted (BuildSection stays mounted collapsed too,
-    // but opening it here matches how a real player would reach the card).
+    // The intake is a bolt-on, on its own stage.
+    buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
     goTo('DYNO');
@@ -586,7 +586,7 @@ describe('every segmented control', () => {
     // BUILD is the engine stand's build software, one part of the engine at a time (its
     // Engine part is a picker and a form, with no segmented control on it).
     let total = 0;
-    for (const part of ['Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust']) {
+    for (const part of ['Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Bolt-ons']) {
       buildPart(part);
       total += expectEverySegHasOneSelection();
     }

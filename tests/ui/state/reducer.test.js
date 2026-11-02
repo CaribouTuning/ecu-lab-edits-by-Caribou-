@@ -1914,3 +1914,26 @@ describe('tune.diffView (#106)', () => {
     expect(toggled.history.future).toHaveLength(1);
   });
 });
+
+describe('SET_ENGINE_CONFIG_PATCH with a base map (an engine of the player\'s own)', () => {
+  const base = {
+    ve: [[1]], timing: [[2]], afr: [[3]], mafScalar: 1.02, layout: null, ecu: undefined,
+  };
+  it('writes the base map in the same pass while the tables are as generated', () => {
+    const s0 = makeInitialState();
+    const s = reducer({ ...s0, tune: { ...s0.tune, tablesDirty: false } }, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { bore: 96 }, base });
+    expect(s.build.engineConfig.bore).toBe(96);
+    expect(s.tune.timing).toEqual([[2]]);
+    expect(s.tune.baseline.timing).toEqual([[2]]);
+    expect(s.build.mafScalar).toBe(1.02);
+    expect(s.tune.tablesDirty).toBe(false);
+  });
+  it('never replaces tables the player has worked on', () => {
+    const s0 = makeInitialState();
+    const dirty = { ...s0, tune: { ...s0.tune, tablesDirty: true } };
+    const s = reducer(dirty, { type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { bore: 96 }, base });
+    expect(s.build.engineConfig.bore).toBe(96);
+    expect(s.tune.timing).toBe(dirty.tune.timing);
+    expect(s.build.mafScalar).toBe(dirty.build.mafScalar);
+  });
+});

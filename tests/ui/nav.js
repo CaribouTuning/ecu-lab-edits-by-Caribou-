@@ -98,7 +98,7 @@ export async function openJobBoard() {
 
 /**
  * On the engine stand's build software, open one part of the engine: Engine, Short block,
- * Heads and cam, Induction, Fuel system or Exhaust.
+ * Heads and cam, Induction, Fuel system or Bolt-ons.
  * @param {string} name
  */
 export function buildPart(name) {

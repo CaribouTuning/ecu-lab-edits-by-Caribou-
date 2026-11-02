@@ -440,6 +440,9 @@ export function EcuLabApp() {
   const goTab = (t) => navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
   /** Open a specific section of a tab. */
   const goSection = (t, sec) => navigate({ view: 'app', tab: t, section: sec });
+  // An engine just put on the BUILD bench, by either path, opens on its short block: the figures to
+  // accept as the factory built them, or to set as the player's own, before the induction.
+  const startOnTheBlock = () => goSection('build', 'block');
   // Screens live in their own files, and some are memoised (LearnScreen today; any
   // BUILD/TUNE/DYNO screen that earns it tomorrow), so their `onToggle` prop has to be
   // REFERENTIALLY STABLE or the memo never bails out. A plain closure over
@@ -1350,7 +1353,7 @@ export function EcuLabApp() {
               <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
             </Station>
           )
-          : tab === 'build' ? <div className={deskApps.buildPage} role="region" aria-label="Build"><EngineStart /></div> : <EngineStart />)}
+          : tab === 'build' ? <div className={deskApps.buildPage} role="region" aria-label="Build"><EngineStart onDone={startOnTheBlock} /></div> : <EngineStart />)}
 
         {/* ---------- BUILD: the build bench, the engine on it built a part at a time ---------- */}
         {/* The engine on its build stand in front of you, the bench computer beside it: one

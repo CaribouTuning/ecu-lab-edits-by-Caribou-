@@ -24,7 +24,7 @@ const SCREENS = [
   { re: /\bBUILD (?:→|›|>) FUEL SYSTEM\b/, tab: 'build', section: 'fuel', label: 'BUILD › FUEL SYSTEM' },
   { re: /\bBUILD (?:→|›|>) INDUCTION\b/, tab: 'build', section: 'induction', label: 'BUILD › INDUCTION' },
   { re: /\bBUILD (?:→|›|>) ENGINE\b/, tab: 'build', section: 'engine', label: 'BUILD › ENGINE' },
-  { re: /\bBUILD (?:→|›|>) EXHAUST\b/, tab: 'build', section: 'exhaust', label: 'BUILD › EXHAUST' },
+  { re: /\bBUILD (?:→|›|>) (?:EXHAUST|BOLT-ONS)\b/, tab: 'build', section: 'exhaust', label: 'BUILD › BOLT-ONS' },
   { re: /\bTUNE (?:→|›|>) AIRFLOW\b/, tab: 'tune', section: 'airflow', label: 'TUNE › AIRFLOW' },
   { re: /\bTUNE (?:→|›|>) SPARK\b|\bOn TIMING\b/, tab: 'tune', section: 'spark', label: 'TUNE › SPARK' },
   { re: /\bTUNE (?:→|›|>) FUEL\b(?! SYSTEM)|\bOn AFR\b/, tab: 'tune', section: 'fuel', label: 'TUNE › FUEL' },

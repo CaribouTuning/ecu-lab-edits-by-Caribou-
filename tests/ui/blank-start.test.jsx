@@ -148,3 +148,46 @@ describe('the form refuses what the simulator cannot answer for, and says why', 
     expect(form.getByText(/Between 4000 and 11000 rpm\. Past 11,000 rpm is racing-engine territory/)).toBeTruthy();
   });
 });
+
+describe('an engine put on the BUILD bench', () => {
+  const onPart = () => within(screen.getByRole('navigation', { name: 'Engine parts' }))
+    .getAllByRole('button').find((b) => b.getAttribute('aria-current') === 'true')?.textContent ?? '';
+  const ownEngine = () => {
+    const form = within(customForm());
+    fireEvent.click(form.getByRole('button', { name: /^V6/ }));
+    fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '95.5' } });
+    fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '81.4' } });
+    fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.3' } });
+    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '7000' } });
+    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
+  };
+
+  it('opens on its short block, a factory engine or the player\'s own', () => {
+    launchBlank();
+    goTo('BUILD');
+    fireEvent.click(factoryEngine('Nissan VQ35HR'));
+    expect(onPart()).toMatch(/Short block/);
+    cleanup();
+    launchBlank();
+    goTo('BUILD');
+    ownEngine();
+    expect(onPart()).toMatch(/Short block/);
+  });
+
+  it('on an engine of the player\'s own, says the base map is safe and not tuned, and that boost is theirs to tune', () => {
+    launchBlank();
+    goTo('BUILD');
+    ownEngine();
+    const note = screen.getByText(/Safe base map loaded/).parentElement.textContent;
+    expect(note).toMatch(/not tuned/);
+    expect(note).toMatch(/turbo, supercharger, nitrous/i);
+  });
+
+  it('on a factory engine, says the factory tables stay as they are', () => {
+    launchBlank();
+    goTo('BUILD');
+    fireEvent.click(factoryEngine('Nissan VQ35HR'));
+    expect(screen.getByText(/leaves the factory VE, spark and fuel tables as they are/)).toBeTruthy();
+    expect(screen.queryByText(/Safe base map loaded/)).toBeNull();
+  });
+});

@@ -149,9 +149,10 @@ export function EngineSpecForm({ onCreate, submitLabel = 'Create this engine' })
       )}
       {check.ok && (
         <Note>
-          It starts naturally aspirated, on 91 octane, with no bolt-ons. Add a turbo, supercharger,
-          intercooler or a different fuel on BUILD afterwards, then press RESET ALL TO STOCK on BUILD ›
-          ENGINE: it writes a calibration generated for that hardware.
+          It starts naturally aspirated, on 91 octane, with no bolt-ons, on a safe base map generated
+          for it: it starts, and a first pull is safe. Add a turbo, a supercharger, nitrous or another
+          fuel on BUILD afterwards and nothing is calculated for them. Log a pull and tune those cells
+          yourself, as a tuner would.
         </Note>
       )}
       <div>

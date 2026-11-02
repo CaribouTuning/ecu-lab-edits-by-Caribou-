@@ -502,7 +502,7 @@ function VeFromLogs() {
         </Worked>
       )}
       <Do steps={[
-        <>Fit <K>Cold Air Intake</K> on <K>BUILD › INDUCTION</K>, then run a pull.</>,
+        <>Fit <K>Cold Air Intake</K> on <K>BUILD › BOLT-ONS</K>, then run a pull.</>,
         <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>Correct VE from logs</K> now has samples.</>,
         <>Select the 5500 RPM, 100 kPa cell and open the advisor to see its maths.</>,
         <>Press <K>Apply half</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,

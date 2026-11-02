@@ -108,7 +108,7 @@ function idleScreen(kind, aspect) {
       g.textAlign = 'left';
     } else {
       // The engine's parts, in the order it goes together.
-      const parts = ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust'];
+      const parts = ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Bolt-ons'];
       const row = (bot - top) / parts.length;
       g.font = `500 ${Math.min(22, row * 0.6)}px system-ui, sans-serif`;
       parts.forEach((name, i) => {

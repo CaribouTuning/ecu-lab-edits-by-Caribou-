@@ -92,7 +92,7 @@ export const MISSIONS = [
     title: 'Bolt-on and retune',
     blurb: 'Fit a cold air intake, read its symptoms, and fix each where it lives.',
     steps: [
-      { text: 'Fit the Cold Air Intake on BUILD › INDUCTION.', check: (ctx) => !!ctx.state.build.mods.intake },
+      { text: 'Fit the Cold Air Intake on BUILD › BOLT-ONS.', check: (ctx) => !!ctx.state.build.mods.intake },
       { text: 'Run a pull.', check: pulledSince },
       {
         text: 'On TUNE › AIRFLOW, press Apply half under the table.',
