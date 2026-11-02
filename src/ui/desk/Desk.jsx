@@ -291,7 +291,9 @@ export function Desk({
       {mode === 'app' && appInfo ? (
         <section className={styles.phoneApp} aria-label={appInfo.label}>
           <header className={styles.phoneAppBar}>
-            <button type="button" className={styles.phoneBack} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
+            {/* Home puts the phone down: back in the shop, stood looking at all of it (the
+                phone's own home screen is one tap away, picking it up again). */}
+            <button type="button" className={styles.phoneBack} onClick={onBay} aria-label={`Close ${appInfo.label} and look at the shop`}>
               <ChevronLeft size={18} aria-hidden="true" /><span>Home</span>
             </button>
             <span className={styles.phoneAppTitle}>{appInfo.label}</span>

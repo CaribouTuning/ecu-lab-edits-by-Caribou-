@@ -22,37 +22,28 @@ describe('StartScreen', () => {
   it('opens the job board', () => {
     const onCareer = vi.fn();
     start({ onCareer });
-    fireEvent.click(screen.getByRole('button', { name: 'Career' }));
+    fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
     expect(onCareer).toHaveBeenCalledTimes(1);
   });
 
   it('opens the sandbox', () => {
     const onStart = vi.fn();
     start({ onStart });
-    fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
   it('opens the tutorial', () => {
     const onTutorial = vi.fn();
     start({ onTutorial });
-    fireEvent.click(screen.getByRole('button', { name: 'Tutorial' }));
+    fireEvent.click(screen.getByRole('button', { name: 'TUTORIAL' }));
     expect(onTutorial).toHaveBeenCalledTimes(1);
   });
 
   it('says what each way in is for, so the first choice is not a guess', () => {
     start();
-    // Each button's description is what it does, read out after its name.
-    expect(screen.getByRole('button', { name: 'Career' }).getAttribute('aria-describedby')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Career', description: /Run a tuning shop/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sandbox', description: /every tool and no customers/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Tutorial', description: /a dyno pull/ })).toBeTruthy();
-  });
-
-  it('marks the career as the way to start', () => {
-    start();
-    expect(screen.getByText('Start here')).toBeTruthy();
-    expect(screen.getByText('Open the shop')).toBeTruthy();
+    expect(screen.getByText('Customer cars with real faults to diagnose')).toBeTruthy();
+    expect(screen.getByText('Build and tune anything, no objectives')).toBeTruthy();
   });
 
   it('shows the build version', () => {

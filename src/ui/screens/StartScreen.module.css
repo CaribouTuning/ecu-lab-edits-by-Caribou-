@@ -1,108 +1,79 @@
-/* The first screen, from the app's own parts: the stations' page bar (Desk.module.css
-   .pageBar), the bench's list of starts (EngineStart.module.css .path), and the key the next
-   step uses (Desk.module.css .nextGo). No card floating on a wash, no drawings: a page. */
 .screen {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   min-height: 100dvh;
+  padding: var(--sp-xxl);
+  position: relative;
+  overflow: hidden;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
+  text-align: center;
 }
 
-/* ---------- the bar: what this is, and which build ---------- */
-.bar {
-  flex: none; height: 46px; display: flex; align-items: center; justify-content: space-between;
-  padding: 0 var(--sp-xl);
-  background: var(--panel); border-bottom: 2px solid var(--pen);
-}
-/* The wordmark as the status strip sets it: the maker small over the program. */
-.mark { display: flex; flex-direction: column; font-size: var(--fs-base); font-weight: 700; line-height: 1.15; }
-.mark small { font-size: var(--fs-xs); font-weight: 700; color: var(--ink2); }
-.version { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); color: var(--ink2); }
-
-/* ---------- the page: who we are on the left, where to go on the right ---------- */
-.body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 56px;
-  align-items: center;
-  width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 40px var(--sp-xxl);
-  box-sizing: border-box;
-}
-.screen *, .screen *::before, .screen *::after { box-sizing: border-box; }
-.start { min-width: 0; }
-
-.about { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-.logo { width: 104px; height: 111px; object-fit: contain; }
-/* 40px is not on the font-size scale: the app's one headline, sized as its own choice. */
-.title { font-size: 40px; font-weight: 700; line-height: 1.05; }
-.subtitle { margin-top: 4px; font-size: var(--fs-md); color: var(--ink2); }
-.blurb { max-width: 40ch; font-size: var(--fs-base); line-height: 1.6; color: var(--ink2); }
-
-/* The section's name, as the next step names itself ("Next"). */
-.startHead { margin-bottom: 8px; font-size: var(--fs-sm); font-weight: 700; color: var(--ink2); }
-
-/* One list, the rows divided by a hairline: three choices of one kind, not three cards. */
-.list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-hi); border-radius: var(--r-lg); background: var(--panel); overflow: hidden; }
-.list li + li { border-top: 1px solid var(--line); }
-
-.way {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 16px; row-gap: 4px; align-items: center;
-  width: 100%; padding: 14px 16px; border: 0; background: transparent; color: var(--ink);
-  font: inherit; text-align: left; cursor: pointer;
-  transition: background-color 0.14s ease;
-}
-.way:hover { background: var(--panel2); }
-.way:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.wayHead { display: flex; align-items: baseline; gap: 10px; }
-.wayName { font-size: var(--fs-md); font-weight: 700; }
-.wayNote { font-size: var(--fs-xs); font-weight: 600; color: var(--ink2); }
-.wayDoes { grid-column: 1; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
-.key, .chevron { grid-column: 2; grid-row: 1 / span 2; }
-.chevron { color: var(--ink2); }
-.way:hover .chevron { color: var(--ink); }
-
-/* The app's key: the next step's button, the one bright control on the page. */
-.key {
-  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
-  border-radius: var(--r-sm); background: var(--acc); color: var(--acc-on);
-  font-size: var(--fs-sm); font-weight: 700; white-space: nowrap;
-}
-.way:hover .key { filter: brightness(1.08); }
-/* The career's row is the way in: its name in full ink, the others' notes quieter. */
-.way[data-way='career'] .wayNote { color: var(--acc-ink); }
-
-/* An upright phone (under the project's one 560px breakpoint, see tokens.css): one column,
-   the badge beside the name so the list is on screen without scrolling. */
-@media (max-width: 559px) {
-  .bar { padding: env(safe-area-inset-top) var(--sp-lg) 0; height: calc(46px + env(safe-area-inset-top)); }
-  .body { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 28px; padding: 24px var(--sp-lg) max(24px, env(safe-area-inset-bottom)); }
-  /* The career's key goes under its description: the row is too narrow to share. */
-  .way[data-way='career'] { grid-template-columns: minmax(0, 1fr); }
-  .way[data-way='career'] .key { grid-column: 1; grid-row: auto; justify-self: start; margin-top: 6px; }
-  .about { display: grid; grid-template-columns: auto 1fr; column-gap: 14px; row-gap: 12px; align-items: center; }
-  .logo { width: 64px; height: 68px; }
-  .title { font-size: 30px; }
-  .subtitle { margin-top: 2px; font-size: var(--fs-base); }
-  .blurb { grid-column: 1 / -1; }
-  .way { padding: 12px 14px; }
-  .key { padding: 0 8px; }
+.glow {
+  position: absolute;
+  top: -15%;
+  left: 50%;
+  width: 420px;
+  height: 420px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--acc-rgb), 0.10) 0%, transparent 70%);
+  pointer-events: none;
 }
 
-/* A phone on its side: little height, so the blurb goes and the two columns stay. */
-@media (max-height: 500px) and (min-width: 560px) {
-  .body { padding: 14px var(--sp-xl); gap: 32px; }
-  .logo { width: 56px; height: 60px; }
-  .title { font-size: 30px; }
-  .blurb { display: none; }
-  .way { padding: 9px 14px; }
+.inner { position: relative; display: flex; flex-direction: column; align-items: center; }
+
+.dial { margin-bottom: 22px; }
+
+.eyebrow {
+  margin-bottom: 7px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: var(--acc-ink);
 }
 
-/* The small print: a simulator, not a tuning tool for a car; and whose names these are. */
-.legal { max-width: 720px; margin: 0 auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); font-size: var(--fs-xs); line-height: 1.55; color: var(--ink2); }
+/* 25px/34px (below, at the breakpoint) are not on the font-size scale: this is
+   the app's one hero headline, sized as its own editorial choice rather than
+   a repeating text role. Forcing it onto the ramp would be renaming a
+   one-off, not systematising a repeated value. */
+.title {
+  max-width: 22ch;
+  margin-bottom: 15px;
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.blurb {
+  max-width: 42ch;
+  margin-bottom: 34px;
+  font-size: var(--fs-base);
+  line-height: 1.65;
+  color: var(--ink2);
+}
+
+.actions { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 300px; }
+
+.way { display: flex; flex-direction: column; gap: 6px; }
+
+/* Each way in says what it is for. Three unlabelled buttons make a newcomer guess
+   which one is the game, and the answer is not obvious from "SANDBOX". */
+.caption { font-size: var(--fs-xs); line-height: 1.4; color: var(--ink2); }
+
+.version { margin-top: 18px; font-family: var(--mono); font-size: var(--fs-xs); color: var(--ink2); }
+
+/* From the small-tablet breakpoint up there is room to sit the two actions side by
+   side, which is also where a full-width button starts looking wrong.
+   560px is the project's one breakpoint — see the note beside the scale in
+   tokens.css. Kept in sync by hand with TutorialScreen.module.css. */
+@media (min-width: 560px) {
+  .title { font-size: 34px; }
+  .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
+  .way { width: 250px; }
+}

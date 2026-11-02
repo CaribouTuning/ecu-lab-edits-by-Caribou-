@@ -1270,7 +1270,7 @@ describe('the DYNO page switcher', () => {
         <EcuLabApp />
       </StoreProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
     // A stock pull logs nothing; 10° of extra spark everywhere makes it knock.
     const timing = makeInitialState().tune.timing.map((row) => row.map((v) => v + 10));
     act(() => dispatch({ type: ACTIONS.SET_TABLE, table: 'timing', value: timing }));
