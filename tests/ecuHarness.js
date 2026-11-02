@@ -15,9 +15,12 @@ import * as S from '../src/sim/index.js';
  * @param {Record<string, string>} [opts.faults]
  * @param {boolean} [opts.nitrousArmed] a nitrous kit's arming switch on the dyno (default on)
  * @param {number} [opts.bottleK] the bottle's temperature at the start of the pull
+ * @param {any} [opts.layout] the breakpoints the preset's calibration is written on
  */
-export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env, faults, nitrousArmed = true, bottleK } = {}) {
-  const p = preset ? S.applyPreset(S.presetById(preset)) : null;
+export function makeEngine({ preset, build: patch = {}, cal: calPatch = {}, env, faults, nitrousArmed = true, bottleK, layout = null } = {}) {
+  // `layout`: the breakpoints the preset's calibration is written on (the game grid where the
+  // engine fits it, by default).
+  const p = preset ? S.applyPreset(S.presetById(preset), layout) : null;
   const build = {
     engineConfig: p?.engineConfig ?? S.DEFAULT_ENGINE_CONFIG,
     mods: p?.mods ?? S.DEFAULT_MODS,

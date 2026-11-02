@@ -82,7 +82,9 @@ remaining risk is the same Node major with a different libm, which is what step 
   (those knocked every other engine in the catalogue), on the induction it left the factory
   with (`build.factoryInduction`): a turbo added since gets no calculated boost cells. It keeps
   an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
-  player. In SANDBOX a build that reaches past its tables extends the axes as the same
+  player. Every engine that fits it starts on the game's 8 × 6 grid (`presetLayout`; only one
+  that revs past 7,750 RPM or makes more than 200 kPa gets breakpoints sized to it), and the
+  sized 16 × 16 is on TUNE's layout switch. In SANDBOX a build that reaches past its tables extends the axes as the same
   write (`withRowsForTheBuild` in reducer.js): `extendAxes` only ever APPENDS rows and columns
   (never re-sample a tuned table: that once turned a typed 11° into 21°) and fills them from
   the edge, marked not tuned, and TUNE fades the cells the engine does not reach yet

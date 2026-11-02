@@ -114,6 +114,17 @@ export function layoutById(id) {
   return (typeof id === 'string' && ECU_LAYOUTS[id]) || GAME_LAYOUT;
 }
 
+/**
+ * Whether an engine runs inside the game grid: its limiter no further past the last RPM
+ * column than a limiter is ever placed (`AXIS_RPM_PAST_LIMIT`), and no more manifold
+ * pressure than the top load row. Past either, the ECU would read the edge for the whole
+ * top end, so the engine's tables are sized to it instead.
+ * @param {{redline: number, peakMapKpa: number}} spec
+ */
+export function fitsGameGrid({ redline, peakMapKpa }) {
+  return redline <= GAME_AXES.rpm[GAME_AXES.rpm.length - 1] + AXIS_RPM_PAST_LIMIT && peakMapKpa <= GAME_AXES.load[0];
+}
+
 /** Smallest of the round steps an ECU's breakpoints are usually written in that is at least `x`. */
 const NICE_STEPS = [5, 6, 7.5, 8, 10, 12.5, 15, 20, 25, 30, 40, 50, 60, 75, 100];
 const niceUp = (x) => NICE_STEPS.find((s) => s >= x - 1e-9) ?? Math.ceil(x / 25) * 25;

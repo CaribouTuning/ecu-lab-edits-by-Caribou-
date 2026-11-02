@@ -47,7 +47,13 @@ describe('the base start-up map', () => {
         expect(S.readTable(turbo.tune.timing, now, rpm, kpa)).toBeCloseTo(S.readTable(stock.tune.timing, was, rpm, kpa), 0);
       }
     }
-    expect(turbo.tune.untuned.timing.length).toBeGreaterThan(0);
+    if (now.load.length > was.load.length) {
+      // The axes grew for the boost (breakpoints sized to the engine): the new rows are marked.
+      expect(turbo.tune.untuned.timing.length).toBeGreaterThan(0);
+    } else {
+      // The game's 8 × 6 already reaches 8 psi: nothing was added, and nothing was written.
+      expect(turbo.tune.timing).toEqual(stock.tune.timing);
+    }
   });
 
   it('is written for the parts fitted, boost cells and all, and undoes back to the player\'s tables', () => {
