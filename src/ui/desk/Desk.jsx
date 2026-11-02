@@ -75,7 +75,7 @@ function Wallpaper({ whole = false }) {
         </linearGradient>
       </defs>
       <rect width="1600" height="900" fill="url(#wall-sky)" />
-      <g transform="translate(590 230) scale(0.45)">{badge}</g>
+      <g className={styles.wallBadge} transform="translate(590 230) scale(0.45)">{badge}</g>
     </svg>
   );
 }
@@ -302,7 +302,7 @@ export function Desk({
             </button>
           </header>
           {next && <NextStrip next={next} place="phone" />}
-          <div className={styles.windowBody}>{footer}{children}</div>
+          <div className={styles.windowBody}>{footer && <div className={styles.phoneStrip}>{footer}</div>}{children}</div>
         </section>
       ) : (
         <div className={styles.homeScreen}>

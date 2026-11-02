@@ -94,3 +94,22 @@
 @media (prefers-reduced-motion: reduce) { .face * { transition: none !important; } }
 
 @container (max-width: 360px) { .appName { display: none; } .titleBar { justify-content: space-between; } }
+
+/* A phone on its side: 390 px of height cannot hold a screen and a console docked under it
+   (Run a pull sat below the fold). The two go side by side, as on a real dyno cart: the
+   screen takes the width and scrolls inside itself, the console is a column beside it,
+   always in reach. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .station[data-flat='true'] {
+    flex-direction: row; align-items: stretch; height: 100%; overflow: hidden; max-width: none;
+    gap: var(--sp-sm); padding: var(--sp-sm) max(var(--sp-sm), env(safe-area-inset-right)) max(var(--sp-sm), env(safe-area-inset-bottom)) max(var(--sp-sm), env(safe-area-inset-left));
+  }
+  .station[data-flat='true'] .face[data-kind='monitor'] { flex: 1 1 auto; min-width: 0; height: 100%; min-height: 0; }
+  .station[data-flat='true'] .screenBody { position: absolute; overflow-y: auto; }
+  .station[data-flat='true'] .face[data-kind='console'] {
+    position: static; flex: none; width: clamp(210px, 32%, 300px); height: 100%; min-height: 0;
+    overflow-y: auto; box-shadow: none;
+    /* Sized both ways, so its plate sees a box taller than wide and stands in a column. */
+    container-type: size;
+  }
+}

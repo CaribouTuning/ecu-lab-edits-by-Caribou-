@@ -206,4 +206,8 @@
 /* A pendant box beside the monitor, taller than wide: its controls stand in a column. */
 @container (max-aspect-ratio: 1 / 1) {
   .plate { flex-direction: column; justify-content: space-evenly; padding: 8px; gap: 10px; }
+  .plate > .group { align-items: center; max-width: 100%; }
+  .plate .keys { flex-wrap: wrap; justify-content: center; }
+  .plate > .readout b { font-size: 20px; }
+  .plate .lever { width: min(100%, 180px); height: 72px; }
 }

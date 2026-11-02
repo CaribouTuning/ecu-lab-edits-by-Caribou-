@@ -88,7 +88,7 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
           </button>
           <button type="button" className={styles.path} onClick={() => setPath('custom')}>
             <span className={styles.pathName}>Build a custom engine</span>
-            <span className={styles.pathWhat}>Your own engine from its layout, bore, stroke, compression and redline. Its calibration is generated from the physics.</span>
+            <span className={styles.pathWhat}>Your own engine from its layout, bore, stroke, compression and redline. It starts on a safe base map generated from the physics, for you to tune.</span>
           </button>
         </div>
       </div>

@@ -346,7 +346,9 @@
 .battery span { display: block; width: 72%; height: 100%; background: var(--ok); border-radius: 1px; }
 .statusBar .flyout { top: calc(100% + 4px); bottom: auto; right: 8px; }
 
-.homeScreen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--wall-sky); }
+/* The wallpaper's own ground, so the bands either side of the badge, where the screen is
+   wider than the picture, are the same graphite and not a step in it. */
+.homeScreen { position: relative; flex: 1; min-height: 0; overflow: hidden; background: linear-gradient(var(--wall-sky), var(--wall-sky2)); }
 /* Four apps to a row, as a phone lays them out; a landscape phone has room for all in one. */
 /* Four apps to a row, as a phone lays them out. */
 .appGrid {
@@ -458,3 +460,25 @@
 
 .taskBtn span { margin-left: 2px; font-size: var(--fs-sm); }
 .taskBtn .badge { margin-left: 3px; font-size: 9px; }
+
+/* A phone on its side: every pixel of height is the station's. The page's bar is slimmer,
+   the engine's status line steps aside (the laptop shows it), and a station's page holds
+   still so the station lays its screen and console side by side (Station.module.css). */
+@media (max-height: 500px) and (orientation: landscape) {
+  .pageBar { height: calc(36px + env(safe-area-inset-top)); }
+  .pageTitle { font-size: var(--fs-md); }
+  .back { height: 28px; }
+  .pageBody > [data-strip] { display: none; }
+  .pageBody:has(> [data-station][data-flat]) { display: flex; flex-direction: column; overflow: hidden; }
+  .pageBody:has(> [data-station][data-flat]) > * { flex: none; }
+  .pageBody:has(> [data-station][data-flat]) > [data-station] { flex: 1; min-height: 0; max-width: none; }
+  /* The phone's home screen: the badge sits low, under one row of apps, and the next step
+     keeps clear of the dock along the right edge. */
+  .homeScreen .wallBadge { transform: translate(665px, 545px) scale(0.3); }
+  /* An app open on its side: as iOS does, no status bar over it, a slimmer bar, and the
+     engine's status line left to the home screen and the laptop. */
+  .phone:not([data-home]) .statusBar { display: none; }
+  .phoneAppBar { height: 34px; }
+  .phoneStrip { display: none; }
+  .homeScreen > .next { position: relative; z-index: 1; margin-right: calc(116px + env(safe-area-inset-right)); }
+}
