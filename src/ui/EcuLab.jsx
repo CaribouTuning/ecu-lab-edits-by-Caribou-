@@ -1009,6 +1009,8 @@ export function EcuLabApp() {
   // Nothing here decides what the engine sounds like. `acousticDrive` turns the operating
   // point into the physical properties of the exhaust note, and `updateEngineAudio`
   // renders them; this effect only says which engine is running and how hard.
+  // The share of the charge burning in the exhaust right now (the pops), off the last log row.
+  const liveAfterfire = live.ecu?.log?.[live.ecu.log.length - 1]?.afterfire ?? 0;
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
@@ -1083,14 +1085,14 @@ export function EcuLabApp() {
       volume,
       // Charge lighting in the manifold on the stand: an overrun burble's pops, or a
       // spark-cut limiter's. Only the live engine runs an overrun.
-      afterfire: onLive ? (live.ecu?.log?.[live.ecu.log.length - 1]?.afterfire ?? 0) : 0,
+      afterfire: onLive ? liveAfterfire : 0,
     };
 
     // One call. The pulse stream keeps its own crank and tops itself up between frames,
     // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
-  }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
+  }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, liveAfterfire, soundOn,
       blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressor,
