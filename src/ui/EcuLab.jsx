@@ -1081,6 +1081,9 @@ export function EcuLabApp() {
       // number nothing measured at that throttle.
       boostPsi: (onDyno && dynoPhase !== 'sweep') ? 0 : (point?.boostPsi ?? 0),
       volume,
+      // Charge lighting in the manifold on the stand: an overrun burble's pops, or a
+      // spark-cut limiter's. Only the live engine runs an overrun.
+      afterfire: onLive ? (live.ecu?.log?.[live.ecu.log.length - 1]?.afterfire ?? 0) : 0,
     };
 
     // One call. The pulse stream keeps its own crank and tops itself up between frames,
