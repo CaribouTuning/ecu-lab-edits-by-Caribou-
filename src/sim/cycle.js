@@ -114,6 +114,18 @@ export function ivcAfterBdcDeg(camDuration) {
  * @param {number} [input.boreFlameFactor] flame travel scaling from bore, 1 at reference
  * @returns {number} burn duration, crank degrees
  */
+/**
+ * The share of the charge a spark fired after top dead centre never burns in the cylinder:
+ * partial burns and quenched kernels in an expanding chamber (COEFF.LATE_SPARK_QUENCH_*).
+ * It leaves at exhaust valve open with its fuel, and lights in the manifold.
+ * @param {number} sparkBtdc spark advance, degrees before TDC (negative: after)
+ * @returns {number} 0..LATE_SPARK_QUENCH_MAX
+ */
+export function lateSparkQuench(sparkBtdc) {
+  const late = (-sparkBtdc - COEFF.LATE_SPARK_QUENCH_ONSET_ATDC) / COEFF.LATE_SPARK_QUENCH_SPAN_DEG;
+  return late <= 0 ? 0 : COEFF.LATE_SPARK_QUENCH_MAX * Math.min(1, late) ** 1.5;
+}
+
 export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1 }) {
   // Mixture: fastest a little rich of stoichiometric, slower in both directions, but
   // not symmetrically. Laminar flame speed falls away far faster on the lean side, where
@@ -177,6 +189,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
  * @property {number} blowbyFrac charge lost past the rings over the closed period
  * @property {number} knockIntegral Livengood-Wu autoignition integral; ≥ 1 means knock
  * @property {number} mfb50Deg crank angle of 50% mass burned, degrees ATDC
+ * @property {number} unburnedAtEvoFrac share of the charge not yet burned at exhaust valve open
  */
 
 /**
@@ -465,6 +478,11 @@ export function runCycle({
     blowbyFrac,
     knockIntegral,
     mfb50Deg,
+    // The share of the charge still unburned when the exhaust valve opens. Nil at any
+    // timing near MBT; with the spark well after top dead centre (an overrun burble, a
+    // badly retarded map) the flame is still crossing the chamber at EVO, and that charge
+    // finishes burning in the exhaust manifold: heat the piston never saw, and the pops.
+    unburnedAtEvoFrac: 1 - burnedFraction(evoAtdc),
   };
 }
 

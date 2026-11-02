@@ -279,8 +279,20 @@ export function liveStepEcu(st, dt, input, cfg) {
   e.idleAir = idleAir;
   let effThrottle = clamp(Math.max(e.throttle, idleAir), 0, 100);
 
+  // ---- OVERRUN BURBLE: the "pops and bangs" a tuner writes in on purpose. For a set time
+  // after the throttle closes, inside an RPM window, the ECU keeps fuelling where it would
+  // cut, holds the throttle cracked for air, and fires the spark far after TDC
+  // (strategy.js); the late flame finishes in the manifold (point.js `afterfire`).
+  e.liftT = pedal < 3 ? (e.liftT ?? 0) + dt : 0;
+  const ig = cal.ignition;
+  const burble = !!(ig.burbleEnabled && s.running && !s.cranking && idleZone && pedal < 3
+    && e.liftT <= (ig.burbleSeconds ?? 3) && s.rpm > (ig.burbleMinRpm ?? 1800) && s.rpm < (ig.burbleMaxRpm ?? 5500)
+    && e.sEct > cal.fuel.dfcoMinEctC);
+  e.burble = burble;
+  if (burble) effThrottle = Math.max(effThrottle, ig.burbleAirPct ?? 3);
+
   // ---- OVERRUN FUEL CUT AND REV LIMITER.
-  const dfco = cal.fuel.dfcoEnabled && s.running && idleZone && pedal < 3
+  const dfco = cal.fuel.dfcoEnabled && !burble && s.running && idleZone && pedal < 3
     && s.rpm > (s.dfco ? cal.fuel.dfcoExitRpm : cal.fuel.dfcoEnterRpm) && e.sEct > cal.fuel.dfcoMinEctC;
   s.dfco = dfco;
   let hardCut = limp ? Math.min(P.limpRpm, redline + cal.limiter.offsetRpm) : redline + cal.limiter.offsetRpm;
@@ -478,7 +490,7 @@ export function liveStepEcu(st, dt, input, cfg) {
         knockRetardDeg: e.knockRetard, stftPct: s.stft, ltftPct: s.ltft, aePct: e.aePct,
         afterStartPct: s.running ? e.afterStartPct : 0, crankingPct, cylinderFuelFactor: filmFactor,
         cutFrac, cutType, extraRetardDeg: limiterRetard + e.torqueRetard, extraFuelPct: e.extraFuelPct,
-        idleSparkDeg: idleSpark, cranking: s.cranking, decel: pedal < 3 && s.rpm > E.IDLE_SPARK_MAX_RPM && !dfco,
+        idleSparkDeg: idleSpark, cranking: s.cranking, decel: pedal < 3 && s.rpm > E.IDLE_SPARK_MAX_RPM && !dfco, burble,
         afrTarget: e.afrTargetF, oilC: s.oilC, highDet: e.highDet, launch: launchArmed, nitrousFrac,
       },
       ...(steady.blower ? { blower: steady.blower } : {}),
@@ -582,7 +594,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     log = {
       map: pt.map, boost: s.boostPsi, boostTarget: e.boostTargetRamped, wgDuty: duty, lambda: pt.lambdaExhaust ?? pt.lambda,
       lambdaTarget: res.input.afrCommanded / 14.7, veTable: res.breakdown.ve[0].value, mafPct: pt.trimPct ?? 0, pw: pt.pw, duty: pt.duty, deadTime: pt.deadTime, railDp: pt.railDp,
-      timing: pt.timing, egt: pt.egt, misfire: pt.misfire, filmFactor: filmFactor * 100, bfs: pt.bfs,
+      timing: pt.timing, egt: pt.egt, misfire: pt.misfire, afterfire: pt.afterfire ?? 0, filmFactor: filmFactor * 100, bfs: pt.bfs,
       torque: crankNm, breakdown: res.breakdown, boostSteps: steps, closedLoopRegion: res.sensed.closedLoopRegion,
     };
   }
@@ -678,6 +690,8 @@ export function liveStepEcu(st, dt, input, cfg) {
     lambda: log ? Number(Math.min(2, log.lambda).toFixed(3)) : 0, lambdaTarget: log ? Number(log.lambdaTarget.toFixed(3)) : 0,
     pw: log ? log.pw : 0, duty: log ? log.duty : 0, deadTime: log ? log.deadTime : 0, railDp: log ? log.railDp : 0,
     timing: log ? log.timing : 0, egt: log ? log.egt : 0, misfire: log ? log.misfire : 0,
+    // Share of the charge lighting in the exhaust (point.js): the pops, and their heat.
+    afterfire: log ? log.afterfire : 0, burble: e.burble ? 1 : 0,
     filmFactor: log ? Math.round(log.filmFactor) : 100, torque: Math.round(crankNm),
     bfs: log ? log.bfs : 0, knockCount: Math.round(s.knockCount), highDet: e.highDet ? 1 : 0, launch: launchArmed ? 1 : 0,
     nitrous: pt?.nitrousLbMin ?? 0, bottle: s.bottle && s.bottle.massKg > 0 ? Math.round(bottlePressurePsi(s.bottle.tempK)) : 0,

@@ -98,6 +98,11 @@ remaining risk is the same Node major with a different libm, which is what step 
   almost everywhere. Fix #15 (no naturally aspirated power peak before redline) before
   refitting presets, or the refit fits data to the wrong shape. Compare whole curves with
   `scripts/analyze_presets.py`, not just peaks.
+- **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
+  with the spark after TDC on a closed throttle. The share of charge unburned at EVO (the
+  Wiebe tail plus `lateSparkQuench`, which is zero for any spark up to 5° ATDC) costs work
+  and lights in the manifold (`afterfire`, EGT). The audio's pops read that share. Keep the
+  quench at zero near MBT, or every retarded boost cell loses power.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 
