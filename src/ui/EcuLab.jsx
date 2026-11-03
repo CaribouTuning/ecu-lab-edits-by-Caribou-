@@ -44,7 +44,7 @@ import {
 } from './audio/engineAudio.js';
 import { T } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
-import { backupShop, loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
+import { backupShop, loadCareer, loadSandbox, loadShop, saveCareer, saveSandbox, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
@@ -818,6 +818,27 @@ export function EcuLabApp() {
     return () => { cancelled = true; };
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
+
+  // SANDBOX's engine and tables survive a reload, a closed tab and a phone discarding the
+  // page: read once at launch, written (debounced) whenever they change. CAREER's cars are
+  // saved with the shop; SANDBOX's own are set aside in the stash while CAREER has the bench.
+  const [sandboxLoaded, setSandboxLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s = await loadSandbox();
+      if (cancelled) return;
+      if (s) dispatch({ type: ACTIONS.RESTORE_SANDBOX, build: s.build, tune: s.tune });
+      setSandboxLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [dispatch]);
+  const sandboxBench = mode === 'sandbox' ? { build, tune } : sandboxStash;
+  useEffect(() => {
+    if (!sandboxLoaded || !sandboxBench || sandboxBench.build.engineReady === false) return undefined;
+    const t = setTimeout(() => { saveSandbox(sandboxBench); }, 600);
+    return () => clearTimeout(t);
+  }, [sandboxLoaded, sandboxBench?.build, sandboxBench?.tune]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Career state is written back whenever it moves. A save call inside `doRun` could
   // not cover the pin: pinning is a dispatch like any other and has no natural "and now

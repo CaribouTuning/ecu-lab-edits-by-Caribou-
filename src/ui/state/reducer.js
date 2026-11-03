@@ -52,6 +52,7 @@ export const ACTIONS = Object.freeze({
   REPAIR_ENGINE: 'REPAIR_ENGINE',
   BANK_PULL: 'BANK_PULL',
   RESTORE_CAREER: 'RESTORE_CAREER',
+  RESTORE_SANDBOX: 'RESTORE_SANDBOX',
   PIN_RUN: 'PIN_RUN',
   UNPIN_RUN: 'UNPIN_RUN',
   SET_ECU: 'SET_ECU',
@@ -391,7 +392,7 @@ export const ACTIONS = Object.freeze({
  *   SwitchMapAction | CopyMapAction | SwapMapsAction | SetLayoutAction |
  *   SetSessionFieldAction | SetTuneFieldAction | SetBoostSelAction |
  *   SetPresetPromptAction | SetEngineConfigPatchAction | ApplyPresetAction |
- *   ResetToStockAction | LoadBaseMapAction | RepairEngineAction | BankPullAction | RestoreCareerAction |
+ *   ResetToStockAction | LoadBaseMapAction | {type: 'RESTORE_SANDBOX', build: object, tune: object} | RepairEngineAction | BankPullAction | RestoreCareerAction |
  *   PinRunAction | UnpinRunAction | LiveStepAction | LivePatchAction | UndoAction |
  *   RedoAction | EnterCareerAction | EnterSandboxAction | CareerUpdateAction
  * } KnownStoreAction
@@ -827,6 +828,21 @@ function baseReducer(state, action) {
           logFocusRpm: null,
         },
       };
+
+    case ACTIONS.RESTORE_SANDBOX: {
+      // SANDBOX's saved engine and tables, read at launch. Laid over this build's defaults
+      // so a save from before a field existed still opens; never over an engine the player
+      // has already put on the bench this session (the read is async).
+      const fresh = makeInitialState();
+      const saved = { build: { ...fresh.build, ...action.build }, tune: { ...fresh.tune, ...action.tune, selection: null } };
+      if (state.session.mode === 'career') {
+        const stashed = state.stash?.sandbox;
+        if (stashed && stashed.build.engineReady !== false) return state;
+        return { ...state, stash: { ...state.stash, sandbox: { ...(stashed ?? { session: {} }), ...saved } } };
+      }
+      if (state.build.engineReady !== false) return state;
+      return { ...state, ...saved, history: { past: [], future: [] } };
+    }
 
     case ACTIONS.RESTORE_CAREER: {
       // SANDBOX's saved stats. If CAREER already has the bench (a cold load straight
