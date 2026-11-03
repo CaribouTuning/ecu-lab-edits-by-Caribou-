@@ -32,6 +32,9 @@ import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProv
 import styles from './EngineScreen.module.css';
 
 /** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
+/** How long a Short block or head change must settle before its base map is written, ms. */
+const BASE_MAP_SETTLE_MS = 350;
+
 const ASSUMED_LABEL = {
   camDuration: (c) => `intake cam duration ${c.camDuration}°`,
   valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
@@ -131,12 +134,19 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // is (ownEngineBaseMap), so it still starts and a first pull is safe. Tables the player has
   // worked on are theirs and stay; the note below offers the base map instead.
   const own = isOwnEngine(build) && session.mode !== 'career';
-  const setCfg = (patch) => dispatch({
-    type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch,
-    base: own && !tablesDirty
-      ? ownEngineBaseMap({ ...build, engineConfig: { ...engineConfig, ...patch } }, layoutById(tune.layout).id)
-      : null,
-  });
+  const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
+  // The base map follows once a change settles: generating one runs the engine's gas
+  // exchange at every cell, too much to do on every step of a slider's drag.
+  const layoutId = layoutById(tune.layout).id;
+  React.useEffect(() => {
+    if (!own || tablesDirty) return undefined;
+    const t = setTimeout(() => {
+      dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: {}, base: ownEngineBaseMap(build, layoutId) });
+    }, BASE_MAP_SETTLE_MS);
+    return () => clearTimeout(t);
+    // Rewritten when the engine's own figures change, not when the tables do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineConfig, own]);
   const loadOwnBaseMap = () => dispatch({ type: ACTIONS.LOAD_BASE_MAP, ...ownEngineBaseMap(build, layoutById(tune.layout).id) });
   const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
 

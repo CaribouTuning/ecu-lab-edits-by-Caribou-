@@ -65,7 +65,7 @@ export function inFixOrder(events) {
  * symptoms under it are what that fix also clears.
  * @type {Record<string, string[]>}
  */
-export const CAUSED_BY = {
+const CAUSED_BY = {
   lean: ['pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband', 'rail', 'fuel'],
   rich: ['pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband'],
   fuel: ['injscale'],

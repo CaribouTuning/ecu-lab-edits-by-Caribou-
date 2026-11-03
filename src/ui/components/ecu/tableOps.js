@@ -21,7 +21,7 @@ export const rowsOf = (t) => (Array.isArray(t.y) ? /** @type {number[][]} */ (t.
  * @param {number[][]} rows
  * @returns {Table}
  */
-export function withRows(t, rows) {
+function withRows(t, rows) {
   return Array.isArray(t.y) ? { ...t, z: rows } : { ...t, z: rows[0] };
 }
 

@@ -62,10 +62,13 @@ export const TAB_NAMES = {
  *   when `view` is not 'app'.
  */
 
-/** @type {Route} */
-/** Old section names, for links made before they were renamed: BUILD's Exhaust is Bolt-ons. */
+/**
+ * Old section names, for links made before they were renamed: BUILD's Exhaust is Bolt-ons.
+ * @type {Record<string, string>}
+ */
 const SECTION_RENAMES = { 'build/exhaust': 'boltons' };
 
+/** @type {Route} */
 const START_ROUTE = { view: 'start', tab: null, section: null };
 
 /** @type {Route} */

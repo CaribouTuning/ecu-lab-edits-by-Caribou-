@@ -164,7 +164,7 @@ function LockedSettings({ section }) {
  * that waits for one should say WHY it waits that long by naming this rather than by
  * carrying a number that has to be remembered if the sequence is ever retimed.
  */
-export const DYNO_PULL = Object.freeze({
+const DYNO_PULL = Object.freeze({
   SETTLE_MS: 1400,
   SWEEP_MS: 1900,
   DOWN_MS: 2100,

@@ -17,7 +17,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import styles from './Apps.module.css';
 
 /** How much slower than real life the crank is shown turning. */
-export const SLOW = 60;
+const SLOW = 60;
 const RAD = Math.PI / 180;
 const GAMMA = 1.32;
 

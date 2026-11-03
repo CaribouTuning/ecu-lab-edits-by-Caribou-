@@ -17,7 +17,7 @@ import { THREE, box, cyl, edged, glow, loftMesh, mergeStatic, profileMesh, sign,
  * height of the shoulder line, `top` the roof, `nose` the front edge of the bonnet, `tail`
  * the rear deck. `cab` is the glasshouse: [rear base, front base, rear top, front top].
  */
-export const BODY_STYLES = {
+const BODY_STYLES = {
   coupe: { label: 'Coupe', len: 4.35, wid: 1.82, belt: 0.88, top: 1.27, nose: 0.74, tail: 0.84, wr: 0.33, cab: [-1.15, 0.5, -0.7, 0.05], hood: 0.55 },
   sedan: { label: 'Sedan', len: 4.75, wid: 1.82, belt: 0.92, top: 1.42, nose: 0.78, tail: 0.9, wr: 0.33, cab: [-1.5, 0.8, -1.05, 0.25], hood: 0.7 },
   hatch: { label: 'Hatchback', len: 4.0, wid: 1.76, belt: 0.9, top: 1.42, nose: 0.76, tail: 0.98, wr: 0.31, cab: [-1.85, 0.6, -1.5, 0.15], hood: 0.5 },
@@ -32,7 +32,7 @@ export const BODY_STYLES = {
 };
 
 /** Wheel designs. */
-export const WHEEL_STYLES = {
+const WHEEL_STYLES = {
   steel: { label: 'Steel', spokes: 0, dish: 0.62 },
   alloy5: { label: '5-spoke alloy', spokes: 5, dish: 0.7 },
   mesh: { label: 'Mesh', spokes: 12, dish: 0.74 },

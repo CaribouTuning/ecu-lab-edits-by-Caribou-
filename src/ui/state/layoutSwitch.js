@@ -27,7 +27,7 @@ import {
  *
  * @param {StoreState['build']} build
  */
-export function buildLayout(build) {
+function buildLayout(build) {
   const wot = build.blowerId ? blowerCurve(build, tankFuel(build)) : [];
   return engineLayout({
     redline: build.engineConfig.redline ?? 7000,
@@ -163,7 +163,7 @@ function carried(state, to) {
  * table, and the inverse. Boost heats the charge as the dyno heats it.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  */
-export function airmassConversion(state) {
+function airmassConversion(state) {
   const { build, tune } = state;
   const axes = layoutById(tune.layout).ve;
   const derived = deriveEngine(build.engineConfig);
@@ -215,7 +215,7 @@ export function layoutSwitch(state, layoutId) {
  * @param {import('../../sim/layouts.js').Layout} to
  * @param {ReturnType<typeof airmassConversion>} conv
  */
-export function moveTables(t, from, to, conv) {
+function moveTables(t, from, to, conv) {
   return {
     ve: resampleTable(t.ve, from.ve, to.ve, conv, 1),
     timing: resampleTable(t.timing, from.timing, to.timing, conv, 1),

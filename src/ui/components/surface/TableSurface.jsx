@@ -22,7 +22,7 @@ import styles from './surface.module.css';
 export const PullTraceContext = React.createContext(/** @type {object[]|null} */ (null));
 
 /** Where a pull point records each live variable the ECU reads a table on. */
-export const PULL_FIELD = Object.freeze({
+const PULL_FIELD = Object.freeze({
   rpm: (p) => p.rpm,
   map: (p) => p.sensedMap ?? p.map,
   // Air per cylinder, for a layout that reads spark by it (sim/layouts.js).

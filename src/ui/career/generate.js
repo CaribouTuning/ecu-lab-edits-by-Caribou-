@@ -382,7 +382,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
 export const TEMPLATE_IDS = TEMPLATES.map((t) => t.id);
 
 /** The template ids a shop at `level` can be offered. @param {number} level */
-export const templatesAt = (level) => TEMPLATES.filter((t) => t.minLevel <= level);
+const templatesAt = (level) => TEMPLATES.filter((t) => t.minLevel <= level);
 
 /** @param {string} id */
 export const templateById = (id) => TEMPLATES.find((t) => t.id === id);

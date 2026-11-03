@@ -5,7 +5,7 @@
  */
 
 /** @type {{text: string, topic: string}[]} */
-export const TIPS = [
+const TIPS = [
   { topic: 'AFR', text: 'Stoichiometric petrol mixture is 14.7:1, just enough air to burn every drop of fuel. Under load an engine runs richer, around 12.5 to 13, because the extra fuel cools the chamber and protects the pistons.' },
   { topic: 'Spark', text: 'There is a spark advance called MBT, minimum advance for best torque. Past it you gain nothing but cylinder pressure and knock risk. The art is finding it, then backing off if the engine pings.' },
   { topic: 'Knock', text: 'Knock is the unburnt end of the mixture igniting by itself before the flame arrives. It sounds like marbles rattling and it can melt a piston in seconds, so a good tune always leaves a margin.' },
