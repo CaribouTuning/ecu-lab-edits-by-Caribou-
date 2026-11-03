@@ -422,6 +422,8 @@ export const world = Object.freeze({
   neonGreen: '#5dff8a',
   neonAmber: '#ffb020',
   lampWarm: '#ffe0a0',
+  // The outline round the station the next step is at: bright enough to find across the shop.
+  nextOutline: '#ffd23a',
   headlight: '#fff3c4',
   taillight: '#e0313b',
   indicator: '#ffa500',

@@ -161,7 +161,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
         shop.setBoardOnWall(l.boardOnWall);
         shop.setTickets(l.mode !== 'board');
         // The next step's station shows itself: its screen a little brighter than the rest.
-        if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); }
+        if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); shop.mark(l.next); }
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.

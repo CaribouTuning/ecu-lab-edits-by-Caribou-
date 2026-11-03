@@ -153,6 +153,42 @@ function caster(x, z, r = 0.045) {
  * nothing to start.
  * @param {'dyno'|'stand'|'build'} kind
  */
+/**
+ * The outline round a station the next step is at: an inverted hull, each of the cart's
+ * meshes drawn again from the inside, pushed out along its normals, in one bright colour
+ * that pulses, so the whole station stands outlined against the shop. One material for
+ * every cart; its clock is the shop's.
+ */
+const OUTLINE_UNIFORMS = { uTime: { value: 0 }, uColor: { value: new THREE.Color(W.nextOutline) }, uWidth: { value: 0.022 } };
+const outlineMaterial = new THREE.ShaderMaterial({
+  uniforms: OUTLINE_UNIFORMS,
+  side: THREE.BackSide,
+  toneMapped: false,
+  vertexShader: 'uniform float uWidth; void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * uWidth, 1.0); }',
+  fragmentShader: 'uniform vec3 uColor; uniform float uTime; void main() { float a = 0.72 + 0.28 * sin(uTime * 4.0); gl_FragColor = vec4(uColor * a, 1.0); }',
+});
+
+/**
+ * An outline shell for every mesh under a group, in that group's own coordinates.
+ * @param {THREE.Object3D} root
+ * @returns {THREE.Group}
+ */
+function outlineOf(root) {
+  const shell = new THREE.Group();
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  root.traverse((o) => {
+    const m = /** @type {THREE.Mesh} */ (o);
+    if (!m.isMesh || !m.geometry?.attributes?.normal) return;
+    const hull = new THREE.Mesh(m.geometry, outlineMaterial);
+    hull.matrixAutoUpdate = false;
+    hull.matrix.multiplyMatrices(inv, m.matrixWorld);
+    hull.renderOrder = -1;
+    shell.add(hull);
+  });
+  return shell;
+}
+
 function makeCart(kind) {
   const g = new THREE.Group();
   g.userData.spot = kind;
@@ -226,7 +262,18 @@ function makeCart(kind) {
   };
   /** Pointed at from across the shop: the screen brightens, the way a hovered thing does. @param {boolean} on */
   const hover = (on) => { idleMat.color.setScalar(on ? 1.35 : 1); };
-  return { group: g, monitor, console: panel, shape, hover };
+  // Where the next step is: the whole station outlined (OUTLINE_UNIFORMS), rebuilt whenever
+  // its shape changes so the outline follows it.
+  let marked = false;
+  let shell = null;
+  const remark = () => {
+    if (shell) { g.remove(shell); shell = null; }
+    if (marked) { shell = outlineOf(body); g.add(shell); }
+  };
+  /** @param {boolean} on */
+  const mark = (on) => { if (on !== marked) { marked = on; remark(); } };
+  const reshape = (d) => { shape(d); if (marked) remark(); };
+  return { group: g, monitor, console: panel, shape: reshape, hover, mark };
 }
 
 /** The carts' faces for each shape of view, metres: monitor, then control box. */
@@ -979,6 +1026,12 @@ export function buildShopScene(stage, init) {
       standCart.hover(id === 'stand');
       buildCart.hover(id === 'build');
     },
+    /** Outline the station the game's next step is at (null: none). @param {string|null} id */
+    mark(id) {
+      dynoCart.mark(id === 'dyno');
+      standCart.mark(id === 'stand');
+      buildCart.mark(id === 'build');
+    },
     surfaces,
     /** The painted tickets show unless the real ones are pinned over them. @param {boolean} on */
     setTickets(on) { ticketsOn = on; tickets.visible = on && boardOn; },
@@ -1066,6 +1119,7 @@ export function buildShopScene(stage, init) {
      * @param {number} [dynoRpm] the engine of the car on the dyno during a pull, 0 between
      */
     update(dt, rpm, dynoRpm = 0) {
+      OUTLINE_UNIFORMS.uTime.value += dt;
       t += dt;
       blend = Math.min(1, blend + dt / 0.7);
       const k = blend * blend * (3 - 2 * blend);
