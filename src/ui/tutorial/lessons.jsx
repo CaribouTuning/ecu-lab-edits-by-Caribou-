@@ -623,6 +623,41 @@ function Limits() {
   );
 }
 
+function TurboIt() {
+  return (
+    <>
+      <Goal learn="add a turbo and tune it to make safe power." need="Chapters 3 and 4." />
+      <P>A turbo packs more air into every cylinder, so the same engine can burn more fuel and make more power. It also heats and squeezes the charge, so the engine knocks at less spark than it did without it. Tuning a turbo is finding the spark and the mixture that use the extra air without knocking.</P>
+      <Do steps={[
+        <>On <K>BUILD › INDUCTION</K>, fit the turbo kit and the intercooler, and set a mild boost curve: about 6 psi everywhere for a first pull.</>,
+        <>On <K>BUILD › FUEL SYSTEM</K>, fit injectors big enough for the power (the Pull Log says so if they are not), and tell the ECU their size on <K>TUNE › INJECTORS</K>.</>,
+        <>Make your first pull at a light throttle, then at full throttle. Read the <K>PULL LOG</K>: any knock names the RPM and the boost rows it happened in.</>,
+        <>On <K>TUNE › SPARK</K>, take timing out of the boost rows where it knocked (the advice beside each cell gives the number), and richen those rows a little on <K>TUNE › FUEL</K>: about 11.5 to 12:1 on pump fuel.</>,
+        'Pull again at full, part and light throttle, until no pull knocks and TUNE flags no cell past the knock limit at any load.',
+        'Then look for spark left on the table: the log says when the timing is held further back than the knock limit needs.',
+      ]} />
+      <Did>A clean turbo pull, at every throttle, making more than the engine did without it. More boost is the same loop again, a few psi at a time.</Did>
+    </>
+  );
+}
+
+function PopsAndBangs() {
+  return (
+    <>
+      <Goal learn="set up an overrun burble, and know what it costs." need="Chapter 3." />
+      <P>Lift off the throttle and a factory ECU cuts the fuel: quiet, and cool on the exhaust. A burble does the opposite. It keeps some fuel going, holds the throttle open a crack for air, and fires the spark long after the piston has passed the top. The flame is still burning when the exhaust valve opens, so it finishes in the exhaust manifold: the pops. Any engine can do it; it is a calibration, not a part.</P>
+      <Do steps={[
+        <>On <K>TUNE › SPARK</K>, open the <K>Overrun burble</K> group and switch <K>Burble</K> on.</>,
+        <><K>Burble timing</K> sets how loud: about -10 (degrees after top dead centre) is a soft crackle, -20 to -30 sends most of the charge into the exhaust still burning, the loud bangs.</>,
+        <><K>Burble lasts</K> is how many seconds after you lift it runs before the normal fuel cut takes over.</>,
+        <>On <K>LIVE</K>, start the engine, rev it to about 4,000 and let go. Watch the exhaust temperature and the share of the charge burning in the exhaust on the run screen, and listen.</>,
+      ]} />
+      <P>The cost is heat. A burble runs the exhaust hundreds of degrees hotter than a fuel cut, which is hard on a turbo and on catalytic converters, and it burns fuel for no work. Keep it short and only as late as you need.</P>
+      <Did>Pops and bangs from the physics of a late flame, on any engine, and a clear idea of what it does to the hardware.</Did>
+    </>
+  );
+}
+
 function TheRest() {
   return (
     <>
@@ -690,6 +725,10 @@ export const CHAPTERS = [
     { id: 've-from-logs', title: 'Correct VE from the log', Body: VeFromLogs, mission: 'bolt-on' },
     { id: 'maf', title: 'Rescale the MAF', Body: MafLesson },
     { id: 'compare', title: 'Pull again and prove it', Body: Compare },
+  ] },
+  { id: 'adders', title: 'Boost, and pops on the overrun', minutes: 12, lessons: [
+    { id: 'turbo-it', title: 'Turbo it, and tune it safely', Body: TurboIt },
+    { id: 'pops-and-bangs', title: 'Pops and bangs: the overrun burble', Body: PopsAndBangs },
   ] },
   { id: 'beyond', title: 'Limits, and the rest of the game', minutes: 5, lessons: [
     { id: 'limits', title: 'What you cannot tune away', Body: Limits },
