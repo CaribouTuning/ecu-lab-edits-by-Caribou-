@@ -34,7 +34,7 @@ describe('parseRoute', () => {
 
   it('routes the eleven TUNE sections and the six BUILD parts', () => {
     expect(ROUTES.tune).toEqual(['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous']);
-    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'induction', 'fuel', 'exhaust']);
+    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'induction', 'fuel', 'boltons']);
   });
 
   it('namespaces `fuel` by tab so the two never collide', () => {
@@ -47,7 +47,11 @@ describe('parseRoute', () => {
   it('degrades a stale deep link to the tab instead of rendering blank', () => {
     // `#/tune/ve` was a real URL before this change. A bookmark must not break the app.
     expect(parseRoute('#/tune/ve')).toEqual({ view: 'app', tab: 'tune', section: null });
-    expect(parseRoute('#/build/boltons')).toEqual({ view: 'app', tab: 'build', section: null });
+    expect(parseRoute('#/build/nothing')).toEqual({ view: 'app', tab: 'build', section: null });
+  });
+
+  it('opens a renamed section where it went: BUILD › Exhaust is Bolt-ons now', () => {
+    expect(parseRoute('#/build/exhaust')).toEqual({ view: 'app', tab: 'build', section: 'boltons' });
   });
 });
 

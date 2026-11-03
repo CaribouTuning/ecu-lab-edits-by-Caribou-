@@ -37,7 +37,7 @@ const HEAD_KEYS = ['camDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'f
  * (its engine, induction, parts and bolt-ons), so nothing is calibrated to find out. Boost
  * raised on a factory turbo counts as induction changed.
  * @param {any} build @param {any} preset the factory engine, or null for one of the player's own
- * @returns {Set<string>} part ids: block, head, induction, fuel, exhaust
+ * @returns {Set<string>} part ids: block, head, induction, fuel, boltons
  */
 export function changedParts(build, preset) {
   const out = new Set();
@@ -54,7 +54,7 @@ export function changedParts(build, preset) {
     || (build.turboOn && (build.turbineIdx !== ind.turbineIdx || (build.turbineCount ?? 1) !== (ind.turbineCount ?? 1) || build.compressorIdx !== ind.compressorIdx))
     || (build.turboOn && factoryBoost && build.boostCurve.some((b, i) => Math.abs(b - (factoryBoost[i] ?? 0)) > 0.05))) out.add('induction');
   if (build.injIdx !== preset.parts.injectorIdx || build.octaneIdx !== preset.parts.octaneIdx) out.add('fuel');
-  if (build.exhaustDiaIdx !== preset.parts.exhaustDiaIdx || !!mods.exhaust !== !!pm.exhaust || !!mods.headers !== !!pm.headers || !!mods.intake !== !!pm.intake) out.add('exhaust');
+  if (build.exhaustDiaIdx !== preset.parts.exhaustDiaIdx || !!mods.exhaust !== !!pm.exhaust || !!mods.headers !== !!pm.headers || !!mods.intake !== !!pm.intake) out.add('boltons');
   return out;
 }
 

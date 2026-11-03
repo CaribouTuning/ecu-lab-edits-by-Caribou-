@@ -20,7 +20,7 @@
  * @type {Record<string, string[]>}
  */
 export const ROUTES = {
-  build: ['engine', 'block', 'head', 'induction', 'fuel', 'exhaust'],
+  build: ['engine', 'block', 'head', 'induction', 'fuel', 'boltons'],
   // The base tables first, then the engine management's own control strategies.
   tune: ['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous'],
   // LIVE is one screen, not an accordion, so it has a single section named for what it
@@ -63,6 +63,9 @@ export const TAB_NAMES = {
  */
 
 /** @type {Route} */
+/** Old section names, for links made before they were renamed: BUILD's Exhaust is Bolt-ons. */
+const SECTION_RENAMES = { 'build/exhaust': 'boltons' };
+
 const START_ROUTE = { view: 'start', tab: null, section: null };
 
 /** @type {Route} */
@@ -140,7 +143,9 @@ export function parseRoute(hash) {
 
   const tab = first;
   const sections = ROUTES[tab];
-  const section = second != null && sections.includes(second) ? second : null;
+  // Sections renamed since a link was made still open where they went.
+  const renamed = SECTION_RENAMES[`${tab}/${second}`] ?? second;
+  const section = renamed != null && sections.includes(renamed) ? renamed : null;
 
   return { view: 'app', tab, section };
 }

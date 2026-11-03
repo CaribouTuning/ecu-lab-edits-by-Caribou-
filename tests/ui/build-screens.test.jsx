@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_ENGINE_CONFIG, MOD_INFO, deriveEngine } from '../../src/sim/index.js';
 import { EngineScreen } from '../../src/ui/screens/build/EngineScreen.jsx';
-import { ExhaustScreen } from '../../src/ui/screens/build/ExhaustScreen.jsx';
+import { BoltonsScreen } from '../../src/ui/screens/build/BoltonsScreen.jsx';
 import { FuelSystemScreen } from '../../src/ui/screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from '../../src/ui/screens/build/InductionScreen.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
@@ -150,27 +150,27 @@ describe('FuelSystemScreen', () => {
   });
 });
 
-describe('ExhaustScreen', () => {
+describe('BoltonsScreen', () => {
   it('shows the shell-computed ideal diameter, not one it derived itself', () => {
     // Fabricated — not something the screen's own inputs (default store state)
     // could ever produce via `idealExhaustDiameter`. If the screen silently
     // re-derived the value instead of trusting the prop, this would fail.
     const ideal = 7.77;
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={ideal} />);
+    mount(<BoltonsScreen active onToggle={noop} idealExhaustDia={ideal} />);
     expect(screen.getByText(new RegExp(`~${ideal.toFixed(2)} in`))).toBeTruthy();
   });
 
   it('reports which section it is when its header is clicked', () => {
     const onToggle = vi.fn();
-    mount(<ExhaustScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
+    mount(<BoltonsScreen active={false} onToggle={onToggle} idealExhaustDia={3} />);
     fireEvent.click(screen.getByText('Bolt-ons'));
-    expect(onToggle).toHaveBeenCalledWith('exhaust');
+    expect(onToggle).toHaveBeenCalledWith('boltons');
   });
 
   it('installs the intake, headers and cat-back bolt-ons through the store when their cards are clicked', () => {
     // Every bolt-on lives on this stage. Clicking each in turn and reading
     // `data-installed` back off the DOM catches a card losing its wiring.
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={3} />);
+    mount(<BoltonsScreen active onToggle={noop} idealExhaustDia={3} />);
     const card = (k) => screen.getByText(MOD_INFO[k].label).closest('button');
     for (const k of ['intake', 'exhaust', 'headers']) {
       expect(card(k).getAttribute('data-installed')).toBe('false');
@@ -339,7 +339,7 @@ describe('the dissolved Bolt-On Parts section', () => {
     mount(<InductionScreen active onToggle={noop} />);
     const onInduction = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     cleanup();
-    mount(<ExhaustScreen active onToggle={noop} idealExhaustDia={2.5} />);
+    mount(<BoltonsScreen active onToggle={noop} idealExhaustDia={2.5} />);
     const onExhaust = Object.keys(MOD_INFO).filter((k) => screen.queryByText(MOD_INFO[k].label));
     expect([...onInduction, ...onExhaust].sort()).toEqual(Object.keys(MOD_INFO).sort());
   });

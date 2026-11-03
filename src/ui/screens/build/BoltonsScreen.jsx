@@ -22,7 +22,7 @@ import { Seg } from '../../primitives/Seg.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
-import styles from './ExhaustScreen.module.css';
+import styles from './BoltonsScreen.module.css';
 
 // Keep reading label/blurb off MOD_INFO rather than copying the strings, or
 // this list forks from the catalogue it is meant to be a view onto.
@@ -36,7 +36,7 @@ const MODS_HERE = ['intake', 'headers', 'exhaust'];
  *   build's displacement and boost, in inches
  * @returns {React.ReactElement}
  */
-export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
+export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
   const [build, dispatch] = useBuild();
   const { exhaustDiaIdx, turboOn, boostCurve, mods } = build;
 
@@ -46,7 +46,7 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
 
   return (
     <BuildSection
-      active={active} onClick={() => onToggle('exhaust')}
+      active={active} onClick={() => onToggle('boltons')}
       icon={Flame} label="Bolt-ons"
       sub={[EXHAUST_DIA_OPTS[exhaustDiaIdx].label, ...MODS_HERE.filter((k) => mods[k]).map((k) => MOD_INFO[k].label.toLowerCase())].join(', ')}
     >

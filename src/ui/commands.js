@@ -48,7 +48,7 @@ export const SECTION_LABELS = {
   'build/head': { label: 'Heads and cam', keywords: ['cam', 'springs', 'valves', 'vvt', 'ignition'] },
   'build/induction': { label: 'Induction', keywords: ['turbo', 'boost', 'supercharger', 'nitrous', 'intercooler'] },
   'build/fuel': { label: 'Fuel system', keywords: ['octane', 'pump', 'injectors'] },
-  'build/exhaust': { label: 'Bolt-ons', keywords: ['intake', 'exhaust', 'pipe', 'header', 'cat-back'] },
+  'build/boltons': { label: 'Bolt-ons', keywords: ['intake', 'exhaust', 'pipe', 'header', 'cat-back'] },
   'tune/airflow': { label: 'Airflow', keywords: ['ve', 'volumetric'] },
   'tune/spark': { label: 'Spark', keywords: ['timing', 'ignition', 'knock'] },
   'tune/fuel': { label: 'Fuel', keywords: ['afr', 'lambda', 'mixture'] },

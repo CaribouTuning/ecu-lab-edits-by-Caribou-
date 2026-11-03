@@ -581,7 +581,7 @@ describe('every segmented control', () => {
     // excluded), so this first count already picks up every Seg on BUILD: three on
     // EngineScreen (Configuration, Block Material, Head Material), one on
     // InductionScreen (Compressor Size), one on FuelSystemScreen (Fuel Octane) and
-    // one on ExhaustScreen (Exhaust Diameter) — six — regardless of which section is
+    // one on BoltonsScreen (Exhaust Diameter) — six — regardless of which section is
     // open.
     // BUILD is the engine stand's build software, one part of the engine at a time (its
     // Engine part is a picker and a form, with no segmented control on it).

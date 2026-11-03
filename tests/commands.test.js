@@ -36,7 +36,7 @@ describe('pageCommands', () => {
     const list = ids(pages());
     expect(list.slice(0, 9)).toEqual([
       'page:build', 'page:build/engine', 'page:build/block', 'page:build/head', 'page:build/induction', 'page:build/fuel',
-      'page:build/exhaust', 'page:tune', 'page:tune/airflow',
+      'page:build/boltons', 'page:tune', 'page:tune/airflow',
     ]);
     expect(list).toContain('page:live');
     expect(list.some((id) => id.startsWith('page:live/'))).toBe(false);

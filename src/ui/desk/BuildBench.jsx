@@ -40,7 +40,7 @@ export const BENCH_PARTS = [
   { id: 'head', label: 'Heads and cam', lead: 'How it breathes: the cam, the springs that follow it, the valves, the spark.' },
   { id: 'induction', label: 'Induction', lead: 'What forces air in: a turbo or a supercharger, its intercooler, and nitrous.' },
   { id: 'fuel', label: 'Fuel system', lead: 'What is in the tank, and the pump, rail and injectors that deliver it.' },
-  { id: 'exhaust', label: 'Bolt-ons', lead: 'The cold air intake, the headers, the cat-back and the exhaust pipe.' },
+  { id: 'boltons', label: 'Bolt-ons', lead: 'The cold air intake, the headers, the cat-back and the exhaust pipe.' },
 ];
 
 /**
@@ -65,7 +65,7 @@ export function partSummaries(build, derived, preset) {
     head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}° cam`,
     induction: bolt ? `${turbo}, ${bolt}` : turbo,
     fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${INJECTOR_OPTS[build.injIdx].label}`,
-    exhaust: ex ? `${EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label}, ${ex}` : EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label,
+    boltons: ex ? `${EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label}, ${ex}` : EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label,
   };
 }
 

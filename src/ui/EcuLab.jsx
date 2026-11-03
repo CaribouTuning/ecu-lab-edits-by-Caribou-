@@ -88,7 +88,7 @@ import { tuneAttention } from './components/fixLinks.js';
 import { isApplePlatform, pageCommands, sectionAvailable } from './commands.js';
 import { CommandPalette } from './components/CommandPalette.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
-import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
+import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
 import { LiveGauges } from './screens/dash/LiveScreen.jsx';
@@ -1409,7 +1409,7 @@ export function EcuLabApp() {
                     ) : null}
                     {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
                     {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
-                    {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
+                    {buildSection === 'boltons' && <BoltonsScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
                   </BuildBench>
                 </BuildLocked.Provider>
           </div>

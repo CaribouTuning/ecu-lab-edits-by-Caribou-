@@ -3,9 +3,8 @@
  *
  * Turbo kit toggle, turbine and compressor sizing, intercooler, the boost target
  * curve editor (eight RPM columns as bar buttons, tap one to select it, then edit it
- * below with full-width controls), and the Cold Air Intake bolt-on — the one
- * installable part whose physics live on the induction side rather than the exhaust
- * side. See ExhaustScreen for the other two (Cat-Back Exhaust, Long-Tube Headers).
+ * below with full-width controls), the supercharger and nitrous. The bolt-ons (cold air
+ * intake, headers, cat-back) are on BoltonsScreen.
  */
 
 import { Wind } from 'lucide-react';
@@ -32,7 +31,7 @@ import styles from './InductionScreen.module.css';
 
 // What forces air in, and only that: the turbo, the supercharger, their intercooler, and
 // nitrous. The cold air intake is a bolt-on, with the headers and the cat-back
-// (ExhaustScreen, BUILD › BOLT-ONS).
+// (BoltonsScreen, BUILD › BOLT-ONS).
 
 /** kg/s to lb/min, the unit turbo compressor maps are sold in. */
 const LB_MIN_PER_KG_S = 132.277;
