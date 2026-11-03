@@ -94,9 +94,14 @@ export const COEFF = {
   WOSCHNI_GAS_EXCHANGE_C1: 6.18,
 
   // --- Breathing (breathing.js): the valves and the runner ---
-  // Discharge coefficient of a poppet valve on its open area. Heywood (1988, ch. 6) shows
-  // measured coefficients on the curtain area of roughly 0.6 to 0.7 at the low lifts where
-  // the curtain governs, falling as the throat takes over; 0.62 is held for both.
+  // Discharge coefficient of a poppet valve on its open area (the lesser of curtain and
+  // throat). Heywood (1988, ch. 6) shows measured coefficients from about 0.5 to 0.7 across
+  // the lift range, lowest at high lift where the throat governs and the jet separates.
+  // CALIBRATED, once, for every engine: 0.52 is the value at which the thirteen factory
+  // engines land on their published peak power and torque (mean error 2.3% and 6.3%, the
+  // speeds of the naturally aspirated ones' peaks within about 450 RPM on average), the
+  // runner a rigid column. It is the one fitted number in the gas exchange; the shape of every
+  // engine's curve, where each peaks, comes from its geometry.
   BREATH_VALVE_CD: 0.52,
   // The port throat behind the valve seat, as a share of the valve head diameter. The open
   // area is the lesser of the curtain and this throat, which caps what lift can buy.
@@ -104,6 +109,8 @@ export const COEFF = {
   // Maximum valve lift over valve diameter. Heywood (ch. 6): about 0.25 is where the
   // curtain area reaches the throat's; production engines run near it.
   BREATH_LIFT_PER_DIA: 0.27,
+  // The lift curve's shape (breathing.js `liftShare`): sin^1.4, as full as a production cam's.
+  BREATH_LIFT_SHAPE_EXP: 1.4,
   // Exhaust valve head as a share of the intake's: exhaust valves are made smaller because
   // the blowdown does much of their work under a large pressure ratio.
   BREATH_EXHAUST_VALVE_SHARE: 0.84,
@@ -114,24 +121,34 @@ export const COEFF = {
   EXH_K_CATALYST: 1.5,
   EXH_K_CATBACK: 3.5,
   EXH_K_CATBACK_FREE: 1.5,
+  // Exhaust primaries (breathing.js): a cast manifold's short runners into a log, against
+  // long-tube headers' (about 30 inches, the length long-tube primaries are sold at) merging
+  // in a collector. The collector's area over one primary's sets the reflection: a log
+  // barely larger than its runners reflects weakly; a header's merge collector, about twice
+  // a primary, sends back a strong suction wave.
+  EXH_PRIMARY_MANIFOLD_M: 0.2,
+  EXH_PRIMARY_HEADERS_M: 0.76,
+  EXH_COLLECTOR_AREA_MANIFOLD: 1.3,
+  EXH_COLLECTOR_AREA_HEADERS: 2.2,
+  // Share of a wave's amplitude left after the round trip of a primary: friction and heat
+  // loss to the pipe walls, and the spreading of the pulse.
+  EXH_WAVE_ATTENUATION: 0.7,
+  // A primary's bore against the exhaust ports' throat area it carries.
+  EXH_PRIMARY_AREA_SHARE: 1.6,
   // How much cooler the gas is in the pipe than at the manifold, K, for its density there.
   EXHAUST_PIPE_COOLING_K: 250,
   // The intake runner, where the engine does not say: its bore against the intake valves'
   // combined throat area (a runner a little larger than the ports it feeds), and the speed
   // its length is tuned to, as a share of the redline, when no torque peak is published.
   BREATH_RUNNER_AREA_SHARE: 1.15,
+  // Gross indicated MEP a full charge buys, Pa per unit of VE: what the model's own cycle
+  // gives at MBT spark on gasoline (about 14 bar at 100% VE). Only used to weigh friction
+  // against filling where a runner is tuned.
+  BREATH_IMEP_PER_VE_PA: 14e5,
   // Runner wall friction: the Darcy friction factor of a smooth pipe at the Reynolds numbers
   // an intake runs (about 1e5: f near 0.018 on the Moody chart), raised for a cast runner's
   // roughness and its bend; and the loss entering it from the plenum (0.05 for a well-radiused
   // bellmouth to 0.5 for a sharp edge; a production runner sits between).
-  // The share of the runner's air that moves as one rigid column. A lumped-inertia runner
-  // treats the whole column as a slug; the real column is compressible, and a pressure wave
-  // takes L/a to cross it (about 2 ms in a 0.7 m runner, a third of the intake event at
-  // 5500 RPM), so only part of it decelerates against the closing valve at once. CALIBRATED,
-  // once, for every engine: 0.5 brings the thirteen factory engines' full-load breathing to
-  // the level that lands their published power and torque, with the curve's shape (where
-  // each peaks) left to the geometry. It is the one fitted number in the gas exchange.
-  BREATH_COLUMN_SHARE: 0.3,
   BREATH_RUNNER_FRICTION: 0.03,
   BREATH_RUNNER_ENTRY_K: 0.5,
   BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
@@ -438,12 +455,6 @@ export const COEFF = {
   // Temperature the residual fraction is mixed in at, K. Exhaust gas in the chamber at
   // the end of blowdown, not peak in-cylinder temperature.
   RESIDUAL_TEMP_K: 1050,
-  // Ratio of specific heats of that residual as it expands from exhaust to manifold
-  // pressure when the intake opens (airflow.js, partLoadVeFactor). Burned gas near
-  // RESIDUAL_TEMP_K: about 1.3 (Heywood, Internal Combustion Engine Fundamentals, ch. 4,
-  // the burned-gas property charts), not the 1.235 of GAMMA_BURNED at combustion
-  // temperature. Not fitted.
-  RESIDUAL_EXPANSION_GAMMA: 1.3,
 
   // --- Turbocharger (see turbo.js) ---
   // Specific heats at constant pressure, J/(kg·K). Exhaust is hot and partly triatomic,
@@ -814,35 +825,9 @@ export const COEFF = {
   // the equivalent single valve is 0.36 * sqrt(2) = 0.509 of the bore, and the factor is
   // 1 / 0.509^2 = 3.86.
   MACH_BORE_VALVE_FACTOR: 3.86,
-  // Where choking starts to cost volumetric efficiency, and how fast it costs it.
-  //
-  // THESE TWO ARE FITTED, and it is worth being straight about to what. Taylor's own
-  // 2-valve data puts the knee near Z = 0.5-0.6; a modern 4-valve head with the geometry
-  // above never gets near that, which is precisely WHY these engines rev as far as they
-  // do. So the absolute threshold here is not Taylor's — it stands in for everything
-  // else that stops a real engine breathing at speed and that this model has no term
-  // for: cam profile running out of area, intake runner tuning falling off its resonant
-  // peak, and port velocity. Those are what actually roll a VQ35HR over at 6800.
-  //
-  // What IS carried over from the physics, and what makes this worth doing as a Mach
-  // index rather than as a curve fit against RPM, is the DEPENDENCE: rolloff scales with
-  // mean piston speed against the speed of sound, so a long-stroke engine chokes at
-  // fewer revolutions than a short-stroke one of the same displacement, and a hotter
-  // charge chokes later. Both are real, both fall out for free, and neither was in the
-  // model before.
-  //
-  // Fitted against the published peak-power RPM of the shipped naturally aspirated
-  // engines, which are the only engines here whose peak the boost curve does not already
-  // place. See the note in presets.js on what moved as a result.
-  MACH_Z_CRIT: 0.155,
-  MACH_VE_LOSS: 10,
-  // A choked engine still breathes something at the limiter.
-  MACH_VE_FLOOR: 0.55,
 
   // --- Camshaft & valvetrain ---
-  CAM_PEAK_SHIFT_PER_DEG: 32,  // RPM the VE peak moves per degree of extra duration
   CAM_OVERLAP_PER_DEG: 0.55,   // overlap degrees gained per degree of duration
-  CAM_FLOW_GAIN_PER_DEG: 0.0015,
   FLOAT_BASE_RPM: 7950,        // float speed at stock cam and stock springs
   FLOAT_PER_SPRING_RATE: 58,
   FLOAT_PER_CAM_DEG: 14,
@@ -873,7 +858,6 @@ export const COEFF = {
   LIMITER_RESTORE_BAND_RPM: 320,
 
   // --- Volumetric efficiency modifiers ---
-  VE_PER_COMPRESSION_POINT: 0.005, // less clearance volume = less residual dilution
   VE_ALUMINIUM_HEAD_GAIN: 1.015,   // cooler chamber = denser incoming charge
   VE_E85_CHARGE_COOLING: 1.03,     // high latent heat of vaporisation densifies charge
   // Direct injection evaporates its fuel in the cylinder while the intake valve is still
@@ -886,39 +870,10 @@ export const COEFF = {
   // a port. Late (compression-stroke) injection would not get it; full-load DI injects
   // on the intake stroke.
   VE_DIRECT_INJECTION: 1.06,
-  VE_EXHAUST_UNDERSIZE: 0.08,      // top-end VE lost per inch undersized
-  VE_EXHAUST_OVERSIZE: 0.05,       // low-end VE lost per inch oversized (scavenging)
-  // Baseline cost of the induction system a turbo engine carries and an NA one does
-  // not: the intercooler core and the charge piping between compressor and throttle,
-  // both of which drop pressure whether or not the turbine is restricting anything.
-  // This is the INTAKE side. It is flat because that plumbing is fixed hardware.
-  VE_TURBINE_BACKPRESSURE: 0.97,
 
-  // --- Exhaust backpressure against cylinder filling ---
-  // The exhaust side. A flat number like the one above cannot stand in for it, because it
-  // would charge a small turbine at 6500 RPM exactly what it charges the same turbine at
-  // idle. The turbine is a flow restriction, so what it costs the engine is set by the
-  // pressure it holds upstream, which climbs with flow.
-  //
-  // Overlap this is fitted at, crank degrees — the stock V6's.
-  VE_BACKPRESSURE_OVERLAP_REF: 24,
-  // Overlap backflow at low speed and manifold vacuum (airflow.js). FITTED to the stock GM
-  // Gen III calibrations' part-load VE (LM7, LQ4, LR4; Pro's GM benchmark): the share of
-  // filling lost at 800 RPM and full vacuum with a stock-overlap cam, fading linearly to
-  // none at OVERLAP_BACKFLOW_FADE_RPM, where the model and GM's tables agree.
-  OVERLAP_BACKFLOW_LOSS: 0.105,
-  OVERLAP_BACKFLOW_FADE_RPM: 2400,
-  // VE lost per unit of (exhaust manifold / intake manifold) pressure above 1, at the
-  // reference overlap. Fitted against the five boosted presets' published figures.
-  VE_BACKPRESSURE_PER_PR: 0.50,
   // Best-power lambda the exhaust flow and temperature estimate assume. The VE table is
   // hardware, not a tune, so it is built at the mixture the engine is meant to run.
   VE_BACKPRESSURE_LAMBDA_REF: 0.88,
-  // However choked the turbine, the engine still breathes something.
-  VE_BACKPRESSURE_FLOOR: 0.70,
-  // Boost over which the backpressure term above phases in, kPa: the first 0.5 bar. Below
-  // atmospheric the same backpressure is charged through residual gas and pumping work.
-  VE_BACKPRESSURE_RAMP_KPA: 50,
 
   // --- Fuel trims ---
   STFT_GAIN: 42,

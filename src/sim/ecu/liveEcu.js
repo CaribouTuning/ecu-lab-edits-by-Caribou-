@@ -18,7 +18,7 @@
 
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA, R_AIR } from '../constants.js';
 import { COEFF } from '../coefficients.js';
-import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM } from '../liveCore.js';
+import { ENGINE_INERTIA, liveRandom, readSpeedAndAirflow, STALL_RPM } from '../liveCore.js';
 import { throttleBoreM, throttledMapKpa } from '../throttle.js';
 import { trappedAirGrams } from '../cycle.js';
 import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
@@ -517,7 +517,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     const knockV = noiseV + actualKnockDeg * knockSignalPerDegV(pt.peakPressure);
     const thresholdV = knockThresholdAt(cal.ignition.knockThreshold, s.rpm, derived);
     const det = knockDetection({ rpm: s.rpm, peakBar: pt.peakPressure, thresholdV, derived, maxRetardDeg: cal.ignition.knockMaxRetard });
-    const heard = cal.ignition.knockEnabled && s.running && (knockV > thresholdV || det.falseRetardDeg > 0.5 && Math.random() < det.falseRetardDeg / cal.ignition.knockMaxRetard);
+    const heard = cal.ignition.knockEnabled && s.running && (knockV > thresholdV || det.falseRetardDeg > 0.5 && liveRandom(s) < det.falseRetardDeg / cal.ignition.knockMaxRetard);
     // Timing past what this engine tolerates at this instant — as opposed to retard
     // the controller is still giving back after an earlier event, or noise it
     // mistook for knock. That is what makes a timing gauge worth colouring.
