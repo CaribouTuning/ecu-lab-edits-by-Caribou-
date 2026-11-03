@@ -75,7 +75,7 @@ function Wallpaper({ whole = false }) {
         </linearGradient>
       </defs>
       <rect width="1600" height="900" fill="url(#wall-sky)" />
-      <g transform="translate(590 230) scale(0.45)">{badge}</g>
+      <g className={styles.wallBadge} transform="translate(590 230) scale(0.45)">{badge}</g>
     </svg>
   );
 }
@@ -291,7 +291,9 @@ export function Desk({
       {mode === 'app' && appInfo ? (
         <section className={styles.phoneApp} aria-label={appInfo.label}>
           <header className={styles.phoneAppBar}>
-            <button type="button" className={styles.phoneBack} onClick={onDesktop} aria-label={`Close ${appInfo.label}`}>
+            {/* Home puts the phone down: back in the shop, stood looking at all of it (the
+                phone's own home screen is one tap away, picking it up again). */}
+            <button type="button" className={styles.phoneBack} onClick={onBay} aria-label={`Close ${appInfo.label} and look at the shop`}>
               <ChevronLeft size={18} aria-hidden="true" /><span>Home</span>
             </button>
             <span className={styles.phoneAppTitle}>{appInfo.label}</span>
@@ -300,7 +302,7 @@ export function Desk({
             </button>
           </header>
           {next && <NextStrip next={next} place="phone" />}
-          <div className={styles.windowBody}>{footer}{children}</div>
+          <div className={styles.windowBody}>{footer && <div className={styles.phoneStrip}>{footer}</div>}{children}</div>
         </section>
       ) : (
         <div className={styles.homeScreen}>

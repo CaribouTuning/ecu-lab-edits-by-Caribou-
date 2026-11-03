@@ -261,6 +261,9 @@ export function resolveEcuPoint({
   if (dyn.cranking) {
     timing = cal.ignition.crankingDeg;
     timingSteps.push({ label: 'Cranking timing (overrides)', value: timing });
+  } else if (dyn.burble) {
+    timing = cal.ignition.burbleSparkDeg ?? -15;
+    timingSteps.push({ label: 'Overrun burble timing (overrides)', value: timing });
   } else if (dyn.launch) {
     timing = cal.arc.launchTiming;
     timingSteps.push({ label: 'Launch control timing (overrides)', value: timing });

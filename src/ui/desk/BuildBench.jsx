@@ -38,9 +38,9 @@ export const BENCH_PARTS = [
   { id: 'engine', label: 'Engine', lead: 'The engine you start from: a factory engine, or your own.' },
   { id: 'block', label: 'Short block', lead: 'Cylinders, bore and stroke, compression, and the pistons and rods that carry them.' },
   { id: 'head', label: 'Heads and cam', lead: 'How it breathes: the cam, the springs that follow it, the valves, the spark.' },
-  { id: 'induction', label: 'Induction', lead: 'What feeds it air: the intake, a turbo or a supercharger, and nitrous.' },
+  { id: 'induction', label: 'Induction', lead: 'What forces air in: a turbo or a supercharger, its intercooler, and nitrous.' },
   { id: 'fuel', label: 'Fuel system', lead: 'What is in the tank, and the pump, rail and injectors that deliver it.' },
-  { id: 'exhaust', label: 'Exhaust', lead: 'The pipe, the headers and the cat-back.' },
+  { id: 'exhaust', label: 'Bolt-ons', lead: 'The cold air intake, the headers, the cat-back and the exhaust pipe.' },
 ];
 
 /**
@@ -57,8 +57,8 @@ export function partSummaries(build, derived, preset) {
   const turbo = build.turboOn
     ? `Turbo, ${build.turbineCount > 1 ? `Twin ${housing.toLowerCase()}` : housing} turbine, peak ${Math.max(...build.boostCurve)} psi`
     : blower ? `${blower.label}, ${(build.blowerRatio ?? blower.defaultRatio ?? 1).toFixed(2)}:1 pulley` : 'Naturally aspirated';
-  const bolt = [build.mods?.intake && 'intake', build.nitrous && `${build.nitrous.shotHp} shot`].filter(Boolean).join(', ');
-  const ex = [build.mods?.headers && 'headers', build.mods?.exhaust && 'cat-back'].filter(Boolean).join(', ');
+  const bolt = [build.mods?.intercooler && (build.turboOn || blower) && 'intercooler', build.nitrous && `${build.nitrous.shotHp} shot`].filter(Boolean).join(', ');
+  const ex = [build.mods?.intake && 'intake', build.mods?.headers && 'headers', build.mods?.exhaust && 'cat-back'].filter(Boolean).join(', ');
   return {
     engine: preset ? `${preset.name}, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}` : `Your own engine, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}`,
     block: `${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm, ${cfg.compression.toFixed(1)}:1`,
@@ -173,7 +173,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
         )}
         <div className={styles.sheetBody}>
           {open.id === 'engine' && changing
-            ? <EngineStart onCancel={() => setChanging(false)} onDone={() => setChanging(false)} replacing={tune.tablesDirty} />
+            ? <EngineStart onCancel={() => setChanging(false)} onDone={() => { setChanging(false); onPart('block'); }} replacing={tune.tablesDirty} />
             : <BuildBenchMode.Provider value>{children}</BuildBenchMode.Provider>}
         </div>
         {/* Built up in order, block first: the next part, or, the last one done, the stand. */}

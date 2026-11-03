@@ -14,7 +14,7 @@ import { AlertTriangle, ChevronDown, RotateCcw } from 'lucide-react';
 import React from 'react';
 
 import {
-  ECU_META, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, getCal, peakMapKpaOf, setCal, setupMismatches,
+  ECU_META, GAME_LAYOUT, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, fitsGameGrid, getCal, peakMapKpaOf, setCal, setupMismatches,
 } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
@@ -51,22 +51,19 @@ export function EcuSection({ section, title, icon, intro, liveVars = null, embed
   const [build] = useBuild();
   const cal = tune.ecu;
   const [showPro, setShowPro] = React.useState(false);
-  // The factory setting, on the breakpoints its tables left the factory on. An engine
-  // chosen from the catalogue or built by the player has tables sized to it: the stock
-  // layout for the induction it left the factory with, as `stockCalibrationFor` sizes it
-  // and RESET ALL TO STOCK writes it, whatever the table axes have been extended or
-  // switched to since. The ready default car (no layout of its own) is on the generic
-  // grid. Judged against the generic grid regardless, a factory N54 opened BOOST with
-  // "1 setting changed", and Factory moved its breakpoints off its own.
-  const sized = tune.layout != null;
+  // The factory setting, on the breakpoints its tables left the factory on: the stock layout
+  // for this engine on the induction it left the factory with, chosen as `presetLayout` chooses
+  // it (the game's 8 × 6 where the engine fits it, else breakpoints sized to it), so as RESET
+  // ALL TO STOCK writes it, whatever the axes have been extended or switched to since. Judged
+  // against any other grid, a factory N54 opened BOOST with "1 setting changed", and Factory
+  // moved its breakpoints off its own.
   const def = React.useMemo(() => {
     const f = build.factoryInduction ?? null;
-    const axes = sized ? engineLayout({
-      redline: build.engineConfig.redline ?? 7000,
-      peakMapKpa: peakMapKpaOf({ turboOn: !!f?.turboOn, boostCurve: f?.boostCurve ?? [] }),
-    }).timing : undefined;
-    return defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes });
-  }, [build, sized]);
+    const redline = build.engineConfig.redline ?? 7000;
+    const peakMapKpa = peakMapKpaOf({ turboOn: !!f?.turboOn, boostCurve: f?.boostCurve ?? [] });
+    const stock = fitsGameGrid({ redline, peakMapKpa }) ? GAME_LAYOUT : engineLayout({ redline, peakMapKpa });
+    return defaultEcuCalibration({ derived: deriveEngine(build.engineConfig), gate: ecuHardwareOf(build).gate, axes: stock.timing });
+  }, [build]);
   // A field for one kind of nitrous kit only (a dry kit's fuel) is not offered on the
   // other: on a wet kit it does nothing, and a tuner reaching for it is chasing nothing.
   const fitsKit = (m) => !m.nitrousKit || m.nitrousKit === build.nitrous?.kit;

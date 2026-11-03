@@ -1,10 +1,10 @@
 /**
- * BUILD > Exhaust.
+ * BUILD > Bolt-ons (the route keeps its old id, `exhaust`).
  *
- * Pipe diameter, how far that sits from the shop-rule ideal for this build, and the
- * two bolt-ons whose physics live on the exhaust side (Cat-Back Exhaust, Long-Tube
- * Headers) — the other half of the dissolved BoltonsScreen. See InductionScreen for
- * the third (Cold Air Intake).
+ * The parts that bolt on without changing what the engine is: the cold air intake, the
+ * long-tube headers and the cat-back, then the exhaust pipe's diameter and how far that
+ * sits from the shop-rule ideal for this build. Induction keeps what forces air in: the
+ * turbo, the supercharger, their intercooler, and nitrous.
  *
  * `idealExhaustDia` is the shell's: it also feeds `exhaustDiaError`, which several
  * other consumers (the score breakdown, the dyno payload) read, so the shell keeps
@@ -24,10 +24,9 @@ import { useBuild } from '../../state/StoreProvider.jsx';
 
 import styles from './ExhaustScreen.module.css';
 
-// `boltons` dissolved into InductionScreen and this screen — this is the exhaust
-// half. Keep reading label/blurb off MOD_INFO rather than copying the strings, or
+// Keep reading label/blurb off MOD_INFO rather than copying the strings, or
 // this list forks from the catalogue it is meant to be a view onto.
-const MODS_HERE = ['exhaust', 'headers'];
+const MODS_HERE = ['intake', 'headers', 'exhaust'];
 
 /**
  * @param {object} props
@@ -48,9 +47,15 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
   return (
     <BuildSection
       active={active} onClick={() => onToggle('exhaust')}
-      icon={Flame} label="Exhaust"
-      sub={EXHAUST_DIA_OPTS[exhaustDiaIdx].label}
+      icon={Flame} label="Bolt-ons"
+      sub={[EXHAUST_DIA_OPTS[exhaustDiaIdx].label, ...MODS_HERE.filter((k) => mods[k]).map((k) => MOD_INFO[k].label.toLowerCase())].join(', ')}
     >
+      <div className={styles.list}>
+        {MODS_HERE.map((key) => (
+          <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
+        ))}
+      </div>
+
       <div className={styles.label}>Exhaust Diameter</div>
       <Seg variant="rule" equal label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
       <div className={styles.idealNote}>
@@ -61,12 +66,6 @@ export function ExhaustScreen({ active, onToggle, idealExhaustDia }) {
         Undersized piping restricts flow at high RPM, choking VE right when the engine wants air moving fastest. Oversized piping does the opposite at low RPM — exhaust velocity drops, scavenging gets lazy, and low-end response suffers.
         <br /><br />The long-standing shop rule is about <b className={styles.em}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
       </ExpandableInfo>
-
-      <div className={styles.list}>
-        {MODS_HERE.map((key) => (
-          <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
-        ))}
-      </div>
     </BuildSection>
   );
 }

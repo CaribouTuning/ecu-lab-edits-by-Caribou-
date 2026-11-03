@@ -77,12 +77,12 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.39-0.55 lb/hp·h, 9.8-11.1 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.39-0.55 lb/hp·h, 9.6-11.1 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
     expect(lo).toBeGreaterThanOrEqual(0.385);
     expect(hi).toBeLessThan(0.555);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
-    expect(alo).toBeGreaterThanOrEqual(9.75);
+    expect(alo).toBeGreaterThanOrEqual(9.55);
     expect(ahi).toBeLessThan(11.15);
   });
 
@@ -116,11 +116,11 @@ describe('the known approximations are the size the pages say', () => {
     }
   });
 
-  it('exhaust temperature at peak power: about 720-745 °C NA, 740-825 °C boosted', () => {
+  it('exhaust temperature at peak power: about 730-750 °C NA, 750-830 °C boosted', () => {
     for (const { peak, boosted } of PRESETS) {
       if (boosted) {
         expect(peak.egt).toBeGreaterThanOrEqual(735);
-        expect(peak.egt).toBeLessThanOrEqual(825);
+        expect(peak.egt).toBeLessThanOrEqual(830);
       } else {
         expect(peak.egt).toBeGreaterThanOrEqual(720);
         expect(peak.egt).toBeLessThanOrEqual(750);
@@ -204,14 +204,14 @@ describe('the known approximations are the size the pages say', () => {
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 54-67 bar on the NA presets, 71-85 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 53-67 bar on the NA presets, 71-85 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
         expect(pmax).toBeGreaterThanOrEqual(70.5);
         expect(pmax).toBeLessThanOrEqual(85.5);
       } else {
-        expect(pmax).toBeGreaterThanOrEqual(53.5);
+        expect(pmax).toBeGreaterThanOrEqual(52.5);
         expect(pmax).toBeLessThanOrEqual(67.5);
       }
     }

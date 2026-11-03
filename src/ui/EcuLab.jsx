@@ -440,6 +440,9 @@ export function EcuLabApp() {
   const goTab = (t) => navigate({ view: 'app', tab: t, section: ROUTES[t][0] });
   /** Open a specific section of a tab. */
   const goSection = (t, sec) => navigate({ view: 'app', tab: t, section: sec });
+  // An engine just put on the BUILD bench, by either path, opens on its short block: the figures to
+  // accept as the factory built them, or to set as the player's own, before the induction.
+  const startOnTheBlock = () => goSection('build', 'block');
   // Screens live in their own files, and some are memoised (LearnScreen today; any
   // BUILD/TUNE/DYNO screen that earns it tomorrow), so their `onToggle` prop has to be
   // REFERENTIALLY STABLE or the memo never bails out. A plain closure over
@@ -1006,6 +1009,8 @@ export function EcuLabApp() {
   // Nothing here decides what the engine sounds like. `acousticDrive` turns the operating
   // point into the physical properties of the exhaust note, and `updateEngineAudio`
   // renders them; this effect only says which engine is running and how hard.
+  // The share of the charge burning in the exhaust right now (the pops), off the last log row.
+  const liveAfterfire = live.ecu?.log?.[live.ecu.log.length - 1]?.afterfire ?? 0;
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
@@ -1078,13 +1083,16 @@ export function EcuLabApp() {
       // number nothing measured at that throttle.
       boostPsi: (onDyno && dynoPhase !== 'sweep') ? 0 : (point?.boostPsi ?? 0),
       volume,
+      // Charge lighting in the manifold on the stand: an overrun burble's pops, or a
+      // spark-cut limiter's. Only the live engine runs an overrun.
+      afterfire: onLive ? liveAfterfire : 0,
     };
 
     // One call. The pulse stream keeps its own crank and tops itself up between frames,
     // so nothing about the exhaust's timing depends on how often React gets around to this.
     updateEngineAudio(a, frame);
 
-  }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, soundOn,
+  }, [live.rpm, live.running, live.cranking, live.effThrottle, live.fuelCut, live.live, liveAfterfire, soundOn,
       blower, blowerRatio,
       engineDerived, engineConfig.configuration, engineConfig.bore, engineConfig.compression,
       exhaustDiaIdx, compressor,
@@ -1350,7 +1358,7 @@ export function EcuLabApp() {
               <Surface name={tab === 'dyno' ? 'dynoMonitor' : 'standMonitor'} kind="monitor" label="No engine yet"><div style={{ height: '100%', overflowY: 'auto' }}><EngineStart /></div></Surface>
             </Station>
           )
-          : tab === 'build' ? <div className={deskApps.buildPage} role="region" aria-label="Build"><EngineStart /></div> : <EngineStart />)}
+          : tab === 'build' ? <div className={deskApps.buildPage} role="region" aria-label="Build"><EngineStart onDone={startOnTheBlock} /></div> : <EngineStart />)}
 
         {/* ---------- BUILD: the build bench, the engine on it built a part at a time ---------- */}
         {/* The engine on its build stand in front of you, the bench computer beside it: one
@@ -1648,7 +1656,7 @@ export function EcuLabApp() {
                 )}
 
                 {result && !running && shown === 'log' && (
-                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} />
+                  <LogScreen flagged={result ? cellsNotRunBy(calAdvice.overAdvanced, result, (layout ?? layoutById(null)).timing) : []} axes={(layout ?? layoutById(null)).timing} />
                 )}
 
                 {result && !running && shown === 'score' && scores && (

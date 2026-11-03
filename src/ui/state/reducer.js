@@ -164,7 +164,7 @@ export const ACTIONS = Object.freeze({
  * `engineConfig` and does the spread itself. Clears `presetId` like every other
  * hardware write.
  *
- * @typedef {{type: 'SET_ENGINE_CONFIG_PATCH', patch: Partial<import('../../sim/index.js').EngineConfig>}} SetEngineConfigPatchAction
+ * @typedef {{type: 'SET_ENGINE_CONFIG_PATCH', patch: Partial<import('../../sim/index.js').EngineConfig>, base?: Omit<LoadBaseMapAction, 'type'>|null}} SetEngineConfigPatchAction
  */
 
 /**
@@ -602,17 +602,35 @@ function baseReducer(state, action) {
         build: { ...state.build, presetPrompt: action.value },
       };
 
-    case ACTIONS.SET_ENGINE_CONFIG_PATCH:
+    case ACTIONS.SET_ENGINE_CONFIG_PATCH: {
+      const build = {
+        ...state.build,
+        engineConfig: { ...state.build.engineConfig, ...action.patch },
+        // A figure the player sets is no longer one the app assumed for them.
+        assumed: (state.build.assumed ?? []).filter((k) => !(k in action.patch)),
+        presetId: null,
+      };
+      // An engine of the player's own, its tables untouched since they were generated: the
+      // caller sends the safe base map for the block and head as they now are, in the same
+      // write (`ownEngineBaseMap`, baseMap.js), so the engine still starts and a first pull
+      // is safe. Tables the player has worked on are never replaced by a hardware change.
+      const b = action.base;
+      if (!b || state.tune.tablesDirty) return { ...state, build };
       return {
         ...state,
-        build: {
-          ...state.build,
-          engineConfig: { ...state.build.engineConfig, ...action.patch },
-          // A figure the player sets is no longer one the app assumed for them.
-          assumed: (state.build.assumed ?? []).filter((k) => !(k in action.patch)),
-          presetId: null,
+        build: { ...build, mafScalar: b.mafScalar ?? build.mafScalar },
+        tune: {
+          ...state.tune,
+          ve: b.ve, timing: b.timing, afr: b.afr,
+          ...(b.ecu ? { ecu: b.ecu } : {}),
+          layout: b.layout ?? null,
+          baseline: { ve: b.ve, timing: b.timing, afr: b.afr },
+          tablesDirty: false,
+          untuned: null,
+          selection: null,
         },
       };
+    }
 
     case ACTIONS.APPLY_PRESET: {
       const p = action.preset;

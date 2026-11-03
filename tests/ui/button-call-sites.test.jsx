@@ -81,7 +81,7 @@ async function sweep() {
   collect();
 
   // BUILD is the landing tab: the engine stand, one part of the engine at a time.
-  for (const part of ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust']) {
+  for (const part of ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Bolt-ons']) {
     buildPart(part);
     collect();
   }

@@ -52,28 +52,28 @@ export function LayoutSwitch() {
   if (session.mode === 'career') return extend;
   const own = build.presetId ? PRESET_ECU_LAYOUT[build.presetId] : null;
   const active = layoutById(tune.layout);
+  // The game's 8 × 6 first: where every engine that fits it starts, and quick to read and tune on
+  // any screen. The finer grid sized to the engine, and the engine computer's own, beside it.
   const options = [
-    { id: 'engine', label: 'Sized to this engine' },
+    { id: 'game', label: '8 × 6' },
+    { id: 'engine', label: 'Sized, 16 × 16' },
     ...[...new Set([own, ECU_LAYOUTS[active.id] ? active.id : null].filter(Boolean))]
       .map((id) => ({ id, label: ECU_LAYOUTS[id].ecu.split(',')[0] })),
   ];
   // One line: the axes' size and span, the whole story in the tooltip.
   const why = active.id === 'engine'
     ? `The range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, they never move a value you have tuned: a build that reaches past them adds rows and columns (in SANDBOX as you build; in CAREER when you extend them), and past the edge the ECU reads the edge.`
-    : active.id === 'game' ? 'On the old 8 × 6 grid. Switch to tables sized to this engine.'
+    : active.id === 'game' ? 'The game\'s 8 × 6 grid: few enough cells to read at a glance and tune on a phone. "Sized" lays 16 × 16 breakpoints over the range this engine runs, for finer control between speeds and loads.'
       : `The breakpoints of ${active.ecu}, read from its own calibrations. ${active.note ?? ''}`;
   return (
     <>
     {extend}
     <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 0 }} title={why}>
-      {/* A choice of one is not a choice: the only layout is named in the caption, and a
-          switch appears when the engine's computer offers another. */}
       {options.length > 1 && (
         <Seg
-          variant="tabs"
           label="Table layout"
           options={options}
-          value={active.id === 'game' ? '' : active.id}
+          value={active.id}
           // The layout already in use is not a change: switching to it would re-sample the tables
           // onto a fresh grid and blur what the player has tuned.
           onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}

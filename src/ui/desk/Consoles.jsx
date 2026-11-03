@@ -15,8 +15,14 @@ import { useSession } from '../state/StoreProvider.jsx';
 
 import styles from './Consoles.module.css';
 
-/** What each load key is, under its number where the plate is wide enough to print it. */
-const LOAD_SUB = { 100: 'Wide open', 70: 'Part throttle', 40: 'Light' };
+/**
+ * What each load key is, under its number where the plate is wide enough to print it. The
+ * keys set the THROTTLE the pull is made at (the sweep opens it to load / 101.3 kPa of the
+ * way): manifold pressure is what follows from it, and on a boosted engine it runs past
+ * 100 kPa even at part throttle. Naming the keys in kPa read as "a 70 kPa pull", which on a
+ * turbo engine it is not.
+ */
+const LOAD_SUB = { 100: 'Wide open', 70: 'Part', 40: 'Light' };
 
 /**
  * @param {object} props
@@ -35,11 +41,11 @@ export function DynoConsole({ loadKpa, onLoad, nitrous, nitrousArmed, onNitrous,
   return (
     <div className={styles.plate} data-kind="dyno">
       <div className={styles.group}>
-        <span className={styles.engraved} aria-hidden="true">Load, kPa</span>
+        <span className={styles.engraved} aria-hidden="true">Throttle, %</span>
         {/* The number on the key, the unit engraved above: three keys fit one row. */}
-        <div className={styles.keys} role="group" aria-label="Load (manifold pressure)">
+        <div className={styles.keys} role="group" aria-label="Throttle for the pull">
           {[100, 70, 40].map((k) => (
-            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k} kPa`}>
+            <button key={k} type="button" className={styles.key} aria-pressed={loadKpa === k} onClick={() => onLoad(k)} disabled={running} aria-label={`${k}% throttle`}>
               <span className={styles.keyNum}>{k}</span>
               <span className={styles.keySub} aria-hidden="true">{LOAD_SUB[k]}</span>
             </button>

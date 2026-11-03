@@ -12,6 +12,7 @@ import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
+import { KNOCK_SAFETY_DEG, UNDER_ADVANCED_DEG } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
 import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
@@ -364,6 +365,50 @@ export function simulateSweep({
         boosted ? `${sparkCanFix ? 'Or' : 'Instead,'} ${lessBoost}.` : null,
         `Hardware that raises the knock limit: ${buildLevers} (BUILD).`,
       ].filter(Boolean).join(' '),
+    });
+  });
+
+  // SPARK LEFT ON THE TABLE. The other half of knock: timing well short of what the engine
+  // could carry here, measured against the same target the advisor and the factory tables
+  // use (MBT, or the knock limit less the advisor's safety margin, whichever is lower). A
+  // tune can be spotless and still be lazy: a turbo V6 with its boost rows pulled to 4°
+  // ran knock-free, lost 34 hp of its 274, and this log said nothing while the score read
+  // 100. A tuner reads a low timing number under boost as power not made, so the log does.
+  //
+  // The power it cost comes from this model's own spark response: torque falls with the
+  // square of the distance from MBT (5°, 10° and 20° of retard cost 1.0, 3.3 and 12.9 %,
+  // scripts/validate-physics.js), so a point's loss is the difference between the two.
+  // Points the ECU retarded itself (knock control, a protection) and the idle columns are
+  // left out: there the low number is the controller's, not the table's.
+  const SPARK_LOSS_PER_DEG2 = 0.00033;
+  const sparkTarget = (p) => Math.min(p.mbtIdeal, p.threshold - KNOCK_SAFETY_DEG);
+  const sparkShort = (p) => sparkTarget(p) - (p.commandedTiming ?? p.timing);
+  // At full throttle only: that is where a tuner chases power, and where the factory tables
+  // are written to the target. At part throttle a stock table is conservative on purpose (a
+  // cruise cell trades a degree for margin), and the log must not call a stock car lazy.
+  const lazy = (p) => loadKpa >= 95 && p.rpm > 1000 && !(p.knockPull > 0) && !(p.protect?.length) && !p.misfire && sparkShort(p) > UNDER_ADVANCED_DEG;
+  groupRuns(points, lazy).forEach((run) => {
+    if (run.length < 3) return;
+    const lostHp = (p) => {
+      const now = Math.max(0, p.mbtIdeal - (p.commandedTiming ?? p.timing));
+      const best = Math.max(0, p.mbtIdeal - sparkTarget(p));
+      const lossNow = SPARK_LOSS_PER_DEG2 * now * now;
+      const lossBest = SPARK_LOSS_PER_DEG2 * best * best;
+      return Math.max(0, (p.hp / Math.max(0.05, 1 - lossNow)) * (lossNow - lossBest));
+    };
+    const worst = run.reduce((a, b) => (sparkShort(b) > sparkShort(a) ? b : a));
+    const cost = Math.max(...run.map(lostHp));
+    if (cost < 2) return;
+    const boosted = run.some((p) => p.boostPsi >= 1);
+    events.push({
+      type: 'timing', severity: 1,
+      // A clean tune that leaves power behind is not a dialled-in one, but it is not a
+      // danger either: charged like a mild mixture miss, by how much power it costs.
+      impact: Math.round(clamp(3 + cost * 0.6, 4, 20) * (0.4 + 0.6 * rangeFrac(run))),
+      rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+      msg: `Spark held ${sparkShort(worst).toFixed(0)}° short of what the engine can take across ${rangeLabel(run)} — about ${Math.round(cost)} hp left on the table`,
+      cause: `Near ${worst.rpm} RPM the table commands ${(worst.commandedTiming ?? worst.timing).toFixed(1)}° where this engine${boosted ? ` at ${worst.boostPsi.toFixed(1)} psi` : ''} burns best at about ${worst.mbtIdeal.toFixed(1)}° and only knocks past about ${worst.threshold.toFixed(1)}°. Nothing is wrong and nothing is at risk: the burn simply lands late, so more of the fuel's heat leaves in the exhaust instead of pushing the piston${boosted ? ', and the turbine runs hotter for it' : ''}.`,
+      fix: `On TUNE → SPARK, add timing in ${tableRowsAt(worst.map, layout, worst.airCharge)} across ${rangeLabel(run)}, about ${Math.round(sparkTarget(worst) * 2) / 2}° near ${worst.rpm} RPM (the advisor lists each cell). Go a degree or two at a time and pull again: stop where the log shows knock retard or the power stops rising.`,
     });
   });
 

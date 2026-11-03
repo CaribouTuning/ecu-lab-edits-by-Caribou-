@@ -58,7 +58,7 @@ export function goTo(name) {
 
 /** Past the start screen into SANDBOX, onto BUILD, as the old landing was. */
 export function enterSandbox() {
-  fireEvent.click(screen.getByRole('button', { name: 'Sandbox' }));
+  fireEvent.click(screen.getByRole('button', { name: 'SANDBOX' }));
   goTo('BUILD');
 }
 
@@ -81,7 +81,7 @@ export function chrome(name) {
  * laptop open. Resolves once the laptop is there.
  */
 export async function enterCareer() {
-  fireEvent.click(screen.getByRole('button', { name: 'Career' }));
+  fireEvent.click(screen.getByRole('button', { name: 'CAREER' }));
   await screen.findByRole('button', { name: 'Open the laptop' });
 }
 
@@ -98,7 +98,7 @@ export async function openJobBoard() {
 
 /**
  * On the engine stand's build software, open one part of the engine: Engine, Short block,
- * Heads and cam, Induction, Fuel system or Exhaust.
+ * Heads and cam, Induction, Fuel system or Bolt-ons.
  * @param {string} name
  */
 export function buildPart(name) {

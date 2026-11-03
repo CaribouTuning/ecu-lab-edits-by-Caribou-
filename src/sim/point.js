@@ -13,7 +13,7 @@
 import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET } from './constants.js';
 import { COEFF } from './coefficients.js';
 import {
-  cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
+  cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, lateSparkQuench, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
 } from './cycle.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { exhaustManifoldKpa, rubbingFmepPa, pumpingFmepPa } from './friction.js';
@@ -292,10 +292,13 @@ export function evaluatePoint({
   // outside what a flame will cross). Both cost the whole event's work.
   const ign = E ? ignitionState({ cyc, usedTiming, lambda: lambdaActual, E }) : null;
   const deadFrac = ign ? clamp((E.cutFrac ?? 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac, 0, 1) : 0;
+  // A spark well after TDC leaves part of every firing charge unburned at EVO: it does no
+  // work, and it lights in the manifold (below).
+  const quench = lateSparkQuench(usedTiming);
   // A burnt valve's cylinder: the work its leak costs, or all of it once it stops firing.
   const wearDead = wear?.deadFrac ?? 0;
   const cylLoss = wear?.cylLossFrac ?? 0;
-  const imepPa = cycle.imepGrossPa * (cylLoss > 0 ? (1 - deadFrac) * (1 - cylLoss) : 1 - deadFrac);
+  const imepPa = cycle.imepGrossPa * (1 - quench) * (cylLoss > 0 ? (1 - deadFrac) * (1 - cylLoss) : 1 - deadFrac);
 
   // The engine must pay for its own rubbing friction, and for the gas-exchange loop.
   // Pumping is exhaust manifold pressure minus intake: a loss when throttled, and
@@ -332,6 +335,11 @@ export function evaluatePoint({
   // and the gas leaves hotter. `exhaustTempK` survives only where an answer is needed
   // BEFORE the cycle can run — the turbine backpressure the cycle itself depends on.
   let egtC = cycle.exhaustK - KELVIN_OFFSET;
+  // Charge still burning when the exhaust valve opens finishes in the manifold: its heat
+  // reaches the turbine and the cats, not the piston (the cycle stopped counting work at
+  // EVO). Nil near MBT; the whole point of an overrun burble, spark set far after TDC.
+  const lateBurn = (1 - deadFrac) * clamp((cycle.unburnedAtEvoFrac ?? 0) + quench, 0, 1);
+  if (lateBurn > 0.002) egtC += lateBurn * ECU_COEFF.AFTERBURN_RISE_C;
   if (ign && deadFrac > 0) {
     // A fuel-cut event pumps cool air through; a spark-cut or misfired one dumps a full
     // charge of fuel and air into a hot manifold, where it lights — the limiter's pops.
@@ -367,6 +375,10 @@ export function evaluatePoint({
     lambdaExhaust: Number((E.cutType === 'fuel' && (E.cutFrac ?? 0) > 0
       ? lambdaActual / Math.max(0.05, 1 - E.cutFrac) : lambdaActual).toFixed(3)),
     knockUnheard: Number(Math.max(0, -(margin + knockPull)).toFixed(2)),
+    // Share of each event's charge lighting in the exhaust: fuel the flame had not reached
+    // at EVO, and whole unlit charges (a spark cut, a misfire) dumped into a hot manifold.
+    // What a listener hears as pops, and what heats the turbine and the cats.
+    afterfire: Number(clamp(lateBurn + (ign ? (E.cutType === 'spark' ? (E.cutFrac ?? 0) : 0) + (1 - (E.cutFrac ?? 0)) * ign.misfireFrac : 0), 0, 1).toFixed(3)),
     misfire: Number(((wearDead > 0 ? 1 - (1 - ign.misfireFrac) * (1 - wearDead) : ign.misfireFrac) * 100).toFixed(1)),
     cutPct: Number(((E.cutFrac ?? 0) * 100).toFixed(0)),
     sparkKvNeed: Number(ign.kvNeeded.toFixed(1)),

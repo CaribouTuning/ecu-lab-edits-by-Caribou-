@@ -82,7 +82,9 @@ remaining risk is the same Node major with a different libm, which is what step 
   (those knocked every other engine in the catalogue), on the induction it left the factory
   with (`build.factoryInduction`): a turbo added since gets no calculated boost cells. It keeps
   an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
-  player. In SANDBOX a build that reaches past its tables extends the axes as the same
+  player. Every engine that fits it starts on the game's 8 × 6 grid (`presetLayout`; only one
+  that revs past 7,750 RPM or makes more than 200 kPa gets breakpoints sized to it), and the
+  sized 16 × 16 is on TUNE's layout switch. In SANDBOX a build that reaches past its tables extends the axes as the same
   write (`withRowsForTheBuild` in reducer.js): `extendAxes` only ever APPENDS rows and columns
   (never re-sample a tuned table: that once turned a typed 11° into 21°) and fills them from
   the edge, marked not tuned, and TUNE fades the cells the engine does not reach yet
@@ -96,6 +98,11 @@ remaining risk is the same Node major with a different libm, which is what step 
   almost everywhere. Fix #15 (no naturally aspirated power peak before redline) before
   refitting presets, or the refit fits data to the wrong shape. Compare whole curves with
   `scripts/analyze_presets.py`, not just peaks.
+- **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
+  with the spark after TDC on a closed throttle. The share of charge unburned at EVO (the
+  Wiebe tail plus `lateSparkQuench`, which is zero for any spark up to 5° ATDC) costs work
+  and lights in the manifold (`afterfire`, EGT). The audio's pops read that share. Keep the
+  quench at zero near MBT, or every retarded boost cell loses power.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

@@ -69,10 +69,16 @@ describe('layouts', () => {
 });
 
 describe('the layout switch', () => {
-  /** A state on a factory LS1, its tables untouched. */
+  /** A state on a factory LS1, its tables untouched (on the game's 8 × 6 grid, where it fits). */
   const onLs1 = () => {
     const s = makeInitialState();
     return reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('ls1')) });
+  };
+  /** A factory engine on the breakpoints sized to it, the layout switch's 16 × 16: the grid
+   *  SANDBOX extends for more boost, and the one the behaviour below is about. */
+  const onSizedGrid = (id) => {
+    const s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById(id)) });
+    return reducer(s, /** @type {any} */ (layoutSwitch(s, 'engine')));
   };
 
   it('regenerates an untouched factory calibration on the new breakpoints, and undo puts the engine\'s own back', () => {
@@ -86,8 +92,8 @@ describe('the layout switch', () => {
     expect(s.tune.selection).toBeNull();
     expect(s.build.presetId).toBe('ls1');
     s = reducer(s, { type: ACTIONS.UNDO });
-    expect(S.layoutById(s.tune.layout).id).toBe('engine');
-    expect(s.tune.timing).toHaveLength(16);
+    expect(S.layoutById(s.tune.layout).id).toBe('game');
+    expect(s.tune.timing).toHaveLength(6);
   });
 
   it('carries the player\'s own edits across, cell by cell', () => {
@@ -96,26 +102,34 @@ describe('the layout switch', () => {
     s = reducer(s, { type: ACTIONS.SET_TABLE, table: 'timing', value: edited });
     const own = S.layoutById(s.tune.layout).timing;
     s = reducer(s, /** @type {any} */ (layoutSwitch(s, 'gm-gen3')));
-    const back = layoutSwitch(s, 'engine');
+    const back = layoutSwitch(s, 'game');
     // The cell nearest 4500 rpm and 100 kPa: well inside both grids.
     const near = (xs, x) => xs.reduce((b, v, i) => (Math.abs(v - x) < Math.abs(xs[b] - x) ? i : b), 0);
     const ri = near(own.load, 100); const ci = near(own.rpm, 4500);
     expect(Math.abs(back.timing[ri][ci] - edited[ri][ci])).toBeLessThan(1);
   });
 
-  it('starts a preset on breakpoints sized to that engine', () => {
+  it('starts a preset on the game grid where it fits, and on breakpoints sized to it where it does not', () => {
     let s = onLs1();
     s = reducer(s, /** @type {any} */ (layoutSwitch(s, 'gm-gen3')));
+    // The LM7: a 5600 limiter and no boost, well inside the 8 × 6.
     s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('lm7')) });
+    expect(S.layoutById(s.tune.layout).id).toBe('game');
+    // The Golf R: more manifold pressure than the 8 × 6's 200 kPa top row, so sized to it.
+    s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('ea888-r')) });
     const L = S.layoutById(s.tune.layout);
     expect(L.id).toBe('engine');
-    // The LM7's 5600 limiter, 250 past it, and no boost: 100 kPa is the top row.
-    expect(L.timing.rpm.at(-1)).toBeGreaterThanOrEqual(5600);
-    expect(L.timing.load[0]).toBe(100);
+    expect(L.timing.load[0]).toBeGreaterThan(200);
+    // And the sized grid is always on the switch for the LM7 too: its limiter, 250 past it,
+    // no boost, 100 kPa the top row.
+    s = reducer(s, { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('lm7')) });
+    const sized = layoutSwitch(s, 'engine');
+    expect(S.layoutById(sized.layout).timing.rpm.at(-1)).toBeGreaterThanOrEqual(5600);
+    expect(S.layoutById(sized.layout).timing.load[0]).toBe(100);
   });
 
   it('in CAREER stays put when the build changes, as a real ECU\'s axes do: the player extends them', () => {
-    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('n54')) });
+    let s = onSizedGrid('n54');
     s = { ...s, session: { ...s.session, mode: 'career' } };
     const before = s.tune;
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'boostCurve', value: s.build.boostCurve.map((b) => (b > 0 ? b + 8 : b)) });
@@ -144,7 +158,7 @@ describe('the layout switch', () => {
   });
 
   it('in SANDBOX gets the rows for more boost as the boost is raised: the edge carried, not tuned, and kept marked', () => {
-    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    let s = onSizedGrid('vq35hr');
     const na = s.tune;
     const naAxes = S.layoutById(na.layout).timing;
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });
@@ -169,7 +183,7 @@ describe('the layout switch', () => {
     // A boost slider writes once per notch, so the axes extend again and again. Extending
     // used to lay a new evenly spaced grid over the table and re-read the old one at its
     // points: a tuned 11 degrees read 21 afterwards. It now only adds rows and columns.
-    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35hr')) });
+    let s = onSizedGrid('vq35hr');
     const was = S.layoutById(s.tune.layout).timing;
     const typed = s.tune.timing.map((r) => [...r]);
     const probes = [[2, 6], [5, 9], [8, 4], [11, 12], [14, 7], [0, 0], [15, 15]];
@@ -196,7 +210,7 @@ describe('the layout switch', () => {
   });
 
   it('never writes a factory calibration for a turbo the factory did not fit', () => {
-    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('vq35de-revup')) });
+    let s = onSizedGrid('vq35de-revup');
     // CAREER, where a build change leaves the tables alone (SANDBOX extends them for the boost).
     s = { ...s, session: { ...s.session, mode: 'career' } };
     s = reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'turboOn', value: true });

@@ -9,7 +9,7 @@ import React, { useEffect, useRef } from 'react';
 
 import { AlertTriangle, ArrowUpRight } from 'lucide-react';
 
-import { LOAD } from '../../../sim/index.js';
+import { GAME_LAYOUT } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { coversRpm, eventTone } from '../../components/eventBands.js';
@@ -42,9 +42,11 @@ function EventLinks({ fix }) {
  *   knock limit that this pull did not run (`cellsNotRunBy`). A pull only runs the tables along
  *   its own load, so a clean pull and a flagged cell are both true; the log says so rather than
  *   leaving the two screens to contradict.
+ * @param {import('../../../sim/layouts.js').TableAxes} [props.axes] the spark table's breakpoints, which
+ *   `flagged` indexes: the game grid unless the tune sits on another
  * @returns {React.ReactElement}
  */
-export function LogScreen({ flagged = [] }) {
+export function LogScreen({ flagged = [], axes = GAME_LAYOUT.timing }) {
   const [session] = useSession();
   const { result, logFocusRpm } = session;
 
@@ -67,11 +69,18 @@ export function LogScreen({ flagged = [] }) {
         <div className={styles.clean}>
           Clean pull — no knock, fueling, or trim issues across the sweep.
           {flagged.length > 0 && (() => {
-            const loads = [...new Set(flagged.map((c) => LOAD[c.ri]))].sort((a, b) => b - a);
+            // The rows named off the table's own breakpoints: the game grid's six load rows are
+            // not every table's, and on a longer one the rows past the sixth came out blank
+            // ("at 100 and 70 and 40 and 20 and kPa").
+            const rows = [...new Set(flagged.map((c) => axes.load[c.ri]).filter((v) => v != null))].sort((a, b) => a - b);
+            const list = rows.length <= 1 ? String(rows[0] ?? '')
+              : `${rows.slice(0, -1).join(', ')} and ${rows[rows.length - 1]}`;
+            const throttle = Math.round(result.loadKpa ?? session.loadKpa);
             return (
               <div className={styles.cleanNote} data-testid="log-flagged-elsewhere">
-                This pull ran at {result.loadKpa ?? session.loadKpa} kPa. TUNE still flags {flagged.length} spark cell{flagged.length === 1 ? '' : 's'} past
-                the knock limit at {loads.join(' and ')} kPa, which a pull at that load will test.{' '}
+                The cells this pull ran are clean, but TUNE still flags {flagged.length} spark cell{flagged.length === 1 ? '' : 's'} past
+                the knock limit in the {list} {axes.loadUnit} row{rows.length === 1 ? '' : 's'}. A pull at {throttle}% throttle never
+                reads {flagged.length === 1 ? 'it' : 'them'}; a pull at another throttle, or more boost, will, and will knock there.{' '}
                 {fixLinks('TUNE › SPARK').map((l) => <a key={l.href} href={l.href} className={styles.eventLink}>{l.label}</a>)}
               </div>
             );

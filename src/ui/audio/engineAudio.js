@@ -231,8 +231,15 @@ export function createEngineAudio(ctx) {
   graph.exhaustGain.connect(master);
   graph.exhaust.out.connect(graph.exhaustGain);
 
+  // AFTERFIRE: charge lighting in the manifold, an overrun burble's pops. Each is a crack
+  // of broadband noise with a fast edge and a short ring, over a low thump, played one-shot
+  // from the shared noise buffer and sent past the master so the engine's own compression
+  // does not swallow it. Scheduled by `firePops` from the share of the charge that is
+  // burning in the exhaust (point.js `afterfire`).
+  const popBus = ctx.createGain(); popBus.gain.value = 1; popBus.connect(outGain);
+
   return Object.assign(graph, {
-    ctx, limiter, outGain, softClip, satOut, master,
+    ctx, limiter, outGain, softClip, satOut, master, noiseBuf, popBus, popDebt: 0,
     indG, indFilt, whistle, whistleG, bladeFilt, bladeG, rushFilt, rushG,
     bovFilt, bovG, flutFilt, flutEnv, flutLfo,
     prevBoostPsi: 0,
@@ -265,6 +272,7 @@ export function createEngineAudio(ctx) {
  * @property {boolean} intakeFitted whether an intake is fitted
  * @property {number} boostPsi current boost, for detecting a lift
  * @property {number} [volume] player-facing master volume, 1 being the tuned balance
+ * @property {number} [afterfire] share of each charge burning in the exhaust (the pops)
  */
 
 /**
@@ -371,6 +379,8 @@ export function updateEngineAudio(a, frame) {
     a.prevBoostPsi = boostPsi;
   }
 
+  firePops(a, frame.afterfire ?? 0, frame.rpm, audible, catBack, t);
+
   // The whole engine follows the throttle: open it and it gets louder, and a fitted
   // cat-back or headers let a little more out.
   //
@@ -385,6 +395,52 @@ export function updateEngineAudio(a, frame) {
   // of it would be inserted INTO that schedule and pull the level straight back up
   // through the gap, so while one is playing it is left alone.
   a.master.gain.setTargetAtTime(audible ? vol : 0, t, cut ? 0.015 : 0.06);
+}
+
+/**
+ * Schedules the pops for the next parameter frame. A burble does not pop on every event:
+ * charge lighting in the manifold catches irregularly, so the rate rises with the share
+ * burning there and with engine speed, and each pop lands at a random point in the frame.
+ * Loudness follows the share as well; an open exhaust lets more of it out.
+ * @param {object} a the graph
+ * @param {number} afterfire share of each charge burning in the exhaust, 0..1
+ * @param {number} rpm
+ * @param {boolean} audible
+ * @param {boolean} catBack
+ * @param {number} t now, in the context's time
+ */
+function firePops(a, afterfire, rpm, audible, catBack, t) {
+  if (!audible || afterfire < 0.02) { a.popDebt = 0; return; }
+  // Pops a second: a handful at a soft crackle, a near-continuous rattle at a hot burble,
+  // never more than one in eight firing events.
+  const events = (rpm / 120) * 6;
+  const rate = Math.min(events / 8, 4 + afterfire * 60) * Math.min(1, rpm / 2500);
+  a.popDebt += rate / PARAM_HZ;
+  const span = 1 / PARAM_HZ;
+  while (a.popDebt >= 1 || (a.popDebt > 0 && Math.random() < a.popDebt)) {
+    a.popDebt = Math.max(0, a.popDebt - 1);
+    const at = t + 0.01 + Math.random() * span;
+    const level = EFFECT_TRIM * Math.min(1.6, 0.35 + afterfire * 2.4) * (catBack ? 1.3 : 1) * (0.6 + Math.random() * 0.6);
+    const src = a.ctx.createBufferSource(); src.buffer = a.noiseBuf;
+    const crack = a.ctx.createBiquadFilter(); crack.type = 'bandpass';
+    crack.frequency.value = 700 + Math.random() * 1400; crack.Q.value = 0.8;
+    const g = a.ctx.createGain(); g.gain.value = 0;
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(level, at + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.05 + afterfire * 0.08);
+    src.connect(crack); crack.connect(g); g.connect(a.popBus);
+    src.start(at, Math.random() * 1.5, 0.2);
+    // The thump under it: the pressure pulse leaving the tailpipe.
+    const thump = a.ctx.createOscillator(); thump.type = 'sine';
+    thump.frequency.setValueAtTime(90 + Math.random() * 40, at);
+    thump.frequency.exponentialRampToValueAtTime(40, at + 0.09);
+    const tg = a.ctx.createGain(); tg.gain.value = 0;
+    tg.gain.setValueAtTime(0, at);
+    tg.gain.linearRampToValueAtTime(level * 0.9, at + 0.004);
+    tg.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
+    thump.connect(tg); tg.connect(a.popBus);
+    thump.start(at); thump.stop(at + 0.14);
+  }
 }
 
 /**

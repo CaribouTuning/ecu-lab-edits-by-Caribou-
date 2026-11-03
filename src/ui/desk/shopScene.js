@@ -108,7 +108,7 @@ function idleScreen(kind, aspect) {
       g.textAlign = 'left';
     } else {
       // The engine's parts, in the order it goes together.
-      const parts = ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Exhaust'];
+      const parts = ['Engine', 'Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Bolt-ons'];
       const row = (bot - top) / parts.length;
       g.font = `500 ${Math.min(22, row * 0.6)}px system-ui, sans-serif`;
       parts.forEach((name, i) => {
@@ -1107,13 +1107,14 @@ export function buildShopScene(stage, init) {
       dynoFx.smoke.update(dt);
       dynoFx.debris.update(dt);
       dynoFx.flash.update(dt);
-      // The dyno's rollers and the car on them idle over; the lift stays put. In a pull the
-      // wheels turn with the engine, through a gear (a picture, not the drivetrain model:
-      // about 3.6 turns of the crank to one of the wheels in the gear a pull is made in).
-      const wheelHz = dynoRpm > 0 ? dynoRpm / 60 / 3.6 : 0.3;
-      const roll = wheelHz * 2 * Math.PI * 0.32 * dt;
-      dynoCar?.roll?.(roll);
-      for (const r of dyno.userData.rollers ?? []) r.rotation.x -= roll / 0.22;
+      // The rollers and the car's driven wheels stand still until a pull runs; in a pull they
+      // turn with the engine, through a gear (a picture, not the drivetrain model: about 3.6
+      // turns of the crank to one of the wheels in the gear a pull is made in).
+      if (dynoRpm > 0) {
+        const roll = (dynoRpm / 60 / 3.6) * 2 * Math.PI * 0.32 * dt;
+        dynoCar?.roll?.(roll);
+        for (const r of dyno.userData.rollers ?? []) r.rotation.x -= roll / 0.22;
+      }
       if (dyno.userData.fan && dynoRpm > 0) dyno.userData.fan.rotation.z += dt * 14;
       stage.followLight(new THREE.Vector3(0, 0, 0));
       void t;

@@ -92,6 +92,7 @@
 .stageBody { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: start; padding: 2px 0 12px; }
 @media (max-width: 560px) { .stageBody { grid-template-columns: 1fr; } .art { max-height: 140px; } }
 .stageArt { padding: 8px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
+.stageBody:not(:has(> .stageArt)) { grid-template-columns: 1fr; }
 .art { display: block; width: 100%; height: auto; }
 .stageNum {
   width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;

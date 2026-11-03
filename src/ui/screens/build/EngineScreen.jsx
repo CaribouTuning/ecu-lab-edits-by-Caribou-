@@ -15,7 +15,7 @@ import React, { useContext } from 'react';
 
 import {
   BOTTOM_END_OPTS, COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
-  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor, pistonMotion,
+  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor, layoutById, pistonMotion,
 } from '../../../sim/index.js';
 import { BuildBenchMode, BuildSection } from '../../components/BuildSection.jsx';
 import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
@@ -25,7 +25,7 @@ import { Note } from '../../primitives/Note.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { Select } from '../../primitives/Select.jsx';
 import { SpecField, SpecGroup, SpecMeter, SpecSlider, SpecTable } from '../../primitives/Spec.jsx';
-import { originPreset } from '../../state/baseMap.js';
+import { isOwnEngine, originPreset, ownEngineBaseMap } from '../../state/baseMap.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
 
@@ -58,6 +58,39 @@ const ASSUMED_LABEL = {
  * @property {boolean} inSync
  * @property {number} maxAbs
  */
+
+/**
+ * What a short-block change does to the calibration, said as it is. A factory engine keeps
+ * its factory tables: the change shows on the next pull, to be tuned from there. An engine of
+ * the player's own gets the safe base map for the block as built, until its tables hold
+ * the player's own work; boost, nitrous and a fuel change stay the player's to tune.
+ * @param {{own: boolean, dirty: boolean, onBaseMap: () => void}} props
+ * @returns {React.ReactElement}
+ */
+function ShortBlockNote({ own, dirty, onBaseMap }) {
+  if (!own) {
+    return <Note>Changing bore, stroke, compression or the cylinder layout leaves the factory VE, spark and fuel tables as they are. You will see the shift on the next dyno pull and tune from there, as after a real short-block swap.</Note>;
+  }
+  if (!dirty) {
+    return (
+      <Note>
+        <b>Safe base map loaded.</b> Your engine has no factory tune, so each change here writes a conservative base map for
+        the block as built: it starts, idles and survives a first pull. It is not tuned. Spark sits back from the knock
+        limit and full load runs rich. A turbo, supercharger, nitrous, a fuel or an injector change gets nothing calculated
+        for it: log a pull and tune those cells yourself, as a tuner would. Once you edit a table it is yours, and changes
+        here stop rewriting it.
+      </Note>
+    );
+  }
+  return (
+    <Note>
+      <b>Your tables are kept.</b> They hold your own work, so this change did not rewrite them. You will see it on the next
+      pull. To start over from a safe base map for the block as built, load it here. It replaces your VE, spark and
+      fuel tables. Undo brings them back.
+      {' '}<Button variant="ghost" size="sm" onClick={onBaseMap}>Load the safe base map</Button>
+    </Note>
+  );
+}
 
 /**
  * @param {object} props
@@ -93,7 +126,18 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // A factory engine put on an empty bench replaced nothing: "replaced your tune" was untrue.
   const fromEmpty = top?.before?.build?.engineReady === false;
 
-  const setCfg = (patch) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch });
+  // An engine of the player's own has no factory calibration to keep: while its tables are
+  // as generated, a block or head change carries the safe base map for the engine as it now
+  // is (ownEngineBaseMap), so it still starts and a first pull is safe. Tables the player has
+  // worked on are theirs and stay; the note below offers the base map instead.
+  const own = isOwnEngine(build) && session.mode !== 'career';
+  const setCfg = (patch) => dispatch({
+    type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch,
+    base: own && !tablesDirty
+      ? ownEngineBaseMap({ ...build, engineConfig: { ...engineConfig, ...patch } }, layoutById(tune.layout).id)
+      : null,
+  });
+  const loadOwnBaseMap = () => dispatch({ type: ACTIONS.LOAD_BASE_MAP, ...ownEngineBaseMap(build, layoutById(tune.layout).id) });
   const clearPresetId = () => dispatch({ type: ACTIONS.CLEAR_PRESET_ID });
 
   /** Whether the player has unsaved calibration work — hand-edited VE/spark/fuel —
@@ -208,12 +252,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             </ExpandableInfo>
           </>
         )}
-        {(build.assumed?.length ?? 0) > 0 && (
-          <Note tone="warn">
-            <b>Assumed, not entered:</b> {build.assumed.map((k) => ASSUMED_LABEL[k]?.(engineConfig) ?? k).join('; ')}.
-            {' '}These are typical values, not your engine&apos;s own. Set each on its own stage and this note goes away.
-          </Note>
-        )}
         {!bench && !presetId && !build.originPresetId && (
           <Note>Custom build: every value on the next stages is yours to set. Pick a factory engine from the list to start from a known-good configuration instead.</Note>
         )}
@@ -242,18 +280,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             </div>
           </div>
         )}
-        {undoable && (
-          <div className={styles.undoLine}>
-            <span>{fromEmpty ? `${top.label.replace('Preset · ', '')} is on the bench with its factory calibration. Undo takes it off.` : `${top.label} replaced your tune. Undo restores the tables and hardware as they were before it.`}</span>
-            <Button
-              variant="quiet" size="sm"
-              aria-label={`Undo ${top.label}`}
-              onClick={() => dispatch({ type: ACTIONS.UNDO })}
-            >
-              UNDO
-            </Button>
-          </div>
-        )}
 
         {!veAdvice.inSync && (
           <div className={styles.callout}>
@@ -277,6 +303,31 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             <RotateCcw size={12} aria-hidden="true" /> RESET ALL TO STOCK
           </Button>
         </div>
+    </>
+  );
+  // What the engine just put on the bench came with: the figures assumed for it and the
+  // undo that takes it off. Said on the part the bench opens on after the choice (the short
+  // block) as well as on Engine, so the player reads it where they land.
+  const arrivalNotes = (
+    <>
+        {(build.assumed?.length ?? 0) > 0 && (
+          <Note tone="warn">
+            <b>Assumed, not entered:</b> {build.assumed.map((k) => ASSUMED_LABEL[k]?.(engineConfig) ?? k).join('; ')}.
+            {' '}These are typical values, not your engine&apos;s own. Set each on its own stage and this note goes away.
+          </Note>
+        )}
+        {undoable && (
+          <div className={styles.undoLine}>
+            <span>{fromEmpty ? `${top.label.replace('Preset · ', '')} is on the bench with its factory calibration. Undo takes it off.` : `${top.label} replaced your tune. Undo restores the tables and hardware as they were before it.`}</span>
+            <Button
+              variant="quiet" size="sm"
+              aria-label={`Undo ${top.label}`}
+              onClick={() => dispatch({ type: ACTIONS.UNDO })}
+            >
+              UNDO
+            </Button>
+          </div>
+        )}
     </>
   );
   const blockParts = (
@@ -305,6 +356,11 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <SpecField label="Pistons and rods" tone={pastBottomEnd ? 'warn' : undefined} aside={bottomEndLimit.label}>
             <Seg label="Pistons and rods" variant="rule" equal value={bottomEndLimit.id} options={bottomEndOpts} onChange={chooseBottomEnd} />
           </SpecField>
+          <SpecSlider
+            label="Redline" unit=" rpm" value={engineDerived.redline} stock={stockCfg?.redline ?? null}
+            min={CUSTOM_ENGINE_LIMITS.redline.min} max={CUSTOM_ENGINE_LIMITS.redline.max} step={CUSTOM_ENGINE_LIMITS.redline.step}
+            onChange={(v) => setCfg({ redline: v })} ariaLabel="Redline"
+          />
           <SpecMeter share={pistonAtRedline.meanSpeedMs / bottomEndLimit.limitMs} label="Mean piston speed at the redline against what this assembly is rated for" />
           <div className={styles.readout} data-testid="bottom-end-readout">
             At the {engineDerived.redline.toLocaleString('en-US')} RPM redline the pistons average {pistonAtRedline.meanSpeedMs.toFixed(1)} m/s
@@ -332,7 +388,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             <Seg label="Friction level" variant="rule" equal options={FRICTION_LEVEL_OPTS} value={engineConfig.frictionLevel ?? 'modern'} onChange={(v) => setCfg({ frictionLevel: v })} />
           </SpecField>
         </SpecGroup>
-        <Note>Changing bore, stroke, or configuration does not retroactively rewrite your VE/timing/AFR tables — you will feel the shift on your next dyno pull and can re-tune from there, just like swapping a real short block.</Note>
+        <ShortBlockNote own={own} dirty={tablesDirty} onBaseMap={loadOwnBaseMap} />
     </>
   );
   const headParts = (
@@ -427,6 +483,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
       sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}, ${engineConfig.compression.toFixed(1)}:1, ${engineConfig.camDuration}° cam`}
     >
       {(!part || part === 'engine') && baseParts}
+      {(!part || part === 'engine' || part === 'block') && arrivalNotes}
       {(!part || part === 'block') && blockParts}
       {(!part || part === 'head') && headParts}
     </BuildSection>

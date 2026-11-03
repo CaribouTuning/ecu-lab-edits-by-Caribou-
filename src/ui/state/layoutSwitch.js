@@ -15,7 +15,7 @@
  */
 
 import {
-  BARO_KPA, ECU_LAYOUTS, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
+  BARO_KPA, ECU_LAYOUTS, GAME_LAYOUT, PSI_TO_KPA, blowerCurve, chargeTempK, deriveEngine, engineLayout,
   extendAxesTo, factoryCalibrationOn, layoutById, oemLayout, peakMapKpaOf, presetById, readTable, resampleTable,
   tankFuel, trappedAirGrams,
 } from '../../sim/index.js';
@@ -39,14 +39,17 @@ export function buildLayout(build) {
 }
 
 /**
- * The layout a TUNE layout choice names, for this build: `engine` for breakpoints sized to
- * it, or an engine computer's own (an ECU_LAYOUTS id), whose tables it gives no
- * breakpoints for sit on the engine's.
+ * The layout a TUNE layout choice names, for this build: `game` for the game's 8 × 6 grid,
+ * `engine` for breakpoints sized to it, or an engine computer's own (an ECU_LAYOUTS id),
+ * whose tables it gives no breakpoints for sit on the engine's.
  *
  * @param {StoreState['build']} build
  * @param {string} choice
  */
 export function layoutFor(build, choice) {
+  // The game's own 8 × 6 grid: where every engine that fits it starts (presets.js
+  // `presetLayout`), and where a player who tried the finer grid comes back to.
+  if (choice === 'game') return GAME_LAYOUT;
   const engine = buildLayout(build);
   return ECU_LAYOUTS[choice] ? oemLayout(choice, engine.ve) : engine;
 }

@@ -124,3 +124,15 @@
   .stepBtn, .stepGo { min-height: 44px; }
   .originBtn { min-height: 40px; }
 }
+
+/* A phone on its side: the sheet gets the height. A smaller engine at the head of the list,
+   a slimmer way on, and the changes line left to the Engine part's panel. Still 36 px a
+   button: above WCAG 2.2's 24 px floor, where 44 cost a sixth of the screen. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .wrap[data-full] .parts > [role='img'] { height: 112px; }
+  .wrap[data-full] .steps { padding: 6px 14px calc(6px + env(safe-area-inset-bottom, 0px)); }
+  .stepBtn, .stepGo { min-height: 36px; }
+  .changes { display: none; }
+  .wrap[data-full] .sheetHead { padding: 10px 18px 8px; }
+  .wrap[data-full] .sheetTitle { font-size: 16px; }
+}

@@ -455,11 +455,11 @@ describe('the dyno load selector', () => {
     // back out of the store, which makes the round trip testable in one click.
     launch();
     goTo('DYNO');
-    expect(selectedLoad()).toBe('100 kPa');
+    expect(selectedLoad()).toBe('100% throttle');
 
-    fireEvent.click(screen.getByRole('button', { name: '40 kPa' }));
+    fireEvent.click(screen.getByRole('button', { name: '40% throttle' }));
 
-    expect(selectedLoad()).toBe('40 kPa');
+    expect(selectedLoad()).toBe('40% throttle');
   });
 });
 
@@ -469,11 +469,11 @@ describe('the dyno load selector', () => {
  * @returns {string}
  */
 function selectedLoad() {
-  const buttons = ['100 kPa', '70 kPa', '40 kPa']
+  const buttons = ['100% throttle', '70% throttle', '40% throttle']
     .map((name) => screen.getByRole('button', { name }));
   const pressed = buttons.filter((b) => b.getAttribute('aria-pressed') === 'true');
   expect(pressed).toHaveLength(1);
-  // The key's name, not its face: the face shows the number, the unit is engraved above it.
+  // The key's name, not its face: the face shows the number, "Throttle, %" is engraved above it.
   return pressed[0].getAttribute('aria-label');
 }
 
@@ -550,7 +550,7 @@ describe('banking a pull', () => {
       // the score panel stays mounted across it. A pull at 40 kPa is a different
       // measurement of the same engine, so these figures are no longer what running
       // now would produce.
-      fireEvent.click(screen.getByRole('button', { name: '40 kPa' }));
+      fireEvent.click(screen.getByRole('button', { name: '40% throttle' }));
 
       expect(statTile('Pull score')).toBe(measured);
       expect(screen.getByText(/before your latest change/)).toBeTruthy();
@@ -582,9 +582,9 @@ describe('banking a pull', () => {
       };
       expect(Number(measured.pull)).toBeGreaterThan(0);
 
-      // BUILD > EXHAUST > fit a 4.0" pipe, then back to the scorecard.
+      // BUILD > BOLT-ONS > fit a 4.0" pipe, then back to the scorecard.
       goTo('BUILD');
-      fireEvent.click(screen.getByText('Exhaust'));
+      fireEvent.click(screen.getByText('Bolt-ons'));
       fireEvent.click(screen.getByRole('button', { name: '4.0"' }));
       // Guard the interaction, not just the outcome: an equality assertion passes
       // trivially if the pipe was never actually changed.

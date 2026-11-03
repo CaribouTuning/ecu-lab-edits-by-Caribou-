@@ -123,6 +123,15 @@ export const COEFF = {
   // Spark to appreciable heat release, crank degrees, while the kernel forms. Real
   // engines show 5-15 depending on charge motion.
   FLAME_DEVELOPMENT_DEG: 8,
+  // A spark fired well after top dead centre lights a kernel in a chamber that is already
+  // expanding: pressure, temperature and turbulence are all falling, and a share of the
+  // charge is never reached before the exhaust valve opens (partial burns, quenched
+  // kernels). That share leaves unburned and lights in the manifold: what catalyst-heating
+  // strategies use spark 10-25° ATDC for, and what an overrun burble's pops are. None at
+  // any spark up to 5° after TDC, rising to 55% by 35° after.
+  LATE_SPARK_QUENCH_ONSET_ATDC: 5,
+  LATE_SPARK_QUENCH_SPAN_DEG: 30,
+  LATE_SPARK_QUENCH_MAX: 0.55,
   // Oxygen-enriched charge lights faster. Zhang et al. (ACS Omega 2022, a 2.0 L gasoline
   // engine at 1500 RPM and light load) measured spark-to-10%-burned 3-4° shorter with the
   // oxidant at 25% O₂ by volume instead of air's 21%, while the 10-90% burn barely moved.

@@ -378,8 +378,11 @@ export function makeCar(spec = {}) {
   };
   /** @param {number} angle front-wheel steering angle, radians */
   rig.steer = (angle) => { for (const w of wheels) if (w.front) w.steer.rotation.y = angle; };
-  /** @param {number} distance metres rolled since last call */
-  rig.roll = (distance) => { for (const w of wheels) w.spin.rotation.x += distance / wr; };
+  /**
+   * On the dyno's rollers: only the driven (rear) wheels turn; the fronts sit on the floor.
+   * @param {number} distance metres rolled since last call
+   */
+  rig.roll = (distance) => { for (const w of wheels) if (!w.front) w.spin.rotation.x += distance / wr; };
   rig.update = (dt) => {
     hoodOpen += (hoodTarget - hoodOpen) * Math.min(1, dt * 5);
     hoodHinge.rotation.x = -hoodOpen;

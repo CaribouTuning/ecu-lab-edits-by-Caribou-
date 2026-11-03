@@ -54,6 +54,23 @@ export const sparkClean = (st) => {
   return s;
 };
 
+/**
+ * Timing put back where the pull log says it was left on the table, the way its advice
+ * reads: a degree at a time in the full-load and boost rows, pulling again each time, and a
+ * degree back out at the first sign of knock.
+ */
+export const sparkToLog = (st) => {
+  let s = st;
+  const step = (x, d) => ({ ...x, tune: { ...x.tune, timing: x.tune.timing.map((row, ri) => row.map((v) => (axesOf(x, 'timing').load[ri] >= 100 ? v + d : v))) } });
+  for (let i = 0; i < 20; i += 1) {
+    const ev = pull(s).events;
+    if (ev.some((e) => e.type === 'knock')) return step(s, -1);
+    if (!ev.some((e) => e.type === 'timing')) return s;
+    s = step(s, 1);
+  }
+  return s;
+};
+
 /** Spark out of the boost rows (degrees per 20 kPa) and the boost rows richer. */
 export const boostSparkAndFuel = (st, degPer20 = 4, afr = 12.0) => ({
   ...st,
@@ -90,7 +107,9 @@ export const TEMPLATE_FIXES = {
   retarded: (s, job) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: job.car.preset }).tune.timing } }),
   // E85's charge cooling moves the airflow too, so the real fix ends with a pass from the log.
   e85: (s) => veFix(scaleFix(s), 1),
-  turbo: (s) => boostSparkAndFuel(s),
+  // The safe start (spark out of the boost rows, the mixture richer), then the timing a
+  // tuner puts back from the log: a blanket pull leaves the power on the table.
+  turbo: (s) => sparkToLog(boostSparkAndFuel(s)),
   // Then the spark checked against the log, as on any breathing change: intake and headers
   // add charge, and with a stock VQ35HR's 2-degree factory margin a pull can knock until a
   // degree comes out where the log says.

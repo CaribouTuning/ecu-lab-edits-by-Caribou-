@@ -38,14 +38,14 @@ const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 /**
  * One stage of the model: a row that opens to its picture, equation and numbers, so the
  * six stages read as a list first and nothing is in the way until you ask for it.
- * @param {{n: number, title: string, what: string, eq: React.ReactNode, rows: [string, string][], open?: boolean, children: React.ReactNode}} props
+ * @param {{n: number, title: string, what: string, eq: React.ReactNode, rows: [string, string][], open?: boolean, children?: React.ReactNode}} props
  */
 function Stage({ n, title, what, eq, rows, open = false, children }) {
   return (
     <details className={styles.stage} open={open}>
       <summary className={styles.stageTitle}><span className={styles.stageNum}>{n}</span>{title}</summary>
       <div className={styles.stageBody}>
-        <div className={styles.stageArt} aria-hidden="true">{children}</div>
+        {children && <div className={styles.stageArt} aria-hidden="true">{children}</div>}
         <div className={styles.stageText}>
           <p className={styles.stageWhat}>{what}</p>
           <div className={styles.eq}>{eq}</div>
@@ -266,16 +266,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         open n={1} title="Air in" what="The cylinder fills with air. How full it gets, against how full it could be at this pressure, is the volumetric efficiency: the number every hardware choice moves."
         eq={<>ρ = MAP / (R × T) = {f((p.map ?? 0) * 1000, 0)} / (287 × {f(tK, 0)}) = {f(rho, 3)} kg/m³<br />m<sub>air</sub> = VE × ρ × V<sub>cyl</sub> = {f((p.ve ?? 0) / 100, 3)} × {f(rho, 3)} × {f(vCylL * 1000, 0)} cc = {f(mAirMg, 0)} mg</>}
         rows={[['VE', `${f(p.ve)} %`], ['MAP', `${f(p.map, 0)} kPa`], ['Charge temp', `${f(p.iat, 0)} °C = ${f(tK, 0)} K`], ['Air density ρ', `${f(rho, 3)} kg/m³`], ['V cyl', `${f(vCylL * 1000, 0)} cc`], ['Air per cylinder', `${f(mAirMg, 0)} mg`]]}
-      >
-        <svg viewBox="0 0 120 120" className={styles.art}>
-          <rect x="34" y="30" width="52" height="80" className={styles.artBox} />
-          <rect x="36" y={32 + (1 - Math.min(1.2, (p.ve ?? 90) / 100)) * 60} width="48" height={Math.min(1.2, (p.ve ?? 90) / 100) * 60} className={styles.artFill} />
-          <rect x="36" y="92" width="48" height="16" className={styles.artBox2} />
-          <path d="M10 18h30v14" className={styles.artLine} fill="none" />
-          <text x="8" y="12" className={styles.artText}>intake</text>
-          <text x="40" y="104" className={styles.artText}>piston</text>
-        </svg>
-      </Stage>
+      />
 
       <Stage
         n={2} title="Fuel" what="The ECU works out how much fuel that air needs for the mixture it wants, then holds the injector open long enough to deliver it."
