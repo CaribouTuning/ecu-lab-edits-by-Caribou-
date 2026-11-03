@@ -135,6 +135,7 @@ export function evaluatePoint({
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
   empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
+  exhaustDia = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
@@ -251,6 +252,7 @@ export function evaluatePoint({
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
     turbine, wastegateRelief, ...(E?.env?.baroKpa ? { baroKpa: E.env.baroKpa } : {}),
+    pipeDiaIn: exhaustDia ?? 3.0, mods,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure

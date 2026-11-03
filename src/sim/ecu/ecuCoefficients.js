@@ -70,10 +70,10 @@ export const ECU_COEFF = Object.freeze({
 
   // ---- Idle and overrun.
   /** Idle-valve travel the controller may use, percent. */
-  IDLE_AIR_MIN_PCT: 1,
-  IDLE_AIR_MAX_PCT: 34,
+  IDLE_AIR_MIN_PCT: 0.1,
+  IDLE_AIR_MAX_PCT: 15,
   /** Where the idle valve bleeds back to while coasting down, percent. */
-  IDLE_COAST_AIR_PCT: 3,
+  IDLE_COAST_AIR_PCT: 1.35,
   /** Above this the ECU is coasting, not idling. */
   IDLE_CAPTURE_RPM: 2000,
   /** Below this idle spark control acts; above it (throttle shut) overrun retard does. */

@@ -17,6 +17,8 @@ import {
 import { clamp, curveAt, interp1 } from './math.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
+import { exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
+import { AMBIENT_K } from './constants.js';
 import { DEFAULT_VE, LOAD, RPM } from './tables.js';
 
 /**
@@ -100,7 +102,7 @@ export function partLoadVeFactor(mapKpa, compression) {
  * @param {object} [hw] as for computeHardwareVE
  * @returns {(rpm: number, mapKpa: number) => number} VE, percent
  */
-export function hardwareVeAt(cfg, mods, hw = {}) {
+export function legacyHardwareVeAt(cfg, mods, hw = {}) {
   const {
     turboOn = false, turbine = null, exhaustDia = null, fuel = null, peakBoostPsi = 0, supercharged = false,
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
@@ -347,4 +349,161 @@ function baseBreathing(rpm, mapKpa) {
     return Math.max(r.row[last] * BASE_EXTRAPOLATION_FLOOR, r.row[last] + slope * (rpm - RPM[last]));
   });
   return interp1(BOOST_ROWS.map((r) => r.kpa), at, Math.max(VE_FULL_LOAD_KPA, mapKpa));
+}
+
+/**
+ * The intake runner this engine breathes through: its bore from the intake valves it feeds,
+ * its length the one whose filling peaks at `tuneRpm` (the published torque peak where
+ * there is one), found by stepping the length and running the gas exchange. A player's
+ * engine may set its own length (`cfg.runnerMm`).
+ * @param {object} base the breathing geometry without the runner length
+ * @param {number} tuneRpm
+ * @returns {number} runner length, m
+ */
+function tunedRunnerM(base, tuneRpm) {
+  const key = `${COEFF.BREATH_VALVE_CD}|${COEFF.BREATH_COLUMN_SHARE}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.runnerAreaM2}|${Math.round(tuneRpm)}`;
+  const hit = RUNNER_CACHE.get(key);
+  if (hit != null) return hit;
+  // The length whose filling peaks at the speed it is tuned for, the peak found between
+  // samples by a parabola through the highest three (a flat curve's peak does not jump from
+  // one sample to the next). Ties go to the shorter runner.
+  const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: 1000 };
+  const step = 500;
+  const rpms = []; for (let r = 1000; r <= tuneRpm * 2 + step; r += step) rpms.push(r);
+  /** Where a runner of this length fills best, interpolated between samples. */
+  const peakOf = (L) => {
+    const g = { ...base, runnerLengthM: L };
+    const ves = rpms.map((rpm) => gasExchange(g, { ...op, rpm }).ve);
+    let k = 0; ves.forEach((v, n) => { if (v > ves[k]) k = n; });
+    let peak = rpms[k];
+    if (k > 0 && k < ves.length - 1) {
+      const den = ves[k - 1] - 2 * ves[k] + ves[k + 1];
+      if (den < 0) peak += step * 0.5 * (ves[k - 1] - ves[k + 1]) / den;
+    }
+    return peak;
+  };
+  // Coarse, then fine about the best: a longer runner peaks lower, so the error is close to
+  // monotonic in the length and two passes find it.
+  let best = 0.35; let bestErr = Infinity;
+  const search = (from, to, by) => {
+    for (let L = from; L <= to + 1e-9; L += by) {
+      const err = Math.abs(peakOf(L) - tuneRpm);
+      if (err < bestErr - 1) { bestErr = err; best = L; }
+    }
+  };
+  search(0.1, 1.0, 0.1);
+  search(Math.max(0.1, best - 0.08), Math.min(1.0, best + 0.08), 0.02);
+  RUNNER_CACHE.set(key, best);
+  return best;
+}
+const RUNNER_CACHE = new Map();
+
+/**
+ * The cylinder's breathing geometry from the engine's own figures (breathing.js).
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{intakeCamAdvanceDeg?: number, exhaustCamRetardDeg?: number}} [phase]
+ * @returns {import('./breathing.js').BreathingGeometry}
+ */
+export function breathingGeometry(cfg, phase = {}) {
+  const { intakeValves, intakeValveMm } = intakeValveAreaRatio(cfg);
+  const valvesPerCyl = cfg.valvesPerCyl ?? 4;
+  const exhaustValves = Math.max(1, valvesPerCyl - intakeValves);
+  const intakeValveM = intakeValveMm / 1000;
+  // Fewer exhaust valves than intake (a three-valve head) are each made larger, so the
+  // exhaust side keeps its share of the area.
+  const exhaustValveM = intakeValveM * COEFF.BREATH_EXHAUST_VALVE_SHARE * Math.sqrt(intakeValves / exhaustValves);
+  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG
+    - (phase.intakeCamAdvanceDeg ?? 0);
+  const throat = intakeValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * intakeValveM) ** 2;
+  const base = {
+    boreM: cfg.bore / 1000, strokeM: cfg.stroke / 1000, compression: cfg.compression, rodRatio: COEFF.ROD_RATIO,
+    intakeValves, intakeValveM, exhaustValves, exhaustValveM, liftPerDia: COEFF.BREATH_LIFT_PER_DIA,
+    runnerAreaM2: throat * COEFF.BREATH_RUNNER_AREA_SHARE, runnerLengthM: 0.35,
+    events: valveEvents({ ivcAbdc, durationDeg: camDuration, exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0, maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM }),
+  };
+  if (cfg.runnerMm) return { ...base, runnerLengthM: cfg.runnerMm / 1000 };
+  // The runner is tuned with the cam parked: a phaser moves the events, not the manifold.
+  const parked = phase.intakeCamAdvanceDeg || phase.exhaustCamRetardDeg ? breathingGeometry(cfg, {}) : null;
+  if (parked) return { ...base, runnerLengthM: parked.runnerLengthM };
+  const tuneRpm = cfg.runnerTuneRpm ?? (cfg.redline ?? 7000) * COEFF.BREATH_TUNE_SHARE_OF_REDLINE;
+  return { ...base, runnerLengthM: tunedRunnerM(base, tuneRpm) };
+}
+
+/**
+ * The engine's volumetric efficiency at any speed and manifold pressure, from its gas
+ * exchange (breathing.js): the valves, the cam's events and any phaser, the runner, the
+ * exhaust manifold pressure the pipe, the bolt-ons or a turbine hold, and the charge
+ * temperature the induction delivers. Effects outside the gas exchange are applied on top:
+ * fuel evaporating in the charge (direct injection, ethanol), the head's heat, valve float.
+ *
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods
+ * @param {object} [hw] as for computeHardwareVE
+ * @returns {(rpm: number, mapKpa: number) => number} VE, percent
+ */
+export function hardwareVeAt(cfg, mods, hw = {}) {
+  const {
+    turboOn = false, turbine = null, exhaustDia = null, fuel = null,
+    intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
+  } = hw;
+  const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg });
+  const cyl = CYL_COUNT[cfg.configuration];
+  const pipeDiaIn = exhaustDia ?? 3.0;
+  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, cfg.camDuration ?? CAM_BASE_DURATION);
+  const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
+  const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
+  const injectionFactor = cfg.injection === 'direct' ? COEFF.VE_DIRECT_INJECTION : 1.0;
+  const stoich = fuel?.stoich ?? 14.7;
+  const cache = new Map();
+
+  /** The gas exchange at one grid node, computed once. */
+  const node = (ri, mi) => {
+    const key = ri * 4096 + mi;
+    const hit = cache.get(key);
+    if (hit != null) return hit;
+    const rpm = Math.max(VE_GRID_RPM, ri * VE_GRID_RPM);
+    const mapKpa = Math.max(VE_GRID_KPA, mi * VE_GRID_KPA);
+    const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
+    const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
+    // Exhaust manifold pressure is set by the flow it passes, which is set by the breathing:
+    // repeated substitution from atmospheric; three passes settle it well inside 0.1% VE.
+    let emp = BARO_KPA;
+    let r = null;
+    for (let i = 0; i < 3; i++) {
+      const tex = exhaustK(mapKpa, r?.ve ?? 85);
+      r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex });
+      const airKgS = r.freshKg * cyl * (rpm / 120);
+      const exhKgS = airKgS * (1 + 1 / (stoich * COEFF.VE_BACKPRESSURE_LAMBDA_REF));
+      // The pipe runs cooler than the manifold: the gas has given up heat on the way.
+      const system = exhaustSystemDropKpa({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods });
+      emp = turboOn && turbine
+        ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) + system
+        : BARO_KPA + system;
+    }
+    let val = r.ve * headFactor * fuelFactor * injectionFactor;
+    if (rpm > floatRpm) val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
+    cache.set(key, val);
+    return val;
+  };
+
+  // Read between grid nodes bilinearly, so the curve is smooth to any caller.
+  return (rpm, mapKpa) => {
+    const x = clamp(rpm, VE_GRID_RPM, 16000) / VE_GRID_RPM;
+    const y = clamp(mapKpa, VE_GRID_KPA, 600) / VE_GRID_KPA;
+    const ri = Math.floor(x); const mi = Math.floor(y);
+    const fx = x - ri; const fy = y - mi;
+    const v = node(ri, mi) * (1 - fx) * (1 - fy) + node(ri + 1, mi) * fx * (1 - fy)
+      + node(ri, mi + 1) * (1 - fx) * fy + node(ri + 1, mi + 1) * fx * fy;
+    return Number(clamp(v, 5, 140).toFixed(1));
+  };
+}
+
+/** The breathing is computed on a grid this fine (RPM, kPa) and read between its nodes. */
+const VE_GRID_RPM = 100;
+const VE_GRID_KPA = 2;
+
+/** Exhaust gas temperature at the manifold for a breathing cell, K (thermo.js). */
+function exhaustK(mapKpa, ve) {
+  return exhaustTempK({ chargeIndex: (ve / 100) * (mapKpa / BARO_KPA), lambda: COEFF.VE_BACKPRESSURE_LAMBDA_REF });
 }

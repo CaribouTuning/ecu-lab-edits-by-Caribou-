@@ -7,6 +7,7 @@
  * that only says something is wrong teaches nothing.
  */
 
+import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
 import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
@@ -130,6 +131,7 @@ export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
+  exhaustDia = null,
 }) {
   const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
@@ -148,7 +150,7 @@ export function simulateSweep({
   const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
   const ecuHw = ecu ? {
     ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
-    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
+    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous, exhaustDia,
     veTruthByPhase: ecu.hw.veTruthByPhase ?? [flowAt],
     ...(wearFx ? { wear: wearFx } : {}),
   } : null;
@@ -183,6 +185,8 @@ export function simulateSweep({
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+      throttle: { boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake },
+      exhaust: { pipeDiaIn: exhaustDia ?? 3.0, mods },
       ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the

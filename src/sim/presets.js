@@ -972,7 +972,14 @@ export function applyPreset(preset, layout = null) {
     mafScalar,
     // A catalogue engine's own reciprocating assembly, rated to its own factory limiter:
     // raise the redline past that and BUILD and the pull log say the parts are past it.
-    engineConfig: { ...preset.engine, bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline },
+    engineConfig: {
+      ...preset.engine, bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline,
+      // The intake runners are tuned where the maker says the engine makes its peak torque
+      // (breathing.js): published for every naturally aspirated engine here. A turbo engine's
+      // torque peak is where its boost arrives, not where its runners resonate, so it keeps
+      // the default tuning.
+      ...(!preset.induction.turboOn && preset.factory?.crankTqRpm ? { runnerTuneRpm: preset.factory.crankTqRpm } : {}),
+    },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,
     // The published boost, limited where the spark table cannot protect it (factoryCalibration).

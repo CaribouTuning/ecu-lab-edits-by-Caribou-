@@ -21,6 +21,7 @@ import { BARO_KPA } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 import { turbineBackPressureKpa } from './turbo.js';
+import { exhaustSystemDropKpa } from './breathing.js';
 
 /**
  * Crankshaft journal sizes when the engine does not state them, as shares of the bore.
@@ -151,12 +152,19 @@ export function rubbingFmepParts(rpm, springPa = 0, arch = {}, mapKpa = BARO_KPA
  * @param {{effectiveAreaM2: number}|null} [input.turbine]
  * @param {number} [input.wastegateRelief] fraction of turbine backpressure the gate bleeds
  * @param {number} [input.baroKpa] the pressure the tailpipe exhausts to
+ * @param {number} [input.pipeDiaIn] exhaust pipe diameter, inches
+ * @param {{headers?: boolean, exhaust?: boolean}} [input.mods] headers and cat-back fitted
  * @returns {number} exhaust manifold pressure, kPa
  */
 export function exhaustManifoldKpa({
   turboOn, exhaustFlowKgS, exhaustK, turbine = null, wastegateRelief = 0, baroKpa = BARO_KPA,
+  pipeDiaIn = 3.0, mods = {},
 }) {
-  const systemKpa = COEFF.EXHAUST_SYSTEM_KPA_PER_KGS * Math.max(0, exhaustFlowKgS);
+  // The pipe, the catalyst and the cat-back (breathing.js): the same backpressure the
+  // breathing is computed against, so filling and pumping cannot disagree.
+  const systemKpa = exhaustSystemDropKpa({
+    flowKgS: Math.max(0, exhaustFlowKgS), exhaustK: exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods, baroKpa,
+  });
   if (!turboOn || !turbine) return baroKpa + systemKpa;
   const turbineKpa = turbineBackPressureKpa(exhaustFlowKgS, exhaustK, turbine.effectiveAreaM2, baroKpa)
     - baroKpa;

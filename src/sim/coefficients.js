@@ -88,6 +88,70 @@ export const COEFF = {
   WOSCHNI_C2: 3.24e-3,
   // Mean chamber wall temperature, K. Coolant ~370 K, metal surfaces above it.
   WALL_TEMP_K: 450,
+  // Woschni's gas-exchange velocity constant: the characteristic gas velocity during the
+  // intake and exhaust strokes is 6.18 times the mean piston speed (Woschni, SAE 670931;
+  // Heywood 1988, ch. 12), against 2.28 during compression and expansion.
+  WOSCHNI_GAS_EXCHANGE_C1: 6.18,
+
+  // --- Breathing (breathing.js): the valves and the runner ---
+  // Discharge coefficient of a poppet valve on its open area. Heywood (1988, ch. 6) shows
+  // measured coefficients on the curtain area of roughly 0.6 to 0.7 at the low lifts where
+  // the curtain governs, falling as the throat takes over; 0.62 is held for both.
+  BREATH_VALVE_CD: 0.52,
+  // The port throat behind the valve seat, as a share of the valve head diameter. The open
+  // area is the lesser of the curtain and this throat, which caps what lift can buy.
+  BREATH_THROAT_SHARE: 0.88,
+  // Maximum valve lift over valve diameter. Heywood (ch. 6): about 0.25 is where the
+  // curtain area reaches the throat's; production engines run near it.
+  BREATH_LIFT_PER_DIA: 0.27,
+  // Exhaust valve head as a share of the intake's: exhaust valves are made smaller because
+  // the blowdown does much of their work under a large pressure ratio.
+  BREATH_EXHAUST_VALVE_SHARE: 0.84,
+  // Exhaust system loss coefficients on the pipe's dynamic pressure (breathing.js
+  // `exhaustSystemDropKpa`), allocated as described there.
+  EXH_K_MANIFOLD: 1.8,
+  EXH_K_HEADERS: 0.8,
+  EXH_K_CATALYST: 1.5,
+  EXH_K_CATBACK: 3.5,
+  EXH_K_CATBACK_FREE: 1.5,
+  // How much cooler the gas is in the pipe than at the manifold, K, for its density there.
+  EXHAUST_PIPE_COOLING_K: 250,
+  // The intake runner, where the engine does not say: its bore against the intake valves'
+  // combined throat area (a runner a little larger than the ports it feeds), and the speed
+  // its length is tuned to, as a share of the redline, when no torque peak is published.
+  BREATH_RUNNER_AREA_SHARE: 1.15,
+  // Runner wall friction: the Darcy friction factor of a smooth pipe at the Reynolds numbers
+  // an intake runs (about 1e5: f near 0.018 on the Moody chart), raised for a cast runner's
+  // roughness and its bend; and the loss entering it from the plenum (0.05 for a well-radiused
+  // bellmouth to 0.5 for a sharp edge; a production runner sits between).
+  // The share of the runner's air that moves as one rigid column. A lumped-inertia runner
+  // treats the whole column as a slug; the real column is compressible, and a pressure wave
+  // takes L/a to cross it (about 2 ms in a 0.7 m runner, a third of the intake event at
+  // 5500 RPM), so only part of it decelerates against the closing valve at once. CALIBRATED,
+  // once, for every engine: 0.5 brings the thirteen factory engines' full-load breathing to
+  // the level that lands their published power and torque, with the curve's shape (where
+  // each peaks) left to the geometry. It is the one fitted number in the gas exchange.
+  BREATH_COLUMN_SHARE: 0.3,
+  BREATH_RUNNER_FRICTION: 0.03,
+  BREATH_RUNNER_ENTRY_K: 0.5,
+  BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
+  // --- The throttle and the intake duct (throttle.js) ---
+  // Discharge coefficient of a throttle plate's open annulus, and where the plate rests
+  // closed (degrees from across the bore). The leakage share stands for the gap a closed
+  // plate leaves: production throttles idle on a few percent of opening beyond it.
+  THROTTLE_CD: 0.8,
+  THROTTLE_CLOSED_DEG: 7,
+  THROTTLE_LEAK_SHARE: 0.0008,
+  // A throttle body is sized so the plate wide open costs this much at the engine's
+  // greatest airflow.
+  THROTTLE_SIZING_DROP_KPA: 3,
+  // Loss coefficients of the intake duct and filter on the duct's dynamic pressure: a stock
+  // airbox with its resonators and paper element, and a cold air intake's straight tube and
+  // open cone filter.
+  INLET_K_STOCK: 2.0,
+  INLET_K_COLD_AIR: 0.8,
+  // Integration step for the gas exchange, crank degrees.
+  BREATH_STEP_DEG: 2,
   // --- Exhaust port: what the EGT probe sees (see the two-stream note in cycle.js) ---
   // How completely the piston-displaced part of the charge cools toward the port wall on
   // its way out, as a number of transfer units at the reference flow. Fitted to the
@@ -413,9 +477,6 @@ export const COEFF = {
   // AFR the exhaust-mass estimate assumes. Only total mass matters, so gasoline is close
   // enough for every fuel.
   EXHAUST_STOICH_REF: 14.7,
-  // NA exhaust system backpressure per kg/s, kPa. A turbine dwarfs this; without one it
-  // is the whole restriction.
-  EXHAUST_SYSTEM_KPA_PER_KGS: 90,
   // The induction solve spools the turbo up from zero (see solveInduction): it climbs in
   // steps of this many psi on a grid that does not depend on the target, then bisects
   // the last step this many times — 12 halvings of half a psi is 0.0001 psi, far inside

@@ -185,6 +185,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} [camDuration] crank degrees
  * @property {number} [springRate] valve spring rate
  * @property {number} [redline] rev limit, RPM
+ * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
+ * @property {number} [runnerMm] intake runner length, mm, where the engine sets its own
  * @property {string} [vvt] cam phasers fitted: 'none', 'intake' or 'dual'. Hardware, like
  *   the cam itself; absent means fixed cams
  * @property {'port'|'direct'} [injection] where the injectors spray: into each intake port

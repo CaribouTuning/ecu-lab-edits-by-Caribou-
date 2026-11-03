@@ -16,9 +16,10 @@
  * ran, unchanged.
  */
 
-import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
+import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA, R_AIR } from '../constants.js';
 import { COEFF } from '../coefficients.js';
-import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM, steadyManifoldKpa } from '../liveCore.js';
+import { ENGINE_INERTIA, readSpeedAndAirflow, STALL_RPM } from '../liveCore.js';
+import { throttleBoreM, throttledMapKpa } from '../throttle.js';
 import { trappedAirGrams } from '../cycle.js';
 import { needsAirmass, readEcuTable, truthReader } from '../layouts.js';
 import { clamp } from '../math.js';
@@ -142,7 +143,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     ...cfg.ecu.hw, derived, mods, turboOn, boostCurve, turbine, compressor,
     blower: cfg.blower ?? null, blowerRatio: cfg.blowerRatio ?? 1, nitrous: cfg.nitrous ?? null,
     injectorCc: cfg.injectorCc, ecuInjectorCc: cfg.ecuInjectorCc, mafScalar: cfg.mafScalar,
-    mafErrorBase: cfg.mafErrorBase, fuel: cfg.fuel,
+    mafErrorBase: cfg.mafErrorBase, fuel: cfg.fuel, exhaustDia: cfg.exhaustDia ?? null,
     veTruthByPhase: cfg.ecu.hw.veTruthByPhase ?? [truthReader(cfg.veTruth, tables.layout?.ve ?? null) ?? ((r, m) => readEcuTable(tables, 've', r, { mapKpa: m }))],
     ...(wearFx ? { wear: wearFx } : {}),
   };
@@ -340,13 +341,18 @@ export function liveStepEcu(st, dt, input, cfg) {
   if ((s.running || s.cranking) && s.rpm > 100) {
     const rpmC = clamp(s.rpm, 700, redline);
     const aFrac = effThrottle / 100;
-    const nFrac = clamp(rpmC / COEFF.MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
-    const overlap = (derived.overlapDeg || 0) + e.camIn + e.camEx;
     // At cranking speed the engine barely pumps, so the manifold sits close to
-    // atmospheric whatever the throttle is doing.
+    // atmospheric whatever the throttle is doing. Running, the opening's manifold pressure
+    // is where the plate's flow meets what the engine draws at this speed, on its breathing
+    // with the cam where the phaser holds it (throttle.js).
+    const inletK = chargeTempK(0, mods.intercooler, env);
     const loadSteady = s.cranking
       ? BARO_KPA * clamp(E.CRANKING_MAP_FRAC - (s.rpm / 1000) * E.CRANKING_MAP_FALL_PER_KRPM, E.CRANKING_MAP_MIN_FRAC, E.CRANKING_MAP_MAX_FRAC)
-      : steadyManifoldKpa(aFrac, nFrac, overlap);
+      : throttledMapKpa({
+        throttleFrac: aFrac, boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake, baroKpa: BARO_KPA, inletK,
+        engineFlowAt: (m) => (veAtPhase(hw.veTruthByPhase, rpmC, m, e.camIn) / 100) * (derived.displacementL / 1000)
+          * ((m * 1000) / (R_AIR * inletK)) * (rpmC / 120),
+      });
     // MANIFOLD FILLING. The plenum is a volume the throttle fills and the engine empties,
     // so its pressure follows a change with a time constant of roughly the plenum's volume
     // over what the engine swallows per second: about a fifth of a second at idle, a few
@@ -408,6 +414,7 @@ export function liveStepEcu(st, dt, input, cfg) {
       // exhaust (a two-step's spark cut) carries more energy to the turbine, which is
       // how anti-lag spools a turbo on the line.
       lambda: 1, exhaustK: Math.max(INDUCTION_REF_EXHAUST_K, e.egtK), baroKpa: baro,
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods },
       ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, env, eta) } : {}),
     });
     const spooling = steady.boostPsi > s.boostPsi;
