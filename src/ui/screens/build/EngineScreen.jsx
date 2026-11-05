@@ -31,10 +31,10 @@ import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProv
 
 import styles from './EngineScreen.module.css';
 
-/** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
 /** How long a Short block or head change must settle before its base map is written, ms. */
 const BASE_MAP_SETTLE_MS = 350;
 
+/** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
 const ASSUMED_LABEL = {
   camDuration: (c) => `intake cam duration ${c.camDuration}°`,
   valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
@@ -138,7 +138,12 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // The base map follows once a change settles: generating one runs the engine's gas
   // exchange at every cell, too much to do on every step of a slider's drag.
   const layoutId = layoutById(tune.layout).id;
+  // Only a change to the figures: the tables already hold the base map for the engine as it
+  // was when this screen opened, and rewriting them on mount re-renders an idle bench.
+  const baseFor = React.useRef(engineConfig);
   React.useEffect(() => {
+    if (baseFor.current === engineConfig) return undefined;
+    baseFor.current = engineConfig;
     if (!own || tablesDirty) return undefined;
     const t = setTimeout(() => {
       dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: {}, base: ownEngineBaseMap(build, layoutId) });

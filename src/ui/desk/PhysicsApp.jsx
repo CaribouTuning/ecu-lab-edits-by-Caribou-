@@ -189,7 +189,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         <label className={styles.ctl}>
           <span>Throttle <b>{load >= 100 ? 'wide open' : `${Math.round(((load - 20) / 80) * 100)} %`}</b>, manifold <b>{f(p.map, 0)} kPa</b></span>
           <input type="range" min={20} max={100} step={10} value={load}
-            onChange={(e) => setLoad(Number(e.target.value))} aria-label="Throttle" aria-valuetext={`${load} kPa`} />
+            onChange={(e) => setLoad(Number(e.target.value))} aria-label="Throttle" aria-valuetext={`${load}% throttle`} />
         </label>
         <p className={styles.ctlNote}>Your engine as built and tuned{fuel ? `, on ${fuel.label}` : ''}. Every panel, every number and the engine below follow these two.</p>
       </div>

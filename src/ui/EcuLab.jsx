@@ -1597,7 +1597,7 @@ export function EcuLabApp() {
                     <dl className={deskApps.runSheetList}>
                       <dt>Car</dt><dd>{inCareer && jobOnBay ? `${jobOnBay.customer.name}'s ${jobOnBay.customer.car}` : 'The shop car, strapped down'}</dd>
                       <dt>Engine</dt><dd>{buildName(build) ?? 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
-                      <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
+                      <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa}% throttle`}`}</dd>
                       <dt>Fuel</dt><dd>{(() => { const f = FUEL_CHOICES[build.octaneIdx] ?? FUEL_CHOICES[0]; return f.flex ? `Flex fuel, E${Math.round(build.ethanolPct ?? 0)}` : /^\d+$/.test(f.label) ? `${f.label} octane` : f.label; })()}</dd>
                     </dl>
                     <p className={deskApps.runSheetNote}>

@@ -276,7 +276,7 @@ describe('every screen the app sends a player to exists', () => {
   // has to be there, or the advice is a dead end however right it is. Scanned from the
   // source rather than from messages that happen to fire, so a rare event is covered too.
   const VIEWS = {
-    BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST'],
+    BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'BOLT-ONS'],
     TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
   };
   const files = [];
@@ -293,7 +293,7 @@ describe('every screen the app sends a player to exists', () => {
     const bad = [];
     for (const f of files) {
       const text = readFileSync(f, 'utf8');
-      for (const m of text.matchAll(/\b(BUILD|TUNE) (?:→|›|&rsaquo;) ([A-Z][A-Z ]*[A-Z])/g)) {
+      for (const m of text.matchAll(/\b(BUILD|TUNE) (?:→|›|&rsaquo;) ([A-Z][A-Z -]*[A-Z])/g)) {
         const name = m[2].trim();
         if (!VIEWS[m[1]].some((v) => name === v || name.startsWith(`${v} `))) bad.push(`${f.slice(ROOT.length + 1)}: "${m[0]}"`);
       }

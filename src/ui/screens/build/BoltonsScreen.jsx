@@ -62,8 +62,8 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
         Estimated ideal for this build: ~{idealExhaustDia.toFixed(2)} in
         {turboOn && Math.max(...boostCurve) > 0 && <span className={styles.raisedByBoost}> (raised by boost)</span>}
       </div>
-      <ExpandableInfo title="Why exhaust diameter isn't just 'bigger is better'">
-        Undersized piping restricts flow at high RPM, choking VE right when the engine wants air moving fastest. Oversized piping does the opposite at low RPM — exhaust velocity drops, scavenging gets lazy, and low-end response suffers.
+      <ExpandableInfo title="Why bigger stops paying">
+        The pipe costs pressure in proportion to the speed of the gas through it squared, so an undersized pipe holds back-pressure on the cylinders at high RPM, where the flow is greatest, and the engine loses top end. Past the size the power needs, the loss left is already small: a bigger pipe gains almost nothing and costs more. The pressure waves that scavenge the cylinder live in the header primaries, not in the pipe after the collector, so this sim gives an oversized cat-back no low-RPM penalty either.
         <br /><br />The long-standing shop rule is about <b className={styles.em}>one inch of total pipe diameter per 100 crank horsepower</b>. Note that this follows POWER, not just engine size — which is why adding boost raises the ideal diameter for the very same engine. This sandbox estimates that target from your displacement and boost, and shows how far your choice sits from it.
       </ExpandableInfo>
     </BuildSection>
