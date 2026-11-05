@@ -102,7 +102,7 @@ export const COEFF = {
   // speeds of the naturally aspirated ones' peaks within about 450 RPM on average), the
   // runner a rigid column. It is the one fitted number in the gas exchange; the shape of every
   // engine's curve, where each peaks, comes from its geometry.
-  BREATH_VALVE_CD: 0.52,
+  BREATH_VALVE_CD: 0.62,
   // The port throat behind the valve seat, as a share of the valve head diameter. The open
   // area is the lesser of the curtain and this throat, which caps what lift can buy.
   BREATH_THROAT_SHARE: 0.88,

@@ -99,19 +99,13 @@ export const ENGINE_PRESETS = [
       // DOHC, four valves, direct-acting buckets with shims (Nissan parts list: intake valve
       // shim buckets; Tomei: 'conventional direct-acting valve train').
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat',
-      // Bore, stroke, compression and redline above are published; `camDuration` and
-      // `springRate` are not (Nissan states only that the Rev-Up revised the cams and
-      // raised the limit), so they are where this preset is fitted, as `vq35hr` is.
-      //
-      // FITTED on the gas-exchange breathing model (breathing.js), through the app's own pull
-      // (tests/ecuHarness.js): 214 puts the power curve's flat top on 6200-6400 against the
-      // published 6400, falling away before the 7000 limiter, with power 4.7% under the
-      // rating and torque 2.7% over it. Longer cams move the peak toward the limiter.
-      //
+      // Cams: Nissan quotes the Rev-Up's (and the HR's) valve timing as 248 / 248 degrees with
+      // 10.5 mm lift (maxima.org, 'VQ OEM and Aftermarket Cam data'), where the earlier DE's
+      // 238 / 240 is the same cam as 208 / 208 at 0.050 inch (my350z.com, 'VQ35 Camshaft Spec
+      // Thread'). Nissan's figure is taken at the same reference, so 248 is 218 at 0.050 inch:
+      // an inference from those two sources, not a figure Nissan states at 0.050 inch.
       // `springRate` 60 does not change power; it sets where the valvetrain gives up.
-      // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline. No pull should
-      // ever show a `float` event here; if one appears that is a bug, not "the character".
-      camDuration: 214, springRate: 60,
+      camDuration: 218, exhaustCamDuration: 218, springRate: 60,
       redline: 7000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -135,17 +129,10 @@ export const ENGINE_PRESETS = [
       compression: 10.6,                 // 10.6:1
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port', // sequential multi-port
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'flat', // as the DE: direct-acting buckets
-      // Bore, stroke, compression and redline above are published figures and do not
-      // move. `camDuration` and `springRate` are not published, so they are where this
-      // preset is fitted.
-      //
-      // FITTED on the gas-exchange breathing model (breathing.js), through the app's own pull
-      // (tests/ecuHarness.js): 226 makes power 2.0% under the rating and torque 3.2% over,
-      // but its power peaks at 6200 against the published 6800, and no duration from 218 to
-      // 230 moves it later: the peak's place is the model's shape, not this input (the same
-      // early peak shows on the LQ4 and the 6.4 HEMI; tests/presets.test.js holds all three). The spring rate carries it:
-      // valve float sits near 8880 RPM, well clear of the 7500 redline.
-      camDuration: 226, springRate: 68,
+      // Cams: 248 / 248 degrees, 10.5 mm lift, as the Rev-Up's (maxima.org, 'VQ OEM and
+      // Aftermarket Cam data'), so 218 / 218 at 0.050 inch the same way (see vq35de-revup).
+      // The spring rate carries the 7500 redline with margin to spare.
+      camDuration: 218, exhaustCamDuration: 218, springRate: 68,
       redline: 7500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -175,10 +162,12 @@ export const ENGINE_PRESETS = [
       // DOHC, four valves; roller finger followers on hydraulic lash adjusters, as BMW's
       // later B58 (an inference for the N54, not a sourced figure).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 214, springRate: 58,
+      // Cams: the OEM figures Cat Cams lists against its N54 set are 239 degrees intake and 263
+      // exhaust at 0.1 mm valve lift, 9.6 / 9.7 mm maximum lift (5150autosport.com, 'Cat Cams
+      // camshaft set BMW N54'). Converted through the lift curve breathing.js models (ramps, then the flank), 0.1 mm
+      // sits on the opening ramp, 8.7 degrees off the seat at each end, which makes them 184
+      // and 206 degrees at 0.050 inch.
+      camDuration: 184, exhaustCamDuration: 206, springRate: 58,
       redline: 7000,
     },
     induction: {
@@ -219,22 +208,11 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       // DOHC, four valves, roller finger followers ('roller drag lever', BMW part 11337640533).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Bore, stroke, compression and redline are published and do not move.
-      // `camDuration` and `springRate` are not published in terms comparable to this
-      // model, so they are free to be fitted — see the VQ35HR comment above for the
-      // same arrangement and why it is not a fudge factor. In the event neither had to
-      // move: this engine's peak torque is set almost entirely by manifold pressure.
-      // Measured with `python3 scripts/analyze_presets.py --id b58-m0` (peak torque
-      // 297 wlb-ft at camDuration 214): swapping duration 212->214->216 moves it only
-      // 298->297->296, about 1 wlb-ft per 2°, while +1 psi of boost at the 3500 node,
-      // the 4500 node, or added across the whole curve each move it 297->306/308/308
-      // — 9-11 wlb-ft per psi. So the boost curve
-      // below is what was actually fitted. 214° sits just below the N54's 216° and
-      // carries 2.20° of overlap, well inside the advisory.
-      // `springRate` 60 puts `valveFloatRpm` at ~8474, 1474 RPM clear of the 7000
-      // limiter — the same order of margin the other presets carry (1242-1682). No
-      // pull on a healthy engine should ever log a `float` event.
-      camDuration: 214, springRate: 60,
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // `springRate` 60 keeps valve float well clear of the 7000 limiter.
+      camDuration: 214, exhaustCamDuration: 214, springRate: 60,
       redline: 7000,
     },
     induction: {
@@ -291,13 +269,11 @@ export const ENGINE_PRESETS = [
       compression: 11.0,
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'direct', // solenoid direct injection, no port injectors
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Same short block, so bore, stroke and compression are the M0's. The revised
-      // engine's sharper calibration is carried by a slightly longer duration and the
-      // spring rate to match: `valveFloatRpm` ~8534, 1534 RPM clear of the limiter.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 210, springRate: 62,
+      // Same short block and head as the M0.
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      camDuration: 210, exhaustCamDuration: 210, springRate: 62,
       redline: 7000,
     },
     induction: {
@@ -366,12 +342,11 @@ export const ENGINE_PRESETS = [
       // four-valve heads use, not a sourced figure for the EA888.3).
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
       // Direct injection only: the North American EA888.3 has no port injectors (the
-      // European one is dual-injected). Duration is fitted, not published: 200 puts both
-      // this and the Golf R, which share it, on their rated power and torque.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      camDuration: 210, springRate: 54,
+      // European one is dual-injected).
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      camDuration: 210, exhaustCamDuration: 210, springRate: 54,
       redline: 6500,
     },
     induction: {
@@ -406,16 +381,11 @@ export const ENGINE_PRESETS = [
       compression: 9.6,
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'direct',
       valvetrain: 'dohc', valvesPerCyl: 4, follower: 'roller',
-      // Direct injection only: the North American EA888.3 has no port injectors (the
-      // European one is dual-injected). Duration is fitted, not published: 200 puts both
-      // this and the Golf R, which share it, on their rated power and torque.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 212, springRate: 54,
+      // Direct injection only, as the GTI.
+      // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
+      // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
+      // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      camDuration: 212, exhaustCamDuration: 212, springRate: 54,
       redline: 6800,
     },
     induction: {
@@ -468,12 +438,9 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power -0.2% of the rating, torque -0.5% (predicted), power flat-top
-      // 5500-5800 against a published 5600.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 210, springRate: 60,
+      // Cams: the 2001-2004 LS1 cam, 199 / 210 degrees at 0.050 inch, 0.467 / 0.479 in lift,
+      // 116 degree lobe separation (corvetteforum.com, 'cam specs', thread 1160929).
+      camDuration: 199, exhaustCamDuration: 210, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -503,10 +470,10 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power -1.5%, torque -4.1% (predicted), flat-top 5800-6400 against a
-      // published 6000. 228 rather than the 230 that lands power closer: 230 starts to
-      // trip the overlap advisory, which a factory cam does not.
-      camDuration: 228, springRate: 60,
+      // Cams: GM 12565308, the 2002-2004 LS6 cam, 204 / 218 degrees at 0.050 inch, 0.550 /
+      // 0.547 in lift, 117.5 degree lobe separation (GM's listing; the exhaust lift as corrected
+      // by GM's engineers on ls1tech.com, 'LS6 camshaft specs').
+      camDuration: 204, exhaustCamDuration: 218, springRate: 60,
       redline: 6500,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -537,13 +504,10 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Fitted: power +1.0%, torque +0.2% (predicted), flat-top 5100-5500. 188 lands
-      // nearer (-0.1%), but 190 is the shortest duration the duration terms are checked
-      // down to (Pro's envelope), and a truck cam is at that end of the range.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 198, springRate: 60,
+      // Cams: GM 12561721, the stock cam for the LQ4 and LQ9, 196 / 201 degrees at 0.050 inch,
+      // 0.467 / 0.479 in lift, 116 degree lobe separation (Chevrolet Performance camshaft
+      // listing; michiganmotorsports.com stock-replacement LQ4 cam).
+      camDuration: 196, exhaustCamDuration: 201, springRate: 60,
       redline: 5600,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -572,12 +536,9 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
       frictionLevel: 'older',
-      // Fitted: power +1.7%, torque -0.3% (predicted), flat-top 5200-5600. 186 lands
-      // nearer (-0.3%); 190 for the same reason as the LQ4.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      camDuration: 198, springRate: 60,
+      // Cams: the 1999-2006 LM7 truck cam, 191 / 190 degrees at 0.050 inch, 0.457 / 0.466 in
+      // lift, 114 degree lobe separation (OnAllCylinders, 'LM7 5.3L Vortec 5300 Engine Specs').
+      camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 5800,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -604,18 +565,9 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Cast Iron', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 48.0,
       frictionLevel: 'older',
-      // Fitted: power +0.3%, torque +2.9% (predicted), flat-top 5500-5800 against a
-      // published 5200.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      // Back to 200 with dissociation (thermo.js, dissociatedEnergyJPerKg): at 202 the
-      // power peak reached the 6000 limiter; 200 lands -2.6% and peaks before it.
-      // REFITTED for molar expansion (thermo.js, molarExpansion) and GM's stock power
-      // enrichment (factoryFuel.js): at 200 the power ran flat from 5500 into the 6000
-      // limiter. 196 lands -0.9% on power and +4.9% on torque, peaking at 5400 (rated 5200)
-      // and falling away before the limiter.
-      camDuration: 196, springRate: 60,
+      // Cams: the 4.8 shares the LM7's truck cam, 191 / 190 degrees at 0.050 inch, 0.457 /
+      // 0.466 in lift (cartipsdaily.com, '4.8 LS Engine Specs').
+      camDuration: 191, exhaustCamDuration: 190, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -645,16 +597,10 @@ export const ENGINE_PRESETS = [
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 54.4,
       // A 2011-on design, so the published friction level; nothing measured for it.
       frictionLevel: 'modern',
-      // Fitted: power -0.9%, torque +1.9% (predicted), within 1 hp of peak from 5800,
-      // peaking at 5900 against a published 6000. 212 lands power nearer (-0.2%) but stays flat to the 6400 limiter,
-      // which the real engine does not; 210 is the longest cam whose power falls before it.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda, so duration came up until power is on the rating again.
-      // REFITTED for molar expansion and the factory fuel strategy (thermo.js, factoryFuel.js):
-      // 220 now ran +4% and flat into the 6400 limiter; 212 lands -0.2%, peaking at the
-      // rated 6000 and falling away after it.
-      camDuration: 212, springRate: 60,
+      // Cams: the non-MDS 6.4 cam, 215 / 221 degrees at 0.050 inch, 0.574 / 0.541 in lift,
+      // 121 degree lobe separation (8020automotive.com, '6.4 HEMI Camshaft Upgrade Guide';
+      // the same figures on lxforums.com, '6.4L Stock Cam Specifications').
+      camDuration: 215, exhaustCamDuration: 221, springRate: 60,
       redline: 6400,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -999,8 +945,12 @@ export const CUSTOM_ENGINE_LIMITS = Object.freeze({
     min: 4000, max: 11000, step: 100, unit: 'rpm',
     why: 'Past 11,000 rpm is racing-engine territory the simulator has no published engine to check against.',
   },
-  camDuration: { min: 180, max: 300, step: 2, unit: '°' },
+  camDuration: { min: 180, max: 300, step: 1, unit: '°' },
+  exhaustCamDuration: { min: 180, max: 300, step: 1, unit: '°' },
 });
+
+/** How much longer than the intake lobe a builder's exhaust lobe is taken to be when not given, degrees. */
+const EXHAUST_LOBE_LONGER_DEG = 8;
 
 /** How far past the limiter a builder's valve springs hold the valves on the cam, RPM. */
 const SPRING_MARGIN_RPM = 500;
@@ -1061,6 +1011,19 @@ export function validateCustomEngine(spec) {
     if (!Number.isFinite(v) || v < lim.min || v > lim.max) errors.camDuration = `Between ${lim.min} and ${lim.max} ${lim.unit}, or leave blank.`;
     else camDuration = v;
   }
+  // The exhaust lobe, where the builder does not give it: factory cams run it longer than
+  // the intake, by -1 to +22 degrees across the published cams in ENGINE_PRESETS (about +8
+  // on average), since the exhaust valve is smaller and the blowdown wants an early opening.
+  let exhaustCamDuration = Math.min(CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max, camDuration + EXHAUST_LOBE_LONGER_DEG);
+  if (spec.exhaustCamDuration === '' || spec.exhaustCamDuration == null) {
+    estimated.push(`exhaust cam duration (${exhaustCamDuration}° assumed, ${EXHAUST_LOBE_LONGER_DEG}° longer than the intake as factory cams run)`);
+    assumed.push('exhaustCamDuration');
+  } else {
+    const v = Number(spec.exhaustCamDuration);
+    const lim = CUSTOM_ENGINE_LIMITS.exhaustCamDuration;
+    if (!Number.isFinite(v) || v < lim.min || v > lim.max) errors.exhaustCamDuration = `Between ${lim.min} and ${lim.max} ${lim.unit}, or leave blank.`;
+    else exhaustCamDuration = v;
+  }
   if (Object.keys(errors).length) return { ok: false, errors };
   const bottomEnd = BOTTOM_END_OPTS.some((o) => o.id === spec.bottomEnd) ? spec.bottomEnd : DEFAULT_BOTTOM_END;
   const valvetrain = /** @type {'ohv'|'sohc'|'dohc'} */ (VALVETRAIN_OPTS.some((o) => o.id === spec.valvetrain) ? spec.valvetrain : 'dohc');
@@ -1087,7 +1050,9 @@ export function validateCustomEngine(spec) {
       // to keep the valves on the cam SPRING_MARGIN_RPM past the limiter, never softer than
       // the stock rate. A 9000-RPM engine on stock springs floats its valves at 8000, which
       // no one who chose that redline would build.
-      camDuration, springRate: springRateFor(/** @type {number} */ (redline), camDuration), redline: /** @type {number} */ (redline),
+      camDuration, exhaustCamDuration,
+      springRate: springRateFor(/** @type {number} */ (redline), Math.max(camDuration, exhaustCamDuration)),
+      redline: /** @type {number} */ (redline),
       valvetrain, valvesPerCyl, bottomEnd,
     },
   };

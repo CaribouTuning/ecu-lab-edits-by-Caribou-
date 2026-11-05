@@ -49,13 +49,26 @@ import {
 } from './thermo.js';
 
 /**
- * Crank angle at which the exhaust valve opens, degrees after TDC firing.
+ * Crank angle at which the exhaust valve opens, degrees after TDC firing, at the 0.050 inch
+ * checking height: the exhaust lobe is centred where the intake's is mirrored about TDC
+ * (breathing.js `valveEvents`), the intake's centre being 180 + IVC - duration / 2 after
+ * TDC, so a longer exhaust lobe opens earlier and gives up expansion for blowdown.
  *
  * Exported because the acoustics model needs the same angle: the exhaust note is the
  * blowdown pulse that starts here, and two files holding their own idea of when the
  * valve cracks would drift apart silently.
+ *
+ * @param {number} exhaustCamDuration crank degrees at 0.050 inch
+ * @param {number} [intakeCamDuration] crank degrees at 0.050 inch; sets the lobe centres
+ * @returns {number} EVO, degrees after TDC firing
  */
-export const EVO_ATDC = 180 - 50;
+export function evoAtdcDeg(exhaustCamDuration, intakeCamDuration = exhaustCamDuration) {
+  const centreAtdc = 180 + ivcAfterBdcDeg(intakeCamDuration) - intakeCamDuration / 2;
+  return 180 - (exhaustCamDuration / 2 - (180 - centreAtdc));
+}
+
+/** EVO for the reference cam, for callers that carry no engine. */
+export const EVO_ATDC = evoAtdcDeg(COEFF.IVC_CAM_REF_DURATION);
 
 /**
  * Cylinder volume at a crank angle, from the slider-crank geometry.
@@ -809,9 +822,9 @@ export function cycleInputsFor({
     products: productsPerKgCharge(lambda > 0 ? 1 / lambda : 1, fuel),
     residualFrac,
     effectiveCr: vIvc / clearanceM3,
-    // Only carried when a phaser has moved the exhaust cam, so a fixed-cam engine's
-    // cycle inputs are exactly what they always were.
-    ...(exhaustRet ? { evoAtdc: EVO_ATDC + exhaustRet } : {}),
+    // Where this engine's exhaust lobe opens, moved later by any exhaust phaser's retard.
+    evoAtdc: evoAtdcDeg(derived.exhaustCamDuration ?? derived.camDuration ?? COEFF.IVC_CAM_REF_DURATION,
+      derived.camDuration ?? COEFF.IVC_CAM_REF_DURATION) + exhaustRet,
     ...(empKpa ? { exhaustManifoldPa: empKpa * 1000 } : {}),
   };
 }

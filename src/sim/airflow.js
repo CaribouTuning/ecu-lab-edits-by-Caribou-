@@ -58,7 +58,7 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
  * @returns {number} runner length, m
  */
 function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
-  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.runnerAreaM2}|${base.runnerReflection}|${Math.round(tuneRpm)}`;
+  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.events.evo}|${base.events.evc}|${base.runnerAreaM2}|${base.runnerReflection}|${Math.round(tuneRpm)}`;
   const hit = RUNNER_CACHE.get(key);
   if (hit != null) return hit;
   // The length whose filling peaks at the speed it is tuned for, the peak found between
@@ -138,7 +138,11 @@ export function breathingGeometry(cfg, phase = {}) {
     exhaustPrimaryM: phase.headers ? COEFF.EXH_PRIMARY_HEADERS_M : COEFF.EXH_PRIMARY_MANIFOLD_M,
     exhaustPrimaryAreaM2: exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
     exhaustReflection: reflectionCoefficient(phase.headers ? COEFF.EXH_COLLECTOR_AREA_HEADERS : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
-    events: valveEvents({ ivcAbdc, durationDeg: camDuration, exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0, maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM }),
+    events: valveEvents({
+      ivcAbdc, durationDeg: camDuration, exhaustDurationDeg: cfg.exhaustCamDuration ?? camDuration,
+      exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0,
+      maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM, exhaustMaxLiftM: COEFF.BREATH_LIFT_PER_DIA * exhaustValveM,
+    }),
   };
   if (cfg.runnerMm) return { ...base, runnerLengthM: cfg.runnerMm / 1000 };
   // The intake runner is tuned with the factory exhaust; headers change the exhaust, not it.

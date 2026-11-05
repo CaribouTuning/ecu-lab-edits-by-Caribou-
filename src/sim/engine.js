@@ -126,7 +126,10 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} compression static compression ratio
  * @property {'Cast Iron'|'Aluminum'} blockMaterial
  * @property {'Cast Iron'|'Aluminum'} headMaterial
- * @property {number} [camDuration] crank degrees
+ * @property {number} [camDuration] intake lobe duration at 0.050 inch lift, crank degrees
+ * @property {number} [exhaustCamDuration] exhaust lobe duration at 0.050 inch lift, crank
+ *   degrees. Every shipped engine states it; a save from before it existed falls back to the
+ *   intake lobe's
  * @property {number} [springRate] valve spring rate
  * @property {number} [redline] rev limit, RPM
  * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
@@ -177,7 +180,8 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} bearingEventBar average peak pressure that raises the bottom-end advisory, bar
  * @property {string} character human-readable bore/stroke description
  * @property {number} perCylL per-cylinder displacement, litres
- * @property {number} camDuration crank degrees
+ * @property {number} camDuration intake lobe duration, crank degrees
+ * @property {number} exhaustCamDuration exhaust lobe duration, crank degrees
  * @property {number} springRate valve spring rate
  * @property {number} overlapDeg valve overlap, crank degrees
  * @property {number} floatRpm valve float speed, RPM
@@ -255,9 +259,12 @@ export function deriveEngine(cfg) {
   const balanceShaftFrac = hasBalanceShafts(cfg.configuration, displacementL)
     ? COEFF.FMEP_BALANCE_SHAFT_FRAC : 0;
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const exhaustCamDuration = cfg.exhaustCamDuration ?? camDuration;
   const springRate = cfg.springRate ?? 50;
-  const overlapDeg = camOverlapDeg(camDuration);
-  const floatRpm = valveFloatRpm(springRate, camDuration);
+  // Overlap is shared between the two lobes, each bringing half of its duration to TDC; the
+  // more aggressive lobe is the one whose valve floats first.
+  const overlapDeg = camOverlapDeg((camDuration + exhaustCamDuration) / 2);
+  const floatRpm = valveFloatRpm(springRate, Math.max(camDuration, exhaustCamDuration));
   const springPa = springFrictionPa(springRate);
   const redline = cfg.redline ?? DEFAULT_REDLINE_RPM;
   // What the pistons and rods are good for (bottomEnd.js).
@@ -281,7 +288,7 @@ export function deriveEngine(cfg) {
     bore: cfg.bore, stroke: cfg.stroke,
     boreFlameFactor, sparkPlugs, chamberOffsetK, injection, evapInCylinder,
     torqueScale, bearingWearMult, bearingFreeBar, bearingEventBar, character, perCylL,
-    camDuration, springRate, overlapDeg, floatRpm, springPa, bottomEnd,
+    camDuration, exhaustCamDuration, springRate, overlapDeg, floatRpm, springPa, bottomEnd,
     balanceShaftFrac, redline,
     configuration: cfg.configuration, valvetrain, valvesPerCyl, follower,
     intakeValves: valves.intakeValves, intakeValveMm: valves.intakeValveMm, valveAreaRatio: valves.ratio,

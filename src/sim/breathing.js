@@ -94,28 +94,41 @@ export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
  * the event below the checking height follows from the maximum lift on the flank's curve,
  * and each ramp adds its own length (`COEFF.BREATH_RAMP_LIFT_M` at
  * `COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG`). The exhaust lobe mirrors the intake about TDC,
- * moved by an exhaust phaser's retard.
+ * moved by an exhaust phaser's retard; each lobe has its own duration, as real cams do.
  *
- * @param {{ivcAbdc: number, durationDeg: number, exhaustRetardDeg?: number, maxLiftM?: number}} cam
- * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number}}
- *   seat-to-seat events, and the ramps as `liftShare` takes them
+ * @param {{ivcAbdc: number, durationDeg: number, exhaustDurationDeg?: number, exhaustRetardDeg?: number,
+ *   maxLiftM?: number, exhaustMaxLiftM?: number}} cam each lobe's duration at 0.050 inch and
+ *   its valve's maximum lift; the exhaust lobe is the intake's where not given
+ * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number,
+ *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, and each
+ *   lobe's ramps as `liftShare` takes them
  */
-export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLiftM = 0 }) {
-  const rampLift = Math.min(COEFF.BREATH_RAMP_LIFT_M, 0.5 * DURATION_CHECK_LIFT_M);
-  const hasLift = maxLiftM > DURATION_CHECK_LIFT_M;
-  const rampDeg = hasLift ? rampLift / COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG : 0;
-  // Share of the flank at each end spent below the checking height, on the flank's curve.
-  const below = hasLift
-    ? Math.asin(((DURATION_CHECK_LIFT_M - rampLift) / (maxLiftM - rampLift)) ** (1 / COEFF.BREATH_LIFT_SHAPE_EXP)) / Math.PI : 0;
-  const flank = durationDeg / (1 - 2 * below);
-  const seat = flank + 2 * rampDeg;
-  const ivcCheck = 180 + ivcAbdc;
-  const centre = ivcCheck - durationDeg / 2;
-  const ivo = centre - seat / 2;
-  const ivc = centre + seat / 2;
-  const evc = -ivo + exhaustRetardDeg;
-  const evo = evc - seat;
-  return { ivo, ivc, evo, evc, rampShare: rampDeg / seat, rampLiftShare: hasLift ? rampLift / maxLiftM : 0 };
+export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM }) {
+  /** One lobe from its duration at 0.050 inch: its seat-to-seat length and its ramps. */
+  const lobe = (dur, maxLift) => {
+    const rampLift = Math.min(COEFF.BREATH_RAMP_LIFT_M, 0.5 * DURATION_CHECK_LIFT_M);
+    const hasLift = maxLift > DURATION_CHECK_LIFT_M;
+    const rampDeg = hasLift ? rampLift / COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG : 0;
+    // Share of the flank at each end spent below the checking height, on the flank's curve.
+    const below = hasLift
+      ? Math.asin(((DURATION_CHECK_LIFT_M - rampLift) / (maxLift - rampLift)) ** (1 / COEFF.BREATH_LIFT_SHAPE_EXP)) / Math.PI : 0;
+    const seat = dur / (1 - 2 * below) + 2 * rampDeg;
+    return { seat, rampShare: rampDeg / seat, rampLiftShare: hasLift ? rampLift / maxLift : 0 };
+  };
+  const inLobe = lobe(durationDeg, maxLiftM);
+  const exLobe = lobe(exhaustDurationDeg, exhaustMaxLiftM);
+  // The intake lobe's centre, from where it closes at the checking height; the exhaust's
+  // mirrors it about TDC, moved by an exhaust phaser's retard.
+  const centre = 180 + ivcAbdc - durationDeg / 2;
+  const exCentre = -centre + exhaustRetardDeg;
+  return {
+    ivo: centre - inLobe.seat / 2,
+    ivc: centre + inLobe.seat / 2,
+    evo: exCentre - exLobe.seat / 2,
+    evc: exCentre + exLobe.seat / 2,
+    rampShare: inLobe.rampShare, rampLiftShare: inLobe.rampLiftShare,
+    exhaustRampShare: exLobe.rampShare, exhaustRampLiftShare: exLobe.rampLiftShare,
+  };
 }
 
 /**
@@ -137,7 +150,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLif
  *   meets its collector, (A1 - A2)/(A1 + A2): negative into a larger area
  * @property {number} [runnerReflection] pressure reflection coefficient where the intake
  *   runner opens into the plenum, (A1 - A2)/(A1 + A2): close to -1, the plenum being large
- * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number}} events
+ * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number,
+ *   exhaustRampShare?: number, exhaustRampLiftShare?: number}} events
  */
 
 /**
@@ -181,8 +195,9 @@ export function gasExchange(g, op) {
   };
   // Open area of one valve set at a crank angle: the curtain while the valve is low, the
   // port throat once it is high; times its discharge coefficient.
-  const valveArea = (deg, open, close, n, dia) => {
-    const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), g.events);
+  const exhaustRamp = { rampShare: g.events.exhaustRampShare ?? g.events.rampShare, rampLiftShare: g.events.exhaustRampLiftShare ?? g.events.rampLiftShare };
+  const valveArea = (deg, open, close, n, dia, ramp = g.events) => {
+    const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), ramp);
     if (lift <= 0) return 0;
     const curtain = Math.PI * dia * lift;
     const throat = (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2;
@@ -281,7 +296,7 @@ export function gasExchange(g, op) {
     // A shut valve is a closed end: the backward wave goes straight round again.
     let fwd = backwardNow();
     if (mid > evo && mid < evc) {
-      const a = valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM);
+      const a = valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp);
       const b = backwardNow();
       // The backward wave reflects off the valve end: a nearly shut valve is a closed end
       // (+1), a wide one passes most of it into the cylinder.

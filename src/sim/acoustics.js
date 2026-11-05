@@ -47,7 +47,7 @@ import {
   AMBIENT_C, BARO_KPA, COMP_ISEN_EFF, GAMMA_EXP, KELVIN_OFFSET, KPA_PER_BAR, PSI_TO_KPA,
   R_AIR,
 } from './constants.js';
-import { EVO_ATDC, cylinderVolumeM3 } from './cycle.js';
+import { EVO_ATDC, cylinderVolumeM3, evoAtdcDeg } from './cycle.js';
 import { clamp } from './math.js';
 
 /**
@@ -462,14 +462,15 @@ export function runnerLengthM(displacementL) {
  * acoustics out of the cycle's hot loop without inventing a second pressure trace.
  *
  * @param {{peakPressureBar: number, peakPressureDeg: number, compression: number,
- *          displacementL: number, cyl: number}} state
+ *          displacementL: number, cyl: number, evoAtdc?: number}} state where the exhaust
+ *          valve opens defaults to the reference cam's (cycle.js `evoAtdcDeg`)
  * @returns {number} pressure at exhaust valve opening, kPa
  */
-export function evoPressureKpa({ peakPressureBar, peakPressureDeg, compression, displacementL, cyl }) {
+export function evoPressureKpa({ peakPressureBar, peakPressureDeg, compression, displacementL, cyl, evoAtdc = EVO_ATDC }) {
   const sweptM3 = (displacementL / cyl) / 1000;
   const clearanceM3 = sweptM3 / Math.max(1.5, compression - 1);
   const vPeak = cylinderVolumeM3(peakPressureDeg, clearanceM3, sweptM3, COEFF.ROD_RATIO);
-  const vEvo = cylinderVolumeM3(EVO_ATDC, clearanceM3, sweptM3, COEFF.ROD_RATIO);
+  const vEvo = cylinderVolumeM3(evoAtdc, clearanceM3, sweptM3, COEFF.ROD_RATIO);
   const expansion = Math.pow(vPeak / vEvo, COEFF.GAMMA_BURNED);
   return peakPressureBar * KPA_PER_BAR * expansion;
 }
@@ -871,11 +872,13 @@ export function circleAreaM2(d) {
  * @param {number} sys.gasTempK exhaust gas temperature at the port, K
  * @param {boolean} [sys.headers] long-tube headers fitted in place of a cast manifold
  * @param {boolean} [sys.turboFitted] a turbine sits in the exhaust path
+ * @param {number} [sys.evoAtdc] where this engine's exhaust valve opens, degrees after TDC
+ *   firing (cycle.js `evoAtdcDeg`); the reference cam's where not given
  * @returns {object} tube lengths, areas, cylinder geometry and gas state
  */
 export function exhaustGeometry({
   displacementL, cyl, bore, compression, configuration, pipeDiaIn, gasTempK,
-  headers = false, turboFitted = false,
+  headers = false, turboFitted = false, evoAtdc = EVO_ATDC,
 }) {
   const events = firingEvents(configuration);
   const banks = events.some((e) => e.bank === 1) ? 2 : 1;
@@ -932,7 +935,7 @@ export function exhaustGeometry({
     clearanceM3: ((displacementL / Math.max(1, cyl)) / 1000)
       / Math.max(1.5, (compression ?? 10) - 1),
     rodRatio: COEFF.ROD_RATIO,
-    evoDeg: EVO_ATDC,
+    evoDeg: evoAtdc,
     valveArea: exhaustFlowAreaM2(bore),
     valveCd: ACOUSTIC.VALVE_CD,
     wallLossPerM: ACOUSTIC.WALL_LOSS_PER_M,
@@ -1191,6 +1194,7 @@ export function acousticDrive({
     ? evoPressureKpa({
       peakPressureBar: point.peakPressure, peakPressureDeg: point.peakPressureDeg,
       compression, displacementL, cyl,
+      evoAtdc: evoAtdcDeg(derived.exhaustCamDuration ?? derived.camDuration ?? 210, derived.camDuration ?? 210),
     })
     : BARO_KPA;
   // A borrowed wide-open point is scaled by throttle (see `throttle` above); the floor is
