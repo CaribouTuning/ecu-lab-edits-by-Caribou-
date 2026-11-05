@@ -23,7 +23,7 @@ import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
 import {
-  OPEN_LOOP_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+  OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
 } from './tables.js';
 
 /**
@@ -49,6 +49,11 @@ const ADVANCE_TOLERANCE_DEG = 1.0;
 
 /** A cell has to be leaving this much advance on the table before it is worth chasing. */
 export const UNDER_ADVANCED_DEG = 3.0;
+/** A pull at or above this load is a full-throttle pull. */
+const FULL_THROTTLE_LOAD_KPA = 95;
+/** How near a pull's point must be to a cell to stand for its knock limit: RPM and kPa. */
+const PULL_CEILING_RPM = 160;
+const PULL_CEILING_KPA = 4;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 const MIX_NOTABLE_AFR = 0.45;
@@ -224,19 +229,24 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
   // the pull's target, a knock cut hid the cells whose knock tripped it: they were never
   // advised, kept their knock, and the cut came back on every pull. Below the pull's first
   // speed nothing was measured, so there the boost it achieved at that speed stands.
+  // Read by the manifold pressure the pull logged, not atmospheric plus its boost: the intake
+  // duct and the throttle lose a few kPa before the manifold (throttle.js), and reach counted
+  // from the barometer put a turbo engine into the gap toward a row it never ran.
   const turboPull = turboOn && pull?.points?.length
     ? pull.points.map((p) => ({
       rpm: p.rpm,
-      boostPsi: p.protect?.some((x) => BOOST_CUTTING.has(x)) ? curveAt(boostCurve, p.rpm) : p.boostPsi,
+      kpa: p.protect?.some((x) => BOOST_CUTTING.has(x))
+        ? reachableKpa({ turboOn, boostCurve, rpm: p.rpm })
+        : p.map + REACHABLE_SLACK_KPA,
     }))
     : null;
   const turboPullAt = (rpm) => (rpm < turboPull[0].rpm
-    ? pull.points[0].boostPsi
-    : interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.boostPsi), rpm));
+    ? turboPull[0].kpa
+    : interp1(turboPull.map((p) => p.rpm), turboPull.map((p) => p.kpa), rpm));
   return (rpm) => (blowerPull
     ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: interp1(blowerPull.map((p) => p.rpm), blowerPull.map((p) => p.boostPsi), rpm) })
     : turboPull
-      ? reachableKpa({ turboOn, boostCurve, rpm, boostPsi: Math.min(curveAt(boostCurve, rpm), turboPullAt(rpm)) })
+      ? Math.min(reachableKpa({ turboOn, boostCurve, rpm }), turboPullAt(rpm))
       : reachableKpa({ turboOn, boostCurve, rpm }));
 }
 
@@ -303,6 +313,10 @@ export function calibrationAdvice({
   const loadOf = (axes, rpm, kpa) => loadForKpa(axes, rpm, kpa, ecuAirAt);
 
   const reachAt = reachKpaAt({ turboOn, boostCurve, pull });
+  // What the engine reaches at full throttle: the bound a suggestion to add timing must
+  // respect (see the interpolation pass below). A full-throttle pull measured it; from a
+  // part-throttle pull, the boost curve the build asks for stands in, as the most it can reach.
+  const reachFull = pull && (pull.loadKpa ?? 0) >= FULL_THROTTLE_LOAD_KPA ? reachAt : reachKpaAt({ turboOn, boostCurve, pull: null });
   const blowerPull = !turboOn && pull?.points?.some((p) => p.blowerRpm != null);
 
   /**
@@ -356,7 +370,21 @@ export function calibrationAdvice({
    * pressure — so this is the ceiling that genuinely applies BETWEEN two rows.
    */
   const ceilingMemo = new Map();
-  const ceilingAt = (rpm, mapKpa) => {
+  // THE LOG OVERRULES HERE TOO. Where the pull ran at this speed and pressure, the knock
+  // limit it met is the one that holds: the static point below prices a part-spooled turbo's
+  // charge and backpressure as an estimate, and capped a 130 kPa row at 0.8 degrees where
+  // the pull at 133 kPa measured 8.2.
+  const pullNear = (rpm, mapKpa) => {
+    let best = null; let bestD = Infinity;
+    for (const p of pull?.points ?? []) {
+      if (Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
+      const d = Math.abs(p.rpm - rpm) / PULL_CEILING_RPM + Math.abs(p.map - mapKpa) / PULL_CEILING_KPA;
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  };
+  const ceilingAt = (rpm, mapKpa) => pullNear(rpm, mapKpa)?.threshold ?? staticCeilingAt(rpm, mapKpa);
+  const staticCeilingAt = (rpm, mapKpa) => {
     const key = `${rpm}|${mapKpa}`;
     if (!ceilingMemo.has(key)) {
       ceilingMemo.set(key, pointAt(rpm, mapKpa, {
@@ -506,22 +534,31 @@ export function calibrationAdvice({
     for (let ri = 1; ri < T.load.length; ri++) {
       const here = byCell.get(`${ri}|${ci}`);
       const above = byCell.get(`${ri - 1}|${ci}`);        // one row up = more pressure
-      // If the row above is unreachable it was never graded, and the engine never runs at
-      // those pressures either — so there is no interpolated path to protect.
-      if (!here || !above) continue;
+      if (!here) continue;
       // Only the part of the gap the engine actually enters needs protecting. At 14 psi
       // the manifold peaks at 197.9 kPa, so a 150-200 gap is entered 96% of the way;
       // at no boost it is not entered at all and the pair is left alone.
       const hereKpa = kpaOf(T, rpm, T.load[ri]);
       const span = kpaOf(T, rpm, T.load[ri - 1]) - hereKpa;
       const entered = clamp((reachAt(rpm) - hereKpa) / span, 0, 1);
+      // ADVICE IS FOR EVERY PULL, NOT ONLY THIS ONE. The verdicts follow the pull the player
+      // made, but a suggestion to ADD timing is typed into a cell the engine also reads on
+      // its way into boost, at full throttle, on the boost curve it is built with. Advised
+      // only from a part-throttle pull, a turbo engine's 100 kPa row was raised into knock,
+      // the next full-throttle pull lowered it, the next part-throttle pull raised it again:
+      // following the advice never ended. So the room it may suggest is the room across
+      // everything the build reaches, the row above read as the table holds it if no pull
+      // graded it.
+      const enteredAdvice = Math.max(entered, clamp((reachFull(rpm) - hereKpa) / span, 0, 1));
+      const aboveNow = above ? above.current : timing[ri - 1]?.[ci];
+      const aboveAdvised = above ? above.suggested : aboveNow;
       // Neither row can knock at any advance it could carry, so nothing between them can:
       // knock only gets likelier with pressure.
-      if (entered <= 0 || (here.unbounded && above.unbounded)) continue;
+      if (enteredAdvice <= 0 || aboveAdvised == null || (here.unbounded && (above?.unbounded ?? false))) continue;
       const room = interpolationRoomDeg({
         ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
-        aboveDeg: above.suggested,
-        entered,
+        aboveDeg: aboveAdvised,
+        entered: enteredAdvice,
       });
       if (room < here.suggested) {
         here.suggested = clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG);
@@ -538,6 +575,8 @@ export function calibrationAdvice({
       // Judged against the table as it stands, therefore. When the two agree the
       // result is identical; where they differ, this is the one that answers "is the
       // table in front of me dangerous".
+      // Judged only over what this pull entered, between rows it graded.
+      if (entered <= 0 || !above) continue;
       const judged = interpolationRoomDeg({
         ceilingAtFrac: (f) => ceilingAt(rpm, hereKpa + f * span) - KNOCK_SAFETY_DEG,
         aboveDeg: above.current,

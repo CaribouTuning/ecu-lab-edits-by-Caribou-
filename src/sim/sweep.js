@@ -7,6 +7,7 @@
  * that only says something is wrong teaches nothing.
  */
 
+import { BARO_KPA } from './constants.js';
 import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
 import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
@@ -23,6 +24,9 @@ import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuSteadyPoint } from './ecu/strategy.js';
 import { N2O_AIR_EQUIV, stepBottle, wetKitFuelKgS } from './nitrous.js';
+
+/** Exhaust over intake pressure past which a turbo engine's turbine is logged as choking it. */
+const BACKPRESSURE_RATIO_LIMIT = 1.8;
 
 /** Lowest engine speed of a dyno pull, RPM. */
 export const SWEEP_START_RPM = 1500;
@@ -521,6 +525,29 @@ export function simulateSweep({
     });
   });
 
+  // BACKPRESSURE: a turbine too small for the engine's exhaust. Everything that leaves the
+  // cylinders has to pass the turbine, and the pressure it takes to push it through climbs
+  // with the flow. Once the exhaust side sits well above the intake, every cylinder pumps
+  // against it and, through overlap, refills with its own exhaust: the engine breathes worse
+  // than it did with no turbo at all. Logged as itself, so a turbo that makes LESS power than
+  // the engine made without it says why.
+  if (turboOn) {
+    groupRuns(points, (p) => p.rpm >= 3000 && p.emp != null && p.map > 0
+      && p.emp / p.map >= BACKPRESSURE_RATIO_LIMIT).forEach((run) => {
+      if (run.length < 3) return;
+      const worst = run.reduce((a, b) => (b.emp / b.map > a.emp / a.map ? b : a));
+      const ratio = worst.emp / worst.map;
+      events.push({
+        type: 'backpressure', severity: 2,
+        impact: Math.round(clamp(6 + (ratio - BACKPRESSURE_RATIO_LIMIT) * 12, 6, 24) * (0.4 + 0.6 * rangeFrac(run))),
+        rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+        msg: `The turbine is choking the engine across ${rangeLabel(run)}: ${Math.round(worst.emp)} kPa of exhaust pressure ahead of it against ${Math.round(worst.map)} kPa in the intake at ${worst.rpm} RPM`,
+        cause: `All of the engine's exhaust has to get through the turbine, and a turbine this size for this much engine needs ${ratio.toFixed(1)} times the intake's pressure to push it through. Each cylinder pumps against that on its exhaust stroke, and while both valves are open the exhaust pushes back into the cylinder, so it fills with less fresh air. Boost falls away and the engine can make less power than it did without the turbo.`,
+        fix: 'On BUILD → INDUCTION, fit a larger turbine housing or twin turbos, so the exhaust passes at a pressure near the intake\'s. A larger exhaust pipe helps a little. Asking for more boost from this turbine makes it worse.',
+      });
+    });
+  }
+
   // UNDERBOOST: the turbo cannot make what is asked of it. Below 4000 RPM a shortfall is
   // spool, which every turbo has and the boost curve should already allow for; above it,
   // with the exhaust flowing hard, a turbo that still falls short is too small (its
@@ -549,7 +576,11 @@ export function simulateSweep({
   // air-per-cylinder axis is sized by the ECU's own air estimate, not by boost.
   const kpaAxes = [layout?.ve, layout?.timing, layout?.afr].filter((a) => a && a.loadUnit === 'kPa');
   const topKpa = layout ? (kpaAxes.length ? Math.min(...kpaAxes.map((a) => a.load[0])) : Infinity) : LOAD[0];
-  groupRuns(points, (p) => p.map > topKpa + 0.5).forEach((run) => {
+  // Above atmospheric only: a naturally aspirated engine at full throttle reaches the
+  // barometer less what the intake and the throttle lose, which can sit a kPa over a table
+  // topped at 100. That is the full-throttle row, not boost nobody has tuned.
+  const pastKpa = Math.max(topKpa, (ecu?.cond?.env?.baroKpa ?? BARO_KPA)) + 0.5;
+  groupRuns(points, (p) => p.map > pastKpa).forEach((run) => {
     const peak = run.reduce((a, b) => (b.map > a.map ? b : a));
     events.push({
       type: 'pastTable', severity: 3, impact: Math.round(clamp((peak.map - topKpa) / 4, 6, 30)),
