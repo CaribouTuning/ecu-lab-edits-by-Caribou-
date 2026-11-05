@@ -135,6 +135,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLif
  * @property {number} [exhaustPrimaryAreaM2] its cross-section, m^2
  * @property {number} [exhaustReflection] pressure reflection coefficient where the primary
  *   meets its collector, (A1 - A2)/(A1 + A2): negative into a larger area
+ * @property {number} [runnerReflection] pressure reflection coefficient where the intake
+ *   runner opens into the plenum, (A1 - A2)/(A1 + A2): close to -1, the plenum being large
  * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number}} events
  */
 
@@ -229,9 +231,9 @@ export function gasExchange(g, op) {
     return collectorR * (f0 + (f1 - f0) * f);
   };
   // THE INTAKE RUNNER AS AN ACOUSTIC LINE, the same way: the valve drawing air launches a
-  // suction wave, -(a / A) * mdot, up the runner; at the plenum, a volume far larger than
-  // the runner, it reflects inverted (an open end), so it comes back as a pressure wave
-  // 2L/a later, attenuated by the pipe. Where that return lands before the valve shuts the
+  // suction wave, -(a / A) * mdot, up the runner; at the plenum, much larger than the
+  // runner, it reflects inverted (nearly an open end, by the area ratio: g.runnerReflection),
+  // so it comes back as a pressure wave 2L/a later. Where that return lands before the valve shuts the
   // runner rams charge in past what the plenum alone would push: the tuning that places an
   // engine's torque peak, at a speed set by the runner's length. A shut valve is a closed
   // end and sends the wave straight back. The steady losses (the runner's wall friction,
@@ -239,7 +241,7 @@ export function gasExchange(g, op) {
   const soundIn = Math.sqrt(GAMMA * R_AIR * intakeK);
   const impedanceIn = soundIn / g.runnerAreaM2;
   const delayStepsIn = ((2 * g.runnerLengthM) / soundIn) * 6 * Math.max(rpm, 60) / step;
-  const plenumR = -COEFF.BREATH_RUNNER_WAVE_ATTENUATION;
+  const plenumR = g.runnerReflection ?? -1;
   const runnerD = Math.sqrt((4 * g.runnerAreaM2) / Math.PI);
   const runnerLossK = COEFF.BREATH_RUNNER_FRICTION * g.runnerLengthM / runnerD + COEFF.BREATH_RUNNER_ENTRY_K;
   /** Wave amplitude leaving the valve end up the runner at each step, Pa. */

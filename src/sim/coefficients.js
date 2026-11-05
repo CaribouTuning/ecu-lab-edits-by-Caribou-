@@ -160,10 +160,12 @@ export const COEFF = {
   // bellmouth to 0.5 for a sharp edge; a production runner sits between).
   BREATH_RUNNER_FRICTION: 0.03,
   BREATH_RUNNER_ENTRY_K: 0.5,
-  // Share of a pressure wave's amplitude left after the round trip of an intake runner and
-  // its reflection at the plenum (breathing.js): wall friction, the plenum's finite size and
-  // the spreading of the pulse. Cooler, slower gas than the exhaust's, so less is lost.
-  BREATH_RUNNER_WAVE_ATTENUATION: 0.8,
+  // The intake plenum's volume as a share of the engine's displacement, where the engine
+  // does not say. Intake design guidance puts a naturally aspirated plenum at about half to
+  // the whole of the displacement (Blair, Design and Simulation of Four-Stroke Engines,
+  // ch. 6). Its cross-section, taken as the face of that volume, against a runner's sets how
+  // strongly a wave reflects where the runner opens into it (breathing.js).
+  BREATH_PLENUM_VOLUME_SHARE: 0.8,
   BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
   // --- The throttle and the intake duct (throttle.js) ---
   // Discharge coefficient of a throttle plate's open annulus, and where the plate rests

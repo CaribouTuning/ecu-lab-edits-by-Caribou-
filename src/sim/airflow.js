@@ -58,7 +58,7 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
  * @returns {number} runner length, m
  */
 function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
-  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.runnerAreaM2}|${Math.round(tuneRpm)}`;
+  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.runnerAreaM2}|${base.runnerReflection}|${Math.round(tuneRpm)}`;
   const hit = RUNNER_CACHE.get(key);
   if (hit != null) return hit;
   // The length whose filling peaks at the speed it is tuned for, the peak found between
@@ -127,10 +127,13 @@ export function breathingGeometry(cfg, phase = {}) {
   const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG
     - (phase.intakeCamAdvanceDeg ?? 0);
   const throat = intakeValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * intakeValveM) ** 2;
+  const runnerAreaM2 = throat * COEFF.BREATH_RUNNER_AREA_SHARE;
+  // The plenum's face where a runner opens into it: the side of a cube of its volume.
+  const plenumAreaM2 = (deriveEngine(cfg).displacementL * 1e-3 * COEFF.BREATH_PLENUM_VOLUME_SHARE) ** (2 / 3);
   const base = {
     boreM: cfg.bore / 1000, strokeM: cfg.stroke / 1000, compression: cfg.compression, rodRatio: COEFF.ROD_RATIO,
     intakeValves, intakeValveM, exhaustValves, exhaustValveM, liftPerDia: COEFF.BREATH_LIFT_PER_DIA,
-    runnerAreaM2: throat * COEFF.BREATH_RUNNER_AREA_SHARE, runnerLengthM: 0.35,
+    runnerAreaM2, runnerLengthM: 0.35, runnerReflection: reflectionCoefficient(plenumAreaM2 / runnerAreaM2),
     // The exhaust primaries: a cast manifold's short ones, or long-tube headers' (phase.headers).
     exhaustPrimaryM: phase.headers ? COEFF.EXH_PRIMARY_HEADERS_M : COEFF.EXH_PRIMARY_MANIFOLD_M,
     exhaustPrimaryAreaM2: exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
