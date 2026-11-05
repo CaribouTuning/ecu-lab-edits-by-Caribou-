@@ -12,7 +12,7 @@ import { COEFF } from './coefficients.js';
 import { CYL_COUNT } from './hardware.js';
 import { CAM_BASE_DURATION, deriveEngine, intakeValveAreaRatio, valveFloatRpm } from './engine.js';
 import { clamp } from './math.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { rubbingFmepPa } from './friction.js';
 import { exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
@@ -64,7 +64,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
   // The length whose filling peaks at the speed it is tuned for, the peak found between
   // samples by a parabola through the highest three (a flat curve's peak does not jump from
   // one sample to the next). Ties go to the shorter runner.
-  const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: 1000 };
+  const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: INDUCTION_REF_EXHAUST_K };
   const step = 500;
   const rpms = []; for (let r = 1000; r <= tuneRpm * 2 + step; r += step) rpms.push(r);
   // Torque, not filling, is what peaks at the published speed: brake MEP is the indicated MEP
@@ -79,7 +79,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       // filling and pumping work both grow with speed.
       let emp = BARO_KPA; let r = null;
       for (let i = 0; i < 2; i++) {
-        r = gasExchange(g, { ...op, rpm, exhaustKpa: emp });
+        r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
         emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
       }
@@ -185,11 +185,19 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
     // Exhaust manifold pressure is set by the flow it passes, which is set by the breathing:
     // repeated substitution from atmospheric; three passes settle it well inside 0.1% VE.
+    // Each pass is the next cycle: it starts from the waves the last one left in the runner.
+    // The burned gas the exhaust stroke starts from is set by the mixture, not by how much
+    // of it there is: a stoichiometric charge burns to the same temperature at any density.
+    // So every cell runs on the full-charge, stoichiometric exhaust temperature, the one the
+    // induction solve prices the turbine on (thermo.js `INDUCTION_REF_EXHAUST_K`).
+    // `exhaustTempK`'s load term is how a probe in the manifold reads a small flow cooled by
+    // the port: taking it as the cylinder's own gas put a light-load, high-speed cylinder
+    // at 600 K and starved its filling (cold residual is dense and hard to push out).
+    const tex = INDUCTION_REF_EXHAUST_K;
     let emp = BARO_KPA;
     let r = null;
     for (let i = 0; i < 3; i++) {
-      const tex = exhaustK(mapKpa, r?.ve ?? 85);
-      r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex });
+      r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex, runnerWaves: r?.runnerWaves });
       const airKgS = r.freshKg * cyl * (rpm / 120);
       const exhKgS = airKgS * (1 + 1 / (stoich * COEFF.VE_BACKPRESSURE_LAMBDA_REF));
       // The pipe runs cooler than the manifold: the gas has given up heat on the way.
@@ -229,9 +237,4 @@ const VE_GRID_KPA = 2;
  */
 function reflectionCoefficient(areaRatio) {
   return (1 - areaRatio) / (1 + areaRatio);
-}
-
-/** Exhaust gas temperature at the manifold for a breathing cell, K (thermo.js). */
-function exhaustK(mapKpa, ve) {
-  return exhaustTempK({ chargeIndex: (ve / 100) * (mapKpa / BARO_KPA), lambda: COEFF.VE_BACKPRESSURE_LAMBDA_REF });
 }

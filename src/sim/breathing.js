@@ -58,17 +58,26 @@ export function orificeFlow(cdA, pUp, tUp, pDown) {
 const ORIFICE_CRITICAL_PR = (2 / (GAMMA + 1)) ** (GAMMA / (GAMMA - 1));
 
 /**
- * Valve lift at a point in its event, as a share of the maximum: sin(pi * phase) raised to
- * COEFF.BREATH_LIFT_SHAPE_EXP, zero at opening and closing with a smooth peak at the middle.
- * The exponent sets how full the curve is, the area under it against duration times maximum
- * lift: 0.5 for a raised cosine (exponent 2), about 0.58 at 1.4, the fullness of a
- * production cam's lift curve (Heywood ch. 6 shows such curves).
- * @param {number} phase 0 at opening, 1 at closing
+ * Valve lift at a point in its event, as a share of the maximum. A production cam lifts the
+ * valve in two parts. First the opening ramp: a stretch of constant, gentle velocity that
+ * takes up the valve train's lash (or a hydraulic lifter's bleed-down) and sets the valve off
+ * its seat without a hammer blow, up to about a quarter of a millimetre. Then the flank,
+ * which accelerates the valve to full lift and back down to the closing ramp. The ramps are
+ * why a cam's seat-to-seat duration runs some 45-60 degrees longer than its duration at
+ * 0.050 inch, and why the exhaust valve is still off its seat at TDC through the overlap.
+ * The flank is sin(pi * x)^COEFF.BREATH_LIFT_SHAPE_EXP across its own share of the event.
+ * @param {number} phase 0 at the seat opening, 1 at the seat closing
+ * @param {{rampShare?: number, rampLiftShare?: number}} [ramp] each ramp's share of the
+ *   seat-to-seat event, and the lift it reaches as a share of the maximum
  * @returns {number} 0..1
  */
-export function liftShare(phase) {
+export function liftShare(phase, ramp = {}) {
   if (phase <= 0 || phase >= 1) return 0;
-  return Math.sin(Math.PI * phase) ** COEFF.BREATH_LIFT_SHAPE_EXP;
+  const r = ramp.rampShare ?? 0;
+  const h = ramp.rampLiftShare ?? 0;
+  const x = Math.min(phase, 1 - phase);
+  if (x < r) return (h * x) / r;
+  return h + (1 - h) * Math.sin((Math.PI * (phase - r)) / (1 - 2 * r)) ** COEFF.BREATH_LIFT_SHAPE_EXP;
 }
 
 /** Lift at which cam duration is quoted: 0.050 inch, the industry's standard checking height. */
@@ -81,26 +90,32 @@ export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
  *
  * Duration is the cam's duration at 0.050 inch lift, as cams are specified, and the intake
  * closes at that height where the cycle already has it (cycle.js `ivcAfterBdcDeg`, moved by
- * a phaser's advance). The valve itself is open longer, from its seat: with the raised-
- * lift curve (`liftShare`), the share of the seat-to-seat event spent above the checking height
- * follows from the maximum lift, so the seat events come out of the same curve. The exhaust
- * lobe mirrors the intake about TDC, moved by an exhaust phaser's retard.
+ * a phaser's advance). The valve itself is open longer, from its seat: the flank's share of
+ * the event below the checking height follows from the maximum lift on the flank's curve,
+ * and each ramp adds its own length (`COEFF.BREATH_RAMP_LIFT_M` at
+ * `COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG`). The exhaust lobe mirrors the intake about TDC,
+ * moved by an exhaust phaser's retard.
  *
  * @param {{ivcAbdc: number, durationDeg: number, exhaustRetardDeg?: number, maxLiftM?: number}} cam
- * @returns {{ivo: number, ivc: number, evo: number, evc: number}} seat-to-seat events
+ * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number}}
+ *   seat-to-seat events, and the ramps as `liftShare` takes them
  */
 export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLiftM = 0 }) {
-  // Share of the event at each end spent below the checking height, on the same curve.
-  const below = maxLiftM > DURATION_CHECK_LIFT_M
-    ? Math.asin((DURATION_CHECK_LIFT_M / maxLiftM) ** (1 / COEFF.BREATH_LIFT_SHAPE_EXP)) / Math.PI : 0;
-  const seat = durationDeg / (1 - 2 * below);
+  const rampLift = Math.min(COEFF.BREATH_RAMP_LIFT_M, 0.5 * DURATION_CHECK_LIFT_M);
+  const hasLift = maxLiftM > DURATION_CHECK_LIFT_M;
+  const rampDeg = hasLift ? rampLift / COEFF.BREATH_RAMP_VELOCITY_M_PER_DEG : 0;
+  // Share of the flank at each end spent below the checking height, on the flank's curve.
+  const below = hasLift
+    ? Math.asin(((DURATION_CHECK_LIFT_M - rampLift) / (maxLiftM - rampLift)) ** (1 / COEFF.BREATH_LIFT_SHAPE_EXP)) / Math.PI : 0;
+  const flank = durationDeg / (1 - 2 * below);
+  const seat = flank + 2 * rampDeg;
   const ivcCheck = 180 + ivcAbdc;
   const centre = ivcCheck - durationDeg / 2;
   const ivo = centre - seat / 2;
   const ivc = centre + seat / 2;
   const evc = -ivo + exhaustRetardDeg;
   const evo = evc - seat;
-  return { ivo, ivc, evo, evc };
+  return { ivo, ivc, evo, evc, rampShare: rampDeg / seat, rampLiftShare: hasLift ? rampLift / maxLiftM : 0 };
 }
 
 /**
@@ -120,7 +135,7 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLif
  * @property {number} [exhaustPrimaryAreaM2] its cross-section, m^2
  * @property {number} [exhaustReflection] pressure reflection coefficient where the primary
  *   meets its collector, (A1 - A2)/(A1 + A2): negative into a larger area
- * @property {{ivo: number, ivc: number, evo: number, evc: number}} events
+ * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number}} events
  */
 
 /**
@@ -130,6 +145,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLif
  * @property {number} trappedK charge temperature at IVC, K
  * @property {number} freshKg fresh charge trapped, kg per cylinder per cycle
  * @property {number} backflowShare intake charge pushed back out before IVC, share of the fresh air taken in
+ * @property {number[]} runnerWaves the waves leaving the intake valve over the last round trip
+ *   of the runner before IVC, Pa: pass as the next cycle's `op.runnerWaves`
  */
 
 /**
@@ -145,6 +162,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustRetardDeg = 0, maxLif
  * @param {number} op.intakeK charge temperature in the plenum, K
  * @param {number} op.exhaustKpa exhaust manifold pressure, kPa absolute
  * @param {number} op.exhaustK exhaust gas temperature, K
+ * @param {number[]} [op.runnerWaves] the runner's waves left by the cycle before (its
+ *   `runnerWaves`); without them the runner starts quiet
  * @returns {BreathingResult}
  */
 export function gasExchange(g, op) {
@@ -161,7 +180,7 @@ export function gasExchange(g, op) {
   // Open area of one valve set at a crank angle: the curtain while the valve is low, the
   // port throat once it is high; times its discharge coefficient.
   const valveArea = (deg, open, close, n, dia) => {
-    const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open));
+    const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), g.events);
     if (lift <= 0) return 0;
     const curtain = Math.PI * dia * lift;
     const throat = (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2;
@@ -209,9 +228,41 @@ export function gasExchange(g, op) {
     const f0 = forward[n] ?? 0; const f1 = forward[n + 1] ?? f0;
     return collectorR * (f0 + (f1 - f0) * f);
   };
-  // The runner's air column: velocity toward the cylinder, and any burned gas overlap has
-  // pushed back into it, which is breathed in again first.
-  let u = 0;
+  // THE INTAKE RUNNER AS AN ACOUSTIC LINE, the same way: the valve drawing air launches a
+  // suction wave, -(a / A) * mdot, up the runner; at the plenum, a volume far larger than
+  // the runner, it reflects inverted (an open end), so it comes back as a pressure wave
+  // 2L/a later, attenuated by the pipe. Where that return lands before the valve shuts the
+  // runner rams charge in past what the plenum alone would push: the tuning that places an
+  // engine's torque peak, at a speed set by the runner's length. A shut valve is a closed
+  // end and sends the wave straight back. The steady losses (the runner's wall friction,
+  // Darcy f L/D, and the entrance from the plenum) are taken on the flow's dynamic pressure.
+  const soundIn = Math.sqrt(GAMMA * R_AIR * intakeK);
+  const impedanceIn = soundIn / g.runnerAreaM2;
+  const delayStepsIn = ((2 * g.runnerLengthM) / soundIn) * 6 * Math.max(rpm, 60) / step;
+  const plenumR = -COEFF.BREATH_RUNNER_WAVE_ATTENUATION;
+  const runnerD = Math.sqrt((4 * g.runnerAreaM2) / Math.PI);
+  const runnerLossK = COEFF.BREATH_RUNNER_FRICTION * g.runnerLengthM / runnerD + COEFF.BREATH_RUNNER_ENTRY_K;
+  /** Wave amplitude leaving the valve end up the runner at each step, Pa. */
+  const outgoing = [];
+  /** The wave arriving at the valve now: the one sent 2L/a ago, reflected at the plenum. */
+  const returningNow = () => {
+    const at = outgoing.length - delayStepsIn;
+    if (!(at >= 0)) return 0;
+    const n = Math.floor(at); const f = at - n;
+    const f0 = outgoing[n] ?? 0; const f1 = outgoing[n + 1] ?? f0;
+    return plenumR * (f0 + (f1 - f0) * f);
+  };
+  // What the runner still holds from the cycle before: the waves left ringing when its intake
+  // valve shut (op.runnerWaves, the steps up to IVC), carried round the closed valve, a
+  // closed end, to this cycle's EVO. The valve slamming shut on a moving column launches the
+  // strongest wave of the cycle, and the ringing it leaves is much of what a tuned runner
+  // does, so a cycle that started from a quiet runner would miss it.
+  if (op.runnerWaves?.length) {
+    outgoing.push(...op.runnerWaves);
+    const closedSteps = Math.round((720 - (ivc - evo)) / step);
+    for (let n = 0; n < closedSteps; n++) outgoing.push(returningNow());
+  }
+  // Burned gas overlap has pushed back into the runner, breathed in again first.
   let runnerBurned = 0;
   let taken = 0;
   let pushedBack = 0;
@@ -253,33 +304,35 @@ export function gasExchange(g, op) {
     }
     forward.push(fwd);
 
-    // INTAKE: the runner column, driven by plenum-to-cylinder pressure, held back by the
-    // valve. Implicit in its velocity, so a closing valve stops it however short the step:
-    //   rho L du/dt = (pPlenum - p) - k u|u|,  k = rho Ar^2 / (2 (Cd Av)^2)
+    // INTAKE: the valve between the runner's end and the cylinder; the runner's end at the
+    // plenum's pressure plus the wave arriving, less the wave the flow itself launches and
+    // the runner's losses. Solved by bisection, as the exhaust is.
     let dmIn = 0;
     let hIn = 0;
+    let out = returningNow();
     if (mid > ivo && mid < ivc) {
       const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM);
-      const inertia = rhoPlenum * g.runnerLengthM / dt;
-      // Losses on the column's dynamic pressure: the valve's restriction, the runner's wall
-      // friction (Darcy, f L/D) and the entrance from the plenum.
-      const runnerD = Math.sqrt((4 * g.runnerAreaM2) / Math.PI);
-      const pipeLoss = (rhoPlenum * (COEFF.BREATH_RUNNER_FRICTION * g.runnerLengthM / runnerD + COEFF.BREATH_RUNNER_ENTRY_K)) / 2;
-      const k = a > 0 ? (rhoPlenum * g.runnerAreaM2 ** 2) / (2 * a * a) + pipeLoss : Infinity;
-      const drive = (pPlenum - p) + inertia * u;
-      if (!Number.isFinite(k)) u = 0;
-      else {
-        // k u|u| + inertia u - drive = 0, solved for the sign drive gives.
-        const sgn = drive >= 0 ? 1 : -1;
-        u = sgn * (-inertia + Math.sqrt(inertia * inertia + 4 * k * Math.abs(drive))) / (2 * k);
+      const b = returningNow();
+      const valveR = (g.runnerAreaM2 - a) / (g.runnerAreaM2 + a);
+      const waveBack = b * (1 + valveR);
+      // Into the cylinder positive.
+      const flowAt = (mdot) => {
+        const port = pPlenum + waveBack - impedanceIn * mdot
+          - (runnerLossK * mdot * Math.abs(mdot)) / (2 * rhoPlenum * g.runnerAreaM2 ** 2);
+        return port > p ? orificeFlow(a, port, intakeK, p) : -orificeFlow(a, p, t, port);
+      };
+      let lo = -orificeFlow(a, Math.max(p, pPlenum) * 2, t, 0) - 1e-9;
+      let hi = orificeFlow(a, Math.max(p, pPlenum) * 2, intakeK, 0) + 1e-9;
+      for (let it = 0; it < 30; it++) {
+        const mid2 = (lo + hi) / 2;
+        if (flowAt(mid2) > mid2) lo = mid2; else hi = mid2;
       }
-      // Never faster than the valve can pass: choked flow at the upstream state.
-      let mdot = rhoPlenum * g.runnerAreaM2 * u;
-      const choke = u >= 0 ? orificeFlow(a, pPlenum, intakeK, 0) : orificeFlow(a, p, t, 0);
-      if (Math.abs(mdot) > choke) { mdot = Math.sign(mdot) * choke; u = mdot / (rhoPlenum * g.runnerAreaM2); }
+      const mdot = (lo + hi) / 2;
+      out = -impedanceIn * mdot + valveR * b;
       dmIn = mdot * dt;
       if (dmIn > 0) { taken += dmIn; hIn = CP * intakeK; } else { pushedBack -= dmIn; hIn = CP * t; dmIn = Math.max(dmIn, -0.9 * m); }
-    } else u = 0;
+    }
+    outgoing.push(out);
     // Through a long overlap at low speed both valves can drain the cylinder in the same
     // step; no step may take out more than the cylinder holds.
     const outflow = Math.max(0, -dmEx) + Math.max(0, -dmIn);
@@ -320,7 +373,10 @@ export function gasExchange(g, op) {
   }
 
   const freshKg = fresh;
+  // The last round trip's worth of waves at IVC, for the next cycle (op.runnerWaves).
+  const keep = Math.ceil(delayStepsIn) + 2;
   return {
+    runnerWaves: Number.isFinite(keep) ? outgoing.slice(-keep) : [],
     ve: (100 * freshKg) / (rhoPlenum * swept),
     residualFrac: clamp(1 - freshKg / Math.max(m, 1e-12), 0, 1),
     trappedK: t,

@@ -109,8 +109,17 @@ export const COEFF = {
   // Maximum valve lift over valve diameter. Heywood (ch. 6): about 0.25 is where the
   // curtain area reaches the throat's; production engines run near it.
   BREATH_LIFT_PER_DIA: 0.27,
-  // The lift curve's shape (breathing.js `liftShare`): sin^1.4, as full as a production cam's.
+  // The lift curve's shape (breathing.js `liftShare`): the flank is sin^1.4, as full as a
+  // production cam's (Heywood ch. 6 shows such curves).
   BREATH_LIFT_SHAPE_EXP: 1.4,
+  // The opening and closing ramps (breathing.js `liftShare`): constant-velocity stretches
+  // that take up lash or a hydraulic lifter's bleed-down before the flank. Production
+  // hydraulic-roller lobes run a ramp of about 0.010 inch at 0.0008-0.001 inch per cam degree
+  // (Norton, Cam Design Handbook, ch. 9; cam makers' lobe sheets), half that per crank degree.
+  // With the flank's own low-lift tail they put the duration at 0.006 inch (a cam's
+  // advertised figure) about 50 degrees past the 0.050 inch one, as stock lobes run.
+  BREATH_RAMP_LIFT_M: 0.010 * 0.0254,
+  BREATH_RAMP_VELOCITY_M_PER_DEG: 0.00045 * 0.0254,
   // Exhaust valve head as a share of the intake's: exhaust valves are made smaller because
   // the blowdown does much of their work under a large pressure ratio.
   BREATH_EXHAUST_VALVE_SHARE: 0.84,
@@ -151,6 +160,10 @@ export const COEFF = {
   // bellmouth to 0.5 for a sharp edge; a production runner sits between).
   BREATH_RUNNER_FRICTION: 0.03,
   BREATH_RUNNER_ENTRY_K: 0.5,
+  // Share of a pressure wave's amplitude left after the round trip of an intake runner and
+  // its reflection at the plenum (breathing.js): wall friction, the plenum's finite size and
+  // the spreading of the pulse. Cooler, slower gas than the exhaust's, so less is lost.
+  BREATH_RUNNER_WAVE_ATTENUATION: 0.8,
   BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
   // --- The throttle and the intake duct (throttle.js) ---
   // Discharge coefficient of a throttle plate's open annulus, and where the plate rests
