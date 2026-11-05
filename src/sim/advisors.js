@@ -654,7 +654,11 @@ export function calibrationAdvice({
   if (pull) {
     return { spark, fuelAdv, wrongMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
   }
-  const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG);
+  // Nor is a cell called dangerous for knock in the idle column where no spark the table can
+  // hold would protect it: full throttle at idle speed is the same tip-in as above, not a
+  // point any pull holds, and the advice still shows the cell with `sparkCannotFix`.
+  const overAdvanced = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG
+    && !(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM));
   const pastMbt = spark.filter((c) => !c.bracketOnly && c.current - c.knockCeiling <= ADVANCE_TOLERANCE_DEG
     && c.current - c.mbt > ADVANCE_TOLERANCE_DEG);
   const underAdvanced = spark.filter((c) => !c.bracketOnly && c.delta > UNDER_ADVANCED_DEG);
