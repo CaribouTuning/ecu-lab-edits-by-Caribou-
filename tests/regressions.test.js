@@ -299,31 +299,38 @@ describe('#4 exhaust sizing has one formula and a reachable target', () => {
   });
 
   it('raises the ideal diameter with boost, in the physics as well as the advice', () => {
+    // The physics does not read the target: it prices the fitted pipe by its pressure drop
+    // at the flow the engine makes. More boost is more flow, so the same small pipe costs
+    // more of the charge at 200 kPa than at 100.
     const cfg = STOCK;
-    const wotRow = 2, topCol = S.RPM.length - 1;
-    const veAt = (dia, peakBoostPsi) => S.computeHardwareVE(cfg, S.DEFAULT_MODS, {
-      turboOn: true, turbine: S.TURBINE_OPTS[1], exhaustDia: dia,
-      fuel: S.OCTANE_OPTS[0], peakBoostPsi,
-    })[wotRow][topCol];
+    const axes = { rpm: [7000], load: [100, 200] };
+    const ve = (dia) => S.computeHardwareVE(cfg, S.DEFAULT_MODS, {
+      turboOn: true, turbine: S.TURBINE_OPTS[1], exhaustDia: dia, fuel: S.OCTANE_OPTS[0],
+    }, axes);
+    const small = ve(3.0); const big = ve(4.0);
+    const costAt = (row) => 1 - small[row][0] / big[row][0];
 
-    // 3.0" is close to ideal with no boost and far undersized at 20 psi, so the
-    // top-end penalty must grow as boost rises.
     expect(S.idealExhaustDiameter(3.5, 20)).toBeGreaterThan(S.idealExhaustDiameter(3.5, 0));
-    expect(veAt(3.0, 20)).toBeLessThan(veAt(3.0, 0));
+    expect(costAt(0)).toBeGreaterThan(0);
+    expect(costAt(1)).toBeGreaterThan(costAt(0));
   });
 
-  it('still penalises both undersized and oversized pipe', () => {
+  it('penalises undersized pipe; an oversized one gains little and loses nothing', () => {
     const cfg = STOCK;
-    const wotRow = 2;
-    const ve = (dia) => S.computeHardwareVE(cfg, S.DEFAULT_MODS, { ...NA_HW, exhaustDia: dia });
+    const axes = { rpm: [1500, 7000], load: [100] };
+    const ve = (dia) => S.computeHardwareVE(cfg, S.DEFAULT_MODS, { ...NA_HW, exhaustDia: dia }, axes)[0];
     const ideal = S.idealExhaustDiameter(S.deriveEngine(cfg).displacementL, 0);
-    const topCol = S.RPM.length - 1;
-    const lowCol = S.RPM.indexOf(1500);
 
     // Undersized chokes the top end.
-    expect(ve(ideal - 1.0)[wotRow][topCol]).toBeLessThan(ve(ideal)[wotRow][topCol]);
-    // Oversized costs low-RPM scavenging velocity.
-    expect(ve(ideal + 1.5)[wotRow][lowCol]).toBeLessThan(ve(ideal)[wotRow][lowCol]);
+    const lost = ve(ideal)[1] - ve(ideal - 1.0)[1];
+    const gained = ve(ideal + 1.5)[1] - ve(ideal)[1];
+    expect(lost).toBeGreaterThan(1);
+    // Bigger stops paying: the drop left at the target is already small.
+    expect(gained).toBeGreaterThanOrEqual(0);
+    expect(gained).toBeLessThan(lost / 2);
+    // The scavenging waves are in the primaries, so the pipe after the collector costs
+    // no low-RPM charge for being big.
+    expect(ve(ideal + 1.5)[0]).toBeGreaterThanOrEqual(ve(ideal)[0]);
   });
 });
 
@@ -432,9 +439,11 @@ describe('preset-readiness hardening', () => {
 });
 
 describe('twin turbos pass twice the air', () => {
-  it('a 7 L V8 holds its boost to redline on two Large turbos where one runs out', () => {
-    // Twins used to double only the turbine: the air side stayed one compressor, so a
-    // pair choked where it should not. Each turbo carries its own compressor.
+  it('a 7 L V8 on one Large turbo is held back by its turbine; two make the same boost through half the back-pressure', () => {
+    // Each turbo carries its own compressor and its own turbine. At the same boost, one
+    // turbine housing passing 7 L of exhaust holds far more pressure on the cylinders than
+    // two, and that back-pressure costs the charge (the gas-exchange model's residuals and
+    // pumping): the pair makes the power, not more boost.
     const top = (count) => {
       const eng = makeEngine({
         build: {
@@ -450,8 +459,9 @@ describe('twin turbos pass twice the air', () => {
     };
     const single = top(1);
     const twin = top(2);
-    expect(single.boostPsi).toBeLessThan(single.boostTarget - 2);
     expect(twin.boostPsi).toBeGreaterThan(twin.boostTarget - 0.5);
-    expect(twin.hp).toBeGreaterThan(single.hp * 1.2);
+    expect(Math.abs(twin.boostPsi - single.boostPsi)).toBeLessThan(0.5);
+    expect(single.emp).toBeGreaterThan(twin.emp * 1.2);
+    expect(twin.hp).toBeGreaterThan(single.hp * 1.15);
   });
 });

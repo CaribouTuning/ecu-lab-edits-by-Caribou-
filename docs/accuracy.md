@@ -36,35 +36,79 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 256 lb-ft | 6400 / 6500 | 0.830 | 29.4° | 0.453 | 10.9 | 738 | 62 | 12.5 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 304 hp / 264 lb-ft | 6800 / 6700 | 0.853 | 29.4° | 0.435 | 11.0 | 740 | 66 | 12.8 |
-| BMW N54 | 302 hp / 295 lb-ft | 305 hp / 322 lb-ft | 5800 / 5500 | 0.823 | 17.4° | 0.451 | 11.0 | 753 | 74 | 18.4 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 321 hp / 339 lb-ft | 5500–6500 / 5700 | 0.967 | 13.3° | 0.389 | 10.9 | 804 | 71 | 19.3 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 375 hp / 378 lb-ft | 5800 / 5700 | 0.952 | 10.2° | 0.395 | 10.9 | 820 | 77 | 21.4 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 224 hp / 239 lb-ft | 4700–6200 / 5700 | 0.958 | 13.6° | 0.407 | 10.5 | 827 | 71 | 20.5 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 301 hp / 289 lb-ft | 5400–6500 / 6400 | 0.923 | 13.9° | 0.399 | 11.1 | 814 | 84 | 24.9 |
-| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 362 hp / 382 lb-ft | 5600 / 5500 | 0.819 | 28.5° | 0.497 | 10.0 | 742 | 59 | 11.5 |
-| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 398 hp / 379 lb-ft | 6000 / 6100 | 0.823 | 29.4° | 0.497 | 10.0 | 741 | 60 | 11.4 |
-| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 333 hp / 380 lb-ft | 5200 / 5000 | 0.811 | 28.3° | 0.513 | 9.8 | 750 | 53 | 10.8 |
-| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 301 hp / 338 lb-ft | 5200 / 5400 | 0.769 | 29.0° | 0.552 | 9.6 | 731 | 55 | 10.8 |
-| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 282 hp / 304 lb-ft | 5200 / 5500 | 0.809 | 29.1° | 0.521 | 9.7 | 745 | 55 | 10.8 |
-| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 472 hp / 479 lb-ft | 6000 / 5900 | 0.828 | 20.5° | 0.444 | 11.1 | 746 | 64 | 12.7 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 267 lb-ft | 6400 / 6200 | 0.862 | 28.4° | 0.432 | 11.0 | 747 | 63 | 13.0 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 300 hp / 276 lb-ft | 6800 / 6200 | 0.938 | 28.9° | 0.398 | 11.0 | 771 | 66 | 13.4 |
+| BMW N54 | 302 hp / 295 lb-ft | 316 hp / 327 lb-ft | 5800 / 5900 | 0.854 | 19.3° | 0.434 | 11.0 | 766 | 74 | 18.7 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 326 hp / 342 lb-ft | 5500–6500 / 6100 | 0.968 | 15.0° | 0.391 | 10.8 | 804 | 70 | 19.4 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 380 hp / 380 lb-ft | 5800 / 5800 | 0.951 | 10.0° | 0.398 | 10.8 | 822 | 76 | 21.6 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 218 hp / 244 lb-ft | 4700–6200 / 5500 | 0.964 | 11.7° | 0.410 | 10.3 | 831 | 69 | 20.9 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 301 hp / 289 lb-ft | 5400–6500 / 6000 | 0.935 | 10.8° | 0.400 | 10.9 | 818 | 84 | 24.8 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 359 hp / 408 lb-ft | 5600 / 5100 | 0.858 | 26.6° | 0.462 | 10.3 | 748 | 60 | 12.3 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 399 hp / 412 lb-ft | 6000 / 5700 | 0.852 | 27.5° | 0.468 | 10.2 | 746 | 61 | 12.4 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 314 hp / 406 lb-ft | 5200 / 4400 | 0.847 | 24.9° | 0.482 | 10.0 | 764 | 52 | 11.6 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 286 hp / 365 lb-ft | 5200 / 4600 | 0.797 | 24.9° | 0.516 | 9.9 | 738 | 53 | 11.7 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 280 hp / 324 lb-ft | 5200 / 4900 | 0.847 | 25.8° | 0.482 | 10.0 | 755 | 55 | 11.4 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 469 hp / 508 lb-ft | 6000 / 5300 | 0.867 | 18.7° | 0.410 | 11.5 | 745 | 68 | 13.5 |
 
-Each engine's one fitted input is its cam duration, set where peak power lands on the
-rating; torque and the peak speeds are predictions. The cams were refitted after the
-rich-flame chemistry below, which took about 4% of the heat out of every full-throttle
-point: the pushrod V8s, the HEMI and the Golf R now land within 0–4% of their ratings again.
-Five cannot be refitted onto theirs and are recorded as known gaps in
-`tests/presets.test.js`: the VQ35DE Rev-Up (−9%; a longer cam runs its power flat into the
-7000 limiter, which the real engine does not do), the VQ35HR (−5%; the cam that lands it
-inside the band makes its stock spark knock once an intake and headers are fitted), the LS6
-(−5%; its cam is held at 228 by the overlap advisory, and its real heads out-flow the LS1's on
-the same valve size, which a breathing model built on valve diameter cannot see), the
-B58B30M1 (−8%) and the GTI's torque
-(−10%), both held far from MBT by the knock limit at full boost, where cam duration does
-not move peak output. The twin-plug HEMI runs about 22° of spark at peak power where
-one-plug engines run 28–30°: two flames burn the charge faster (engine.js), so best torque
-needs less advance.
+Each engine's one fitted input is its cam duration; torque and the peak speeds are
+predictions. Every pull above is the app's own: the hardware's breathing from the
+gas-exchange model as the truth and the ECU in the loop (`tests/ecuHarness.js`). Power sits
+within 5% of every rating. Where the model still misses, measured:
+
+- **Naturally aspirated peaks land early.** The VQ35HR peaks at 6200 against 6800, the LQ4
+  at 4400 against 5200, the 6.4 HEMI at 5300 against 6000. No cam duration moves them later
+  (the VQ35HR was swept from 218 to 230), so the place of the peak is the model's shape, not
+  its fitted input. `tests/presets.test.js` fails on these three until the shape is right.
+- **Pushrod V8 torque reads high**, 8–10% over the rating on the LS1, the trucks and the
+  HEMI, with the torque peak 300–600 RPM early.
+- **The N54 reads 11% over its rated torque**, inside what stock cars measure on a dyno
+  (KNOWN_GAPS in `tests/presets.test.js`).
+
+The twin-plug HEMI runs about 19° of spark at peak power where one-plug engines run 25–29°:
+two flames burn the charge faster (engine.js), so best torque needs less advance.
+
+## The air model (November 2026)
+
+Volumetric efficiency is no longer a fitted curve. `src/sim/breathing.js` integrates one
+cylinder's gas exchange crank angle by crank angle, from the exhaust valve opening (the
+blowdown) through the exhaust stroke, the overlap and the intake stroke to the intake valve
+closing:
+
+- **Valves** are compressible orifices (Heywood, *Internal Combustion Engine Fundamentals*,
+  App. C) on their own open area: the curtain while low, the port throat once high, with
+  one discharge coefficient (`BREATH_VALVE_CD` 0.52), the model's single fitted breathing
+  constant, fitted across all thirteen factory engines. The events come from the cam's
+  duration at 0.050 in lift, the seat-to-seat events derived from the lift profile.
+- **The intake runner** is a column of air with inertia, wall friction (Darcy) and an
+  entrance loss, solved implicitly so a closing valve stops it; its length is tuned so the
+  engine's torque peaks at its published torque speed (airflow.js `tunedRunnerM`).
+- **The exhaust primary** is an acoustic line: the blowdown launches a pressure wave that
+  reflects at the collector as suction (`EXH_*` in coefficients.js), which is what headers
+  are.
+- **Residual gas** and the fresh charge are tracked separately, with Woschni's gas-exchange
+  heat transfer.
+- **The throttle** is an orifice too (`src/sim/throttle.js`): a pull's load is a throttle
+  opening, and the manifold pressure is where the plate's flow meets the engine's draw. The
+  inlet duct and filter lose a share of the dynamic pressure, which is where a cold air
+  intake gains.
+- **The exhaust system** after the ports costs pressure as the square of the gas speed
+  through it (`exhaustSystemDropKpa`): an undersized pipe holds back-pressure on the
+  cylinders at high flow; an oversized one gains little and costs no low end.
+
+What replaced what: the old empirical VE curve, its bolt-on bonuses (`MOD_BONUS`), the
+inlet Mach multiplier, and the fitted backpressure and overlap-backflow penalties are gone.
+Sections below that describe them are the history of how the model got here; where one
+disagrees with this section, this section is the model.
+
+Known limits of the air model, measured:
+
+- **Light load at high speed.** At 20–25 kPa above 6000 RPM the stock engine's VE falls
+  under 10%, where real tables read 30–50%: the derived seat-to-seat events give the stock
+  cam only about 9° of overlap and an exhaust valve nearly shut at TDC, so the exhaust stroke
+  cannot empty the cylinder at that speed. `tests/physics.test.js` ("keeps every VE cell
+  inside physically sane bounds") fails on it until the valve events are right.
+- **Headers** gain 1–2% where dynos measure 5–6%: one acoustic line per primary is not a
+  full 1-D wave model.
 
 ## Rich flames, and why enrichment cools the exhaust
 

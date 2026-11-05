@@ -6,7 +6,7 @@
  * player-editable and feed real physics downstream.
  */
 
-import { AMBIENT_K, CHAR_SCALE, GAMMA_AIR, R_AIR, SONIC_AMBIENT_MS } from './constants.js';
+import { SONIC_AMBIENT_MS } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { bottomEndLimit } from './bottomEnd.js';
 import {
@@ -18,21 +18,6 @@ export const CAM_BASE_DURATION = 210;
 
 /** Rev limit assumed when an engine does not state one. */
 export const DEFAULT_REDLINE_RPM = 7500;
-
-/**
- * How far the VE peak moves for a given cam duration.
- *
- * Duration is how long (in crank degrees) a valve stays open. A longer cam holds the
- * intake valve open later into the compression stroke, so at low RPM some charge is
- * pushed back out — but at high RPM the extra open time is exactly what lets the
- * cylinder keep filling. That is why a big cam trades bottom end for top end.
- *
- * @param {number} camDuration crank degrees
- * @returns {number} RPM the VE peak shifts by
- */
-export function camPeakShiftRpm(camDuration) {
-  return (camDuration - CAM_BASE_DURATION) * COEFF.CAM_PEAK_SHIFT_PER_DEG;
-}
 
 /**
  * Valve overlap — both valves open together around TDC.
@@ -97,14 +82,10 @@ export function meanPistonSpeedMs(strokeMm, rpm) {
  *
  *     Z = (bore / D_valve)^2 * meanPistonSpeed / sonicVelocity
  *
- * Past a critical value the flow chokes, the cylinder stops filling, and VE falls away
- * however hard the engine is turning. This is the term the model was missing: without it
- * VE kept climbing at the limiter and no naturally aspirated engine had a power peak
- * before its redline (issue #15).
- *
- * The bore-to-valve factor is lumped into a coefficient because the model has no valve
- * geometry — see COEFF.MACH_BORE_VALVE_FACTOR for what it is worth on a real head, and
- * for the honest note on which parts of this are derived and which are fitted.
+ * A yardstick, not a term in the airflow: the simulator no longer multiplies VE by any
+ * function of it. The fall of VE at speed comes out of the gas-exchange model
+ * (breathing.js), which flows the charge through the valves' own open area crank angle by
+ * crank angle and chokes where the pressure ratio says it does.
  *
  * @param {number} boreMm bore, mm — unused directly; kept for the geometry it represents
  * @param {number} strokeMm stroke, mm
@@ -116,7 +97,7 @@ export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS
   return (COEFF.MACH_BORE_VALVE_FACTOR / valveAreaRatio) * meanPistonSpeedMs(strokeMm, rpm) / sonicMs;
 }
 
-/** The four-valve head the Mach coefficients were fitted with: two intakes at 0.36 of the bore. */
+/** The reference four-valve head: two intakes at 0.36 of the bore. */
 export const REFERENCE_INTAKE_AREA_SHARE = 2 * 0.36 * 0.36;
 
 /**
@@ -138,43 +119,6 @@ export function intakeValveAreaRatio(cfg) {
 }
 
 /**
- * How much volumetric efficiency the inlet Mach index costs at this speed.
- *
- * Flat until the flow starts to choke, then falling quadratically — the shape of
- * Taylor's measured VE-against-Z curves. Floored, because a real engine still breathes
- * something at the limiter.
- *
- * @param {number} boreMm bore, mm
- * @param {number} strokeMm stroke, mm
- * @param {number} rpm engine speed
- * @returns {number} multiplier on VE, 0..1
- */
-export function machVeMultiplier(boreMm, strokeMm, rpm, chargeK = AMBIENT_K, valveAreaRatio = 1) {
-  // Sonic velocity in the charge as it actually is, not as ambient. A boosted engine
-  // runs a hotter intake, sound travels faster in it, and it therefore chokes LATER —
-  // a real effect, and one of the reasons forced induction tolerates more piston speed.
-  const sonicMs = Math.sqrt(GAMMA_AIR * R_AIR * chargeK);
-  const over = Math.max(0, inletMachIndex(boreMm, strokeMm, rpm, sonicMs, valveAreaRatio) - COEFF.MACH_Z_CRIT);
-  return Math.max(COEFF.MACH_VE_FLOOR, 1 - COEFF.MACH_VE_LOSS * over * over);
-}
-
-/**
- * Bore/stroke ratio bias — oversquare engines favour high RPM, undersquare favour low.
- *
- * @param {number} rpm engine speed
- * @param {number} ratio bore ÷ stroke
- * @returns {number} multiplier
- */
-export function charMultiplier(rpm, ratio) {
-  const norm = (rpm - 4500) / 3000; // -1 at 1500 rpm, +1 at 7500 rpm
-  // Fitted between 1500 and 7500 RPM. Past 7500 an oversquare engine's credit is held
-  // where it was measured rather than extrapolated; an undersquare engine's deficit keeps
-  // growing (its long stroke is also what the Mach term charges, in the same direction).
-  const n = ratio > 1 ? Math.min(norm, 1) : norm;
-  return 1 + (ratio - 1) * CHAR_SCALE * n;
-}
-
-/**
  * @typedef {object} EngineConfig
  * @property {'I4'|'I6'|'V6'|'V8'} configuration
  * @property {number} bore mm
@@ -185,6 +129,8 @@ export function charMultiplier(rpm, ratio) {
  * @property {number} [camDuration] crank degrees
  * @property {number} [springRate] valve spring rate
  * @property {number} [redline] rev limit, RPM
+ * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
+ * @property {number} [runnerMm] intake runner length, mm, where the engine sets its own
  * @property {string} [vvt] cam phasers fitted: 'none', 'intake' or 'dual'. Hardware, like
  *   the cam itself; absent means fixed cams
  * @property {'port'|'direct'} [injection] where the injectors spray: into each intake port

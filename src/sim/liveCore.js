@@ -47,11 +47,31 @@ export const CRANK_SENSOR_MIN_RPM = 30;
  * @param {number} trueVal actual underlying value
  * @param {number} lagFactor 0..1, how fast the reading catches up
  * @param {number} noiseAmp peak noise amplitude
+ * @param {{rng?: number}|null} [s] the live state carrying the noise's seed
  * @returns {number}
  */
-export function sensorRead(prev, trueVal, lagFactor, noiseAmp) {
+export function sensorRead(prev, trueVal, lagFactor, noiseAmp, s = null) {
   const lagged = prev + (trueVal - prev) * lagFactor;
-  return lagged + (Math.random() - 0.5) * 2 * noiseAmp;
+  return lagged + (liveRandom(s) - 0.5) * 2 * noiseAmp;
+}
+
+/** Seed a live engine starts from: the same start, the same noise, run after run. */
+export const LIVE_RNG_SEED = 0x2f6b5a11;
+
+/**
+ * The live engine's own random numbers, from a seed it carries in its state (`s.rng`):
+ * sensor noise and false knock are reproducible, so a recorded run plays back the same
+ * and a test needs nothing stubbed. Mulberry32. Without a state to carry it, Math.random.
+ * @param {{rng?: number}|null} [s] live state, updated in place
+ * @returns {number} 0..1
+ */
+export function liveRandom(s = null) {
+  if (!s) return Math.random();
+  let x = ((s.rng ?? LIVE_RNG_SEED) + 0x6d2b79f5) >>> 0;
+  s.rng = x;
+  x = Math.imul(x ^ (x >>> 15), x | 1);
+  x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
+  return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
 }
 
 /**
@@ -102,7 +122,7 @@ export function readSpeedAndAirflow(s, pt, dt, overlapDeg) {
   s.lope = lopeAmp;
   s.sensedRpm = s.rpm < CRANK_SENSOR_MIN_RPM
     ? 0
-    : sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp);
-  s.sensedMaf = sensorRead(s.sensedMaf, pt ? pt.maf : 0, lag * 0.8, 1.4);
+    : sensorRead(s.sensedRpm, s.rpm, lag, 14 + lopeAmp, s);
+  s.sensedMaf = sensorRead(s.sensedMaf, pt ? pt.maf : 0, lag * 0.8, 1.4, s);
   return lag;
 }

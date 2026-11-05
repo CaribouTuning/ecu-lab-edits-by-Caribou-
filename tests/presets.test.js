@@ -10,28 +10,18 @@ import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
 
+import { makeEngine } from './ecuHarness.js';
+
 /** Crank rating converted to the wheel figure the sim reports. */
 const toWheel = (crankHp) => crankHp * S.DRIVETRAIN_EFF;
 
-/** Runs a preset exactly as the app would, with its own factory calibration. */
+/**
+ * Runs a preset exactly as the app would, with its own factory calibration: the hardware's
+ * own breathing is the truth (not the factory VE table read back as if it were the engine)
+ * and the ECU is in the loop (tests/ecuHarness.js, as EcuLab.jsx builds it).
+ */
 function pullFor(preset) {
-  const patch = S.applyPreset(preset);
-  const derived = S.deriveEngine(patch.engineConfig);
-  return S.simulateSweep({
-    loadKpa: 100,
-    ve: patch.ve, veTruth: patch.ve, layout: patch.layout,
-    timing: patch.timing, afr: patch.afr,
-    turboOn: patch.turboOn, boostCurve: patch.boostCurve,
-    octaneBonus: S.OCTANE_OPTS[patch.octaneIdx].bonus,
-    octaneLabel: S.OCTANE_OPTS[patch.octaneIdx].label,
-    fuel: S.OCTANE_OPTS[patch.octaneIdx],
-    injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
-    ecuInjectorCc: patch.ecuInjectorCc,
-    injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-    mods: patch.mods, mafScalar: patch.mafScalar, derived,
-    turbine: S.presetTurbine(preset),
-    compressor: S.presetCompressor(preset),
-  });
+  return makeEngine({ preset: preset.id }).pull(100);
 }
 
 describe('preset data integrity', () => {
@@ -178,9 +168,9 @@ function flatTopRpm(points) {
  *
  * Its own docstring said that if either engine ever started peaking before its redline
  * the entry should be DELETED rather than updated, because that would mean the model had
- * gained the term it was missing. The inlet Mach index (issue #15) is that term, both
- * engines now peak where they are rated to, and so the map is gone and every preset goes
- * through the ordinary rated-RPM assertions.
+ * gained what it was missing. The gas-exchange breathing model (breathing.js) is that:
+ * VE falls at speed from the valves' own flow, both engines peak before their limiters,
+ * and so the map is gone and every preset goes through the ordinary rated-RPM assertions.
  */
 
 /*

@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest';
 
 import * as S from '../src/sim/index.js';
 
+import { makeEngine } from './ecuHarness.js';
+
 const STOCK = S.DEFAULT_ENGINE_CONFIG;
 const NO_MODS = { ...S.DEFAULT_MODS, turboFitted: false };
 
@@ -1054,49 +1056,35 @@ describe('the inlet Mach index', () => {
     );
   });
 
-  it('costs nothing through the mid-range and bites at the top', () => {
-    expect(S.machVeMultiplier(BORE, STROKE, 3000)).toBe(1);
-    expect(S.machVeMultiplier(BORE, STROKE, 7500)).toBeLessThan(1);
-    // Monotonic once it starts, so there is no speed at which revving harder helps.
-    const at = (rpm) => S.machVeMultiplier(BORE, STROKE, rpm);
-    expect(at(7500)).toBeLessThan(at(6500));
-    expect(at(6500)).toBeLessThanOrEqual(at(5500));
+  // The breathing limit at speed is no longer a multiplier on this index: it is the valves'
+  // own flow, which the gas-exchange model (breathing.js) integrates crank angle by crank
+  // angle. These hold the same claims against that model.
+  const veAt = (cfg, rpms) => S.computeHardwareVE(cfg, S.DEFAULT_MODS, {}, { rpm: rpms, load: [100] })[0];
+
+  it('falls away at the top of a stock engine\'s range: the valves stop keeping up', () => {
+    const [mid, high, top] = veAt(S.DEFAULT_ENGINE_CONFIG, [5500, 6500, 7500]);
+    expect(high).toBeLessThan(mid);
+    expect(top).toBeLessThan(high);
   });
 
   it('chokes a long-stroke engine at fewer revolutions than a short-stroke one', () => {
-    // The payoff for keying on piston speed rather than RPM: this is why an undersquare
-    // engine cannot rev, and it now falls out of the model instead of being asserted.
-    const longStroke = S.machVeMultiplier(BORE, 100, 6500);
-    const shortStroke = S.machVeMultiplier(BORE, 70, 6500);
-    expect(longStroke).toBeLessThan(shortStroke);
-  });
-
-  it('chokes later on a hot charge, because sound travels faster in it', () => {
-    const cold = S.machVeMultiplier(BORE, STROKE, 7500, 298);
-    const hot = S.machVeMultiplier(BORE, STROKE, 7500, 400);
-    expect(hot).toBeGreaterThan(cold);
-  });
-
-  it('never starves the engine completely', () => {
-    expect(S.machVeMultiplier(BORE, 120, 9000)).toBeGreaterThanOrEqual(S.COEFF.MACH_VE_FLOOR);
+    // The same valves feed more displacement at a higher piston speed: an undersquare
+    // engine cannot rev, and it falls out of the valve flow.
+    const [long] = veAt({ ...S.DEFAULT_ENGINE_CONFIG, stroke: 100 }, [6500]);
+    const [short] = veAt({ ...S.DEFAULT_ENGINE_CONFIG, stroke: 70 }, [6500]);
+    expect(long).toBeLessThan(short);
   });
 
   it('gives a naturally aspirated engine a power peak before its redline', () => {
     // The headline of the issue, asserted on the shipped engines rather than in the
     // abstract: both naturally aspirated presets used to climb into the limiter.
+    // Through the app's own pull (the hardware's breathing as the truth, the ECU in the
+    // loop), not the factory table read back as if it were the engine.
     for (const preset of S.ENGINE_PRESETS) {
-      const p = S.applyPreset(preset);
-      if (p.turboOn) continue;                       // a boost curve places these itself
-      const derived = S.deriveEngine(p.engineConfig);
-      const r = S.simulateSweep({
-        loadKpa: 100, ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
-        turboOn: false, boostCurve: p.boostCurve,
-        octaneBonus: S.OCTANE_OPTS[p.octaneIdx].bonus, octaneLabel: 'x',
-        fuel: S.OCTANE_OPTS[p.octaneIdx], injectorCc: S.INJECTOR_OPTS[p.injIdx].cc,
-        ecuInjectorCc: p.ecuInjectorCc, injectorLabel: 'x', mods: p.mods, mafScalar: p.mafScalar,
-        derived, turbine: S.presetTurbine(preset),
-        compressor: S.presetCompressor(preset),
-      });
+      if (preset.induction.turboOn) continue;         // a boost curve places these itself
+      const eng = makeEngine({ preset: preset.id });
+      const { derived } = eng;
+      const r = eng.pull(100);
       const peakHp = Math.max(...r.points.map((x) => x.hp));
       const peakRpm = Math.max(...r.points.filter((x) => x.hp === peakHp).map((x) => x.rpm));
       const atRedline = r.points[r.points.length - 1].hp;
@@ -1540,15 +1528,22 @@ describe('exhaust gas temperature', () => {
         peak: Math.max(...r.points.map((p) => p.egt)),
         alarms: r.points.filter((p) => p.egtRisk).length,
         n: r.points.length,
+        points: r.points,
       };
     };
 
     it('reads coolest at the lightest load, not hottest', () => {
-      const wot = peakEgtAt(S.BARO_KPA).peak;
-      const part = peakEgtAt(40).peak;
-      const cruise = peakEgtAt(20).peak;
-      expect(part).toBeLessThan(wot);
-      expect(cruise).toBeLessThan(part);
+      // The pull's load is a throttle opening (the throttle body sets the manifold pressure
+      // from it, throttle.js), so the comparison is by the manifold pressure each point ran:
+      // wherever a light throttle holds the manifold under half an atmosphere, the exhaust
+      // is cooler than full throttle at the same speed.
+      const wot = peakEgtAt(S.BARO_KPA).points;
+      const light = peakEgtAt(20).points.filter((p) => p.map < 50);
+      expect(light.length).toBeGreaterThan(10);
+      for (const p of light) {
+        const full = wot.find((w) => w.rpm === p.rpm);
+        expect(p.egt, `${p.rpm} RPM at ${Math.round(p.map)} kPa`).toBeLessThan(full.egt);
+      }
     });
 
     it('stops alarming on a part-throttle pull', () => {
