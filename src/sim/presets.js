@@ -172,12 +172,11 @@ export const ENGINE_PRESETS = [
     },
     induction: {
       turboOn: true, turbineIdx: 0, compressorIdx: 0,
-      // TWO small turbos (Mitsubishi TD03s), each with its own turbine and compressor.
-      // Now that backpressure is solved from turbine flow area rather than assumed
-      // proportional to boost, the count is load-bearing: a pair of small housings
-      // passes twice the exhaust of one before it starts choking, and a pair of small
-      // compressors twice the air, which is the whole reason a manufacturer fits two
-      // small turbos instead of one big one.
+      // Two small turbos (Mitsubishi TD03s), each with its own turbine and compressor.
+      // Backpressure is solved from turbine flow area, not assumed proportional to boost,
+      // so the count is load-bearing: a pair of small housings passes twice the exhaust of
+      // one before it starts choking, and a pair of small compressors twice the air, which
+      // is the whole reason a manufacturer fits two small turbos instead of one big one.
       turbineCount: 2,
       // Twin small turbos spool early (0.6 bar / 8.5 psi target by 3500), but the
       // factory ECU tapers boost above that as exhaust backpressure and heat climb

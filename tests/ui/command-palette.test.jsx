@@ -336,11 +336,13 @@ describe('the palette in the app', () => {
     window.history.back();
     await waitFor(() => expect(window.location.hash).toBe('#/bay'));
     window.history.back();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy());
+    // jsdom dispatches the hashchange from a queued task, and the start screen renders the
+    // whole app back down. Under a loaded full run that takes longer than waitFor's 1 s.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'SANDBOX' })).toBeTruthy(), { timeout: 10000 });
 
     enterSandbox();
     expect(isOpen()).toBe(false);
-  });
+  }, 20000);
 
   it('stays put while K is held down, and still swallows the repeats', () => {
     launch();

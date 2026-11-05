@@ -944,9 +944,10 @@ function baseReducer(state, action) {
  *
  * A map rather than a Set plus a lookup elsewhere: `UNDOABLE` is derived from its keys
  * below, so another undoable action cannot be added to the membership list without
- * also declaring what its undo restores.
+ * also declaring what its undo restores. Exported so the tests can check each action's
+ * write surface against its scope, for every undoable action rather than a list of them.
  */
-const UNDO_SCOPE = Object.freeze({
+export const UNDO_SCOPE = Object.freeze({
   [ACTIONS.SET_TABLE]: RESTORE_CALIBRATION,
   [ACTIONS.SET_ECU]: RESTORE_CALIBRATION,
   [ACTIONS.SWITCH_MAP]: RESTORE_CALIBRATION,
@@ -1038,8 +1039,9 @@ function clearsRedo(action) {
  *    the range mode, or toggling the overlay silently kills the redo a player crossed
  *    tabs to reach.
  *  - UNDO/REDO manage `future` themselves.
- *  - TAKE_JOB does write snapshotted fields, but it empties both stacks itself (a
- *    different car makes every entry meaningless). Listing it here would be worse than
+ *  - ENTER_CAREER, ENTER_SANDBOX and CAREER_UPDATE (when it puts another car on the
+ *    bay) do write snapshotted fields, but they empty both stacks themselves (a
+ *    different car makes every entry meaningless). Listing them here would be worse than
  *    redundant: the branch in `reducer` rebuilds `history` from the pre-action `past`.
  *
  * The UNDOABLE actions are listed here too, for one list that answers "is this new

@@ -573,14 +573,14 @@ export const COEFF = {
   N2O_HEATER_W: 250,
   // Backpressure a wastegate relieves while bleeding exhaust around the turbine. This is
   // why a larger turbine is worth power at the same boost: it spends more life gated.
-  // Scales the share of turbine capability above the target (see solveInduction). Fitted
-  // to the turbo presets' published ratings after the gate was corrected to open on
-  // SURPLUS rather than shortfall; at 0.2 every one landed within 5% of its rated power,
-  // with exhaust backpressure at rated power 1.0-1.4x the boost pressure, which is where
-  // small OEM turbos run. It was 0.55 when it acted in the wrong direction. Not refitted
-  // after the rich-flame chemistry (thermo.js, heatReleasedShare) took 4-6% of heat out of
-  // their full-boost points: the B58B30M1 now reads 7% under (docs/accuracy.md), held there
-  // by its knock limit rather than by its turbine.
+  // Scales the share of turbine capability above the target (see solveInduction), so the
+  // gate opens on surplus rather than shortfall. Fitted to the turbo presets' published
+  // ratings: at 0.2 every one lands within 5% of its rated power, with exhaust
+  // backpressure at rated power 1.0-1.4x the boost pressure, which is where small OEM
+  // turbos run. Not refitted after the rich-flame chemistry (thermo.js,
+  // heatReleasedShare) took 4-6% of heat out of their full-boost points: the B58B30M1
+  // reads 7% under (docs/accuracy.md), held there by its knock limit rather than by its
+  // turbine.
   WASTEGATE_RELIEF: 0.2,
   // --- Compressor map (see compressorMap in turbo.js) ---
   // How sharply efficiency falls away from the island centre, and how much a unit of
@@ -717,14 +717,17 @@ export const COEFF = {
   // tracks a pull's average peak pressure, not boost. Boost would be a bad proxy: it
   // charges a 9.5:1 and a 12.5:1 engine alike for the same manifold pressure.
   //
-  // Below the free threshold the oil film carries the load indefinitely, so a pull costs
-  // nothing; above it, each bar of average peak pressure costs WEAR_BEARING_PER_BAR.
+  // These are ordering numbers: NA cheap, factory turbo about a point, compression-on-
+  // boost whole points per pull; nothing downstream relies on the absolute value beyond
+  // the health bar. Below the free threshold the oil film carries the load indefinitely,
+  // so a pull costs nothing; above it, each bar of average peak pressure costs
+  // WEAR_BEARING_PER_BAR.
   //
   // THE THRESHOLD IS THE BOTTOM END'S, not one number for every engine. A factory
   // engine's bottom end is designed for its own service pressure with margin: stock
   // naturally aspirated pulls average about 58-59 bar and factory turbo engines 68-78,
   // and none of them wears out on its own factory tune. One threshold of 55 for all of
-  // them once charged a stock B58 1.4 points of bearing life per pull and flagged
+  // them would charge a stock B58 1.4 points of bearing life per pull and flag
   // bottom-end stress on every factory turbo car. A naturally aspirated bottom end is
   // free to 60 bar; a factory turbo engine's (`boostRatedBottomEnd`, set by its preset)
   // to 80. A turbo bolted onto a naturally aspirated engine keeps the NA bottom end, and
@@ -911,10 +914,9 @@ export const COEFF = {
   // because a build has a taller or shorter rev limit. Do not wire this to
   // `derived.redline`.
   //
-  // Today's max shippable redline (7500, see `DEFAULT_REDLINE_RPM` in `engine.js` and
-  // the RPM axis in `tables.js`) equals this datum, so the resulting `nFrac` never
-  // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
-  // currently unreachable headroom, not a live limit.
+  // A custom engine revs to 11,000 RPM, so `nFrac` reaches about 1.47. It has no ceiling
+  // (`vacuumSpeedFrac`): the callers hold engine speed to the redline, and the model's
+  // own 0.12 floor bounds the vacuum at a closed throttle.
   MANIFOLD_VACUUM_RPM_NORM: 7500,
 
   // --- Engineer Score: static compression under boost ---
@@ -931,10 +933,7 @@ export const COEFF = {
   // port injection: less than that gap, because part of it is era and boost level, which
   // the boost term below already prices. The NA base below is a PORT-injected engine's, and
   // DI earns the same point there (Mazda's direct-injected NA Skyactiv-G runs 13:1).
-  //
-  // The other simplification that stood here — the headroom not scaling with boost
-  // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
-  // COMPRESSION_PER_BOOST_PSI below.
+  // (Headroom also scales with boost level, through COMPRESSION_PER_BOOST_PSI below.)
   COMPRESSION_BOOST_BASE: 10.8,
   COMPRESSION_DI_STEP: 1.0,
   // Compression credit per degree of octane bonus, and per intercooler.
