@@ -873,9 +873,12 @@ export function factoryCalibration(preset, layout = null) {
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
+    // On the engine's own pipe and bolt-ons: the backpressure the pull and the advisor
+    // price, so the three agree on the knock limit a cell is written to.
     const empKpa = induction ? induction.empKpa : exhaustManifoldKpa({
       turboOn: preset.induction.turboOn, exhaustFlowKgS, turbine,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veActual, kpa), lambda }),
+      pipeDiaIn: EXHAUST_DIA_OPTS[preset.parts.exhaustDiaIdx]?.dia ?? 3.0, mods: preset.mods,
     });
     // The generator asks the physics the same question the running ECU asks — how much
     // spark will this cylinder take — by solving the same cycle. Burnable mass releases

@@ -155,7 +155,7 @@ export function veRecommendations(currentVe, cfg, mods, hw, axes = GAME_LAYOUT.v
  * @param {object} input
  * @returns {number} MBT spark advance, degrees BTDC
  */
-function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine }) {
+function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null }) {
   const chargeK = chargeTempK(Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler);
   const airG = trappedAirGrams({
     veActual: veCell, mapKpa, chargeK,
@@ -174,6 +174,7 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
       turboOn, turbine: turboOn ? turbine : null,
       exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
+      pipeDiaIn: exhaustDia ?? 3.0, mods,
     }),
   });
 }
@@ -284,7 +285,8 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
  * 5. ON THE ENGINE AS WORN. `health` (damage.js) is the engine's condition: a worn engine
  *    is judged with what its worn parts do, as the dyno pull it is compared with runs it.
  *
- * @param {object} input includes `camAt`, the intake cam advance the VVT calibration holds
+ * @param {object} input includes `exhaustDia`, the exhaust pipe in inches (3.0 absent), and
+ *   `camAt`, the intake cam advance the VVT calibration holds
  *   at a speed and pressure (crank degrees), when the engine has an intake phaser, and
  *   `health`, the engine's condition (absent: as new)
  * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
@@ -292,6 +294,7 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
   compressor, turbine, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull = null, camAt = null, health = null,
+  exhaustDia = null,
 }) {
   const wear = wearEffects(health, derived.cyl);
   const spark = [], fuelAdv = [];
@@ -359,7 +362,7 @@ export function calibrationAdvice({
     ...(camAt ? { cam: { intakeAdvDeg: camAt(rpm, mapKpa) } } : {}),
     fuel, mods: { ...mods, turboFitted: turboOn }, mafScalar, mafErrorBase,
     injectorCc, ecuInjectorCc, derived, compressor,
-    turbine: turboOn ? turbine : null,
+    turbine: turboOn ? turbine : null, exhaustDia,
     ...(wear ? { wear } : {}),
   });
 
@@ -464,7 +467,7 @@ export function calibrationAdvice({
       const knockCeiling = pt.threshold - KNOCK_SAFETY_DEG;
       const mbt = mbtAtRow({
         rpm, mapKpa: gradeKpa, veCell, afrCell,
-        fuel, mods, derived, turboOn, turbine,
+        fuel, mods, derived, turboOn, turbine, exhaustDia,
       });
       const safeTiming = clamp(
         Math.round(Math.min(knockCeiling, mbt) * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG,
