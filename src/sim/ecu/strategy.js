@@ -70,6 +70,7 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {number[][][]} veTruthByPhase hardware VE at each VE_PHASE_SAMPLES intake phase
  * @property {object} [cfg] the engine config, for the cylinder layout
  * @property {object|null} [blower] a supercharger (a BLOWER_OPTS entry), instead of a turbo
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches (its pressure drop, breathing.js)
  * @property {number} [blowerRatio] crank pulley ÷ blower pulley
  * @property {{kit: 'wet'|'dry', shotHp: number, heater?: boolean, bottleLb?: number}|null} [nitrous]
  *   a nitrous kit
