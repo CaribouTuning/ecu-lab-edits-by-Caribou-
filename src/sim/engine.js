@@ -131,6 +131,8 @@ export function intakeValveAreaRatio(cfg) {
  *   degrees. Every shipped engine states it; a save from before it existed falls back to the
  *   intake lobe's
  * @property {number} [springRate] valve spring rate
+ * @property {number} [intakePortCfm] the head's peak intake port flow on a flow bench at 28
+ *   inches of water, per cylinder, cfm, where it has been measured (airflow.js)
  * @property {number} [redline] rev limit, RPM
  * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
  * @property {number} [runnerMm] intake runner length, mm, where the engine sets its own

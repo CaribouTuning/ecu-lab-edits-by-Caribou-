@@ -58,20 +58,22 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
  * @returns {number} runner length, m
  */
 function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
-  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.events.evo}|${base.events.evc}|${base.runnerAreaM2}|${base.runnerReflection}|${Math.round(tuneRpm)}`;
+  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.events.evo}|${base.events.evc}|${base.runnerAreaM2}|${base.runnerReflection}|${base.intakePortAreaM2}|${Math.round(tuneRpm)}`;
   const hit = RUNNER_CACHE.get(key);
   if (hit != null) return hit;
   // The length whose filling peaks at the speed it is tuned for, the peak found between
   // samples by a parabola through the highest three (a flat curve's peak does not jump from
   // one sample to the next). Ties go to the shorter runner.
   const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: INDUCTION_REF_EXHAUST_K };
-  const step = 500;
+  // Sampled finely enough that a flat-topped curve's peak, found between samples, moves
+  // smoothly with the length rather than jumping from one sample to the next.
+  const step = 250;
   const rpms = []; for (let r = 1000; r <= tuneRpm * 2 + step; r += step) rpms.push(r);
   // Torque, not filling, is what peaks at the published speed: brake MEP is the indicated MEP
   // the filling buys, less the engine's own rubbing friction, which climbs with speed and so
   // puts the torque peak below the filling peak.
   const fmep = rpms.map((rpm) => rubbingFmepPa(rpm, derived?.springPa ?? 0, derived ?? {}));
-  /** Where a runner of this length peaks in torque, interpolated between samples. */
+  /** Where a runner of this length peaks in torque, interpolated between samples, and its torque at the tune speed. */
   const peakOf = (L) => {
     const g = { ...base, runnerLengthM: L };
     const ves = rpms.map((rpm, n) => {
@@ -91,19 +93,25 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       const den = ves[k - 1] - 2 * ves[k] + ves[k + 1];
       if (den < 0) peak += step * 0.5 * (ves[k - 1] - ves[k + 1]) / den;
     }
-    return peak;
+    const at = rpms.findIndex((r) => r >= tuneRpm);
+    return { peak, atTune: ves[Math.max(0, at)] };
   };
-  // Coarse, then fine about the best: a longer runner peaks lower, so the error is close to
-  // monotonic in the length and two passes find it.
-  let best = 0.35; let bestErr = Infinity;
+  // Of the lengths whose torque peaks at or above the tune speed, the one that fills best
+  // there: the strongest runner that still peaks where it is meant to. Choosing the length
+  // whose peak lands nearest the speed instead read a flat curve's peak, which jumps between
+  // lengths on small changes, and could pick a weak runner over a strong one beside it.
+  let best = null; let bestAt = -Infinity; let nearest = 0.35; let nearestErr = Infinity;
   const search = (from, to, by) => {
     for (let L = from; L <= to + 1e-9; L += by) {
-      const err = Math.abs(peakOf(L) - tuneRpm);
-      if (err < bestErr - 1) { bestErr = err; best = L; }
+      const { peak, atTune } = peakOf(L);
+      if (peak >= tuneRpm - step && atTune > bestAt + 1) { bestAt = atTune; best = L; }
+      const err = Math.abs(peak - tuneRpm);
+      if (err < nearestErr - 1) { nearestErr = err; nearest = L; }
     }
   };
-  search(0.1, 1.0, 0.1);
-  search(Math.max(0.1, best - 0.08), Math.min(1.0, best + 0.08), 0.02);
+  search(0.1, 1.0, 0.05);
+  // No length peaks that high (a speed past every length's reach): the nearest.
+  if (best == null) best = nearest;
   RUNNER_CACHE.set(key, best);
   return best;
 }
@@ -144,6 +152,10 @@ export function breathingGeometry(cfg, phase = {}) {
       maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM, exhaustMaxLiftM: COEFF.BREATH_LIFT_PER_DIA * exhaustValveM,
     }),
   };
+  // A head whose port has been on a flow bench: its peak intake flow at the standard 28 inches
+  // of water is an effective area outright, A = Q / sqrt(2 dp / rho), and caps the valve's
+  // open area in place of the throat times the universal Cd (breathing.js `valveArea`).
+  if (cfg.intakePortCfm) base.intakePortAreaM2 = (cfg.intakePortCfm * CFM_TO_M3S) / FLOW_BENCH_VELOCITY_MS;
   if (cfg.runnerMm) return { ...base, runnerLengthM: cfg.runnerMm / 1000 };
   // The intake runner is tuned with the factory exhaust; headers change the exhaust, not it.
   if (phase.headers) return { ...base, runnerLengthM: breathingGeometry(cfg, { ...phase, headers: false }).runnerLengthM };
@@ -230,6 +242,11 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     return Number(clamp(v, 5, 140).toFixed(1));
   };
 }
+
+/** Cubic feet per minute to cubic metres per second. */
+const CFM_TO_M3S = 0.000471947;
+/** Ideal velocity through a port at a flow bench's 28 inches of water (6.97 kPa), standard air: sqrt(2 dp / rho). */
+const FLOW_BENCH_VELOCITY_MS = Math.sqrt((2 * 28 * 249.089) / 1.204);
 
 /** The breathing is computed on a grid this fine (RPM, kPa) and read between its nodes. */
 const VE_GRID_RPM = 100;

@@ -212,7 +212,8 @@ export const ENGINE_PRESETS = [
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
       // `springRate` 60 keeps valve float well clear of the 7000 limiter.
-      camDuration: 214, exhaustCamDuration: 214, springRate: 60,
+      // At 204 (BREATH_VALVE_CD 0.61): power +3.3%, torque +5.2% of the ratings.
+      camDuration: 204, exhaustCamDuration: 204, springRate: 60,
       redline: 7000,
     },
     induction: {
@@ -273,7 +274,10 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      camDuration: 210, exhaustCamDuration: 210, springRate: 62,
+      // At 190: power -3.3%, torque +2.0%, the flat top 6300-6700 against a published 5800.
+      // Longer cams land power nearer (198: +0.1%) but hold it to 6800: the fitted boost
+      // taper below carries 10.75 psi to the limiter, which is what keeps the peak late.
+      camDuration: 190, exhaustCamDuration: 190, springRate: 62,
       redline: 7000,
     },
     induction: {
@@ -346,6 +350,7 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
+      // At 210: power +1.1%, torque -7.4% (204-216 all land within a point of it).
       camDuration: 210, exhaustCamDuration: 210, springRate: 54,
       redline: 6500,
     },
@@ -385,7 +390,8 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      camDuration: 212, exhaustCamDuration: 212, springRate: 54,
+      // At 198: power +2.5%, torque +0.8%.
+      camDuration: 198, exhaustCamDuration: 198, springRate: 54,
       redline: 6800,
     },
     induction: {
@@ -438,9 +444,14 @@ export const ENGINE_PRESETS = [
       blockMaterial: 'Aluminum', headMaterial: 'Aluminum', injection: 'port',
       valvetrain: 'ohv', valvesPerCyl: 2, follower: 'roller', intakeValveMm: 50.8,
       frictionLevel: 'older',
-      // Cams: the 2001-2004 LS1 cam, 199 / 210 degrees at 0.050 inch, 0.467 / 0.479 in lift,
-      // 116 degree lobe separation (corvetteforum.com, 'cam specs', thread 1160929).
-      camDuration: 199, exhaustCamDuration: 210, springRate: 60,
+      // Cams: GM 12561721, which Chevrolet Performance lists as the stock cam of the 2001-2004
+      // LS1 as well as the LQ4 and LQ9: 196 / 201 degrees at 0.050 inch, 116 degree lobe
+      // separation (Chevrolet Performance camshaft listing). Owners' forum figures for the
+      // same years differ (199 / 210 on corvetteforum.com); GM's own listing is taken.
+      // Head: the 241 casting, peak intake flow 243 cfm at 28 inches of water (the same
+      // bench table as the LS6's 243 casting below: corvetteforum.com, '241 Heads vs. 243 Heads').
+      intakePortCfm: 243,
+      camDuration: 196, exhaustCamDuration: 201, springRate: 60,
       redline: 6000,
     },
     induction: { turboOn: false, turbineIdx: 1, compressorIdx: 1, boost: RPM.map(() => 0) },
@@ -473,6 +484,10 @@ export const ENGINE_PRESETS = [
       // Cams: GM 12565308, the 2002-2004 LS6 cam, 204 / 218 degrees at 0.050 inch, 0.550 /
       // 0.547 in lift, 117.5 degree lobe separation (GM's listing; the exhaust lift as corrected
       // by GM's engineers on ls1tech.com, 'LS6 camshaft specs').
+      // Head: the 243 casting, peak intake flow 278 cfm at 28 inches of water, against the
+      // LS1's 241 at 243 on the same bench (corvetteforum.com, '241 Heads vs. 243 Heads'):
+      // most of why the LS6 makes 14% more than the LS1 on nearly the same short block.
+      intakePortCfm: 278,
       camDuration: 204, exhaustCamDuration: 218, springRate: 60,
       redline: 6500,
     },
@@ -600,6 +615,9 @@ export const ENGINE_PRESETS = [
       // Cams: the non-MDS 6.4 cam, 215 / 221 degrees at 0.050 inch, 0.574 / 0.541 in lift,
       // 121 degree lobe separation (8020automotive.com, '6.4 HEMI Camshaft Upgrade Guide';
       // the same figures on lxforums.com, '6.4L Stock Cam Specifications').
+      // Head flow: the Apache head is quoted at about 340-350 cfm, but with no lift or test
+      // depression stated, so it is not comparable to a 28-inch figure and is not used; the
+      // port is the throat with the universal discharge coefficient, as an unmeasured head's.
       camDuration: 215, exhaustCamDuration: 221, springRate: 60,
       redline: 6400,
     },

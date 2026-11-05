@@ -97,12 +97,13 @@ export const COEFF = {
   // Discharge coefficient of a poppet valve on its open area (the lesser of curtain and
   // throat). Heywood (1988, ch. 6) shows measured coefficients from about 0.5 to 0.7 across
   // the lift range, lowest at high lift where the throat governs and the jet separates.
-  // CALIBRATED, once, for every engine: 0.52 is the value at which the thirteen factory
-  // engines land on their published peak power and torque (mean error 2.3% and 6.3%, the
-  // speeds of the naturally aspirated ones' peaks within about 450 RPM on average), the
-  // runner a rigid column. It is the one fitted number in the gas exchange; the shape of every
-  // engine's curve, where each peaks, comes from its geometry.
-  BREATH_VALVE_CD: 0.62,
+  // CALIBRATED, once, for every engine: the valves' discharge coefficient on the curtain,
+  // and on the port throat of a head with no flow-bench figure (airflow.js `intakePortCfm`).
+  // 0.61 is the value at which the naturally aspirated presets, on their published cams,
+  // centre on their published power (within -9% to +5.5% each). It sits inside the 0.6-0.7
+  // Heywood gives for poppet valves. It is the one fitted number in the gas exchange; the
+  // shape of every engine's curve, where each peaks, comes from its geometry.
+  BREATH_VALVE_CD: 0.61,
   // The port throat behind the valve seat, as a share of the valve head diameter. The open
   // area is the lesser of the curtain and this throat, which caps what lift can buy.
   BREATH_THROAT_SHARE: 0.88,

@@ -148,6 +148,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  * @property {number} [exhaustPrimaryAreaM2] its cross-section, m^2
  * @property {number} [exhaustReflection] pressure reflection coefficient where the primary
  *   meets its collector, (A1 - A2)/(A1 + A2): negative into a larger area
+ * @property {number} [intakePortAreaM2] the intake port's effective flow area per cylinder
+ *   from a flow bench, m^2; without it the throat times the universal Cd
  * @property {number} [runnerReflection] pressure reflection coefficient where the intake
  *   runner opens into the plenum, (A1 - A2)/(A1 + A2): close to -1, the plenum being large
  * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number,
@@ -196,12 +198,14 @@ export function gasExchange(g, op) {
   // Open area of one valve set at a crank angle: the curtain while the valve is low, the
   // port throat once it is high; times its discharge coefficient.
   const exhaustRamp = { rampShare: g.events.exhaustRampShare ?? g.events.rampShare, rampLiftShare: g.events.exhaustRampLiftShare ?? g.events.rampLiftShare };
-  const valveArea = (deg, open, close, n, dia, ramp = g.events) => {
+  const valveArea = (deg, open, close, n, dia, ramp = g.events, portAreaM2 = 0) => {
     const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), ramp);
     if (lift <= 0) return 0;
-    const curtain = Math.PI * dia * lift;
-    const throat = (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2;
-    return n * COEFF.BREATH_VALVE_CD * Math.min(curtain, throat);
+    const curtain = n * COEFF.BREATH_VALVE_CD * Math.PI * dia * lift;
+    // The port behind the seat: its flow-bench area where the head has been measured,
+    // otherwise the throat with the universal discharge coefficient.
+    const port = portAreaM2 > 0 ? portAreaM2 : n * COEFF.BREATH_VALVE_CD * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2;
+    return Math.min(curtain, port);
   };
   const { ivo, ivc, evo, evc } = g.events;
   const step = COEFF.BREATH_STEP_DEG;
@@ -328,7 +332,7 @@ export function gasExchange(g, op) {
     let hIn = 0;
     let out = returningNow();
     if (mid > ivo && mid < ivc) {
-      const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM);
+      const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0);
       const b = returningNow();
       const valveR = (g.runnerAreaM2 - a) / (g.runnerAreaM2 + a);
       const waveBack = b * (1 + valveR);
