@@ -1036,14 +1036,13 @@ describe('valve count and valve size', () => {
  * naturally aspirated engine climbed monotonically into its limiter and had no power peak
  * at all. Two presets carried a written exception saying exactly that.
  *
- * The missing term is the inlet Mach index — how close the charge is to choking on its
- * way past the valve. What makes it worth doing as physics rather than as a curve fit
- * against RPM is the dependence it brings for free: it keys on MEAN PISTON SPEED against
- * the speed of sound, so a long-stroke engine chokes at fewer revolutions, and a hotter
- * charge chokes later.
+ * What makes VE fall at speed now is the gas-exchange model (breathing.js): the charge
+ * flows through the valves' own open area crank angle by crank angle, so at high piston
+ * speed the valves stop keeping up, and a long-stroke engine runs out of valve at fewer
+ * revolutions than a short-stroke one. The inlet Mach index is kept as the yardstick for
+ * that piston speed; it is no longer a multiplier on VE.
  */
 describe('the inlet Mach index', () => {
-  const STROKE = S.DEFAULT_ENGINE_CONFIG.stroke;
   const BORE = S.DEFAULT_ENGINE_CONFIG.bore;
 
   it('is mean piston speed against the speed of sound', () => {

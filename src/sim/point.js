@@ -29,6 +29,8 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches: what the exhaust
+ *   system after the ports costs in back-pressure (friction.js `exhaustManifoldKpa`)
  * @property {number} veVal the ECU's VE table value at this point, percent — what the
  *   ECU BELIEVES the cylinder filling is. Drives the fuel calculation.
  * @property {number} [veActualVal] TRUE cylinder filling at this point, percent — what
