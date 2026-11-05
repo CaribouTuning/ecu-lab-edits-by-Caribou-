@@ -16,6 +16,7 @@
  * from.
  */
 
+import { throttleBoreM } from '../throttle.js';
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
 import { OCTANE_OPTS } from '../hardware.js';
@@ -69,6 +70,7 @@ const NM_PER_LBFT = 1 / 0.7376;
  * @property {number[][][]} veTruthByPhase hardware VE at each VE_PHASE_SAMPLES intake phase
  * @property {object} [cfg] the engine config, for the cylinder layout
  * @property {object|null} [blower] a supercharger (a BLOWER_OPTS entry), instead of a turbo
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches (its pressure drop, breathing.js)
  * @property {number} [blowerRatio] crank pulley ÷ blower pulley
  * @property {{kit: 'wet'|'dry', shotHp: number, heater?: boolean, bottleLb?: number}|null} [nitrous]
  *   a nitrous kit
@@ -403,7 +405,7 @@ export function resolveEcuPoint({
       mafScalar: hw.mafScalar, mafErrorBase: hw.mafErrorBase,
       injectorCc: hw.injectorCc, ecuInjectorCc: hw.ecuInjectorCc,
       derived: hw.derived, compressor: hw.compressor,
-      turbine: hw.turboOn ? hw.turbine : null,
+      turbine: hw.turboOn ? hw.turbine : null, exhaustDia: hw.exhaustDia ?? null,
       ...(empKpa != null ? { empKpa } : {}),
       ...(blower ? { blower } : {}),
       // A wet kit's fuel jet is an orifice on the same rail as the injectors, so it flows
@@ -687,6 +689,8 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       derived: hw.derived,
       intakeKAt: (b) => chargeTempK(b, hw.mods.intercooler, env),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
+      throttle: { boreM: throttleBoreM(hw.derived), coldAirIntake: !!hw.mods.intake },
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods: hw.mods },
       ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });

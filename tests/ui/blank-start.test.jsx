@@ -191,3 +191,19 @@ describe('an engine put on the BUILD bench', () => {
     expect(screen.queryByText(/Safe base map loaded/)).toBeNull();
   });
 });
+
+describe('SANDBOX across a reload', () => {
+  it('keeps the engine on the bench and its tables', async () => {
+    launchBlank();
+    goTo('BUILD');
+    fireEvent.click(factoryEngine('Nissan VQ35HR'));
+    // The save is debounced; wait it out, then close the app and open it again.
+    const settle = async (ms) => { await act(async () => {}); await act(() => new Promise((r) => setTimeout(r, ms))); };
+    await settle(900);
+    expect(localStorage.getItem('sandbox')).toBeTruthy();
+    cleanup();
+    launchBlank();
+    await settle(50);
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35HR/);
+  });
+});

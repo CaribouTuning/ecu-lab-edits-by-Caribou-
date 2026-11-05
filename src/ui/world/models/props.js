@@ -3,7 +3,7 @@
  */
 
 import { world as W } from '../../tokens.js';
-import { THREE, box, cone, cyl, edged, glow, strut, toon, tyreGeometry } from '../gfx.js';
+import { THREE, box, cyl, edged, glow, strut, toon, tyreGeometry } from '../gfx.js';
 
 const G = () => new THREE.Group();
 
@@ -268,15 +268,6 @@ export function makeBarrel(color = W.barrel) {
   const g = G();
   g.add(cyl(0.3, 0.3, 0.9, color, { y: 0.45, seg: 10 }));
   g.add(cyl(0.31, 0.31, 0.05, W.metalDark, { y: 0.2, edge: false, seg: 10 }), cyl(0.31, 0.31, 0.05, W.metalDark, { y: 0.7, edge: false, seg: 10 }));
-  return g;
-}
-
-
-export function makeCone() {
-  const g = G();
-  g.add(box(0.4, 0.04, 0.4, W.black, { y: 0.02, edge: false }));
-  g.add(cone(0.16, 0.6, W.cone, { y: 0.34, seg: 8, edge: false }));
-  g.add(cyl(0.1, 0.12, 0.08, W.white, { y: 0.32, edge: false, seg: 8 }));
   return g;
 }
 

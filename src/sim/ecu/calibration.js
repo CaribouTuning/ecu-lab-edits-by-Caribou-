@@ -170,19 +170,21 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
     },
     idle: {
       target: curve(ECT_AXIS, () => 800),
-      baseAir: curve(ECT_AXIS, (t) => Math.max(6, 8.5 - t * 0.03)),
+      // Idle air is throttle opening (throttle.js): a plate's open area grows quickly off its
+      // rest, so a warm engine idles on about 3%, a cold one on a little more.
+      baseAir: curve(ECT_AXIS, (t) => Math.max(2.7, 3.8 - t * 0.0135)),
       startHoldS: 0.4,
-      gainUp: 0.003,
-      gainDown: 0.001,
-      damp: 0.04,
+      gainUp: 0.00135,
+      gainDown: 0.00045,
+      damp: 0.018,
       bleed: COEFF.IDLE_BLEED_RATE,
       sparkGain: COEFF.IDLE_SPARK_GAIN,
       sparkLimit: COEFF.IDLE_SPARK_LIMIT,
       acRpmAdd: 50,
-      acAirAdd: 2.5,
-      elecAirAdd: 1.2,
+      acAirAdd: 1.1,
+      elecAirAdd: 0.55,
       antiStallRpm: 200,
-      antiStallAir: 2,
+      antiStallAir: 0.9,
       tpsIdlePct: 3,
     },
     limiter: {

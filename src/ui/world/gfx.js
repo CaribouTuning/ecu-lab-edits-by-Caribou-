@@ -103,7 +103,7 @@ function chamfer(w, h, d) {
  * A box's geometry, its edges chamfered. @param {number} w @param {number} h @param {number} d
  * @returns {THREE.BufferGeometry}
  */
-export function boxGeometry(w, h, d) {
+function boxGeometry(w, h, d) {
   const r = chamfer(w, h, d);
   return r > 0 ? new RoundedBoxGeometry(w, h, d, 1, r) : new THREE.BoxGeometry(w, h, d);
 }
@@ -212,7 +212,7 @@ export function floorPlane(w, d, color, o = {}) {
  * @param {{y: number, z0: number, z1: number, w: number}} top
  * @returns {THREE.BufferGeometry}
  */
-export function loft(bottom, top) {
+function loft(bottom, top) {
   const b = bottom;
   const t = top;
   const v = [
@@ -313,7 +313,7 @@ function epx(px, w, h) {
  * @param {(g: CanvasRenderingContext2D) => void} draw
  * @returns {THREE.CanvasTexture}
  */
-export function pixelTexture(w, h, draw) {
+function pixelTexture(w, h, draw) {
   const small = document.createElement('canvas');
   small.width = w;
   small.height = h;
@@ -347,81 +347,6 @@ export function shade(c, dl) {
   return new THREE.Color(c).offsetHSL(0, 0, dl).getStyle();
 }
 
-const patternCache = new Map();
-
-/**
- * Little repeating pixel patterns for walls and roofs: what takes a flat wall from "a coloured
- * box" to "a brick wall". 16 by 16, drawn whole-pixel, repeating every `tile` metres.
- *
- * @param {'brick'|'siding'|'shingle'|'tile'|'plank'|'stucco'|'slate'} kind
- * @param {string} base a palette colour
- * @param {number} [tile] metres per repeat
- * @returns {THREE.MeshToonMaterial}
- */
-export function patternMaterial(kind, base, tile = 2) {
-  const key = `${kind}|${base}|${tile}`;
-  let m = patternCache.get(key);
-  if (m) return m;
-  const dark = shade(base, -0.09);
-  const darker = shade(base, -0.17);
-  const light = shade(base, 0.06);
-  let seed = kind.length * 977 + base.length * 31;
-  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-  const tex = pixelTexture(16, 16, (g) => {
-    g.fillStyle = base;
-    g.fillRect(0, 0, 16, 16);
-    if (kind === 'brick') {
-      g.fillStyle = darker;
-      for (let r = 0; r < 4; r += 1) {
-        g.fillRect(0, r * 4 + 3, 16, 1);
-        const off = r % 2 ? 4 : 0;
-        g.fillRect((off + 0) % 16, r * 4, 1, 3);
-        g.fillRect((off + 8) % 16, r * 4, 1, 3);
-      }
-      g.fillStyle = light;
-      for (let i = 0; i < 10; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 4) * 4 + 1, 2, 1);
-      g.fillStyle = dark;
-      for (let i = 0; i < 8; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 4) * 4 + 2, 2, 1);
-    } else if (kind === 'siding') {
-      for (let r = 0; r < 4; r += 1) {
-        g.fillStyle = light; g.fillRect(0, r * 4, 16, 1);
-        g.fillStyle = darker; g.fillRect(0, r * 4 + 3, 16, 1);
-        g.fillStyle = dark; g.fillRect(0, r * 4 + 2, 16, 1);
-      }
-    } else if (kind === 'shingle' || kind === 'slate') {
-      for (let r = 0; r < 4; r += 1) {
-        const off = r % 2 ? 2 : 0;
-        g.fillStyle = darker; g.fillRect(0, r * 4 + 3, 16, 1);
-        g.fillStyle = dark;
-        for (let x = 0; x < 16; x += 4) g.fillRect((x + off) % 16, r * 4, 1, 3);
-        g.fillStyle = light;
-        for (let x = 0; x < 16; x += 4) g.fillRect((x + off + 1) % 16, r * 4, 2, 1);
-      }
-    } else if (kind === 'tile') {
-      for (let x = 0; x < 16; x += 4) {
-        g.fillStyle = dark; g.fillRect(x, 0, 1, 16);
-        g.fillStyle = light; g.fillRect(x + 1, 0, 1, 16);
-        g.fillStyle = darker; g.fillRect(x + 3, 0, 1, 16);
-      }
-    } else if (kind === 'plank') {
-      for (let x = 0; x < 16; x += 8) { g.fillStyle = darker; g.fillRect(x, 0, 1, 16); g.fillStyle = light; g.fillRect(x + 1, 0, 1, 16); }
-      g.fillStyle = dark;
-      for (let i = 0; i < 6; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 15), 1, 2);
-    } else {
-      g.fillStyle = dark;
-      for (let i = 0; i < 26; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), 1, 1);
-      g.fillStyle = light;
-      for (let i = 0; i < 14; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), 1, 1);
-    }
-  });
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  m = new THREE.MeshToonMaterial({ map: tex, gradientMap: RAMP, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-  m.userData.tile = tile;
-  patternCache.set(key, m);
-  return m;
-}
-
 /**
  * A soft ball of leaves, a bush, a lamp globe: smooth-shaded, a handful of segments.
  * @param {number} r @param {string} color
@@ -434,61 +359,6 @@ export function ball(r, color, o = {}) {
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
-}
-
-const groundCache = new Map();
-
-/**
- * A ground plane covered in a small repeating pixel pattern: tiles with grout, speckled
- * asphalt, grass. One mesh however big it is.
- *
- * @param {number} w @param {number} d metres
- * @param {{base: string, alt?: string, line?: string, kind?: 'tile'|'speckle'|'blades', tile?: number, seed?: number, flowers?: string[]}} o
- */
-export function groundPlane(w, d, o) {
-  const tile = o.tile ?? 2;
-  const tex = groundTexture(o);
-  const t = tex.clone();
-  t.needsUpdate = true;
-  t.repeat.set(w / tile, d / tile);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }));
-  m.rotation.x = -Math.PI / 2;
-  m.receiveShadow = true;
-  return m;
-}
-
-/** @param {Parameters<typeof groundPlane>[2]} o */
-function groundTexture(o) {
-  const key = `${o.base}|${o.alt}|${o.line}|${o.kind}|${o.flowers ?? ''}`;
-  let tex = groundCache.get(key);
-  if (!tex) {
-    let seed = o.seed ?? 7;
-    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-    tex = pixelTexture(16, 16, (g) => {
-      g.fillStyle = o.base;
-      g.fillRect(0, 0, 16, 16);
-      if (o.kind === 'tile') {
-        g.fillStyle = o.alt ?? o.base;
-        g.fillRect(0, 0, 8, 8);
-        g.fillRect(8, 8, 8, 8);
-        g.fillStyle = o.line ?? o.base;
-        g.fillRect(0, 0, 16, 1);
-        g.fillRect(0, 0, 1, 16);
-        g.fillRect(0, 8, 16, 1);
-        g.fillRect(8, 0, 1, 16);
-      } else {
-        g.fillStyle = o.alt ?? o.base;
-        const n = o.kind === 'blades' ? 22 : 30;
-        for (let i = 0; i < n; i += 1) g.fillRect(Math.floor(rnd() * 16), Math.floor(rnd() * 16), o.kind === 'blades' ? 1 : 1 + Math.floor(rnd() * 2), o.kind === 'blades' ? 2 : 1);
-        // Flowers, a few: the dot of colour that makes a lawn look cared for.
-        if (o.flowers) for (let i = 0; i < 3; i += 1) { g.fillStyle = o.flowers[i % o.flowers.length]; g.fillRect(Math.floor(rnd() * 15), Math.floor(rnd() * 15), 1, 1); }
-      }
-    });
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    groundCache.set(key, tex);
-  }
-  return tex;
 }
 
 /**

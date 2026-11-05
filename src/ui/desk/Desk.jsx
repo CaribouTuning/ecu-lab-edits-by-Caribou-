@@ -138,7 +138,7 @@ function useMedia(q) {
 }
 
 /** @returns {boolean} whether the screen is a phone's */
-export const usePhone = () => useMedia(PHONE_QUERY);
+const usePhone = () => useMedia(PHONE_QUERY);
 
 /** @returns {boolean} whether it is a phone held upright, where the shop's left wall is out of the picture */
 export const usePortraitPhone = () => useMedia('(max-width: 560px) and (orientation: portrait)');

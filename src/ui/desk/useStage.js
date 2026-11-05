@@ -10,7 +10,7 @@
  * nothing in the app depends on the picture.
  */
 
-import { read3d, write3d } from './render3d.js';
+import { hasHardwareGl, read3d, write3d } from './render3d.js';
 import { useEffect, useRef, useState } from 'react';
 
 import { createStage } from '../world/stage.js';
@@ -50,8 +50,11 @@ export function useStage(setup, opts = {}) {
     let stage;
     if (typeof WebGLRenderingContext === 'undefined') { setFailed(true); return undefined; }
     // The lit shop only: a player who turned the 3D off, or a start that failed last time.
-    const choice = opts.real ? read3d() : 'on';
-    if (choice === 'off') { setFailed(true); return undefined; }
+    const choice = read3d();
+    if (opts.real && choice === 'off') { setFailed(true); return undefined; }
+    // No hardware drawing on this machine: every 3D view stays flat, not just the shop,
+    // unless the player has forced the 3D on.
+    if (choice !== 'force' && !hasHardwareGl()) { setFailed(true); return undefined; }
     try {
       // Hatching only where a scene asks for it: over the shop it read as diagonal stripes.
       // A software renderer (hardware acceleration off) would draw the shop at a crawl or

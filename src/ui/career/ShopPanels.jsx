@@ -18,8 +18,8 @@ import {
 import styles from './ShopScreen.module.css';
 
 export const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
-export const TIER_NAME = { 1: 'Street', 2: 'Enthusiast', 3: 'Pro' };
-export const VERDICT = {
+const TIER_NAME = { 1: 'Street', 2: 'Enthusiast', 3: 'Pro' };
+const VERDICT = {
   pass: { title: 'Job done', tone: 'ok' },
   partial: { title: 'Partly done', tone: 'warn' },
   fail: { title: 'Not fixed yet', tone: 'warn' },

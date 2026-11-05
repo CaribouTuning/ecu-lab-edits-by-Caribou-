@@ -19,9 +19,9 @@ describe('changedParts', () => {
     const with_ = (patch) => [...changedParts({ ...stock, ...patch }, p)];
     expect(with_({ engineConfig: { ...stock.engineConfig, bore: stock.engineConfig.bore + 1 } })).toEqual(['block']);
     expect(with_({ engineConfig: { ...stock.engineConfig, camDuration: stock.engineConfig.camDuration + 8 } })).toEqual(['head']);
-    expect(with_({ mods: { ...stock.mods, intake: !stock.mods.intake } })).toEqual(['exhaust']);
+    expect(with_({ mods: { ...stock.mods, intake: !stock.mods.intake } })).toEqual(['boltons']);
     expect(with_({ injIdx: stock.injIdx + 1 })).toEqual(['fuel']);
-    expect(with_({ mods: { ...stock.mods, headers: !stock.mods.headers } })).toEqual(['exhaust']);
+    expect(with_({ mods: { ...stock.mods, headers: !stock.mods.headers } })).toEqual(['boltons']);
   });
 
   it('has no stock to compare an engine of the player\'s own with', () => {

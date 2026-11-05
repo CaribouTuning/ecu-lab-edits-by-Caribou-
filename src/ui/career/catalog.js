@@ -155,7 +155,7 @@ export const EQUIPMENT = [
 ];
 
 /** Reputation, and what each step up is called. */
-export const REP_TIERS = [
+const REP_TIERS = [
   { min: 0, title: 'Garage startup' },
   { min: 20, title: 'Local shop' },
   { min: 60, title: 'Known tuner' },

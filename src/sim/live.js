@@ -6,8 +6,8 @@
  * exceeds friction torque, idles because the ECU trims air to hold a target, and
  * stalls if it does not.
  *
- * `liveStep` is pure apart from `sensorRead`, which uses `Math.random()` to simulate
- * sensor noise. Tests that need determinism should stub `Math.random`.
+ * `liveStep` is pure: sensor noise comes from a seeded generator the state carries
+ * (`liveRandom`), so the same start gives the same run.
  */
 
 import { BARO_KPA, DRIVETRAIN_EFF, PSI_TO_KPA } from './constants.js';
@@ -230,10 +230,10 @@ export function liveStep(st, dt, input, cfg) {
 
   // ---- simulated sensors: lag + noise ----
   const lag = readSpeedAndAirflow(s, pt, dt, derived.overlapDeg || 0);
-  s.sensedMap = sensorRead(s.sensedMap, pt ? pt.map : BARO_KPA, lag, 0.7);
-  s.sensedIat = sensorRead(s.sensedIat, pt ? pt.iat : 25, 0.05, 0.3);
-  s.sensedLambda = sensorRead(s.sensedLambda, pt && s.running && !s.fuelCut ? pt.lambda : 1.6, lag * 0.5, 0.008);
-  s.sensedCoolant = sensorRead(s.sensedCoolant, s.coolantC, 0.08, 0.25);
+  s.sensedMap = sensorRead(s.sensedMap, pt ? pt.map : BARO_KPA, lag, 0.7, s);
+  s.sensedIat = sensorRead(s.sensedIat, pt ? pt.iat : 25, 0.05, 0.3, s);
+  s.sensedLambda = sensorRead(s.sensedLambda, pt && s.running && !s.fuelCut ? pt.lambda : 1.6, lag * 0.5, 0.008, s);
+  s.sensedCoolant = sensorRead(s.sensedCoolant, s.coolantC, 0.08, 0.25, s);
   s.live = pt;
   s.effThrottle = effThrottle;
   s.closedLoop = closedLoop;

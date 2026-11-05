@@ -352,8 +352,11 @@ export const BLOWER_OPTS = [
 ];
 
 /**
- * Exhaust diameter is not simply "bigger is better" — undersized chokes high-RPM
- * flow, oversized loses low-RPM scavenging velocity.
+ * Exhaust diameter: the pipe's pressure drop goes as the square of the gas speed through it
+ * (breathing.js `exhaustSystemDropKpa`), so an undersized pipe holds back-pressure on the
+ * cylinders at high flow and a bigger one stops paying once its drop is small. The waves
+ * that scavenge are in the primaries (headers), not after the collector, so no low-RPM
+ * penalty is charged for an oversized pipe.
  *
  * Must span everything {@link idealExhaustDiameter} can return (2.0"-5.0") in steps small
  * enough that some option always lands inside the Engineer Score's 0.3" tolerance, or
@@ -381,10 +384,9 @@ export const MAX_EXHAUST_DIA = EXHAUST_DIA_OPTS[EXHAUST_DIA_OPTS.length - 1].dia
  * roughly scales power with pressure ratio, so a boosted build genuinely needs more
  * pipe than the same engine naturally aspirated.
  *
- * This is the single source of truth for exhaust sizing. The VE model, the on-screen
- * advice and the Engineer Score all call it. Do not add a second formula elsewhere: a
- * separate displacement-only one in the airflow model would let the score reward a
- * diameter the physics then penalises.
+ * This is the on-screen target and the Engineer Score's. The physics does not read it:
+ * the airflow model prices whatever pipe is fitted by its own pressure drop at the flow
+ * the engine makes, which is why the score only marks a pipe smaller than this.
  *
  * @param {number} displacementL engine displacement, litres
  * @param {number} [peakBoostPsi] peak boost target, psi
@@ -395,23 +397,6 @@ export function idealExhaustDiameter(displacementL, peakBoostPsi = 0) {
   const estCrankHp = naCrankHp * (1 + Math.max(0, peakBoostPsi) / 14.7);
   return clamp(estCrankHp / 100, 2.0, 5.0);
 }
-
-/**
- * Airflow gains per bolt-on, in VE points at wide open throttle, weighted toward the RPM
- * where each one works.
- *
- * Fitted to what these parts measure on a chassis dyno on a naturally aspirated 3.5 V6
- * (the VQ35 is the most-dynoed engine these parts are sold for), each with the MAF
- * rescaled and the VE table corrected afterwards: a cold air intake about 5-8 whp, a
- * cat-back 5-8 whp, long-tube headers 15-20 whp, all three together about 30-35 whp,
- * roughly 12-14% over stock. These were once about twice that (the three together
- * added 26%, and headers alone 12%), which made a turbo kit look barely worth fitting.
- */
-export const MOD_BONUS = {
-  intake: [0, 0, 0, 0.5, 1, 1.5, 2, 2.5],
-  exhaust: [0, 0, 0.5, 1, 1.5, 2, 2.5, 3],
-  headers: [0, 0.5, 1, 2, 3.5, 5, 6, 6.5],
-};
 
 /** Display copy for each bolt-on. */
 export const MOD_INFO = {

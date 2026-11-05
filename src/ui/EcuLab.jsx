@@ -44,7 +44,7 @@ import {
 } from './audio/engineAudio.js';
 import { T } from './theme.js';
 import { BUILD_VERSION } from '../version.js';
-import { backupShop, loadCareer, loadShop, saveCareer, saveShop } from '../storage.js';
+import { backupShop, loadCareer, loadSandbox, loadShop, saveCareer, saveSandbox, saveShop } from '../storage.js';
 import { StatusStrip } from './AppShell.jsx';
 import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
@@ -88,7 +88,7 @@ import { tuneAttention } from './components/fixLinks.js';
 import { isApplePlatform, pageCommands, sectionAvailable } from './commands.js';
 import { CommandPalette } from './components/CommandPalette.jsx';
 import { EngineScreen } from './screens/build/EngineScreen.jsx';
-import { ExhaustScreen } from './screens/build/ExhaustScreen.jsx';
+import { BoltonsScreen } from './screens/build/BoltonsScreen.jsx';
 import { FuelSystemScreen } from './screens/build/FuelSystemScreen.jsx';
 import { InductionScreen } from './screens/build/InductionScreen.jsx';
 import { LiveGauges } from './screens/dash/LiveScreen.jsx';
@@ -164,7 +164,7 @@ function LockedSettings({ section }) {
  * that waits for one should say WHY it waits that long by naming this rather than by
  * carrying a number that has to be remembered if the sequence is ever retimed.
  */
-export const DYNO_PULL = Object.freeze({
+const DYNO_PULL = Object.freeze({
   SETTLE_MS: 1400,
   SWEEP_MS: 1900,
   DOWN_MS: 2100,
@@ -819,6 +819,27 @@ export function EcuLabApp() {
     // Stable for the life of the store, so this still loads career stats exactly once.
   }, [dispatch]);
 
+  // SANDBOX's engine and tables survive a reload, a closed tab and a phone discarding the
+  // page: read once at launch, written (debounced) whenever they change. CAREER's cars are
+  // saved with the shop; SANDBOX's own are set aside in the stash while CAREER has the bench.
+  const [sandboxLoaded, setSandboxLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const s = await loadSandbox();
+      if (cancelled) return;
+      if (s) dispatch({ type: ACTIONS.RESTORE_SANDBOX, build: s.build, tune: s.tune });
+      setSandboxLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [dispatch]);
+  const sandboxBench = mode === 'sandbox' ? { build, tune } : sandboxStash;
+  useEffect(() => {
+    if (!sandboxLoaded || !sandboxBench || sandboxBench.build.engineReady === false) return undefined;
+    const t = setTimeout(() => { saveSandbox(sandboxBench); }, 600);
+    return () => clearTimeout(t);
+  }, [sandboxLoaded, sandboxBench?.build, sandboxBench?.tune]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   // Career state is written back whenever it moves. A save call inside `doRun` could
   // not cover the pin: pinning is a dispatch like any other and has no natural "and now
   // save" call site. An effect over the persisted fields does.
@@ -1388,7 +1409,7 @@ export function EcuLabApp() {
                     ) : null}
                     {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
                     {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
-                    {buildSection === 'exhaust' && <ExhaustScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
+                    {buildSection === 'boltons' && <BoltonsScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
                   </BuildBench>
                 </BuildLocked.Provider>
           </div>
@@ -1576,7 +1597,7 @@ export function EcuLabApp() {
                     <dl className={deskApps.runSheetList}>
                       <dt>Car</dt><dd>{inCareer && jobOnBay ? `${jobOnBay.customer.name}'s ${jobOnBay.customer.car}` : 'The shop car, strapped down'}</dd>
                       <dt>Engine</dt><dd>{buildName(build) ?? 'Your own build'}, {engineDerived.displacementL.toFixed(1)} L {build.engineConfig.configuration}</dd>
-                      <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa} kPa`}`}</dd>
+                      <dt>Pull</dt><dd>{`${SWEEP_START_RPM.toLocaleString('en-US')} to ${engineDerived.redline.toLocaleString('en-US')} rpm, ${loadKpa >= 100 ? 'full throttle' : `${loadKpa}% throttle`}`}</dd>
                       <dt>Fuel</dt><dd>{(() => { const f = FUEL_CHOICES[build.octaneIdx] ?? FUEL_CHOICES[0]; return f.flex ? `Flex fuel, E${Math.round(build.ethanolPct ?? 0)}` : /^\d+$/.test(f.label) ? `${f.label} octane` : f.label; })()}</dd>
                     </dl>
                     <p className={deskApps.runSheetNote}>

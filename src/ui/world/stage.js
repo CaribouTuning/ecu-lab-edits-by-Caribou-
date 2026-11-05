@@ -13,7 +13,7 @@ import { SPRITE_LIGHT, THREE } from './gfx.js';
 import { makeSky } from './sky.js';
 
 /** Internal rows of pixels each quality aims for. */
-export const PIXEL_ROWS = { chunky: 200, normal: 280, fine: 420 };
+const PIXEL_ROWS = { chunky: 200, normal: 280, fine: 420 };
 
 const SKY = W.sky;
 /** How far you see, metres: haze start and end, and where the outlines fade out. Driving looks down the road. */

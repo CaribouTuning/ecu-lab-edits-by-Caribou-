@@ -59,9 +59,11 @@ Two results disagree with real engines. Both are left as the physics gives them,
 
 ## 5. Nothing adds horsepower
 
-No part carries a power bonus. Bolt-ons add airflow (VE points, `MOD_BONUS` in
-`src/sim/hardware.js`) fitted to chassis-dyno results on a 3.5 L V6, and `airflow.js`
-states the rule outright: "never as a bonus multiplier on power". Power comes out of the
+No part carries a power bonus, and none carries a VE bonus either. A bolt-on changes the
+hardware the gas-exchange model flows through (`src/sim/breathing.js`): a cold air intake
+the inlet duct's loss ahead of the throttle (`src/sim/throttle.js`), headers the exhaust
+primary's length and its collector, a cat-back the exhaust system's pressure drop. What it
+gains is whatever that hardware breathes. Power comes out of the
 air, fuel and cycle physics. The empirical constants (about 200) live in
 `src/sim/coefficients.js`, each with a comment saying where it comes from.
 

@@ -71,8 +71,6 @@ export const DRIVETRAIN_EFF = 0.85;
 /** Injector opening latency at ~13.5 V, ms. */
 export const INJ_DEADTIME_MS = 1.0;
 
-/** How strongly bore:stroke ratio biases the powerband. */
-export const CHAR_SCALE = 0.3;
 
 /**
  * Ambient air density, kg/m³.

@@ -29,6 +29,8 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
+ * @property {number|null} [exhaustDia] the exhaust pipe fitted, inches: what the exhaust
+ *   system after the ports costs in back-pressure (friction.js `exhaustManifoldKpa`)
  * @property {number} veVal the ECU's VE table value at this point, percent — what the
  *   ECU BELIEVES the cylinder filling is. Drives the fuel calculation.
  * @property {number} [veActualVal] TRUE cylinder filling at this point, percent — what
@@ -135,6 +137,7 @@ export function evaluatePoint({
   fuel, mods, mafScalar, mafErrorBase,
   injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
   empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
+  exhaustDia = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
@@ -251,6 +254,7 @@ export function evaluatePoint({
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
     turbine, wastegateRelief, ...(E?.env?.baroKpa ? { baroKpa: E.env.baroKpa } : {}),
+    pipeDiaIn: exhaustDia ?? 3.0, mods,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure

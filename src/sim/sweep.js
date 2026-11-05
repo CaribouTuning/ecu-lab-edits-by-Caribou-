@@ -7,6 +7,8 @@
  * that only says something is wrong teaches nothing.
  */
 
+import { BARO_KPA } from './constants.js';
+import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
 import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
@@ -22,6 +24,9 @@ import { ecuSweepEvents } from './ecu/ecuEvents.js';
 import { ECU_COEFF } from './ecu/ecuCoefficients.js';
 import { ecuSteadyPoint } from './ecu/strategy.js';
 import { N2O_AIR_EQUIV, stepBottle, wetKitFuelKgS } from './nitrous.js';
+
+/** Exhaust over intake pressure past which a turbo engine's turbine is logged as choking it. */
+const BACKPRESSURE_RATIO_LIMIT = 1.8;
 
 /** Lowest engine speed of a dyno pull, RPM. */
 export const SWEEP_START_RPM = 1500;
@@ -130,6 +135,7 @@ export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
+  exhaustDia = null,
 }) {
   const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
@@ -148,7 +154,7 @@ export function simulateSweep({
   const hardCut = ecu ? (derived.redline ?? SWEEP_END_RPM) + ecu.cal.limiter.offsetRpm : Infinity;
   const ecuHw = ecu ? {
     ...ecu.hw, mafErrorBase, derived, mods, turboOn, boostCurve, turbine, compressor,
-    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous,
+    injectorCc, ecuInjectorCc, mafScalar, fuel, blower, blowerRatio, nitrous, exhaustDia,
     veTruthByPhase: ecu.hw.veTruthByPhase ?? [flowAt],
     ...(wearFx ? { wear: wearFx } : {}),
   } : null;
@@ -183,6 +189,8 @@ export function simulateSweep({
       derived,
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+      throttle: { boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake },
+      exhaust: { pipeDiaIn: exhaustDia ?? 3.0, mods },
       ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
@@ -454,7 +462,7 @@ export function simulateSweep({
           ? `This is while the nitrous sprays: it brings oxygen worth about 1.6 times its weight in air, and ${nitrous?.kit === 'dry' ? 'a dry kit relies on the ECU to add the fuel for it through the injectors — too little arrived' : 'the wet kit\'s fuel jet did not bring enough to match it'}. Lean on nitrous is how pistons melt.`
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `The AFR table asked for ${peak.afrCommanded.toFixed(1)}:1 here, but the engine got ${peak.afr.toFixed(1)}:1. The target is fine; the fuelling is not delivering it.`
-          : `The AFR target itself (${peak.afrCommanded.toFixed(1)}:1) is set leaner than is safe for ${Math.round(loadKpa)} kPa in this range.${missedTarget(peak) ? ` And the engine got even leaner than that, ${peak.afr.toFixed(1)}:1.` : ''}`,
+          : `The AFR target itself (${peak.afrCommanded.toFixed(1)}:1) is set leaner than is safe for ${Math.round(peak.map)} kPa in the manifold.${missedTarget(peak) ? ` And the engine got even leaner than that, ${peak.afr.toFixed(1)}:1.` : ''}`,
       fix: peak.fuelLimited
         ? `Upgrade injectors on BUILD → FUEL SYSTEM (and set TUNE → INJECTORS to match), or lower VE/boost so demand fits within current capacity.`
         : spraying(peak)
@@ -517,6 +525,29 @@ export function simulateSweep({
     });
   });
 
+  // BACKPRESSURE: a turbine too small for the engine's exhaust. Everything that leaves the
+  // cylinders has to pass the turbine, and the pressure it takes to push it through climbs
+  // with the flow. Once the exhaust side sits well above the intake, every cylinder pumps
+  // against it and, through overlap, refills with its own exhaust: the engine breathes worse
+  // than it did with no turbo at all. Logged as itself, so a turbo that makes LESS power than
+  // the engine made without it says why.
+  if (turboOn) {
+    groupRuns(points, (p) => p.rpm >= 3000 && p.emp != null && p.map > 0
+      && p.emp / p.map >= BACKPRESSURE_RATIO_LIMIT).forEach((run) => {
+      if (run.length < 3) return;
+      const worst = run.reduce((a, b) => (b.emp / b.map > a.emp / a.map ? b : a));
+      const ratio = worst.emp / worst.map;
+      events.push({
+        type: 'backpressure', severity: 2,
+        impact: Math.round(clamp(6 + (ratio - BACKPRESSURE_RATIO_LIMIT) * 12, 6, 24) * (0.4 + 0.6 * rangeFrac(run))),
+        rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+        msg: `The turbine is choking the engine across ${rangeLabel(run)}: ${Math.round(worst.emp)} kPa of exhaust pressure ahead of it against ${Math.round(worst.map)} kPa in the intake at ${worst.rpm} RPM`,
+        cause: `All of the engine's exhaust has to get through the turbine, and a turbine this size for this much engine needs ${ratio.toFixed(1)} times the intake's pressure to push it through. Each cylinder pumps against that on its exhaust stroke, and while both valves are open the exhaust pushes back into the cylinder, so it fills with less fresh air. Boost falls away and the engine can make less power than it did without the turbo.`,
+        fix: 'On BUILD → INDUCTION, fit a larger turbine housing or twin turbos, so the exhaust passes at a pressure near the intake\'s. A larger exhaust pipe helps a little. Asking for more boost from this turbine makes it worse.',
+      });
+    });
+  }
+
   // UNDERBOOST: the turbo cannot make what is asked of it. Below 4000 RPM a shortfall is
   // spool, which every turbo has and the boost curve should already allow for; above it,
   // with the exhaust flowing hard, a turbo that still falls short is too small (its
@@ -545,7 +576,11 @@ export function simulateSweep({
   // air-per-cylinder axis is sized by the ECU's own air estimate, not by boost.
   const kpaAxes = [layout?.ve, layout?.timing, layout?.afr].filter((a) => a && a.loadUnit === 'kPa');
   const topKpa = layout ? (kpaAxes.length ? Math.min(...kpaAxes.map((a) => a.load[0])) : Infinity) : LOAD[0];
-  groupRuns(points, (p) => p.map > topKpa + 0.5).forEach((run) => {
+  // Above atmospheric only: a naturally aspirated engine at full throttle reaches the
+  // barometer less what the intake and the throttle lose, which can sit a kPa over a table
+  // topped at 100. That is the full-throttle row, not boost nobody has tuned.
+  const pastKpa = Math.max(topKpa, (ecu?.cond?.env?.baroKpa ?? BARO_KPA)) + 0.5;
+  groupRuns(points, (p) => p.map > pastKpa).forEach((run) => {
     const peak = run.reduce((a, b) => (b.map > a.map ? b : a));
     events.push({
       type: 'pastTable', severity: 3, impact: Math.round(clamp((peak.map - topKpa) / 4, 6, 30)),

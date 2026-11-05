@@ -61,6 +61,9 @@
 .spotLayer .spot { pointer-events: none; }
 .spotLayer .spotLabel { opacity: 0; transition: opacity 120ms; }
 .spotLayer .spot:focus-visible .spotLabel, .spotLayer .spot[data-hover] .spotLabel { opacity: 1; }
+/* The station the next step is at keeps its name up, in the outline's colour, so the
+   outline round it in the shop (shopScene.js `mark`) says what it is. */
+.spotLayer .spot[data-next='true'] .spotLabel { opacity: 1; background: var(--acc); color: var(--acc-on); border-color: var(--acc); }
 .spotLayer .spot:focus-visible { outline: none; }
 
 /* ---------- the laptop ---------- */

@@ -184,7 +184,7 @@ export const overhead = (c) => 40 + 70 * (capacity(c) - 1)
 const advanceDay = (c) => withOffers({ ...c, day: c.day + 1, money: c.money - overhead(c) });
 
 /** How many customers wait on the board. @param {Career} c */
-export const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
+const boardSize = (c) => 3 + (c.owned.includes('sign') ? 1 : 0);
 
 /** @param {Career} c @param {string} page a TUNE section id */
 export const pageUnlocked = (c, page) => STARTING_PAGES.includes(page)
