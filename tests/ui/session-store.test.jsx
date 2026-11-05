@@ -557,7 +557,7 @@ describe('banking a pull', () => {
     it('does not re-grade a finished pull against hardware fitted afterwards', async () => {
       // The headline case from the issue, driven through a real hardware control:
       // change the exhaust after the pull. Under the old memo the Engineer Score
-      // recomputed to 92 (`-8 Exhaust diameter poorly matched to displacement`) and
+      // recomputed to 92 (an exhaust deduction) and
       // dragged the Pull Score down with it — on a dyno session that had already ended,
       // through a pipe the engine never ran.
       //
@@ -580,13 +580,13 @@ describe('banking a pull', () => {
       };
       expect(Number(measured.pull)).toBeGreaterThan(0);
 
-      // BUILD > EXHAUST > fit a 4.0" pipe, then back to the scorecard.
+      // BUILD > EXHAUST > fit a 2.0" pipe, too small for the power, then back to the scorecard.
       fireEvent.click(screen.getByRole('button', { name: 'BUILD' }));
       fireEvent.click(screen.getByText('Exhaust'));
-      fireEvent.click(screen.getByRole('button', { name: '4.0"' }));
+      fireEvent.click(screen.getByRole('button', { name: '2.0"' }));
       // Guard the interaction, not just the outcome: an equality assertion passes
       // trivially if the pipe was never actually changed.
-      expect(screen.getByRole('button', { name: '4.0"' }).getAttribute('aria-pressed')).toBe('true');
+      expect(screen.getByRole('button', { name: '2.0"' }).getAttribute('aria-pressed')).toBe('true');
       fireEvent.click(screen.getByRole('button', { name: 'DYNO' }));
       fireEvent.click(screen.getByRole('button', { name: 'SCORE' }));
 

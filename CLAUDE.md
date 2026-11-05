@@ -93,11 +93,26 @@ remaining risk is the same Node major with a different libm, which is what step 
   run" is judged against the player's own pull (`cellsNotRunBy`), never TUNE's full-throttle
   one. `CUSTOM_ENGINE_LIMITS` are the ranges
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.
-- **Preset fidelity is tracked in #19.** The gap is the shape of the airflow curve, not a
-  missing effect such as direct injection: the DI presets already sit at MBT timing
-  almost everywhere. Fix #15 (no naturally aspirated power peak before redline) before
-  refitting presets, or the refit fits data to the wrong shape. Compare whole curves with
-  `scripts/analyze_presets.py`, not just peaks.
+- **VE is a gas-exchange model, not a curve** (`sim/breathing.js`, called by
+  `airflow.js hardwareVeAt` on a lazily filled 100 RPM × 2 kPa grid). Valves are orifices
+  with one fitted constant (`BREATH_VALVE_CD` 0.52, fitted across all 13 presets), the runner
+  is an inertial column tuned to the torque peak (`tunedRunnerM`), the exhaust primary an
+  acoustic line. Bolt-ons change hardware, never add VE. Do not reintroduce a VE multiplier
+  to fix a preset: the user's rule is that the air model is the physics. It is slow: the full
+  suite takes over an hour on one core, so run the changed files, not the suite, while working.
+- **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
+  throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
+  point's own `map` for anything about manifold pressure.
+- **Tests that pull a preset go through `tests/ecuHarness.js` `makeEngine`** (the app's own
+  path: the hardware's breathing as truth, the ECU in the loop). Passing the factory VE table
+  as `veTruth` reads the table back as if it were the engine and hides the physics.
+- **Preset fidelity is tracked in #19.** Known misses on the new model: NA peaks early
+  (VQ35HR, LQ4, HEMI; no cam duration moves them), pushrod V8 torque 8–10% high, and VE
+  under 10% at 20–25 kPa above 6000 RPM (the derived valve events leave ~9° of overlap).
+  Those are the shape to fix next, in breathing.js, not by refitting cams. Compare whole
+  curves with `scripts/analyze_presets.py`, not just peaks.
+- **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
+  replays exactly; do not call `Math.random` in the simulation.
 - **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
   with the spark after TDC on a closed throttle. The share of charge unburned at EVO (the
   Wiebe tail plus `lateSparkQuench`, which is zero for any spark up to 5° ATDC) costs work

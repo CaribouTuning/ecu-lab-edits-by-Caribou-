@@ -103,36 +103,14 @@ export const ENGINE_PRESETS = [
       // `springRate` are not (Nissan states only that the Rev-Up revised the cams and
       // raised the limit), so they are where this preset is fitted, as `vq35hr` is.
       //
-      // `camDuration` 210 is fitted with the inlet Mach index (#15) in place, which takes
-      // volumetric efficiency out of the top end: power lands on the published figure
-      // (0.0%, torque +5.0%), and the power curve's flat top (within 1 hp of peak) runs
-      // 6500-6900 against a published 6400 rather than climbing into the 7000 limiter.
+      // FITTED on the gas-exchange breathing model (breathing.js), through the app's own pull
+      // (tests/ecuHarness.js): 214 puts the power curve's flat top on 6200-6400 against the
+      // published 6400, falling away before the 7000 limiter, with power 4.7% under the
+      // rating and torque 2.7% over it. Longer cams move the peak toward the limiter.
       //
       // `springRate` 60 does not change power; it sets where the valvetrain gives up.
-      // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline, mid-pack
-      // against the rest of the set. No pull should ever show a `float` event here; if
-      // one appears that is a bug, not "the character".
-      //
-      // REFITTED from 202 for the inlet Mach index (#15). That term takes volumetric
-      // efficiency out of the top end, so duration comes back up to pay for it: power
-      // lands on the published figure (0.0%, torque +5.0%), and the power curve's flat top
-      // (within 1 hp of peak) now runs 6500-6900 against a published 6400 instead of
-      // climbing into the 7000 limiter.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: duration moved to
-      // where power lands on the published rating again (friction.js).
-      // REFITTED for the breathing curve read at speed scaled to its peak (airflow.js) and
-      // the corrected rod length: 214 (power -3.9%, torque 0.0%) is the longest duration
-      // whose power still falls away before the 7000 limiter (peak 6600 against a
-      // published 6400). Longer lands power on the rating but flat into the limiter,
-      // which the real engine does not do.
-      // REFITTED for the rich-flame chemistry (thermo.js, heatReleasedShare): a rich mixture
-      // now releases only what its CO and H2 leave it, about 4% less heat per kg of air at
-      // full-throttle lambda. Duration stays at 214, still the longest whose power falls
-      // away before the 7000 limiter: every longer cam runs flat into it, which the real
-      // engine does not do. So this preset now reads about 9% under its rating, a known gap
-      // recorded in tests/presets.test.js (KNOWN_GAPS): the model's top-end rolloff, not
-      // its cam, is what holds it there.
+      // `valveFloatRpm` lands ~8530, about 1530 RPM clear of the 7000 redline. No pull should
+      // ever show a `float` event here; if one appears that is a bug, not "the character".
       camDuration: 214, springRate: 60,
       redline: 7000,
     },
@@ -161,32 +139,12 @@ export const ENGINE_PRESETS = [
       // move. `camDuration` and `springRate` are not published, so they are where this
       // preset is fitted.
       //
-      // `camDuration` 218 is fitted with the inlet Mach index (#15) in place, which takes
-      // real volumetric efficiency out of the top end. Power lands on the published
-      // figure (-0.0%) and torque +1.8%.
-      //
-      // The spring rate carries it easily: valve float sits near 8880 RPM, well clear of
-      // the 7500 redline, and the cam stays short of the overlap that trips the cam
-      // advisory (see the refit note below).
-      //
-      // THE ROLLOFF NOW EXISTS. This preset used to climb monotonically into its limiter
-      // and read peak power at 7500, 700 RPM above the published 6800, because nothing in
-      // the shared physics made VE fall at speed. The Mach index is that term, and the
-      // simulated flat top (within 1 hp of peak) now runs 6400-7100, bracketing the
-      // published 6800 rather than sitting 700 RPM above it. What remains missing is still worth naming: the real
-      // engine's rolloff is cam profile, VVEL variable lift and intake-tract tuning, and
-      // the Mach term stands in for all three at once rather than reproducing any of them.
-      // REFITTED for the geometry-based friction model (friction.js), which charges this
-      // engine more friction at speed than the old straight line did: 228 is the longest
-      // duration that stays clear of the overlap advisory, which a factory cam does not
-      // trip (power -2.0%, torque -2.1%; 232 lands power on the rating but trips it).
-      // REFITTED for the breathing curve read at speed scaled to its peak (airflow.js) and
-      // the corrected rod length: 226 lands power on the rating (0.0%, torque +0.1%, peak
-      // 7000 against a published 6800), clear of the overlap advisory.
-      // KEPT through the rich-flame chemistry (thermo.js, heatReleasedShare), which took
-      // about 4% of heat per kg of air out of full throttle: power now reads about -5%. 228
-      // reads -3.9%, but then the stock spark table knocks at 5100 RPM once an intake and
-      // headers are fitted, which a factory margin does not allow.
+      // FITTED on the gas-exchange breathing model (breathing.js), through the app's own pull
+      // (tests/ecuHarness.js): 226 makes power 2.0% under the rating and torque 3.2% over,
+      // but its power peaks at 6200 against the published 6800, and no duration from 218 to
+      // 230 moves it later: the peak's place is the model's shape, not this input (the same
+      // early peak shows on the LQ4 and the 6.4 HEMI; tests/presets.test.js holds all three). The spring rate carries it:
+      // valve float sits near 8880 RPM, well clear of the 7500 redline.
       camDuration: 226, springRate: 68,
       redline: 7500,
     },
@@ -488,7 +446,7 @@ export const ENGINE_PRESETS = [
   //
   // Intake valve sizes are cylinder-head casting figures from enthusiast references
   // (2.00 in on the 241/243/317 castings, 1.89 in on the 706/862 truck castings), not
-  // GM documents; they set the valve area the inlet Mach index reads.
+  // GM documents; they set the valve area the gas-exchange model flows through.
   {
     id: 'ls1',
     name: 'GM LS1 (C5 Corvette)',

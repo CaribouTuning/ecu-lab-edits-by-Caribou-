@@ -819,7 +819,7 @@ export const COEFF = {
   // into what a tuned one adds.
   BEARING_EVENT_BAR_BOOST_RATED: 86,
 
-  // --- Inlet Mach index: the high-speed breathing limit (see engine.js) ---
+  // --- Inlet Mach index (engine.js): a yardstick; the breathing limit is breathing.js ---
   // Lumped (bore / inlet valve diameter)^2 from Taylor's index. DERIVED, not fitted: a
   // modern four-valve head runs two intake valves at roughly 0.36 of the bore each, so
   // the equivalent single valve is 0.36 * sqrt(2) = 0.509 of the bore, and the factor is

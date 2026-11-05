@@ -274,8 +274,10 @@ export function computeEngineerScore({
       score -= 8; deductions.push('-8 Turbo too small for this engine\'s airflow — boost will fall away near redline and exhaust back-pressure climbs (fit a bigger turbo, or twins)');
     }
   }
-  if (Math.abs(exhaustDiaError) > 0.3) {
-    score -= 8; deductions.push('-8 Exhaust diameter poorly matched to displacement');
+  // Only a pipe too small for the power costs anything in the physics (its pressure drop at
+  // high flow); an oversized one gains little and loses nothing, so it is not marked.
+  if (exhaustDiaError < -0.3) {
+    score -= 8; deductions.push('-8 Exhaust pipe too small for the power: back-pressure costs the top end');
   }
   if (dutyPreview > 95) {
     score -= 12; deductions.push('-12 Injectors undersized for current demand');

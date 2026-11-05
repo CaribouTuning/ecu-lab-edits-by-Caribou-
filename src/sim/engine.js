@@ -82,14 +82,10 @@ export function meanPistonSpeedMs(strokeMm, rpm) {
  *
  *     Z = (bore / D_valve)^2 * meanPistonSpeed / sonicVelocity
  *
- * Past a critical value the flow chokes, the cylinder stops filling, and VE falls away
- * however hard the engine is turning. This is the term the model was missing: without it
- * VE kept climbing at the limiter and no naturally aspirated engine had a power peak
- * before its redline (issue #15).
- *
- * The bore-to-valve factor is lumped into a coefficient because the model has no valve
- * geometry — see COEFF.MACH_BORE_VALVE_FACTOR for what it is worth on a real head, and
- * for the honest note on which parts of this are derived and which are fitted.
+ * A yardstick, not a term in the airflow: the simulator no longer multiplies VE by any
+ * function of it. The fall of VE at speed comes out of the gas-exchange model
+ * (breathing.js), which flows the charge through the valves' own open area crank angle by
+ * crank angle and chokes where the pressure ratio says it does.
  *
  * @param {number} boreMm bore, mm — unused directly; kept for the geometry it represents
  * @param {number} strokeMm stroke, mm
@@ -101,7 +97,7 @@ export function inletMachIndex(boreMm, strokeMm, rpm, sonicMs = SONIC_AMBIENT_MS
   return (COEFF.MACH_BORE_VALVE_FACTOR / valveAreaRatio) * meanPistonSpeedMs(strokeMm, rpm) / sonicMs;
 }
 
-/** The four-valve head the Mach coefficients were fitted with: two intakes at 0.36 of the bore. */
+/** The reference four-valve head: two intakes at 0.36 of the bore. */
 export const REFERENCE_INTAKE_AREA_SHARE = 2 * 0.36 * 0.36;
 
 /**

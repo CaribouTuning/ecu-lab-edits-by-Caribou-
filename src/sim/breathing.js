@@ -280,6 +280,14 @@ export function gasExchange(g, op) {
       dmIn = mdot * dt;
       if (dmIn > 0) { taken += dmIn; hIn = CP * intakeK; } else { pushedBack -= dmIn; hIn = CP * t; dmIn = Math.max(dmIn, -0.9 * m); }
     } else u = 0;
+    // Through a long overlap at low speed both valves can drain the cylinder in the same
+    // step; no step may take out more than the cylinder holds.
+    const outflow = Math.max(0, -dmEx) + Math.max(0, -dmIn);
+    if (outflow > 0.9 * m) {
+      const s = (0.9 * m) / outflow;
+      if (dmEx < 0) dmEx *= s;
+      if (dmIn < 0) { pushedBack += dmIn * (1 - s); dmIn *= s; }
+    }
 
     // Wall heat: Woschni's correlation with his gas-exchange velocity, 6.18 x mean piston speed.
     const area = 2 * boreArea + Math.PI * g.boreM * ((v - clearance) / boreArea);
