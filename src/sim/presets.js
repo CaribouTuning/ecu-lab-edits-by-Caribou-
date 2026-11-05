@@ -993,7 +993,7 @@ const INJECTOR_SIZING_MAX_DUTY = 0.85;
  * Checks the figures a player entered for an engine of their own.
  *
  * @param {{configuration?: string, bore?: number|string, stroke?: number|string, compression?: number|string,
- *   redline?: number|string, camDuration?: number|string|null, injection?: string, valvetrain?: string,
+ *   redline?: number|string, camDuration?: number|string|null, exhaustCamDuration?: number|string|null, injection?: string, valvetrain?: string,
  *   valvesPerCyl?: number|string, blockMaterial?: string, headMaterial?: string, bottomEnd?: string}} spec
  * @returns {{ok: true, engine: import('./engine.js').EngineConfig, estimated: string[], assumed: string[]}
  *   | {ok: false, errors: Record<string, string>}} `estimated` names every figure that was

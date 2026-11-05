@@ -45,6 +45,7 @@ export function pullInputs(state) {
     octaneBonus: fuel.bonus, octaneLabel: fuel.label, fuel, injectorCc: INJECTOR_OPTS[injIdx].cc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived, turbine,
     compressor: compressorWithCount(COMPRESSOR_OPTS[compressorIdx], turbineCount), ecu,
+    exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     layout: tune.layout ? layoutById(tune.layout) : null,
   };

@@ -407,10 +407,10 @@ export function EcuLabApp() {
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor, turbine, camAt,
+    compressor, turbine, camAt, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
+       compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),

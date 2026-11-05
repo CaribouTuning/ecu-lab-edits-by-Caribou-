@@ -62,7 +62,7 @@ export function partSummaries(build, derived, preset) {
   return {
     engine: preset ? `${preset.name}, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}` : `Your own engine, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}`,
     block: `${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm, ${cfg.compression.toFixed(1)}:1`,
-    head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}° cam`,
+    head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}°/${cfg.exhaustCamDuration ?? cfg.camDuration}° cam`,
     induction: bolt ? `${turbo}, ${bolt}` : turbo,
     fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${INJECTOR_OPTS[build.injIdx].label}`,
     boltons: ex ? `${EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label}, ${ex}` : EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label,

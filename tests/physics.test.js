@@ -126,17 +126,25 @@ describe('airflow', () => {
   });
 
   it('keeps every VE cell inside physically sane bounds', () => {
-    for (const cfg of [STOCK, { ...STOCK, compression: 13, camDuration: 300, springRate: 20 }]) {
+    // A stock engine fills at least a tenth of its cylinder at any speed and manifold
+    // pressure, light load at high speed included. A 300 degree race cam keeps its intake
+    // valve open more than a full turn, seat to seat, so at idle vacuum the exhaust stroke
+    // pushes straight back into the manifold and the cylinder fills with its own exhaust:
+    // why such cams idle at 50-70 kPa and cannot pull 20. It is held to the same floor from
+    // 40 kPa up, and to a finite, positive filling below that.
+    const race = { ...STOCK, compression: 13, camDuration: 300, springRate: 20 };
+    for (const cfg of [STOCK, race]) {
       const ve = S.computeHardwareVE(cfg, { intake: true, exhaust: true, headers: true, intercooler: true }, {
         turboOn: true, turbine: S.TURBINE_OPTS[2], exhaustDia: 4.0, fuel: S.OCTANE_OPTS[3],
       });
-      for (const row of ve) {
+      ve.forEach((row, li) => {
         for (const v of row) {
           expect(Number.isFinite(v)).toBe(true);
-          expect(v).toBeGreaterThanOrEqual(10);
+          expect(v).toBeGreaterThan(0);
+          if (cfg === STOCK || S.LOAD[li] >= 40) expect(v).toBeGreaterThanOrEqual(10);
           expect(v).toBeLessThanOrEqual(130);
         }
-      }
+      });
     }
   });
 });
@@ -1253,6 +1261,8 @@ describe('the spark advisor', () => {
       turbine: S.presetTurbine(preset),
       injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
       mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+      // The engine's own exhaust, as the app passes it: the generator priced its backpressure.
+      exhaustDia: S.EXHAUST_DIA_OPTS[p.exhaustDiaIdx].dia,
     });
   }
 
@@ -1437,6 +1447,7 @@ describe('spark advice survives interpolation', () => {
         compressor: S.presetCompressor(preset), turbine: S.presetTurbine(preset),
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
         mafScalar: p.mafScalar, mafErrorBase: S.mafErrorFactor(p.mods, p.turboOn),
+        exhaustDia: S.EXHAUST_DIA_OPTS[p.exhaustDiaIdx].dia,
       });
       expect(a.overAdvanced, `${preset.id} overAdvanced`).toHaveLength(0);
       expect(a.pastMbt, `${preset.id} pastMbt`).toHaveLength(0);

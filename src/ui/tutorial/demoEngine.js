@@ -70,7 +70,7 @@ export function runDemo(key, scenario = (s) => s) {
     octaneBonus: fuel.bonus, fuel, mods: base.build.mods, turboOn: base.build.turboOn,
     boostCurve: base.build.boostCurve, compressor: args.compressor,
     turbine: args.turbine, injectorCc: args.injectorCc, ecuInjectorCc: base.build.ecuInjectorCc,
-    mafScalar: base.build.mafScalar, mafErrorBase, pull: advisorPull,
+    exhaustDia: args.exhaustDia, mafScalar: base.build.mafScalar, mafErrorBase, pull: advisorPull,
   });
   const chartData = result.points.map((p) => ({
     rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,

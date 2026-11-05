@@ -37,6 +37,7 @@ const BASE_MAP_SETTLE_MS = 350;
 /** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
 const ASSUMED_LABEL = {
   camDuration: (c) => `intake cam duration ${c.camDuration}°`,
+  exhaustCamDuration: (c) => `exhaust cam duration ${c.exhaustCamDuration ?? c.camDuration}°`,
   valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
   valvesPerCyl: (c) => `${c.valvesPerCyl ?? 4} valves per cylinder`,
   blockMaterial: (c) => `${c.blockMaterial.toLowerCase()} block`,
@@ -197,6 +198,8 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const factory = activePreset ?? origin;
   const stockCfg = origin?.engine ?? null;
   const camStock = stockCfg?.camDuration ?? null;
+  const exhaustCamStock = stockCfg ? (stockCfg.exhaustCamDuration ?? stockCfg.camDuration) : null;
+  const exhaustCam = engineConfig.exhaustCamDuration ?? engineConfig.camDuration;
   const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
 
   // The base engine, the short block, the heads and cam: one section on a phone's
@@ -408,11 +411,13 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   );
   const headParts = (
     <>
-        <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
-          <SpecSlider label="Duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Camshaft duration" />
+        <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / ${exhaustCam}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
+          <SpecSlider label="Intake duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Intake cam duration" />
+          <SpecSlider label="Exhaust duration" unit="°" value={exhaustCam} stock={exhaustCamStock} min={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.min} max={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max} step={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.step} onChange={(v) => setCfg({ exhaustCamDuration: v })} lo="late opening, more expansion" hi="early blowdown, top-end" ariaLabel="Exhaust cam duration" />
           <ExpandableInfo title="What camshaft duration actually does">
           Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
-          <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. This sandbox models it by sampling the breathing curve at a cam-shifted engine speed, which is the honest way to represent it.
+          <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. The simulator gets this from the gas exchange itself: it opens and closes each valve on its lobe, crank degree by crank degree, and the filling falls out.
+          <br /><br />The two lobes are separate, as on a real cam: factory exhaust lobes usually run a few degrees longer than the intake. A longer exhaust lobe opens the valve earlier, giving up a little expansion work to empty the cylinder better at high RPM.
           <br /><br /><b className={styles.em}>Overlap</b> is the window where both valves are open together. It grows with duration, and it is why cammed engines idle lumpy, pull weak manifold vacuum, and sound the way they do.
         </ExpandableInfo>
           <SpecSlider label="Valve spring rate" value={engineConfig.springRate} stock={stockCfg?.springRate ?? null} min={20} max={100} step={1} onChange={(v) => setCfg({ springRate: v })} aside={`float at ${Math.round(engineDerived.floatRpm)} rpm`} tone={floating ? 'warn' : undefined} lo="soft" hi="stiff" ariaLabel="Valve spring rate" />
@@ -495,7 +500,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
     <BuildSection
       active={active} onClick={() => onToggle('engine')}
       icon={Settings} label="Engine Architecture"
-      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}, ${engineConfig.compression.toFixed(1)}:1, ${engineConfig.camDuration}° cam`}
+      sub={`${engineDerived.displacementL.toFixed(1)}L ${engineConfig.configuration}, ${engineConfig.compression.toFixed(1)}:1, ${engineConfig.camDuration}°/${exhaustCam}° cam`}
     >
       {(!part || part === 'engine') && baseParts}
       {(!part || part === 'engine' || part === 'block') && arrivalNotes}

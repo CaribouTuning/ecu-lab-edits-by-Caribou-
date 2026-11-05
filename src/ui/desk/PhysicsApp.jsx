@@ -170,7 +170,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
     ['Layout', `${derived?.configuration ?? '—'}`, `${derived?.cyl ?? '—'} cylinders: how many slices the work is split into`],
     ['Bore × stroke', `${f(bore, 1)} × ${f(stroke, 1)} mm`, `${f(vCylL * 1000, 0)} cc a cylinder, ${f(derived?.displacementL, 2)} L in all`],
     ['Compression', `${f(derived?.compression, 1)} : 1`, 'squeeze before the spark: more work per burn, closer to knock'],
-    ['Cam duration', `${f(derived?.camDuration, 0)}°`, 'how long the valves stay open: shapes the VE curve'],
+    ['Cam duration', `${f(derived?.camDuration, 0)}° / ${f(derived?.exhaustCamDuration, 0)}°`, 'how long the intake and exhaust valves stay open: shapes the VE curve'],
     ['Piston speed', `${f(pistonSpeed, 1)} m/s at ${p.rpm} rpm`, 'from the stroke: what the intake has to keep up with'],
     ['Fuel', fuel?.label ?? '—', 'sets the knock limit and the stoichiometric ratio'],
   ]);

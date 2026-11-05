@@ -198,6 +198,10 @@ export function gasExchange(g, op) {
   // Open area of one valve set at a crank angle: the curtain while the valve is low, the
   // port throat once it is high; times its discharge coefficient.
   const exhaustRamp = { rampShare: g.events.exhaustRampShare ?? g.events.rampShare, rampLiftShare: g.events.exhaustRampLiftShare ?? g.events.rampLiftShare };
+  /**
+   * @param {number} deg @param {number} open @param {number} close @param {number} n @param {number} dia
+   * @param {{rampShare?: number, rampLiftShare?: number}} [ramp] @param {number} [portAreaM2]
+   */
   const valveArea = (deg, open, close, n, dia, ramp = g.events, portAreaM2 = 0) => {
     const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), ramp);
     if (lift <= 0) return 0;
