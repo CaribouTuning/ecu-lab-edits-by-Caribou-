@@ -32,32 +32,15 @@ REPO = Path(__file__).resolve().parent.parent
 # so this script cannot silently drift from `src/sim/constants.js`.
 COLLECT_JS = """
 import * as S from './src/sim/index.js';
-
+// The app's own pull, exactly as tests/presets.test.js runs it (tests/ecuHarness.js): the
+// hardware's breathing as the truth, the ECU in the loop, each preset's tables on the
+// layout they were written for. Passing the factory VE table as the truth read the table
+// back as if it were the engine, and broke once a preset's tables were sized 16 x 16.
+import { makeEngine } from './tests/ecuHarness.js';
 const out = {
   drivetrainEff: S.DRIVETRAIN_EFF,
   presets: S.ENGINE_PRESETS.map((preset) => {
-    const patch = S.applyPreset(preset);
-    const derived = S.deriveEngine(patch.engineConfig);
-    const r = S.simulateSweep({
-      loadKpa: 100,
-      ve: patch.ve, veTruth: patch.ve,
-      timing: patch.timing, afr: patch.afr,
-      turboOn: patch.turboOn, boostCurve: patch.boostCurve,
-      octaneBonus: S.OCTANE_OPTS[patch.octaneIdx].bonus,
-      octaneLabel: S.OCTANE_OPTS[patch.octaneIdx].label,
-      fuel: S.OCTANE_OPTS[patch.octaneIdx],
-      injectorCc: S.INJECTOR_OPTS[patch.injIdx].cc,
-      ecuInjectorCc: patch.ecuInjectorCc,
-      injectorLabel: S.INJECTOR_OPTS[patch.injIdx].label,
-      mods: patch.mods, mafScalar: 1, derived,
-      // `presetTurbine`, NOT `TURBINE_OPTS[turbineIdx]`. It applies the preset's
-      // turbineCount, so a twin-turbo engine gets both turbos. Reading the option
-      // straight out of the list drops the count and quietly under-flows the N54 by
-      // ~7% — this script disagreeing with the test it claims to mirror, which is the
-      // one thing it must never do.
-      turbine: S.presetTurbine(preset),
-      compressor: S.COMPRESSOR_OPTS[patch.compressorIdx],
-    });
+    const r = makeEngine({ preset: preset.id }).pull(100);
     return {
       id: preset.id,
       name: preset.name,

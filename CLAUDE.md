@@ -95,22 +95,31 @@ remaining risk is the same Node major with a different libm, which is what step 
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.
 - **VE is a gas-exchange model, not a curve** (`sim/breathing.js`, called by
   `airflow.js hardwareVeAt` on a lazily filled 100 RPM × 2 kPa grid). Valves are orifices
-  with one fitted constant (`BREATH_VALVE_CD` 0.52, fitted across all 13 presets), the runner
-  is an inertial column tuned to the torque peak (`tunedRunnerM`), the exhaust primary an
-  acoustic line. Bolt-ons change hardware, never add VE. Do not reintroduce a VE multiplier
-  to fix a preset: the user's rule is that the air model is the physics. It is slow: the full
-  suite takes over an hour on one core, so run the changed files, not the suite, while working.
+  on lift curves with opening and closing ramps; each cam lobe has its own duration
+  (`camDuration`, `exhaustCamDuration`, at 0.050 in) and the exhaust lobe also sets EVO in
+  the cycle (`cycle.js evoAtdcDeg`). The intake runner and the exhaust primary are linear
+  acoustic lines (the runner reflects at the plenum by area ratio, its waves carried from
+  one cycle to the next); the runner is tuned so its torque peak lands on the published
+  speed (`tunedRunnerM`). Every cell runs on the stoichiometric full-charge exhaust
+  temperature (`INDUCTION_REF_EXHAUST_K`): the load-only probe correlation once starved
+  light load at high speed. One fitted constant, `BREATH_VALVE_CD` 0.61; a head with
+  flow-bench data carries `intakePortCfm`. Bolt-ons change hardware, never add VE. Do not
+  reintroduce a VE multiplier to fix a preset: the user's rule is that the air model is the
+  physics. It is slow: the full suite takes over an hour on one core, so run the changed
+  files, not the suite, while working.
 - **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
   throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
   point's own `map` for anything about manifold pressure.
 - **Tests that pull a preset go through `tests/ecuHarness.js` `makeEngine`** (the app's own
   path: the hardware's breathing as truth, the ECU in the loop). Passing the factory VE table
   as `veTruth` reads the table back as if it were the engine and hides the physics.
-- **Preset fidelity is tracked in #19.** Known misses on the new model: NA peaks early
-  (VQ35HR, LQ4, HEMI; no cam duration moves them), pushrod V8 torque 8–10% high, and VE
-  under 10% at 20–25 kPa above 6000 RPM (the derived valve events leave ~9° of overlap).
-  Those are the shape to fix next, in breathing.js, not by refitting cams. Compare whole
-  curves with `scripts/analyze_presets.py`, not just peaks.
+- **Preset fidelity is tracked in #19.** Cams are published figures with their sources in
+  presets.js (converted to 0.050 in through the model's own lift curve where quoted at
+  another lift); only the B58s and EA888s, with no factory figure found, are fitted, and
+  their comments say so. Known misses (`KNOWN_GAPS` in tests/presets.test.js, with the
+  measurements): VQ35HR power about -9% (no cam moves it; no flow data for its head), GM
+  truck V8 torque +8-12% with peaks 300-700 RPM early (87-octane rating is 1.2-1.9 points
+  of it). Compare whole curves with `scripts/analyze_presets.py`, not just peaks.
 - **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
   replays exactly; do not call `Math.random` in the simulation.
 - **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
