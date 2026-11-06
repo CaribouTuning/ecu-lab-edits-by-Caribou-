@@ -27,7 +27,7 @@ import {
  *
  * @typedef {object} BuildState
  * @property {import('../../sim/index.js').EngineConfig} engineConfig short-block design
- * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons fitted
+ * @property {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods bolt-ons fitted (the catalyst: absent is the stock ceramic)
  * @property {boolean} turboOn
  * @property {number[]} boostCurve psi, indexed by RPM
  * @property {string|null} [originPresetId] the factory engine this build started as, kept

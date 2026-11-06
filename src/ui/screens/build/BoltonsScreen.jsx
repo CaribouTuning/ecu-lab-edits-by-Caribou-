@@ -12,13 +12,14 @@
  */
 
 import { Flame } from 'lucide-react';
-import React from 'react';
+import React, { useMemo } from 'react';
 
-import { EXHAUST_DIA_OPTS, MOD_INFO } from '../../../sim/index.js';
+import { CUSTOM_ENGINE_LIMITS, EXHAUST_DIA_OPTS, MOD_INFO, catalystLossShare, headDefaultsOf } from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { PartRow } from '../../components/PartRow.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
+import { SpecField, SpecSlider } from '../../primitives/Spec.jsx';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
@@ -38,7 +39,11 @@ const MODS_HERE = ['intake', 'headers', 'exhaust'];
  */
 export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
   const [build, dispatch] = useBuild();
-  const { exhaustDiaIdx, turboOn, boostCurve, mods } = build;
+  const { exhaustDiaIdx, turboOn, boostCurve, mods, engineConfig } = build;
+  // The headers' tube where the engine does not set it: what the sliders start from.
+  const defaults = useMemo(() => headDefaultsOf(engineConfig), [engineConfig]);
+  const setCfg = (patch) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'engineConfig', value: { ...engineConfig, ...patch } });
+  const catalyst = mods.catalyst ?? 'ceramic';
 
   // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
   // table: TUNE › AIRFLOW shows the gap, and you correct it from a log once you know why.
@@ -55,6 +60,31 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
           <PartRow key={key} label={MOD_INFO[key].label} blurb={MOD_INFO[key].blurb} fitted={!!mods[key]} onToggle={() => toggleMod(key)} />
         ))}
       </div>
+
+      {mods.headers && (
+        <>
+          <SpecSlider label="Header primary length" unit=" mm" value={engineConfig.headerPrimaryMm ?? defaults.headerPrimaryMm}
+            stock={defaults.headerPrimaryMm} min={CUSTOM_ENGINE_LIMITS.headerPrimaryMm.min} max={CUSTOM_ENGINE_LIMITS.headerPrimaryMm.max} step={CUSTOM_ENGINE_LIMITS.headerPrimaryMm.step}
+            onChange={(v) => setCfg({ headerPrimaryMm: v })} lo="short: tuned high" hi="long: tuned low"
+            aside={`${((engineConfig.headerPrimaryMm ?? defaults.headerPrimaryMm) / 25.4).toFixed(0)} in`} ariaLabel="Header primary length" />
+          <SpecSlider label="Header primary bore" unit=" mm" decimals={1} value={engineConfig.headerPrimaryIdMm ?? defaults.headerPrimaryIdMm}
+            stock={defaults.headerPrimaryIdMm} min={CUSTOM_ENGINE_LIMITS.headerPrimaryIdMm.min} max={CUSTOM_ENGINE_LIMITS.headerPrimaryIdMm.max} step={0.5}
+            onChange={(v) => setCfg({ headerPrimaryIdMm: v })} lo="small: strong, quick waves" hi="big: free-flowing up top"
+            aside={`about ${(((engineConfig.headerPrimaryIdMm ?? defaults.headerPrimaryIdMm) + 1.65) / 25.4).toFixed(2)} in tube`} ariaLabel="Header primary bore" />
+          <ExpandableInfo title="What a header's tubes tune">
+            Each primary is a pipe the blowdown pulse runs down. At the collector it meets the other primaries and the collector&apos;s outlet, much more area together, and comes back as a <b className={styles.em}>suction wave</b>. Where that suction arrives at the valve during overlap, it pulls the last exhaust out and draws the fresh charge in behind it. The round trip takes a fixed time, about 2L/a, so a <b className={styles.em}>longer primary</b> lands its suction at a lower RPM and a shorter one higher. A <b className={styles.em}>smaller tube</b> makes the wave stronger at low flow, while a bigger one flows more at the top. The Physics page shows this wave and when it arrives.
+          </ExpandableInfo>
+        </>
+      )}
+
+      <SpecField label="Catalytic converter" aside={catalyst === 'none' ? 'off-road only' : `${Math.round(catalystLossShare(catalyst) * 100)}% of stock restriction`}>
+        <Seg variant="rule" equal label="Catalytic converter" value={catalyst}
+          options={[{ id: 'ceramic', label: 'Stock 400-cell' }, { id: 'metallic', label: 'High-flow 200-cell' }, { id: 'none', label: 'Test pipe' }]}
+          onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, catalyst: v === 'ceramic' ? undefined : v } })} />
+      </SpecField>
+      <ExpandableInfo title="Why a high-flow cat flows more">
+        A converter is a honeycomb of square channels, about a millimetre across, coated with the catalyst. The gas moves through them slowly enough to flow smoothly, so the pressure it loses goes as one over the open area times the channel width squared. A stock converter has 400 cells per square inch with walls 0.0065 in thick. A high-flow one has 200 cells on metal foil 0.002 in thick: wider channels, more open area, and about a third of the restriction. A test pipe removes it altogether, which is not legal on the road.
+      </ExpandableInfo>
 
       <div className={styles.label}>Exhaust Diameter</div>
       <Seg variant="rule" equal label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />

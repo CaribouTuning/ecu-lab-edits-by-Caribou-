@@ -11,11 +11,11 @@
  */
 
 import { RotateCcw, Settings } from 'lucide-react';
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
 
 import {
   BOTTOM_END_OPTS, COIL_OPTS, CONFIG_OPTS, CUSTOM_ENGINE_LIMITS, CYL_COUNT, ENGINE_PRESETS, FOLLOWER_OPTS, FRICTION_LEVEL_OPTS, INJECTION_OPTS, MATERIAL_OPTS, PRESET_GROUPS,
-  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, intakeValvesFor, layoutById, pistonMotion,
+  TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, headDefaultsOf, intakeValvesFor, layoutById, pistonMotion,
 } from '../../../sim/index.js';
 import { BuildBenchMode, BuildSection } from '../../components/BuildSection.jsx';
 import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
@@ -200,6 +200,11 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const camStock = stockCfg?.camDuration ?? null;
   const exhaustCamStock = stockCfg ? (stockCfg.exhaustCamDuration ?? stockCfg.camDuration) : null;
   const exhaustCam = engineConfig.exhaustCamDuration ?? engineConfig.camDuration;
+  // The head's and cam card's figures where the engine does not set them: what the sliders
+  // start from, the model's own (setting a slider to it changes nothing).
+  const hd = useMemo(() => headDefaultsOf(engineConfig), [engineConfig]);
+  const lsa = engineConfig.lsaDeg ?? hd.lsaDeg; const icl = engineConfig.iclDeg ?? hd.iclDeg;
+  const L = CUSTOM_ENGINE_LIMITS;
   const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
 
   // The base engine, the short block, the heads and cam: one section on a phone's
@@ -414,6 +419,25 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / ${exhaustCam}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
           <SpecSlider label="Intake duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Intake cam duration" />
           <SpecSlider label="Exhaust duration" unit="°" value={exhaustCam} stock={exhaustCamStock} min={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.min} max={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max} step={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.step} onChange={(v) => setCfg({ exhaustCamDuration: v })} lo="late opening, more expansion" hi="early blowdown, top-end" ariaLabel="Exhaust cam duration" />
+          <SpecSlider label="Intake lift" unit=" mm" decimals={1} value={engineConfig.intakeLiftMm ?? hd.intakeLiftMm} stock={hd.intakeLiftMm}
+            min={L.intakeLiftMm.min} max={L.intakeLiftMm.max} step={L.intakeLiftMm.step} onChange={(v) => setCfg({ intakeLiftMm: v })}
+            aside={`${((engineConfig.intakeLiftMm ?? hd.intakeLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Intake valve lift" />
+          <SpecSlider label="Exhaust lift" unit=" mm" decimals={1} value={engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm} stock={hd.exhaustLiftMm}
+            min={L.exhaustLiftMm.min} max={L.exhaustLiftMm.max} step={L.exhaustLiftMm.step} onChange={(v) => setCfg({ exhaustLiftMm: v })}
+            aside={`${((engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Exhaust valve lift" />
+          <SpecSlider label="Lobe separation" unit="°" decimals={1} value={lsa} stock={hd.lsaDeg}
+            min={L.lsaDeg.min} max={L.lsaDeg.max} step={L.lsaDeg.step} onChange={(v) => setCfg({ lsaDeg: v, iclDeg: icl })}
+            aside={`overlap ${Math.round(engineDerived.overlapDeg)}°`} lo="tight: more overlap, peaky" hi="wide: smooth, broad" ariaLabel="Lobe separation angle" />
+          <SpecSlider label="Intake centreline" unit="°" decimals={1} value={icl} stock={hd.iclDeg}
+            min={L.iclDeg.min} max={L.iclDeg.max} step={L.iclDeg.step} onChange={(v) => setCfg({ iclDeg: v, lsaDeg: lsa })}
+            aside={icl < lsa ? `installed ${(lsa - icl).toFixed(1)}° advanced` : icl > lsa ? `installed ${(icl - lsa).toFixed(1)}° retarded` : 'installed straight up'}
+            lo="advanced: low-end" hi="retarded: top-end" ariaLabel="Installed intake centreline" />
+          <ExpandableInfo title="Lift, lobe separation and the centreline: reading a cam card">
+            A cam card gives each lobe's <b className={styles.em}>duration</b> (how long, at 0.050 in), its <b className={styles.em}>lift</b> at the valve (how far), the <b className={styles.em}>lobe separation angle</b> (the angle between the two lobes&apos; centres) and where it should be installed, the <b className={styles.em}>intake centreline</b> in degrees after TDC.
+            <br /><br />More lift opens the valve further into the port, so it flows more once the port, not the curtain, is what limits it. That pays at high RPM.
+            <br /><br />A <b className={styles.em}>tighter separation</b> pulls the lobes together. Overlap grows by two degrees for each degree tighter (overlap = average duration − 2 × LSA), so the torque band gets peakier and the idle lumpier.
+            <br /><br /><b className={styles.em}>Advancing</b> the cam (installing it with a centreline before its separation, typically 4°) opens and closes the intake earlier. That trades top end for low-end torque. Moving these two moves only the lobes. The exhaust centreline follows as 2 × LSA − ICL, as the card says.
+          </ExpandableInfo>
           <ExpandableInfo title="What camshaft duration actually does">
           Duration is how long, in crank degrees, a valve stays open. Hold the intake valve open longer and at <b className={styles.em}>low RPM</b> some charge gets pushed back out during compression — you lose bottom end. But at <b className={styles.em}>high RPM</b> there is barely time to fill the cylinder at all, and that extra open time is exactly what keeps it breathing.
           <br /><br />So a bigger cam does not add power everywhere — it <i>moves</i> the power. Watch the VE table and the dyno curve: the peak slides up the RPM range and the low-RPM cells drop. The simulator gets this from the gas exchange itself: it opens and closes each valve on its lobe, crank degree by crank degree, and the filling falls out.
@@ -444,6 +468,21 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             <Seg label="Cam followers" variant="rule" equal options={FOLLOWER_OPTS} value={engineConfig.follower ?? ((engineConfig.valvetrain ?? 'dohc') === 'dohc' ? 'flat' : 'roller')} onChange={(v) => setCfg({ follower: v })} />
           </SpecField>
           <SpecSlider label="Intake valve" unit=" mm" decimals={1} value={intakeValveMm} min={25} max={60} step={0.5} onChange={(v) => setCfg({ intakeValveMm: v })} aside={`× ${intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}${engineConfig.intakeValveMm == null ? ', typical for this head' : ''}`} ariaLabel="Intake valve diameter" />
+          <SpecSlider label="Exhaust valve" unit=" mm" decimals={1} value={engineConfig.exhaustValveMm ?? hd.exhaustValveMm} stock={hd.exhaustValveMm}
+            min={L.exhaustValveMm.min} max={L.exhaustValveMm.max} step={0.5} onChange={(v) => setCfg({ exhaustValveMm: v })} ariaLabel="Exhaust valve diameter" />
+          <SpecSlider label="Intake port flow" unit=" cfm" value={engineConfig.intakePortCfm ?? hd.intakePortCfm} stock={hd.intakePortCfm}
+            min={L.intakePortCfm.min} max={L.intakePortCfm.max} step={L.intakePortCfm.step} onChange={(v) => setCfg({ intakePortCfm: v })}
+            aside="on a flow bench at 28 in of water" lo="stock casting" hi="ported race head" ariaLabel="Intake port flow" />
+          <SpecSlider label="Exhaust port flow" unit=" cfm" value={engineConfig.exhaustPortCfm ?? hd.exhaustPortCfm} stock={hd.exhaustPortCfm}
+            min={L.exhaustPortCfm.min} max={L.exhaustPortCfm.max} step={L.exhaustPortCfm.step} onChange={(v) => setCfg({ exhaustPortCfm: v })}
+            aside="at 28 in of water" lo="stock casting" hi="ported race head" ariaLabel="Exhaust port flow" />
+          <SpecSlider label="Intake runner" unit=" mm" value={engineConfig.runnerMm ?? hd.runnerMm} stock={hd.runnerMm}
+            min={L.runnerMm.min} max={L.runnerMm.max} step={L.runnerMm.step} onChange={(v) => setCfg({ runnerMm: v })}
+            aside="plenum to valve" lo="short: tuned high" hi="long: tuned low" ariaLabel="Intake runner length" />
+          <ExpandableInfo title="Port flow, valves and the runner">
+            A head is measured on a <b className={styles.em}>flow bench</b>: air drawn through each port at a fixed 28 inches of water, read in cubic feet a minute. Porting a head raises that figure, and the model uses it as the port&apos;s effective area. The valve opening (the curtain) limits flow at low lift, and the port limits it at high lift. The exhaust port matters less to filling than you might think. Most of the exhaust leaves under its own pressure when the valve first opens, so a tight exhaust port mostly leaves more burned gas behind.
+            <br /><br />The <b className={styles.em}>intake runner</b> is a pipe the closing valve sends a pressure wave up. It reflects at the plenum and comes back. Where it arrives before the valve shuts, it rams extra charge in. Its length sets the RPM that happens at: a longer runner fills best lower down. The factory length is the one tuned to the engine&apos;s published torque peak.
+          </ExpandableInfo>
           <ExpandableInfo title="Pushrods, overhead cams, and how many valves">
           A <b className={styles.em}>pushrod</b> (OHV) engine has one camshaft in the block, working the valves through lifters, pushrods and rockers; GM&apos;s small-blocks and the modern Hemi are built this way. An <b className={styles.em}>overhead-cam</b> engine carries its cams in the head, one per bank (SOHC) or two (DOHC), working the valves directly or through short followers.
           <br /><br />What changes here is real: <b className={styles.em}>friction</b> and <b className={styles.em}>breathing</b>. Every cam bearing and every follower on its lobe costs work: a pushrod V8 turns one cam on five bearings where a DOHC V8 turns four on twenty, and four valves per cylinder are twice the followers of two. A flat tappet or bucket slides where a roller rolls and costs more; that difference is not priced yet, because the published coefficient for it could not be obtained, so a flat-follower engine is charged as a roller one for now. Four valves give the charge more valve area than two in the same bore, so the engine keeps filling to a higher piston speed; that is why a four-valve head revs. Give the valve size if you know it: a GM LS head runs a single valve about half the bore across, almost as much area as a typical four-valve head.
