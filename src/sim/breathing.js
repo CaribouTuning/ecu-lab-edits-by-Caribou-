@@ -102,13 +102,13 @@ export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
  * moved by an exhaust phaser's retard; each lobe has its own duration, as real cams do.
  *
  * @param {{ivcAbdc: number, durationDeg: number, exhaustDurationDeg?: number, exhaustRetardDeg?: number,
- *   maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null}} cam each lobe's duration at 0.050 inch and
+ *   maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null, intakeAdvanceDeg?: number}} cam each lobe's duration at 0.050 inch and
  *   its valve's maximum lift; the exhaust lobe is the intake's where not given
  * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number,
  *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, and each
  *   lobe's ramps as `liftShare` takes them
  */
-export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM, iclDeg = null, lsaDeg = null }) {
+export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM, iclDeg = null, lsaDeg = null, intakeAdvanceDeg = 0 }) {
   /** One lobe from its duration at 0.050 inch: its seat-to-seat length and its ramps. */
   const lobe = (dur, maxLift) => {
     const rampLift = Math.min(COEFF.BREATH_RAMP_LIFT_M, 0.5 * DURATION_CHECK_LIFT_M);
@@ -128,8 +128,13 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
   // installed, and the lobe separation, the angle between the two centrelines in cam degrees,
   // which puts the exhaust centreline 2 * LSA - ICL before TDC (crank degrees). Without them,
   // a lobe pair ground symmetric about TDC: the lobe separation equal to the centreline.
+  // An intake phaser's advance moves the intake lobe only (`ivcAbdc` is already advanced):
+  // the exhaust lobe mirrors where the intake lobe sits parked, and moves only with its own
+  // phaser's retard. Mirroring the advanced intake moved the exhaust lobe the other way too,
+  // doubling the overlap an intake phaser adds.
   const centre = iclDeg != null ? iclDeg : 180 + ivcAbdc - durationDeg / 2;
-  const exCentre = -(lsaDeg != null ? 2 * lsaDeg - centre : centre) + exhaustRetardDeg;
+  const parked = centre + intakeAdvanceDeg;
+  const exCentre = -(lsaDeg != null ? 2 * lsaDeg - centre : parked) + exhaustRetardDeg;
   return {
     ivo: centre - inLobe.seat / 2,
     ivc: centre + inLobe.seat / 2,

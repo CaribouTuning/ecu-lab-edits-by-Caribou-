@@ -176,6 +176,7 @@ export function breathingGeometry(cfg, phase = {}) {
     events: valveEvents({
       ivcAbdc, durationDeg: camDuration, exhaustDurationDeg: cfg.exhaustCamDuration ?? camDuration,
       exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0,
+      intakeAdvanceDeg: phase.intakeCamAdvanceDeg ?? 0,
       maxLiftM: intakeLiftM, exhaustMaxLiftM: exhaustLiftM,
       // A cam card's installed intake centreline (moved by an intake phaser's advance) and
       // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC. Each
@@ -247,6 +248,26 @@ const VE_READERS = new Map();
 const VE_READERS_KEPT = 48;
 
 /**
+ * What the gas exchange's filling becomes as the engine's VE: the head's material, the
+ * fuel's charge cooling, direct injection, and the valves floating past the springs' speed.
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{stoich: number}|null|undefined} fuel
+ * @returns {(ve: number, rpm: number) => number}
+ */
+function veFinish(cfg, fuel) {
+  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, Math.max(camDuration, cfg.exhaustCamDuration ?? camDuration));
+  const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
+  const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
+  const injectionFactor = cfg.injection === 'direct' ? COEFF.VE_DIRECT_INJECTION : 1.0;
+  return (ve, rpm) => {
+    let val = ve * headFactor * fuelFactor * injectionFactor;
+    if (rpm > floatRpm) val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
+    return val;
+  };
+}
+
+/**
  * `hardwareVeAt`'s reader, built fresh.
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{headers?: boolean, intercooler?: boolean}} mods
@@ -259,11 +280,7 @@ function buildVeReader(cfg, mods, hw) {
   const cyl = CYL_COUNT[cfg.configuration];
   const pipeDiaIn = exhaustDia ?? 3.0;
   // The longer lobe floats first (engine.js `deriveEngine`).
-  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
-  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, Math.max(camDuration, cfg.exhaustCamDuration ?? camDuration));
-  const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
-  const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
-  const injectionFactor = cfg.injection === 'direct' ? COEFF.VE_DIRECT_INJECTION : 1.0;
+  const finish = veFinish(cfg, fuel);
   const stoich = fuel?.stoich ?? 14.7;
   const cache = new Map();
 
@@ -299,8 +316,7 @@ function buildVeReader(cfg, mods, hw) {
         ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) + system
         : BARO_KPA + system;
     }
-    let val = r.ve * headFactor * fuelFactor * injectionFactor;
-    if (rpm > floatRpm) val *= clamp(1 - (rpm - floatRpm) / COEFF.FLOAT_COLLAPSE_RPM, COEFF.FLOAT_COLLAPSE_FLOOR, 1);
+    const val = finish(r.ve, rpm);
     cache.set(key, val);
     return val;
   };
@@ -355,7 +371,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   const degPerSec = rpm * 6;
   return {
     rpm, mapKpa, empKpa: emp, exhaustFlowGs: exhKgS * 1000,
-    ve: r.ve, residualFrac: r.residualFrac, backflowShare: r.backflowShare,
+    // The engine's VE as the VE truth makes it of this filling (`veFinish`).
+    ve: veFinish(cfg, fuel)(r.ve, rpm), residualFrac: r.residualFrac, backflowShare: r.backflowShare,
     trace: r.trace,
     events: g.events,
     geometry: {
@@ -376,6 +393,34 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
       catback: part(mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK),
       turbine: turboOn && turbine ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) - BARO_KPA : 0,
     },
+  };
+}
+
+/**
+ * The figure the model uses for each of the head's, cam card's and headers' optional parts
+ * when the engine does not set it: what BUILD's controls start from, and what setting each
+ * of them to changes nothing (tests/head-exhaust.test.js holds that).
+ * @param {import('./engine.js').EngineConfig} cfg
+ */
+export function headDefaultsOf(cfg) {
+  const g = breathingGeometry({ ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined });
+  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG;
+  const centre = 180 + ivcAbdc - camDuration / 2;
+  // A port with no bench figure flows through its throat times the universal discharge
+  // coefficient (breathing.js `valveArea`): that area, as the bench would read it.
+  const portCfm = (n, dia) => (n * COEFF.BREATH_VALVE_CD * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2 * FLOW_BENCH_VELOCITY_MS) / CFM_TO_M3S;
+  const headers = breathingGeometry(cfg, { headers: true });
+  return {
+    intakeLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.intakeValveM * 1000,
+    exhaustLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.exhaustValveM * 1000,
+    exhaustValveMm: g.exhaustValveM * 1000,
+    intakePortCfm: cfg.intakePortCfm ?? portCfm(g.intakeValves, g.intakeValveM),
+    exhaustPortCfm: portCfm(g.exhaustValves, g.exhaustValveM),
+    lsaDeg: centre, iclDeg: centre,
+    runnerMm: g.runnerLengthM * 1000,
+    headerPrimaryMm: headers.exhaustPrimaryM * 1000,
+    headerPrimaryIdMm: Math.sqrt((4 * headers.exhaustPrimaryAreaM2) / Math.PI) * 1000,
   };
 }
 
