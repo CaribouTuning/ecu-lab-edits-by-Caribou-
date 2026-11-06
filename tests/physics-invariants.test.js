@@ -329,11 +329,13 @@ describe('whole pulls on random builds', () => {
         // flame's heat depends on how rich it is (thermo.js, heatReleasedShare) that shows.
         const ecuActed = (p.protect?.length ?? 0) > 0 || p.knockPull > 0 || l.knockPull > 0
           || p.misfire > 0 || p.cutPct > 0 || p.duty >= 100
-          // Its own boost target: the ECU's boost table, not the BUILD curve the original
-          // model runs on, and its closed-loop boost control. A tenth of a psi apart, it shuts
-          // the wastegate a step sooner where the turbo runs out of flow (random build 10020 at
-          // 4700 RPM: 218 against 196 kPa ahead of the turbine).
-          || Math.abs((p.boostTarget ?? 0) - (l.boostTarget ?? 0)) > 0.05;
+          // Its own boost control, where it changed what the turbo did: the ECU runs its boost
+          // table and closed-loop wastegate, not the BUILD curve the original model runs on, and
+          // where the turbo runs out of flow it can shut the gate a step sooner (random build
+          // 10020 at 4700 RPM: 218 against 196 kPa ahead of the turbine at the same boost).
+          // Judged on the boost made and the pressure ahead of the turbine, not on the target,
+          // which differs by a tenth of a psi almost everywhere and would excuse every turbo point.
+          || Math.abs((p.boostPsi ?? 0) - (l.boostPsi ?? 0)) > 0.05 || Math.abs((p.emp ?? 0) - (l.emp ?? 0)) > 1;
         // One unit of rounding: the ECU prices the injector pulse through its own dead time,
         // which on a mis-scaled injector moves the charge by a hundredth of a percent.
         const off = (a, b) => Math.abs(a - b) > Math.max(1, 0.005 * b);
