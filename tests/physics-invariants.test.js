@@ -5,7 +5,8 @@
  * someone thought to build. These are laws — energy, mass, units, and the direction
  * every lever pulls in — asserted on seeded random builds and operating points across
  * the whole range the BUILD and TUNE screens allow. A failure prints its seed; `seed`
- * in `randomBuild(seed)` rebuilds that exact engine.
+ * in `randomPoint(seed)` rebuilds that exact point (its engine is `randomBuild` of
+ * `1 + floor((seed - 1) / POINTS_PER_BUILD)`).
  *
  * Tolerances are the reporting precision of the fields involved (hp and torque are
  * whole numbers, lambda three decimals), never a fudge.
@@ -19,6 +20,21 @@ import { randomBuild, rng } from './randomBuilds.js';
 
 const POINTS = 1500;
 const BUILDS = 120;
+// Operating points per random engine: 1500 points on 300 engines. Each new engine tunes its
+// intake runners from the gas exchange on its first breathing call (airflow.js
+// tunedRunnerM), about two seconds, so one engine per point, rebuilt for each of the
+// thirteen properties, ran for hours. The points are as many and as random as before; each
+// engine is built once and shared.
+const POINTS_PER_BUILD = 5;
+const ENGINES = new Map();
+/** @param {number} buildSeed */
+function engineOf(buildSeed) {
+  if (!ENGINES.has(buildSeed)) {
+    const build = randomBuild(buildSeed);
+    ENGINES.set(buildSeed, { build, eng: makeEngine({ build }) });
+  }
+  return ENGINES.get(buildSeed);
+}
 
 /**
  * A random operating point on a random build, with everything evaluatePoint needs.
@@ -26,8 +42,7 @@ const BUILDS = 120;
  * @param {number} seed
  */
 function randomPoint(seed) {
-  const build = randomBuild(seed);
-  const eng = makeEngine({ build });
+  const { build, eng } = engineOf(1 + Math.floor((seed - 1) / POINTS_PER_BUILD));
   const r = rng(seed * 7919 + 1);
   const peakBoost = build.turboOn ? Math.max(...build.boostCurve) : 0;
   const rpm = Math.round(1200 + r() * (build.engineConfig.redline - 1200));
