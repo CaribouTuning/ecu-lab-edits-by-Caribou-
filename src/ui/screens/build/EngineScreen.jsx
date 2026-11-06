@@ -205,6 +205,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const hd = useMemo(() => headDefaultsOf(engineConfig), [engineConfig]);
   const lsa = engineConfig.lsaDeg ?? hd.lsaDeg; const icl = engineConfig.iclDeg ?? hd.iclDeg;
   const L = CUSTOM_ENGINE_LIMITS;
+  // A head or cam-card change keeps the intake manifold: the runner stays the length it is
+  // (the factory's, tuned to its published torque peak), as a cam swap keeps it
+  // (`manifoldCam`). Without this every step of these sliders tuned a new runner.
+  const setHead = (patch) => setCfg({ ...patch, runnerMm: engineConfig.runnerMm ?? Math.round(hd.runnerMm) });
   const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
 
   // The base engine, the short block, the heads and cam: one section on a phone's
@@ -420,16 +424,16 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <SpecSlider label="Intake duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Intake cam duration" />
           <SpecSlider label="Exhaust duration" unit="°" value={exhaustCam} stock={exhaustCamStock} min={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.min} max={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max} step={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.step} onChange={(v) => setCfg({ exhaustCamDuration: v })} lo="late opening, more expansion" hi="early blowdown, top-end" ariaLabel="Exhaust cam duration" />
           <SpecSlider label="Intake lift" unit=" mm" decimals={1} value={engineConfig.intakeLiftMm ?? hd.intakeLiftMm} stock={hd.intakeLiftMm}
-            min={L.intakeLiftMm.min} max={L.intakeLiftMm.max} step={L.intakeLiftMm.step} onChange={(v) => setCfg({ intakeLiftMm: v })}
+            min={L.intakeLiftMm.min} max={L.intakeLiftMm.max} step={L.intakeLiftMm.step} onChange={(v) => setHead({ intakeLiftMm: v })}
             aside={`${((engineConfig.intakeLiftMm ?? hd.intakeLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Intake valve lift" />
           <SpecSlider label="Exhaust lift" unit=" mm" decimals={1} value={engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm} stock={hd.exhaustLiftMm}
-            min={L.exhaustLiftMm.min} max={L.exhaustLiftMm.max} step={L.exhaustLiftMm.step} onChange={(v) => setCfg({ exhaustLiftMm: v })}
+            min={L.exhaustLiftMm.min} max={L.exhaustLiftMm.max} step={L.exhaustLiftMm.step} onChange={(v) => setHead({ exhaustLiftMm: v })}
             aside={`${((engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Exhaust valve lift" />
           <SpecSlider label="Lobe separation" unit="°" decimals={1} value={lsa} stock={hd.lsaDeg}
-            min={L.lsaDeg.min} max={L.lsaDeg.max} step={L.lsaDeg.step} onChange={(v) => setCfg({ lsaDeg: v, iclDeg: icl })}
+            min={L.lsaDeg.min} max={L.lsaDeg.max} step={L.lsaDeg.step} onChange={(v) => setHead({ lsaDeg: v, iclDeg: icl })}
             aside={`overlap ${Math.round(engineDerived.overlapDeg)}°`} lo="tight: more overlap, peaky" hi="wide: smooth, broad" ariaLabel="Lobe separation angle" />
           <SpecSlider label="Intake centreline" unit="°" decimals={1} value={icl} stock={hd.iclDeg}
-            min={L.iclDeg.min} max={L.iclDeg.max} step={L.iclDeg.step} onChange={(v) => setCfg({ iclDeg: v, lsaDeg: lsa })}
+            min={L.iclDeg.min} max={L.iclDeg.max} step={L.iclDeg.step} onChange={(v) => setHead({ iclDeg: v, lsaDeg: lsa })}
             aside={icl < lsa ? `installed ${(lsa - icl).toFixed(1)}° advanced` : icl > lsa ? `installed ${(icl - lsa).toFixed(1)}° retarded` : 'installed straight up'}
             lo="advanced: low-end" hi="retarded: top-end" ariaLabel="Installed intake centreline" />
           <ExpandableInfo title="Lift, lobe separation and the centreline: reading a cam card">
@@ -469,12 +473,12 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           </SpecField>
           <SpecSlider label="Intake valve" unit=" mm" decimals={1} value={intakeValveMm} min={25} max={60} step={0.5} onChange={(v) => setCfg({ intakeValveMm: v })} aside={`× ${intakeValvesFor(engineConfig.valvesPerCyl ?? 4)}${engineConfig.intakeValveMm == null ? ', typical for this head' : ''}`} ariaLabel="Intake valve diameter" />
           <SpecSlider label="Exhaust valve" unit=" mm" decimals={1} value={engineConfig.exhaustValveMm ?? hd.exhaustValveMm} stock={hd.exhaustValveMm}
-            min={L.exhaustValveMm.min} max={L.exhaustValveMm.max} step={0.5} onChange={(v) => setCfg({ exhaustValveMm: v })} ariaLabel="Exhaust valve diameter" />
+            min={L.exhaustValveMm.min} max={L.exhaustValveMm.max} step={0.5} onChange={(v) => setHead({ exhaustValveMm: v })} ariaLabel="Exhaust valve diameter" />
           <SpecSlider label="Intake port flow" unit=" cfm" value={engineConfig.intakePortCfm ?? hd.intakePortCfm} stock={hd.intakePortCfm}
-            min={L.intakePortCfm.min} max={L.intakePortCfm.max} step={L.intakePortCfm.step} onChange={(v) => setCfg({ intakePortCfm: v })}
+            min={L.intakePortCfm.min} max={L.intakePortCfm.max} step={L.intakePortCfm.step} onChange={(v) => setHead({ intakePortCfm: v })}
             aside="on a flow bench at 28 in of water" lo="stock casting" hi="ported race head" ariaLabel="Intake port flow" />
           <SpecSlider label="Exhaust port flow" unit=" cfm" value={engineConfig.exhaustPortCfm ?? hd.exhaustPortCfm} stock={hd.exhaustPortCfm}
-            min={L.exhaustPortCfm.min} max={L.exhaustPortCfm.max} step={L.exhaustPortCfm.step} onChange={(v) => setCfg({ exhaustPortCfm: v })}
+            min={L.exhaustPortCfm.min} max={L.exhaustPortCfm.max} step={L.exhaustPortCfm.step} onChange={(v) => setHead({ exhaustPortCfm: v })}
             aside="at 28 in of water" lo="stock casting" hi="ported race head" ariaLabel="Exhaust port flow" />
           <SpecSlider label="Intake runner" unit=" mm" value={engineConfig.runnerMm ?? hd.runnerMm} stock={hd.runnerMm}
             min={L.runnerMm.min} max={L.runnerMm.max} step={L.runnerMm.step} onChange={(v) => setCfg({ runnerMm: v })}

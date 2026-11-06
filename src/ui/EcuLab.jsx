@@ -169,6 +169,26 @@ const DYNO_PULL = Object.freeze({
 export const DYNO_PULL_MS = DYNO_PULL.SETTLE_MS + DYNO_PULL.SWEEP_MS
   + DYNO_PULL.DOWN_MS + DYNO_PULL.REST_MS;
 
+/** How long a hardware value must hold still before the engine is rebuilt for it, ms. */
+const SETTLE_MS = /** @type {any} */ (import.meta).env?.MODE === 'test' ? 0 : 180;
+
+/**
+ * A value once it has stopped changing for SETTLE_MS: the same value, later. Under the test
+ * runner it is the value itself, so a test that sets a part sees the engine for it at once.
+ * @template T
+ * @param {T} value
+ * @returns {T}
+ */
+function useSettled(value) {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    if (SETTLE_MS === 0 || settled === value) return undefined;
+    const t = window.setTimeout(() => setSettled(value), SETTLE_MS);
+    return () => window.clearTimeout(t);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return SETTLE_MS === 0 ? value : settled;
+}
+
 /** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
  *  out in the shop: the dyno, the build bench, the engine stand, the job board. */
 const CAREER_APPS = ['tune', 'messages'];
@@ -182,7 +202,17 @@ export function EcuLabApp() {
   const tab = route.tab;
   // The BUILD slice (hardware and ECU configuration), destructured so read sites below
   // use a bare `engineConfig` / `mods` / ...; writes go through `dispatch`.
-  const [build, dispatch] = useBuild();
+  const [liveBuild, dispatch] = useBuild();
+  // The engine's hardware as it settles: everything a new engine costs (its breathing grid,
+  // the full-throttle pull, the advice) follows a slider once it stops for a moment, not at
+  // every step of a drag, which held the page for most of a second a step. The controls
+  // read the store themselves and move at once; every other field here is the live one.
+  const settledCfg = useSettled(liveBuild.engineConfig);
+  const settledMods = useSettled(liveBuild.mods);
+  const build = useMemo(
+    () => (settledCfg === liveBuild.engineConfig && settledMods === liveBuild.mods ? liveBuild : { ...liveBuild, engineConfig: settledCfg, mods: settledMods }),
+    [liveBuild, settledCfg, settledMods],
+  );
   const {
     engineConfig, mods, turboOn, boostCurve, injIdx, mafScalar,
     turbineIdx, turbineCount, compressorIdx, exhaustDiaIdx, ecuInjectorCc,
