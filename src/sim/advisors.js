@@ -789,7 +789,9 @@ function judgeAgainstPull(spark, pull, inForce) {
       continue;
     }
     if (c.bracketOnly) continue;
-    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) overAdvanced.push(c);
+    // As without a pull: an idle-column cell no spark the table holds would protect is a
+    // full-throttle tip-in at idle speed, shown with `sparkCannotFix`, not a danger verdict.
+    if (c.current - c.knockCeiling > ADVANCE_TOLERANCE_DEG) { if (!(c.sparkCannotFix && c.rpm <= IDLE_COLUMN_MAX_RPM)) overAdvanced.push(c); }
     else if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
     else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);
   }

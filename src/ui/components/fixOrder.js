@@ -21,7 +21,7 @@ export const FIX_STEPS = [
   { id: 'setup', label: 'Setup', types: ['pastTable', 'injscale', 'mapsensor', 'maf', 'wideband', 'fueltype'] },
   { id: 'fuel', label: 'Fuel', types: ['rich', 'lean', 'valve', 'fuel', 'rail', 'dutyprot', 'leanprot', 'misfire'] },
   { id: 'spark', label: 'Spark', types: ['knock', 'unheardknock', 'falseknock', 'knockprot', 'iatprot', 'egtprot', 'timing'] },
-  { id: 'boost', label: 'Boost', types: ['underboost', 'overboost', 'boostctl', 'compressor', 'blower'] },
+  { id: 'boost', label: 'Boost', types: ['underboost', 'backpressure', 'overboost', 'boostctl', 'compressor', 'blower'] },
   { id: 'nitrous', label: 'Nitrous', types: ['nitrouslean', 'nitrousknock', 'bottle', 'nitrouswindow'] },
   { id: 'hardware', label: 'Hardware', types: ['pressure', 'bearing', 'float', 'cam', 'limiter', 'torquelimit', 'oilprot', 'failure'] },
 ];

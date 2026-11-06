@@ -301,7 +301,7 @@ describe('choosing a turbine', () => {
 describe('resetting the calibration to stock', () => {
   /**
    * Runs the app to a reset and reports the VE table the store received.
-   * @param {boolean} withIntake whether to fit the intake first
+   * @param {boolean} withIntake whether to fit a bolt-on (the headers) first
    * @returns {number[][]}
    */
   function veAfterReset(withIntake) {
@@ -326,8 +326,12 @@ describe('resetting the calibration to stock', () => {
     fireEvent.click(toggleFor('Turbo kit'));
     // `boltons` dissolved into Induction and Exhaust — the intake card is already in
     // the DOM once this section is mounted.
+    // Headers, the part that changes how the cylinder breathes: an intake only changes the
+    // duct ahead of the throttle and compressor, which leaves VE at a given manifold
+    // pressure alone, so with it this test could not fail.
     if (withIntake) {
-      fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
+      fireEvent.click(screen.getByText('Exhaust'));
+      fireEvent.click(screen.getByRole('button', { name: /Long-Tube Headers/ }));
     }
     fireEvent.click(screen.getByRole('button', { name: /RESET ALL TO STOCK/ }));
     cleanup();
@@ -358,7 +362,9 @@ describe('resetting the calibration to stock', () => {
       peakBoostPsi: 8,
     };
     const stock = computeHardwareVE(DEFAULT_ENGINE_CONFIG, DEFAULT_MODS, hw);
-    const modded = computeHardwareVE(DEFAULT_ENGINE_CONFIG, { ...DEFAULT_MODS, intake: true }, hw);
+    // Headers: on a turbo engine an intake only changes the duct ahead of the compressor,
+    // not how the cylinder fills at a given manifold pressure, so it leaves VE alone.
+    const modded = computeHardwareVE(DEFAULT_ENGINE_CONFIG, { ...DEFAULT_MODS, headers: true }, hw);
     expect(modded).not.toEqual(stock);
   });
 });

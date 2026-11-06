@@ -37,7 +37,7 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 262 lb-ft | 6400 / 6600 | 0.855 | 29.9° | 0.441 | 10.8 | 748 | 62 | 12.8 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 280 hp / 261 lb-ft | 6800 / 6600 | 0.861 | 30.0° | 0.445 | 10.7 | 757 | 62 | 12.7 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 281 hp / 260 lb-ft | 6800 / 6700 | 0.877 | 30.4° | 0.437 | 10.6 | 762 | 62 | 12.6 |
 | BMW N54 | 302 hp / 295 lb-ft | 308 hp / 326 lb-ft | 5800 / 5900 | 0.851 | 18.8° | 0.433 | 11.1 | 764 | 71 | 18.6 |
 | BMW B58B30M0 | 320 hp / 330 lb-ft | 331 hp / 347 lb-ft | 5500–6500 / 6200 | 0.962 | 15.3° | 0.388 | 11.0 | 798 | 69 | 19.7 |
 | BMW B58B30M1 | 382 hp / 369 lb-ft | 369 hp / 376 lb-ft | 5800 / 6300 | 0.929 | 12.9° | 0.392 | 11.2 | 804 | 72 | 21.4 |
@@ -58,7 +58,7 @@ so. Every pull above is the app's own: the hardware's breathing from the gas-exc
 the truth and the ECU in the loop (`src/sim/rig.js`). Every power peak lands within 500 RPM of
 its rating. Where the model still misses, measured (KNOWN_GAPS in `tests/presets.test.js`):
 
-- **The VQ35HR makes about 9% under its 306 hp** on every intake cam from 218° to 234°, so
+- **The VQ35HR makes 8-9% under its 306 hp** on every intake cam from 218° to 234°, so
   the cam is not what it is short of; Nissan credits the HR's revised head and twin-runner
   intake, and no flow-bench figure for that head was found.
 - **The GM truck V8s read 8–12% high on peak torque**, the peak 300–700 RPM before the

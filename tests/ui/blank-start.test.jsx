@@ -105,7 +105,11 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.click(form.getByRole('button', { name: 'CREATE THIS ENGINE' }));
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
-    fireEvent.change(screen.getAllByRole('slider').find((s) => s.getAttribute('min') === '180'), { target: { value: '222' } });
+    // Each lobe is its own figure: the intake set, the exhaust lobe is still assumed, until it is set too.
+    fireEvent.change(screen.getByRole('slider', { name: 'Intake cam duration' }), { target: { value: '222' } });
+    expect(note()).not.toMatch(/intake cam duration/);
+    expect(note()).toMatch(/exhaust cam duration/);
+    fireEvent.change(screen.getByRole('slider', { name: 'Exhaust cam duration' }), { target: { value: '228' } });
     expect(note()).not.toMatch(/cam duration/);
     expect(note()).toMatch(/valvetrain DOHC/);
   });

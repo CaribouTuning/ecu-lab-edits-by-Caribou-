@@ -16,7 +16,7 @@ const advise = (eng, octaneIdx) => {
     derived: eng.derived, fuel: S.OCTANE_OPTS[octaneIdx], mods: build.mods, turboOn: build.turboOn,
     boostCurve: build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: cc, mafScalar: build.mafScalar ?? 1,
-    mafErrorBase: S.mafErrorFactor(build.mods, build.turboOn),
+    mafErrorBase: S.mafErrorFactor(build.mods, build.turboOn), exhaustDia: S.EXHAUST_DIA_OPTS[build.exhaustDiaIdx].dia,
   });
 };
 
@@ -45,6 +45,7 @@ const adviseWithPull = (eng, tables = eng.tables, mafScalar = eng.build.mafScala
     boostCurve: eng.build.boostCurve, compressor: eng.compressor, turbine: eng.turbine,
     injectorCc: cc, ecuInjectorCc: eng.build.ecuInjectorCc, mafScalar,
     mafErrorBase: S.mafErrorFactor(eng.build.mods, eng.build.turboOn), pull: eng.pull(100),
+    exhaustDia: S.EXHAUST_DIA_OPTS[eng.build.exhaustDiaIdx].dia,
   });
 };
 const where = (cells) => cells.map((c) => `${c.map} kPa / ${c.rpm} rpm`);
@@ -129,12 +130,14 @@ describe('cells the pull did not run', () => {
     return eng;
   };
 
-  it('are judged against the player\'s own pull: a 40 kPa pull runs the 40 kPa row, a 100 kPa pull does not', () => {
+  it('are judged against the player\'s own pull: a pull through the 40 kPa row runs it, a full-throttle pull does not', () => {
     const eng = knockingAt40();
     const flagged = adviseWithPull(eng).overAdvanced.filter((c) => c.map === 40);
     expect(flagged.length).toBeGreaterThan(0);
     expect(S.cellsNotRunBy(flagged, eng.pull(100))).toEqual(flagged);
-    const at40 = eng.pull(40);
+    // A pull's load is a throttle opening: 40% throttle holds this engine near full manifold
+    // pressure at low speed, and it is about 20% that crosses the 40 kPa row (near 4,000-4,500 RPM).
+    const at40 = eng.pull(20);
     const notRun = S.cellsNotRunBy(flagged, at40);
     expect(notRun.length).toBeLessThan(flagged.length);
     // The 40 kPa pull's own log charges what it ran; the score charges the rest once each.
@@ -208,6 +211,7 @@ describe('a turbo bolted onto a factory engine can be tuned by following the adv
       camAt: S.intakeCamAt(st.build.engineConfig, st.tune.ecu?.vvt), octaneBonus: fuel.bonus, fuel, mods: st.build.mods,
       turboOn: true, boostCurve: st.build.boostCurve, compressor: args.compressor, turbine: args.turbine,
       injectorCc: args.injectorCc, ecuInjectorCc: st.build.ecuInjectorCc, mafScalar: st.build.mafScalar, mafErrorBase, pull: first,
+      exhaustDia: args.exhaustDia,
     });
     const timing = st.tune.timing.map((row) => [...row]);
     const afr = st.tune.afr.map((row) => [...row]);
