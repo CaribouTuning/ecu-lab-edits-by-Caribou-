@@ -82,7 +82,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       // Against the exhaust backpressure its own flow raises through a stock system: lost
       // filling and pumping work both grow with speed.
       let emp = BARO_KPA; let r = null;
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < 3; i++) {
         r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
         emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
@@ -193,10 +193,39 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     turboOn = false, turbine = null, exhaustDia = null, fuel = null,
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
   } = hw;
+  // The same engine's breathing is asked for by its factory calibration, its VE truth, the
+  // advisor and every pull: one grid per engine, kept, so no cell is solved twice. Keyed on
+  // everything below that the gas exchange reads.
+  const key = JSON.stringify([cfg, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
+    exhaustDia, fuel?.stoich ?? null, intakeCamAdvanceDeg, exhaustCamRetardDeg, COEFF.BREATH_VALVE_CD]);
+  const kept = VE_READERS.get(key);
+  if (kept) { VE_READERS.delete(key); VE_READERS.set(key, kept); return kept; }
+  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg });
+  VE_READERS.set(key, reader);
+  if (VE_READERS.size > VE_READERS_KEPT) VE_READERS.delete(VE_READERS.keys().next().value);
+  return reader;
+}
+
+/** Engines' breathing grids kept, most recently used last. */
+const VE_READERS = new Map();
+/** How many: an engine's phases and bolt-on variants several times over, a few MB at most. */
+const VE_READERS_KEPT = 48;
+
+/**
+ * `hardwareVeAt`'s reader, built fresh.
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{headers?: boolean, intercooler?: boolean}} mods
+ * @param {object} hw
+ * @returns {(rpm: number, mapKpa: number) => number}
+ */
+function buildVeReader(cfg, mods, hw) {
+  const { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg } = hw;
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
   const pipeDiaIn = exhaustDia ?? 3.0;
-  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, cfg.camDuration ?? CAM_BASE_DURATION);
+  // The longer lobe floats first (engine.js `deriveEngine`).
+  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, Math.max(camDuration, cfg.exhaustCamDuration ?? camDuration));
   const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
   const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
   const injectionFactor = cfg.injection === 'direct' ? COEFF.VE_DIRECT_INJECTION : 1.0;
