@@ -157,6 +157,14 @@ export function breathingGeometry(cfg, phase = {}) {
   // open area in place of the throat times the universal Cd (breathing.js `valveArea`).
   if (cfg.intakePortCfm) base.intakePortAreaM2 = (cfg.intakePortCfm * CFM_TO_M3S) / FLOW_BENCH_VELOCITY_MS;
   if (cfg.runnerMm) return { ...base, runnerLengthM: cfg.runnerMm / 1000 };
+  // The runners are hardware: tuned for the cam the engine left the factory with, and kept
+  // when the cam is changed. Re-tuning them to every cam fitted a new intake manifold with
+  // each cam swap, which handed back the low end a bigger cam gives away.
+  const mc = cfg.manifoldCam;
+  if (mc && (mc.camDuration !== cfg.camDuration || (mc.exhaustCamDuration ?? mc.camDuration) !== (cfg.exhaustCamDuration ?? cfg.camDuration))) {
+    const factory = breathingGeometry({ ...cfg, camDuration: mc.camDuration, exhaustCamDuration: mc.exhaustCamDuration ?? mc.camDuration }, {});
+    return { ...base, runnerLengthM: factory.runnerLengthM };
+  }
   // The intake runner is tuned with the factory exhaust; headers change the exhaust, not it.
   if (phase.headers) return { ...base, runnerLengthM: breathingGeometry(cfg, { ...phase, headers: false }).runnerLengthM };
   // The runner is tuned with the cam parked: a phaser moves the events, not the manifold.

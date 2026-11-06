@@ -136,6 +136,8 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} [redline] rev limit, RPM
  * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
  * @property {number} [runnerMm] intake runner length, mm, where the engine sets its own
+ * @property {{camDuration: number, exhaustCamDuration?: number}} [manifoldCam] the cam the intake
+ *   runners were tuned with; the current cam where absent (a save from before it existed)
  * @property {string} [vvt] cam phasers fitted: 'none', 'intake' or 'dual'. Hardware, like
  *   the cam itself; absent means fixed cams
  * @property {'port'|'direct'} [injection] where the injectors spray: into each intake port

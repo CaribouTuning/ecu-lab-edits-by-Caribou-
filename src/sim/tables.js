@@ -150,6 +150,9 @@ export const DEFAULT_ENGINE_CONFIG = Object.freeze({
   injection: 'port',
   camDuration: 210,
   exhaustCamDuration: 218,
+  // The cam its intake runners were tuned with (airflow.js `breathingGeometry`): a cam
+  // changed later in BUILD keeps the manifold.
+  manifoldCam: Object.freeze({ camDuration: 210, exhaustCamDuration: 218 }),
   springRate: 50,
   redline: 7500,
 });

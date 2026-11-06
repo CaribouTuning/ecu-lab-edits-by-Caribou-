@@ -931,6 +931,12 @@ export function applyPreset(preset, layout = null) {
       // torque peak is where its boost arrives, not where its runners resonate, so it keeps
       // the default tuning.
       ...(!preset.induction.turboOn && preset.factory?.crankTqRpm ? { runnerTuneRpm: preset.factory.crankTqRpm } : {}),
+      // The cam the intake manifold was tuned with. A cam swap later keeps the manifold:
+      // the runners stay the length the factory chose (airflow.js `breathingGeometry`).
+      manifoldCam: preset.engine.manifoldCam ?? {
+        camDuration: preset.engine.camDuration,
+        exhaustCamDuration: preset.engine.exhaustCamDuration ?? preset.engine.camDuration,
+      },
     },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,
