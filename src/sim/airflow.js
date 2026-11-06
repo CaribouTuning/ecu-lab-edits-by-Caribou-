@@ -82,7 +82,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       // Against the exhaust backpressure its own flow raises through a stock system: lost
       // filling and pumping work both grow with speed.
       let emp = BARO_KPA; let r = null;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 2; i++) {
         r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
         emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
