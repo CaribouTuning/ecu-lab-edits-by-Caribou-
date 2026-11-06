@@ -66,7 +66,7 @@ export function buildRig({ preset, build: patch = {}, cal: calPatch = {}, env, f
     // And the induction it left the factory with: what RESET ALL TO STOCK calibrates for.
     factoryInduction: p?.factoryInduction ?? null,
     originPresetId: p?.presetId ?? null,
-    ethanolPct: 0,
+    ethanolPct: p?.ethanolPct ?? 0,
     ...patch,
   };
   const turbine = turbineWithCount(TURBINE_OPTS[build.turbineIdx], build.turbineCount);

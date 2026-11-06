@@ -1255,7 +1255,7 @@ describe('the spark advisor', () => {
     const p = S.applyPreset(preset);
     return S.calibrationAdvice({
       ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
-      derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+      derived: S.deriveEngine(p.engineConfig), fuel: S.tankFuel(p),
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.presetCompressor(preset),
       turbine: S.presetTurbine(preset),
@@ -1319,7 +1319,7 @@ describe('the spark advisor', () => {
     const a = S.calibrationAdvice({
       ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing,
       afr: p.afr.map((row) => row.map((v) => v + 1.5)),
-      derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+      derived: S.deriveEngine(p.engineConfig), fuel: S.tankFuel(p),
       mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
       compressor: S.presetCompressor(preset), turbine: S.presetTurbine(preset),
       injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
@@ -1442,7 +1442,7 @@ describe('spark advice survives interpolation', () => {
       const p = S.applyPreset(preset);
       const a = S.calibrationAdvice({
         ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
-        derived: S.deriveEngine(p.engineConfig), fuel: S.OCTANE_OPTS[p.octaneIdx],
+        derived: S.deriveEngine(p.engineConfig), fuel: S.tankFuel(p),
         mods: p.mods, turboOn: p.turboOn, boostCurve: p.boostCurve,
         compressor: S.presetCompressor(preset), turbine: S.presetTurbine(preset),
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
@@ -1482,7 +1482,7 @@ describe('exhaust gas temperature', () => {
       const p = S.applyPreset(preset);
       const r = S.simulateSweep({
         loadKpa: 100, ve: p.ve, veTruth: p.ve, layout: p.layout, timing: p.timing, afr: p.afr,
-        turboOn: p.turboOn, boostCurve: p.boostCurve, fuel: S.OCTANE_OPTS[p.octaneIdx],
+        turboOn: p.turboOn, boostCurve: p.boostCurve, fuel: S.tankFuel(p),
         injectorCc: S.INJECTOR_OPTS[p.injIdx].cc, ecuInjectorCc: p.ecuInjectorCc,
         mods: p.mods, mafScalar: p.mafScalar, derived: S.deriveEngine(p.engineConfig),
         turbine: S.presetTurbine(preset), compressor: S.presetCompressor(preset),
