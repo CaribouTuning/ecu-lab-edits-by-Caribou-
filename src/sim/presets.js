@@ -1009,6 +1009,23 @@ export const CUSTOM_ENGINE_LIMITS = Object.freeze({
   },
   camDuration: { min: 180, max: 300, step: 1, unit: '°' },
   exhaustCamDuration: { min: 180, max: 300, step: 1, unit: '°' },
+  // The head and cam card's own figures, each optional (absent, the model's usual one). Lift
+  // at the valve: production cams lift about 9-12 mm, race cams past 15.
+  intakeLiftMm: { min: 6, max: 18, step: 0.1, unit: 'mm' },
+  exhaustLiftMm: { min: 6, max: 18, step: 0.1, unit: 'mm' },
+  exhaustValveMm: { min: 20, max: 50, step: 0.1, unit: 'mm' },
+  // Port flow on a flow bench at 28 inches of water: a stock port 150-250 cfm, a race head's
+  // past 350; exhaust ports flow about three quarters of the intake's.
+  intakePortCfm: { min: 120, max: 420, step: 1, unit: 'cfm' },
+  exhaustPortCfm: { min: 90, max: 330, step: 1, unit: 'cfm' },
+  // Lobe separation: aftermarket cams are ground 104-118 degrees, OEM ones wider. Installed
+  // intake centreline: about four degrees before the separation is the usual install.
+  lsaDeg: { min: 100, max: 124, step: 0.5, unit: '°' },
+  iclDeg: { min: 96, max: 130, step: 0.5, unit: '°' },
+  runnerMm: { min: 100, max: 900, step: 5, unit: 'mm' },
+  // Long-tube header primaries: 24-36 inches is the usual run, 1.5-2 inch tube.
+  headerPrimaryMm: { min: 300, max: 1200, step: 5, unit: 'mm' },
+  headerPrimaryIdMm: { min: 28, max: 55, step: 0.1, unit: 'mm' },
 });
 
 /** How much longer than the intake lobe a builder's exhaust lobe is taken to be when not given, degrees. */

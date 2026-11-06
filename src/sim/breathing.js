@@ -51,9 +51,14 @@ const CP = CV + R_AIR;
 export function orificeFlow(cdA, pUp, tUp, pDown) {
   if (cdA <= 0 || pUp <= pDown) return 0;
   const pr = Math.max(pDown / pUp, ORIFICE_CRITICAL_PR);
-  const psi = Math.sqrt((2 * GAMMA / (GAMMA - 1)) * (pr ** (2 / GAMMA) - pr ** ((GAMMA + 1) / GAMMA)));
+  // pr^(2/g) - pr^((g+1)/g) is a(a - pr) with a = pr^(1/g): the same flow function with one
+  // power instead of two. This runs thousands of times per engine cycle.
+  const a = pr ** INV_GAMMA;
+  const psi = Math.sqrt(ORIFICE_PSI_K * a * (a - pr));
   return (cdA * pUp / Math.sqrt(R_AIR * tUp)) * psi;
 }
+const INV_GAMMA = 1 / GAMMA;
+const ORIFICE_PSI_K = (2 * GAMMA) / (GAMMA - 1);
 /** The pressure ratio at which an orifice chokes, for gamma 1.4: (2/(gamma+1))^(gamma/(gamma-1)). */
 const ORIFICE_CRITICAL_PR = (2 / (GAMMA + 1)) ** (GAMMA / (GAMMA - 1));
 
@@ -97,13 +102,13 @@ export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
  * moved by an exhaust phaser's retard; each lobe has its own duration, as real cams do.
  *
  * @param {{ivcAbdc: number, durationDeg: number, exhaustDurationDeg?: number, exhaustRetardDeg?: number,
- *   maxLiftM?: number, exhaustMaxLiftM?: number}} cam each lobe's duration at 0.050 inch and
+ *   maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null}} cam each lobe's duration at 0.050 inch and
  *   its valve's maximum lift; the exhaust lobe is the intake's where not given
  * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number,
  *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, and each
  *   lobe's ramps as `liftShare` takes them
  */
-export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM }) {
+export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM, iclDeg = null, lsaDeg = null }) {
   /** One lobe from its duration at 0.050 inch: its seat-to-seat length and its ramps. */
   const lobe = (dur, maxLift) => {
     const rampLift = Math.min(COEFF.BREATH_RAMP_LIFT_M, 0.5 * DURATION_CHECK_LIFT_M);
@@ -119,8 +124,12 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
   const exLobe = lobe(exhaustDurationDeg, exhaustMaxLiftM);
   // The intake lobe's centre, from where it closes at the checking height; the exhaust's
   // mirrors it about TDC, moved by an exhaust phaser's retard.
-  const centre = 180 + ivcAbdc - durationDeg / 2;
-  const exCentre = -centre + exhaustRetardDeg;
+  // A cam card's figures place both where it gives them: the intake centreline after TDC as
+  // installed, and the lobe separation, the angle between the two centrelines in cam degrees,
+  // which puts the exhaust centreline 2 * LSA - ICL before TDC (crank degrees). Without them,
+  // a lobe pair ground symmetric about TDC: the lobe separation equal to the centreline.
+  const centre = iclDeg != null ? iclDeg : 180 + ivcAbdc - durationDeg / 2;
+  const exCentre = -(lsaDeg != null ? 2 * lsaDeg - centre : centre) + exhaustRetardDeg;
   return {
     ivo: centre - inLobe.seat / 2,
     ivc: centre + inLobe.seat / 2,
@@ -148,6 +157,10 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  * @property {number} [exhaustPrimaryAreaM2] its cross-section, m^2
  * @property {number} [exhaustReflection] pressure reflection coefficient where the primary
  *   meets its collector, (A1 - A2)/(A1 + A2): negative into a larger area
+ * @property {number} [exhaustPortAreaM2] the exhaust port's effective flow area per cylinder, m^2,
+ *   from its flow-bench figure
+ * @property {number} [intakeLiftM] intake valve lift where the cam card gives it, m
+ * @property {number} [exhaustLiftM] exhaust valve lift where the cam card gives it, m
  * @property {number} [intakePortAreaM2] the intake port's effective flow area per cylinder
  *   from a flow bench, m^2; without it the throat times the universal Cd
  * @property {number} [runnerReflection] pressure reflection coefficient where the intake
@@ -201,9 +214,11 @@ export function gasExchange(g, op) {
   /**
    * @param {number} deg @param {number} open @param {number} close @param {number} n @param {number} dia
    * @param {{rampShare?: number, rampLiftShare?: number}} [ramp] @param {number} [portAreaM2]
+   * @param {number} [maxLiftM] the lobe's lift at the valve, where the cam card gives it;
+   *   otherwise the usual share of the valve's diameter
    */
-  const valveArea = (deg, open, close, n, dia, ramp = g.events, portAreaM2 = 0) => {
-    const lift = g.liftPerDia * dia * liftShare((deg - open) / (close - open), ramp);
+  const valveArea = (deg, open, close, n, dia, ramp = g.events, portAreaM2 = 0, maxLiftM = 0) => {
+    const lift = (maxLiftM > 0 ? maxLiftM : g.liftPerDia * dia) * liftShare((deg - open) / (close - open), ramp);
     if (lift <= 0) return 0;
     const curtain = n * COEFF.BREATH_VALVE_CD * Math.PI * dia * lift;
     // The port behind the seat: its flow-bench area where the head has been measured,
@@ -225,6 +240,8 @@ export function gasExchange(g, op) {
   // pipe the blowdown is what sets its column moving.
   let theta = evo;
   let v = volume(theta);
+  // Each valve's flow at the last step, where its next solve starts.
+  let lastEx = null; let lastIn = null;
   const pEvo = Math.max(pExh * 1.05, pPlenum * clamp(COEFF.EVO_PRESSURE_RATIO_AT_0 + COEFF.EVO_PRESSURE_RATIO_PER_RPM * rpm, 3.5, 6.2));
   let t = exhaustK * (pEvo / pExh) ** ((COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED);
   let m = pEvo * v / (R_AIR * t);
@@ -304,7 +321,7 @@ export function gasExchange(g, op) {
     // A shut valve is a closed end: the backward wave goes straight round again.
     let fwd = backwardNow();
     if (mid > evo && mid < evc) {
-      const a = valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp);
+      const a = valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp, g.exhaustPortAreaM2 ?? 0, g.exhaustLiftM ?? 0);
       const b = backwardNow();
       // The backward wave reflects off the valve end: a nearly shut valve is a closed end
       // (+1), a wide one passes most of it into the cylinder.
@@ -316,13 +333,10 @@ export function gasExchange(g, op) {
         const port = pExh + waveBack + impedance * mdot;
         return p > port ? orificeFlow(a, p, t, port) : -orificeFlow(a, port, exhaustK, p);
       };
-      let lo = -orificeFlow(a, Math.max(p, pExh) * 2, exhaustK, 0) - 1e-9;
-      let hi = orificeFlow(a, Math.max(p, pExh) * 2, t, 0) + 1e-9;
-      for (let it = 0; it < BISECT_STEPS; it++) {
-        const mid2 = (lo + hi) / 2;
-        if (flowAt(mid2) > mid2) lo = mid2; else hi = mid2;
-      }
-      const out = (lo + hi) / 2;
+      const out = solveFlow(flowAt,
+        -orificeFlow(a, Math.max(p, pExh) * 2, exhaustK, 0) - 1e-9,
+        orificeFlow(a, Math.max(p, pExh) * 2, t, 0) + 1e-9, lastEx);
+      lastEx = out;
       fwd = impedance * out + valveR * b;
       dmEx = Math.max(-out * dt, -0.9 * m);
       hEx = dmEx < 0 ? CP * t : CP * exhaustK;
@@ -336,7 +350,7 @@ export function gasExchange(g, op) {
     let hIn = 0;
     let out = returningNow();
     if (mid > ivo && mid < ivc) {
-      const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0);
+      const a = valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0, g.intakeLiftM ?? 0);
       const b = returningNow();
       const valveR = (g.runnerAreaM2 - a) / (g.runnerAreaM2 + a);
       const waveBack = b * (1 + valveR);
@@ -346,13 +360,10 @@ export function gasExchange(g, op) {
           - (runnerLossK * mdot * Math.abs(mdot)) / (2 * rhoPlenum * g.runnerAreaM2 ** 2);
         return port > p ? orificeFlow(a, port, intakeK, p) : -orificeFlow(a, p, t, port);
       };
-      let lo = -orificeFlow(a, Math.max(p, pPlenum) * 2, t, 0) - 1e-9;
-      let hi = orificeFlow(a, Math.max(p, pPlenum) * 2, intakeK, 0) + 1e-9;
-      for (let it = 0; it < BISECT_STEPS; it++) {
-        const mid2 = (lo + hi) / 2;
-        if (flowAt(mid2) > mid2) lo = mid2; else hi = mid2;
-      }
-      const mdot = (lo + hi) / 2;
+      const mdot = solveFlow(flowAt,
+        -orificeFlow(a, Math.max(p, pPlenum) * 2, t, 0) - 1e-9,
+        orificeFlow(a, Math.max(p, pPlenum) * 2, intakeK, 0) + 1e-9, lastIn);
+      lastIn = mdot;
       out = -impedanceIn * mdot + valveR * b;
       dmIn = mdot * dt;
       if (dmIn > 0) { taken += dmIn; hIn = CP * intakeK; } else { pushedBack -= dmIn; hIn = CP * t; dmIn = Math.max(dmIn, -0.9 * m); }
@@ -410,8 +421,59 @@ export function gasExchange(g, op) {
   };
 }
 
-/** Halvings of the flow bracket in the valve solves: a millionth of the bracket, far inside any figure the model reports. */
-const BISECT_STEPS = 20;
+/** The valve solves stop when the bracket is narrower than this share of where it started. */
+const FLOW_SOLVE_TOL = 1e-9;
+/** And never take more evaluations than this, the cost of 40 halvings. */
+const FLOW_SOLVE_MAX = 40;
+
+/**
+ * The valve flow that is its own answer: `flowAt(mdot) = mdot`, with `flowAt(mdot) - mdot`
+ * falling through zero between `lo` and `hi` (a flow raises the port pressure that opposes
+ * it). Bracketed false position with the Illinois modification, the method cycle.js searches
+ * the knock limit with: it keeps a bracket around the root as bisection does, but steps to
+ * where the line through the bracket's ends crosses zero, halving the weight of an end that
+ * stays put so it cannot stall. The flow function is smooth and monotonic, so it closes to a
+ * billionth of the bracket in a handful of evaluations, where twenty halvings stopped at a
+ * millionth.
+ * @param {(mdot: number) => number} flowAt
+ * @param {number} lo flow at which flowAt(lo) > lo
+ * @param {number} hi flow at which flowAt(hi) < hi
+ * @returns {number}
+ */
+function solveFlow(flowAt, lo, hi, guess = null) {
+  const tol = (hi - lo) * FLOW_SOLVE_TOL;
+  let gLo; let gHi;
+  // From the last step's flow, which the valve and the waves move only a little in two crank
+  // degrees: bracket outward from it, doubling the reach, rather than from the ends of the
+  // possible range. Either way the bracket holds the root and closes to the same tolerance.
+  if (guess != null && guess > lo && guess < hi) {
+    const g0 = flowAt(guess) - guess;
+    if (g0 === 0) return guess;
+    let reach = Math.max(Math.abs(guess) * 0.02, (hi - lo) * 1e-4);
+    let x = guess; let gx = g0;
+    for (;;) {
+      const y = g0 > 0 ? Math.min(hi, x + reach) : Math.max(lo, x - reach);
+      const gy = y === hi || y === lo ? null : flowAt(y) - y;
+      if (gy === null) { if (g0 > 0) { lo = x; gLo = gx; } else { hi = x; gHi = gx; } break; }
+      if ((gy > 0) === (g0 > 0) && gy !== 0) { x = y; gx = gy; reach *= 2; continue; }
+      if (g0 > 0) { lo = x; gLo = gx; hi = y; gHi = gy; } else { hi = x; gHi = gx; lo = y; gLo = gy; }
+      break;
+    }
+  }
+  if (gLo === undefined) gLo = flowAt(lo) - lo;
+  if (gHi === undefined) gHi = flowAt(hi) - hi;
+  if (!(gLo > 0) || !(gHi < 0)) return (lo + hi) / 2;
+  let side = 0;
+  for (let it = 0; it < FLOW_SOLVE_MAX && hi - lo > tol; it++) {
+    let x = lo + ((hi - lo) * gLo) / (gLo - gHi);
+    // A step that lands on an end does not shrink the bracket: halve instead.
+    if (!(x > lo && x < hi)) x = (lo + hi) / 2;
+    const gx = flowAt(x) - x;
+    if (gx === 0) return x;
+    if (gx > 0) { lo = x; gLo = gx; if (side === 1) gHi /= 2; side = 1; } else { hi = x; gHi = gx; if (side === -1) gLo /= 2; side = -1; }
+  }
+  return lo + ((hi - lo) * gLo) / (gLo - gHi);
+}
 
 /** Atmospheric, for callers that do not carry a barometer. */
 export const BREATH_BARO_KPA = BARO_KPA;
@@ -432,17 +494,41 @@ export const BREATH_BARO_KPA = BARO_KPA;
  * @param {number} input.flowKgS exhaust mass flow, kg/s
  * @param {number} input.exhaustK gas temperature, K
  * @param {number} input.pipeDiaIn pipe diameter, inches
- * @param {{headers?: boolean, exhaust?: boolean}} [input.mods]
+ * @param {{headers?: boolean, exhaust?: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} [input.mods]
  * @param {number} [input.baroKpa]
  * @returns {number} the pressure drop, kPa
  */
 export function exhaustSystemDropKpa({ flowKgS, exhaustK, pipeDiaIn, mods = {}, baroKpa = BARO_KPA }) {
   if (!(flowKgS > 0)) return 0;
   const area = (Math.PI / 4) * (pipeDiaIn * 0.0254) ** 2;
-  const k = (mods.headers ? COEFF.EXH_K_HEADERS : COEFF.EXH_K_MANIFOLD) + COEFF.EXH_K_CATALYST
+  const k = (mods.headers ? COEFF.EXH_K_HEADERS : COEFF.EXH_K_MANIFOLD) + COEFF.EXH_K_CATALYST * catalystLossShare(mods.catalyst)
     + (mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK);
   // Density at the tailpipe end, near atmospheric: the drop is small against it.
   const rho = (baroKpa * 1000) / (R_AIR * exhaustK);
   const u = flowKgS / (rho * area);
   return (k * rho * u * u) / 2 / 1000;
+}
+
+/**
+ * How hard a catalyst is to push through, against the OEM ceramic's (1). Its substrate is a
+ * honeycomb of square channels a millimetre or so across, and the flow in them is laminar,
+ * so the drop goes as Hagen-Poiseuille's: viscosity times length times the channel speed over
+ * the channel's hydraulic diameter squared. For the same converter size and flow, the
+ * channel speed goes as one over the open frontal area, so the drop goes as
+ * 1 / (open area * d_h^2), from the cell density and the wall thickness: the cell pitch is
+ * 1 / sqrt(cells per square inch), the channel the pitch less one wall, the open area the
+ * channel over the pitch squared. A 200-cell metallic substrate on thin foil comes out at
+ * about a third of the 400-cell ceramic's. No converter (a test pipe) costs nothing here.
+ * @param {'ceramic'|'metallic'|'none'|undefined} catalyst absent is the OEM ceramic
+ * @returns {number}
+ */
+export function catalystLossShare(catalyst) {
+  if (catalyst === 'none') return 0;
+  if (catalyst !== 'metallic') return 1;
+  const resistance = (cpsi, wallIn) => {
+    const pitch = 1 / Math.sqrt(cpsi);
+    const channel = pitch - wallIn;
+    return 1 / (((channel / pitch) ** 2) * channel * channel);
+  };
+  return resistance(COEFF.CAT_METALLIC_CPSI, COEFF.CAT_METALLIC_WALL_IN) / resistance(COEFF.CAT_CERAMIC_CPSI, COEFF.CAT_CERAMIC_WALL_IN);
 }

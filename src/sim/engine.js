@@ -134,6 +134,17 @@ export function intakeValveAreaRatio(cfg) {
  * @property {number} [intakePortCfm] the head's peak intake port flow on a flow bench at 28
  *   inches of water, per cylinder, cfm, where it has been measured (airflow.js)
  * @property {number} [redline] rev limit, RPM
+ * @property {number} [exhaustValveMm] exhaust valve head diameter, mm; absent means the usual
+ *   share of the intake's
+ * @property {number} [intakeLiftMm] intake valve lift at the valve (the cam card's), mm; absent
+ *   means the usual share of the valve's diameter
+ * @property {number} [exhaustLiftMm] exhaust valve lift at the valve, mm
+ * @property {number} [exhaustPortCfm] the head's peak exhaust port flow on a flow bench at 28
+ *   inches of water, cfm
+ * @property {number} [lsaDeg] lobe separation angle, cam degrees (the cam card's)
+ * @property {number} [iclDeg] installed intake centreline, crank degrees after TDC
+ * @property {number} [headerPrimaryMm] long-tube header primary length, mm, when headers are fitted
+ * @property {number} [headerPrimaryIdMm] header primary inside diameter, mm
  * @property {number} [runnerTuneRpm] the speed the intake runners are tuned to (breathing.js); default a share of the redline
  * @property {number} [runnerMm] intake runner length, mm, where the engine sets its own
  * @property {{camDuration: number, exhaustCamDuration?: number}} [manifoldCam] the cam the intake
@@ -267,7 +278,12 @@ export function deriveEngine(cfg) {
   const springRate = cfg.springRate ?? 50;
   // Overlap is shared between the two lobes, each bringing half of its duration to TDC; the
   // more aggressive lobe is the one whose valve floats first.
-  const overlapDeg = camOverlapDeg((camDuration + exhaustCamDuration) / 2);
+  // A cam card's lobe separation moves the lobes apart or together: overlap at the checking
+  // lift is (intake + exhaust duration) / 2 - 2 * LSA, so each degree tighter than the
+  // separation the lobes otherwise sit at (the intake centreline, both mirrored about TDC)
+  // adds two of overlap.
+  const impliedLsa = 180 + COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG - camDuration / 2;
+  const overlapDeg = Math.max(0, camOverlapDeg((camDuration + exhaustCamDuration) / 2) + (cfg.lsaDeg != null ? 2 * (impliedLsa - cfg.lsaDeg) : 0));
   const floatRpm = valveFloatRpm(springRate, Math.max(camDuration, exhaustCamDuration));
   const springPa = springFrictionPa(springRate);
   const redline = cfg.redline ?? DEFAULT_REDLINE_RPM;
