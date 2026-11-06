@@ -280,6 +280,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
         </label>
         <span className={styles.note}>{rpm.toLocaleString('en-US')} RPM, {f(mapKpa, 0)} kPa manifold, slowed {slowMo.toLocaleString('en-US')}×</span>
       </div>
+      <div className={styles.scroller}>
       <svg ref={svgRef} viewBox="0 0 960 360" className={styles.svg} role="img"
         aria-label={`The engine breathing at ${rpm} RPM: air through the runner into the cylinder, burned gas out through the ${geo.headers ? 'headers' : 'manifold'} and exhaust, animated with the model's own pressures and flows`}>
         <defs>
@@ -334,7 +335,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
           <line key={k} data-primary-seg x1={exX0 + (k / PIPE_SEGMENTS) * primaryPx} y1={yAxis}
             x2={exX0 + ((k + 1) / PIPE_SEGMENTS) * primaryPx + 0.6} y2={yAxis} className={styles.pipeSegEx} />
         ))}
-        <text x={exX0} y={yAxis + 48} className={styles.lab}>{geo.headers ? 'header primary' : 'manifold runner'} {f(geo.primaryLengthMm, 0)} × {f(geo.primaryBoreMm, 0)} mm</text>
+        <text x={exX0} y={yAxis + 62} className={styles.lab}>{geo.headers ? 'header primary' : 'manifold runner'} {f(geo.primaryLengthMm, 0)} × {f(geo.primaryBoreMm, 0)} mm</text>
         <path d={`M${exX1} ${yAxis - 8} L${exX1 + 34} ${yAxis - 14} L${exX1 + 34} ${yAxis + 14} L${exX1} ${yAxis + 8} Z`} className={styles.collector} />
         <text x={exX1 + 17} y={yAxis - 24} className={styles.lab} textAnchor="middle">collector</text>
         <line x1={exX1 + 34} y1={yAxis} x2={catX} y2={yAxis} className={styles.pipeEx} />
@@ -357,9 +358,10 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
           <rect x={268} width={14} height={8} fill={pressureColour(1, 0, 1)} /><text x={286} y={8} className={styles.lab}>above it (pressure)</text>
         </g>
       </svg>
+      </div>
       <p ref={readoutRef} className={styles.live} aria-live="off" />
 
-      <div className={styles.charts}>
+      <div className={`${styles.charts} ${styles.scroller}`}>
         <svg viewBox="0 0 960 170" className={styles.chart} role="img" aria-label="Cylinder pressure across the whole cycle">
           <rect x={X(overlapLo)} y={14} width={Math.max(0, X(overlapHi) - X(overlapLo))} height={136} className={styles.overlap} />
           <polyline points={cylPath} className={styles.cylLine} />

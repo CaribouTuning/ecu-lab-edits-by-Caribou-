@@ -13,8 +13,10 @@
 .scrub input { flex: 1; min-width: 0; accent-color: var(--acc); }
 .note { font-variant-numeric: tabular-nums; }
 
-.svg { display: block; width: 100%; height: auto; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
-.chart { display: block; width: 100%; height: auto; }
+.scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Never drawn narrower than its labels can be read at: a phone scrolls it sideways in its own box. */
+.svg { display: block; width: 100%; min-width: 720px; height: auto; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
+.chart { display: block; width: 100%; min-width: 720px; height: auto; }
 .charts { display: flex; flex-direction: column; gap: 4px; }
 
 .hIn { fill: var(--cyan); font: 700 13px var(--sans); letter-spacing: 0.06em; }
