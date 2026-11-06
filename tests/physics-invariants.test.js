@@ -284,6 +284,13 @@ describe('every lever pulls the way it does on a real engine', () => {
 
 describe('whole pulls on random builds', () => {
   const builds = Array.from({ length: BUILDS }, (_, i) => randomBuild(10000 + i));
+  // Each random engine solves its own breathing grid, seconds apiece, and both tests below
+  // pull the same builds at full throttle: one engine and one ECU pull per build, shared,
+  // and made on first use, so either test still runs on its own.
+  const engines = new Map();
+  const engineFor = (build) => { if (!engines.has(build)) engines.set(build, makeEngine({ build })); return engines.get(build); };
+  const ecuPulls = new Map();
+  const ecuPullOf = (build) => { if (!ecuPulls.has(build)) ecuPulls.set(build, engineFor(build).pull(100)); return ecuPulls.get(build); };
 
   it('with the factory ECU calibration, pull exactly as the original model wherever the ECU did nothing of its own', () => {
     // The neutrality contract, beyond the seven presets. The ECU adds things the original
@@ -292,9 +299,8 @@ describe('whole pulls on random builds', () => {
     // engine management on with nothing changed must not move a single horsepower.
     const failures = [];
     for (const build of builds) {
-      const eng = makeEngine({ build });
-      const legacy = eng.pull(100, { legacy: true });
-      const ecu = eng.pull(100);
+      const legacy = engineFor(build).pull(100, { legacy: true });
+      const ecu = ecuPullOf(build);
       ecu.points.forEach((p, i) => {
         const l = legacy.points[i];
         // An injector held open past its whole cycle is the ECU's pulse limit deciding the
@@ -317,7 +323,7 @@ describe('whole pulls on random builds', () => {
   it('log every problem with what, why and how to fix it, and score within 0-100', () => {
     const failures = [];
     for (const build of builds) {
-      const pull = makeEngine({ build }).pull(100);
+      const pull = ecuPullOf(build);
       for (const e of pull.events) {
         if (!e.msg || !e.cause || !e.fix) failures.push(`seed ${build.seed}: ${e.type} event missing msg/cause/fix`);
       }

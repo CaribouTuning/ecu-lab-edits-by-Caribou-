@@ -278,7 +278,13 @@ export function buildFingerprint(S) {
                   peakHp: r.peakHp, peakTq: r.peakTq,
                   tuningScore: tuning.score, engineerScore: engineer.score,
                 }),
-                samples: [0, 20, 40, 55].map((i) => r.points[i] && roundAll(r.points[i])),
+                // A point's knock retard at 4 figures, as wear is above and for the same reason:
+                // the ECU's retard follows a knock limit searched to 0.25° (KNOCK_SEARCH_TOL_DEG),
+                // so a point near a knock threshold carries it to a tenth of a degree, not seven
+                // figures. On undersquare|heavy|none|100|40kPa the first sample's retard moved
+                // 3.119772 -> 3.119775 under 16 ULP; checked directly, the only value in the
+                // matrix that did. The app shows it to a tenth of a degree.
+                samples: [0, 20, 40, 55].map((i) => r.points[i] && { ...roundAll(r.points[i]), knockPull: w6(r.points[i].knockPull) }),
               };
             }
           }
