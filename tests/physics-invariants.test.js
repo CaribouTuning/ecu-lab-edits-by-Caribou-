@@ -113,7 +113,9 @@ describe('units balance', () => {
       const tqFromBmep = (p.bmep * 1e5 * (eng.derived.displacementL / 1000)) / (4 * Math.PI) * 0.7376 * S.DRIVETRAIN_EFF;
       if (Math.abs(tqFromBmep - p.torque) > 1) return `torque ${p.torque} vs bmep ${tqFromBmep.toFixed(1)}`;
       const cycleMs = 120000 / p.rpm;
-      if (p.duty > 0 && Math.abs(p.duty - (p.pw / cycleMs) * 100) > 1) return `duty ${p.duty} vs pw/cycle ${(p.pw / cycleMs * 100).toFixed(1)}`;
+      // Duty is the share of the cycle the ECU asks for, reported up to 220% (point.js): past
+      // that the request is off the scale, and the pulse is what says how far.
+      if (p.duty > 0 && Math.abs(p.duty - Math.min(220, (p.pw / cycleMs) * 100)) > 1) return `duty ${p.duty} vs pw/cycle ${(p.pw / cycleMs * 100).toFixed(1)}`;
       return null;
     })).toEqual([]);
   });
@@ -193,6 +195,10 @@ describe('every lever pulls the way it does on a real engine', () => {
       const timingVal = Math.min(safe - 2, at({ timingVal: safe - 2, derived: derivedHi }).threshold - 1);
       const lo = at({ timingVal });
       const hi = at({ timingVal, derived: derivedHi });
+      // The law is about a charge that burns: leaner than a flame propagates through
+      // (ECU_COEFF.FLAME_LEAN_LIMIT, lambda 1.6; injectors past their limit can leave it
+      // there), there is no combustion efficiency for compression to raise.
+      if (lo.lambda > S.ECU_COEFF.FLAME_LEAN_LIMIT) return null;
       if (hi.threshold > lo.threshold + 0.05) return `knock limit ${lo.threshold} → ${hi.threshold} at +1 CR`;
       if (hi.imep < lo.imep - 0.005) return `imep ${lo.imep} → ${hi.imep} at +1 CR, same air and fuel`;
       return null;
@@ -322,7 +328,12 @@ describe('whole pulls on random builds', () => {
         // fuel, not the table: the two paths saturate differently, and since a rich
         // flame's heat depends on how rich it is (thermo.js, heatReleasedShare) that shows.
         const ecuActed = (p.protect?.length ?? 0) > 0 || p.knockPull > 0 || l.knockPull > 0
-          || p.misfire > 0 || p.cutPct > 0 || p.duty >= 100;
+          || p.misfire > 0 || p.cutPct > 0 || p.duty >= 100
+          // Its own boost target: the ECU's boost table, not the BUILD curve the original
+          // model runs on, and its closed-loop boost control. A tenth of a psi apart, it shuts
+          // the wastegate a step sooner where the turbo runs out of flow (random build 10020 at
+          // 4700 RPM: 218 against 196 kPa ahead of the turbine).
+          || Math.abs((p.boostTarget ?? 0) - (l.boostTarget ?? 0)) > 0.05;
         // One unit of rounding: the ECU prices the injector pulse through its own dead time,
         // which on a mis-scaled injector moves the charge by a hundredth of a percent.
         const off = (a, b) => Math.abs(a - b) > Math.max(1, 0.005 * b);
