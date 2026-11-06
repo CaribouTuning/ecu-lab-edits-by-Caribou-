@@ -15,7 +15,9 @@
 /* ---------- the shop behind ---------- */
 .backdrop { position: absolute; inset: 0; }
 .backdropCanvas { display: block; width: 100%; height: 100%; }
-.backdropFallback { width: 100%; height: 100%; background: var(--bg); }
+/* Only a fill where the 3D shop would be: it must never take a click from the controls laid
+   over it (on a machine without a GPU it swallowed the stand's Start engine button). */
+.backdropFallback { width: 100%; height: 100%; background: var(--bg); pointer-events: none; }
 /* The things in the shop the page's controls are laid on (ShopBackdrop.jsx): a layer the
    size of the picture that lets clicks through to the picture, except on the faces. */
 .surfaceLayer { position: absolute !important; inset: 0; pointer-events: none; }
@@ -259,6 +261,10 @@
 .page[data-scene] .pageBody { display: flex; flex-direction: column; overflow: hidden; pointer-events: none; }
 .page[data-scene] .pageBody > * { pointer-events: auto; flex: none; width: 100%; }
 .page[data-scene] .pageBody > [data-station] { flex: 1; min-height: 0; max-width: none; pointer-events: none; }
+/* With no room to lay the faces on (3D off, or a machine without a GPU), the station is a
+   flat page of its own controls, and they must take clicks: the rule above, more specific
+   than the station's own flat one, left Start engine and the throttle dead. */
+.page[data-scene] .pageBody > [data-station][data-flat='true'] { pointer-events: auto; }
 
 /* ---------- inside the apps ---------- */
 .viewer {
