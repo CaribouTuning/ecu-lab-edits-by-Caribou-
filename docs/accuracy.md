@@ -91,7 +91,24 @@ closing:
   tuned once, for the cam the engine left the factory with, so the torque peak lands on the
   published speed, and a cam swap keeps it.
 - **The exhaust primary** is an acoustic line too: the blowdown launches a pressure wave that
-  reflects at the collector as suction, which is what headers are.
+  reflects at the collector as suction, which is what headers are. At a header's collector
+  the wave meets every other branch of the merge, the other primaries and the outlet, so it
+  reflects as into their summed area (linear junction theory: Kinsler & Frey, branched pipes;
+  Blair, *Design and Simulation of Four-Stroke Engines*, ch. 2): about -0.62 on a V6's
+  3-into-1, not the -0.38 of a single pipe twice the primary's area.
+- **The head and cam card** are parts (`headDefaultsOf` gives the figure each starts from,
+  and typing it in changes nothing): lift at each valve, exhaust valve size, exhaust port
+  flow on the bench, and the lobe separation with the installed intake centreline, which put
+  the exhaust centreline at 2 LSA - ICL (overlap = mean duration - 2 LSA: two degrees of
+  overlap for each degree of separation). A head or cam change keeps the intake runner, as
+  a cam swap does. A cam phaser moves only its own lobe: until November 2026 an intake
+  phaser also moved the exhaust lobe, doubling the overlap it adds.
+- **Headers and the catalyst** are parts too: header primary length and bore on the
+  acoustic primary, and the converter's substrate. Its channels are laminar, so its
+  restriction goes as 1 / (open frontal area x hydraulic diameter^2) from the cell density
+  and wall thickness: Corning's standard 400-cell, 6.5-thou ceramic is the stock one, and a
+  200-cell metallic one on 2-thou foil passes about a third of the drop (0.32). A test pipe
+  removes it.
 - **Residual gas** and the fresh charge are tracked separately, with Woschni's gas-exchange
   heat transfer. Every cell runs on the stoichiometric full-charge exhaust temperature: the
   burned gas is set by the mixture, not the load.
@@ -116,9 +133,18 @@ Known limits of the air model, measured:
   cam 14° longer, where MotoIQ's JWT C2 test on a VQ35DE measured 6% (13.3 whp, losing up to
   6 whp below 4400 RPM, which the model also does). The career's NA builds are set from what
   the model gives.
-- **Headers** gain about 1% where dynos measure 3–6%: one linear acoustic line per primary is
-  not a full 1-D gas-dynamic model, and the suction a real header pulls at overlap comes from
-  the non-linear blowdown pulse.
+- **Headers** gain about 1% on the stock VQ35DE where dynos measure 3–6%, and their primary
+  length moves its torque peak little: its cam has almost no overlap for the suction wave to
+  work through. On a cammed LS1 (25° of overlap) long tubes gain 1.5–2 VE points and longer
+  primaries build low-end filling, the right direction and short of real headers. One linear
+  acoustic line per primary is not a full 1-D gas-dynamic model, and the suction a real
+  header pulls at overlap comes from the non-linear blowdown pulse.
+- **An exhaust port's restriction is priced in the residual it leaves, not in pumping
+  work.** Pumping (`friction.js`) is taken on the manifold's pressure; the cylinder's own
+  pressure on the exhaust stroke, which a choked port raises, is not yet integrated into it.
+- **A catalyst's removal pays less than test-pipe dynos claim** (about 0.4% against 1–3% on
+  NA engines): the model prices the converter at about 5 kPa at full flow on a 3 in system,
+  in line with measured converter drops, and its saving as pumping work and residual.
 
 ## Rich flames, and why enrichment cools the exhaust
 
