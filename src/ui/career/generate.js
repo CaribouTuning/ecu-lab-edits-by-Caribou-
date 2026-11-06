@@ -208,7 +208,10 @@ const TEMPLATES = /** @type {Template[]} */ ([
     },
   },
   {
-    id: 'headers', minLevel: 0, cars: ['v6', 'hr', 'de'], needs: {},
+    // Not the game's own V6: on it headers and a cat-back move full-throttle mixture by
+    // under 2% (about 1.7%), inside the tolerance this job holds, so its owner would have
+    // no lean to complain of. The Nissans' factory exhaust leaves them 2.6-5.3% lean.
+    id: 'headers', minLevel: 0, cars: ['hr', 'de'], needs: {},
     make: ({ r, level }) => ({
       tier: 1, pay: payAt(420, level, r), rep: 5,
       says: FAULTS.headers.symptom(r), wants: 'Fix the lean condition, all the way to the limiter.',
