@@ -105,10 +105,17 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
-    // The cam is on the stand's Heads and cam part; the note is on its Engine part.
+    // The cam is on the stand's Heads and cam part; the note is on its Engine part. Each lobe
+    // is its own figure: the intake set, the exhaust lobe is still assumed, until it is set too.
     const parts = () => within(screen.getByRole('navigation', { name: 'Engine parts' }));
+    const cams = () => screen.getAllByRole('slider').filter((s) => s.getAttribute('min') === '180');
     fireEvent.click(parts().getByRole('button', { name: /Heads and cam/ }));
-    fireEvent.change(screen.getAllByRole('slider').find((s) => s.getAttribute('min') === '180'), { target: { value: '222' } });
+    fireEvent.change(cams()[0], { target: { value: '222' } });
+    fireEvent.click(parts().getByRole('button', { name: /^Engine/ }));
+    expect(note()).not.toMatch(/intake cam duration/);
+    expect(note()).toMatch(/exhaust cam duration/);
+    fireEvent.click(parts().getByRole('button', { name: /Heads and cam/ }));
+    fireEvent.change(cams()[1], { target: { value: '228' } });
     fireEvent.click(parts().getByRole('button', { name: /^Engine/ }));
     expect(note()).not.toMatch(/cam duration/);
     expect(note()).toMatch(/valvetrain DOHC/);

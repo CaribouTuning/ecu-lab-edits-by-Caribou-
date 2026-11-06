@@ -117,7 +117,7 @@ remaining risk is the same Node major with a different libm, which is what step 
   presets.js (converted to 0.050 in through the model's own lift curve where quoted at
   another lift); only the B58s and EA888s, with no factory figure found, are fitted, and
   their comments say so. Known misses (`KNOWN_GAPS` in tests/presets.test.js, with the
-  measurements): VQ35HR power about -9% (no cam moves it; no flow data for its head), GM
+  measurements): VQ35HR power 8-9% low (no cam moves it; no flow data for its head), GM
   truck V8 torque +8-12% with peaks 300-700 RPM early (87-octane rating is 1.2-1.9 points
   of it); the LS6 and 6.4 HEMI still rise gently into their limiters (FLAT_TO_LIMITER in
   tests/physics.test.js). Cam swaps check out on the LS1 (+10.5% against about +9-10% on

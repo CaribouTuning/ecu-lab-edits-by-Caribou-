@@ -592,8 +592,10 @@ export function simulateSweep({
   // with the flow. Once the exhaust side sits well above the intake, every cylinder pumps
   // against it and, through overlap, refills with its own exhaust: the engine breathes worse
   // than it did with no turbo at all. Logged as itself, so a turbo that makes LESS power than
-  // the engine made without it says why.
-  if (turboOn) {
+  // the engine made without it says why. Judged at full throttle only: part throttle, the
+  // manifold sits below the charge pressure ahead of the throttle plate, so exhaust over
+  // manifold pressure reads the throttle's restriction, not the turbine's size.
+  if (turboOn && loadKpa >= 95) {
     groupRuns(points, (p) => p.rpm >= 3000 && p.emp != null && p.map > 0
       && p.emp / p.map >= BACKPRESSURE_RATIO_LIMIT).forEach((run) => {
       if (run.length < 3) return;

@@ -10,7 +10,8 @@
  * Pure: every check reads a context and returns a boolean.
  */
 
-import { LOAD } from '../../sim/index.js';
+import { LOAD, layoutById, veCorrections, veSamplesFromPull } from '../../sim/index.js';
+import { VE_LOG_GOOD_PCT } from '../components/advisorReports.js';
 
 /**
  * @typedef {object} MissionCtx
@@ -47,6 +48,17 @@ const at = (tab, section) => (ctx) => ctx.route.tab === tab && (section == null 
 const pulledSince = (ctx) => ctx.state.session.pullCount > ctx.marks[ctx.marks.length - 1].pullCount && !ctx.state.session.running;
 const events = (ctx) => ctx.state.session.result?.events ?? [];
 const WOT = LOAD.indexOf(100);
+/**
+ * The last pull's VE log already within what a wideband and trims can tell, in every cell it
+ * logged: AIRFLOW's CORRECT VE FROM LOGS then has nothing to apply (APPLY HALF is greyed).
+ * Read the way that panel reads it, with the MAF's own error taken out.
+ */
+const veLogInSync = (state) => {
+  const pts = state.session.result?.points;
+  if (!pts) return false;
+  const { ratio, cells } = veCorrections(veSamplesFromPull(pts), layoutById(state.tune.layout).ve);
+  return cells > 0 && ratio.every((row) => row.every((r) => r == null || Math.abs(r - 1) * 100 < VE_LOG_GOOD_PCT));
+};
 const rowMean = (t) => t[WOT].reduce((a, b) => a + b, 0) / t[WOT].length;
 
 /** @type {Mission[]} */
@@ -95,9 +107,11 @@ export const MISSIONS = [
       { text: 'Fit the Cold Air Intake on BUILD › BOLT-ONS.', check: (ctx) => !!ctx.state.build.mods.intake },
       { text: 'Run a pull.', check: pulledSince },
       {
-        text: 'On TUNE › AIRFLOW, press Apply half under the table.',
-        check: (ctx) => ctx.state.tune.ve !== ctx.marks[ctx.marks.length - 1].ve,
-        hint: 'CORRECT VE FROM LOGS is under the VE table. Select a cell and open the advisor to see its maths first.',
+        // Done by applying the log, or by reading it and finding nothing to apply: with the
+        // MAF's error taken out, an intake leaves VE at a given manifold pressure nearly alone.
+        text: 'On TUNE › AIRFLOW, read CORRECT VE FROM LOGS under the table, and press Apply half if a cell is more than 2% out.',
+        check: (ctx) => ctx.state.tune.ve !== ctx.marks[ctx.marks.length - 1].ve || (at('tune', 'airflow')(ctx) && veLogInSync(ctx.state)),
+        hint: 'Select a cell and open the advisor to see its maths. Every cell within 2% means the table already describes the engine: what the intake changed is the MAF reading, next.',
       },
       {
         text: 'On TUNE › SENSORS, set the MAF scalar to about 1.11.',

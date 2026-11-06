@@ -67,6 +67,11 @@ const BUILD_KEYS = [
   // blower writes a starter ratio for it, so restoring the blower without its ratio
   // would put it on another blower's pulley.
   'blowerId', 'blowerRatio', 'nitrous',
+  // APPLY_PRESET records the induction the engine left the factory with and the preset it
+  // started as (RESET ALL TO STOCK and the base map are calibrated from them): undoing it
+  // has to put back the previous engine's, or a reset after the undo would calibrate for
+  // the engine that was undone.
+  'factoryInduction', 'originPresetId',
 ];
 
 /**
@@ -82,7 +87,9 @@ const BUILD_KEYS = [
  * undoing either must put back the baseline that went with the tables it restores, or
  * the CHANGES view would compare the old tables against the new calibration.
  */
-const TUNE_KEYS = ['ve', 'timing', 'afr', 'ecu', 'maps', 'activeMap', 'tablesDirty', 'baseline', 'layout'];
+// `untuned` marks the cells extended past the factory axes and not tuned yet: it goes with
+// the tables it describes, so an undo of a preset or a reset restores it with them.
+const TUNE_KEYS = ['ve', 'timing', 'afr', 'ecu', 'maps', 'activeMap', 'tablesDirty', 'baseline', 'layout', 'untuned'];
 
 /**
  * Does a write to `tune.<field>` touch something a snapshot carries?

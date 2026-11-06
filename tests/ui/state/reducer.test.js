@@ -1725,16 +1725,16 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 24 build and 9 tune fields', () => {
+  it('snapshots exactly the documented 26 build and 10 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'assumed', 'blowerId', 'blowerRatio', 'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc',
-      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'fuelSystem', 'injIdx', 'mafScalar',
-      'mods', 'nitrous', 'octaneIdx', 'plugGapMm', 'presetId', 'sensorHw', 'turbineCount',
+      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'fuelSystem', 'injIdx', 'mafScalar',
+      'mods', 'nitrous', 'octaneIdx', 'originPresetId', 'plugGapMm', 'presetId', 'sensorHw', 'turbineCount',
       'turbineIdx', 'turboOn', 'wastegate',
     ]);
     expect(Object.keys(snap.tune).sort()).toEqual([
-      'activeMap', 'afr', 'baseline', 'ecu', 'layout', 'maps', 'tablesDirty', 'timing', 've',
+      'activeMap', 'afr', 'baseline', 'ecu', 'layout', 'maps', 'tablesDirty', 'timing', 'untuned', 've',
     ]);
   });
 
@@ -1751,6 +1751,7 @@ describe('snapshot field coverage', () => {
   const UNDOABLE_EXAMPLES = {
     [ACTIONS.APPLY_PRESET]: { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET },
     [ACTIONS.RESET_TO_STOCK]: { type: ACTIONS.RESET_TO_STOCK, ve: [[1]] },
+    [ACTIONS.LOAD_BASE_MAP]: { type: ACTIONS.LOAD_BASE_MAP, ve: [[1]], timing: [[2]], afr: [[3]], layout: null },
     [ACTIONS.SET_TABLE]: { type: ACTIONS.SET_TABLE, table: 've', value: [[42]] },
     [ACTIONS.SET_ECU]: { type: ACTIONS.SET_ECU, value: { loaded: true } },
     [ACTIONS.SWITCH_MAP]: { type: ACTIONS.SWITCH_MAP, index: 1 },

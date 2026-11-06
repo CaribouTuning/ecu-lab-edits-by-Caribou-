@@ -714,6 +714,28 @@ export function presetLayout(preset, depth = {}) {
 }
 
 /**
+ * The engine a preset puts on the bench, which its factory calibration is written for too.
+ *
+ * The intake runners are tuned where the maker says the engine makes its peak torque
+ * (breathing.js): published for every naturally aspirated engine here. A turbo engine's
+ * torque peak is where its boost arrives, not where its runners resonate, so it keeps the
+ * default tuning. `manifoldCam` is the cam the intake manifold was tuned with: a cam swap
+ * later keeps the manifold, and the runners stay the length the factory chose (airflow.js
+ * `breathingGeometry`). An engine that already carries either (one on the bench, handed back
+ * for RESET ALL TO STOCK) keeps its own.
+ *
+ * @param {Preset} preset
+ */
+export function benchEngineOf(preset) {
+  const e = preset.engine;
+  return {
+    ...e,
+    ...(e.runnerTuneRpm == null && !preset.induction.turboOn && preset.factory?.crankTqRpm ? { runnerTuneRpm: preset.factory.crankTqRpm } : {}),
+    manifoldCam: e.manifoldCam ?? { camDuration: e.camDuration, exhaustCamDuration: e.exhaustCamDuration ?? e.camDuration },
+  };
+}
+
+/**
  * Generates the factory calibration for a preset, on any layout: the engine-sized one
  * by default, or an engine computer's own breakpoints.
  *
@@ -733,6 +755,8 @@ export function presetLayout(preset, depth = {}) {
  *   tables go with; `boost` the boost target curve the factory runs them at
  */
 export function factoryCalibration(preset, layout = null) {
+  // Written for the engine the preset puts on the bench, runners and all.
+  preset = { ...preset, engine: /** @type {any} */ (benchEngineOf(preset)) };
   const L = layout ? layoutById(layout) : presetLayout(preset);
   const derived = deriveEngine(preset.engine);
   const fuel = presetFuel(preset);
@@ -924,20 +948,7 @@ export function applyPreset(preset, layout = null) {
     mafScalar,
     // A catalogue engine's own reciprocating assembly, rated to its own factory limiter:
     // raise the redline past that and BUILD and the pull log say the parts are past it.
-    engineConfig: {
-      ...preset.engine, bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline,
-      // The intake runners are tuned where the maker says the engine makes its peak torque
-      // (breathing.js): published for every naturally aspirated engine here. A turbo engine's
-      // torque peak is where its boost arrives, not where its runners resonate, so it keeps
-      // the default tuning.
-      ...(!preset.induction.turboOn && preset.factory?.crankTqRpm ? { runnerTuneRpm: preset.factory.crankTqRpm } : {}),
-      // The cam the intake manifold was tuned with. A cam swap later keeps the manifold:
-      // the runners stay the length the factory chose (airflow.js `breathingGeometry`).
-      manifoldCam: preset.engine.manifoldCam ?? {
-        camDuration: preset.engine.camDuration,
-        exhaustCamDuration: preset.engine.exhaustCamDuration ?? preset.engine.camDuration,
-      },
-    },
+    engineConfig: { ...benchEngineOf(preset), bottomEndRatedRpm: preset.bottomEndRatedRpm ?? preset.engine.redline },
     mods: { ...preset.mods },
     turboOn: preset.induction.turboOn,
     // The published boost, limited where the spark table cannot protect it (factoryCalibration).

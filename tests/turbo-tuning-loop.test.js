@@ -25,6 +25,7 @@ function adviceAt(eng, load) {
     derived: eng.derived, fuel: eng.fuel, mods: eng.build.mods, turboOn: eng.build.turboOn, boostCurve: eng.build.boostCurve,
     compressor: eng.compressor, turbine: eng.turbine, injectorCc: cc, ecuInjectorCc: eng.build.ecuInjectorCc,
     mafScalar: eng.build.mafScalar ?? 1, mafErrorBase: S.mafErrorFactor(eng.build.mods, eng.build.turboOn), pull,
+    exhaustDia: S.EXHAUST_DIA_OPTS[eng.build.exhaustDiaIdx].dia,
   });
   return { pull, a };
 }

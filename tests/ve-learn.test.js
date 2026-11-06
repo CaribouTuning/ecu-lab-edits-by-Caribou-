@@ -85,7 +85,9 @@ describe('correcting VE from a dyno pull', () => {
 });
 
 describe('correcting VE from the LIVE datalog', () => {
-  const cruise = (eng) => runLive(eng, { seconds: 14, pedal: (t) => (t > 3 ? 30 : 0), coolantC: 90, holdRpm: 3000 });
+  // A cruise: 15% pedal holds about 43 kPa at 3000 RPM, in closed loop. A pull's load is a
+  // throttle opening (sim/throttle.js), and 30% already reads about 86 kPa: power enrichment.
+  const cruise = (eng) => runLive(eng, { seconds: 14, pedal: (t) => (t > 3 ? 15 : 0), coolantC: 90, holdRpm: 3000 });
 
   it('folds the fuel trims in: log, apply, re-log, and the trims converge on nothing left to do', () => {
     // Real VE tuning is iterative: a cruise between two table rows only half-informs the
@@ -115,7 +117,7 @@ describe('correcting VE from the LIVE datalog', () => {
 
   it('leaves out a cold engine, where warm-up fuel is doing the enriching', () => {
     const eng = offBy(0.9);
-    const { rows } = runLive(eng, { seconds: 8, pedal: (t) => (t > 3 ? 30 : 0), coolantC: 20, holdRpm: 3000 });
+    const { rows } = runLive(eng, { seconds: 8, pedal: (t) => (t > 3 ? 15 : 0), coolantC: 20, holdRpm: 3000 });
     expect(S.veSamplesFromLive(rows, eng.tables.ve)).toEqual([]);
   });
 });

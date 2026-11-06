@@ -48,7 +48,7 @@ function appPull(presetId, change = {}) {
     injectorLabel: S.INJECTOR_OPTS[build.injIdx].label, mods: build.mods, mafScalar: p.mafScalar ?? 1,
     derived: S.deriveEngine(build.engineConfig),
     turbine, compressor: S.compressorWithCount(S.COMPRESSOR_OPTS[build.compressorIdx], build.turbineCount),
-    ecu: ecuBundle, layout: p.layout ?? null,
+    ecu: ecuBundle, layout: p.layout ?? null, exhaustDia: hwForVe.exhaustDia,
   });
 }
 

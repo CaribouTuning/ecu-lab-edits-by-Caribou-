@@ -159,17 +159,16 @@ describe.each([
 });
 
 describe('a lesson’s screen is live', () => {
-  it('APPLY HALF in lesson 4.2 changes the sandbox table and then asks for a new pull, as the game does', () => {
+  it('lesson 4.2 shows the intake pull as the game does: every logged cell within 2%, nothing to apply', () => {
     openLesson(COURSE, COURSE.lessons.findIndex((l) => l.id === 've-from-logs'));
     const fig = screen.getByRole('figure', { name: 'Game screen: TUNE › AIRFLOW' });
-    // The cells the intake pull logged: half the correction moves some of them by more
-    // than the grid's displayed rounding (at 5500 RPM it is under one VE point).
-    const cells = () => within(fig).getAllByRole('button', { name: / RPM, \d+(\.\d+)? kPa$/ }).map((b) => b.textContent).join('|');
-    const before = cells();
-    fireEvent.click(within(fig).getByRole('button', { name: 'Apply half' }));
-    expect(cells()).not.toBe(before);
-    const panel = within(fig).getByRole('region', { name: 'Correct VE from logs' });
-    expect(within(panel).getByText(/before you changed VE table .* run another pull/)).toBeTruthy();
+    const panel = within(within(fig).getByRole('region', { name: 'Correct VE from logs' }));
+    // With the MAF's error taken out, an intake leaves VE at a given manifold pressure
+    // nearly alone: the panel says the table already describes the engine.
+    expect(panel.getByText(/Every logged cell is within 2%/)).toBeTruthy();
+    expect(panel.getByRole('button', { name: 'Apply half' }).hasAttribute('disabled')).toBe(true);
+    // And the MAF's part is named, for SENSORS.
+    expect(panel.getByText(/The MAF read .* low in these logs/)).toBeTruthy();
   });
 });
 
@@ -228,7 +227,7 @@ describe('practice missions', () => {
     expect(p.step).toBe(m.steps.length);
   });
 
-  it('bolt-on: the VE step only ticks once the table actually changes after the pull', () => {
+  it('bolt-on: the VE step ticks when the table changes after the pull, or when AIRFLOW shows nothing to apply', () => {
     const m = find('bolt-on');
     let s = base();
     let p = startOf(s);
@@ -236,12 +235,15 @@ describe('practice missions', () => {
     p = advance(m, p, s, route('build', 'induction'));
     expect(p.step).toBe(1);
     s = { ...s, session: { ...s.session, pullCount: 1, result: intakeFitted().result } };
-    p = advance(m, p, s, route('tune', 'airflow'));
+    p = advance(m, p, s, route('dyno', 'result'));
     expect(p.step).toBe(2);
-    // Same table, a new render: not done.
-    p = advance(m, p, { ...s, tune: { ...s.tune } }, route('tune', 'airflow'));
+    // Same table, a new render, still away from AIRFLOW: not done.
+    p = advance(m, p, { ...s, tune: { ...s.tune } }, route('dyno', 'result'));
     expect(p.step).toBe(2);
-    s = { ...s, tune: { ...s.tune, ve: s.tune.ve.map((r) => r.map((v) => v + 1)) } };
+    // A table changed after the pull is done, wherever the player is.
+    const changed = advance(m, p, { ...s, tune: { ...s.tune, ve: s.tune.ve.map((r) => r.map((v) => v + 1)) } }, route('dyno', 'result'));
+    expect(changed.step).toBe(3);
+    // So is reading the intake's log on AIRFLOW: every cell within 2%, nothing to apply.
     p = advance(m, p, s, route('tune', 'airflow'));
     expect(p.step).toBe(3);
     s = { ...s, build: { ...s.build, mafScalar: 1.11 } };

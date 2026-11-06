@@ -467,7 +467,9 @@ function VeFromLogs() {
   const col = lessonCol(5500);
   const m = veCellMaths(d, row, col);
   const table = d.state.tune.ve[row][col];
-  const truth = d.veTruth(5500, 100);
+  // Where the intake's gain really is: the manifold pressure at the same speed, stock and fitted.
+  const mapStock = Math.round(pointAt(stock(), 5500).map);
+  const mapFitted = Math.round(pointAt(d, 5500).map);
   return (
     <>
       <Goal learn="correct the VE table from a log, and follow the maths for one cell." need="Lesson 4.1." />
@@ -485,7 +487,7 @@ function VeFromLogs() {
           { at: 'table[aria-label="Logged VE error by cell, percent"]', text: 'How far each logged cell is off. Positive: the engine got more air than the table thought. Dots: no data, no change.' },
           { at: '[data-tour="velog-apply"]', text: 'APPLY HALF is what tuners do: apply half, pull again, repeat until every cell is within 2–3%.' },
         ]}
-        caption="The real AIRFLOW page after the intake pull. Select a cell and open the advisor to see its maths; the worked example below is the same calculation. APPLY HALF works here too, on this copy only: watch the table change and the panel ask for a new pull."
+        caption="The real AIRFLOW page after the intake pull. Select a cell and open the advisor to see its maths; the worked example below is the same calculation. Apply half is greyed out here, as it is in the game after an intake: every logged cell is already within 2%, so there is nothing to apply."
       >
         <LiveAirflow demo={d} />
       </ScreenSnippet>
@@ -498,14 +500,14 @@ function VeFromLogs() {
           ['New VE', `${n1(table)} × ${m.ratio.toFixed(3)} = ${n1(table * m.ratio)}%`],
           ['Applying half', `${n1(table + (table * m.ratio - table) / 2)}%`],
         ]}>
-          The wideband alone says the engine got {((m.lambdaRatio - 1) * 100).toFixed(0)}% more air than planned. Most of that is the MAF misreading, not the engine breathing better. With the MAF part taken out, the log asks for {((m.ratio - 1) * 100).toFixed(1)}%, and the intake really did raise VE here by {((truth / table - 1) * 100).toFixed(1)}%. Folding the MAF&apos;s 10% into VE would have to be undone the moment the MAF was fixed.
+          The wideband alone says the engine got {((m.lambdaRatio - 1) * 100).toFixed(0)}% more air than planned. Most of that is the MAF misreading, not the engine breathing better. With the MAF part taken out, the log asks for {((m.ratio - 1) * 100).toFixed(1)}%: next to nothing, and that is the right answer. VE is measured against manifold pressure, and an intake does not change how the cylinder fills at a given pressure. It loses less pressure on the way in, so more reaches the manifold ({mapStock} kPa stock, {mapFitted} kPa with it, at 5500 RPM), and a speed-density ECU already reads that from its MAP sensor. Folding the MAF&apos;s 10% into VE would have to be undone the moment the MAF was fixed.
         </Worked>
       )}
       <Do steps={[
         <>Fit <K>Cold Air Intake</K> on <K>BUILD › BOLT-ONS</K>, then run a pull.</>,
         <>Open <K>TUNE › AIRFLOW</K>. Under the table, <K>Correct VE from logs</K> now has samples.</>,
         <>Select the 5500 RPM, 100 kPa cell and open the advisor to see its maths.</>,
-        <>Press <K>Apply half</K>. Pull again, and repeat until the panel says every cell is within 2%.</>,
+        <>If a cell is more than 2% out, press <K>Apply half</K>, pull again, and repeat until the panel says every cell is within 2%. After an intake it already says so: what changed was the MAF reading, which Lesson 4.3 fixes.</>,
       ]} />
       <Did>You corrected a speed-density table from a wideband log, the way it is done on real cars, and you can check the software&apos;s working by hand.</Did>
       <Trouble items={[

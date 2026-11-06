@@ -20,7 +20,9 @@ describe('which cells the engine reaches', () => {
 
   it('reads the boost the last full-throttle pull made, never more than the target', () => {
     const asked = [{ label: 'Base target (BUILD curve)', value: 10 }];
-    const pull = { points: [{ rpm: 1500, boostPsi: 1, boostSteps: asked }, { rpm: 3000, boostPsi: 10, boostSteps: asked }, { rpm: 6000, boostPsi: 10, boostSteps: asked }] };
+    // With the manifold pressure each point logged (a few kPa under the barometer plus boost:
+    // the intake duct and the throttle lose them), which is what reach reads.
+    const pull = { points: [{ rpm: 1500, boostPsi: 1, map: 105, boostSteps: asked }, { rpm: 3000, boostPsi: 10, map: 167, boostSteps: asked }, { rpm: 6000, boostPsi: 10, map: 167, boostSteps: asked }] };
     const reach = reachOf(/** @type {any} */ (turbo), pull);
     expect(reach(1500)).toBeLessThan(120);
     expect(reach(6000)).toBeGreaterThan(165);
