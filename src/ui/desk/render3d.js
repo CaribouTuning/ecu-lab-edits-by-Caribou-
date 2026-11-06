@@ -25,10 +25,13 @@ export function write3d(v) {
 
 let hardwareGl = /** @type {boolean|null} */ (null);
 
+/** Renderer names of the GPU-less WebGL implementations. */
+const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render driver/i;
+
 /**
  * Whether this machine draws WebGL in hardware: asked once, of a scratch canvas, with
  * `failIfMajorPerformanceCaveat`, which a software renderer (hardware acceleration off, a
- * blocklisted GPU) refuses. Every 3D view checks it before building a scene: drawn in
+ * blocklisted GPU) should refuse, and by the renderer's own name where the browser gives it. Every 3D view checks it before building a scene: drawn in
  * software, even the small engine views held the page for seconds at a time.
  * @returns {boolean}
  */
@@ -38,7 +41,13 @@ export function hasHardwareGl() {
     const c = document.createElement('canvas');
     const gl = c.getContext('webgl2', { failIfMajorPerformanceCaveat: true })
       ?? c.getContext('webgl', { failIfMajorPerformanceCaveat: true });
-    hardwareGl = !!gl;
+    // Chromium now hands out its SwiftShader software renderer even with the caveat flag, so
+    // the renderer's own name is asked as well: SwiftShader (Chromium), llvmpipe and softpipe
+    // (Mesa), Microsoft Basic Render Driver (Windows WARP) and Apple's software renderer all
+    // draw on the CPU, where one frame of the shop took about a second and froze the page.
+    const info = gl?.getExtension('WEBGL_debug_renderer_info');
+    const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) ?? '') : '';
+    hardwareGl = !!gl && !SOFTWARE_RENDERER.test(renderer);
     /** @type {any} */ (gl)?.getExtension('WEBGL_lose_context')?.loseContext();
   } catch {
     hardwareGl = false;

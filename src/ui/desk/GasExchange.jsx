@@ -99,6 +99,9 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
   const scrubRef = useRef(scrub);
   scrubRef.current = scrub;
   const readoutRef = useRef(/** @type {HTMLParagraphElement|null} */ (null));
+  const wrapRef = useRef(/** @type {HTMLDivElement|null} */ (null));
+  // The crank angle survives a re-render: a new trace carries on from where the last one was.
+  const degRef = useRef(-360);
 
   const tr = gx.trace;
   const ev = gx.events;
@@ -200,24 +203,25 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
       }
     };
 
-    let raf = 0; let last = window.performance.now(); let deg = -360;
+    let raf = 0; let last = window.performance.now();
     let visible = true;
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const tick = (now) => {
       raf = 0;
       const dt = Math.min(0.1, (now - last) / 1000); last = now;
-      if (scrubRef.current != null) deg = scrubRef.current;
-      else if (!paused && !reduce) deg += (720 / CYCLE_SECONDS) * dt;
-      draw(deg);
+      if (scrubRef.current != null) degRef.current = scrubRef.current;
+      else if (!paused && !reduce) degRef.current = wrap(degRef.current + (720 / CYCLE_SECONDS) * dt);
+      draw(degRef.current);
       if (visible && !document.hidden && !paused && !reduce && scrubRef.current == null) raf = requestAnimationFrame(tick);
     };
     const start = () => { if (!raf) { last = window.performance.now(); raf = requestAnimationFrame(tick); } };
     const io = typeof window.IntersectionObserver === 'function'
       ? new window.IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) start(); }, { threshold: 0.05 }) : null;
-    io?.observe(svg);
+    // The whole panel, charts included: their cursors move with the drawing.
+    io?.observe(wrapRef.current ?? svg);
     const onVis = () => { if (!document.hidden) start(); };
     document.addEventListener('visibilitychange', onVis);
-    draw(scrubRef.current ?? deg);
+    draw(scrubRef.current ?? degRef.current);
     start();
     return () => { if (raf) cancelAnimationFrame(raf); io?.disconnect(); document.removeEventListener('visibilitychange', onVis); };
   }, [gx, tr, cyc, L, paused, scrub, mapKpa, gasLo, peakBar]);
@@ -265,7 +269,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
   const catCells = mods?.catalyst === 'metallic' ? 5 : 9;
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} ref={wrapRef}>
       <div className={styles.toolbar}>
         <button type="button" className={styles.btn} onClick={() => setPaused((v) => !v)} aria-pressed={paused}>{paused ? 'Run' : 'Pause'}</button>
         <label className={styles.scrub}>
@@ -330,7 +334,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
           <line key={k} data-primary-seg x1={exX0 + (k / PIPE_SEGMENTS) * primaryPx} y1={yAxis}
             x2={exX0 + ((k + 1) / PIPE_SEGMENTS) * primaryPx + 0.6} y2={yAxis} className={styles.pipeSegEx} />
         ))}
-        <text x={(exX0 + exX1) / 2} y={yAxis + 30} className={styles.lab} textAnchor="middle">{geo.headers ? 'header primary' : 'manifold runner'} {f(geo.primaryLengthMm, 0)} × {f(geo.primaryBoreMm, 0)} mm</text>
+        <text x={exX0} y={yAxis + 48} className={styles.lab}>{geo.headers ? 'header primary' : 'manifold runner'} {f(geo.primaryLengthMm, 0)} × {f(geo.primaryBoreMm, 0)} mm</text>
         <path d={`M${exX1} ${yAxis - 8} L${exX1 + 34} ${yAxis - 14} L${exX1 + 34} ${yAxis + 14} L${exX1} ${yAxis + 8} Z`} className={styles.collector} />
         <text x={exX1 + 17} y={yAxis - 24} className={styles.lab} textAnchor="middle">collector</text>
         <line x1={exX1 + 34} y1={yAxis} x2={catX} y2={yAxis} className={styles.pipeEx} />
@@ -380,7 +384,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
           {[[ev.evo, 'EVO'], [ev.ivo, 'IVO'], [ev.evc, 'EVC'], [ev.ivc, 'IVC']].map(([d, k]) => (
             <text key={k} x={X(d)} y={164} className={styles.lab} textAnchor="middle">{k}</text>
           ))}
-          <text x={44} y={40} className={styles.lab}>ports, kPa ({f(portRange[0], 0)}–{f(portRange[1], 0)}); valve lift below</text>
+          <text x={916} y={26} className={styles.lab} textAnchor="end">ports, kPa ({f(portRange[0], 0)}–{f(portRange[1], 0)}); valve lift shaded below</text>
           <line data-cursor-port y1={14} y2={150} className={styles.cursor} />
         </svg>
         <div className={styles.key}>
