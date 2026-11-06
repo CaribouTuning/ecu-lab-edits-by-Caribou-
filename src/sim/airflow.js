@@ -120,6 +120,17 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
 const RUNNER_CACHE = new Map();
 
 /**
+ * Primaries merging in each header collector: a bank's cylinders on a V or flat engine (one
+ * collector a side), all of an inline four's, and three on an inline six (its two 3-into-1s).
+ * @param {import('./engine.js').EngineConfig} cfg
+ */
+function primariesPerCollector(cfg) {
+  const cyl = CYL_COUNT[cfg.configuration] ?? 6;
+  if (/^(V|F|H)/.test(cfg.configuration)) return Math.max(1, cyl / 2);
+  return cyl > 4 ? Math.ceil(cyl / 2) : cyl;
+}
+
+/**
  * The cylinder's breathing geometry from the engine's own figures (breathing.js).
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{intakeCamAdvanceDeg?: number, exhaustCamRetardDeg?: number, headers?: boolean}} [phase]
@@ -132,7 +143,11 @@ export function breathingGeometry(cfg, phase = {}) {
   const intakeValveM = intakeValveMm / 1000;
   // Fewer exhaust valves than intake (a three-valve head) are each made larger, so the
   // exhaust side keeps its share of the area.
-  const exhaustValveM = intakeValveM * COEFF.BREATH_EXHAUST_VALVE_SHARE * Math.sqrt(intakeValves / exhaustValves);
+  const exhaustValveM = cfg.exhaustValveMm ? cfg.exhaustValveMm / 1000
+    : intakeValveM * COEFF.BREATH_EXHAUST_VALVE_SHARE * Math.sqrt(intakeValves / exhaustValves);
+  // Lift at the valve, where the cam card gives it; otherwise the usual share of the valve.
+  const intakeLiftM = cfg.intakeLiftMm ? cfg.intakeLiftMm / 1000 : COEFF.BREATH_LIFT_PER_DIA * intakeValveM;
+  const exhaustLiftM = cfg.exhaustLiftMm ? cfg.exhaustLiftMm / 1000 : COEFF.BREATH_LIFT_PER_DIA * exhaustValveM;
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
   const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG
     - (phase.intakeCamAdvanceDeg ?? 0);
@@ -145,15 +160,35 @@ export function breathingGeometry(cfg, phase = {}) {
     intakeValves, intakeValveM, exhaustValves, exhaustValveM, liftPerDia: COEFF.BREATH_LIFT_PER_DIA,
     runnerAreaM2, runnerLengthM: 0.35, runnerReflection: reflectionCoefficient(plenumAreaM2 / runnerAreaM2),
     // The exhaust primaries: a cast manifold's short ones, or long-tube headers' (phase.headers).
-    exhaustPrimaryM: phase.headers ? COEFF.EXH_PRIMARY_HEADERS_M : COEFF.EXH_PRIMARY_MANIFOLD_M,
-    exhaustPrimaryAreaM2: exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
-    exhaustReflection: reflectionCoefficient(phase.headers ? COEFF.EXH_COLLECTOR_AREA_HEADERS : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
+    // Headers bought to a length and a tube size carry them: the primary is an acoustic line,
+    // its length the wave's round trip and its bore the wave's strength for a given flow.
+    exhaustPrimaryM: phase.headers ? (cfg.headerPrimaryMm ? cfg.headerPrimaryMm / 1000 : COEFF.EXH_PRIMARY_HEADERS_M) : COEFF.EXH_PRIMARY_MANIFOLD_M,
+    exhaustPrimaryAreaM2: phase.headers && cfg.headerPrimaryIdMm
+      ? (Math.PI / 4) * (cfg.headerPrimaryIdMm / 1000) ** 2
+      : exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
+    // At the collector a primary's wave meets every other branch of the merge, not one pipe:
+    // the other primaries into it as well as the collector's outlet (linear junction theory:
+    // Kinsler & Frey, branched pipes; Blair, Design and Simulation of Four-Stroke Engines,
+    // ch. 2), so it reflects as into their summed area.
+    exhaustReflection: reflectionCoefficient(phase.headers
+      ? COEFF.EXH_COLLECTOR_AREA_HEADERS + (primariesPerCollector(cfg) - 1)
+      : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
     events: valveEvents({
       ivcAbdc, durationDeg: camDuration, exhaustDurationDeg: cfg.exhaustCamDuration ?? camDuration,
       exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0,
-      maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM, exhaustMaxLiftM: COEFF.BREATH_LIFT_PER_DIA * exhaustValveM,
+      maxLiftM: intakeLiftM, exhaustMaxLiftM: exhaustLiftM,
+      // A cam card's installed intake centreline (moved by an intake phaser's advance) and
+      // lobe separation, which fix the exhaust centreline at 2 * LSA - ICL before TDC. Each
+      // phaser moves only its own lobe: the separation handed on is the one that keeps the
+      // exhaust centreline where the card puts it, and valveEvents adds an exhaust retard.
+      iclDeg: cfg.iclDeg != null ? cfg.iclDeg - (phase.intakeCamAdvanceDeg ?? 0) : null,
+      lsaDeg: cfg.lsaDeg != null ? cfg.lsaDeg - (phase.intakeCamAdvanceDeg ?? 0) / 2 : null,
     }),
   };
+  if (cfg.intakeLiftMm) base.intakeLiftM = intakeLiftM;
+  if (cfg.exhaustLiftMm) base.exhaustLiftM = exhaustLiftM;
+  // The exhaust port the same way as the intake's, from its own flow-bench figure.
+  if (cfg.exhaustPortCfm) base.exhaustPortAreaM2 = (cfg.exhaustPortCfm * CFM_TO_M3S) / FLOW_BENCH_VELOCITY_MS;
   // A head whose port has been on a flow bench: its peak intake flow at the standard 28 inches
   // of water is an effective area outright, A = Q / sqrt(2 dp / rho), and caps the valve's
   // open area in place of the throat times the universal Cd (breathing.js `valveArea`).

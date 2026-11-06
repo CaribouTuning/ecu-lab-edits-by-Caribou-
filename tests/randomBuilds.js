@@ -58,12 +58,23 @@ export function randomBuild(seed) {
     springRate: range(40, 100, 1),
     redline: range(6000, 7500, 100),
   };
+  // The head, cam card and header figures a player can set, each present half the time, from
+  // a stream of their own so the builds above are the same engines they always were.
+  const r2 = rng(seed * 31 + 7);
+  const opt = (key) => {
+    if (r2() < 0.5) return;
+    const lim = S.CUSTOM_ENGINE_LIMITS[key];
+    engineConfig[key] = Number((lim.min + Math.round((r2() * (lim.max - lim.min)) / lim.step) * lim.step).toFixed(1));
+  };
+  ['intakeLiftMm', 'exhaustLiftMm', 'exhaustValveMm', 'intakePortCfm', 'exhaustPortCfm', 'lsaDeg', 'iclDeg', 'runnerMm', 'headerPrimaryMm', 'headerPrimaryIdMm'].forEach(opt);
+  const catalyst = /** @type {const} */ (['ceramic', 'metallic', 'none'])[Math.floor(r2() * 3)];
   return {
     seed,
     engineConfig,
     mods: {
       intake: r() < 0.5, exhaust: r() < 0.5, headers: r() < 0.5,
       intercooler: turboOn ? r() < 0.8 : false,
+      catalyst,
     },
     turboOn,
     boostCurve: shape.map((k) => Number((k * peak).toFixed(1))),

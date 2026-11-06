@@ -153,7 +153,7 @@ export function rubbingFmepParts(rpm, springPa = 0, arch = {}, mapKpa = BARO_KPA
  * @param {number} [input.wastegateRelief] fraction of turbine backpressure the gate bleeds
  * @param {number} [input.baroKpa] the pressure the tailpipe exhausts to
  * @param {number} [input.pipeDiaIn] exhaust pipe diameter, inches
- * @param {{headers?: boolean, exhaust?: boolean}} [input.mods] headers and cat-back fitted
+ * @param {{headers?: boolean, exhaust?: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} [input.mods] headers, cat-back and catalyst fitted
  * @returns {number} exhaust manifold pressure, kPa
  */
 export function exhaustManifoldKpa({

@@ -130,6 +130,15 @@ export const COEFF = {
   EXH_K_HEADERS: 0.8,
   EXH_K_CATALYST: 1.5,
   EXH_K_CATBACK: 3.5,
+  // Catalyst substrates, for how hard each is to push through (breathing.js
+  // `catalystLossShare`): the OEM converter is a 400-cell-per-square-inch ceramic with
+  // 6.5-thousandths walls (Corning's standard Celcor 400/6.5); a high-flow converter a
+  // 200-cell metallic one wound from 0.05 mm (2-thousandths) foil. EXH_K_CATALYST is the
+  // ceramic's.
+  CAT_CERAMIC_CPSI: 400,
+  CAT_CERAMIC_WALL_IN: 0.0065,
+  CAT_METALLIC_CPSI: 200,
+  CAT_METALLIC_WALL_IN: 0.002,
   EXH_K_CATBACK_FREE: 1.5,
   // Exhaust primaries (breathing.js): a cast manifold's short runners into a log, against
   // long-tube headers' (about 30 inches, the length long-tube primaries are sold at) merging
