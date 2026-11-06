@@ -167,19 +167,23 @@ describe('boost pays like real boost', () => {
   const derived = S.deriveEngine(cfg);
   const fuel = S.OCTANE_OPTS.find((o) => o.label === '93');
 
-  /** Best safe power at 5500 RPM and a given boost. */
-  function powerAt(psi, intercooler) {
+  /**
+   * Best safe power at 5500 RPM and a given boost, on a turbine sized for it: the Large,
+   * which passes this 3.5 L engine's exhaust at 20 psi with the drive pressure about 1.4x
+   * the boost. The rule of thumb below assumes a turbo that suits the engine.
+   */
+  function powerAt(psi, intercooler, turbineIdx = 2) {
     const turbo = psi > 0;
     const mods = { ...S.DEFAULT_MODS, intercooler, turboFitted: turbo };
     const ve = S.computeHardwareVE(cfg, mods, {
-      turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[1] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi,
+      turboOn: turbo, turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null, exhaustDia: 3.0, fuel, peakBoostPsi: psi,
     });
     const map = S.BARO_KPA + psi * S.PSI_TO_KPA;
     const at = (timingVal) => S.evaluatePoint({
       rpm: 5500, mapKpa: map, boostPsi: psi, veVal: S.interp2(ve, 5500, map), timingVal,
       afrCommanded: turbo ? 11.8 : 12.8, fuel, mods, mafScalar: 1, mafErrorBase: 1,
       injectorCc: 1000, ecuInjectorCc: 1000, derived, compressor: S.COMPRESSOR_OPTS[2],
-      turbine: turbo ? S.TURBINE_OPTS[1] : null,
+      turbine: turbo ? S.TURBINE_OPTS[turbineIdx] : null,
     });
     const probe = at(10);
     return at(Math.min(probe.threshold - 1, probe.mbtIdeal));
@@ -196,6 +200,15 @@ describe('boost pays like real boost', () => {
     expect(powerAt(10, true).hp / na).toBeLessThan(1.75);
     expect(powerAt(20, true).hp / na).toBeGreaterThan(1.7);
     expect(powerAt(20, true).hp / na).toBeLessThan(2.35);
+  });
+
+  it('pays less through a turbine too small for the flow, which holds the exhaust back', () => {
+    // The Medium on this engine at 20 psi: the same boost, less power, and the drive
+    // pressure well above the boost, as an undersized turbo runs.
+    const small = powerAt(20, true, 1);
+    const sized = powerAt(20, true, 2);
+    expect(small.hp).toBeLessThan(sized.hp);
+    expect(small.emp / small.map).toBeGreaterThan(sized.emp / sized.map + 0.15);
   });
 
   it('makes less at the same boost without an intercooler, and knocks sooner', () => {

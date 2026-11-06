@@ -318,7 +318,7 @@ export function gasExchange(g, op) {
       };
       let lo = -orificeFlow(a, Math.max(p, pExh) * 2, exhaustK, 0) - 1e-9;
       let hi = orificeFlow(a, Math.max(p, pExh) * 2, t, 0) + 1e-9;
-      for (let it = 0; it < 30; it++) {
+      for (let it = 0; it < BISECT_STEPS; it++) {
         const mid2 = (lo + hi) / 2;
         if (flowAt(mid2) > mid2) lo = mid2; else hi = mid2;
       }
@@ -348,7 +348,7 @@ export function gasExchange(g, op) {
       };
       let lo = -orificeFlow(a, Math.max(p, pPlenum) * 2, t, 0) - 1e-9;
       let hi = orificeFlow(a, Math.max(p, pPlenum) * 2, intakeK, 0) + 1e-9;
-      for (let it = 0; it < 30; it++) {
+      for (let it = 0; it < BISECT_STEPS; it++) {
         const mid2 = (lo + hi) / 2;
         if (flowAt(mid2) > mid2) lo = mid2; else hi = mid2;
       }
@@ -409,6 +409,9 @@ export function gasExchange(g, op) {
     backflowShare: taken > 0 ? pushedBack / taken : 0,
   };
 }
+
+/** Halvings of the flow bracket in the valve solves: a millionth of the bracket, far inside any figure the model reports. */
+const BISECT_STEPS = 20;
 
 /** Atmospheric, for callers that do not carry a barometer. */
 export const BREATH_BARO_KPA = BARO_KPA;

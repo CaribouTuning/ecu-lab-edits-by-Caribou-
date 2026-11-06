@@ -576,11 +576,8 @@ export const COEFF = {
   // Scales the share of turbine capability above the target (see solveInduction), so the
   // gate opens on surplus rather than shortfall. Fitted to the turbo presets' published
   // ratings: at 0.2 every one lands within 5% of its rated power, with exhaust
-  // backpressure at rated power 1.0-1.4x the boost pressure, which is where small OEM
-  // turbos run. Not refitted after the rich-flame chemistry (thermo.js,
-  // heatReleasedShare) took 4-6% of heat out of their full-boost points: the B58B30M1
-  // reads 7% under (docs/accuracy.md), held there by its knock limit rather than by its
-  // turbine.
+  // backpressure at rated power 1.0-1.5x the boost pressure (docs/accuracy.md), which is
+  // where small OEM turbos run.
   WASTEGATE_RELIEF: 0.2,
   // --- Compressor map (see compressorMap in turbo.js) ---
   // How sharply efficiency falls away from the island centre, and how much a unit of

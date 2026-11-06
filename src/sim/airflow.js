@@ -68,6 +68,8 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
   // Sampled finely enough that a flat-topped curve's peak, found between samples, moves
   // smoothly with the length rather than jumping from one sample to the next.
   const step = 250;
+  // From low speed: a long runner can ram hardest well below its tune speed and hump again
+  // above it, and only the whole curve says which is its peak.
   const rpms = []; for (let r = 1000; r <= tuneRpm * 2 + step; r += step) rpms.push(r);
   // Torque, not filling, is what peaks at the published speed: brake MEP is the indicated MEP
   // the filling buys, less the engine's own rubbing friction, which climbs with speed and so
