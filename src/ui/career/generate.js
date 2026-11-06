@@ -142,8 +142,10 @@ const FAULTS = {
   headers: {
     build: (_p) => withMods({ headers: true, exhaust: true }),
     params: () => ({}),
-    checks: (level) => [
-      { type: 'mixture', kind: 'complaint', pct: mixPct(level), label: 'On target at full throttle, all the way to redline' },
+    checks: (_level) => [
+      // Headers and a cat-back change how the engine breathes by a few percent, so the job is
+      // finishing the tune: within 2%, where a professional holds full-throttle mixture.
+      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
     ],
     symptom: (r) => r.pick([
       'Headers and a cat-back went on. My gauge says it goes lean under load.',
@@ -183,7 +185,10 @@ const TEMPLATES = /** @type {Template[]} */ ([
   {
     id: 'idle', minLevel: 0, cars: ['v6', 'hr', 'de'], needs: { training: ['idle'] },
     make: ({ r, level }) => {
-      const damp = Number(r.range(0.003, 0.009).toFixed(4));
+      // Another shop's "fix": the idle controller's integral gains turned up and its damping
+      // turned down. Raised gains alone still settle; with the damping cut the idle hunts.
+      const damp = Number(r.range(0.003, 0.006).toFixed(4));
+      const gain = Number(r.range(4, 5).toFixed(2));
       return {
         tier: 1, pay: payAt(320, level, r), rep: 4,
         says: r.pick([
@@ -192,7 +197,7 @@ const TEMPLATES = /** @type {Template[]} */ ([
         ]),
         wants: 'A normal, steady idle.',
         work: ['Diagnose the idle', 'Correct the calibration'],
-        carTune: { idleDamp: damp }, params: { damp },
+        carTune: { idleDamp: damp, idleGainMult: gain }, params: { damp, gain },
         checks: [
           { type: 'idle', kind: 'complaint', swing: 60, offset: 60, label: 'Idles steadily, on its target, without stalling' },
           ...SAFE,
@@ -329,9 +334,12 @@ const TEMPLATES = /** @type {Template[]} */ ([
     id: 'build-na', minLevel: 2, cars: ['v6', 'hr', 'de'], needs: { training: ['builder'], equipment: ['dyno'] },
     make: ({ r, level, car }) => {
       const octaneIdx = r.pick([0, 1]);
-      // Up to +14%: every car here reaches +15-21% naturally aspirated with bolt-ons, a
-      // 240° cam and a retune, so the hardest ask still leaves room for a sensible build.
-      const share = r.range(1.06, 1.09 + level * 0.0125);
+      // +2% to +4%: bolt-ons, a street cam a step up from stock and a retune from the log make
+      // +4.5% on the VQ35DE, +5.9% on the VQ35HR and +6.4% on the V6 in the air model
+      // (tests/careerFixes.js 'build-na'), so the hardest ask leaves room on every car. Real
+      // VQ builds measure more (MotoIQ's JWT C2 test: +6% from the cams alone); the model's
+      // VQ answers a cam less than that (CLAUDE.md, preset fidelity).
+      const share = r.range(1.02, 1.03 + level * 0.0025);
       const redline = r.pick([null, null, 7200]);
       return {
         tier: 3, pay: payAt(2200, level, r), rep: 14, build: true,
@@ -426,10 +434,18 @@ export function generatedJob(id) {
   };
 }
 
-/** Calibration faults, as tune patches. @param {{idleDamp?: number, retard?: {deg: number, rows: number}}} f */
+/** Calibration faults, as tune patches. @param {{idleDamp?: number, idleGainMult?: number, retard?: {deg: number, rows: number}}} f */
 function tuneFor(f) {
   return (t) => ({
-    ...(f.idleDamp != null ? { ecu: { ...t.ecu, idle: { ...t.ecu.idle, damp: f.idleDamp } } } : {}),
+    ...(f.idleDamp != null ? {
+      ecu: {
+        ...t.ecu,
+        idle: {
+          ...t.ecu.idle, damp: f.idleDamp,
+          ...(f.idleGainMult ? { gainUp: t.ecu.idle.gainUp * f.idleGainMult, gainDown: t.ecu.idle.gainDown * f.idleGainMult } : {}),
+        },
+      },
+    } : {}),
     ...(f.retard ? { timing: t.timing.map((row, ri) => row.map((v) => (ri <= f.retard.rows ? v - f.retard.deg : v))) } : {}),
   });
 }

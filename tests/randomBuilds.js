@@ -53,7 +53,8 @@ export function randomBuild(seed) {
     compression: Number(range(S.CUSTOM_ENGINE_LIMITS.compression.min, turboOn ? 11.5 : S.CUSTOM_ENGINE_LIMITS.compression.max, 0.1).toFixed(1)),
     blockMaterial: pick(MATERIALS),
     headMaterial: pick(MATERIALS),
-    camDuration: range(190, 280, 2),
+    camDuration: range(190, 280, 1),
+    exhaustCamDuration: range(190, 280, 1),
     springRate: range(40, 100, 1),
     redline: range(6000, 7500, 100),
   };

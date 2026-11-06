@@ -24,12 +24,12 @@ import { assertBoostCurve } from './sweep.js';
 import { liveStepEcu } from './ecu/liveEcu.js';
 import {
   CRANK_RPM, CRANK_SENSOR_MIN_RPM, ENGINE_INERTIA, IDLE_TARGET_RPM, LIMITER_OVERSHOOT_RPM, REDLINE_CUT, STALL_RPM,
-  readSpeedAndAirflow, sensorRead, steadyManifoldKpa,
+  readSpeedAndAirflow, sensorRead, steadyManifoldKpa, vacuumSpeedFrac,
 } from './liveCore.js';
 
 export {
   CRANK_RPM, CRANK_SENSOR_MIN_RPM, ENGINE_INERTIA, IDLE_TARGET_RPM, LIMITER_OVERSHOOT_RPM, REDLINE_CUT, STALL_RPM,
-  readSpeedAndAirflow, sensorRead, steadyManifoldKpa,
+  readSpeedAndAirflow, sensorRead, steadyManifoldKpa, vacuumSpeedFrac,
 };
 
 
@@ -126,7 +126,7 @@ export function liveStep(st, dt, input, cfg) {
     const aFrac = clamp(effThrottle, 0, 100) / 100;
     // Normalised against a fixed RPM datum, not this engine's redline — see
     // COEFF.MANIFOLD_VACUUM_RPM_NORM in coefficients.js for why that is deliberate.
-    const nFrac = clamp(rpmClamped / COEFF.MANIFOLD_VACUUM_RPM_NORM, 0, 1.2);
+    const nFrac = vacuumSpeedFrac(rpmClamped);
     const loadKpa = steadyManifoldKpa(aFrac, nFrac, derived.overlapDeg || 0);
     const boostTarget = turboOn ? curveAt(boostCurve, rpmClamped) : 0;
     const steady = solveInduction({

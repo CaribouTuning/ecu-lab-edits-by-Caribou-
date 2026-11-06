@@ -12,7 +12,7 @@ import { COEFF } from './coefficients.js';
 import { CYL_COUNT } from './hardware.js';
 import { CAM_BASE_DURATION, deriveEngine, intakeValveAreaRatio, valveFloatRpm } from './engine.js';
 import { clamp } from './math.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { rubbingFmepPa } from './friction.js';
 import { exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
@@ -58,20 +58,24 @@ export function computeHardwareVE(cfg, mods, hw = {}, axes = null) {
  * @returns {number} runner length, m
  */
 function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
-  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.runnerAreaM2}|${Math.round(tuneRpm)}`;
+  const key = `${COEFF.BREATH_VALVE_CD}|${cyl}|${base.boreM}|${base.strokeM}|${base.compression}|${base.intakeValveM}|${base.intakeValves}|${base.events.ivc}|${base.events.ivo}|${base.events.evo}|${base.events.evc}|${base.runnerAreaM2}|${base.runnerReflection}|${base.intakePortAreaM2}|${Math.round(tuneRpm)}`;
   const hit = RUNNER_CACHE.get(key);
   if (hit != null) return hit;
   // The length whose filling peaks at the speed it is tuned for, the peak found between
   // samples by a parabola through the highest three (a flat curve's peak does not jump from
   // one sample to the next). Ties go to the shorter runner.
-  const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: 1000 };
-  const step = 500;
+  const op = { plenumKpa: BARO_KPA, intakeK: AMBIENT_K, exhaustKpa: BARO_KPA + 8, exhaustK: INDUCTION_REF_EXHAUST_K };
+  // Sampled finely enough that a flat-topped curve's peak, found between samples, moves
+  // smoothly with the length rather than jumping from one sample to the next.
+  const step = 250;
+  // From low speed: a long runner can ram hardest well below its tune speed and hump again
+  // above it, and only the whole curve says which is its peak.
   const rpms = []; for (let r = 1000; r <= tuneRpm * 2 + step; r += step) rpms.push(r);
   // Torque, not filling, is what peaks at the published speed: brake MEP is the indicated MEP
   // the filling buys, less the engine's own rubbing friction, which climbs with speed and so
   // puts the torque peak below the filling peak.
   const fmep = rpms.map((rpm) => rubbingFmepPa(rpm, derived?.springPa ?? 0, derived ?? {}));
-  /** Where a runner of this length peaks in torque, interpolated between samples. */
+  /** Where a runner of this length peaks in torque, interpolated between samples, and its torque at the tune speed. */
   const peakOf = (L) => {
     const g = { ...base, runnerLengthM: L };
     const ves = rpms.map((rpm, n) => {
@@ -79,7 +83,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       // filling and pumping work both grow with speed.
       let emp = BARO_KPA; let r = null;
       for (let i = 0; i < 2; i++) {
-        r = gasExchange(g, { ...op, rpm, exhaustKpa: emp });
+        r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
         emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
       }
@@ -91,19 +95,25 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       const den = ves[k - 1] - 2 * ves[k] + ves[k + 1];
       if (den < 0) peak += step * 0.5 * (ves[k - 1] - ves[k + 1]) / den;
     }
-    return peak;
+    const at = rpms.findIndex((r) => r >= tuneRpm);
+    return { peak, atTune: ves[Math.max(0, at)] };
   };
-  // Coarse, then fine about the best: a longer runner peaks lower, so the error is close to
-  // monotonic in the length and two passes find it.
-  let best = 0.35; let bestErr = Infinity;
+  // Of the lengths whose torque peaks at or above the tune speed, the one that fills best
+  // there: the strongest runner that still peaks where it is meant to. Choosing the length
+  // whose peak lands nearest the speed instead read a flat curve's peak, which jumps between
+  // lengths on small changes, and could pick a weak runner over a strong one beside it.
+  let best = null; let bestAt = -Infinity; let nearest = 0.35; let nearestErr = Infinity;
   const search = (from, to, by) => {
     for (let L = from; L <= to + 1e-9; L += by) {
-      const err = Math.abs(peakOf(L) - tuneRpm);
-      if (err < bestErr - 1) { bestErr = err; best = L; }
+      const { peak, atTune } = peakOf(L);
+      if (peak >= tuneRpm - step && atTune > bestAt + 1) { bestAt = atTune; best = L; }
+      const err = Math.abs(peak - tuneRpm);
+      if (err < nearestErr - 1) { nearestErr = err; nearest = L; }
     }
   };
-  search(0.1, 1.0, 0.1);
-  search(Math.max(0.1, best - 0.08), Math.min(1.0, best + 0.08), 0.02);
+  search(0.1, 1.0, 0.05);
+  // No length peaks that high (a speed past every length's reach): the nearest.
+  if (best == null) best = nearest;
   RUNNER_CACHE.set(key, best);
   return best;
 }
@@ -127,17 +137,36 @@ export function breathingGeometry(cfg, phase = {}) {
   const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG
     - (phase.intakeCamAdvanceDeg ?? 0);
   const throat = intakeValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * intakeValveM) ** 2;
+  const runnerAreaM2 = throat * COEFF.BREATH_RUNNER_AREA_SHARE;
+  // The plenum's face where a runner opens into it: the side of a cube of its volume.
+  const plenumAreaM2 = (deriveEngine(cfg).displacementL * 1e-3 * COEFF.BREATH_PLENUM_VOLUME_SHARE) ** (2 / 3);
   const base = {
     boreM: cfg.bore / 1000, strokeM: cfg.stroke / 1000, compression: cfg.compression, rodRatio: COEFF.ROD_RATIO,
     intakeValves, intakeValveM, exhaustValves, exhaustValveM, liftPerDia: COEFF.BREATH_LIFT_PER_DIA,
-    runnerAreaM2: throat * COEFF.BREATH_RUNNER_AREA_SHARE, runnerLengthM: 0.35,
+    runnerAreaM2, runnerLengthM: 0.35, runnerReflection: reflectionCoefficient(plenumAreaM2 / runnerAreaM2),
     // The exhaust primaries: a cast manifold's short ones, or long-tube headers' (phase.headers).
     exhaustPrimaryM: phase.headers ? COEFF.EXH_PRIMARY_HEADERS_M : COEFF.EXH_PRIMARY_MANIFOLD_M,
     exhaustPrimaryAreaM2: exhaustValves * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * exhaustValveM) ** 2 * COEFF.EXH_PRIMARY_AREA_SHARE,
     exhaustReflection: reflectionCoefficient(phase.headers ? COEFF.EXH_COLLECTOR_AREA_HEADERS : COEFF.EXH_COLLECTOR_AREA_MANIFOLD),
-    events: valveEvents({ ivcAbdc, durationDeg: camDuration, exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0, maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM }),
+    events: valveEvents({
+      ivcAbdc, durationDeg: camDuration, exhaustDurationDeg: cfg.exhaustCamDuration ?? camDuration,
+      exhaustRetardDeg: phase.exhaustCamRetardDeg ?? 0,
+      maxLiftM: COEFF.BREATH_LIFT_PER_DIA * intakeValveM, exhaustMaxLiftM: COEFF.BREATH_LIFT_PER_DIA * exhaustValveM,
+    }),
   };
+  // A head whose port has been on a flow bench: its peak intake flow at the standard 28 inches
+  // of water is an effective area outright, A = Q / sqrt(2 dp / rho), and caps the valve's
+  // open area in place of the throat times the universal Cd (breathing.js `valveArea`).
+  if (cfg.intakePortCfm) base.intakePortAreaM2 = (cfg.intakePortCfm * CFM_TO_M3S) / FLOW_BENCH_VELOCITY_MS;
   if (cfg.runnerMm) return { ...base, runnerLengthM: cfg.runnerMm / 1000 };
+  // The runners are hardware: tuned for the cam the engine left the factory with, and kept
+  // when the cam is changed. Re-tuning them to every cam fitted a new intake manifold with
+  // each cam swap, which handed back the low end a bigger cam gives away.
+  const mc = cfg.manifoldCam;
+  if (mc && (mc.camDuration !== cfg.camDuration || (mc.exhaustCamDuration ?? mc.camDuration) !== (cfg.exhaustCamDuration ?? cfg.camDuration))) {
+    const factory = breathingGeometry({ ...cfg, camDuration: mc.camDuration, exhaustCamDuration: mc.exhaustCamDuration ?? mc.camDuration }, {});
+    return { ...base, runnerLengthM: factory.runnerLengthM };
+  }
   // The intake runner is tuned with the factory exhaust; headers change the exhaust, not it.
   if (phase.headers) return { ...base, runnerLengthM: breathingGeometry(cfg, { ...phase, headers: false }).runnerLengthM };
   // The runner is tuned with the cam parked: a phaser moves the events, not the manifold.
@@ -164,10 +193,39 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     turboOn = false, turbine = null, exhaustDia = null, fuel = null,
     intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0,
   } = hw;
+  // The same engine's breathing is asked for by its factory calibration, its VE truth, the
+  // advisor and every pull: one grid per engine, kept, so no cell is solved twice. Keyed on
+  // everything below that the gas exchange reads.
+  const key = JSON.stringify([cfg, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
+    exhaustDia, fuel?.stoich ?? null, intakeCamAdvanceDeg, exhaustCamRetardDeg, COEFF.BREATH_VALVE_CD]);
+  const kept = VE_READERS.get(key);
+  if (kept) { VE_READERS.delete(key); VE_READERS.set(key, kept); return kept; }
+  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg });
+  VE_READERS.set(key, reader);
+  if (VE_READERS.size > VE_READERS_KEPT) VE_READERS.delete(VE_READERS.keys().next().value);
+  return reader;
+}
+
+/** Engines' breathing grids kept, most recently used last. */
+const VE_READERS = new Map();
+/** How many: an engine's phases and bolt-on variants several times over, a few MB at most. */
+const VE_READERS_KEPT = 48;
+
+/**
+ * `hardwareVeAt`'s reader, built fresh.
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{headers?: boolean, intercooler?: boolean}} mods
+ * @param {object} hw
+ * @returns {(rpm: number, mapKpa: number) => number}
+ */
+function buildVeReader(cfg, mods, hw) {
+  const { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg } = hw;
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
   const pipeDiaIn = exhaustDia ?? 3.0;
-  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, cfg.camDuration ?? CAM_BASE_DURATION);
+  // The longer lobe floats first (engine.js `deriveEngine`).
+  const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
+  const floatRpm = valveFloatRpm(cfg.springRate ?? 50, Math.max(camDuration, cfg.exhaustCamDuration ?? camDuration));
   const headFactor = cfg.headMaterial === 'Aluminum' ? COEFF.VE_ALUMINIUM_HEAD_GAIN : 1.0;
   const fuelFactor = fuel ? (fuel.stoich < 12 ? COEFF.VE_E85_CHARGE_COOLING : fuel.stoich < 14.7 ? 1.005 : 1.0) : 1.0;
   const injectionFactor = cfg.injection === 'direct' ? COEFF.VE_DIRECT_INJECTION : 1.0;
@@ -185,11 +243,19 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
     const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
     // Exhaust manifold pressure is set by the flow it passes, which is set by the breathing:
     // repeated substitution from atmospheric; three passes settle it well inside 0.1% VE.
+    // Each pass is the next cycle: it starts from the waves the last one left in the runner.
+    // The burned gas the exhaust stroke starts from is set by the mixture, not by how much
+    // of it there is: a stoichiometric charge burns to the same temperature at any density.
+    // So every cell runs on the full-charge, stoichiometric exhaust temperature, the one the
+    // induction solve prices the turbine on (thermo.js `INDUCTION_REF_EXHAUST_K`).
+    // `exhaustTempK`'s load term is how a probe in the manifold reads a small flow cooled by
+    // the port: taking it as the cylinder's own gas put a light-load, high-speed cylinder
+    // at 600 K and starved its filling (cold residual is dense and hard to push out).
+    const tex = INDUCTION_REF_EXHAUST_K;
     let emp = BARO_KPA;
     let r = null;
     for (let i = 0; i < 3; i++) {
-      const tex = exhaustK(mapKpa, r?.ve ?? 85);
-      r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex });
+      r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex, runnerWaves: r?.runnerWaves });
       const airKgS = r.freshKg * cyl * (rpm / 120);
       const exhKgS = airKgS * (1 + 1 / (stoich * COEFF.VE_BACKPRESSURE_LAMBDA_REF));
       // The pipe runs cooler than the manifold: the gas has given up heat on the way.
@@ -216,6 +282,11 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
   };
 }
 
+/** Cubic feet per minute to cubic metres per second. */
+const CFM_TO_M3S = 0.000471947;
+/** Ideal velocity through a port at a flow bench's 28 inches of water (6.97 kPa), standard air: sqrt(2 dp / rho). */
+const FLOW_BENCH_VELOCITY_MS = Math.sqrt((2 * 28 * 249.089) / 1.204);
+
 /** The breathing is computed on a grid this fine (RPM, kPa) and read between its nodes. */
 const VE_GRID_RPM = 100;
 const VE_GRID_KPA = 2;
@@ -229,9 +300,4 @@ const VE_GRID_KPA = 2;
  */
 function reflectionCoefficient(areaRatio) {
   return (1 - areaRatio) / (1 + areaRatio);
-}
-
-/** Exhaust gas temperature at the manifold for a breathing cell, K (thermo.js). */
-function exhaustK(mapKpa, ve) {
-  return exhaustTempK({ chargeIndex: (ve / 100) * (mapKpa / BARO_KPA), lambda: COEFF.VE_BACKPRESSURE_LAMBDA_REF });
 }

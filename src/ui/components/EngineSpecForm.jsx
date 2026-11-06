@@ -36,7 +36,7 @@ const REQUIRED = [
 export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' }) {
   const [spec, setSpec] = useState(/** @type {Record<string, any>} */ ({
     configuration: '', bore: '', stroke: '', compression: '', redline: '',
-    camDuration: '', valvetrain: '', valvesPerCyl: '', injection: '', blockMaterial: '', headMaterial: '', bottomEnd: '',
+    camDuration: '', exhaustCamDuration: '', valvetrain: '', valvesPerCyl: '', injection: '', blockMaterial: '', headMaterial: '', bottomEnd: '',
   }));
   const [tried, setTried] = useState(false);
   const set = (patch) => setSpec((s) => ({ ...s, ...patch }));
@@ -105,6 +105,18 @@ export function EngineSpecForm({ onCreate, submitLabel = 'CREATE THIS ENGINE' })
             <span className={styles.unit}>{CUSTOM_ENGINE_LIMITS.camDuration.unit}</span>
           </span>
           {errors.camDuration && <span className={styles.error} role="alert">{errors.camDuration}</span>}
+        </label>
+        <label className={styles.field}>
+          <span className={styles.label}>Exhaust cam duration</span>
+          <span className={styles.inputRow}>
+            <input
+              className={styles.input} inputMode="decimal" autoComplete="off" placeholder="intake + 8 if unknown"
+              value={spec.exhaustCamDuration} aria-invalid={errors.exhaustCamDuration ? 'true' : undefined}
+              onChange={(e) => set({ exhaustCamDuration: e.target.value })}
+            />
+            <span className={styles.unit}>{CUSTOM_ENGINE_LIMITS.exhaustCamDuration.unit}</span>
+          </span>
+          {errors.exhaustCamDuration && <span className={styles.error} role="alert">{errors.exhaustCamDuration}</span>}
         </label>
         <div className={styles.label}>Valvetrain <span className={styles.typical}>DOHC if left blank</span></div>
         <Seg label="Valvetrain" equal value={spec.valvetrain} options={VALVETRAIN_OPTS} onChange={(v) => set({ valvetrain: v })} />

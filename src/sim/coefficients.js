@@ -97,20 +97,30 @@ export const COEFF = {
   // Discharge coefficient of a poppet valve on its open area (the lesser of curtain and
   // throat). Heywood (1988, ch. 6) shows measured coefficients from about 0.5 to 0.7 across
   // the lift range, lowest at high lift where the throat governs and the jet separates.
-  // CALIBRATED, once, for every engine: 0.52 is the value at which the thirteen factory
-  // engines land on their published peak power and torque (mean error 2.3% and 6.3%, the
-  // speeds of the naturally aspirated ones' peaks within about 450 RPM on average), the
-  // runner a rigid column. It is the one fitted number in the gas exchange; the shape of every
-  // engine's curve, where each peaks, comes from its geometry.
-  BREATH_VALVE_CD: 0.52,
+  // CALIBRATED, once, for every engine: the valves' discharge coefficient on the curtain,
+  // and on the port throat of a head with no flow-bench figure (airflow.js `intakePortCfm`).
+  // 0.61 is the value at which the naturally aspirated presets, on their published cams,
+  // centre on their published power (within -9% to +5.5% each). It sits inside the 0.6-0.7
+  // Heywood gives for poppet valves. It is the one fitted number in the gas exchange; the
+  // shape of every engine's curve, where each peaks, comes from its geometry.
+  BREATH_VALVE_CD: 0.61,
   // The port throat behind the valve seat, as a share of the valve head diameter. The open
   // area is the lesser of the curtain and this throat, which caps what lift can buy.
   BREATH_THROAT_SHARE: 0.88,
   // Maximum valve lift over valve diameter. Heywood (ch. 6): about 0.25 is where the
   // curtain area reaches the throat's; production engines run near it.
   BREATH_LIFT_PER_DIA: 0.27,
-  // The lift curve's shape (breathing.js `liftShare`): sin^1.4, as full as a production cam's.
+  // The lift curve's shape (breathing.js `liftShare`): the flank is sin^1.4, as full as a
+  // production cam's (Heywood ch. 6 shows such curves).
   BREATH_LIFT_SHAPE_EXP: 1.4,
+  // The opening and closing ramps (breathing.js `liftShare`): constant-velocity stretches
+  // that take up lash or a hydraulic lifter's bleed-down before the flank. Production
+  // hydraulic-roller lobes run a ramp of about 0.010 inch at 0.0008-0.001 inch per cam degree
+  // (Norton, Cam Design Handbook, ch. 9; cam makers' lobe sheets), half that per crank degree.
+  // With the flank's own low-lift tail they put the duration at 0.006 inch (a cam's
+  // advertised figure) about 50 degrees past the 0.050 inch one, as stock lobes run.
+  BREATH_RAMP_LIFT_M: 0.010 * 0.0254,
+  BREATH_RAMP_VELOCITY_M_PER_DEG: 0.00045 * 0.0254,
   // Exhaust valve head as a share of the intake's: exhaust valves are made smaller because
   // the blowdown does much of their work under a large pressure ratio.
   BREATH_EXHAUST_VALVE_SHARE: 0.84,
@@ -151,6 +161,12 @@ export const COEFF = {
   // bellmouth to 0.5 for a sharp edge; a production runner sits between).
   BREATH_RUNNER_FRICTION: 0.03,
   BREATH_RUNNER_ENTRY_K: 0.5,
+  // The intake plenum's volume as a share of the engine's displacement, where the engine
+  // does not say. Intake design guidance puts a naturally aspirated plenum at about half to
+  // the whole of the displacement (Blair, Design and Simulation of Four-Stroke Engines,
+  // ch. 6). Its cross-section, taken as the face of that volume, against a runner's sets how
+  // strongly a wave reflects where the runner opens into it (breathing.js).
+  BREATH_PLENUM_VOLUME_SHARE: 0.8,
   BREATH_TUNE_SHARE_OF_REDLINE: 0.68,
   // --- The throttle and the intake duct (throttle.js) ---
   // Discharge coefficient of a throttle plate's open annulus, and where the plate rests
@@ -557,14 +573,11 @@ export const COEFF = {
   N2O_HEATER_W: 250,
   // Backpressure a wastegate relieves while bleeding exhaust around the turbine. This is
   // why a larger turbine is worth power at the same boost: it spends more life gated.
-  // Scales the share of turbine capability above the target (see solveInduction). Fitted
-  // to the turbo presets' published ratings after the gate was corrected to open on
-  // SURPLUS rather than shortfall; at 0.2 every one landed within 5% of its rated power,
-  // with exhaust backpressure at rated power 1.0-1.4x the boost pressure, which is where
-  // small OEM turbos run. It was 0.55 when it acted in the wrong direction. Not refitted
-  // after the rich-flame chemistry (thermo.js, heatReleasedShare) took 4-6% of heat out of
-  // their full-boost points: the B58B30M1 now reads 7% under (docs/accuracy.md), held there
-  // by its knock limit rather than by its turbine.
+  // Scales the share of turbine capability above the target (see solveInduction), so the
+  // gate opens on surplus rather than shortfall. Fitted to the turbo presets' published
+  // ratings: at 0.2 every one lands within 5% of its rated power, with exhaust
+  // backpressure at rated power 1.0-1.5x the boost pressure (docs/accuracy.md), which is
+  // where small OEM turbos run.
   WASTEGATE_RELIEF: 0.2,
   // --- Compressor map (see compressorMap in turbo.js) ---
   // How sharply efficiency falls away from the island centre, and how much a unit of
@@ -701,14 +714,17 @@ export const COEFF = {
   // tracks a pull's average peak pressure, not boost. Boost would be a bad proxy: it
   // charges a 9.5:1 and a 12.5:1 engine alike for the same manifold pressure.
   //
-  // Below the free threshold the oil film carries the load indefinitely, so a pull costs
-  // nothing; above it, each bar of average peak pressure costs WEAR_BEARING_PER_BAR.
+  // These are ordering numbers: NA cheap, factory turbo about a point, compression-on-
+  // boost whole points per pull; nothing downstream relies on the absolute value beyond
+  // the health bar. Below the free threshold the oil film carries the load indefinitely,
+  // so a pull costs nothing; above it, each bar of average peak pressure costs
+  // WEAR_BEARING_PER_BAR.
   //
   // THE THRESHOLD IS THE BOTTOM END'S, not one number for every engine. A factory
   // engine's bottom end is designed for its own service pressure with margin: stock
   // naturally aspirated pulls average about 58-59 bar and factory turbo engines 68-78,
   // and none of them wears out on its own factory tune. One threshold of 55 for all of
-  // them once charged a stock B58 1.4 points of bearing life per pull and flagged
+  // them would charge a stock B58 1.4 points of bearing life per pull and flag
   // bottom-end stress on every factory turbo car. A naturally aspirated bottom end is
   // free to 60 bar; a factory turbo engine's (`boostRatedBottomEnd`, set by its preset)
   // to 80. A turbo bolted onto a naturally aspirated engine keeps the NA bottom end, and
@@ -895,10 +911,9 @@ export const COEFF = {
   // because a build has a taller or shorter rev limit. Do not wire this to
   // `derived.redline`.
   //
-  // Today's max shippable redline (7500, see `DEFAULT_REDLINE_RPM` in `engine.js` and
-  // the RPM axis in `tables.js`) equals this datum, so the resulting `nFrac` never
-  // exceeds 1.0 in practice — the 1.2 clamp ceiling around it in `live.js` is
-  // currently unreachable headroom, not a live limit.
+  // A custom engine revs to 11,000 RPM, so `nFrac` reaches about 1.47. It has no ceiling
+  // (`vacuumSpeedFrac`): the callers hold engine speed to the redline, and the model's
+  // own 0.12 floor bounds the vacuum at a closed throttle.
   MANIFOLD_VACUUM_RPM_NORM: 7500,
 
   // --- Engineer Score: static compression under boost ---
@@ -915,10 +930,7 @@ export const COEFF = {
   // port injection: less than that gap, because part of it is era and boost level, which
   // the boost term below already prices. The NA base below is a PORT-injected engine's, and
   // DI earns the same point there (Mazda's direct-injected NA Skyactiv-G runs 13:1).
-  //
-  // The other simplification that stood here — the headroom not scaling with boost
-  // LEVEL, so that 3 psi and 24 psi were judged alike — is fixed, by
-  // COMPRESSION_PER_BOOST_PSI below.
+  // (Headroom also scales with boost level, through COMPRESSION_PER_BOOST_PSI below.)
   COMPRESSION_BOOST_BASE: 10.8,
   COMPRESSION_DI_STEP: 1.0,
   // Compression credit per degree of octane bonus, and per intercooler.

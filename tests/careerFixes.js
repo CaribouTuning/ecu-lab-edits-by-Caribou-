@@ -44,6 +44,17 @@ const axesOf = (st, t) => S.layoutById(st.tune.layout)[t];
 /** The ECU told the injector size that is fitted. */
 export const scaleFix = (st) => setBuild(st, { ecuInjectorCc: S.INJECTOR_OPTS[st.build.injIdx].cc });
 
+/** The knock threshold raised a tenth at a time until the log reports no false knock. */
+export const quietKnock = (st) => {
+  let s = st;
+  for (let i = 0; i < 12; i += 1) {
+    if (!pull(s).events.some((e) => e.type === 'falseknock')) return s;
+    const t = S.getCal(s.tune.ecu, 'ignition.knockThreshold');
+    s = { ...s, tune: { ...s.tune, ecu: S.setCal(s.tune.ecu, 'ignition.knockThreshold', { ...t, z: t.z.map((v) => v * 1.1) }) } };
+  }
+  return s;
+};
+
 /** Spark out of the full-load rows a degree at a time until the log has no knock. */
 export const sparkClean = (st) => {
   let s = st;
@@ -120,11 +131,16 @@ export const TEMPLATE_FIXES = {
       octaneIdx: job.params.octaneIdx, injIdx: 1, ecuInjectorCc: S.INJECTOR_OPTS[1].cc,
       mods: { ...b.mods, intake: true, exhaust: true, headers: true },
       engineConfig: {
-        ...b.engineConfig, camDuration: 240, springRate: 72,
+        // A street cam a step up from the car's own, as MotoIQ's JWT C2 test on a VQ35DE: the
+        // intake manifold stays (manifoldCam), and the springs go up a little with it.
+        ...b.engineConfig, camDuration: b.engineConfig.camDuration + 8,
+        exhaustCamDuration: (b.engineConfig.exhaustCamDuration ?? b.engineConfig.camDuration) + 8, springRate: 72,
         ...(job.params.redline ? { redline: Math.min(b.engineConfig.redline, job.params.redline) } : {}),
       },
     });
-    return sparkClean(airAndFuel(built));
+    // A 240 degree cam on stiffer springs rings the knock sensor: the log reports false
+    // knock, and the tuner raises the knock threshold until it stops, then checks spark.
+    return sparkClean(quietKnock(airAndFuel(built)));
   },
   'build-boost': (s, job) => {
     const e85 = job.params.octaneIdx === 3;
@@ -143,7 +159,7 @@ export const TEMPLATE_FIXES = {
 
 const getCal = (st, path) => S.getCal(st.tune.ecu, path);
 /** VE corrected from the pull's own log, `passes` times, the way AIRFLOW's panel does it. */
-const storyVeFromLogs = (st, passes = 3) => {
+export const storyVeFromLogs = (st, passes = 3) => {
   let s = st;
   for (let i = 0; i < passes; i += 1) {
     const { ratio } = S.veCorrections(S.veSamplesFromPull(pull(s).points), axesOf(s, 've'));
@@ -151,21 +167,18 @@ const storyVeFromLogs = (st, passes = 3) => {
   }
   return s;
 };
-/** The last VE column, which a pull to a 7000 RPM redline cannot log, extended by hand. */
-const extendTopColumn = (st, f) => {
-  const c = axesOf(st, 've').rpm.length - 1;
-  return { ...st, tune: { ...st.tune, ve: st.tune.ve.map((row, ri) => row.map((v, ci) => (ci === c && axesOf(st, 've').load[ri] >= 70 ? v * f : v))) } };
-};
 const zmul = (st, path, f) => { const t = getCal(st, path); return setCal(st, path, { ...t, z: t.z.map((v) => v * f) }); };
 
 /** How each story job is really fixed. Every one uses only controls the job's training opens. */
 export const STORY_FIXES = {
   'intake-maf': (s) => setBuild(s, { mafScalar: 1.11 }),
   'injector-scaling': (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
-  'headers-lean': (s) => extendTopColumn(storyVeFromLogs(s, 2), 1.16),
-  'idle-hunt': (s) => setCal(s, 'idle.damp', 0.04),
+  'headers-lean': (s) => storyVeFromLogs(s, 2),
+  'idle-hunt': (s) => setCal(s, 'idle.damp', 0.025),
   'cam-swap': (s) => storyVeFromLogs(s, 3),
-  e85: (s) => setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }),
+  // The injectors the ECU is told about, then the fuelling corrected from the log on the new
+  // fuel, as an E85 conversion is finished.
+  e85: (s) => storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc }), 2),
   'retarded-timing': (s) => ({ ...s, tune: { ...s.tune, timing: customerCar({ preset: 'vq35hr' }).tune.timing } }),
   'turbo-kit': (s) => boostSparkAndFuel(s),
   'full-session': (s) => zmul(storyVeFromLogs(setBuild(s, { ecuInjectorCc: S.INJECTOR_OPTS[s.build.injIdx].cc, mafScalar: 1.11 })), 'ignition.knockThreshold', 1.4),

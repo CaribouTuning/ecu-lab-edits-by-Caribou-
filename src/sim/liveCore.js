@@ -9,6 +9,7 @@
  */
 
 import { BARO_KPA } from './constants.js';
+import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 /** Crank + flywheel + damper rotational inertia, kg·m². */
@@ -72,6 +73,19 @@ export function liveRandom(s = null) {
   x = Math.imul(x ^ (x >>> 15), x | 1);
   x ^= x + Math.imul(x ^ (x >>> 7), x | 61);
   return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+}
+
+/**
+ * Engine speed as the manifold vacuum model reads it: against a fixed RPM datum, not this
+ * engine's redline (see COEFF.MANIFOLD_VACUUM_RPM_NORM). Callers pass a speed already
+ * held to the redline, so no ceiling is needed here: an engine built to 11,000 RPM keeps
+ * pulling harder vacuum all the way up, as it does below the datum.
+ *
+ * @param {number} rpm engine speed, held to the redline
+ * @returns {number}
+ */
+export function vacuumSpeedFrac(rpm) {
+  return Math.max(0, rpm / COEFF.MANIFOLD_VACUUM_RPM_NORM);
 }
 
 /**

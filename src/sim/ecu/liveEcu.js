@@ -447,14 +447,22 @@ export function liveStepEcu(st, dt, input, cfg) {
     const tpsRate = (e.sTps - e.prevTps) / dt;
     e.prevTps = e.sTps;
     const cold = read1(cal.fuel.accelColdMult, e.sEct);
-    const aeWant = tpsRate > 5 ? read1(cal.fuel.accel, tpsRate) * cold
-      : tpsRate < -5 ? -read1(cal.fuel.accel, -tpsRate) * cold * cal.fuel.decelEnlean : 0;
-    const decayed = e.aePct * Math.exp(-dt / Math.max(0.02, cal.fuel.accelDecayS));
-    e.aePct = aeWant > 0 ? Math.max(decayed, aeWant) : aeWant < 0 ? Math.min(decayed, Math.max(-60, aeWant)) : decayed;
-    if (Math.abs(e.aePct) < 0.05) e.aePct = 0;
     const { X, tau: filmTau } = filmParams(s.coolantC, derived.injection);
     const injPerCycle = lastPt?.fuelCmd != null && !s.fuelCut ? lastPt.fuelCmd / 1000 : 0;
     const cycles = (s.rpm / 120) * dt;
+    // How full the port-wall film is against what steady running at this fuelling holds
+    // (X of each injection laid down, evaporating over tau: the X-tau model, Aquino, SAE
+    // 810494). The ECU keeps the same account from its own injection record and coolant
+    // temperature. A lift takes fuel out only for what the film gives back: after a fuel
+    // cut (the limiter, the overrun) the film is empty, and taking fuel out then just leaned
+    // the first injections past what the pistons should see.
+    const filmSteady = X * (lastPt?.fuelCmd ?? 0) / 1000 * (s.rpm / 120) * filmTau;
+    const filmFull = filmSteady > 0 ? clamp(e.film / filmSteady, 0, 1) : 0;
+    const aeWant = tpsRate > 5 ? read1(cal.fuel.accel, tpsRate) * cold
+      : tpsRate < -5 ? -read1(cal.fuel.accel, -tpsRate) * cold * cal.fuel.decelEnlean * filmFull : 0;
+    const decayed = e.aePct * Math.exp(-dt / Math.max(0.02, cal.fuel.accelDecayS));
+    e.aePct = aeWant > 0 ? Math.max(decayed, aeWant) : aeWant < 0 ? Math.min(decayed, Math.max(-60, aeWant)) : decayed;
+    if (Math.abs(e.aePct) < 0.05) e.aePct = 0;
     const evap = e.film * clamp(dt / filmTau, 0, 1);
     e.film = Math.max(0, e.film + X * injPerCycle * cycles - evap);
     const deliveredPerCycle = injPerCycle > 0 ? (1 - X) * injPerCycle + evap / Math.max(1e-6, cycles) : 0;

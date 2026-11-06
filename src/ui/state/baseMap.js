@@ -28,7 +28,7 @@ export function baseMapAction(build) {
 
 /** The engine's own figures each part decides, by part: what "changed from stock" compares. */
 const BLOCK_KEYS = ['configuration', 'bore', 'stroke', 'compression', 'blockMaterial', 'frictionLevel', 'bottomEnd'];
-const HEAD_KEYS = ['camDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'sparkPlugs', 'vvt', 'injection', 'headMaterial'];
+const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'sparkPlugs', 'vvt', 'injection', 'headMaterial'];
 
 /**
  * Which of the engine's parts differ from the factory engine it started as: none on a stock

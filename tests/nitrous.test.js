@@ -221,8 +221,10 @@ describe('fuel while spraying', () => {
   });
 
   it('closed loop stands down while spraying rather than trimming the nitrous toward the base target', () => {
-    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(100) }, cal: { 'nitrous.minTpsPct': 50 } });
-    const { rows } = runLive(eng, { seconds: 12, pedal: (t) => (t > 3 ? 55 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 4000 });
+    // A 22% opening holds this engine at part load at 4000 RPM (a throttle's area grows fast
+    // with its angle: 55% is already near full load), with the window armed from 20%.
+    const eng = makeEngine({ build: { ...FUELLED, nitrous: kit(100) }, cal: { 'nitrous.minTpsPct': 20 } });
+    const { rows } = runLive(eng, { seconds: 12, pedal: (t) => (t > 3 ? 22 : 0), coolantC: 90, aux: { nitrous: true }, holdRpm: 4000 });
     const spraying = rows.filter((r) => r.nitrous > 0);
     expect(spraying.length).toBeGreaterThan(50);
     // Part throttle, inside the closed-loop region: the trims would otherwise act here, and
@@ -264,7 +266,9 @@ describe('fuel while spraying', () => {
   });
 
   it('a naturally aspirated engine\'s exhaust-heat protection talks about its valves and cat, not a turbine', () => {
-    const ev = rich().events.find((e) => e.type === 'egtprot');
+    // The protection set to act at the 700 °C floor, so it acts on this spray: what is
+    // checked is what it says.
+    const ev = stock(kit(150), { cal: { 'protect.egtLimitC': 700 } }).events.find((e) => e.type === 'egtprot');
     expect(ev).toBeDefined();
     expect(ev.cause).not.toMatch(/turbine/);
   });

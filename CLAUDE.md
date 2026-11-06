@@ -95,22 +95,39 @@ remaining risk is the same Node major with a different libm, which is what step 
   `tests/randomBuilds.js` fuzzes: widen one only with the fuzz, and keep both passing.
 - **VE is a gas-exchange model, not a curve** (`sim/breathing.js`, called by
   `airflow.js hardwareVeAt` on a lazily filled 100 RPM × 2 kPa grid). Valves are orifices
-  with one fitted constant (`BREATH_VALVE_CD` 0.52, fitted across all 13 presets), the runner
-  is an inertial column tuned to the torque peak (`tunedRunnerM`), the exhaust primary an
-  acoustic line. Bolt-ons change hardware, never add VE. Do not reintroduce a VE multiplier
-  to fix a preset: the user's rule is that the air model is the physics. It is slow: the full
-  suite takes over an hour on one core, so run the changed files, not the suite, while working.
+  on lift curves with opening and closing ramps; each cam lobe has its own duration
+  (`camDuration`, `exhaustCamDuration`, at 0.050 in) and the exhaust lobe also sets EVO in
+  the cycle (`cycle.js evoAtdcDeg`). The intake runner and the exhaust primary are linear
+  acoustic lines (the runner reflects at the plenum by area ratio, its waves carried from
+  one cycle to the next); the runner is tuned so its torque peak lands on the published
+  speed (`tunedRunnerM`). Every cell runs on the stoichiometric full-charge exhaust
+  temperature (`INDUCTION_REF_EXHAUST_K`): the load-only probe correlation once starved
+  light load at high speed. One fitted constant, `BREATH_VALVE_CD` 0.61; a head with
+  flow-bench data carries `intakePortCfm`. Bolt-ons change hardware, never add VE. Do not
+  reintroduce a VE multiplier to fix a preset: the user's rule is that the air model is the
+  physics. It is slow: the full suite takes over an hour on one core, so run the changed
+  files, not the suite, while working.
 - **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
   throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
   point's own `map` for anything about manifold pressure.
 - **Tests that pull a preset go through `tests/ecuHarness.js` `makeEngine`** (the app's own
   path: the hardware's breathing as truth, the ECU in the loop). Passing the factory VE table
   as `veTruth` reads the table back as if it were the engine and hides the physics.
-- **Preset fidelity is tracked in #19.** Known misses on the new model: NA peaks early
-  (VQ35HR, LQ4, HEMI; no cam duration moves them), pushrod V8 torque 8–10% high, and VE
-  under 10% at 20–25 kPa above 6000 RPM (the derived valve events leave ~9° of overlap).
-  Those are the shape to fix next, in breathing.js, not by refitting cams. Compare whole
-  curves with `scripts/analyze_presets.py`, not just peaks.
+- **Preset fidelity is tracked in #19.** Cams are published figures with their sources in
+  presets.js (converted to 0.050 in through the model's own lift curve where quoted at
+  another lift); only the B58s and EA888s, with no factory figure found, are fitted, and
+  their comments say so. Known misses (`KNOWN_GAPS` in tests/presets.test.js, with the
+  measurements): VQ35HR power about -9% (no cam moves it; no flow data for its head), GM
+  truck V8 torque +8-12% with peaks 300-700 RPM early (87-octane rating is 1.2-1.9 points
+  of it); the LS6 and 6.4 HEMI still rise gently into their limiters (FLAT_TO_LIMITER in
+  tests/physics.test.js). Cam swaps check out on the LS1 (+10.5% against about +9-10% on
+  real cam-only swaps) but pay the VQ less than MotoIQ's JWT C2 test (+2.5% against +6%),
+  and headers gain about 1% against 3-6%: the career's NA builds are set from the model.
+  Compare whole curves with `scripts/analyze_presets.py`, not just peaks.
+- **Every pull and advice call passes the build's exhaust pipe** (`exhaustDia`): the VE
+  truth prices it, so a pull, the live engine or the advisor that leaves it out runs the
+  car on a 3.0 in pipe and disagrees with its own factory calibration. `src/sim/rig.js`,
+  `pullInputs.js` and EcuLab's sweeps all carry it.
 - **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
   replays exactly; do not call `Math.random` in the simulation.
 - **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on
@@ -142,9 +159,15 @@ remaining risk is the same Node major with a different libm, which is what step 
   If a third-party Action is really needed, say so in the PR: the owner has to add it to
   the allow list (Settings → Actions → General) before it can run. Workflow runs from
   outside contributors' fork PRs also wait for the owner's approval.
+- **The `/dyno` Discord bot (`bot/`) deploys from `main`, not from tags.** Vercel's GitHub
+  app rebuilds it when `main` changes the bot, `src/sim`, `src/ui/tokens.js` or
+  `scripts/discord-notify.js` (`bot/scripts/should-build.sh`). It runs `buildRig` from
+  `src/sim/rig.js`, so anything that stops `src/sim` running in plain Node breaks `/dyno`
+  too. The Vercel project and the Discord app belong to the owner; agents never handle
+  their keys or tokens.
 - **Tags are production.** A `v*` tag deploys to GitHub Pages, and the `github-pages`
-  environment accepts only `v*` tags, so `main` cannot deploy. There is no `develop`
-  branch.
+  environment accepts only `v*` tags, so `main` cannot deploy the app (the `/dyno` bot
+  is the exception; see the bullet above). There is no `develop` branch.
 - **Weekly release traps.**
   - If a `release/vX.Y.Z` branch is never opened as a PR, every later weekly run computes
     the same version, and its push fails as non-fast-forward. Delete the stale branch (it

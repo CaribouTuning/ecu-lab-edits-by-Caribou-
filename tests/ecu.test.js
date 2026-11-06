@@ -81,12 +81,20 @@ describe('sensors: the ECU acts on what it measures', () => {
   });
 
   it('drives closed loop to the wrong mixture on a mis-scaled wideband, while reading on target', () => {
+    // A pull's load is a throttle opening: 15% holds this 3.5 L near 36 kPa at 3500 RPM, part
+    // load in closed loop (40% opening is already near full load, in power enrichment). The
+    // ECU set to read "AFR 10-20" sees 1.00 at 2.35 V, which the fitted controller's lambda
+    // 0.5-1.5 line puts at lambda 0.970: closed loop pulls the mixture rich toward it while
+    // the gauge reads on target.
     const eng = makeEngine({ cal: { 'sensors.wideband': 'afr-10-20' } });
-    const p = at(eng.pull(40), 3500);
+    const reads = S.readSensor({ kind: 'wideband', value: 0.97, part: 'lambda-0.5-1.5', scale: 'afr-10-20' }).value;
+    expect(reads).toBeCloseTo(1, 2);
+    const p = at(eng.pull(15), 3500);
     expect(p.openLoop).toBe(false);
     expect(Math.abs(p.sensedLambda - 1)).toBeLessThan(0.02);
-    expect(Math.abs(p.lambda - 1)).toBeGreaterThan(0.025);
-    expect(types(eng.pull(40))).toContain('wideband');
+    expect(p.lambda).toBeLessThan(0.985);
+    expect(p.lambda).toBeLessThan(p.sensedLambda - 0.015);
+    expect(types(eng.pull(15))).toContain('wideband');
   });
 
   it('misreads charge temperature on the wrong thermistor curve', () => {
@@ -348,6 +356,45 @@ describe('protections intervene, and say why', () => {
   });
 });
 
+describe('the injector duty preview is the pull\'s own point', () => {
+  // TUNE → INJECTORS shows this before a pull, and the Engineer Score reads it. If it
+  // drifts from the pull, the screen promises a duty the dyno does not deliver.
+  const FUELLED = { injIdx: 3, ecuInjectorCc: 650, octaneIdx: 1 };
+  const INTERCOOLED = { ...S.DEFAULT_MODS, intercooler: true };
+  const n54 = S.applyPreset(S.presetById('n54'));
+  const builds = [
+    { name: 'the default build', opts: {} },
+    ...S.ENGINE_PRESETS.map((p) => ({ name: `the ${p.id} preset`, opts: { preset: p.id } })),
+    // A blower heats its charge at its own efficiency, not the turbo's.
+    ...S.BLOWER_OPTS.map((b) => ({ name: `a ${b.id} blower`, opts: { build: { ...FUELLED, mods: INTERCOOLED, blowerId: b.id } } })),
+    { name: '2000 m of altitude', opts: { env: { ambientC: 24.85, altitudeM: 2000 } } },
+    { name: 'a 40 °C day', opts: { env: { ambientC: 40, altitudeM: 0 } } },
+    // More boost asked for than the turbo makes: the fuel is for the boost it makes.
+    { name: '30 psi asked of an N54', opts: { preset: 'n54', build: { boostCurve: n54.boostCurve.map((v, i) => (S.RPM[i] >= 5500 ? 30 : v)) } } },
+    { name: 'a 2 ms dead time', opts: { cal: { 'injector.deadTime': S.curve(S.VOLT_AXIS, () => 2) } } },
+  ];
+
+  it.each(builds)('commands at 6500 RPM (or its redline) what the pull logs there, on $name', ({ opts }) => {
+    const eng = makeEngine(opts);
+    const point = at(eng.pull(), S.dutyPreviewRpm(eng.derived));
+    // Guard the setup: where a protection acts, the two are meant to differ (below).
+    expect(point.protect).toEqual([]);
+    expect(eng.dutyPreview()).toBe(point.duty);
+  });
+
+  it('shows the demand that duty protection hides by cutting boost', () => {
+    const eng = makeEngine({ build: { turboOn: true, boostCurve: S.DEFAULT_BOOST.map((v, i) => (S.RPM[i] >= 5500 ? 25 : v)) } });
+    const point = at(eng.pull(), 6500);
+    expect(point.protect).toContain('duty');
+    expect(point.duty).toBeLessThanOrEqual(eng.cal.protect.dutyLimitPct);
+    expect(eng.dutyPreview()).toBeGreaterThan(eng.cal.protect.dutyLimitPct);
+  });
+
+  it('falls as the ECU is told of bigger injectors', () => {
+    expect(makeEngine({ build: { ecuInjectorCc: 550 } }).dutyPreview()).toBeLessThan(makeEngine().dutyPreview());
+  });
+});
+
 describe('the day matters', () => {
   it('makes less power at altitude and on a hot day', () => {
     const sea = makeEngine().pull().peakHp;
@@ -415,7 +462,10 @@ describe('the live engine runs its controllers in time', () => {
     // engine cranks and will not fire. On E85, with twice gasoline's latent heat, the
     // evaporation arithmetic used to cool that charge below absolute zero and hand LIVE
     // a NaN for RPM.
-    const eng = makeEngine({ build: { octaneIdx: 3 } });
+    // The ECU is also told its injectors are half their size, so every pulse is doubled: on
+    // the gas-exchange model the cold engine fills close to the table's 130%, and the table
+    // alone leaves it at lambda 0.4-0.45, inside the rich limit, where it does fire.
+    const eng = makeEngine({ build: { octaneIdx: 3, ecuInjectorCc: 158 } });
     eng.tables.ve = eng.tables.ve.map((row) => row.map(() => 130));
     const { rows, state } = runLive(eng, { seconds: 8, coolantC: 20, pedal: (t) => (t > 4 ? 100 : 0) });
     expect(rows.every((r) => Number.isFinite(r.rpm) && Number.isFinite(r.torque) && Number.isFinite(r.egt))).toBe(true);

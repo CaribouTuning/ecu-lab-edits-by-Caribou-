@@ -4,20 +4,13 @@
  *
  * WHAT THIS FILE IS
  * Presentation. It reads the simulation's output; engineering maths belongs in
- * `src/sim/`, which is what keeps the physics testable in plain Node. One exception
- * remains: `dutyPreview` below repeats the sim's injector-duty chain.
+ * `src/sim/`, which is what keeps the physics testable in plain Node.
  *
  * LAYOUT
- * This used to be one large single-component app; it has been split into
- * `ui/primitives/`, `ui/screens/` and `ui/AppShell.jsx`. What remains here is the
- * store setup, the one piece still shared across more than one screen (`Tach`), and
- * the top-level component that reads the route and renders the right screen into the
- * shell.
- *
- * TYPE CHECKING
- * No longer opts out. This file used to carry `@ts-nocheck` while it was one large
- * untyped component; now that it is a thin, typed root, it is checked like everything
- * else under `npm run typecheck`.
+ * Screens live in `ui/screens/`, building blocks in `ui/primitives/`, and the chrome in
+ * `ui/AppShell.jsx`. What is here is the store setup, the one piece still shared across
+ * more than one screen (`Tach`), and the top-level component that reads the route and
+ * renders the right screen into the shell.
  */
 
 import React, { useMemo, useEffect, useRef, useCallback, useDeferredValue, useState } from 'react';
@@ -27,13 +20,12 @@ import {
 } from 'lucide-react';
 
 import {
-  BARO_KPA, COMPRESSOR_OPTS, compressorWithCount,
+  COMPRESSOR_OPTS, compressorWithCount,
   EXHAUST_DIA_OPTS,
-  INJ_DEADTIME_MS, INJECTOR_OPTS,
-  PSI_TO_KPA,
-  R_AIR, RPM, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, chargeTempK, clamp,
+  INJECTOR_OPTS,
+  TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp,
   computeEngineerScore, computePullScore, computeTuningScore,
-  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, exhaustGeometry, idealExhaustDiameter, interp1, isLocatable, layoutById, presetById, readEcuTable,
+  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview, isLocatable, layoutById, presetById,
   simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
   veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
@@ -395,41 +387,36 @@ export function EcuLabApp() {
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
+    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous, advisorHealth]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   const calAdvice = useMemo(() => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-    compressor, turbine, camAt,
+    compressor, turbine, camAt, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
-       compressor, turbine, camAt, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
+       compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
 
   const veAdvice = useMemo(
     () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
     [ve, engineConfig, mods, veTruth, layout]
   );
 
-  // Same real-units chain the sim uses, evaluated at WOT / 6500 RPM as a preview.
-  const dutyPreview = useMemo(() => {
-    const rpm = 6500;
-    const boostPsi = turboOn ? boostCurve[RPM.indexOf(6500)]
-      : blowerWot.length ? interp1(blowerWot.map((p) => p.rpm), blowerWot.map((p) => p.boostPsi), rpm) : 0;
-    const mapKpa = BARO_KPA + boostPsi * PSI_TO_KPA;
-    const chargeK = chargeTempK(boostPsi, mods.intercooler);
-    const vCylM3 = (engineDerived.displacementL / engineDerived.cyl) / 1000;
-    const airDensity = (mapKpa * 1000) / (R_AIR * chargeK);
-    const airChargeG = (readEcuTable({ ve, timing, afr, layout }, 've', rpm, { mapKpa }) / 100) * vCylM3 * airDensity * 1000;
-    const lambda = readEcuTable({ ve, timing, afr, layout }, 'afr', rpm, { mapKpa, airmassG: airChargeG }) / 14.7;
-    const fuelMassG = airChargeG / (lambda * fuel.stoich);
-    const pw = fuelMassG / ((ecuInjectorCc * fuel.density) / 60000) + INJ_DEADTIME_MS;
-    return clamp((pw / (120000 / rpm)) * 100, 0, 220);
-  }, [ve, timing, afr, layout, turboOn, boostCurve, ecuInjectorCc, fuel, mods.intercooler, engineDerived, blowerWot]);
+  // Injector duty at WOT / 6500 RPM (or the redline, below it), from the tables as they
+  // stand, before any pull. The same inputs as the pull (`sweepArgs` below), so the point
+  // is the one the pull solves.
+  const dutyRpm = dutyPreviewRpm(engineDerived);
+  const dutyPreview = useMemo(() => injectorDutyPreview({
+    rpm: dutyRpm, loadKpa: 100, ve, veTruth, timing, afr, layout, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc,
+    mods, mafScalar, derived: engineDerived, turbine, compressor, ecu: ecuBundle, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
+    ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
+  }), [dutyRpm, ve, veTruth, timing, afr, layout, turboOn, boostCurve, fuel, injectorCc, ecuInjectorCc, mods, mafScalar,
+       engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous]);
   // `dutyPreview` is computed here, not in InjectorsScreen, because the score breakdown
   // and dyno payload below read it too.
 
@@ -598,7 +585,7 @@ export function EcuLabApp() {
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu, layout,
+    turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
@@ -703,7 +690,7 @@ export function EcuLabApp() {
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
-    compressor, exhaustDiaError, layout,
+    compressor, exhaustDiaError, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.
@@ -1039,6 +1026,7 @@ export function EcuLabApp() {
         configuration: engineConfig.configuration,
         pipeDiaIn: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, gasTempK: drive.gasTempK,
         headers: Boolean(mods.headers), turboFitted: Boolean(turboOn),
+        evoAtdc: evoAtdcDeg(engineDerived.exhaustCamDuration, engineDerived.camDuration),
       }),
       rpm,
       configuration: engineConfig.configuration,
@@ -1478,7 +1466,7 @@ export function EcuLabApp() {
         )}
 
         {tunePage && tuneView === 'injectors' && (
-          <InjectorsScreen dutyPreview={dutyPreview} injectorCc={injectorCc}>
+          <InjectorsScreen dutyPreview={dutyPreview} dutyRpm={dutyRpm} injectorCc={injectorCc}>
             <div style={{ padding: '0 16px' }}>
               <EcuSection embedded section="injectors" title="Injector settings" icon={Fuel} liveVars={liveVars} />
             </div>

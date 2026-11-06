@@ -114,7 +114,9 @@ export const JOBS = [
     car: { preset: 'vq35de-revup', build: withMods({ headers: true, exhaust: true }) },
     needs: {}, minRep: 0, pay: 450, rep: 7,
     checks: [
-      { type: 'mixture', kind: 'complaint', pct: 5, label: 'On target at full throttle, all the way to redline' },
+      // Within 2%, where a professional holds full-throttle mixture: headers change the
+      // engine's breathing by a few percent, not a gross amount.
+      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
       ...SAFE, IDLES,
     ],
     hint: 'Much better through the middle, but right at the top before the limiter it still goes lean on my gauge.',
@@ -126,7 +128,8 @@ export const JOBS = [
     says: 'Since another shop “tuned” it, the idle goes up and down like crazy, and twice it’s just died pulling up to a light.',
     wants: 'I just want it to idle like a normal car again.',
     work: ['Diagnose the idle', 'Correct the calibration'],
-    car: { preset: 'vq35hr', tune: (t) => ({ ecu: { ...t.ecu, idle: { ...t.ecu.idle, damp: 0.005 } } }) },
+    // The other shop turned the idle controller's gains up fourfold and its damping down.
+    car: { preset: 'vq35hr', tune: (t) => ({ ecu: { ...t.ecu, idle: { ...t.ecu.idle, damp: 0.005, gainUp: t.ecu.idle.gainUp * 4, gainDown: t.ecu.idle.gainDown * 4 } } }) },
     needs: { training: ['idle'] }, minRep: 0, pay: 350, rep: 6,
     checks: [
       { type: 'idle', kind: 'complaint', swing: 60, offset: 60, label: 'Idles steadily, on its target, without stalling' },
@@ -164,9 +167,9 @@ export const JOBS = [
     needs: { equipment: ['flex'] }, minRep: 20, pay: 800, rep: 9,
     checks: [
       { type: 'events', kind: 'complaint', types: ['injscale', 'rich'], label: 'Fuelling right for the injectors and the fuel' },
-      // 7, not 6: on the game's 8 × 6 the VQ35HR's airflow bulges between the 4500 and 5500
-      // RPM columns, so even a table corrected from the logs runs about 6.3% lean at 5000.
-      { type: 'mixture', kind: 'complaint', pct: 7, label: 'Full-throttle mixture where it should be' },
+      // Injectors told to the ECU and the fuelling corrected from the log on E85 land within
+      // about 1.5% (tests/careerFixes.js 'e85'); the injector size alone leaves it 7% lean.
+      { type: 'mixture', kind: 'complaint', pct: 5, label: 'Full-throttle mixture where it should be' },
       ...SAFE, IDLES,
     ],
     hint: 'Still bucks a little and I can still smell it. Something about the fuel is still off.',
