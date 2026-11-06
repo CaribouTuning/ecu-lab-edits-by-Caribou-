@@ -119,7 +119,15 @@ remaining risk is the same Node major with a different libm, which is what step 
   their comments say so. Known misses (`KNOWN_GAPS` in tests/presets.test.js, with the
   measurements): VQ35HR power about -9% (no cam moves it; no flow data for its head), GM
   truck V8 torque +8-12% with peaks 300-700 RPM early (87-octane rating is 1.2-1.9 points
-  of it). Compare whole curves with `scripts/analyze_presets.py`, not just peaks.
+  of it); the LS6 and 6.4 HEMI still rise gently into their limiters (FLAT_TO_LIMITER in
+  tests/physics.test.js). Cam swaps check out on the LS1 (+10.5% against about +9-10% on
+  real cam-only swaps) but pay the VQ less than MotoIQ's JWT C2 test (+2.5% against +6%),
+  and headers gain about 1% against 3-6%: the career's NA builds are set from the model.
+  Compare whole curves with `scripts/analyze_presets.py`, not just peaks.
+- **Every pull and advice call passes the build's exhaust pipe** (`exhaustDia`): the VE
+  truth prices it, so a pull, the live engine or the advisor that leaves it out runs the
+  car on a 3.0 in pipe and disagrees with its own factory calibration. `src/sim/rig.js`,
+  `pullInputs.js` and EcuLab's sweeps all carry it.
 - **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
   replays exactly; do not call `Math.random` in the simulation.
 - **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on

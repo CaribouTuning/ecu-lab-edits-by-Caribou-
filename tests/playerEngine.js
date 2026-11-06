@@ -61,11 +61,18 @@ export function adviceAt(eng, load) {
 /** The throttles a player pulls at. */
 export const LOADS = [100, 70, 40];
 
-/** Rounds of pull-and-correct until TUNE names nothing at any throttle; how many it took. */
+/**
+ * Rounds of pull-and-correct until TUNE names nothing; how many it took. TUNE's advice is
+ * judged on a full-throttle pull whatever load the player pulled at (EcuLab.jsx
+ * `advisorPull`), so it is taken from one here too. Taking it from part-throttle pulls as
+ * well flipped a cell the full-throttle pull meets with the turbine's back-pressure behind
+ * it (80 kPa at 7600 RPM: a 25 degree limit) against the same pressure throttled (34): advice
+ * no player is shown. The tests still require no knock at any throttle afterwards.
+ */
 export function tuneFromTheAdvice(eng, rounds = 6) {
   for (let round = 1; round <= rounds; round++) {
     let changed = 0;
-    for (const load of LOADS) {
+    for (const load of [100]) {
       const { a } = adviceAt(eng, load);
       for (const c of [...a.overAdvanced, ...a.pastMbt, ...a.underAdvanced]) { eng.tables.timing[c.ri][c.ci] = c.suggested; changed++; }
       for (const c of a.wrongMix) if (c.suggested != null) { eng.tables.afr[c.ri][c.ci] = c.suggested; changed++; }

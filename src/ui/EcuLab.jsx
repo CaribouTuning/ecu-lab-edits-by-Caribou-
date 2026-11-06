@@ -389,11 +389,11 @@ export function EcuLabApp() {
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout,
+    turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
-       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, blower, blowerRatio, nitrous, advisorHealth]);
+       injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
   const calAdvice = useMemo(() => calibrationAdvice({
@@ -596,7 +596,7 @@ export function EcuLabApp() {
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
     fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
-    turbine, compressor, ecu, layout,
+    turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
 
@@ -705,7 +705,7 @@ export function EcuLabApp() {
   liveCfgRef.current = {
     ve, veTruth, timing, afr, derived: engineDerived, fuel, injectorCc, ecuInjectorCc, mods, mafScalar, mafErrorBase,
     turboOn, boostCurve, octaneBonus, turbine,
-    compressor, exhaustDiaError, layout,
+    compressor, exhaustDiaError, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     // The live engine runs its own ECU controllers against the same calibration, with
     // whatever accessories are switched on.

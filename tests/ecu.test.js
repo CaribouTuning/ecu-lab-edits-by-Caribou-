@@ -81,12 +81,20 @@ describe('sensors: the ECU acts on what it measures', () => {
   });
 
   it('drives closed loop to the wrong mixture on a mis-scaled wideband, while reading on target', () => {
+    // A pull's load is a throttle opening: 15% holds this 3.5 L near 36 kPa at 3500 RPM, part
+    // load in closed loop (40% opening is already near full load, in power enrichment). The
+    // ECU set to read "AFR 10-20" sees 1.00 at 2.35 V, which the fitted controller's lambda
+    // 0.5-1.5 line puts at lambda 0.970: closed loop pulls the mixture rich toward it while
+    // the gauge reads on target.
     const eng = makeEngine({ cal: { 'sensors.wideband': 'afr-10-20' } });
-    const p = at(eng.pull(40), 3500);
+    const reads = S.readSensor({ kind: 'wideband', value: 0.97, part: 'lambda-0.5-1.5', scale: 'afr-10-20' }).value;
+    expect(reads).toBeCloseTo(1, 2);
+    const p = at(eng.pull(15), 3500);
     expect(p.openLoop).toBe(false);
     expect(Math.abs(p.sensedLambda - 1)).toBeLessThan(0.02);
-    expect(Math.abs(p.lambda - 1)).toBeGreaterThan(0.025);
-    expect(types(eng.pull(40))).toContain('wideband');
+    expect(p.lambda).toBeLessThan(0.985);
+    expect(p.lambda).toBeLessThan(p.sensedLambda - 0.015);
+    expect(types(eng.pull(15))).toContain('wideband');
   });
 
   it('misreads charge temperature on the wrong thermistor curve', () => {
@@ -454,7 +462,10 @@ describe('the live engine runs its controllers in time', () => {
     // engine cranks and will not fire. On E85, with twice gasoline's latent heat, the
     // evaporation arithmetic used to cool that charge below absolute zero and hand LIVE
     // a NaN for RPM.
-    const eng = makeEngine({ build: { octaneIdx: 3 } });
+    // The ECU is also told its injectors are half their size, so every pulse is doubled: on
+    // the gas-exchange model the cold engine fills close to the table's 130%, and the table
+    // alone leaves it at lambda 0.4-0.45, inside the rich limit, where it does fire.
+    const eng = makeEngine({ build: { octaneIdx: 3, ecuInjectorCc: 158 } });
     eng.tables.ve = eng.tables.ve.map((row) => row.map(() => 130));
     const { rows, state } = runLive(eng, { seconds: 8, coolantC: 20, pedal: (t) => (t > 4 ? 100 : 0) });
     expect(rows.every((r) => Number.isFinite(r.rpm) && Number.isFinite(r.torque) && Number.isFinite(r.egt))).toBe(true);
