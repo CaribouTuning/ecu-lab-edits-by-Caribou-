@@ -7,8 +7,11 @@
   gap: var(--sp-sm);
 }
 
+/* Wraps: at 320px the unit, the "modified" badge and four chips are wider than the
+   card, and the chips drop to their own line rather than running off the side. */
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-sm);
   font-size: var(--fs-xs);
@@ -124,8 +127,8 @@
   font-family: var(--sans); font-variant-numeric: tabular-nums;
   font-size: var(--fs-sm);
   font-weight: 700;
-  /* A finger on the table still scrolls the page; ranges on a touchscreen are SELECT
-     RANGE's two taps, a mouse drags. */
+  /* A finger on the table still scrolls the page; ranges on a touchscreen are Range's
+     two taps, a mouse drags. */
   touch-action: pan-x pan-y;
   outline: none;
 }
