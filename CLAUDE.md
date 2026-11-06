@@ -107,6 +107,13 @@ remaining risk is the same Node major with a different libm, which is what step 
   reintroduce a VE multiplier to fix a preset: the user's rule is that the air model is the
   physics. It is slow: the full suite takes over an hour on one core, so run the changed
   files, not the suite, while working.
+- **The head, cam card and headers are optional parts** (`intakeLiftMm`, `exhaustLiftMm`,
+  `exhaustValveMm`, `exhaustPortCfm`, `lsaDeg`, `iclDeg`, `runnerMm`, `headerPrimaryMm`,
+  `headerPrimaryIdMm` on the engine; `mods.catalyst`). Absent, each is the model's own figure
+  (`headDefaultsOf`), and setting it to that changes nothing (tests/head-exhaust.test.js):
+  keep that true when adding one. A head or cam change keeps the intake runner (BUILD pins
+  `runnerMm`): retuning it is a new manifold, and cost about 0.65 s a slider step. A cam
+  phaser moves only its own lobe (`valveEvents` `intakeAdvanceDeg`).
 - **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
   throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
   point's own `map` for anything about manifold pressure.
