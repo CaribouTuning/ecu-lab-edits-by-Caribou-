@@ -497,9 +497,10 @@ export function evaluateEcu(args) {
  * @param {{ve: number[][], timing: number[][], afr: number[][], layout?: import('../layouts.js').Layout|null}} input.tables
  * @param {number} input.rpm
  * @param {number} input.loadKpa the dyno's throttle, as sea-level kPa
+ * @param {boolean} [input.traceCycle] keep the closed cycle's pressure trace, as `cycleTrace`
  * @returns {object} the datalog record, with ECU channels and the correction breakdown
  */
-export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
+export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle = false }) {
   const throttleFrac = clamp(loadKpa / BARO_KPA, 0, 1);
   const throttlePct = throttleFrac * 100;
   const gear = cond.gear ?? DYNO_GEAR;
@@ -622,6 +623,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa }) {
     protect: [...protect],
     ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },
+    // The closed cycle's pressure trace at the settled point, for the Physics page: the same
+    // resolved inputs evaluated once more with the trace kept.
+    ...(traceCycle && resolved?.input ? { cycleTrace: evaluatePoint({ .../** @type {any} */ (resolved.input), traceCycle: true }).cycleTrace } : {}),
   };
 }
 

@@ -204,7 +204,7 @@ export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
-  exhaustDia = null,
+  exhaustDia = null, traceRpm = null,
 }) {
   const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
@@ -232,7 +232,7 @@ export function simulateSweep({
       const cond = bottle
         ? { ...ecu.cond, nitrous: { ...nc, armed: nc.armed && bottle.massKg > 0, bottleK: bottle.tempK } }
         : ecu.cond;
-      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr, layout }, rpm, loadKpa });
+      const pt = ecuSteadyPoint({ cal: ecu.cal, hw: ecuHw, cond, tables: { ve, timing, afr, layout }, rpm, loadKpa, traceCycle: rpm === traceRpm });
       points.push(pt);
       if (bottle && pt.nitrousLbMin > 0) {
         bottle = stepBottle(bottle, (pt.nitrousLbMin * 0.45359237 / 60) * dtPerPoint, dtPerPoint, {

@@ -176,6 +176,8 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  * @property {number} trappedK charge temperature at IVC, K
  * @property {number} freshKg fresh charge trapped, kg per cylinder per cycle
  * @property {number} backflowShare intake charge pushed back out before IVC, share of the fresh air taken in
+ * @property {{deg: number[], cylKpa: number[], exPortKpa: number[], inPortKpa: number[], exFlowGs: number[], inFlowGs: number[], exAreaMm2: number[], inAreaMm2: number[], freshShare: number[]}} [trace]
+ *   the crank-angle record, when `op.trace` asked for it
  * @property {number[]} runnerWaves the waves leaving the intake valve over the last round trip
  *   of the runner before IVC, Pa: pass as the next cycle's `op.runnerWaves`
  */
@@ -193,6 +195,7 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  * @param {number} op.intakeK charge temperature in the plenum, K
  * @param {number} op.exhaustKpa exhaust manifold pressure, kPa absolute
  * @param {number} op.exhaustK exhaust gas temperature, K
+ * @param {boolean} [op.trace] keep the crank-angle record (returned as `trace`)
  * @param {number[]} [op.runnerWaves] the runner's waves left by the cycle before (its
  *   `runnerWaves`); without them the runner starts quiet
  * @returns {BreathingResult}
@@ -263,6 +266,14 @@ export function gasExchange(g, op) {
   /** Forward-wave amplitude leaving the port at each step, Pa. */
   const forward = [];
   /** The backward wave arriving at the port now: the forward wave of 2L/a ago, reflected. */
+  /** The backward wave that arrived at step `k` (0-based), as backwardNow saw it then. */
+  const backwardAt = (k) => {
+    const at = k - delaySteps;
+    if (!(at >= 0)) return 0;
+    const n = Math.floor(at); const f = at - n;
+    const f0 = forward[n] ?? 0; const f1 = forward[n + 1] ?? f0;
+    return collectorR * (f0 + (f1 - f0) * f);
+  };
   const backwardNow = () => {
     const at = forward.length - delaySteps;
     if (!(at >= 0)) return 0;
@@ -287,6 +298,14 @@ export function gasExchange(g, op) {
   /** Wave amplitude leaving the valve end up the runner at each step, Pa. */
   const outgoing = [];
   /** The wave arriving at the valve now: the one sent 2L/a ago, reflected at the plenum. */
+  /** The wave that arrived at the valve at step `k`, as returningNow saw it then. */
+  const returningAt = (k) => {
+    const at = k - delayStepsIn;
+    if (!(at >= 0)) return 0;
+    const n = Math.floor(at); const f = at - n;
+    const f0 = outgoing[n] ?? 0; const f1 = outgoing[n + 1] ?? f0;
+    return plenumR * (f0 + (f1 - f0) * f);
+  };
   const returningNow = () => {
     const at = outgoing.length - delayStepsIn;
     if (!(at >= 0)) return 0;
@@ -308,6 +327,10 @@ export function gasExchange(g, op) {
   let runnerBurned = 0;
   let taken = 0;
   let pushedBack = 0;
+  // The crank-angle record the Physics page draws from, only when asked for (op.trace): the
+  // model's own numbers at every step, nothing recomputed for the picture.
+  /** @type {{deg: number[], cylKpa: number[], exPortKpa: number[], inPortKpa: number[], exFlowGs: number[], inFlowGs: number[], exAreaMm2: number[], inAreaMm2: number[], freshShare: number[]}|null} */
+  const trace = op.trace ? { deg: [], cylKpa: [], exPortKpa: [], inPortKpa: [], exFlowGs: [], inFlowGs: [], exAreaMm2: [], inAreaMm2: [], freshShare: [] } : null;
 
   while (theta < ivc) {
     const next = Math.min(theta + step, ivc);
@@ -369,6 +392,21 @@ export function gasExchange(g, op) {
       if (dmIn > 0) { taken += dmIn; hIn = CP * intakeK; } else { pushedBack -= dmIn; hIn = CP * t; dmIn = Math.max(dmIn, -0.9 * m); }
     }
     outgoing.push(out);
+    if (trace) {
+      // Each pipe end's pressure is its arriving wave plus the one leaving it (the steady
+      // runner loss aside): at a shut valve the two are equal, the closed end's doubling.
+      const bEx = forward.length >= 2 ? backwardAt(forward.length - 1) : 0;
+      const bIn = returningAt(outgoing.length - 1);
+      trace.deg.push(mid);
+      trace.cylKpa.push(p / 1000);
+      trace.exPortKpa.push((pExh + bEx + fwd) / 1000);
+      trace.inPortKpa.push((pPlenum + bIn + out) / 1000);
+      trace.exFlowGs.push(-dmEx / dt * 1000);
+      trace.inFlowGs.push(dmIn / dt * 1000);
+      trace.exAreaMm2.push(mid > evo && mid < evc ? valveArea(mid, evo, evc, g.exhaustValves, g.exhaustValveM, exhaustRamp, g.exhaustPortAreaM2 ?? 0, g.exhaustLiftM ?? 0) * 1e6 : 0);
+      trace.inAreaMm2.push(mid > ivo && mid < ivc ? valveArea(mid, ivo, ivc, g.intakeValves, g.intakeValveM, g.events, g.intakePortAreaM2 ?? 0, g.intakeLiftM ?? 0) * 1e6 : 0);
+      trace.freshShare.push(clamp(fresh / Math.max(m, 1e-12), 0, 1));
+    }
     // Through a long overlap at low speed both valves can drain the cylinder in the same
     // step; no step may take out more than the cylinder holds.
     const outflow = Math.max(0, -dmEx) + Math.max(0, -dmIn);
@@ -418,6 +456,7 @@ export function gasExchange(g, op) {
     trappedK: t,
     freshKg,
     backflowShare: taken > 0 ? pushedBack / taken : 0,
+    ...(trace ? { trace } : {}),
   };
 }
 

@@ -26,6 +26,7 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
+ * @property {boolean} [traceCycle] return the closed cycle's pressure trace as `cycleTrace`
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
@@ -135,7 +136,7 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
 export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
-  injectorCc, ecuInjectorCc, derived, compressor, turbine = null,
+  injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false,
   empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
   exhaustDia = null,
 }) {
@@ -289,7 +290,7 @@ export function evaluatePoint({
   const knockPull = E?.knock ? ecuKnockRetard(margin, E.knock) : (margin < 0 ? Math.min(COEFF.MAX_KNOCK_RETARD, -margin) : 0);
   const usedTiming = timingVal - knockPull;
 
-  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming });
+  const cycle = runCycle({ ...cyc, sparkBtdc: usedTiming, trace: traceCycle });
   const mbtIdeal = mbtFromBurn(cyc.burnDeg, cyc.flameDevDeg);
   // Events that did not burn: the ECU cutting them (limiter, protection, traction) and
   // the cylinder failing to light (a spark too weak for the pressure, or a mixture
@@ -400,6 +401,7 @@ export function evaluatePoint({
     afr: Number(actualAfr.toFixed(2)), afrCommanded: Number(afrCommanded.toFixed(2)),
     lambda: Number(lambdaActual.toFixed(3)),
     timing: Number(usedTiming.toFixed(1)), commandedTiming: Number(timingVal.toFixed(1)),
+    ...(traceCycle && cycle.trace ? { cycleTrace: cycle.trace } : {}),
     duty: Math.round(dutyPct), pw: Number(pulseWidthMs.toFixed(2)),
     maf: Number(mafGps.toFixed(1)), map: Number(mapKpa.toFixed(0)),
     iat: Number(chargeC.toFixed(0)), airCharge: Number(airChargeG.toFixed(3)),
