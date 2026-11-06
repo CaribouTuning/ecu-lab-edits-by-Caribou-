@@ -9,6 +9,7 @@
 import React from 'react';
 
 import styles from './CorrectionStack.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * @param {object} props
@@ -18,11 +19,12 @@ import styles from './CorrectionStack.module.css';
  * @returns {React.ReactElement|null}
  */
 export function CorrectionStack({ breakdown, result = {} }) {
+  const U = useUnits();
   if (!breakdown) return null;
   const cols = [
     { key: 'timing', title: 'Spark', unit: '°', final: result.timing != null ? { label: 'Fired (after knock control)', value: result.timing } : null },
     { key: 'fuel', title: 'Fuel', unit: '', final: result.lambda != null ? { label: 'Delivered lambda', value: result.lambda, unit: 'λ' } : null },
-    { key: 'boost', title: 'Boost', unit: 'psi', final: null },
+    { key: 'boost', title: 'Boost', unit: U.boostUnit, final: null },
   ].filter((c) => breakdown[c.key]?.length);
   return (
     <div className={styles.wrap}>
@@ -34,7 +36,10 @@ export function CorrectionStack({ breakdown, result = {} }) {
               <li key={i} className={styles.row} data-base={i === 0 || undefined}>
                 <span className={styles.label}>{s.label}</span>
                 <span className={styles.value}>
-                  {s.delta != null ? `${s.delta > 0 ? '+' : ''}${s.delta.toFixed(1)}` : fmt(s.value, s.unit)}
+                  {/* Boost steps arrive in psi; metric shows them in bar. */}
+                  {c.key === 'boost' && U.metric && s.unit !== '%'
+                    ? (s.delta != null ? `${s.delta > 0 ? '+' : ''}${U.boost(s.delta).toFixed(2)}` : (Number.isFinite(s.value) ? U.boost(s.value).toFixed(2) : '–'))
+                    : s.delta != null ? `${s.delta > 0 ? '+' : ''}${s.delta.toFixed(1)}` : fmt(s.value, s.unit)}
                   <span className={styles.unit}>{s.unit === '%' ? '%' : s.unit === 'λ' ? 'λ' : c.unit}</span>
                 </span>
               </li>

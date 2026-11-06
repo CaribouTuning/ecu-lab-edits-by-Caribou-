@@ -25,6 +25,7 @@ import { sparklinePath } from '../../state/runLog.js';
 import { useSession } from '../../state/StoreProvider.jsx';
 
 import styles from './HistoryScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /** Sparkline box, in the same user units the CSS sizes it in. */
 const SPARK_W = 84;
@@ -52,6 +53,7 @@ function relativeTime(at, now) {
 export function HistoryScreen() {
   const [session, dispatch] = useSession();
   const { runs, pinnedRunId } = session;
+  const U = useUnits();
 
   // `diffMeasuredInputs` runs ~32 `JSON.stringify` calls per row and `sparklinePath`
   // walks up to 61 points; both ran on every render, unmemoized, over up to 20 rows.
@@ -73,7 +75,7 @@ export function HistoryScreen() {
       // oldest VISIBLE row has no `prev` either, at whatever `n` it happens to be.
       // "first pull" is keyed on `run.n === 1` so only the real first pull claims it.
       const deltaText = prev
-        ? `${dHp > 0 ? '+' : ''}${Math.round(dHp)} whp vs Run ${prev.n}`
+        ? `${dHp > 0 ? '+' : ''}${Math.round(U.power(dHp))} ${U.wheelUnit} vs Run ${prev.n}`
         : (run.n === 1 ? 'first pull' : '');
       return {
         run, prev, tone, changed, pinned, deltaText,
@@ -81,7 +83,7 @@ export function HistoryScreen() {
         spark: sparklinePath(run.points, SPARK_W, SPARK_H),
       };
     });
-  }, [runs, pinnedRunId]);
+  }, [runs, pinnedRunId, U]);
 
   if (runs.length === 0) {
     return (
@@ -109,7 +111,7 @@ export function HistoryScreen() {
               <path className={styles.sparkLine} d={spark} />
             </svg>
             <div>
-              <div className={styles.peaks}>{`${Math.round(run.peakHp)} whp, ${Math.round(run.peakTq)} lb-ft`}</div>
+              <div className={styles.peaks}>{`${U.fmtWheel(run.peakHp)}, ${U.fmtTorque(run.peakTq)}`}</div>
               <div className={styles.delta} data-tone={tone}>
                 {deltaText}
                 {run.knocks > 0 && <span className={styles.knocks}>, {run.knocks} knock{run.knocks === 1 ? '' : 's'}</span>}

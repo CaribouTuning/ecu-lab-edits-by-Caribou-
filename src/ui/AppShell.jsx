@@ -59,6 +59,7 @@ import { useBuild, useSession } from './state/StoreProvider.jsx';
 import { statusTone } from './theme.js';
 
 import styles from './AppShell.module.css';
+import { useUnits } from './units.js';
 
 /** @typedef {import('./routing.js').Route} Route */
 
@@ -242,6 +243,7 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
   const [session] = useSession();
   const { engineConfig, turboOn, boostCurve, octaneIdx, injIdx } = build;
   const { health, result } = session;
+  const U = useUnits();
 
   // Keyed on `engineConfig` so the 20 Hz re-render does not re-derive the engine
   // twenty times a second to print the same string.
@@ -294,9 +296,9 @@ export function StatusStrip({ onTutorial, onRepair, onSearch, onMenu, actions = 
         {/* Grouped so they wrap as one unit — see `.readouts` in AppShell.module.css
             for how the strip fits a phone. */}
         <div className={styles.readouts}>
-          <StripField label="Boost" value={noEngine ? '—' : turboOn || blower ? `${peakBoost.toFixed(1)} psi` : 'none'} />
+          <StripField label="Boost" value={noEngine ? '—' : turboOn || blower ? U.fmtBoost(peakBoost) : 'none'} />
           {noEngine ? <StripField label="Health" value="—" /> : <HealthField pct={overallHealth} />}
-          <StripField label="Last pull" value={result ? `${Math.round(result.peakHp)} whp` : '—'} />
+          <StripField label="Last pull" value={result ? U.fmtWheel(result.peakHp) : '—'} />
           <EngineRunLight />
         </div>
         {/* Icon-only, so the label has to be spelled out: `title` alone leaves a

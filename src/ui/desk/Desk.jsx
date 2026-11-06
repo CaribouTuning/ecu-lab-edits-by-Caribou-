@@ -16,6 +16,7 @@
 
 import { read3d, write3d } from './render3d.js';
 import { Atom, Bell, BookOpen, ChevronLeft, ChevronRight, ClipboardList, Gauge, Home, MessageCircle, Search, Settings, Store, Wrench, X } from 'lucide-react';
+import { useUnitSystem, writeUnits } from '../units.js';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { isApplePlatform } from '../commands.js';
@@ -212,6 +213,7 @@ export function Desk({
   mode, app, onOpen, onDesktop, onBay, apps = null, board = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
+  const units = useUnitSystem();
   const [surfaces, setSurfaces] = useState(/** @type {Record<string, HTMLElement>|null} */ (null));
   useEffect(() => { setMenu(null); }, [mode, app]);
   // A phone shows a station's screen full size, as the laptop shows an app: no faces laid on
@@ -246,6 +248,9 @@ export function Desk({
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onTutorial?.(); }}>Tutorial</button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onRepair?.(); }}>Repair engine</button>
       <button type="button" role="menuitemcheckbox" aria-checked={threeD} onClick={() => { setMenu(null); toggle3d(); }}>{threeD ? 'Turn the 3D shop off' : 'Turn the 3D shop on'}</button>
+      <button type="button" role="menuitemcheckbox" aria-checked={units === 'metric'} onClick={() => { setMenu(null); writeUnits(units === 'metric' ? 'imperial' : 'metric'); }}>
+        {units === 'metric' ? 'Units: metric (kW, N·m, bar). Switch to hp, lb-ft, psi' : 'Units: hp, lb-ft, psi. Switch to metric (kW, N·m, bar)'}
+      </button>
       <button type="button" role="menuitem" onClick={() => { setMenu(null); onBay(); }}>{phone ? 'Put the phone down' : 'Shut the laptop'}</button>
     </div>
   );

@@ -32,6 +32,7 @@ import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
 
 import styles from './ResultScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * One event band. Rendered through `ReferenceArea`'s `shape` so it can carry the
@@ -141,6 +142,9 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
   // without the axis running away for a low-redline build.
   const dynoChartMaxRpm = engineDerived.redline * 1.05;
   // The value axis rounded to the tallest of everything drawn, the previous pull included.
+  // chartData arrives in the units on screen (EcuLab converts it); only labels are set here.
+  const U = useUnits();
+  const whp = U.metric ? 'Wheel kW' : 'WHP';
   const powerScale = niceScale(Math.max(1, ...chartData.flatMap((d) => [d.hp, d.torque, d.prevHp, d.prevTorque].filter((v) => Number.isFinite(v)))));
 
   // Shared by both charts below — see `resolveBandRpm`'s own doc for why the decision
@@ -162,7 +166,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             <CartesianGrid {...GRID} />
             <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
             <YAxis {...VALUE_AXIS} width={44} {...powerScale} />
-            <Tooltip {...TOOLTIP} formatter={(v, name) => [Math.round(Number(v)), /TQ$|Torque/.test(String(name)) ? `${name}, lb-ft` : `${name}, hp`]} />
+            <Tooltip {...TOOLTIP} formatter={(v, name) => [Math.round(Number(v)), /TQ$|Torque/.test(String(name)) ? `${name}, ${U.torqueUnit}` : `${name}, ${U.powerUnit}`]} />
             {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
             <Legend verticalAlign="top" height={26} iconType="plainline" wrapperStyle={{ fontSize: 12.5 }} />
             {bands.map((b) => (
@@ -171,9 +175,9 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
                 shape={(shapeProps) => <Band {...shapeProps} band={b} onSelectRpm={onSelectRpm} />}
               />
             ))}
-            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} WHP`} stroke="var(--acc)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
+            {ghostLabel && <Line dataKey="prevHp" name={`${ghostLabel} ${whp}`} stroke="var(--acc)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
             {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke="var(--data2)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
-            <Line dataKey="hp" name="WHP" stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line dataKey="hp" name={whp} stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
             <Line dataKey="torque" name="Torque" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>

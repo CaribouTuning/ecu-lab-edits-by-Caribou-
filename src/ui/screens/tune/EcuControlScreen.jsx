@@ -16,6 +16,7 @@ import { StatTile } from '../../primitives/StatTile.jsx';
 import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 
 import styles from './EcuControlScreen.module.css';
+import { useUnits } from '../../units.js';
 
 
 /**
@@ -29,6 +30,7 @@ import styles from './EcuControlScreen.module.css';
 export function EcuControlScreen({ section, title, icon, liveVars }) {
   const [build] = useBuild();
   const [session] = useSession();
+  const U = useUnits();
   const live = session.live;
   const e = live?.ecu;
   const row = e?.log?.[e.log.length - 1];
@@ -37,7 +39,7 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
 
   const tiles = {
     boost: running && build.turboOn ? [
-      ['Boost', row.boost.toFixed(1), 'psi'], ['Target', row.boostTarget.toFixed(1), 'psi'],
+      ['Boost', U.boost(row.boost).toFixed(U.boostDecimals), U.boostUnit], ['Target', U.boost(row.boostTarget).toFixed(U.boostDecimals), U.boostUnit],
       ['Wastegate', row.wgDuty.toFixed(0), '%'],
     ] : null,
     vvt: running && vvt.intake ? [
@@ -56,7 +58,7 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
       ['Crank torque', String(row.torque), 'Nm'], ['Spark', row.timing.toFixed(1), '°'],
     ] : null,
     nitrous: running && build.nitrous ? [
-      ['Nitrous', row.nitrous.toFixed(2), 'lb/min'], row.bottle > 0 ? ['Bottle', String(row.bottle), 'psi'] : ['Bottle', 'empty', ''],
+      ['Nitrous', U.massFlow(row.nitrous).toFixed(2), U.massFlowUnit], row.bottle > 0 ? ['Bottle', U.metric ? U.boost(row.bottle).toFixed(0) : String(row.bottle), U.boostUnit] : ['Bottle', 'empty', ''],
       ['Spark', row.timing.toFixed(1), '°'],
     ] : null,
   }[section];

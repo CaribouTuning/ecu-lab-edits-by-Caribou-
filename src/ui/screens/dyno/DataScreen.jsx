@@ -18,6 +18,7 @@ import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { downloadCsv, dynoSheetFilename, sweepToCsv } from '../../components/dynoCsv.js';
 import { eventBands } from '../../components/eventBands.js';
 import { initialScrubRpm, pointAt, pointGauges } from '../../components/scrubPoint.js';
+import { useUnits } from '../../units.js';
 import { CorrectionStack } from '../../components/ecu/CorrectionStack.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
@@ -84,6 +85,7 @@ export function DataScreen() {
   const { result, histogram } = session;
   const [tune] = useTune();
   const [build] = useBuild();
+  const U = useUnits();
 
   /**
    * The pull, as a file.
@@ -224,7 +226,7 @@ export function DataScreen() {
       <div className={styles.card} data-tone={tone}>
         <div className={styles.cardHead}>
           <span className={styles.cardRpm}>{shown.rpm} RPM</span>
-          <span className={styles.cardStat}>{`${shown.hp} whp, ${shown.torque} lb-ft`}</span>
+          <span className={styles.cardStat}>{`${U.fmtWheel(shown.hp)}, ${U.fmtTorque(shown.torque)}`}</span>
         </div>
         <div className={styles.gauges}>
           {gauges.map((g) => (
@@ -252,14 +254,14 @@ export function DataScreen() {
             <div className={styles.gauges}>
               <StatTile label="Knock retard" value={shown.knockPull.toFixed(1)} unit="°" tone={shown.knockPull > 0 ? 'warn' : 'neutral'} />
               <StatTile label="Unheard knock" value={(shown.knockUnheard ?? 0).toFixed(1)} unit="°" tone={shown.knockUnheard > 0.3 ? 'danger' : 'neutral'} />
-              {shown.boostTarget > 0 && <StatTile label="Boost target" value={shown.boostTarget} unit="psi" />}
+              {shown.boostTarget > 0 && <StatTile label="Boost target" value={U.boost(shown.boostTarget).toFixed(U.boostDecimals)} unit={U.boostUnit} />}
               {shown.boostTarget > 0 && <StatTile label="Wastegate" value={shown.wgDuty} unit="%" />}
               <StatTile label="Fuel ΔP" value={shown.railDp} unit="kPa" tone={shown.fuelStarved ? 'danger' : 'neutral'} />
               <StatTile label="Misfire" value={shown.misfire} unit="%" tone={shown.misfire > 5 ? 'danger' : 'neutral'} />
               {shown.blowerRpm != null && <StatTile label="Blower" value={shown.blowerRpm.toLocaleString('en-US')} unit="rpm" tone={shown.blowerOverspeed ? 'danger' : 'neutral'} />}
-              {shown.blowerHp != null && <StatTile label="Blower drive" value={shown.blowerHp} unit="hp" />}
-              {shown.nitrousLbMin > 0 && <StatTile label="Nitrous" value={shown.nitrousLbMin} unit="lb/min" />}
-              {shown.nitrousLbMin > 0 && <StatTile label="Bottle" value={shown.bottlePsi} unit="psi" tone={shown.bottlePsi < 850 ? 'warn' : 'neutral'} />}
+              {shown.blowerHp != null && <StatTile label="Blower drive" value={Math.round(U.power(shown.blowerHp))} unit={U.powerUnit} />}
+              {shown.nitrousLbMin > 0 && <StatTile label="Nitrous" value={U.massFlow(shown.nitrousLbMin).toFixed(2)} unit={U.massFlowUnit} />}
+              {shown.nitrousLbMin > 0 && <StatTile label="Bottle" value={U.metric ? U.boost(shown.bottlePsi).toFixed(0) : shown.bottlePsi} unit={U.boostUnit} tone={shown.bottlePsi < 850 ? 'warn' : 'neutral'} />}
               {(shown.camIn > 0 || shown.camEx > 0) && <StatTile label="Cams in / ex" value={`${shown.camIn} / ${shown.camEx}`} unit="°" />}
               <StatTile label="Protections" value={shown.protect?.length ? shown.protect.join(', ') : 'none'} tone={shown.protect?.length ? 'warn' : 'ok'} />
             </div>

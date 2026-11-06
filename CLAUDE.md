@@ -117,6 +117,13 @@ remaining risk is the same Node major with a different libm, which is what step 
 - **A pull's load is a throttle opening** (`loadKpa / 101.3`), turned into MAP by the
   throttle body (`sim/throttle.js`). Label it "% throttle" in the UI, never kPa, and read a
   point's own `map` for anything about manifold pressure.
+- **Alpha-N is the fourth air-mass strategy** (`config.airModel: 'alphan'`). The ECU reads VE,
+  spark and mixture by throttle (`dyn.sensedTpsPct`, on the same load rows as a pull) and runs
+  the air sum on baro, so its VE cells hold true VE × MAP ÷ baro (`alphaNFillAt`). Points and
+  LIVE rows carry `ecuLoad` only on alpha-N, and VE learning sorts by it: anything that reads
+  "the load the ECU looked a table up by" must use `ecuLoad ?? sensedMap`, never `map`.
+- **Displayed units go through `src/ui/units.js`** (`useUnits`; metric is kW, N·m, bar, mm).
+  The simulation, saves and CSV stay in hp, lb-ft and psi; convert only at the screen.
 - **Tests that pull a preset go through `tests/ecuHarness.js` `makeEngine`** (the app's own
   path: the hardware's breathing as truth, the ECU in the loop). Passing the factory VE table
   as `veTruth` reads the table back as if it were the engine and hides the physics.

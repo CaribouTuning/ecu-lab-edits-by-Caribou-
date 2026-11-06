@@ -55,6 +55,7 @@ import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { PagePicker } from './components/PagePicker.jsx';
 import { ThrottleLoadContext } from './components/TuningGrid.jsx';
+import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { COURSE } from './tutorial/books.js';
@@ -225,6 +226,7 @@ export function EcuLabApp() {
   // so it is not re-bound here.
   const [tune] = useTune();
   const airModel = tune.ecu?.config?.airModel ?? 'blend';
+  const U = useUnits();
   const { ve, timing, afr } = tune;
   // The engine computer whose breakpoints the tables sit on (sim/layouts.js), or null
   // for the ECU Lab grid. Every pull and the live engine read the tables through it.
@@ -997,12 +999,13 @@ export function EcuLabApp() {
     return result.points.slice(0, running ? revealCount : result.points.length).map((p) => {
       const g = ghostByRpm.get(p.rpm);
       return {
-        rpm: p.rpm, hp: p.hp, torque: p.torque, afr: p.afr, afrCommanded: p.afrCommanded,
+        // Power and torque in the units on screen (units.js); everything else as simulated.
+        rpm: p.rpm, hp: U.power(p.hp), torque: U.torque(p.torque), afr: p.afr, afrCommanded: p.afrCommanded,
         timing: p.timing, commandedTiming: p.commandedTiming, duty: p.duty, trimPct: p.trimPct,
-        prevHp: g?.hp, prevTorque: g?.torque,
+        prevHp: g ? U.power(g.hp) : undefined, prevTorque: g ? U.torque(g.torque) : undefined,
       };
     });
-  }, [result, ghost, running, revealCount]);
+  }, [result, ghost, running, revealCount, U]);
 
   // The shell computes these for the same reason it computes `chartData`: the screen
   // is handed a model rather than deriving one.
@@ -1614,7 +1617,7 @@ export function EcuLabApp() {
               <Computer
                 label="Dyno computer" screens={keys} current={shown} onScreen={pick}
                 title="Caribou Dyno"
-                status={running ? `${Math.round(currentRpm)} rpm` : result ? `Peak ${result.peakHp} whp, ${result.peakTq} lb-ft` : null}
+                status={running ? `${Math.round(currentRpm)} rpm` : result ? `Peak ${U.fmtWheel(result.peakHp)}, ${U.fmtTorque(result.peakTq)}` : null}
               >
                 {blown && !running && <EngineFailed part={blown} onRepair={repairEngine} />}
                 {!result && !(runs.length > 0 && dynoView === 'history') && (
@@ -1637,8 +1640,8 @@ export function EcuLabApp() {
 
                 {result && runs[1] && !running && shown === 'result' && (() => {
                   const prev = runs[1];
-                  const dHp = result.peakHp - prev.peakHp;
-                  const dTq = result.peakTq - prev.peakTq;
+                  const dHp = Math.round(U.power(result.peakHp) - U.power(prev.peakHp));
+                  const dTq = Math.round(U.torque(result.peakTq) - U.torque(prev.peakTq));
                   const knockNow = result.events.filter((e) => e.type === 'knock').length;
                   const dKnock = knockNow - prev.knocks;
                   const fmtDelta = (v, unit) => `${v > 0 ? '+' : ''}${v}${unit}`;
@@ -1646,8 +1649,8 @@ export function EcuLabApp() {
                     <Panel tight style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <TrendingUp size={15} color="var(--ink2)" style={{ flexShrink: 0 }} />
                       <div style={{ display: 'flex', gap: 14, fontSize: 12.5, flexWrap: 'wrap' }}>
-                        <span style={{ color: dHp === 0 ? 'var(--ink2)' : dHp > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dHp, ' whp')}</span>
-                        <span style={{ color: dTq === 0 ? 'var(--ink2)' : dTq > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dTq, ' lb-ft')}</span>
+                        <span style={{ color: dHp === 0 ? 'var(--ink2)' : dHp > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dHp, ` ${U.wheelUnit}`)}</span>
+                        <span style={{ color: dTq === 0 ? 'var(--ink2)' : dTq > 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtDelta(dTq, ` ${U.torqueUnit}`)}</span>
                         <span style={{ color: dKnock === 0 ? 'var(--ink2)' : dKnock < 0 ? T.ok : T.dangerInk, fontFamily: 'var(--sans)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{knockNow} knock{knockNow === 1 ? '' : 's'} {dKnock !== 0 ? `(${fmtDelta(dKnock, '')})` : ''}</span>
                       </div>
                     </Panel>
@@ -1674,8 +1677,8 @@ export function EcuLabApp() {
                     rpm={running ? currentRpm : (point?.rpm ?? 0)} fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline}
                     throttle={running && dynoPhase === 'sweep' ? loadKpa : 0}
                     meters={[
-                      { label: 'Power', value: `${Math.round(point?.hp ?? 0)}`, unit: ' whp', pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
-                      { label: 'Torque', value: `${Math.round(point?.torque ?? 0)}`, unit: ' lb-ft', pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
+                      { label: 'Power', value: `${Math.round(U.power(point?.hp ?? 0))}`, unit: ` ${U.wheelUnit}`, pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
+                      { label: 'Torque', value: `${Math.round(U.torque(point?.torque ?? 0))}`, unit: ` ${U.torqueUnit}`, pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
                       { label: 'Air-fuel ratio', value: (point?.afr ?? 0).toFixed(1), unit: ':1', pct: ((point?.afr ?? 14.7) - 9) / 9, tone: 'ok' },
                       { label: 'Spark timing', value: `${Math.round(point?.timing ?? 0)}`, unit: '°', pct: (point?.timing ?? 0) / 50 },
                       { label: 'Injector duty', value: `${Math.round(point?.duty ?? 0)}`, unit: '%', pct: (point?.duty ?? 0) / 100, tone: (point?.duty ?? 0) > 90 ? 'danger' : 'acc' },
@@ -1824,7 +1827,7 @@ export function EcuLabApp() {
         const v = tuneViews.find((t) => t.id === page);
         deskNotices.push({ id: `att-${page}`, text: `The last pull's log points ${n} ${n === 1 ? 'time' : 'times'} at ${v?.label ?? page}.`, tone: 'warn', action: 'Open', go: () => goSection('tune', page) });
       }
-      if (result && !scoresStale) deskNotices.push({ id: 'pull', text: `Last pull: ${Math.round(result.peakHp)} whp.`, tone: 'ok', action: 'Dyno', go: () => goTab('dyno') });
+      if (result && !scoresStale) deskNotices.push({ id: 'pull', text: `Last pull: ${U.fmtWheel(result.peakHp)}.`, tone: 'ok', action: 'Dyno', go: () => goTab('dyno') });
       // The sandbox's record, kept across sessions (saveCareer).
       if (pullCount > 0) deskNotices.push({ id: 'record', text: `Your record: best pull ${bestScore}, total score ${totalScore}, ${pullCount} ${pullCount === 1 ? 'pull' : 'pulls'} logged.`, tone: 'ok' });
     }

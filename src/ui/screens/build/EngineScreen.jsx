@@ -30,6 +30,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useHistory, useSession, useTune } from '../../state/StoreProvider.jsx';
 
 import styles from './EngineScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /** How long a Short block or head change must settle before its base map is written, ms. */
 const BASE_MAP_SETTLE_MS = 350;
@@ -117,6 +118,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const [tune] = useTune();
   const { tablesDirty } = tune;
   const [session] = useSession();
+  const U = useUnits();
   const { result } = session;
   // `dispatch` above is the store's one dispatch function — useHistory() would hand
   // back the identical reference, so only `history` is taken from it here.
@@ -238,7 +240,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
             // their prefix. That reads fine (VW is the badge, Volkswagen the
             // maker) and is not worth an abbreviation table in the UI layer.
             options: g.presets.map((p) => ({
-              label: `${p.name.replace(`${p.manufacturer} `, '')}, ${p.factory.crankHp} hp`,
+              label: `${p.name.replace(`${p.manufacturer} `, '')}, ${U.fmtPower(p.factory.crankHp)}`,
               value: p.id,
             })),
           }))}
@@ -269,8 +271,8 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         {factory && (
           <>
             <SpecTable rows={[
-              { label: 'Factory rating', value: `${factory.factory.crankHp} hp, ${factory.factory.crankTq} lb-ft`, note: 'at the crank' },
-              { label: 'Your last pull', value: result ? `${result.peakHp} whp, ${result.peakTq} lb-ft` : 'none logged', note: result ? 'at the wheels' : undefined },
+              { label: 'Factory rating', value: `${U.fmtPower(factory.factory.crankHp)}, ${U.fmtTorque(factory.factory.crankTq)}`, note: 'at the crank' },
+              { label: 'Your last pull', value: result ? `${U.fmtWheel(result.peakHp)}, ${U.fmtTorque(result.peakTq)}` : 'none logged', note: result ? 'at the wheels' : undefined },
               { label: 'Redline', value: `${factory.engine.redline.toLocaleString('en-US')} rpm`, note: `${factory.factory.displacementL.toFixed(1)} L ${factory.engine.configuration}${factory.induction.turboOn ? ' turbo' : ''}` },
             ]} />
             <p className={styles.blurb}>{factory.blurb}</p>
@@ -425,10 +427,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <SpecSlider label="Exhaust duration" unit="°" value={exhaustCam} stock={exhaustCamStock} min={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.min} max={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.max} step={CUSTOM_ENGINE_LIMITS.exhaustCamDuration.step} onChange={(v) => setCfg({ exhaustCamDuration: v })} lo="late opening, more expansion" hi="early blowdown, top-end" ariaLabel="Exhaust cam duration" />
           <SpecSlider label="Intake lift" unit=" mm" decimals={1} value={engineConfig.intakeLiftMm ?? hd.intakeLiftMm} stock={hd.intakeLiftMm}
             min={L.intakeLiftMm.min} max={L.intakeLiftMm.max} step={L.intakeLiftMm.step} onChange={(v) => setHead({ intakeLiftMm: v })}
-            aside={`${((engineConfig.intakeLiftMm ?? hd.intakeLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Intake valve lift" />
+            aside={U.metric ? 'at the valve' : `${((engineConfig.intakeLiftMm ?? hd.intakeLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Intake valve lift" />
           <SpecSlider label="Exhaust lift" unit=" mm" decimals={1} value={engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm} stock={hd.exhaustLiftMm}
             min={L.exhaustLiftMm.min} max={L.exhaustLiftMm.max} step={L.exhaustLiftMm.step} onChange={(v) => setHead({ exhaustLiftMm: v })}
-            aside={`${((engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Exhaust valve lift" />
+            aside={U.metric ? 'at the valve' : `${((engineConfig.exhaustLiftMm ?? hd.exhaustLiftMm) / 25.4).toFixed(3)} in at the valve`} lo="mild" hi="race" ariaLabel="Exhaust valve lift" />
           <SpecSlider label="Lobe separation" unit="°" decimals={1} value={lsa} stock={hd.lsaDeg}
             min={L.lsaDeg.min} max={L.lsaDeg.max} step={L.lsaDeg.step} onChange={(v) => setHead({ lsaDeg: v, iclDeg: icl })}
             aside={`overlap ${Math.round(engineDerived.overlapDeg)}°`} lo="tight: more overlap, peaky" hi="wide: smooth, broad" ariaLabel="Lobe separation angle" />

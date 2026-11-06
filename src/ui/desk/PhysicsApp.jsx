@@ -29,6 +29,7 @@ import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
 import { GasExchange } from './GasExchange.jsx';
+import { useUnits } from '../units.js';
 
 const R_AIR = 287;
 const NM_PER_LBFT = 1.3558;
@@ -111,6 +112,7 @@ function PressureTrace({ p }) {
  * @returns {React.ReactElement}
  */
 export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, traceAt = null }) {
+  const U = useUnits();
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
   const [load, setLoad] = useState(100);
@@ -255,13 +257,13 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           <div className={styles.plotKey}>
             {graph === 've'
               ? <span><i className={styles.keyAcc} aria-hidden="true" />VE, %</span>
-              : <><span><i className={styles.keyAcc} aria-hidden="true" />Power, hp</span><span><i className={styles.key2} aria-hidden="true" />Torque, lb-ft</span></>}
+              : <><span><i className={styles.keyAcc} aria-hidden="true" />Power, {U.powerUnit}</span><span><i className={styles.key2} aria-hidden="true" />Torque, {U.torqueUnit}</span></>}
             <span className={styles.plotUnit}>engine speed, rpm</span>
           </div>
           <dl className={styles.readout}>
             <div><dt>Speed</dt><dd>{p.rpm.toLocaleString('en-US')} <small>rpm</small></dd></div>
-            <div><dt>Power</dt><dd>{f(p.hp, 0)} <small>hp</small></dd></div>
-            <div><dt>Torque</dt><dd>{f(p.torque, 0)} <small>lb-ft</small></dd></div>
+            <div><dt>Power</dt><dd>{f(U.power(p.hp), 0)} <small>{U.powerUnit}</small></dd></div>
+            <div><dt>Torque</dt><dd>{f(U.torque(p.torque), 0)} <small>{U.torqueUnit}</small></dd></div>
             <div><dt>VE</dt><dd>{f(p.ve, 0)} <small>%</small></dd></div>
           </dl>
         </section>
@@ -338,7 +340,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
       <Stage
         n={6} title="Heat" what="Most of the fuel's energy never reaches the crank: it goes out of the exhaust and into the coolant. How much fuel each horsepower costs says how well the engine turns heat into work."
         eq={<>η = 3.6 / (BSFC × 0.6083 × LHV) = 3.6 / ({f(p.bsfc, 3)} × 0.6083 × 43) = {f(eff * 100, 0)} %</>}
-        rows={[['Exhaust gas temp', `${f(p.egt, 0)} °C`], ['BSFC', `${f(p.bsfc, 3)} lb/hp·h`], ['Thermal efficiency', `${f(eff * 100, 0)} % (on gasoline)`]]}
+        rows={[['Exhaust gas temp', `${f(p.egt, 0)} °C`], ['BSFC', U.metric ? `${f(p.bsfc * 608.277, 0)} g/kWh` : `${f(p.bsfc, 3)} lb/hp·h`], ['Thermal efficiency', `${f(eff * 100, 0)} % (on gasoline)`]]}
       >
         <svg viewBox="0 0 120 120" className={styles.art}>
           <rect x="10" y="40" width="100" height="22" className={styles.artBox} />

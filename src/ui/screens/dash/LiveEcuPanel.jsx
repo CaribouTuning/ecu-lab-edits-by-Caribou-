@@ -23,6 +23,7 @@ import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 import { T } from '../../theme.js';
 
 import styles from './LiveEcuPanel.module.css';
+import { useUnits } from '../../units.js';
 
 /** Series colours for the logger's small multiples: data hues, never status colours. */
 const SERIES = ['var(--acc)', 'var(--data2)', T.violet, 'var(--ink2)'];
@@ -34,6 +35,7 @@ const WINDOW_S = 20;
 export function LiveEcuPanel() {
   const [session, dispatch] = useSession();
   const [build] = useBuild();
+  const U = useUnits();
   const kit = build.nitrous;
   const blowerFitted = !build.turboOn && !!build.blowerId;
   const live = /** @type {Record<string, any>} */ (session.live);
@@ -81,9 +83,9 @@ export function LiveEcuPanel() {
           <StatTile label="Oil" value={row.oil} unit="kPa" tone={e.protect.includes('oil pressure') ? 'danger' : 'neutral'} />
           <StatTile label="Protections" value={e.protect.length ? e.protect.join(', ') : 'none'} tone={e.protect.length ? 'warn' : 'ok'} />
           {blowerFitted && <StatTile label="Blower" value={Math.round(row.blowerRpm).toLocaleString('en-US')} unit="rpm" />}
-          {kit && <StatTile label="Nitrous" value={row.nitrous.toFixed(2)} unit="lb/min" tone={row.nitrous > 0 ? 'warn' : 'neutral'} />}
+          {kit && <StatTile label="Nitrous" value={U.massFlow(row.nitrous).toFixed(2)} unit={U.massFlowUnit} tone={row.nitrous > 0 ? 'warn' : 'neutral'} />}
           {kit && (row.bottle > 0
-            ? <StatTile label="Bottle" value={String(row.bottle)} unit="psi" tone={row.bottle < 850 ? 'warn' : 'neutral'} />
+            ? <StatTile label="Bottle" value={U.metric ? U.boost(row.bottle).toFixed(0) : String(row.bottle)} unit={U.boostUnit} tone={row.bottle < 850 ? 'warn' : 'neutral'} />
             : <StatTile label="Bottle" value="empty" tone="danger" />)}
         </div>
       ) : (

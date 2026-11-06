@@ -27,6 +27,7 @@ import EcuLab from '../../src/ui/EcuLab.jsx';
 import { ROUTES } from '../../src/ui/routing.js';
 import { StoreProvider, useBuild, useSession } from '../../src/ui/state/StoreProvider.jsx';
 import { ACTIONS } from '../../src/ui/state/reducer.js';
+import { writeUnits } from '../../src/ui/units.js';
 import { enterSandbox, goTo } from './nav.js';
 
 afterEach(cleanup);
@@ -187,6 +188,23 @@ describe('the status strip', () => {
     }));
 
     // Wheel horsepower, labelled as every other power figure in the app is.
+    expect(screen.getByText('12345 whp')).toBeTruthy();
+  });
+
+  it('reads in kW and bar once the player switches to metric, and back', () => {
+    /** @type {React.Dispatch<*>} */
+    let dispatch;
+    mountShell(ROUTE_TUNE, (d) => { dispatch = d; });
+    act(() => dispatch({
+      type: ACTIONS.SET_SESSION_FIELD, field: 'result', value: { peakHp: 12345, peakTq: 1, points: [], events: [] },
+    }));
+    try {
+      act(() => writeUnits('metric'));
+      // 12345 hp × 0.7457 kW/hp.
+      expect(screen.getByText('9206 kW')).toBeTruthy();
+    } finally {
+      act(() => writeUnits('imperial'));
+    }
     expect(screen.getByText('12345 whp')).toBeTruthy();
   });
 });

@@ -26,6 +26,7 @@ import { COEFF, gasExchangeTrace } from '../../sim/index.js';
 
 import cut from './Apps.module.css';
 import styles from './GasExchange.module.css';
+import { useUnits } from '../units.js';
 
 /** Seconds one engine cycle takes on screen, whatever the engine speed. */
 const CYCLE_SECONDS = 3.6;
@@ -105,6 +106,7 @@ const STROKES = /** @type {const} */ (['Intake', 'Compression', 'Power', 'Exhaus
  * @param {any} props.derived the engine's derived geometry
  */
 export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTrace, derived }) {
+  const U = useUnits();
   const rpm = point?.rpm ?? 3000;
   const mapKpa = point?.map ?? 100;
   const advance = camAt ? camAt(rpm, mapKpa) : 0;
@@ -298,7 +300,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
     [`${geo.headers ? 'Header primary' : 'Manifold runner'} ${f(geo.primaryLengthMm, 0)} × ${f(geo.primaryBoreMm, 0)} mm`, blockR + 118, portY + 46, blockR + 86, portY + 30],
     ['Collector', colX - 6, exitY + 44, colX + 20, exitY + 14],
     [mods?.catalyst === 'none' ? 'Test pipe' : mods?.catalyst === 'metallic' ? 'High-flow cat' : 'Catalytic converter', catX - 4, exitY - 44, catX + catW / 2, exitY - 30],
-    [`${mods?.exhaust ? 'Free-flow muffler' : 'Muffler'}, ${f(hwForVe?.exhaustDia ?? 3, 2)} in pipe`, mufX - 40, exitY + 52, mufX + mufW / 2, exitY + 30],
+    [`${mods?.exhaust ? 'Free-flow muffler' : 'Muffler'}, ${U.metric ? U.fmtLength(hwForVe?.exhaustDia ?? 3) : `${f(hwForVe?.exhaustDia ?? 3, 2)} in`} pipe`, mufX - 40, exitY + 52, mufX + mufW / 2, exitY + 30],
     ['Piston', blockR + 22, pistonTop + pistonH * 0.55, cx + halfBore - 4, pistonTop + pistonH * 0.5],
     ['Crankshaft', cx + rk + 50, cy + 30, cx + 12, cy + 4],
   ]);
@@ -467,7 +469,7 @@ export function GasExchange({ engineConfig, mods, hwForVe, camAt, point, cycleTr
           <dt>Valves</dt><dd>{geo.intakeValves} × {f(geo.intakeValveMm, 1)} mm intake, {geo.exhaustValves} × {f(geo.exhaustValveMm, 1)} mm exhaust</dd>
         </dl>
         <div className={styles.dropBox} aria-label="Exhaust back-pressure, part by part">
-          <div className={styles.dropHead}>Exhaust back-pressure <b>{f(dropTotal, 1)} kPa</b> <span>({f(dropTotal * 0.145, 2)} psi) at {f(gx.exhaustFlowGs, 0)} g/s</span></div>
+          <div className={styles.dropHead}>Exhaust back-pressure <b>{f(dropTotal, 1)} kPa</b> <span>({U.metric ? `${f(dropTotal / 100, 3)} bar` : `${f(dropTotal * 0.145, 2)} psi`}) at {f(gx.exhaustFlowGs, 0)} g/s</span></div>
           {dropRows.map(([kk, v]) => (
             <div key={kk} className={styles.dropRow}>
               <span>{kk}</span>

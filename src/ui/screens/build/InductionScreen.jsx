@@ -28,6 +28,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useSession } from '../../state/StoreProvider.jsx';
 
 import styles from './InductionScreen.module.css';
+import { useUnits } from '../../units.js';
 
 // What forces air in, and only that: the turbo, the supercharger, their intercooler, and
 // nitrous. The cold air intake is a bolt-on, with the headers and the cat-back
@@ -47,6 +48,7 @@ const BLOWER_KIND = { roots: 'Roots', twinscrew: 'Twin-screw', centrifugal: 'Cen
  */
 export function InductionScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
+  const U = useUnits();
   const [session] = useSession();
   const {
     turboOn, boostCurve, boostSel, turbineIdx, turbineCount, compressorIdx, mods, nitrous,
@@ -108,8 +110,8 @@ export function InductionScreen({ active, onToggle }) {
     <BuildSection
       active={active} onClick={() => onToggle('induction')}
       icon={Wind} label="Induction"
-      sub={`${turboOn ? `Turbo, ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine, peak ${Math.max(...boostCurve)} psi`
-        : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${peakBoost.toFixed(0)} psi`
+      sub={`${turboOn ? `Turbo, ${turbineCount > 1 ? `Twin ${TURBINE_OPTS[turbineIdx].label.split(' ')[0].toLowerCase()}` : TURBINE_OPTS[turbineIdx].label.split(' ')[0]} turbine, peak ${U.fmtBoost(Math.max(...boostCurve))}`
+        : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${U.fmtBoost(peakBoost, U.metric ? 2 : 0)}`
           : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
       <div className={styles.labelTight}>MAP Sensor</div>
@@ -134,11 +136,11 @@ export function InductionScreen({ active, onToggle }) {
           <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.labelTight}>Compressor Size</div>
           <Seg variant="rule" equal label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
-          <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{ceiling} psi</div>
+          <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{U.fmtBoost(ceiling, U.metric ? 2 : 0)}</div>
           <div className={styles.labelTight}>Turbos</div>
           <Seg variant="rule" label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />
           <div className={styles.hint} data-testid="turbo-airflow" data-over={chokes ? 'true' : 'false'}>
-            At {redline} RPM and {peakPsi} psi this engine needs about {Math.round(needLbMin)} lb/min of air. {turbineCount > 1 ? 'The two compressors choke' : 'This compressor chokes'} at about {Math.round(chokeLbMin)} lb/min.
+            At {redline} RPM and {U.fmtBoost(peakPsi, U.metric ? 2 : 0)} this engine needs about {Math.round(needLbMin)} lb/min of air. {turbineCount > 1 ? 'The two compressors choke' : 'This compressor chokes'} at about {Math.round(chokeLbMin)} lb/min.
             {chokes && ' It cannot feed that: boost will fall away near redline while exhaust back-pressure climbs. Fit a bigger compressor or a second turbo.'}
           </div>
           <ExpandableInfo title="Turbine vs. compressor — different jobs">
@@ -153,7 +155,7 @@ export function InductionScreen({ active, onToggle }) {
           {gate.type === 'pneumatic' && (
             <>
               <div className={styles.labelTight}>Spring Pressure</div>
-              <Seg variant="rule" label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: `${p} psi` }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
+              <Seg variant="rule" label="Wastegate spring pressure" options={[4, 5, 7, 10, 14].map((p) => ({ id: p, label: U.fmtBoost(p, U.metric ? 2 : 0) }))} value={gate.springPsi} onChange={(v) => setGate({ springPsi: Number(v) })} equal />
               <div className={styles.hint}>The gate opens at its spring pressure on its own. The boost solenoid can hold it shut longer — it can never open it sooner.</div>
             </>
           )}
@@ -178,7 +180,7 @@ export function InductionScreen({ active, onToggle }) {
                     className={styles.col} data-selected={on ? 'true' : 'false'}
                   >
                     <div className={styles.colValue} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}>
-                      {boostCurve[i]}
+                      {U.metric ? U.boost(boostCurve[i]).toFixed(2) : boostCurve[i]}
                     </div>
                     <div
                       className={styles.colFill} data-selected={on ? 'true' : 'false'} data-over={over ? 'true' : 'false'}
@@ -197,7 +199,7 @@ export function InductionScreen({ active, onToggle }) {
             <div className={styles.editorHead}>
               <span className={styles.editorRpm}>{RPM[boostSel]} RPM</span>
               <span className={styles.editorValue} data-over={selectedOverCeiling ? 'true' : 'false'}>
-                {boostCurve[boostSel]}<span className={styles.editorUnit}>psi</span>
+                {U.metric ? U.boost(boostCurve[boostSel]).toFixed(2) : boostCurve[boostSel]}<span className={styles.editorUnit}>{U.boostUnit}</span>
               </span>
             </div>
             <input type="range" min={0} max={25} step={1} value={boostCurve[boostSel]}
@@ -207,7 +209,8 @@ export function InductionScreen({ active, onToggle }) {
               {[-5, -1, 1, 5].map((d) => (
                 <button key={d} onClick={() => setBoostAt(boostSel, (boostCurve[boostSel] ?? 0) + d)}
                   className={styles.stepButton}>
-                  {d > 0 ? '+' : ''}{d}
+                  {/* The curve is held in whole psi; metric labels each step by what it adds. */}
+                  {d > 0 ? '+' : ''}{U.metric ? U.boost(d).toFixed(2) : d}
                 </button>
               ))}
             </div>
@@ -230,7 +233,7 @@ export function InductionScreen({ active, onToggle }) {
               </Button>
             </div>
             <div className={styles.ceilingWarning} data-over={peakOverCeiling ? 'true' : 'false'}>
-              Compressor efficient to ~{ceiling} psi{peakOverCeiling ? ' — you are past it, expect hot inefficient air' : ''}
+              Compressor efficient to ~{U.fmtBoost(ceiling, U.metric ? 2 : 0)}{peakOverCeiling ? ' — you are past it, expect hot inefficient air' : ''}
             </div>
           </Panel>
 
@@ -252,7 +255,7 @@ export function InductionScreen({ active, onToggle }) {
             value={blower.id} onChange={(v) => setBlower(v)} />
           <div className={styles.hint}>
             {blower.type === 'centrifugal'
-              ? `${blower.stepUp}:1 internal step-up, impeller rated ${rated.toLocaleString('en-US')} rpm, up to ${blower.boostCeiling} psi`
+              ? `${blower.stepUp}:1 internal step-up, impeller rated ${rated.toLocaleString('en-US')} rpm, up to ${U.fmtBoost(blower.boostCeiling, U.metric ? 2 : 0)}`
               : `${blower.dispL} L per revolution, rated ${rated.toLocaleString('en-US')} rpm, up to ${Math.round(blower.etaPeak * 100)}% efficient`}
           </div>
 
@@ -327,11 +330,11 @@ export function InductionScreen({ active, onToggle }) {
           <div className={styles.labelTight}>Bottle</div>
           <Seg variant="rule" label="Bottle size" options={[10, 15].map((lb) => ({ id: lb, label: `${lb} lb` }))}
             value={nitrous.bottleLb} onChange={(v) => setNitrous({ bottleLb: Number(v) })} equal />
-          <Toggle label="Bottle heater" sub="Holds the bottle at 85 °F — about 920 psi" checked={!!nitrous.heater} onChange={(v) => setNitrous({ heater: v })} />
+          <Toggle label="Bottle heater" sub={U.metric ? 'Holds the bottle at 29 °C — about 63 bar' : 'Holds the bottle at 85 °F — about 920 psi'} checked={!!nitrous.heater} onChange={(v) => setNitrous({ heater: v })} />
           <div className={styles.hint}>
             {nitrous.heater
-              ? `The bottle sits near ${bottlePsi} psi: the jets flow about their rated shot.`
-              : `At today's ${Math.round(dayK - KELVIN_OFFSET)} °C the bottle sits near ${bottlePsi} psi: the jets flow about ${jetShare}% of their rated shot.`}
+              ? `The bottle sits near ${U.fmtBoost(bottlePsi, 0)}: the jets flow about their rated shot.`
+              : `At today's ${Math.round(dayK - KELVIN_OFFSET)} °C the bottle sits near ${U.fmtBoost(bottlePsi, 0)}: the jets flow about ${jetShare}% of their rated shot.`}
             {nitrous.kit === 'dry' ? ' A dry kit sprays nitrous only — the ECU adds its fuel through the injectors.' : ' A wet kit brings its own fuel through a second jet.'}
           </div>
           <Note>Arm it from LIVE or the dyno; set where it sprays, the timing it takes out and a dry kit's fuel on TUNE › NITROUS.</Note>

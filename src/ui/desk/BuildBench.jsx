@@ -29,6 +29,7 @@ import { engineSpecOf } from '../world/models/engine.js';
 import { EngineViewer } from './EngineViewer.jsx';
 
 import styles from './BuildBench.module.css';
+import { unitsFor, useUnits } from '../units.js';
 
 /** How the parts list names where the engine came from. */
 const ORIGIN_TAG = { stock: 'Stock', modified: 'Modified', own: 'Your own' };
@@ -48,24 +49,25 @@ export const BENCH_PARTS = [
  * @param {any} build @param {any} derived @param {{name: string}|null} preset
  * @returns {Record<string, string>}
  */
-export function partSummaries(build, derived, preset) {
+export function partSummaries(build, derived, preset, U = unitsFor('imperial')) {
   const cfg = build.engineConfig;
   const blower = blowerOf(build);
   const vt = VALVETRAIN_OPTS.find((o) => o.id === (cfg.valvetrain ?? 'dohc'))?.label ?? 'DOHC';
   const fuel = FUEL_CHOICES[build.octaneIdx];
   const housing = TURBINE_OPTS[build.turbineIdx].label.split(' ')[0];
   const turbo = build.turboOn
-    ? `Turbo, ${build.turbineCount > 1 ? `Twin ${housing.toLowerCase()}` : housing} turbine, peak ${Math.max(...build.boostCurve)} psi`
+    ? `Turbo, ${build.turbineCount > 1 ? `Twin ${housing.toLowerCase()}` : housing} turbine, peak ${U.fmtBoost(Math.max(...build.boostCurve))}`
     : blower ? `${blower.label}, ${(build.blowerRatio ?? blower.defaultRatio ?? 1).toFixed(2)}:1 pulley` : 'Naturally aspirated';
   const bolt = [build.mods?.intercooler && (build.turboOn || blower) && 'intercooler', build.nitrous && `${build.nitrous.shotHp} shot`].filter(Boolean).join(', ');
   const ex = [build.mods?.intake && 'intake', build.mods?.headers && 'headers', build.mods?.exhaust && 'cat-back'].filter(Boolean).join(', ');
+  const pipe = U.metric ? U.fmtLength(EXHAUST_DIA_OPTS[build.exhaustDiaIdx].dia) : EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label;
   return {
     engine: preset ? `${preset.name}, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}` : `Your own engine, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}`,
     block: `${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm, ${cfg.compression.toFixed(1)}:1`,
     head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}°/${cfg.exhaustCamDuration ?? cfg.camDuration}° cam`,
     induction: bolt ? `${turbo}, ${bolt}` : turbo,
     fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${INJECTOR_OPTS[build.injIdx].label}`,
-    boltons: ex ? `${EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label}, ${ex}` : EXHAUST_DIA_OPTS[build.exhaustDiaIdx].label,
+    boltons: ex ? `${pipe}, ${ex}` : pipe,
   };
 }
 
@@ -111,7 +113,8 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
   // Where the parts are narrow (a phone), they fold to one line, the step you are on, and
   // open to the whole list on a tap.
   const [railOpen, setRailOpen] = useState(false);
-  const sums = useMemo(() => partSummaries(build, derived, preset), [build, derived, preset]);
+  const U = useUnits();
+  const sums = useMemo(() => partSummaries(build, derived, preset, U), [build, derived, preset, U]);
   const open = BENCH_PARTS.find((p) => p.id === part) ?? BENCH_PARTS[0];
   const tall = useTall();
   const spec = useMemo(() => engineSpecOf(build, derived), [build, derived]);

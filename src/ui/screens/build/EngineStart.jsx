@@ -16,6 +16,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
 import styles from './EngineStart.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * @returns {React.ReactElement}
@@ -28,6 +29,7 @@ import styles from './EngineStart.module.css';
  *   it stay together, not a screen's length apart.
  */
 export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
+  const U = useUnits();
   return (
     <>
       {PRESET_GROUPS.map((g) => (
@@ -40,7 +42,7 @@ export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
                   <span className={styles.name}>{p.name}</span>
                   <span className={styles.spec}>
                     {p.factory.displacementL.toFixed(1)} L {p.engine.configuration}
-                    {p.induction.turboOn ? ' turbo' : ''}, {p.factory.crankHp} hp, {p.years}
+                    {p.induction.turboOn ? ' turbo' : ''}, {U.fmtPower(p.factory.crankHp)}, {p.years}
                   </span>
                 </button>
                 {detail && picked?.id === p.id && detail(p)}
@@ -69,6 +71,7 @@ export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
  */
 export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
   const [, dispatch] = useBuild();
+  const U = useUnits();
   const [path, setPath] = useState(/** @type {null|'factory'|'custom'} */ (null));
   const [picked, setPicked] = useState(/** @type {any} */ (null));
   const load = (preset) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); onDone?.(); };
@@ -113,7 +116,7 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
                   <div><dt>Bore × stroke</dt><dd>{p.engine.bore} × {p.engine.stroke} mm</dd></div>
                   <div><dt>Compression</dt><dd>{p.engine.compression}:1</dd></div>
                   <div><dt>Redline</dt><dd>{p.engine.redline.toLocaleString('en-US')} rpm</dd></div>
-                  <div className={styles.wide}><dt>Factory rating</dt><dd>{p.factory.crankHp} hp, {p.factory.crankTq} lb-ft</dd></div>
+                  <div className={styles.wide}><dt>Factory rating</dt><dd>{U.fmtPower(p.factory.crankHp)}, {U.fmtTorque(p.factory.crankTq)}</dd></div>
                 </dl>
                 <button type="button" className={styles.use} onClick={() => load(p)} aria-label={`Use ${p.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
               </div>

@@ -26,6 +26,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
 import styles from './FuelSystemScreen.module.css';
+import { useUnits } from '../../units.js';
 
 /**
  * @param {object} props
@@ -35,6 +36,7 @@ import styles from './FuelSystemScreen.module.css';
  */
 export function FuelSystemScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
+  const U = useUnits();
   const { octaneIdx, injIdx } = build;
   const fuelSystem = build.fuelSystem ?? DEFAULT_ECU_HW.fuelSystem;
   const sensorHw = build.sensorHw ?? DEFAULT_ECU_HW.sensorHw;
@@ -78,7 +80,7 @@ export function FuelSystemScreen({ active, onToggle }) {
       <Seg variant="rule" label="Pressure regulation" options={REGULATOR_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={fuelSystem.regulator} onChange={(v) => setFs({ regulator: v })} equal />
       <SetupNote paths={['injector.pressureComp']} />
       <div className={styles.labelSpaced}>Base Fuel Pressure</div>
-      <Seg variant="rule" label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
+      <Seg variant="rule" label="Base fuel pressure" options={[250, 300, 350, 400].map((k) => ({ id: k, label: U.metric ? `${(k / 100).toFixed(1)} bar` : `${(k / 6.895).toFixed(0)} psi` }))} value={fuelSystem.basePressureKpa} onChange={(v) => setFs({ basePressureKpa: Number(v) })} equal />
       <SetupNote paths={['injector.refPressureKpa']} />
       <ExpandableInfo title="Pump, regulator and why pressure is fuel">
         An injector is a calibrated hole: it passes fuel as the <b className={styles.em}>square root of the pressure across it</b>. Its flow rating is only true at the pressure it was measured at — 3 bar, 43.5 psi.
