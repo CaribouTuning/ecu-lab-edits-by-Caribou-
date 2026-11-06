@@ -35,7 +35,7 @@ import styles from './AirflowScreen.module.css';
  * @typedef {object} VeLog
  * @property {import('../../../sim/veLearn.js').VeSample[]} pull from the last dyno pull, if it still describes this tune
  * @property {import('../../../sim/veLearn.js').VeSample[]} live from the LIVE datalog
- * @property {'blend'|'sd'|'maf'} airModel the ECU's air-mass strategy
+ * @property {'blend'|'sd'|'maf'|'alphan'} airModel the ECU's air-mass strategy
  * @property {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} pullInfo
  *   why the last pull is or is not in the numbers
  * @property {(share: number) => void} onApply applies that share of the correction

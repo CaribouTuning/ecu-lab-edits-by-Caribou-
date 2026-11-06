@@ -7,7 +7,7 @@
  * The advisors report the gap; closing it is the player's job.
  */
 
-import { BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { BARO_KPA, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { hardwareVeAt } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
@@ -19,6 +19,7 @@ import { evaluatePoint } from './point.js';
 import { wearEffects } from './damage.js';
 import { reachableKpa } from './manifold.js';
 import { inductionAtMap } from './turbo.js';
+import { throttleBoreM, throttledMapKpa } from './throttle.js';
 import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
@@ -79,6 +80,29 @@ const MIX_DI_MARGIN_AFR = 0.15;
 
 /** Full load for the lean edge: where the factory enrichment is complete (factoryFuel.js). */
 const MIX_FULL_LOAD_KPA = 97;
+
+/**
+ * What an ALPHA-N VE table should hold: the cylinder's fill against the OUTSIDE air at a
+ * throttle opening, because that ECU reads its row by throttle and works the air out from
+ * the barometric pressure. The opening's manifold pressure comes from the throttle body
+ * (`throttledMapKpa`): the plate passes what the engine draws. True VE × MAP ÷ baro.
+ * Naturally aspirated: a throttle-indexed table cannot see boost.
+ *
+ * @param {(rpm: number, mapKpa: number) => number} veAt the engine's true breathing
+ * @param {{displacementL: number, redline?: number}} derived
+ * @param {{intake?: boolean}} [mods]
+ * @returns {(rpm: number, loadKpa: number) => number} fill (%) at a throttle row, the row
+ *   written as a pull's load (101.3 kPa is wide open)
+ */
+export function alphaNFillAt(veAt, derived, mods = {}) {
+  const boreM = throttleBoreM(derived);
+  const sweptM3 = derived.displacementL / 1000;
+  return (rpm, loadKpa) => {
+    const engineFlowAt = (m) => (veAt(rpm, m) / 100) * sweptM3 * ((m * 1000) / (R_AIR * 298)) * (rpm / 120);
+    const map = throttledMapKpa({ throttleFrac: clamp(loadKpa / BARO_KPA, 0, 1), engineFlowAt, boreM, coldAirIntake: !!mods.intake });
+    return (veAt(rpm, map) * map) / BARO_KPA;
+  };
+}
 
 /**
  * Compares the player's VE table against what the current hardware would flow, and

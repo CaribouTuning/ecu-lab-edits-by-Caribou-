@@ -421,8 +421,8 @@ export const ECU_META = [
 
   // ---- AIRFLOW ----
   { path: 'config.airModel', section: 'airflow', group: 'Load calculation', label: 'Air-mass strategy', kind: 'enum',
-    options: [{ id: 'blend', label: 'Speed-density + MAF trim' }, { id: 'sd', label: 'Speed-density' }, { id: 'maf', label: 'MAF' }],
-    help: 'How the ECU works out air per cylinder. Speed-density uses MAP, IAT and the VE table; MAF measures airflow directly and ignores VE. The default is the original model: VE for fuel, the MAF\'s error feeding the trims.' },
+    options: [{ id: 'blend', label: 'Speed-density + MAF trim' }, { id: 'sd', label: 'Speed-density' }, { id: 'maf', label: 'MAF' }, { id: 'alphan', label: 'Alpha-N (throttle position)' }],
+    help: 'How the ECU works out air per cylinder. Speed-density uses MAP, IAT and the VE table; MAF measures airflow directly and ignores VE. Alpha-N reads the VE, spark and mixture tables by throttle opening instead of MAP, and works the air out from the barometric pressure: the usual first step converting a carburetted engine, and the choice for big cams and individual throttle bodies, whose manifold pressure is too unsteady to read at idle. It cannot see boost, a blocked filter or a different intake, only where the blade is, so the VE table carries all of that and must be retuned for it. The load rows then mean throttle opening. The default is the original model: VE for fuel, the MAF\'s error feeding the trims.' },
   { path: 'config.cylinderModel', section: 'airflow', group: 'Load calculation', label: 'Model cylinder-to-cylinder distribution', kind: 'bool', options: onOff,
     help: 'Solve each cylinder separately. Real intake manifolds feed some runners better than others and middle cylinders run hotter, so cylinders differ in mixture and knock limit. Slower to compute.' },
   { path: 'airflow.mafTrim', section: 'airflow', group: 'MAF', label: 'MAF transfer correction', kind: 'curve', unit: '%', xLabel: 'Airflow g/s', min: -30, max: 30, step: 0.5, decimals: 1,

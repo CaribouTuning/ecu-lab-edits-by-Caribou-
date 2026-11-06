@@ -42,7 +42,8 @@ const MIN_ECT_C = 75;
 /**
  * @typedef {object} VeSample
  * @property {number} rpm
- * @property {number} mapKpa manifold pressure as the ECU read it — what it looked VE up by
+ * @property {number} mapKpa the load the ECU looked VE up by: manifold pressure as it read it,
+ *   or on alpha-N the throttle opening as a share of 101.3 kPa
  * @property {number} lambdaRatio λ measured ÷ λ target: over 1 is leaner than asked
  * @property {number} trim what the fuel trims were adding, as a factor (1 = none)
  * @property {number} maf the MAF's error the ECU was applying, as a factor (1 = none)
@@ -74,7 +75,7 @@ export function veSamplesFromPull(points) {
     if ((p.nitrousLbMin ?? 0) > 0 || p.fuelLimited || p.fuelStarved || (p.protect?.length ?? 0) > 0) continue;
     if ((p.cutPct ?? 0) > 0 || (p.misfire ?? 0) > 0) continue;
     const s = sample({
-      rpm: p.rpm, mapKpa: p.sensedMap ?? p.map, lambdaRatio: p.sensedLambda / (p.afrCommanded / 14.7),
+      rpm: p.rpm, mapKpa: p.ecuLoad ?? p.sensedMap ?? p.map, lambdaRatio: p.sensedLambda / (p.afrCommanded / 14.7),
       trim: 1, maf: 1 + (p.trimPct ?? 0) / 100, rescale: 1, source: 'pull',
     });
     if (!(s.ratio > 0.6 && s.ratio < 1.6)) continue;
@@ -96,15 +97,17 @@ export function veSamplesFromLive(rows, ve, axes) {
   const out = [];
   let prev = null;
   for (const r of rows ?? []) {
-    const steady = prev && Math.abs(r.sMap - prev.sMap) <= MAX_MAP_STEP_KPA;
+    // The load the ECU read VE by: manifold pressure, or on alpha-N the throttle opening.
+    const load = r.ecuLoad ?? r.sMap;
+    const steady = prev && Math.abs(load - (prev.ecuLoad ?? prev.sMap)) <= MAX_MAP_STEP_KPA;
     prev = r;
     if (!steady || !r.running || r.rpm < 600 || r.ect < MIN_ECT_C) continue;
     if (Math.abs(r.ae ?? 0) >= 1 || (r.cut ?? 0) > 0 || (r.nitrous ?? 0) > 0 || (r.misfire ?? 0) > 0) continue;
     if ((r.protect?.length ?? 0) > 0 || !(r.veTable > 0) || !(r.lambdaTarget > 0) || !(r.sLambda > 0)) continue;
     const s = sample({
-      rpm: r.rpm, mapKpa: r.sMap, lambdaRatio: r.sLambda / r.lambdaTarget,
+      rpm: r.rpm, mapKpa: load, lambdaRatio: r.sLambda / r.lambdaTarget,
       trim: (1 + (r.stft ?? 0) / 100) * (1 + (r.ltft ?? 0) / 100), maf: 1 + (r.mafPct ?? 0) / 100,
-      rescale: r.veTable / Math.max(1, axes ? readTable(ve, axes, r.rpm, r.sMap) : interp2(ve, r.rpm, r.sMap)), source: 'live',
+      rescale: r.veTable / Math.max(1, axes ? readTable(ve, axes, r.rpm, load) : interp2(ve, r.rpm, load)), source: 'live',
     });
     if (!(s.ratio > 0.6 && s.ratio < 1.6)) continue;
     out.push(s);

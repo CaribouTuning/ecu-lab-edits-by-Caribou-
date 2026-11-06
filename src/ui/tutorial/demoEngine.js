@@ -39,7 +39,7 @@ const lessonStart = () => reducer(makeInitialState(), { type: ACTIONS.APPLY_PRES
  * @property {object[]} chartData DYNO's curves, shaped as the shell shapes them
  * @property {object[]} bands the pull's event bands on the chart
  * @property {number} wholePullCount events that belong to the whole pull, not an RPM
- * @property {{pull: object[], live: object[], airModel: 'blend'|'sd'|'maf', pullInfo: {state: 'none'|'stale'|'part-load'|'unused'|'ok'}, onApply: (share: number) => void}} veLog
+ * @property {{pull: object[], live: object[], airModel: 'blend'|'sd'|'maf'|'alphan', pullInfo: {state: 'none'|'stale'|'part-load'|'unused'|'ok'}, onApply: (share: number) => void}} veLog
  *   TUNE › AIRFLOW's log correction, fed from this pull
  * @property {ReturnType<typeof import('../../sim/index.js').deriveEngine>} derived
  * @property {(rpm: number, kpa: number) => number} veTruth the engine's real breathing (for the tutorial's own maths, never shown as a tuning aid)
@@ -83,7 +83,7 @@ export function runDemo(key, scenario = (s) => s) {
     bands: eventBands(result.events),
     wholePullCount: result.events.filter((e) => !isLocatable(e)).length,
     veLog: {
-      pull, live: [], airModel: /** @type {'blend'|'sd'|'maf'} */ (base.tune.ecu?.config?.airModel ?? 'blend'),
+      pull, live: [], airModel: /** @type {'blend'|'sd'|'maf'|'alphan'} */ (base.tune.ecu?.config?.airModel ?? 'blend'),
       pullInfo: { state: /** @type {'ok'|'unused'} */ (pull.length ? 'ok' : 'unused') },
       // The sandbox's own table is what a snippet's APPLY changes; this is only its label.
       onApply: () => {},

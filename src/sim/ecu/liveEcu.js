@@ -501,7 +501,7 @@ export function liveStepEcu(st, dt, input, cfg) {
       cal, hw, cond: condNow, tables, rpm: rpmC, mapKpa, boostPsi: s.boostPsi, veActual,
       cam: { intakeAdvDeg: e.camIn, exhaustRetDeg: e.camEx }, empKpa: steady.empKpa,
       dyn: {
-        steadyTrims: false, sensedMapKpa: e.sMap, sensedIatC: e.sIat, sensedEctC: e.sEct,
+        steadyTrims: false, sensedMapKpa: e.sMap, sensedTpsPct: e.sTps, sensedIatC: e.sIat, sensedEctC: e.sEct,
         knockRetardDeg: e.knockRetard, stftPct: s.stft, ltftPct: s.ltft, aePct: e.aePct,
         afterStartPct: s.running ? e.afterStartPct : 0, crankingPct, cylinderFuelFactor: filmFactor,
         cutFrac, cutType, extraRetardDeg: limiterRetard + e.torqueRetard, extraFuelPct: e.extraFuelPct,
@@ -693,7 +693,9 @@ export function liveStepEcu(st, dt, input, cfg) {
   // ---- LOG.
   const row = {
     t: Number(s.elapsed.toFixed(2)), rpm: Math.round(s.rpm), pedal: Math.round(pedal), throttle: Number(e.throttle.toFixed(1)),
-    tps: Number(e.sTps.toFixed(1)), sMap: Math.round(e.sMap), stft: Number(s.stft.toFixed(1)), ltft: Number(s.ltft.toFixed(1)),
+    tps: Number(e.sTps.toFixed(1)), sMap: Math.round(e.sMap),
+    ...(cal.config.airModel === 'alphan' ? { ecuLoad: Number((clamp(e.sTps, 0, 100) / 100 * BARO_KPA).toFixed(1)) } : {}),
+    stft: Number(s.stft.toFixed(1)), ltft: Number(s.ltft.toFixed(1)),
     ae: Number(e.aePct.toFixed(1)), knockRetard: Number(e.knockRetard.toFixed(1)), knockV: Number((e.knockV ?? 0).toFixed(3)),
     camIn: Number(e.camIn.toFixed(1)), camInTarget: Number((e.camInTarget ?? 0).toFixed(1)), camEx: Number(e.camEx.toFixed(1)),
     idleTarget: Math.round(e.idleTarget ?? 0), idleAir: Number((e.idleAir ?? 0).toFixed(1)), iat: Math.round(e.sIat), ect: Math.round(e.sEct),

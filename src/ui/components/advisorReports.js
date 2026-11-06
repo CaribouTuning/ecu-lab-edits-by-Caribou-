@@ -197,7 +197,7 @@ export const VE_LOG_GOOD_PCT = 2;
  * @property {{cell: (import('../../sim/veLearn.js').VeCell|null)[][], cells: number}} corr
  *   from `veCorrections`
  * @property {number[][]} ve the table on screen
- * @property {'blend'|'sd'|'maf'} airModel
+ * @property {'blend'|'sd'|'maf'|'alphan'} airModel
  * @property {{state: 'none'|'stale'|'part-load'|'unused'|'ok', changed?: string[]}} pullInfo
  * @property {number} liveSamples
  * @property {import('../../sim/layouts.js').TableAxes} [axes] the VE table's breakpoints, when

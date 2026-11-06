@@ -119,7 +119,7 @@ export const FIELD_TIPS = {
   'ignition.knockThreshold': 'How loud a noise must be to count as knock. After a cam or spring change, raise it if the ECU hears "knock" that is not there.',
   'ignition.highDetRetard': 'After heavy knock, the ECU drops to safer timing by this much until things calm down. Zero turns it off.',
   // AIRFLOW
-  'config.airModel': 'How the ECU works out air: from pressure and the AIRFLOW table, from the airflow sensor, or both. Leave on the default.',
+  'config.airModel': 'How the ECU works out air: from pressure and the AIRFLOW table, from the airflow sensor, both, or from throttle position alone (Alpha-N, for a converted carburettor engine or individual throttle bodies). Leave on the default unless the engine has no usable MAP signal.',
   'config.cylinderModel': 'Works out each cylinder on its own, so they can differ. Turn on to use per-cylinder trims.',
   'airflow.mafTrim': 'Corrects the airflow sensor at specific airflows, after an intake change.',
   'airflow.camVeCorr': 'Corrects the AIRFLOW table as the cam phaser moves. Needs cam phasers.',

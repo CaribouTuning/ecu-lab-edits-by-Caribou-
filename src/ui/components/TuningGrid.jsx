@@ -53,6 +53,27 @@ export const LOAD_UNIT_LABEL = Object.freeze({ kPa: 'MAP kPa', 'g/cyl': 'AIR g/c
 export const loadText = (unit, v) => (unit === 'g/cyl' ? v.toFixed(2) : String(v));
 
 /**
+ * True when the ECU reads its tables by THROTTLE (the alpha-N air-mass strategy). The
+ * rows are the same breakpoints (a load row of 101.3 kPa is a wide-open throttle, as a
+ * pull's load is), written as the throttle opening the ECU looks them up at.
+ */
+export const ThrottleLoadContext = React.createContext(false);
+
+/**
+ * How a table's load axis reads on screen: its label, and each breakpoint's text.
+ * @param {string} unit the axis's load unit
+ * @param {boolean} throttle the ECU reads this axis by throttle (alpha-N)
+ */
+export function loadAxisText(unit, throttle) {
+  if (!(throttle && unit === 'kPa')) {
+    return { label: LOAD_UNIT_LABEL[unit] ?? unit, unit: unit === 'kPa' ? 'kPa' : unit, word: unit === 'kPa' ? ' MAP' : ' air', text: (v) => loadText(unit, v) };
+  }
+  // Past a wide-open throttle the ECU reads the top row it can reach: rows above it are
+  // boost rows, which a throttle-indexed table cannot address.
+  return { label: 'THROTTLE %', unit: '%', word: ' throttle', text: (v) => (v > 101.5 ? `>${100}` : String(Math.round(Math.min(100, (v / 101.3) * 100)))) };
+}
+
+/**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against `axes`
  * @param {import('../../sim/layouts.js').TableAxes} [props.axes] the table's breakpoints:
@@ -192,7 +213,8 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   for (const row of data) for (const v of row) { if (v < lo) lo = v; if (v > hi) hi = v; }
   if (!(hi - lo > (max - min) * 0.02)) { lo = min; hi = max; }
   const cross = selection?.type === 'cell' ? { r: selection.row, c: selection.col } : null;
-  const loadUnit = LOAD_UNIT_LABEL[axes.loadUnit];
+  const lx = loadAxisText(axes.loadUnit, React.useContext(ThrottleLoadContext));
+  const loadUnit = lx.label;
 
   return (
     <div
@@ -224,7 +246,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
               <th scope="row" className={styles.rowHead}>
                 <button type="button" onClick={() => selectRow(ri)} data-tour={axes.loadUnit === 'kPa' ? `grid-load-${load}` : undefined}
                   data-on={(selection?.type === 'row' && selection.row === ri) || undefined}
-                  data-cross={(cross?.r === ri) || undefined}>{loadText(axes.loadUnit, load)}</button>
+                  data-cross={(cross?.r === ri) || undefined}>{lx.text(load)}</button>
               </th>
               {data[ri].map((val, ci) => {
                 const untunedHere = notTuned.has(`${ri}:${ci}`);
@@ -234,7 +256,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
                     <button
                       type="button"
                       className={styles.cell}
-                      aria-label={`${axes.rpm[ci]} RPM, ${loadText(axes.loadUnit, load)} ${axes.loadUnit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
+                      aria-label={`${axes.rpm[ci]} RPM, ${lx.text(load)} ${lx.unit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
                       data-untuned={untunedHere ? 'true' : undefined}
                       data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}
                       data-anchor={isAnchor(ri, ci) || undefined}

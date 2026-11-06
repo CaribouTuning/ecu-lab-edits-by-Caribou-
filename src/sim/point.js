@@ -92,9 +92,14 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
  *   through the injectors; negative takes fuel out
  * @property {number} [sensedMapKpa] manifold pressure as the ECU's MAP sensor reports it
  * @property {number} [sensedIatK] charge temperature as the ECU's IAT sensor reports it
- * @property {'blend'|'sd'|'maf'} [airModel] how the ECU works out air mass. `blend` is the
+ * @property {'blend'|'sd'|'maf'|'alphan'} [airModel] how the ECU works out air mass. `blend` is the
  *   original model: speed-density from the VE table, with the MAF's error feeding the
- *   trims. `sd` is pure speed-density. `maf` fuels from the MAF reading and ignores VE
+ *   trims. `sd` is pure speed-density. `maf` fuels from the MAF reading and ignores VE.
+ *   `alphan` reads VE by throttle opening and runs the air sum on barometric pressure
+ * @property {number} [ecuLoadKpa] the load the ECU read its tables by, when it is not the
+ *   MAP sensor (alpha-N: the throttle opening as a share of 101.3 kPa)
+ * @property {number} [airSumKpa] the pressure the ECU's air sum runs on, when it is not
+ *   the MAP sensor (alpha-N: the barometric pressure)
  * @property {number} [mafNetFactor] the MAF's total reading error after the ECU's own
  *   transfer-function correction, as a multiplier on true airflow
  * @property {number} [openLoopKpa] MAP above which the ECU stops trimming
@@ -182,7 +187,7 @@ export function evaluatePoint({
     ? airChargeG
     : trappedAirGrams({
       veActual: veVal,
-      mapKpa: E?.sensedMapKpa ?? mapKpa,
+      mapKpa: E?.airSumKpa ?? E?.sensedMapKpa ?? mapKpa,
       chargeK: E?.sensedIatK ?? chargeK,
       sweptM3: vCylM3,
     });
@@ -190,8 +195,9 @@ export function evaluatePoint({
   const mafGps = (airChargeG * derived.cyl * (rpm / 2)) / 60;
 
   // --- MAF error / fuel trim. Open loop above OPEN_LOOP_KPA (near WOT).
-  const netFactor = airModel === 'sd' ? 1 : (E?.mafNetFactor ?? mafErrorBase * mafScalar);
-  const ecuMapKpa = E?.sensedMapKpa ?? mapKpa;
+  const netFactor = airModel === 'sd' || airModel === 'alphan' ? 1 : (E?.mafNetFactor ?? mafErrorBase * mafScalar);
+  // Open loop starts at a LOAD: manifold pressure, or on alpha-N the throttle opening.
+  const ecuMapKpa = E?.ecuLoadKpa ?? E?.sensedMapKpa ?? mapKpa;
   const openLoop = ecuMapKpa >= (E?.openLoopKpa ?? OPEN_LOOP_KPA);
   const effFactor = E ? ecuTrimmedFactor(netFactor, openLoop, E) : effectiveMafFactor(netFactor, mapKpa);
   const trimPct = (effFactor - 1) * 100;
@@ -366,6 +372,7 @@ export function evaluatePoint({
   // it is not, so an ECU-less evaluation is the same record it always was, field for field.
   const ecuFields = E ? {
     sensedMap: Number((E.sensedMapKpa ?? mapKpa).toFixed(0)),
+    ...(E.ecuLoadKpa != null ? { ecuLoad: Number(E.ecuLoadKpa.toFixed(1)) } : {}),
     sensedIat: Number(((E.sensedIatK ?? chargeK) - KELVIN_OFFSET).toFixed(0)),
     fuelMass: Number((deliveredFuelG * 1000).toFixed(2)),
     fuelCmd: Number((fuelMassG * 1000).toFixed(2)),

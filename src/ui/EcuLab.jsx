@@ -27,7 +27,7 @@ import {
   computeEngineerScore, computePullScore, computeTuningScore,
   applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview, isLocatable, layoutById, presetById,
   simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
-  veRecommendations, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
+  veRecommendations, alphaNFillAt, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
   veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
 } from '../sim/index.js';
 import {
@@ -54,6 +54,7 @@ import { canReadCareer, deliver, pageUnlocked, reviveCareer, sectionUnlocked, st
 import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
 import { PagePicker } from './components/PagePicker.jsx';
+import { ThrottleLoadContext } from './components/TuningGrid.jsx';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { COURSE } from './tutorial/books.js';
@@ -223,6 +224,7 @@ export function EcuLabApp() {
   // useBuild() returned (one reducer, one useReducer call — see StoreProvider.jsx),
   // so it is not re-bound here.
   const [tune] = useTune();
+  const airModel = tune.ecu?.config?.airModel ?? 'blend';
   const { ve, timing, afr } = tune;
   // The engine computer whose breakpoints the tables sit on (sim/layouts.js), or null
   // for the ECU Lab grid. Every pull and the live engine read the tables through it.
@@ -435,8 +437,10 @@ export function EcuLabApp() {
        compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
 
   const veAdvice = useMemo(
-    () => veRecommendations(ve, engineConfig, mods, veTruth, (layout ?? layoutById(null)).ve),
-    [ve, engineConfig, mods, veTruth, layout]
+    // On alpha-N the table holds the fill against the outside air at each throttle row.
+    () => veRecommendations(ve, engineConfig, mods,
+      airModel === 'alphan' ? alphaNFillAt(veTruth, engineDerived, mods) : veTruth, (layout ?? layoutById(null)).ve),
+    [ve, engineConfig, mods, veTruth, layout, airModel, engineDerived]
   );
 
   // Injector duty at WOT / 6500 RPM (or the redline, below it), from the tables as they
@@ -1212,7 +1216,7 @@ export function EcuLabApp() {
       : result.points.every((p) => !p.openLoop) ? { state: 'part-load' }
         : veLogPull.length === 0 ? { state: 'unused' } : { state: 'ok' };
   const veLog = veLogOpen ? {
-    pull: veLogPull, live: veLogLive, airModel: tune.ecu?.config?.airModel ?? 'blend', pullInfo,
+    pull: veLogPull, live: veLogLive, airModel, pullInfo,
     onApply: (share) => {
       const { ratio } = veCorrections([...veLogPull, ...veLogLive], layout?.ve);
       dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: applyVeCorrections(ve, ratio, share), label: `VE from logs (${share === 1 ? 'all' : 'half'})` });
@@ -1522,6 +1526,7 @@ export function EcuLabApp() {
               );
             })()}
 
+            <ThrottleLoadContext.Provider value={airModel === 'alphan'}>
             {tunePage && tuneView === 'airflow' && (
               <AirflowScreen veLog={veLog}>
                 {ecuOpen('airflow') ? <EcuSection embedded section="airflow" title="Air model" icon={Wind} liveVars={liveVars} /> : <LockedSettings section="airflow" />}
@@ -1539,6 +1544,7 @@ export function EcuLabApp() {
                 {ecuOpen('fuel') ? <EcuSection embedded section="fuel" title="Fuel strategy & enrichment" icon={Droplets} liveVars={liveVars} /> : <LockedSettings section="fuel" />}
               </FuelScreen>
             )}
+            </ThrottleLoadContext.Provider>
 
             {tunePage && tuneView === 'injectors' && (
               <InjectorsScreen dutyPreview={dutyPreview} dutyRpm={dutyRpm} injectorCc={injectorCc}>

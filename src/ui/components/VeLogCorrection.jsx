@@ -34,7 +34,7 @@ const PULL_NOTE = {
  * @param {number} props.liveCount samples from the LIVE datalog
  * @param {{state: string, changed?: string[]}} props.pullInfo why the pull is or is not used
  * @param {number} props.mafPct the MAF's own reading error across the samples, percent
- * @param {'blend'|'sd'|'maf'} props.airModel the ECU's air-mass strategy
+ * @param {'blend'|'sd'|'maf'|'alphan'} props.airModel the ECU's air-mass strategy
  * @param {(share: number) => void} props.onApply applies that share of the correction
  * @param {import('../../sim/layouts.js').TableAxes} [props.axes] the VE table's breakpoints
  * @returns {React.ReactElement}

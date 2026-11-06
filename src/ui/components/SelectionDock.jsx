@@ -27,7 +27,7 @@ import { Seg } from '../primitives/Seg.jsx';
 import { T, shadowAlpha } from '../theme.js';
 
 import { cellCount, countLabel, opLabel, rectOf, selectionKey, signed, stepsFor } from './selection.js';
-import { loadText } from './TuningGrid.jsx';
+import { loadAxisText, ThrottleLoadContext } from './TuningGrid.jsx';
 
 /** @typedef {import('./selection.js').Selection} Selection */
 
@@ -115,8 +115,9 @@ const COMMIT_KEYS = new Set([
  */
 export function SelectionDock({ data, setData, selection, min, max, decimals, unit, onClose, kind, baseline, axes = GAME_LAYOUT.ve }) {
   const RPM = axes.rpm;
-  const LOAD = axes.load.map((v) => loadText(axes.loadUnit, v));
-  const lu = axes.loadUnit === 'kPa' ? 'kPa' : axes.loadUnit;
+  const lx = loadAxisText(axes.loadUnit, React.useContext(ThrottleLoadContext));
+  const LOAD = axes.load.map(lx.text);
+  const lu = lx.unit;
   // The slider's in-flight value. React maps onChange on a range input to the `input`
   // event, so a drag fires it continuously; committing each one would turn a single
   // drag into eighteen undo steps. The draft holds the value while the finger is down
@@ -225,7 +226,7 @@ export function SelectionDock({ data, setData, selection, min, max, decimals, un
   // LOAD runs high to low down the grid, so a range's bottom row is its LOW pressure.
   const span = (lo, hi) => (lo === hi ? `${lo}` : `${lo}–${hi}`);
   let sel;
-  const mapWord = axes.loadUnit === 'kPa' ? ' MAP' : ' air';
+  const mapWord = lx.word;
   if (selection.type === 'row') sel = `Row: ${LOAD[selection.row]} ${lu}${mapWord}`;
   else if (selection.type === 'col') sel = `Column: ${RPM[selection.col]} RPM`;
   else if (selection.type === 'range') {

@@ -226,14 +226,26 @@ export function resolveEcuPoint({
   // ---- BASE TABLES, read at the load the ECU believes: manifold pressure, or (on a
   // layout that reads spark by air per cylinder, layouts.js) the air its own VE table
   // and sensors work out.
-  const veBase = readEcuTable(tables, 've', rpm, { mapKpa: sMap });
+  //
+  // ALPHA-N reads all three by THROTTLE instead: the opening, as a share of the outside
+  // air's pressure, on the same load rows a pull uses (`loadKpa / 101.3` is a throttle
+  // opening). Its VE table then holds the cylinder's fill against the outside air, not
+  // against the manifold, and the air sum runs on the barometric pressure: Speeduino's and
+  // MegaSquirt's alpha-N, with the barometric correction on. It is how a carburetted
+  // engine is first converted (no MAP signal worth reading on a big cam at idle), and its
+  // blind spot is real: it cannot see boost or a blocked filter, only where the blade is.
+  const alphaN = cal.config.airModel === 'alphan';
+  const sTps = dyn.sensedTpsPct ?? 100;
+  const ecuLoadKpa = alphaN ? clamp(sTps, 0, 100) / 100 * BARO_KPA : sMap;
+  const airSumKpa = alphaN ? env.baroKpa : sMap;
+  const veBase = readEcuTable(tables, 've', rpm, { mapKpa: ecuLoadKpa });
   const camVe = read2(cal.airflow.camVeCorr, rpm, cam.intakeAdvDeg);
   const veVal = veBase * (1 + camVe / 100);
   const ecuAirG = needsAirmass(tables.layout)
-    ? trappedAirGrams({ veActual: veVal, mapKpa: sMap, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
+    ? trappedAirGrams({ veActual: veVal, mapKpa: airSumKpa, chargeK: sIatC + KELVIN_OFFSET, sweptM3: (hw.derived.displacementL / hw.derived.cyl) / 1000 })
     : 0;
-  const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: sMap, airmassG: ecuAirG });
-  const afrLoad = ambientNormalized(sMap, env.baroKpa);
+  const timingBase = readEcuTable(tables, 'timing', rpm, { mapKpa: ecuLoadKpa, airmassG: ecuAirG });
+  const afrLoad = alphaN ? { mapKpa: ecuLoadKpa, scale: 1 } : ambientNormalized(sMap, env.baroKpa);
   const afrBase = readEcuTable(tables, 'afr', rpm, { mapKpa: afrLoad.mapKpa, airmassG: ecuAirG * afrLoad.scale });
 
   // ---- SPARK: base, then every correction in the order the ECU stacks them.
@@ -376,6 +388,7 @@ export function resolveEcuPoint({
     // wet kit the correction is usually a reduction.
     ...(nitrous?.injFuelKgS ? { extraFuelG: (nitrous.injFuelKgS * 1000) / (hw.derived.cyl * (rpm / 2) / 60) } : {}),
     sensedMapKpa: sMap,
+    ...(alphaN ? { ecuLoadKpa, airSumKpa } : {}),
     sensedIatK: sIatC + KELVIN_OFFSET,
     airModel: cal.config.airModel,
     mafNetFactor,
@@ -654,7 +667,8 @@ function settle({ cal, hw, cond, tables, rpm, loadKpa, throttlePct, gear }, m) {
     cal, hw, cond, tables, rpm, mapKpa: solved.man.mapKpa, boostPsi: solved.man.boostPsi,
     veActual: solved.veActual, cam: solved.cam, empKpa: solved.man.empKpa,
     dyn: {
-      steadyTrims: true, extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac,
+      steadyTrims: true, sensedTpsPct: clamp(throttlePct * m.loadScale, 0, 100),
+      extraFuelPct: m.extraFuelPct, extraRetardDeg: m.extraRetardDeg, cutFrac: m.cutFrac,
       cutType: m.cutType, highDet: m.highDet, nitrousFrac: m.nitrousFrac,
     },
     ...(solved.man.blower ? { blower: solved.man.blower } : {}),
