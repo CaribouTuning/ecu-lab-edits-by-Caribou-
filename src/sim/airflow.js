@@ -15,7 +15,7 @@ import { clamp } from './math.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { rubbingFmepPa } from './friction.js';
-import { exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
+import { catalystLossShare, exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
 import { LOAD, RPM } from './tables.js';
 
 /**
@@ -314,6 +314,68 @@ function buildVeReader(cfg, mods, hw) {
     const v = node(ri, mi) * (1 - fx) * (1 - fy) + node(ri + 1, mi) * fx * (1 - fy)
       + node(ri, mi + 1) * (1 - fx) * fy + node(ri + 1, mi + 1) * fx * fy;
     return Number(clamp(v, 5, 140).toFixed(1));
+  };
+}
+
+/**
+ * One operating point's gas exchange laid open, for the Physics page's live diagram: the
+ * same geometry, exhaust back-pressure passes and runner waves as the VE truth computes at
+ * that speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by
+ * crank degree, and the exhaust system's pressure drop part by part. Nothing here is a second
+ * model: every number is one the breathing already makes.
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {{headers?: boolean, exhaust?: boolean, intercooler?: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods
+ * @param {{turboOn?: boolean, turbine?: any, exhaustDia?: number, fuel?: any, intakeCamAdvanceDeg?: number, exhaustCamRetardDeg?: number}} hw
+ * @param {number} rpm
+ * @param {number} mapKpa
+ */
+export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
+  const { turboOn = false, turbine = null, exhaustDia, fuel, intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0 } = hw ?? {};
+  const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
+  const cyl = CYL_COUNT[cfg.configuration];
+  const pipeDiaIn = exhaustDia ?? 3.0;
+  const stoich = fuel?.stoich ?? 14.7;
+  const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
+  const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
+  const tex = INDUCTION_REF_EXHAUST_K;
+  let emp = BARO_KPA;
+  let r = null;
+  let exhKgS = 0;
+  for (let i = 0; i < 3; i++) {
+    r = gasExchange(g, { rpm, plenumKpa: mapKpa, intakeK, exhaustKpa: emp, exhaustK: tex, runnerWaves: r?.runnerWaves, trace: i === 2 });
+    exhKgS = r.freshKg * cyl * (rpm / 120) * (1 + 1 / (stoich * COEFF.VE_BACKPRESSURE_LAMBDA_REF));
+    const system = exhaustSystemDropKpa({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods });
+    emp = turboOn && turbine ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) + system : BARO_KPA + system;
+  }
+  // The same loss as exhaustSystemDropKpa, part by part, at the flow just found.
+  const part = (k) => exhaustSystemDropKpa({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods: {} }) * (k / partK0);
+  const partK0 = COEFF.EXH_K_MANIFOLD + COEFF.EXH_K_CATALYST + COEFF.EXH_K_CATBACK;
+  const sound = Math.sqrt(COEFF.GAMMA_BURNED * 287 * tex);
+  const soundIn = Math.sqrt(1.4 * 287 * intakeK);
+  const degPerSec = rpm * 6;
+  return {
+    rpm, mapKpa, empKpa: emp, exhaustFlowGs: exhKgS * 1000,
+    ve: r.ve, residualFrac: r.residualFrac, backflowShare: r.backflowShare,
+    trace: r.trace,
+    events: g.events,
+    geometry: {
+      runnerLengthMm: g.runnerLengthM * 1000, runnerBoreMm: Math.sqrt((4 * g.runnerAreaM2) / Math.PI) * 1000,
+      runnerReflection: g.runnerReflection,
+      primaryLengthMm: g.exhaustPrimaryM * 1000, primaryBoreMm: Math.sqrt((4 * (g.exhaustPrimaryAreaM2 ?? 0)) / Math.PI) * 1000,
+      collectorReflection: g.exhaustReflection, headers: !!mods.headers,
+      intakeValveMm: g.intakeValveM * 1000, exhaustValveMm: g.exhaustValveM * 1000,
+      intakeValves: g.intakeValves, exhaustValves: g.exhaustValves,
+    },
+    // A wave's round trip of each pipe in crank degrees at this speed: where it lands in the
+    // cycle is what tunes the pipe.
+    runnerRoundTripDeg: ((2 * g.runnerLengthM) / soundIn) * degPerSec,
+    primaryRoundTripDeg: ((2 * g.exhaustPrimaryM) / sound) * degPerSec,
+    exhaustDropKpa: {
+      manifold: part(mods.headers ? COEFF.EXH_K_HEADERS : COEFF.EXH_K_MANIFOLD),
+      catalyst: part(COEFF.EXH_K_CATALYST * catalystLossShare(mods.catalyst)),
+      catback: part(mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK),
+      turbine: turboOn && turbine ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) - BARO_KPA : 0,
+    },
   };
 }
 

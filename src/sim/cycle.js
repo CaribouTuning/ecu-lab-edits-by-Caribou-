@@ -159,6 +159,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 
 /**
  * @typedef {object} CycleInput
+ * @property {boolean} [trace] keep the pressure trace, returned as `trace`
  * @property {number} rpm engine speed
  * @property {number} sparkBtdc commanded spark advance, degrees before TDC
  * @property {number} trappedPa cylinder pressure at intake valve close
@@ -192,6 +193,7 @@ export function burnDurationDeg({ rpm, lambda, residualFrac, boreFlameFactor = 1
 
 /**
  * @typedef {object} CycleResult
+ * @property {{deg: number[], bar: number[], burned: number[]}} [trace] the pressure trace, when asked for
  * @property {number} imepGrossPa gross indicated MEP over the closed period
  * @property {number} peakPressurePa highest cylinder pressure reached
  * @property {number} peakPressureDeg crank angle of that peak, degrees ATDC
@@ -215,9 +217,13 @@ export function runCycle({
   rpm, sparkBtdc, trappedPa, trappedK, heatJ,
   clearanceM3, sweptM3, rodRatio, ivcAbdc, burnDeg, octaneNumber,
   boreM, strokeM, trappedMassKg, evoAtdc = EVO_ATDC, exhaustManifoldPa = BARO_KPA * 1000,
-  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED, products = null,
+  flameDevDeg = COEFF.FLAME_DEVELOPMENT_DEG, gammaBurned = COEFF.GAMMA_BURNED, products = null, trace = false,
 }) {
   const step = COEFF.CYCLE_STEP_DEG;
+  // The pressure trace itself, when asked for (the Physics page draws it): every step's crank
+  // angle, pressure and burned share, as integrated.
+  /** @type {{deg: number[], bar: number[], burned: number[]}|null} */
+  const rec = trace ? { deg: [], bar: [], burned: [] } : null;
   const thetaStart = -180 + ivcAbdc;
   const spark = -sparkBtdc;
   // Spark does not light the charge instantly: there is a delay while a kernel forms
@@ -410,6 +416,7 @@ export function runCycle({
       knockIntegral += (endGasShare * step * msPerDeg) / tau;
     }
 
+    if (rec) { rec.deg.push(thetaNext); rec.bar.push(pNext / 1e5); rec.burned.push(burned); }
     if (pNext > peakPressurePa) { peakPressurePa = pNext; peakPressureDeg = thetaNext; }
     if (!crossed50 && burned >= 0.5) { mfb50Deg = thetaNext; crossed50 = true; }
 
@@ -480,6 +487,7 @@ export function runCycle({
   const portK = blowdownMassFrac * blowdownK + (1 - blowdownMassFrac) * displacedK;
 
   return {
+    ...(rec ? { trace: rec } : {}),
     imepGrossPa: work / sweptM3,
     // Cylinder pressure when the exhaust valve opens: what the blowdown pulse starts from.
     evoPressurePa: p,
