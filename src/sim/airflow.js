@@ -25,7 +25,7 @@ import { LOAD, RPM } from './tables.js';
  * logs airflow.
  *
  * @param {import('./engine.js').EngineConfig} cfg short-block design
- * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods bolt-ons
+ * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods bolt-ons
  * @param {object} [hw] induction hardware
  * @param {boolean} [hw.turboOn]
  * @param {{effectiveAreaM2: number}|null} [hw.turbine] the housing: its effective area sets
@@ -220,7 +220,7 @@ export function breathingGeometry(cfg, phase = {}) {
  * fuel evaporating in the charge (direct injection, ethanol), the head's heat, valve float.
  *
  * @param {import('./engine.js').EngineConfig} cfg
- * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean}} mods
+ * @param {{intake: boolean, exhaust: boolean, headers: boolean, intercooler: boolean, catalyst?: 'ceramic'|'metallic'|'none'}} mods
  * @param {object} [hw] as for computeHardwareVE
  * @returns {(rpm: number, mapKpa: number) => number} VE, percent
  */
