@@ -15,8 +15,8 @@
 
 .scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 /* Never drawn narrower than its labels can be read at: a phone scrolls it sideways in its own box. */
-.svg { display: block; width: 100%; min-width: 720px; height: auto; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); }
-.chart { display: block; width: 100%; min-width: 720px; height: auto; }
+.svg { display: block; width: 100%; min-width: 720px; height: auto; max-height: none; }
+.chart { display: block; width: 100%; min-width: 720px; height: auto; background: var(--panel2); border-radius: var(--r-sm); }
 .charts { display: flex; flex-direction: column; gap: 4px; }
 
 .hIn { fill: var(--cyan); font: 700 13px var(--sans); letter-spacing: 0.06em; }
@@ -56,22 +56,22 @@
 
 .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
 .overlap { fill: var(--acc-bg); opacity: 0.5; }
-.cylLine { fill: none; stroke: var(--warn); stroke-width: 2; stroke-linejoin: round; }
-.portLineIn { fill: none; stroke: var(--cyan); stroke-width: 2; stroke-linejoin: round; }
-.portLineEx { fill: none; stroke: var(--danger); stroke-width: 2; stroke-linejoin: round; }
-.refIn { stroke: var(--cyan); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
-.refEx { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
-.liftIn { fill: none; stroke: var(--cyan); stroke-width: 1.2; opacity: 0.5; }
-.liftEx { fill: none; stroke: var(--danger); stroke-width: 1.2; opacity: 0.5; }
-.waveMark { stroke: var(--danger); stroke-width: 1; stroke-dasharray: 6 3; }
+.cylLine { fill: none; stroke: var(--cut-burn); stroke-width: 2; stroke-linejoin: round; }
+.portLineIn { fill: none; stroke: var(--cut-fresh); stroke-width: 2; stroke-linejoin: round; }
+.portLineEx { fill: none; stroke: var(--cut-exhaust); stroke-width: 2; stroke-linejoin: round; }
+.refIn { stroke: var(--cut-fresh); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
+.refEx { stroke: var(--cut-exhaust); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
+.liftIn { fill: none; stroke: var(--cut-fresh); stroke-width: 1.2; opacity: 0.5; }
+.liftEx { fill: none; stroke: var(--cut-exhaust); stroke-width: 1.2; opacity: 0.5; }
+.waveMark { stroke: var(--cut-burn); stroke-width: 1; stroke-dasharray: 6 3; }
 .cursor { stroke: var(--ink); stroke-width: 1.2; }
 
 .key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--fs-xs); color: var(--ink2); }
 .key span { display: inline-flex; align-items: center; gap: 6px; }
 .key i { display: inline-block; width: 14px; height: 3px; border-radius: 1px; }
-.kIn { background: var(--cyan); }
-.kEx { background: var(--danger); }
-.kCyl { background: var(--warn); }
+.kIn { background: var(--cut-fresh); }
+.kEx { background: var(--cut-exhaust); }
+.kCyl { background: var(--cut-burn); }
 .kOv { background: var(--acc-bg); height: 8px !important; }
 
 .numbers { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px 24px; }
@@ -88,5 +88,6 @@
 .dropRow { display: grid; grid-template-columns: 9.5em 1fr 3em; align-items: center; gap: 8px; padding: 3px 0; color: var(--ink2); }
 .dropRow b { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
 .dropBar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
-.dropBar i { display: block; height: 100%; background: var(--danger); }
+.dropBar i { display: block; height: 100%; background: var(--cut-burn); }
 .dropNote { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.5; }
+.side { display: flex; flex-direction: column; gap: 8px; }
