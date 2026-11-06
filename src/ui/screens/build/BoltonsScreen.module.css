@@ -69,3 +69,6 @@
   font-size: 11.5px;
   color: var(--ink2);
 }
+
+/* The header tubes and the catalyst: set apart from the parts list, each control with room. */
+.specs { display: flex; flex-direction: column; gap: 16px; margin: 16px 0 20px; }

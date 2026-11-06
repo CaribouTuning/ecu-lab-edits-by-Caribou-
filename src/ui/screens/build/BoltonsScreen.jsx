@@ -61,6 +61,7 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
         ))}
       </div>
 
+      <div className={styles.specs}>
       {mods.headers && (
         <>
           <SpecSlider label="Header primary length" unit=" mm" value={engineConfig.headerPrimaryMm ?? defaults.headerPrimaryMm}
@@ -77,14 +78,15 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
         </>
       )}
 
-      <SpecField label="Catalytic converter" aside={catalyst === 'none' ? 'off-road only' : `${Math.round(catalystLossShare(catalyst) * 100)}% of stock restriction`}>
+      <SpecField label="Catalytic converter" aside={catalyst === 'none' ? 'off-road only' : `${catalyst === 'metallic' ? '200-cell metallic' : '400-cell ceramic'}, ${Math.round(catalystLossShare(catalyst) * 100)}% of stock restriction`}>
         <Seg variant="rule" equal label="Catalytic converter" value={catalyst}
-          options={[{ id: 'ceramic', label: 'Stock 400-cell' }, { id: 'metallic', label: 'High-flow 200-cell' }, { id: 'none', label: 'Test pipe' }]}
+          options={[{ id: 'ceramic', label: 'Stock' }, { id: 'metallic', label: 'High-flow' }, { id: 'none', label: 'Test pipe' }]}
           onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, catalyst: v === 'ceramic' ? undefined : v } })} />
       </SpecField>
       <ExpandableInfo title="Why a high-flow cat flows more">
         A converter is a honeycomb of square channels, about a millimetre across, coated with the catalyst. The gas moves through them slowly enough to flow smoothly, so the pressure it loses goes as one over the open area times the channel width squared. A stock converter has 400 cells per square inch with walls 0.0065 in thick. A high-flow one has 200 cells on metal foil 0.002 in thick: wider channels, more open area, and about a third of the restriction. A test pipe removes it altogether, which is not legal on the road.
       </ExpandableInfo>
+      </div>
 
       <div className={styles.label}>Exhaust Diameter</div>
       <Seg variant="rule" equal label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
