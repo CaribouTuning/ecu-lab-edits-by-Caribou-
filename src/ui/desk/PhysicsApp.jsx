@@ -28,6 +28,7 @@ import { TableSurface } from '../components/surface/TableSurface.jsx';
 import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
+import { GasExchange } from './GasExchange.jsx';
 
 const R_AIR = 287;
 const NM_PER_LBFT = 1.3558;
@@ -104,9 +105,12 @@ function PressureTrace({ p }) {
  * @param {number[][]|null} [props.ve] the tune's VE table (highest load first), for the 3-D map
  * @param {{rpm: number[], load: number[], loadUnit: string}|null} [props.veAxes] its breakpoints
  * @param {((loadKpa: number) => {points: any[]})|null} [props.sweepAt] runs the model's pull at a part-throttle load
+ * @param {{engineConfig: any, mods: any, hwForVe: any, camAt: ((rpm: number, kpa: number) => number)|null}|null} [props.breathing]
+ *   the engine's breathing inputs, for the live gas-exchange diagram
+ * @param {((rpm: number, loadKpa: number) => any)|null} [props.traceAt] the closed cycle's pressure trace at a speed and load
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null }) {
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, traceAt = null }) {
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
   const [load, setLoad] = useState(100);
@@ -130,6 +134,9 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const veLoads = useMemo(() => (veAxes ? [...veAxes.load].reverse() : null), [veAxes]);
   const i = Math.min(pts.length - 1, idx ?? peakIdx);
   const p = pts[i];
+  // The closed cycle at the chosen speed and load, for the breathing diagram: the pull's own
+  // point, evaluated with its pressure trace kept.
+  const cycleTrace = useMemo(() => (traceAt && p ? traceAt(p.rpm, deferredLoad) : null), [traceAt, p?.rpm, deferredLoad]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return <div className={styles.pad}>Build an engine first: the model needs something to run.</div>;
 
   // The curve at the top, and the RPM picker it doubles as.
@@ -259,6 +266,14 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           </dl>
         </section>
 
+        {breathing ? (
+          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The engine breathing">
+            <h3 className={styles.panelTitle}>The engine breathing: intake, cylinder and exhaust</h3>
+            <p className={styles.panelNote}>One cycle at {p.rpm} RPM, slowed down. The pipes are coloured by the pressure waves in them, the cylinder by its own pressure; the charts under it are the same numbers against crank angle. Change the headers, catalyst, pipe, cam or runner on BUILD and this follows.</p>
+            <GasExchange engineConfig={breathing.engineConfig} mods={breathing.mods} hwForVe={breathing.hwForVe} camAt={breathing.camAt}
+              point={p} cycleTrace={cycleTrace} derived={derived} />
+          </section>
+        ) : null}
         <section className={styles.physPanel} aria-label="The raw physics model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>
           <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>

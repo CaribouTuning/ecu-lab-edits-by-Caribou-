@@ -17,6 +17,7 @@
 }
 .panelHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panelTitle { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.physWide { grid-column: 1 / -1; }
 .panelNote { margin: 0 0 10px; font-size: var(--fs-sm); color: var(--ink2); line-height: 1.5; }
 .graphBtns { display: flex; gap: 6px; margin-bottom: 8px; }
 .graphBtns button {

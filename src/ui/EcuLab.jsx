@@ -603,6 +603,10 @@ export function EcuLabApp() {
   // The Physics app's part-throttle pulls: the same model and calibration as the dyno,
   // at the load its throttle asks for. Stable while the setup is, so it can cache them.
   const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
+  // And the breathing diagram's inputs: the engine as built, and the closed cycle's pressure
+  // trace at one speed, from the same pull with that point's trace kept.
+  const physicsBreathing = useMemo(() => ({ engineConfig, mods, hwForVe, camAt }), [engineConfig, mods, hwForVe, camAt]);
+  const physicsTraceAt = useCallback((rpm, load) => simulateSweep({ ...sweepArgs(load, ecuBundle), traceRpm: rpm }).points.find((q) => q.rpm === rpm)?.cycleTrace ?? null, [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doRun = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
@@ -1352,7 +1356,8 @@ export function EcuLabApp() {
         )}
         {tab === 'physics' && !inCareer && !engineMissing && (
           <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
-            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt} />
+            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt}
+            breathing={physicsBreathing} traceAt={physicsTraceAt} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}
