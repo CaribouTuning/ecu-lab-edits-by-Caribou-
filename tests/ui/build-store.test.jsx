@@ -615,12 +615,12 @@ describe('every segmented control', () => {
     //     twin), Wastegate Actuator (the spring picker
     //     only appears for a pneumatic gate), Nitrous Kit (its shot and bottle pickers
     //     only appear with a kit fitted); Fuel: Octane, Regulation, Base Pressure,
-    //     Wideband Controller; Exhaust: Diameter.
+    //     Wideband Controller; Exhaust: Diameter, Catalytic Converter.
     //   TUNE > INJECTORS 3 — the map-slot picker above every TUNE view, ECU Injector
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
     //   (BUILD › ENGINE also has Pistons and rods, the bottom-end picker.)
-    expect(total).toBe(27);
+    expect(total).toBe(28);
   });
 });
 
