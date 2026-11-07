@@ -246,25 +246,86 @@ function bankGeometry({ derived, n, W, deckY, bottomY, margin = 34 }) {
   return { bore, k, r, rk: r * k, comp: comp * k, pistonH: bore * 0.62 * k, halfBore, pitch, xs, crankY, pinY, margin, bx0, bx1 };
 }
 
-/** One cylinder's bore, charge, piston and rings. */
-function Cylinder({ x, g, d, deckY, roofY, burnedShare, sparkD, rod = true }) {
-  const pinY = g.pinY(d);
-  const top = pinY - g.comp;
-  const s = strokeOf(d);
-  const chamber = `M${x - g.halfBore} ${deckY} L${x} ${roofY} L${x + g.halfBore} ${deckY} L${x + g.halfBore} ${top} L${x - g.halfBore} ${top} Z`;
-  const cls = s <= 1 ? cut.gasFresh : s === 2 ? cut.gasBurn : cut.gasSpent;
-  const op = s === 1 ? 0.55 + 0.4 * clamp01((deckY + 40 - top) / 40 + 0.6) : s === 2 ? 0.45 + 0.5 * (1 - burnedShare * 0.5) : 0.6;
-  const flame = s === 2 || s === 1 ? burnedShare : 0;
-  const crankPinY = g.crankY - g.rk * Math.cos(d * RAD);
+/**
+ * Each cylinder of the bank, cut away end on and running at its own place in the firing order,
+ * as the per-cylinder row of a cutaway poster draws them: the piston on the engine's own slider
+ * crank, both valves at their lift, the charge by stroke, the spark. Drawn apart from the
+ * manifold so no tube ever crosses a bore.
+ */
+function CylinderStrip({ bank, d, R, derived, W, y0, sparkD, burnedAt, label }) {
+  const n = bank.length; const margin = 26;
+  const pitch = (W - 2 * margin) / n;
+  const bore = derived?.bore ?? 90; const stroke = derived?.stroke ?? 86;
+  const r = stroke / 2; const l = r * COEFF.ROD_RATIO;
+  const clear = stroke / Math.max(1.5, (derived?.compression ?? 10) - 1);
+  const comp = bore * 0.3;
+  const bw = Math.min(pitch * 0.5, 44); const k = bw / bore;
+  const deck = y0 + 42;
+  const crankY = deck + (r + l + comp + clear) * k;
+  const rk = r * k;
+  const pistonH = bore * 0.55 * k;
   return (
     <g>
-      <path d={chamber} className={cls} opacity={op} />
-      {flame > 0.02 && flame < 0.97 && <circle cx={x} cy={roofY + 6} r={4 + flame * g.halfBore} className={cut.cutFlame} opacity={0.65 * (1 - flame * 0.7)} />}
-      {Math.abs(wrap(d - sparkD)) < 9 && <path d={`M${x} ${roofY - 1} l6 9 l-7 2 l7 11 l-13 -11 l7 -2 z`} className={cut.cutSpark} />}
-      {rod && <line x1={x} y1={pinY} x2={x} y2={crankPinY} className={cut.cutRod} />}
-      <rect x={x - g.halfBore + 1.5} y={top} width={g.halfBore * 2 - 3} height={g.pistonH} rx={3} className={cut.cutPiston} />
-      {[0.07, 0.15, 0.23].map((t) => <line key={t} x1={x - g.halfBore + 1.5} x2={x + g.halfBore - 1.5} y1={top + g.pistonH * t} y2={top + g.pistonH * t} className={cut.cutRing} />)}
-      <circle cx={x} cy={pinY} r={Math.max(3.5, g.halfBore * 0.14)} className={cut.cutHub} />
+      <text x={margin} y={y0 + 8} className={cut.artText}>{label}</text>
+      {bank.map((c, j) => {
+        const x = margin + pitch * (j + 0.5);
+        const dj = wrap(d - c.offset);
+        const th = dj * RAD;
+        const pinY = crankY - (r * Math.cos(th) + Math.sqrt(l * l - (r * Math.sin(th)) ** 2)) * k;
+        const top = pinY - comp * k;
+        const st = strokeOf(dj);
+        const burned = burnedAt(dj);
+        const inL = R.inLift(dj); const exL = R.exLift(dj);
+        const cls = st <= 1 ? cut.gasFresh : st === 2 ? cut.gasBurn : cut.gasSpent;
+        const op = st === 2 ? 0.45 + 0.5 * (1 - burned * 0.5) : st === 1 ? 0.8 : 0.6;
+        const vw = bw * 0.2; const drop = bw * 0.16;
+        const pinX = x + rk * Math.sin(th); const pinY2 = crankY - rk * Math.cos(th);
+        return (
+          <g key={c.n}>
+            {/* ports above the head: fresh charge in on the left, burned gas out on the right */}
+            <rect x={x - bw / 2 - 2} y={deck - 26} width={bw * 0.42} height={12} rx={2} className={cut.gasFresh} opacity={0.25 + 0.7 * inL} />
+            <rect x={x + bw / 2 + 2 - bw * 0.42} y={deck - 26} width={bw * 0.42} height={12} rx={2} className={cut.gasSpent} opacity={0.25 + 0.7 * exL} />
+            <rect x={x - bw / 2 - 6} y={deck - 14} width={bw + 12} height={14} className={cut.cutHead} />
+            <rect x={x - bw / 2 - 6} y={deck} width={6} height={crankY - rk - 6 - deck} className={cut.cutBlock} />
+            <rect x={x + bw / 2} y={deck} width={6} height={crankY - rk - 6 - deck} className={cut.cutBlock} />
+            <path d={`M${x - bw / 2} ${deck} L${x} ${deck - 6} L${x + bw / 2} ${deck} L${x + bw / 2} ${top} L${x - bw / 2} ${top} Z`} className={cls} opacity={op} />
+            {(st === 1 || st === 2) && burned > 0.02 && burned < 0.97 && <circle cx={x} cy={deck - 2} r={2 + burned * bw * 0.45} className={cut.cutFlame} opacity={0.6 * (1 - burned * 0.6)} />}
+            {Math.abs(wrap(dj - sparkD)) < 10 && <path d={`M${x} ${deck - 5} l4 6 l-5 1 l5 8 l-9 -8 l5 -1 z`} className={cut.cutSpark} />}
+            {[[-1, inL], [1, exL]].map(([sgn, lift]) => (
+              <g key={sgn}>
+                <line x1={x + sgn * bw * 0.24} y1={deck - 14} x2={x + sgn * bw * 0.24} y2={deck - 3 + lift * drop} className={cut.cutStem} style={{ strokeWidth: 2 }} />
+                <rect x={x + sgn * bw * 0.24 - vw / 2} y={deck - 4 + lift * drop} width={vw} height={2.5} className={cut.cutValve} />
+              </g>
+            ))}
+            <line x1={x} y1={pinY} x2={pinX} y2={pinY2} className={cut.cutRod} style={{ strokeWidth: Math.max(3, bw * 0.12) }} />
+            <rect x={x - bw / 2 + 1} y={top} width={bw - 2} height={pistonH} rx={2} className={cut.cutPiston} />
+            {[0.1, 0.22].map((t) => <line key={t} x1={x - bw / 2 + 1} x2={x + bw / 2 - 1} y1={top + pistonH * t} y2={top + pistonH * t} className={cut.cutRing} />)}
+            <g transform={`rotate(${(dj % 360).toFixed(1)} ${x} ${crankY})`}>
+              <path d={`M${x - rk * 1.2} ${crankY + 2} A ${rk * 1.2} ${rk * 1.2} 0 0 0 ${x + rk * 1.2} ${crankY + 2} Z`} className={cut.cutCounter} />
+            </g>
+            <circle cx={x} cy={crankY} r={Math.max(3, rk * 0.35)} className={cut.cutHub} />
+            <circle cx={pinX} cy={pinY2} r={Math.max(2.5, rk * 0.22)} className={cut.cutHub} />
+            <text x={x} y={crankY + rk * 1.2 + 14} className={cut.artText} textAnchor="middle">{c.n} · {STROKES[st]}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+/** The bank's block from outside: solid casting, the bores behind it as hidden (dashed) lines,
+ *  as an engineering drawing shows what is behind a face. */
+function BlockFace({ g, top, bottom }) {
+  return (
+    <g>
+      <rect x={g.bx0} y={top} width={g.bx1 - g.bx0} height={bottom - top} className={cut.cutBlock} />
+      {g.xs.map((x) => (
+        <g key={x}>
+          <rect x={x - g.halfBore} y={top + 4} width={g.halfBore * 2} height={bottom - top - 8} fill="none" stroke="var(--ink3)" strokeWidth={1} strokeDasharray="4 3" />
+          <circle cx={x - g.halfBore - 6} cy={top + 8} r={2.4} className={cut.cutHub} />
+          <circle cx={x + g.halfBore + 6} cy={top + 8} r={2.4} className={cut.cutHub} />
+        </g>
+      ))}
     </g>
   );
 }
@@ -352,9 +413,10 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
   };
 
   const ev = gx.events; const geo = gx.geometry;
-  const W = 480; const H = 520;
-  const headTop = 232; const deckY = 318; const roofY = deckY - 12;
-  const g = bankGeometry({ derived, n: bank.length, W, deckY, bottomY: H - 40, margin: 84 });
+  const W = 480; const H = 616;
+  const headTop = 232; const deckY = 318;
+  const g = bankGeometry({ derived, n: bank.length, W, deckY, bottomY: deckY + 260, margin: 84 });
+  const blockBot = deckY + 70; const stripY = blockBot + 14;
   const centreIn = (ev.ivo + ev.ivc) / 2;
   const sparkD = wrap(360 - (point?.timing ?? 20));
   const RW = Math.min(g.pitch * 0.34, 26);
@@ -385,11 +447,8 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
     ['Camshaft', W - 8, headTop + 4, g.bx1 - 8, headTop + 22],
     ['Intake valves', 8, headTop + 34, valvesX(g.xs[0])[0] - 6, deckY - 10],
     ['Ports', 8, headTop + 66, g.xs[0] - RW / 2, flangeY + 14],
-    ['Coolant', 8, deckY + 50, g.bx0 + 12, deckY + 50],
-    ['Chamber', W - 8, deckY + 28, g.xs[g.xs.length - 1] + g.halfBore * 0.5, deckY + 6],
-    ['Piston', W - 8, deckY + 92, g.xs[g.xs.length - 1] + g.halfBore - 4, g.pinY(wrap(d - bank[bank.length - 1].offset)) - g.comp + 10],
-    ['Crankshaft', W - 8, g.crankY + 30, g.bx1 - 10, g.crankY],
-    ['Oil pan', 8, H - 14, g.bx0 + 2, H - 20],
+    ['Chambers', W - 8, deckY - 18, g.xs[g.xs.length - 1] + g.halfBore * 0.5, deckY - 5],
+    ['Block', 8, deckY + 44, g.bx0 + 4, deckY + 44],
   ]);
 
   return (
@@ -434,34 +493,15 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
               </g>
             );
           })}
-          {/* block, coolant between the bores, the crankcase */}
-          <rect x={g.bx0} y={deckY} width={g.bx1 - g.bx0} height={g.crankY - g.rk - 16 - deckY} className={cut.cutBlock} />
-          {g.xs.slice(0, -1).map((x, j) => (
-            <rect key={`w${j}`} x={(x + g.xs[j + 1]) / 2 - 4} y={deckY + 8} width={8} height={g.crankY - g.rk - 40 - deckY} rx={3} className={cut.cutCoolant} />
-          ))}
-          <rect x={g.bx0 + 8} y={deckY + 8} width={14} height={g.crankY - g.rk - 40 - deckY} rx={4} className={cut.cutCoolant} />
-          <rect x={g.bx1 - 22} y={deckY + 8} width={14} height={g.crankY - g.rk - 40 - deckY} rx={4} className={cut.cutCoolant} />
-          {g.xs.map((x) => <rect key={`b${x}`} x={x - g.halfBore} y={deckY} width={g.halfBore * 2} height={g.crankY - g.rk - 16 - deckY} style={{ fill: 'var(--bg)' }} />)}
-          <path d={`M${g.bx0} ${g.crankY - g.rk - 16} L${g.bx1} ${g.crankY - g.rk - 16} L${g.bx1 + 8} ${H - 34} L${g.bx0 - 8} ${H - 34} Z`} className={cut.cutCase} />
-          <path d={`M${g.bx0 - 8} ${H - 34} L${g.bx1 + 8} ${H - 34} L${g.bx1 - 6} ${H - 8} L${g.bx0 + 6} ${H - 8} Z`} className={cut.cutOil} />
-          <line x1={g.bx0 + 4} x2={g.bx1 - 4} y1={g.crankY} y2={g.crankY} className={cut.cutRod} style={{ strokeWidth: 7 }} />
+          {/* the block from outside, bores behind it dashed; each cylinder's chamber in the cut head */}
+          <BlockFace g={g} top={deckY} bottom={blockBot} />
           {g.xs.map((x, j) => {
-            const dj = wrap(d - bank[j].offset);
-            const pinY = g.crankY - g.rk * Math.cos(dj * RAD);
-            return (
-              <g key={`k${j}`}>
-                {/* Seen from the side, a throw's web swings up and down with its pin, and its
-                    counterweight the other way: */}
-                <rect x={x - g.halfBore * 0.85} y={Math.min(g.crankY, 2 * g.crankY - pinY) - 6} width={g.halfBore * 1.7} height={Math.abs(g.crankY - pinY) * 1.1 + 12} rx={Math.min(14, g.halfBore * 0.5)} className={cut.cutCounter} />
-                <rect x={x - g.halfBore * 0.32} y={Math.min(g.crankY, pinY) - g.halfBore * 0.3} width={g.halfBore * 0.64} height={Math.abs(g.crankY - pinY) + g.halfBore * 0.6} rx={g.halfBore * 0.3} className={cut.cutWeb} />
-                <Cylinder x={x} g={g} d={dj} deckY={deckY} roofY={roofY} burnedShare={burnedAt(dj)} sparkD={sparkD} />
-                <circle cx={x} cy={pinY} r={Math.max(4, g.halfBore * 0.16)} className={cut.cutHub} />
-                <line x1={x - g.halfBore} x2={x - g.halfBore} y1={deckY} y2={g.crankY - g.rk - 16} className={cut.cutBore} />
-                <line x1={x + g.halfBore} x2={x + g.halfBore} y1={deckY} y2={g.crankY - g.rk - 16} className={cut.cutBore} />
-                <text x={x} y={deckY + 14} className={cut.artText} textAnchor="middle">{bank[j].n}</text>
-              </g>
-            );
+            const st = strokeOf(wrap(d - bank[j].offset));
+            return <path key={`ch${j}`} d={`M${x - g.halfBore} ${deckY} L${x} ${deckY - 12} L${x + g.halfBore} ${deckY} Z`} className={st <= 1 ? cut.gasFresh : st === 2 ? cut.gasBurn : cut.gasSpent} opacity={0.75} />;
           })}
+          {g.xs.map((x, j) => <text key={`n${j}`} x={x} y={deckY + 16} className={cut.artText} textAnchor="middle">{bank[j].n}</text>)}
+          <CylinderStrip bank={bank} d={d} R={R} derived={derived} W={W} y0={stripY} sparkD={sparkD} burnedAt={burnedAt}
+            label="Each cylinder, at its own place in the firing order" />
           {/* runners: the wave in each, at its cylinder's place in the cycle */}
           {runners.map((pts, j) => (
             <path key={`ro${j}`} d={roundedPath(pts, 18)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={RW + 8} />
@@ -528,24 +568,32 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
     out.current += dt * 0.22;
   };
 
-  const W = 480; const H = 520;
-  const camY = 34; const headTop = 22; const deckY = 128; const roofY = deckY - 12; const blockBot = 300;
+  const W = 480;
+  const camY = 34; const headTop = 22; const deckY = 128; const blockBot = 214;
   const g = bankGeometry({ derived, n: bank.length, W, deckY, bottomY: deckY + 250, margin: 84 });
   const centreEx = (ev.evo + ev.evc) / 2;
   const sparkD = wrap(360 - (point?.timing ?? 20));
   const PW = Math.min(g.pitch * 0.3, 22);
   const flangeY = 78;
   const valvesX = (x) => (geo.exhaustValves > 1 ? [x - g.halfBore * 0.45, x + g.halfBore * 0.45] : [x]);
-  const colX = W / 2 + 10; const colTop = 392; const colY = 440;
-  const spacing = Math.min(PW + 6, 26);
+  // A merge collector: the primaries meet side by side and a cone takes them down to the
+  // outlet at a 15-degree included angle, the usual figure (Burns Stainless, "Collectors",
+  // Vince in Shorts part one: about 15 degrees for most, 7 to 18 across applications).
+  const colX = W / 2 + 10; const colTop = 300;
+  const spacing = PW + 2;
+  const inletHalf = (spacing * bank.length) / 2 + 3; const outletHalf = PW * 0.8;
+  const coneLen = Math.min(150, (inletHalf - outletHalf) / Math.tan(7.5 * RAD));
+  const colY = colTop + coneLen;
+  const stripY = colY + 72;
+  const H = stripY + 196;
   const primaries = useMemo(() => g.xs.map((x, j) => {
     const mx = colX + (j - (bank.length - 1) / 2) * spacing;
     return /** @type {[number, number][]} */ ([[x, flangeY], [x, flangeY + 70 + j * 10], [x + (mx - x) * 0.55, 250 + j * 8], [mx, colTop - 30], [mx, colTop]]);
   }), [g.xs, bank.length, colX, spacing]);
   const primaryPts = useMemo(() => primaries.map((p) => roundedAlong(p, 26, 30)), [primaries]);
   /** @type {[number, number][]} */
-  const outlet = [[colX, colY + 14], [colX, H - 40], [W - 4, H - 40]];
-  const outletPts = useMemo(() => roundedAlong(outlet, 20, 26), [colX]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outlet = [[colX, colY - 2], [colX, colY + 24], [W - 4, colY + 24]];
+  const outletPts = useMemo(() => roundedAlong(outlet, 20, 26), [colX, colY]); // eslint-disable-line react-hooks/exhaustive-deps
   const half = gx.primaryRoundTripDeg / 2;
   const emp = gx.empKpa;
   const s1 = strokeOf(d);
@@ -563,11 +611,10 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
     ['Exhaust valves', W - 8, 30, (valvesX(g.xs[n - 1]).at(-1) ?? 0) + 6, deckY - 12],
     ['Ports', 8, 78, g.xs[0] - PW / 2 - 6, flangeY + 8],
     ['Cylinder head', 8, deckY - 20, g.bx0 + 4, deckY - 24],
-    ['Piston', W - 8, deckY + 70, g.xs[n - 1] + g.halfBore - 4, deckY + 70],
-    ['Coolant', W - 8, deckY + 120, g.bx1 - 14, deckY + 120],
+    ['Block', W - 8, deckY + 60, g.bx1 - 6, deckY + 60],
     [`${geo.headers ? 'Primaries' : 'Runners'} ${f(geo.primaryLengthMm, 0)} × ${f(geo.primaryBoreMm, 0)} mm`, 8, 340, primaries[0][2][0] - PW / 2, primaries[0][2][1] + 14],
-    [`Collector, ${n} into 1`, 8, colY + 4, colX - spacing * n / 2 - 6, colY - 10],
-    ['To the catalytic converter', W - 8, H - 12, W - 40, H - 40],
+    [`Merge collector, ${n} into 1, 15°`, 8, colTop + coneLen / 2, colX - (inletHalf + outletHalf) / 2 - 4, colTop + coneLen / 2],
+    ['To the catalytic converter', W - 8, colY + 50, W - 40, colY + 30],
   ]);
 
   return (
@@ -578,30 +625,8 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
       <div className={cut.cutSplit}>
         <svg viewBox={`0 0 ${W} ${H}`} className={cut.cutSvg} role="img"
           aria-label={`The exhaust header at ${gx.rpm} RPM: cylinder 1 on its ${STROKES[s1].toLowerCase()} stroke, its port at ${f(port1, 0)} kPa, the collector at ${f(collKpa, 0)} kPa`}>
-          <defs>
-            <clipPath id="hdrBlock"><rect x={0} y={0} width={W} height={blockBot} /></clipPath>
-          </defs>
-          {/* head, cam and valves, the block cut off below the bores */}
-          <g clipPath="url(#hdrBlock)">
-            <rect x={g.bx0} y={deckY} width={g.bx1 - g.bx0} height={blockBot - deckY} className={cut.cutBlock} />
-            <rect x={g.bx0 + 8} y={deckY + 8} width={14} height={blockBot - deckY - 8} rx={4} className={cut.cutCoolant} />
-            <rect x={g.bx1 - 22} y={deckY + 8} width={14} height={blockBot - deckY - 8} rx={4} className={cut.cutCoolant} />
-            {g.xs.slice(0, -1).map((x, j) => (
-              <rect key={`w${j}`} x={(x + g.xs[j + 1]) / 2 - 4} y={deckY + 8} width={8} height={blockBot - deckY - 8} rx={3} className={cut.cutCoolant} />
-            ))}
-            {g.xs.map((x, j) => {
-              const dj = wrap(d - bank[j].offset);
-              return (
-                <g key={`c${j}`}>
-                  <rect x={x - g.halfBore} y={deckY} width={g.halfBore * 2} height={blockBot - deckY} style={{ fill: 'var(--bg)' }} />
-                  <Cylinder x={x} g={g} d={dj} deckY={deckY} roofY={roofY} burnedShare={burnedAt(dj)} sparkD={sparkD} />
-                  <line x1={x - g.halfBore} x2={x - g.halfBore} y1={deckY} y2={blockBot} className={cut.cutBore} />
-                  <line x1={x + g.halfBore} x2={x + g.halfBore} y1={deckY} y2={blockBot} className={cut.cutBore} />
-                </g>
-              );
-            })}
-          </g>
-          <path d={`M${g.bx0} ${blockBot} l12 -5 l12 5 l12 -5 ${Array.from({ length: Math.ceil((g.bx1 - g.bx0) / 24) }, () => 'l12 5 l12 -5').join(' ')}`} fill="none" className={cut.cutLeader} />
+          {/* the block from outside; the head cut open along its exhaust ports */}
+          <BlockFace g={g} top={deckY} bottom={blockBot} />
           <rect x={g.bx0} y={headTop} width={g.bx1 - g.bx0} height={deckY - headTop} className={cut.cutHead} />
           <rect x={g.bx0} y={headTop} width={g.bx1 - g.bx0} height={8} rx={3} className={cut.cutBlock} />
           <line x1={g.bx0 + 6} x2={g.bx1 - 6} y1={camY} y2={camY} className={cut.cutRod} style={{ strokeWidth: 5 }} />
@@ -633,8 +658,10 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
           })}
           {g.xs.map((x) => <rect key={`f${x}`} x={x - PW / 2 - 7} y={flangeY - 6} width={PW + 14} height={10} rx={2} className={cut.cutBlock} />)}
           {/* collector: the primaries merge, then the outlet */}
-          <path d={`M${colX - (spacing * n) / 2 - 6} ${colTop - 2} L${colX + (spacing * n) / 2 + 6} ${colTop - 2} L${colX + PW * 0.75 + 5} ${colY + 16} L${colX - PW * 0.75 - 5} ${colY + 16} Z`} style={{ fill: 'var(--cut-metal)' }} />
-          <path d={`M${colX - (spacing * n) / 2} ${colTop} L${colX + (spacing * n) / 2} ${colTop} L${colX + PW * 0.75} ${colY + 14} L${colX - PW * 0.75} ${colY + 14} Z`} style={{ fill: hotMix(collKpa, emp) }} />
+          <path d={`M${colX - inletHalf - 4} ${colTop - 2} L${colX + inletHalf + 4} ${colTop - 2} L${colX + outletHalf + 4} ${colY} L${colX - outletHalf - 4} ${colY} Z`} style={{ fill: 'var(--cut-metal)' }} />
+          <path d={`M${colX - inletHalf} ${colTop} L${colX + inletHalf} ${colTop} L${colX + outletHalf} ${colY} L${colX - outletHalf} ${colY} Z`} style={{ fill: hotMix(collKpa, emp) }} />
+          <CylinderStrip bank={bank} d={d} R={R} derived={derived} W={W} y0={stripY} sparkD={sparkD} burnedAt={burnedAt}
+            label="Each cylinder into this collector, in firing order" />
           <path d={roundedPath(outlet, 26)} fill="none" stroke="var(--cut-metal)" strokeWidth={PW * 1.5 + 7} />
           <path d={roundedPath(outlet, 26)} fill="none" style={{ stroke: hotMix(collKpa, emp) }} strokeWidth={PW * 1.5} />
           {/* the burned gas moving out */}
