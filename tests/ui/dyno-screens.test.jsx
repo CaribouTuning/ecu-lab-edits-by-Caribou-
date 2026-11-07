@@ -195,6 +195,23 @@ describe('ResultScreen', () => {
   });
 });
 
+describe('ResultScreen dyno cursor', () => {
+  const CHART = [1500, 1600, 1700, 1800].map((rpm, i) => ({ rpm, hp: [100, 140, 130, 120][i], torque: [350, 360, 340, 300][i], afr: 12.5, afrCommanded: 12.6, timing: 20 }));
+
+  it('rests on peak power, with the numbers there, and moves with its slider', () => {
+    mount(<ResultScreen chartData={CHART} engineDerived={{ redline: 7000 }} />);
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,600 rpm.*140.*360/);
+    fireEvent.change(screen.getByRole('slider', { name: 'Dyno cursor' }), { target: { value: '1800' } });
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,800 rpm.*120.*300/);
+  });
+
+  it('follows the sweep while a pull draws, and offers no slider until it is done', () => {
+    mount(<ResultScreen chartData={CHART.slice(0, 3)} engineDerived={{ redline: 7000 }} running />);
+    expect(screen.getByTestId('dyno-cursor').textContent).toMatch(/1,700 rpm/);
+    expect(screen.queryByRole('slider', { name: 'Dyno cursor' })).toBeNull();
+  });
+});
+
 describe('ResultScreen ghost curve', () => {
   const CHART = [{ rpm: 1500, hp: 111, torque: 222, prevHp: 100, prevTorque: 200 }];
 

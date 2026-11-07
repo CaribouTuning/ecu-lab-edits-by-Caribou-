@@ -24,9 +24,9 @@
  * Hue now carries series identity and opacity carries time.
  */
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 
-import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { resolveBandRpm } from '../../components/eventBands.js';
 import { Panel } from '../../primitives/Panel.jsx';
@@ -133,9 +133,10 @@ const TOOLTIP = {
  * @param {import('../../components/eventBands.js').EventBand[]} [props.bands]
  * @param {number} [props.wholePullCount] how many findings have no RPM at all
  * @param {(rpm: number|null) => void} [props.onSelectRpm]
+ * @param {boolean} [props.running] a pull is drawing: the cursor follows the sweep
  * @returns {React.ReactElement}
  */
-export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [], wholePullCount = 0, onSelectRpm = () => {} }) {
+export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [], wholePullCount = 0, onSelectRpm = () => {}, running = false }) {
   // The live tach needle and this chart's RPM axis both used to top out at a
   // hardcoded 7500 — correct only for the one preset whose redline happened to
   // match it. 1.05x redline gives the sweep's last point a little headroom
@@ -147,25 +148,57 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
   const whp = U.metric ? 'Wheel kW' : 'WHP';
   const powerScale = niceScale(Math.max(1, ...chartData.flatMap((d) => [d.hp, d.torque, d.prevHp, d.prevTorque].filter((v) => Number.isFinite(v)))));
 
+  // THE DYNO CURSOR. Dyno software reads a curve at one speed: a line you drag along it,
+  // the power and torque at that speed beside it. It rests on peak power after a pull and
+  // follows the sweep while one draws; the player moves it by dragging on either chart, or
+  // with the slider under them (touch and keyboard).
+  const [picked, setPicked] = useState(/** @type {number|null} */ (null));
+  const drag = useRef({ down: false, moved: false });
+  const first = chartData[0]?.rpm ?? 1500;
+  const last = chartData.at(-1)?.rpm ?? first;
+  const peakAt = chartData.reduce((b, d) => (d.hp > (b?.hp ?? -Infinity) ? d : b), null)?.rpm ?? last;
+  const sweeping = !!running;
+  const cursorRpm = sweeping ? last : Math.min(last, Math.max(first, picked ?? peakAt));
+  const at = chartData.reduce((b, d) => (!b || Math.abs(d.rpm - cursorRpm) < Math.abs(b.rpm - cursorRpm) ? d : b), null);
+  const moveTo = (state) => { const r = Number(state?.activeLabel); if (Number.isFinite(r)) setPicked(r); };
+  const dragProps = {
+    onMouseDown: (state) => { drag.current = { down: true, moved: false }; moveTo(state); },
+    onMouseMove: (state) => { if (drag.current.down) { drag.current.moved = true; moveTo(state); } },
+    onMouseUp: () => { drag.current.down = false; },
+    onMouseLeave: () => { drag.current.down = false; },
+  };
+
   // Shared by both charts below — see `resolveBandRpm`'s own doc for why the decision
   // lives there rather than inline here, and why it resolves by RPM rather than by band.
+  // A drag that ends over a band is the cursor being moved, not a click on the band.
   const handleChartClick = (state) => {
+    if (drag.current.moved) { drag.current.moved = false; return; }
     const rpm = resolveBandRpm(state?.activeLabel, bands);
     if (rpm !== null) onSelectRpm(rpm);
   };
+  const cursorLine = (yAxisId) => (at ? <ReferenceLine x={at.rpm} {...(yAxisId ? { yAxisId } : {})} stroke="var(--ink)" strokeWidth={1.2} strokeDasharray="4 3" ifOverflow="extendDomain" /> : null);
 
   return (
     <>
       <Panel tight className={styles.panel} data-tour="dyno-power">
         <div className={styles.chartLabel}>Power and torque against rpm</div>
+        {at && (
+          <div className={styles.cursorRead} aria-live="polite" data-testid="dyno-cursor">
+            <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
+            <span className={styles.cursorHp}>{Math.round(at.hp)} <small>{U.metric ? 'kW' : 'whp'}</small></span>
+            <span className={styles.cursorTq}>{Math.round(at.torque)} <small>{U.torqueUnit}</small></span>
+            {Number.isFinite(at.prevHp) && <span className={styles.cursorPrev}>{at.hp - at.prevHp >= 0 ? '+' : ''}{Math.round(at.hp - at.prevHp)} vs {ghostLabel}</span>}
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={200}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
-            onClick={handleChartClick}
+            onClick={handleChartClick} {...dragProps}
           >
             <CartesianGrid {...GRID} />
             <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
             <YAxis {...VALUE_AXIS} width={44} {...powerScale} />
+            {cursorLine(null)}
             <Tooltip {...TOOLTIP} formatter={(v, name) => [Math.round(Number(v)), /TQ$|Torque/.test(String(name)) ? `${name}, ${U.torqueUnit}` : `${name}, ${U.powerUnit}`]} />
             {/* Above the chart, where it is read first: at the foot of a small screen it was missed. */}
             <Legend verticalAlign="top" height={26} iconType="plainline" wrapperStyle={{ fontSize: 12.5 }} />
@@ -179,19 +212,37 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             {ghostLabel && <Line dataKey="prevTorque" name={`${ghostLabel} TQ`} stroke="var(--data2)" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.5} dot={false} isAnimationActive={false} />}
             <Line dataKey="hp" name={whp} stroke="var(--acc)" strokeWidth={2} dot={false} isAnimationActive={false} />
             <Line dataKey="torque" name="Torque" stroke="var(--data2)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            {at && <ReferenceDot x={at.rpm} y={at.hp} r={4.5} fill="var(--acc)" stroke="var(--bg)" strokeWidth={2} />}
+            {at && <ReferenceDot x={at.rpm} y={at.torque} r={4.5} fill="var(--data2)" stroke="var(--bg)" strokeWidth={2} />}
           </LineChart>
         </ResponsiveContainer>
+        {chartData.length > 1 && !sweeping && (
+          <input
+            type="range" className={styles.cursorSlider} min={first} max={last} step={chartData[1].rpm - chartData[0].rpm}
+            value={at?.rpm ?? first} onChange={(e) => setPicked(Number(e.target.value))}
+            aria-label="Dyno cursor" aria-valuetext={at ? `${at.rpm} rpm, ${Math.round(at.hp)} ${U.metric ? 'kilowatts' : 'wheel horsepower'}, ${Math.round(at.torque)} ${U.torqueUnit}` : undefined}
+          />
+        )}
       </Panel>
 
       <Panel tight className={styles.panel} data-tour="dyno-afr-timing">
         <div className={styles.chartLabel}>Air-fuel ratio, asked for and measured, and spark timing</div>
+        {at && Number.isFinite(at.afr) && (
+          <div className={styles.cursorRead}>
+            <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
+            <span className={styles.cursorHp}>{Number(at.afr).toFixed(1)} <small>:1 measured</small></span>
+            <span className={styles.cursorPrev}>{Number(at.afrCommanded).toFixed(1)}:1 asked</span>
+            <span className={styles.cursorTq}>{Number(at.timing).toFixed(1)}<small>° spark</small></span>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height={180}>
           <LineChart
             data={chartData} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
-            onClick={handleChartClick}
+            onClick={handleChartClick} {...dragProps}
           >
             <CartesianGrid {...GRID} />
             <XAxis {...RPM_AXIS} domain={[1500, dynoChartMaxRpm]} ticks={rpmTicks(dynoChartMaxRpm)} />
+            {cursorLine('afr')}
             {/* Mixture and spark on their own scales: on one axis, AFR around 12 against
                 timing up to 30 degrees drew the mixture as a flat line. */}
             <YAxis {...VALUE_AXIS} yAxisId="afr" width={44} domain={['auto', 'auto']} tickFormatter={(v) => Number(v).toFixed(1)} />

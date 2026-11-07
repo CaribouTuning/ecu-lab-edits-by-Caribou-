@@ -75,7 +75,7 @@ import { Note } from './primitives/Note.jsx';
 import { Panel } from './primitives/Panel.jsx';
 import { Computer, Station, Surface } from './desk/Station.jsx';
 import { DynoConsole, StandConsole, StandStatus } from './desk/Consoles.jsx';
-import { BarGraph, LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
+import { LiveBars, LivePhysics, VeCurve } from './desk/BenchScreens.jsx';
 import { TableSurface } from './components/surface/TableSurface.jsx';
 import { eventBands } from './components/eventBands.js';
 import { tuneAttention } from './components/fixLinks.js';
@@ -256,14 +256,6 @@ export function EcuLabApp() {
     const next = advanceSaga(career);
     if (next !== career) dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
   }, [career, mode, dispatch]);
-  // The bench computers' screens that are not the dyno's routed sections: VE, 3D and the
-  // pull's live channels on the dyno's; the engine stand's are all its own.
-  // One belongs to the route it was picked on: go anywhere (the palette, a notification,
-  // a fix link) and the routed section shows again, not the screen picked before.
-  const [dynoPick, setDynoPick] = useState(/** @type {null|{id: 've'|'3d'|'live', at: object}} */ (null));
-  const dynoExtra = dynoPick && dynoPick.at === route ? dynoPick.id : null;
-  /** @param {null|'ve'|'3d'|'live'} id */
-  const setDynoExtra = (id) => setDynoPick(id ? { id, at: route } : null);
   const [standScreen, setStandScreen] = useState('bars');
   // Opened from the game's next step: the job ticket, open, where the car is handed back.
   const [ticketAsk, setTicketAsk] = useState(0);
@@ -1579,15 +1571,14 @@ export function EcuLabApp() {
             what the pull measured is on the bench computer beside it, a screen a button. */}
         {tab === 'dyno' && !engineMissing && (!inCareer || career.working) && (() => {
           // DYNO's gating is irregular ON PURPOSE. While a pull is running the computer
-          // shows the curves (or the pull's live channels, if that is the screen you
-          // chose) and offers nothing else, whatever section the URL has selected: a
+          // shows the curves, drawing as it sweeps, and offers nothing else, whatever section the URL has selected: a
           // DATALOG/PULL LOG/SCORE view would otherwise go blank the moment a pull starts.
           // HISTORY is offered without a result: its data (`runs`) is restored from storage
           // on a cold start, while `result` is not persisted and is cleared by APPLY_PRESET.
-          const shown = running ? (dynoExtra === 'live' ? 'live' : 'result') : (dynoExtra ?? dynoView);
+          const shown = running ? 'result' : dynoView;
           /** @type {{id: string, label: string, flag?: boolean}[]} */
           const keys = [];
-          if (result) keys.push({ id: 'result', label: 'Curves' }, { id: 'live', label: 'Live' });
+          if (result) keys.push({ id: 'result', label: 'Curves' });
           if (!running) {
             for (const [id, label] of [['log', 'Pull log'], ['data', 'Data'], ['score', 'Score'], ['history', 'History']]) {
               if (!(id === 'history' ? (result || runs.length > 0) : result)) continue;
@@ -1595,12 +1586,7 @@ export function EcuLabApp() {
               keys.push({ id, label, flag: id === 'log' && result.events.length > 0 });
             }
           }
-          const pick = (id) => {
-            if (id === 'live') { setDynoExtra(id); return; }
-            setDynoExtra(null);
-            goSection('dyno', id);
-          };
-          const point = chartData[chartData.length - 1];
+          const pick = (id) => goSection('dyno', id);
           const veAxes = (layout ?? layoutById(tune.layout)).ve;
           return (
             <Station kind="dyno">
@@ -1667,21 +1653,7 @@ export function EcuLabApp() {
                     bands={running ? [] : bands}
                     wholePullCount={running ? 0 : wholePullCount}
                     onSelectRpm={selectLogRpm}
-                  />
-                )}
-
-                {result && shown === 'live' && (
-                  <BarGraph
-                    rpm={running ? currentRpm : (point?.rpm ?? 0)} fullScaleRpm={tachFullScaleRpm} redline={engineDerived.redline}
-                    throttle={running && dynoPhase === 'sweep' ? loadKpa : 0}
-                    meters={[
-                      { label: 'Power', value: `${Math.round(U.power(point?.hp ?? 0))}`, unit: ` ${U.wheelUnit}`, pct: (point?.hp ?? 0) / Math.max(1, result.peakHp * 1.1) },
-                      { label: 'Torque', value: `${Math.round(U.torque(point?.torque ?? 0))}`, unit: ` ${U.torqueUnit}`, pct: (point?.torque ?? 0) / Math.max(1, result.peakTq * 1.1), tone: 'ok' },
-                      { label: 'Air-fuel ratio', value: (point?.afr ?? 0).toFixed(1), unit: ':1', pct: ((point?.afr ?? 14.7) - 9) / 9, tone: 'ok' },
-                      { label: 'Spark timing', value: `${Math.round(point?.timing ?? 0)}`, unit: '°', pct: (point?.timing ?? 0) / 50 },
-                      { label: 'Injector duty', value: `${Math.round(point?.duty ?? 0)}`, unit: '%', pct: (point?.duty ?? 0) / 100, tone: (point?.duty ?? 0) > 90 ? 'danger' : 'acc' },
-                      { label: 'Fuel trim', value: `${(point?.trimPct ?? 0) > 0 ? '+' : ''}${(point?.trimPct ?? 0).toFixed(1)}`, unit: '%', pct: ((point?.trimPct ?? 0) + 25) / 50, tone: 'ok' },
-                    ]}
+                    running={running}
                   />
                 )}
 

@@ -39,3 +39,13 @@
 }
 
 
+
+/* The dyno cursor's reading: the speed and the values there, as dyno software prints them
+   beside its cursor. Big numbers, tabular, in each series' own colour. */
+.cursorRead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 0 0 6px; font-variant-numeric: tabular-nums; }
+.cursorRead small { font-size: 11px; font-weight: 500; color: var(--ink2); }
+.cursorRpm { font-size: 15px; font-weight: 700; color: var(--ink); }
+.cursorHp { font-size: 15px; font-weight: 700; color: var(--acc); }
+.cursorTq { font-size: 15px; font-weight: 700; color: var(--data2); }
+.cursorPrev { font-size: 12px; color: var(--ink2); }
+.cursorSlider { display: block; width: 100%; margin: 6px 0 0; accent-color: var(--acc); }
