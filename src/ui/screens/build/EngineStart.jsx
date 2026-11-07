@@ -10,8 +10,7 @@
 import React, { useState } from 'react';
 
 import { PRESET_GROUPS, applyPreset } from '../../../sim/index.js';
-import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
-import { Panel } from '../../primitives/Panel.jsx';
+import { ownEnginePatch } from '../../state/ownEngine.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
@@ -58,9 +57,10 @@ export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
 /**
  * Where the engine comes from, chosen first: a factory engine, or one of the player's own.
  * Nothing of either path shows until it is chosen. The factory path is a catalogue to pick
- * from, the engine's published figures to read, and a confirm; the custom path is the spec
- * form. Both land on the same build bench with the engine loaded. The path and the engine
- * picked survive Back, for as long as this screen is up.
+ * from, the engine's published figures to read, and a confirm; the custom path puts a typical
+ * engine on the bench at once, for the player to set part by part from its short block.
+ * Both land on the same build bench with the engine loaded. The factory engine picked
+ * survives Back, for as long as this screen is up.
  */
 /**
  * @param {object} [props]
@@ -72,7 +72,7 @@ export function PrebuiltEngines({ onPick, picked = null, detail = undefined }) {
 export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
   const [, dispatch] = useBuild();
   const U = useUnits();
-  const [path, setPath] = useState(/** @type {null|'factory'|'custom'} */ (null));
+  const [path, setPath] = useState(/** @type {null|'factory'} */ (null));
   const [picked, setPicked] = useState(/** @type {any} */ (null));
   const load = (preset) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); onDone?.(); };
   const create = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); onDone?.(); };
@@ -89,9 +89,9 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
             <span className={styles.pathName}>Start with a factory engine</span>
             <span className={styles.pathWhat}>A production engine as it left the factory, with its published figures and its factory calibration. Change any part of it after.</span>
           </button>
-          <button type="button" className={styles.path} onClick={() => setPath('custom')}>
+          <button type="button" className={styles.path} onClick={() => create(ownEnginePatch())}>
             <span className={styles.pathName}>Build a custom engine</span>
-            <span className={styles.pathWhat}>Your own engine from its layout, bore, stroke, compression and redline. It starts on a safe base map generated from the physics, for you to tune.</span>
+            <span className={styles.pathWhat}>Your own engine, set part by part on the bench, starting with the short block: layout, bore, stroke, compression and redline. It runs on a safe base map generated from the physics, for you to tune.</span>
           </button>
         </div>
       </div>
@@ -102,11 +102,10 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
     <div className={styles.page} data-testid="engine-start">
       <div className={styles.bar}>
         <button type="button" className={styles.back} onClick={() => setPath(null)}>Back</button>
-        <h2 className={styles.title}>{path === 'factory' ? 'Factory engines' : 'Custom engine'}</h2>
+        <h2 className={styles.title}>Factory engines</h2>
       </div>
-      {path === 'factory' ? (
-        <div className={styles.catalog} data-plain="">
-          <PrebuiltEngines
+      <div className={styles.catalog} data-plain="">
+        <PrebuiltEngines
             onPick={(p) => setPicked(picked?.id === p.id ? null : p)} picked={picked}
             detail={(p) => (
               <div className={styles.sheet} role="region" aria-label={`${p.name} specifications`}>
@@ -123,14 +122,6 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
             )}
           />
         </div>
-      ) : (
-        <Panel>
-          <p className={styles.formLead}>
-            Enter your engine&apos;s figures from its manual or build sheet. Everything past these is set on the bench after.
-          </p>
-          <EngineSpecForm onCreate={create} />
-        </Panel>
-      )}
     </div>
   );
 }

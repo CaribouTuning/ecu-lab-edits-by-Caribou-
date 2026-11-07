@@ -18,7 +18,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import {
-  EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf,
+  COIL_OPTS, EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf,
 } from '../../sim/index.js';
 import { BuildBenchMode } from '../components/BuildSection.jsx';
 import { EngineStart } from '../screens/build/EngineStart.jsx';
@@ -38,7 +38,8 @@ const ORIGIN_TAG = { stock: 'Stock', modified: 'Modified', own: 'Your own' };
 export const BENCH_PARTS = [
   { id: 'engine', label: 'Engine', lead: 'The engine you start from: a factory engine, or your own.' },
   { id: 'block', label: 'Short block', lead: 'Cylinders, bore and stroke, compression, and the pistons and rods that carry them.' },
-  { id: 'head', label: 'Heads and cam', lead: 'How it breathes: the cam, the springs that follow it, the valves, the spark.' },
+  { id: 'head', label: 'Heads and cam', lead: 'How it breathes: the cam, the springs that follow it, the valves and ports.' },
+  { id: 'ignition', label: 'Ignition', lead: 'The spark: plugs, coils and the gap the spark has to cross.' },
   { id: 'induction', label: 'Induction', lead: 'What forces air in: a turbo or a supercharger, its intercooler, and nitrous.' },
   { id: 'fuel', label: 'Fuel system', lead: 'What is in the tank, and the pump, rail and injectors that deliver it.' },
   { id: 'boltons', label: 'Bolt-ons', lead: 'The cold air intake, the headers, the cat-back and the exhaust pipe.' },
@@ -65,6 +66,7 @@ export function partSummaries(build, derived, preset, U = unitsFor('imperial')) 
     engine: preset ? `${preset.name}, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}` : `Your own engine, ${derived.displacementL.toFixed(1)} L ${cfg.configuration}`,
     block: `${cfg.bore.toFixed(1)} × ${cfg.stroke.toFixed(1)} mm, ${cfg.compression.toFixed(1)}:1`,
     head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}°/${cfg.exhaustCamDuration ?? cfg.camDuration}° cam`,
+    ignition: `${cfg.sparkPlugs ?? 1} plug${(cfg.sparkPlugs ?? 1) > 1 ? 's' : ''} a cylinder, ${(COIL_OPTS.find((o) => o.id === (build.coil ?? 'stock')) ?? COIL_OPTS[0]).label.toLowerCase()}, ${(build.plugGapMm ?? 1.0).toFixed(1)} mm gap`,
     induction: bolt ? `${turbo}, ${bolt}` : turbo,
     fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${INJECTOR_OPTS[build.injIdx].label}`,
     boltons: ex ? `${pipe}, ${ex}` : pipe,
@@ -129,7 +131,7 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
     <div className={styles.bench}>
       <nav className={styles.parts} aria-label="Engine parts" data-open={railOpen ? 'true' : undefined}>
         {full && <EngineViewer spec={spec} rpm={rpm} label={`The engine on the stand: ${sums.engine}`} caption={build.engineReady ? caption : null} />}
-        {/* Narrow only (BuildBench.module.css): the step you are on, and where you are in the six. */}
+        {/* Narrow only (BuildBench.module.css): the step you are on, and where you are in the seven. */}
         <button type="button" className={styles.rail} aria-label="Choose a part" aria-expanded={railOpen} onClick={() => setRailOpen((o) => !o)}>
           <span className={styles.railStep}>{BENCH_PARTS.indexOf(open) + 1}<span className={styles.railOf}>/{BENCH_PARTS.length}</span></span>
           <span className={styles.railName}>{open.label}</span>

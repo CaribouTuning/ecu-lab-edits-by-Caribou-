@@ -29,7 +29,8 @@ export function baseMapAction(build) {
 
 /** The engine's own figures each part decides, by part: what "changed from stock" compares. */
 const BLOCK_KEYS = ['configuration', 'bore', 'stroke', 'compression', 'blockMaterial', 'frictionLevel', 'bottomEnd'];
-const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'sparkPlugs', 'vvt', 'injection', 'headMaterial'];
+const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'vvt', 'injection', 'headMaterial',
+  'intakeLiftMm', 'exhaustLiftMm', 'exhaustValveMm', 'intakePortCfm', 'exhaustPortCfm', 'lsaDeg', 'iclDeg', 'runnerMm'];
 
 /**
  * Which of the engine's parts differ from the factory engine it started as: none on a stock
@@ -37,7 +38,7 @@ const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrai
  * (its engine, induction, parts and bolt-ons), so nothing is calibrated to find out. Boost
  * raised on a factory turbo counts as induction changed.
  * @param {any} build @param {any} preset the factory engine, or null for one of the player's own
- * @returns {Set<string>} part ids: block, head, induction, fuel, boltons
+ * @returns {Set<string>} part ids: block, head, ignition, induction, fuel, boltons
  */
 export function changedParts(build, preset) {
   const out = new Set();
@@ -47,7 +48,8 @@ export function changedParts(build, preset) {
   const mods = build.mods ?? {};
   const pm = preset.mods ?? {};
   if (differs(BLOCK_KEYS)) out.add('block');
-  if (differs(HEAD_KEYS) || (build.coil ?? 'stock') !== 'stock') out.add('head');
+  if (differs(HEAD_KEYS)) out.add('head');
+  if (differs(['sparkPlugs']) || (build.coil ?? 'stock') !== 'stock' || (build.plugGapMm ?? 1.0) !== 1.0) out.add('ignition');
   const ind = preset.induction;
   const factoryBoost = build.factoryInduction?.boostCurve ?? null;
   if (!!build.turboOn !== !!ind.turboOn || !!build.blowerId || !!build.nitrous || !!mods.intercooler !== !!pm.intercooler

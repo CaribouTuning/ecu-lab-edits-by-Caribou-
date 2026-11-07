@@ -118,12 +118,10 @@ export function factoryEngine(name) {
   return screen.getByRole('button', { name: `Use ${name}` });
 }
 
-/** With no engine on the bench: take the custom path (from either path) and return its form. */
-export function customForm() {
-  const custom = () => screen.queryByRole('button', { name: /^Build a custom engine/ });
+/** With no engine on the bench: take the custom path, which puts a typical engine of the
+ *  player's own on the bench at once and opens its short block. Returns its button. */
+export function customEngine() {
   const back = button('Back');
-  if (back && !custom() && !screen.queryByRole('form', { name: 'Describe your engine' })) fireEvent.click(back);
-  const path = custom();
-  if (path) fireEvent.click(path);
-  return screen.getByRole('form', { name: 'Describe your engine' });
+  if (back && !screen.queryByRole('button', { name: /^Build a custom engine/ })) fireEvent.click(back);
+  return screen.getByRole('button', { name: /^Build a custom engine/ });
 }

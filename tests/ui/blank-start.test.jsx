@@ -10,7 +10,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
-import { enterSandbox, goTo, enterCareer, factoryEngine, customForm } from './nav.js';
+import { enterSandbox, goTo, enterCareer, factoryEngine, customEngine } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -27,7 +27,7 @@ const launchBlank = () => {
 };
 
 describe('SANDBOX with no engine yet', () => {
-  it('says so in the header and offers prebuilt engines and the spec form on every engine screen', () => {
+  it('says so in the header and offers prebuilt engines and a custom engine on every engine screen', () => {
     launchBlank();
     expect(screen.getByTestId('build-line').textContent).toMatch(/No engine chosen yet/);
     for (const tab of ['TUNE', 'LIVE', 'DYNO', 'BUILD']) {
@@ -36,7 +36,7 @@ describe('SANDBOX with no engine yet', () => {
       expect(screen.queryByTestId('tuning-grid')).toBeNull();
     }
     expect(factoryEngine('Nissan VQ35DE Rev-Up')).toBeTruthy();
-    expect(customForm()).toBeTruthy();
+    expect(customEngine()).toBeTruthy();
   });
 
   it('starts on a prebuilt engine in one click, with that engine named in the header', () => {
@@ -47,31 +47,17 @@ describe('SANDBOX with no engine yet', () => {
     expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35HR/);
   });
 
-  it('refuses a spec with missing or out-of-range figures and says which', () => {
+  it('a custom engine goes straight to its short block, typical figures on it, with no form to fill in first', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(customForm());
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
-    expect(form.getAllByRole('alert').length).toBeGreaterThanOrEqual(5);
-    expect(screen.getByTestId('engine-start')).toBeTruthy();
-    fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '400' } });
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
-    expect(form.getByText(/^Between 75 and 105 mm\. Outside this range/)).toBeTruthy();
-  });
-
-  it('builds an engine from the player\'s own figures, showing its displacement first', () => {
-    launchBlank();
-    goTo('BUILD');
-    const form = within(customForm());
-    fireEvent.click(form.getByRole('button', { name: /^V8/ }));
-    fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '96' } });
-    fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '92' } });
-    fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.1' } });
-    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '6500' } });
-    expect(form.getByTestId('spec-displacement').textContent).toMatch(/5\.33 L/);
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
+    fireEvent.click(customEngine());
     expect(screen.queryByTestId('engine-start')).toBeNull();
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^5\.3L V8/);
+    expect(screen.queryByRole('form', { name: 'Describe your engine' })).toBeNull();
+    expect(screen.getByTestId('build-line').textContent).toMatch(/^2\.0L I4/);
+    const onPart = within(screen.getByRole('navigation', { name: 'Engine parts' }))
+      .getAllByRole('button').find((x) => x.getAttribute('aria-current') === 'true')?.textContent ?? '';
+    expect(onPart).toMatch(/Short block/);
+    expect(screen.getByRole('slider', { name: /Bore/ })).toBeTruthy();
   });
 
   it('is undone by one UNDO from BUILD, back to no engine', () => {
@@ -96,15 +82,13 @@ describe('figures the app assumed for the player\'s own engine', () => {
   it('lists them on BUILD until each is set, and drops each as the player sets it', () => {
     launchBlank();
     goTo('BUILD');
-    const form = within(customForm());
-    fireEvent.click(form.getByRole('button', { name: /^V6/ }));
-    fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '95.5' } });
-    fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '81.4' } });
-    fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.3' } });
-    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '7000' } });
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
+    fireEvent.click(customEngine());
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
+    expect(note()).toMatch(/I4 layout.*86 mm bore.*86 mm stroke.*10\.5:1 compression.*6,800 rpm redline/);
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
+    fireEvent.change(screen.getByRole('slider', { name: /Bore/ }), { target: { value: '90' } });
+    expect(note()).not.toMatch(/mm bore/);
+    expect(note()).toMatch(/mm stroke/);
     // The cam is on the stand's Heads and cam part; the note is on its Engine part. Each lobe
     // is its own figure: the intake set, the exhaust lobe is still assumed, until it is set too.
     const parts = () => within(screen.getByRole('navigation', { name: 'Engine parts' }));
@@ -145,29 +129,10 @@ describe('a practice mission with no engine chosen yet', () => {
   });
 });
 
-describe('the form refuses what the simulator cannot answer for, and says why', () => {
-  it('a redline past 11,000 rpm', () => {
-    launchBlank();
-    goTo('BUILD');
-    const form = within(customForm());
-    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '11500' } });
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
-    expect(form.getByText(/Between 4000 and 11000 rpm\. Past 11,000 rpm is racing-engine territory/)).toBeTruthy();
-  });
-});
-
 describe('an engine put on the BUILD bench', () => {
   const onPart = () => within(screen.getByRole('navigation', { name: 'Engine parts' }))
     .getAllByRole('button').find((b) => b.getAttribute('aria-current') === 'true')?.textContent ?? '';
-  const ownEngine = () => {
-    const form = within(customForm());
-    fireEvent.click(form.getByRole('button', { name: /^V6/ }));
-    fireEvent.change(form.getByPlaceholderText('Cylinder diameter'), { target: { value: '95.5' } });
-    fireEvent.change(form.getByPlaceholderText('Piston travel'), { target: { value: '81.4' } });
-    fireEvent.change(form.getByPlaceholderText('Static, e.g. 10.5'), { target: { value: '10.3' } });
-    fireEvent.change(form.getByPlaceholderText('Rev limit'), { target: { value: '7000' } });
-    fireEvent.click(form.getByRole('button', { name: 'Create this engine' }));
-  };
+  const ownEngine = () => fireEvent.click(customEngine());
 
   it('opens on its short block, a factory engine or the player\'s own', () => {
     launchBlank();

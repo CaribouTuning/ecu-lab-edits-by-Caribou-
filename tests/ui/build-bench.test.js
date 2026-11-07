@@ -21,6 +21,8 @@ describe('changedParts', () => {
     expect(with_({ engineConfig: { ...stock.engineConfig, camDuration: stock.engineConfig.camDuration + 8 } })).toEqual(['head']);
     expect(with_({ mods: { ...stock.mods, intake: !stock.mods.intake } })).toEqual(['boltons']);
     expect(with_({ injIdx: stock.injIdx + 1 })).toEqual(['fuel']);
+    expect(with_({ coil: 'high' })).toEqual(['ignition']);
+    expect(with_({ plugGapMm: 0.7 })).toEqual(['ignition']);
     expect(with_({ mods: { ...stock.mods, headers: !stock.mods.headers } })).toEqual(['boltons']);
   });
 

@@ -34,7 +34,7 @@ describe('parseRoute', () => {
 
   it('routes the eleven TUNE sections and the six BUILD parts', () => {
     expect(ROUTES.tune).toEqual(['airflow', 'spark', 'fuel', 'injectors', 'sensors', 'boost', 'vvt', 'idle', 'protect', 'torque', 'nitrous']);
-    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'induction', 'fuel', 'boltons']);
+    expect(ROUTES.build).toEqual(['engine', 'block', 'head', 'ignition', 'induction', 'fuel', 'boltons']);
   });
 
   it('namespaces `fuel` by tab so the two never collide', () => {

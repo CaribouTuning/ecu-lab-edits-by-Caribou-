@@ -590,7 +590,7 @@ describe('every segmented control', () => {
     // BUILD is the engine stand's build software, one part of the engine at a time (its
     // Engine part is a picker and a form, with no segmented control on it).
     let total = 0;
-    for (const part of ['Short block', 'Heads and cam', 'Induction', 'Fuel system', 'Bolt-ons']) {
+    for (const part of ['Short block', 'Heads and cam', 'Ignition', 'Induction', 'Fuel system', 'Bolt-ons']) {
       buildPart(part);
       total += expectEverySegHasOneSelection();
     }

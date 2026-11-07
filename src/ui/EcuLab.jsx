@@ -1428,7 +1428,7 @@ export function EcuLabApp() {
                       ? <><b>Build it.</b> This is an engine-building job: every part is yours to choose, and the customer pays for them. Build to the list on their ticket, then run it and tune it.</>
                       : <><b>The customer&apos;s car.</b> Look through what is fitted. The parts are theirs: the job is the calibration, so nothing here can be changed.</>) : null}
                   >
-                    {(buildSection ?? 'engine') === 'engine' || buildSection === 'block' || buildSection === 'head' ? (
+                    {(buildSection ?? 'engine') === 'engine' || buildSection === 'block' || buildSection === 'head' || buildSection === 'ignition' ? (
                       <EngineScreen
                         active onToggle={toggleBuildSection} part={/** @type {any} */ (buildSection ?? 'engine')}
                         engineDerived={engineDerived} activePreset={activePreset} veAdvice={veAdvice}

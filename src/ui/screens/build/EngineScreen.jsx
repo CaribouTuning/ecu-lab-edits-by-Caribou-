@@ -18,7 +18,7 @@ import {
   TYPICAL_INTAKE_VALVE_SHARE, VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, VVT_OPTS, applyPreset, headDefaultsOf, intakeValvesFor, layoutById, pistonMotion,
 } from '../../../sim/index.js';
 import { BuildBenchMode, BuildSection } from '../../components/BuildSection.jsx';
-import { EngineSpecForm } from '../../components/EngineSpecForm.jsx';
+import { ownEnginePatch } from '../../state/ownEngine.js';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { Button } from '../../primitives/Button.jsx';
 import { Note } from '../../primitives/Note.jsx';
@@ -37,6 +37,11 @@ const BASE_MAP_SETTLE_MS = 350;
 
 /** How BUILD names a figure the app assumed for a player's own engine, with the value it used. */
 const ASSUMED_LABEL = {
+  configuration: (c) => `${c.configuration} layout`,
+  bore: (c) => `${c.bore} mm bore`,
+  stroke: (c) => `${c.stroke} mm stroke`,
+  compression: (c) => `${c.compression}:1 compression`,
+  redline: (c) => `${c.redline.toLocaleString('en-US')} rpm redline`,
   camDuration: (c) => `intake cam duration ${c.camDuration}°`,
   exhaustCamDuration: (c) => `exhaust cam duration ${c.exhaustCamDuration ?? c.camDuration}°`,
   valvetrain: (c) => `valvetrain ${String(c.valvetrain ?? 'dohc').toUpperCase()}`,
@@ -104,8 +109,8 @@ function ShortBlockNote({ own, dirty, onBaseMap }) {
  * @param {EngineDerived} props.engineDerived
  * @param {object|null} props.activePreset the catalogue entry `presetId` names, or null
  * @param {VeAdvice} props.veAdvice
- * @param {'engine'|'block'|'head'} [props.part] on the engine stand, which of the three to
- *   show: the base engine, the short block, or the heads and cam (all three when left out)
+ * @param {'engine'|'block'|'head'|'ignition'} [props.part] on the engine stand, which to show:
+ *   the base engine, the short block, the heads and cam, or the ignition (all when left out)
  * @param {() => void} props.onResetToStock wipes the calibration back to a stock
  *   baseline. The shell owns it because it rebuilds the VE table from `hwForVe`, a
  *   derivation several other screens and the sim payload also read.
@@ -113,7 +118,6 @@ function ShortBlockNote({ own, dirty, onBaseMap }) {
  */
 export function EngineScreen({ active, onToggle, part, engineDerived, activePreset, veAdvice, onResetToStock }) {
   const [build, dispatch] = useBuild();
-  const [ownOpen, setOwnOpen] = React.useState(false);
   const { engineConfig, presetId, presetPrompt } = build;
   const [tune] = useTune();
   const { tablesDirty } = tune;
@@ -253,20 +257,14 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           }}
         />
       {!bench && (
-        <details className={styles.ownEngine} onToggle={(e) => setOwnOpen(e.currentTarget.open)}>
-          <summary>Enter my own engine&apos;s specs instead</summary>
+        <div className={styles.ownEngine}>
+          <Button variant="ghost" size="sm" onClick={() => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: ownEnginePatch() }); onToggle('block'); }}>
+            Build my own engine instead
+          </Button>
           <p className={styles.ownLead}>
-            Replaces the engine, and its calibration, with one built from your figures. You can undo it.
+            Replaces the engine, and its calibration, with a typical one you set part by part, starting on the short block. You can undo it.
           </p>
-          {/* Mounted only while open: a blank form has no option selected yet, which nothing
-              else on this screen does. */}
-          {ownOpen && (
-            <EngineSpecForm
-              submitLabel="Replace the engine with this one"
-              onCreate={(patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); setOwnOpen(false); }}
-            />
-          )}
-        </details>
+        </div>
       )}
         {factory && (
           <>
@@ -497,21 +495,6 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         </ExpandableInfo>
         </SpecGroup>
 
-        <SpecGroup title="Ignition">
-          <SpecField label="Spark plugs per cylinder">
-            <Seg label="Spark plugs per cylinder" variant="rule" equal options={[{ id: 1, label: '1' }, { id: 2, label: '2' }]} value={engineConfig.sparkPlugs ?? 1} onChange={(v) => setCfg({ sparkPlugs: Number(v) })} />
-          </SpecField>
-          <SpecField label="Coils">
-            <Seg label="Ignition coils" variant="rule" equal options={COIL_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={build.coil ?? 'stock'} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'coil', value: v })} />
-          </SpecField>
-          <SpecField label="Plug gap" aside="mm">
-            <Seg label="Spark plug gap" variant="rule" equal options={[0.6, 0.7, 0.8, 0.9, 1.0, 1.1].map((g) => ({ id: g, label: g.toFixed(1) }))} value={build.plugGapMm ?? 1.0} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'plugGapMm', value: Number(v) })} />
-          </SpecField>
-          <ExpandableInfo title="Why boosted engines close the plug gap">
-          Before a spark can do anything, the gap has to break down — and the voltage that takes rises with the density of the gas across it. Boost and advance both mean denser gas at the plug when it fires. Past what the coil can make, some events never light: a misfire that feels like a stutter and costs power exactly where the engine is working hardest. A smaller gap, a longer dwell or a stronger coil all buy it back.
-        </ExpandableInfo>
-        </SpecGroup>
-
         <SpecGroup title="Air and fuel">
           <SpecField label="Cam phasers">
             <Seg label="Cam phasers" variant="rule" equal options={VVT_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={engineConfig.vvt ?? 'none'} onChange={(v) => setCfg({ vvt: v })} />
@@ -541,6 +524,27 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
     </>
   );
 
+  // The spark on its own stage: plugs, coils and gap, so Heads and cam is the breathing alone.
+  const ignitionParts = (
+    <>
+        <SpecGroup title="Ignition">
+          <SpecField label="Spark plugs per cylinder">
+            <Seg label="Spark plugs per cylinder" variant="rule" equal options={[{ id: 1, label: '1' }, { id: 2, label: '2' }]} value={engineConfig.sparkPlugs ?? 1} onChange={(v) => setCfg({ sparkPlugs: Number(v) })} />
+          </SpecField>
+          <SpecField label="Coils">
+            <Seg label="Ignition coils" variant="rule" equal options={COIL_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={build.coil ?? 'stock'} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'coil', value: v })} />
+          </SpecField>
+          <SpecField label="Plug gap" aside="mm">
+            <Seg label="Spark plug gap" variant="rule" equal options={[0.6, 0.7, 0.8, 0.9, 1.0, 1.1].map((g) => ({ id: g, label: g.toFixed(1) }))} value={build.plugGapMm ?? 1.0} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'plugGapMm', value: Number(v) })} />
+          </SpecField>
+          <ExpandableInfo title="Why boosted engines close the plug gap">
+          Before a spark can do anything, the gap has to break down — and the voltage that takes rises with the density of the gas across it. Boost and advance both mean denser gas at the plug when it fires. Past what the coil can make, some events never light: a misfire that feels like a stutter and costs power exactly where the engine is working hardest. A smaller gap, a longer dwell or a stronger coil all buy it back.
+        </ExpandableInfo>
+        </SpecGroup>
+
+    </>
+  );
+
   return (
     <BuildSection
       active={active} onClick={() => onToggle('engine')}
@@ -551,6 +555,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
       {(!part || part === 'engine' || part === 'block') && arrivalNotes}
       {(!part || part === 'block') && blockParts}
       {(!part || part === 'head') && headParts}
+      {(!part || part === 'ignition') && ignitionParts}
     </BuildSection>
   );
 }
