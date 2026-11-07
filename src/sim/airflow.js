@@ -406,14 +406,21 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
  * @param {import('./engine.js').EngineConfig} cfg
  */
 export function headDefaultsOf(cfg) {
-  const g = breathingGeometry({ ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined });
+  const plain = { ...cfg, intakeLiftMm: undefined, exhaustLiftMm: undefined, exhaustPortCfm: undefined, intakePortCfm: cfg.intakePortCfm, lsaDeg: undefined, iclDeg: undefined };
+  // Every figure but the runner is read with the runner held at any length: none of them
+  // depends on it, and tuning the runner to the engine is the one costly step (about 0.4 s
+  // on a phone each time the block changes). The runner's own default is tuned only when
+  // asked for, below.
+  const held = { ...plain, runnerMm: cfg.runnerMm ?? 350 };
+  const g = breathingGeometry(held);
   const camDuration = cfg.camDuration ?? CAM_BASE_DURATION;
   const ivcAbdc = COEFF.IVC_BASE_ABDC + (camDuration - COEFF.IVC_CAM_REF_DURATION) * COEFF.IVC_PER_CAM_DEG;
   const centre = 180 + ivcAbdc - camDuration / 2;
   // A port with no bench figure flows through its throat times the universal discharge
   // coefficient (breathing.js `valveArea`): that area, as the bench would read it.
   const portCfm = (n, dia) => (n * COEFF.BREATH_VALVE_CD * (Math.PI / 4) * (COEFF.BREATH_THROAT_SHARE * dia) ** 2 * FLOW_BENCH_VELOCITY_MS) / CFM_TO_M3S;
-  const headers = breathingGeometry(cfg, { headers: true });
+  const headers = breathingGeometry({ ...cfg, runnerMm: cfg.runnerMm ?? 350 }, { headers: true });
+  let runnerMm = null;
   return {
     intakeLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.intakeValveM * 1000,
     exhaustLiftMm: COEFF.BREATH_LIFT_PER_DIA * g.exhaustValveM * 1000,
@@ -421,7 +428,10 @@ export function headDefaultsOf(cfg) {
     intakePortCfm: cfg.intakePortCfm ?? portCfm(g.intakeValves, g.intakeValveM),
     exhaustPortCfm: portCfm(g.exhaustValves, g.exhaustValveM),
     lsaDeg: centre, iclDeg: centre,
-    runnerMm: g.runnerLengthM * 1000,
+    get runnerMm() {
+      if (runnerMm == null) runnerMm = breathingGeometry(plain).runnerLengthM * 1000;
+      return runnerMm;
+    },
     headerPrimaryMm: headers.exhaustPrimaryM * 1000,
     headerPrimaryIdMm: Math.sqrt((4 * headers.exhaustPrimaryAreaM2) / Math.PI) * 1000,
   };

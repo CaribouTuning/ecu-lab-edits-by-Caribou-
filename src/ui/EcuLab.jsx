@@ -105,6 +105,38 @@ import { ScoreScreen } from './screens/dyno/ScoreScreen.jsx';
 /** The tabs that need an engine; the laptop's reading apps do not. */
 const ENGINE_TABS = ['build', 'tune', 'live', 'dyno', 'physics'];
 
+/** Under the test runner the advisor runs in the render that wants it, as `useSettled` does. */
+const IMMEDIATE_ADVISOR = /** @type {any} */ (import.meta).env?.MODE === 'test';
+
+/** What the advisor reads as before it has run: no pull and no advice. */
+const NO_PULL = Object.freeze({ points: [], events: [], peakHp: 0, peakTq: 0 });
+const NO_ADVICE = Object.freeze({ spark: [], fuelAdv: [], overAdvanced: [], underAdvanced: [], pastMbt: [], wrongMix: [] });
+
+/**
+ * `useMemo` that only computes while `wanted`: otherwise it hands back what it last
+ * computed (or null), and computes on the first render it is wanted with inputs it has not
+ * seen. For work nothing on screen reads. `now()` gets the value for this render's inputs
+ * whether or not it is wanted, for an action that needs it this instant (a pull started
+ * from the command palette, on another tab).
+ * @template T
+ * @param {boolean} wanted
+ * @param {() => T} compute
+ * @param {unknown[]} deps
+ * @returns {{value: T|null, now: () => T}}
+ */
+function useWhenWanted(wanted, compute, deps) {
+  const memo = useRef(/** @type {{deps: unknown[]|null, value: T|null}} */ ({ deps: null, value: null }));
+  const now = () => {
+    const prev = memo.current.deps;
+    if (!prev || prev.length !== deps.length || deps.some((d, i) => !Object.is(d, prev[i]))) {
+      memo.current = { deps, value: compute() };
+    }
+    return /** @type {T} */ (memo.current.value);
+  };
+  if (wanted) now();
+  return { value: memo.current.value, now };
+}
+
 /** The engine a practice mission is built around, put on the bench when the player has none yet. */
 const MISSION_ENGINE = 'vq35de-revup';
 
@@ -411,7 +443,24 @@ export function EcuLabApp() {
   // and a pull a step is not worth re-solving for a hundredth of a percent of wear.
   const hp = Math.round(health.piston), hb = Math.round(health.bearing), hv = Math.round(health.valve);
   const advisorHealth = useMemo(() => ({ piston: hp, bearing: hb, valve: hv }), [hp, hb, hv]);
-  const advisorPull = useMemo(() => simulateSweep({
+  // ONLY WHEN SOMETHING READS IT. The advisor's full-throttle pull and the spark and fuel
+  // advice it feeds take about a second of a phone's main thread, and nothing on BUILD,
+  // LIVE or the laptop's other apps shows them: computed on every BUILD slider step they
+  // froze the page for seconds at a time. They are worked out when TUNE, DYNO or PHYSICS is
+  // open, and kept, so coming back with nothing changed is instant.
+  const advisorShown = tab === 'tune' || tab === 'dyno' || tab === 'physics';
+  // And only after the screen that wants it has painted: opening TUNE draws TUNE at once,
+  // then works the advice out, rather than holding the tap for a second first.
+  const [advisorPainted, setAdvisorPainted] = useState(false);
+  useEffect(() => {
+    if (!advisorShown) { setAdvisorPainted(false); return undefined; }
+    let t = 0;
+    const raf = requestAnimationFrame(() => { t = window.setTimeout(() => setAdvisorPainted(true), 0); });
+    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, [advisorShown]);
+  // Tests render synchronously and read the advice in the same act(): no frame to wait for.
+  const advisorWanted = advisorShown && (advisorPainted || IMMEDIATE_ADVISOR);
+  const advisorPullMemo = useWhenWanted(advisorWanted, () => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
     injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
@@ -420,15 +469,17 @@ export function EcuLabApp() {
     health: advisorHealth,
   }), [deferredTables, veTruth, turboOn, boostCurve, octaneBonus, fuel, injectorCc, ecuInjectorCc,
        injIdx, mods, mafScalar, engineDerived, turbine, compressor, ecuBundle, exhaustDiaIdx, blower, blowerRatio, nitrous, advisorHealth]);
+  const advisorPull = advisorPullMemo.value ?? NO_PULL;
   // Judged on the tables' own breakpoints, at the cam phase the VVT calibration holds.
   const camAt = useMemo(() => intakeCamAt(engineConfig, vvtCal), [engineConfig, vvtCal]);
-  const calAdvice = useMemo(() => calibrationAdvice({
+  const calAdviceMemo = useWhenWanted(advisorWanted, () => calibrationAdvice({
     ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr, layout: deferredTables.layout,
     derived: engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
     compressor, turbine, camAt, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
-    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPull, health: advisorHealth,
+    injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, pull: advisorPullMemo.now(), health: advisorHealth,
   }), [deferredTables, veTruth, engineDerived, octaneBonus, fuel, mods, turboOn, boostCurve,
        compressor, turbine, camAt, exhaustDiaIdx, injectorCc, ecuInjectorCc, mafScalar, mafErrorBase, advisorPull, advisorHealth]);
+  const calAdvice = calAdviceMemo.value ?? NO_ADVICE;
 
   const veAdvice = useMemo(
     // On alpha-N the table holds the fill against the outside air at each throttle row.
@@ -653,7 +704,7 @@ export function EcuLabApp() {
     // against this pull, at whatever load it ran, not TUNE's own full-throttle one: a cell
     // this pull did run is already charged by its log, and charging it again would count
     // one knocking cell twice.
-    const ts = computeTuningScore(r, cellsNotRunBy(calAdvice.overAdvanced, r, (layout ?? layoutById(null)).timing));
+    const ts = computeTuningScore(r, cellsNotRunBy(calAdviceMemo.now().overAdvanced, r, (layout ?? layoutById(null)).timing));
     const es = computeEngineerScore({
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
       supercharged: !!blower, turbine, compressor,

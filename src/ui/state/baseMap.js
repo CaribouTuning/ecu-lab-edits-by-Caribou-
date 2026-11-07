@@ -30,7 +30,9 @@ export function baseMapAction(build) {
 /** The engine's own figures each part decides, by part: what "changed from stock" compares. */
 const BLOCK_KEYS = ['configuration', 'bore', 'stroke', 'compression', 'blockMaterial', 'frictionLevel', 'bottomEnd'];
 const HEAD_KEYS = ['camDuration', 'exhaustCamDuration', 'springRate', 'valvetrain', 'valvesPerCyl', 'follower', 'intakeValveMm', 'vvt', 'injection', 'headMaterial',
-  'intakeLiftMm', 'exhaustLiftMm', 'exhaustValveMm', 'intakePortCfm', 'exhaustPortCfm', 'lsaDeg', 'iclDeg', 'runnerMm'];
+  'intakeLiftMm', 'exhaustLiftMm', 'exhaustValveMm', 'intakePortCfm', 'exhaustPortCfm', 'lsaDeg', 'iclDeg'];
+// Not the intake runner: BUILD writes its length onto the engine whenever the block or head
+// changes (the manifold stays), so its being set says nothing about the head.
 
 /**
  * Which of the engine's parts differ from the factory engine it started as: none on a stock

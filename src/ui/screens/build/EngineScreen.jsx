@@ -215,6 +215,11 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   // (the factory's, tuned to its published torque peak), as a cam swap keeps it
   // (`manifoldCam`). Without this every step of these sliders tuned a new runner.
   const setHead = (patch) => setCfg({ ...patch, runnerMm: engineConfig.runnerMm ?? Math.round(hd.runnerMm) });
+  // A short-block change keeps the intake manifold too, on a factory engine: boring or
+  // stroking a block does not change the runners bolted to its heads, and retuning them on
+  // every step cost about 0.4 s a step. An engine of the player's own is still being
+  // specified, so its runner is still the one tuned to it.
+  const setBlock = (patch) => setCfg(own || engineConfig.runnerMm ? patch : { ...patch, runnerMm: Math.round(hd.runnerMm) });
   const intakeValveMm = engineConfig.intakeValveMm ?? Math.round(TYPICAL_INTAKE_VALVE_SHARE[engineConfig.valvesPerCyl ?? 4] * engineConfig.bore * 2) / 2;
 
   // The base engine, the short block, the heads and cam: one section on a phone's
@@ -360,20 +365,20 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
   const blockParts = (
     <>
         <SpecGroup title="Cylinders" aside={`${CYL_COUNT[engineConfig.configuration]} cylinders`}>
-          <Seg label="Configuration" variant="rule" equal options={CONFIG_OPTS.map((c) => ({ label: c, id: c }))} value={engineConfig.configuration} onChange={(v) => setCfg({ configuration: v })} />
+          <Seg label="Configuration" variant="rule" equal options={CONFIG_OPTS.map((c) => ({ label: c, id: c }))} value={engineConfig.configuration} onChange={(v) => setBlock({ configuration: v })} />
           <ExpandableInfo title="Why cylinder count and layout matter">
           For the same total displacement, spreading it across more, smaller cylinders means a shorter flame path in each, so the burn finishes sooner and the end gas has less time to knock — a small real knock-margin benefit — and more, smaller firing pulses smooth the delivery. More cylinders also means more bearings and friction, so it is a trade-off, not a free upgrade.
         </ExpandableInfo>
         </SpecGroup>
 
         <SpecGroup title="Geometry" aside={`${engineDerived.displacementL.toFixed(2)} L, bore:stroke ${engineDerived.ratio.toFixed(2)}`}>
-          <SpecSlider label="Bore" unit=" mm" decimals={1} value={engineConfig.bore} stock={stockCfg?.bore ?? null} min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} onChange={(v) => setCfg({ bore: v })} />
-          <SpecSlider label="Stroke" unit=" mm" decimals={1} value={engineConfig.stroke} stock={stockCfg?.stroke ?? null} min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} onChange={(v) => setCfg({ stroke: v })} />
+          <SpecSlider label="Bore" unit=" mm" decimals={1} value={engineConfig.bore} stock={stockCfg?.bore ?? null} min={CUSTOM_ENGINE_LIMITS.bore.min} max={CUSTOM_ENGINE_LIMITS.bore.max} step={CUSTOM_ENGINE_LIMITS.bore.step} onChange={(v) => setBlock({ bore: v })} />
+          <SpecSlider label="Stroke" unit=" mm" decimals={1} value={engineConfig.stroke} stock={stockCfg?.stroke ?? null} min={CUSTOM_ENGINE_LIMITS.stroke.min} max={CUSTOM_ENGINE_LIMITS.stroke.max} step={CUSTOM_ENGINE_LIMITS.stroke.step} onChange={(v) => setBlock({ stroke: v })} />
           <p className={styles.character}>{engineDerived.character}</p>
           <ExpandableInfo title="Bore, stroke, and engine character">
           Bore is cylinder diameter, stroke is how far the piston travels; together with cylinder count they set displacement. But the ratio between them shapes character independent of displacement: big-bore/short-stroke ("oversquare") tends to breathe and rev higher; small-bore/long-stroke ("undersquare") tends toward stronger low-end torque. This sandbox shifts your VE curve's effective bias toward high or low RPM based on what you set here.
         </ExpandableInfo>
-          <SpecSlider label="Compression ratio" unit=":1" decimals={1} value={engineConfig.compression} stock={stockCfg?.compression ?? null} min={CUSTOM_ENGINE_LIMITS.compression.min} max={CUSTOM_ENGINE_LIMITS.compression.max} step={CUSTOM_ENGINE_LIMITS.compression.step} onChange={(v) => setCfg({ compression: v })} />
+          <SpecSlider label="Compression ratio" unit=":1" decimals={1} value={engineConfig.compression} stock={stockCfg?.compression ?? null} min={CUSTOM_ENGINE_LIMITS.compression.min} max={CUSTOM_ENGINE_LIMITS.compression.max} step={CUSTOM_ENGINE_LIMITS.compression.step} onChange={(v) => setBlock({ compression: v })} />
           <ExpandableInfo title="Compression ratio's trade-off">
           Higher compression squeezes the mixture tighter before ignition, extracting more work from the same fuel — genuinely more efficient and torquey. The same squeeze also raises end-gas temperature and pressure, which is what causes knock. That is exactly why turbocharged engines usually run lower static compression than naturally aspirated ones: boost already adds cylinder pressure on its own.
         </ExpandableInfo>
@@ -386,7 +391,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
           <SpecSlider
             label="Redline" unit=" rpm" value={engineDerived.redline} stock={stockCfg?.redline ?? null}
             min={CUSTOM_ENGINE_LIMITS.redline.min} max={CUSTOM_ENGINE_LIMITS.redline.max} step={CUSTOM_ENGINE_LIMITS.redline.step}
-            onChange={(v) => setCfg({ redline: v })} ariaLabel="Redline"
+            onChange={(v) => setBlock({ redline: v })} ariaLabel="Redline"
           />
           <SpecMeter share={pistonAtRedline.meanSpeedMs / bottomEndLimit.limitMs} label="Mean piston speed at the redline against what this assembly is rated for" />
           <div className={styles.readout} data-testid="bottom-end-readout">
@@ -418,7 +423,9 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         <ShortBlockNote own={own} dirty={tablesDirty} onBaseMap={loadOwnBaseMap} />
     </>
   );
-  const headParts = (
+  // A function, rendered only on its own stage: its sliders read the head's default figures,
+  // and the runner's is tuned to the engine, which is not worth doing on every block change.
+  const renderHeadParts = () => (
     <>
         <SpecGroup title="Camshaft" aside={`${engineConfig.camDuration}° / ${exhaustCam}° / overlap ${Math.round(engineDerived.overlapDeg)}°`}>
           <SpecSlider label="Intake duration" unit="°" value={engineConfig.camDuration} stock={camStock} min={CUSTOM_ENGINE_LIMITS.camDuration.min} max={CUSTOM_ENGINE_LIMITS.camDuration.max} step={CUSTOM_ENGINE_LIMITS.camDuration.step} onChange={(v) => setCfg({ camDuration: v })} lo="mild, low-end torque" hi="wild, top-end power" ariaLabel="Intake cam duration" />
@@ -554,7 +561,7 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
       {(!part || part === 'engine') && baseParts}
       {(!part || part === 'engine' || part === 'block') && arrivalNotes}
       {(!part || part === 'block') && blockParts}
-      {(!part || part === 'head') && headParts}
+      {(!part || part === 'head') && renderHeadParts()}
       {(!part || part === 'ignition') && ignitionParts}
     </BuildSection>
   );
