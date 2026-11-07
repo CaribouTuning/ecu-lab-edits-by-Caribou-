@@ -30,8 +30,11 @@
  * 50%) both costs more power and heats the charge more than a twin-screw (70-78%) or a
  * centrifugal at its best (60-80%) making the same boost.
  *
- * Below wide-open throttle a bypass valve opens and the blower recirculates its own
- * air: no boost, and only its mechanical drag to pay.
+ * At light load a bypass valve opens and the blower recirculates its own air: no boost,
+ * and only its mechanical drag to pay. The valve is a vacuum actuator against a spring, so
+ * it follows MANIFOLD VACUUM, not the pedal: once the throttle holds less than a few inches
+ * of mercury (a big throttle a long way open, or most of the way at low speed) the spring
+ * shuts it and the blower boosts, part throttle or not.
  */
 
 import { GAMMA_EXP, PSI_TO_KPA, R_AIR } from './constants.js';
@@ -41,14 +44,18 @@ import { compressorMap } from './compressorMap.js';
 import { BLOWER_OPTS } from './hardware.js';
 
 /**
- * How closed the bypass valve is. It is held open by manifold vacuum, so it only closes
- * as the throttle approaches wide open.
+ * How closed the bypass valve is. Its actuator is a diaphragm on manifold vacuum against a
+ * spring: vacuum holds it open, and as the vacuum falls the spring closes it, fully once
+ * the manifold is within about 3 inHg of the air outside (US Patent 5,186,081's example
+ * reference), and it is fully open by about 5 inHg (an owner's bench measurement of a
+ * factory Eaton actuator, MG Experience forum). Between the two it closes in proportion.
  *
- * @param {number} throttleFrac 0..1
+ * @param {number} vacuumKpa how far below the outside air the throttle alone holds the
+ *   manifold, kPa
  * @returns {number} 0 fully bypassed .. 1 all flow through the blower
  */
-export function bypassClosedFrac(throttleFrac) {
-  return clamp((throttleFrac - COEFF.BLOWER_BYPASS_OPEN_FRAC) / (COEFF.BLOWER_BYPASS_SHUT_FRAC - COEFF.BLOWER_BYPASS_OPEN_FRAC), 0, 1);
+export function bypassClosedFrac(vacuumKpa) {
+  return clamp((COEFF.BLOWER_BYPASS_OPEN_VAC_KPA - vacuumKpa) / (COEFF.BLOWER_BYPASS_OPEN_VAC_KPA - COEFF.BLOWER_BYPASS_SHUT_VAC_KPA), 0, 1);
 }
 
 /**
@@ -160,8 +167,8 @@ export function blowerDriveW(flowKgS, pr, eta, inletK, blower, blowerRpm) {
  * @param {object} input.blower a BLOWER_OPTS entry
  * @param {number} input.driveRatio crank pulley ÷ blower pulley
  * @param {number} input.rpm
- * @param {number} input.throttleFrac 0..1
- * @param {number} input.throttledKpa manifold pressure the throttle alone would give
+ * @param {number} input.throttledKpa manifold pressure the throttle alone would give: its
+ *   vacuum works the bypass valve
  * @param {number} input.baroKpa
  * @param {number} input.inletK air temperature at the blower inlet
  * @param {(mapKpa: number, boostPsi: number, eta: number) => number} input.engineFlowAt
@@ -170,11 +177,11 @@ export function blowerDriveW(flowKgS, pr, eta, inletK, blower, blowerRpm) {
  * @returns {{boostPsi: number, pr: number, eta: number, flowKgS: number, blowerRpm: number,
  *   overspeed: boolean, driveW: number, surge: boolean, choke: boolean, margin: number, bypass: number}}
  */
-export function solveBlower({ blower, driveRatio, rpm, throttleFrac, throttledKpa, baroKpa, inletK, engineFlowAt }) {
+export function solveBlower({ blower, driveRatio, rpm, throttledKpa, baroKpa, inletK, engineFlowAt }) {
   const blowerRpm = blowerSpeedRpm(blower, rpm, driveRatio);
   const maxRpm = blower.maxRpm ?? blower.maxImpellerRpm;
   const overspeed = blowerRpm > maxRpm;
-  const bypass = bypassClosedFrac(throttleFrac);
+  const bypass = bypassClosedFrac(baroKpa - throttledKpa);
   const inletDensity = (baroKpa * 1000) / (R_AIR * inletK);
   const speedFrac = blowerRpm / maxRpm;
 

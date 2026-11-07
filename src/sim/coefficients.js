@@ -522,10 +522,14 @@ export const COEFF = {
   INDUCTION_EDGE_PASSES: 12,
 
   // --- Superchargers (src/sim/blower.js) ---
-  // The bypass valve is held open by manifold vacuum and shuts as the throttle nears wide
-  // open: fully bypassed below 85% throttle, fully shut from 97%.
-  BLOWER_BYPASS_OPEN_FRAC: 0.85,
-  BLOWER_BYPASS_SHUT_FRAC: 0.97,
+  // The bypass valve's vacuum actuator: fully open at 5 inHg (16.9 kPa) of manifold vacuum,
+  // an owner's bench measurement of a factory Eaton actuator (MG Experience forum, "Supercharger
+  // bypass valve actuating pressure"), and shut for full boost within 3 inHg (10.2 kPa) of the
+  // air outside, US Patent 5,186,081's example spring reference. It had been on throttle
+  // position (shut only past 97%), which left a blower making no boost at 70% throttle with
+  // the manifold at 96 kPa.
+  BLOWER_BYPASS_OPEN_VAC_KPA: 16.9,
+  BLOWER_BYPASS_SHUT_VAC_KPA: 10.2,
   // Positive-displacement efficiency map (modelling choice, shaped to the published
   // figures on each BLOWER_OPTS entry): best at 70% of rated speed and at the unit's
   // design pressure ratio, falling away quadratically below it and as isochoric

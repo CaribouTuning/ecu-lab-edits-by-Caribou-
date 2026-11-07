@@ -410,7 +410,17 @@ export function calibrationAdvice({
     }
     return best;
   };
-  const ceilingAt = (rpm, mapKpa) => pullNear(rpm, mapKpa)?.threshold ?? staticCeilingAt(rpm, mapKpa);
+  // The log CORRECTS the model; it does not stand in for it at another pressure. The knock
+  // limit moves fast with pressure and mixture (the full-load enrichment ramps in over the
+  // last few kPa), so a full-throttle pull's limit at 101 kPa, used as the limit at 97 kPa,
+  // condemned a factory cell that was 2.3 degrees clear there. What the pull measured is
+  // carried as its difference from the model at the pull's own speed and pressure, and the
+  // model's own shape supplies the rest.
+  const ceilingAt = (rpm, mapKpa) => {
+    const p = pullNear(rpm, mapKpa);
+    const est = staticCeilingAt(rpm, mapKpa);
+    return p ? est + (p.threshold - staticCeilingAt(p.rpm, p.map)) : est;
+  };
   const staticCeilingAt = (rpm, mapKpa) => {
     const key = `${rpm}|${mapKpa}`;
     if (!ceilingMemo.has(key)) {

@@ -208,7 +208,7 @@ export function solveInduction({
   if (blower && !turboOn) {
     const chargeKFor = (b, eta) => (intakeKAtEff ? intakeKAtEff(b, eta) : intakeKAt(b));
     const sc = solveBlower({
-      blower, driveRatio: blowerRatio, rpm, throttleFrac, throttledKpa, baroKpa,
+      blower, driveRatio: blowerRatio, rpm, throttledKpa, baroKpa,
       inletK: intakeKAt(0),
       engineFlowAt: (mapKpa, b, eta) => airFlowAtK(mapKpa, chargeKFor(b, eta)),
     });
