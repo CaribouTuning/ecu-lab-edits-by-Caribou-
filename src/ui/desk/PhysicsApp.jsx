@@ -30,6 +30,7 @@ import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
 import { ExhaustSystemCutaway, HeaderCutaway, IntakeCutaway } from './BreathingCutaways.jsx';
+import { EngineCondition } from './EngineCondition.jsx';
 import { useUnits } from '../units.js';
 
 const R_AIR = 287;
@@ -109,9 +110,11 @@ function PressureTrace({ p }) {
  * @param {((loadKpa: number) => {points: any[]})|null} [props.sweepAt] runs the model's pull at a part-throttle load
  * @param {{engineConfig: any, mods: any, hwForVe: any, camAt: ((rpm: number, kpa: number) => number)|null}|null} [props.breathing]
  *   the engine's breathing inputs, for the live gas-exchange diagram
+ * @param {{piston: number, bearing: number, valve: number}|null} [props.health] each part's life left, percent
+ * @param {(() => void)|null} [props.onRepair] rebuild the engine
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null }) {
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, health = null, onRepair = null }) {
   const U = useUnits();
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
@@ -285,6 +288,12 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
               <ExhaustSystemCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} mods={breathing?.mods} exhaustDia={breathing?.hwForVe?.exhaustDia ?? 3} />
             </section>
           </>
+        ) : null}
+        {health ? (
+          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="Engine condition">
+            <h3 className={styles.panelTitle}>Engine condition: what wears it, and what the wear does</h3>
+            <EngineCondition health={health} point={p} pointsPerPull={pts.length} derived={derived} onRepair={onRepair} />
+          </section>
         ) : null}
         <section className={styles.physPanel} aria-label="The raw physics model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>

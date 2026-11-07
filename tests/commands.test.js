@@ -34,8 +34,8 @@ describe('the label table', () => {
 describe('pageCommands', () => {
   it('lists each tab, then its sections, in nav order; a one-section tab is one command', () => {
     const list = ids(pages());
-    expect(list.slice(0, 9)).toEqual([
-      'page:build', 'page:build/engine', 'page:build/block', 'page:build/head', 'page:build/induction', 'page:build/fuel',
+    expect(list.slice(0, 10)).toEqual([
+      'page:build', 'page:build/engine', 'page:build/block', 'page:build/head', 'page:build/ignition', 'page:build/induction', 'page:build/fuel',
       'page:build/boltons', 'page:tune', 'page:tune/airflow',
     ]);
     expect(list).toContain('page:live');
@@ -44,7 +44,7 @@ describe('pageCommands', () => {
     expect(list.slice(-6)).toEqual([
       'page:learn', 'page:learn/sources', 'page:learn/ecu', 'page:learn/engine', 'page:learn/how', 'page:physics',
     ]);
-    expect(list).toHaveLength(6 + 26);
+    expect(list).toHaveLength(6 + 27);
   });
 
   it('prints the tab before a section, and not before a tab', () => {
