@@ -23,12 +23,13 @@
 
 import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 
+import { gasExchangeTrace } from '../../sim/index.js';
 import { TableSurface } from '../components/surface/TableSurface.jsx';
 
 import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
-import { GasExchange } from './GasExchange.jsx';
+import { ExhaustSystemCutaway, HeaderCutaway, IntakeCutaway } from './BreathingCutaways.jsx';
 import { useUnits } from '../units.js';
 
 const R_AIR = 287;
@@ -108,10 +109,9 @@ function PressureTrace({ p }) {
  * @param {((loadKpa: number) => {points: any[]})|null} [props.sweepAt] runs the model's pull at a part-throttle load
  * @param {{engineConfig: any, mods: any, hwForVe: any, camAt: ((rpm: number, kpa: number) => number)|null}|null} [props.breathing]
  *   the engine's breathing inputs, for the live gas-exchange diagram
- * @param {((rpm: number, loadKpa: number) => any)|null} [props.traceAt] the closed cycle's pressure trace at a speed and load
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, traceAt = null }) {
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null }) {
   const U = useUnits();
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
@@ -136,9 +136,11 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const veLoads = useMemo(() => (veAxes ? [...veAxes.load].reverse() : null), [veAxes]);
   const i = Math.min(pts.length - 1, idx ?? peakIdx);
   const p = pts[i];
-  // The closed cycle at the chosen speed and load, for the breathing diagram: the pull's own
-  // point, evaluated with its pressure trace kept.
-  const cycleTrace = useMemo(() => (traceAt && p ? traceAt(p.rpm, deferredLoad) : null), [traceAt, p?.rpm, deferredLoad]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The gas exchange at the chosen speed and throttle, once, for all three breathing diagrams.
+  const advance = breathing?.camAt && p ? breathing.camAt(p.rpm, p.map ?? 100) : 0;
+  const gx = useMemo(() => (breathing && p
+    ? gasExchangeTrace(breathing.engineConfig, breathing.mods ?? {}, { ...breathing.hwForVe, intakeCamAdvanceDeg: advance }, p.rpm, p.map ?? 100)
+    : null), [breathing, p?.rpm, p?.map, advance]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return <div className={styles.pad}>Build an engine first: the model needs something to run.</div>;
 
   // The curve at the top, and the RPM picker it doubles as.
@@ -268,13 +270,21 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           </dl>
         </section>
 
-        {breathing ? (
-          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The engine breathing">
-            <h3 className={styles.panelTitle}>The engine breathing: intake, cylinder and exhaust</h3>
-            <p className={styles.panelNote}>One cycle at {p.rpm} RPM, slowed down. The pipes are coloured by the pressure waves in them, the cylinder by its own pressure; the charts under it are the same numbers against crank angle. Change the headers, catalyst, pipe, cam or runner on BUILD and this follows.</p>
-            <GasExchange engineConfig={breathing.engineConfig} mods={breathing.mods} hwForVe={breathing.hwForVe} camAt={breathing.camAt}
-              point={p} cycleTrace={cycleTrace} derived={derived} />
-          </section>
+        {gx ? (
+          <>
+            <section className={styles.physPanel} aria-label="The intake manifold">
+              <h3 className={styles.panelTitle}>The intake: air filter, throttle, plenum and runners</h3>
+              <IntakeCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} throttleFrac={Math.min(1, deferredLoad / 101.3)} />
+            </section>
+            <section className={styles.physPanel} aria-label="The exhaust header">
+              <h3 className={styles.panelTitle}>The exhaust header: ports, primaries and collector</h3>
+              <HeaderCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} />
+            </section>
+            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust system">
+              <h3 className={styles.panelTitle}>The exhaust system: converter, muffler and tailpipe</h3>
+              <ExhaustSystemCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} mods={breathing?.mods} exhaustDia={breathing?.hwForVe?.exhaustDia ?? 3} />
+            </section>
+          </>
         ) : null}
         <section className={styles.physPanel} aria-label="The raw physics model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>

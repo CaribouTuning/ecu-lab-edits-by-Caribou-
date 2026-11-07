@@ -371,6 +371,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   const degPerSec = rpm * 6;
   return {
     rpm, mapKpa, empKpa: emp, exhaustFlowGs: exhKgS * 1000,
+    // The gas each pipe carries and the speed its waves run at, for the diagrams' working.
+    intakeK, exhaustK: tex, intakeSoundMs: soundIn, exhaustSoundMs: sound, cylinders: cyl,
     // The engine's VE as the VE truth makes it of this filling (`veFinish`).
     ve: veFinish(cfg, fuel)(r.ve, rpm), residualFrac: r.residualFrac, backflowShare: r.backflowShare,
     trace: r.trace,
@@ -382,6 +384,7 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
       collectorReflection: g.exhaustReflection, headers: !!mods.headers,
       intakeValveMm: g.intakeValveM * 1000, exhaustValveMm: g.exhaustValveM * 1000,
       intakeValves: g.intakeValves, exhaustValves: g.exhaustValves,
+      primariesPerCollector: primariesPerCollector(cfg),
     },
     // A wave's round trip of each pipe in crank degrees at this speed: where it lands in the
     // cycle is what tunes the pipe.

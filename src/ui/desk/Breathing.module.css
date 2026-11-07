@@ -1,0 +1,35 @@
+/* The Physics app's breathing cutaways (BreathingCutaways.jsx): their charts, the back-pressure
+   box and the wide exhaust drawing's scroller. The drawings use the combustion cutaway's own
+   classes (Apps.module.css). */
+
+.scroller { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* Never drawn narrower than its labels can be read at: a phone scrolls it sideways in its own box. */
+.svg { display: block; width: 100%; min-width: 720px; height: auto; max-height: none; }
+.chart { display: block; width: 100%; min-width: 720px; height: auto; background: var(--panel2); border-radius: var(--r-sm); }
+
+.lab { fill: var(--ink2); font: 10px var(--sans); font-variant-numeric: tabular-nums; }
+
+.grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.portLineIn { fill: none; stroke: var(--cut-fresh); stroke-width: 2; stroke-linejoin: round; }
+.portLineEx { fill: none; stroke: var(--cut-burn); stroke-width: 2; stroke-linejoin: round; }
+.refIn { stroke: var(--cut-fresh); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
+.refEx { stroke: var(--cut-exhaust); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.7; }
+
+.numbers { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px 24px; }
+@container (max-width: 640px) { .numbers { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .numbers { grid-template-columns: 1fr; } }
+
+.dropBox { padding: 10px 12px; border-radius: var(--r-sm); background: var(--panel2); border: 1px solid var(--line); font-size: var(--fs-sm); }
+.dropHead { margin-bottom: 8px; color: var(--ink2); }
+.dropHead b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.dropHead span { font-size: var(--fs-xs); }
+.dropRow { display: grid; grid-template-columns: 9.5em 1fr 3em; align-items: center; gap: 8px; padding: 3px 0; color: var(--ink2); }
+.dropRow b { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.dropBar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.dropBar i { display: block; height: 100%; background: var(--cut-burn); }
+.dropNote { margin: 8px 0 0; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.5; }
+
+.liftFillIn { fill: var(--cut-fresh); opacity: 0.16; }
+.liftFillEx { fill: var(--cut-exhaust); opacity: 0.22; }
+.stripMean { fill: none; stroke: var(--ink2); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.stripNow { fill: none; stroke: var(--cut-burn); stroke-width: 2; stroke-linejoin: round; }
