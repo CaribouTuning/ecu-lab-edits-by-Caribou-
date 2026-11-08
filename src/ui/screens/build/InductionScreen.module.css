@@ -230,3 +230,11 @@
 }
 
 .hint[data-over='true'] { color: var(--danger); }
+
+/* The screen's three groups: what forces the air in, nitrous, the MAP sensor. Each says in
+   one line what it changes, so the player knows which settings matter for this build. */
+.group { display: flex; flex-direction: column; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.groupTitle { font-size: var(--fs-sm); font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+.groupWhat { margin: 6px 0 4px; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink2); }
+.subhead { margin: 14px 0 2px; padding-top: 10px; border-top: 1px solid var(--line); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.02em; color: var(--ink); }
+.subhead span { font-weight: 400; color: var(--ink2); margin-left: 6px; }

@@ -1,9 +1,11 @@
 /**
  * BUILD > Induction.
  *
- * Turbo kit toggle, turbine and compressor sizing, intercooler, the boost target
+ * One choice of what forces the air in (none, turbo, supercharger), then only that
+ * kit's settings, each group saying what it changes: turbine and compressor sizing, intercooler, the boost target
  * curve editor (eight RPM columns as bar buttons, tap one to select it, then edit it
- * below with full-width controls), the supercharger and nitrous. The bolt-ons (cold air
+ * below with full-width controls), the supercharger; then nitrous and the MAP sensor in
+ * their own groups. The bolt-ons (cold air
  * intake, headers, cat-back) are on BoltonsScreen.
  */
 
@@ -40,6 +42,15 @@ const LB_MIN_PER_KG_S = 132.277;
 /** What each kind of supercharger is called on the picker. */
 const BLOWER_KIND = { roots: 'Roots', twinscrew: 'Twin-screw', centrifugal: 'Centrifugal' };
 
+/** The one choice that decides what else on this screen applies. */
+const FORCED_OPTS = [{ id: 'none', label: 'None' }, { id: 'turbo', label: 'Turbocharger' }, { id: 'blower', label: 'Supercharger' }];
+/** What each choice does to the engine, in one sentence. */
+const FORCED_WHAT = {
+  none: 'No boost: the engine fills from the atmosphere, so the manifold never goes above outside pressure.',
+  turbo: 'Exhaust drives a compressor: boost builds once there is exhaust to spin it (spool lag), and the wastegate and boost target decide how much.',
+  blower: 'The crank drives a compressor through a belt: boost from just off idle with no lag, set by the pulley, paid for with crank power.',
+};
+
 /**
  * @param {object} props
  * @param {boolean} props.active whether this is BUILD's open section
@@ -59,6 +70,7 @@ export function InductionScreen({ active, onToggle }) {
   const blower = blowerOf(build);
   const fuel = tankFuel(build);
   const curve = React.useMemo(() => (blower ? blowerCurve(build, fuel) : []), [blower, build, fuel]);
+  const kind = turboOn ? 'turbo' : blower ? 'blower' : 'none';
   const setTurbo = (v) => { if (v) set('blowerId', null); set('turboOn', v); };
   const setBlower = (id) => {
     if (!id) { set('blowerId', null); return; }
@@ -114,16 +126,11 @@ export function InductionScreen({ active, onToggle }) {
         : blower ? `${blower.label}, ${ratio.toFixed(2)}:1 pulley, ~${U.fmtBoost(peakBoost, U.metric ? 2 : 0)}`
           : 'Not installed'}${nitrous ? `, ${nitrous.shotHp} shot ${nitrous.kit} nitrous` : ''}`}
     >
-      <div className={styles.labelTight}>MAP Sensor</div>
-      <Seg variant="rule" label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
-        value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />
-      <div className={styles.hint}>A sensor reads up to its rating and no further: a 1-bar sensor tops out at atmospheric and never sees boost.</div>
-      <SetupNote paths={['sensors.map']} okText="The ECU is set up for this sensor."
-        hardwareWarning={turboOn && sensorHw.map === '1bar'
-          ? 'This engine makes boost, and a 1-bar sensor stops reading at atmospheric. The ECU will not see boost and will fuel too little under it. Fit 2.5-bar or bigger.'
-          : null} />
-
-      <Toggle label="Turbo kit" sub="Adds boost near WOT, with spool lag off idle" checked={turboOn} onChange={setTurbo} />
+      <section className={styles.group} aria-label="Forced induction">
+        <div className={styles.groupTitle}>What forces the air in</div>
+        <Seg variant="rule" equal label="Forced induction" options={FORCED_OPTS}
+          value={kind} onChange={(v) => { if (v === 'turbo') setTurbo(true); else if (v === 'blower') setBlower(build.blowerId ?? 'tvs1900'); else { setTurbo(false); setBlower(null); } }} />
+        <p className={styles.groupWhat} data-testid="forced-what">{FORCED_WHAT[kind]}</p>
 
       <div className={styles.subPanel} data-open={turboOn ? 'true' : 'false'}>
         <div className={styles.subPanelInner}>
@@ -132,6 +139,7 @@ export function InductionScreen({ active, onToggle }) {
               The boost target is 0 psi everywhere, so the turbo only restricts the exhaust and the engine makes less power, not more. Set a boost curve under Boost Target Curve below; 6–8 psi is a sensible first step, with timing taken out of the boost rows on TUNE › SPARK before you pull.
             </Note>
           )}
+          <div className={styles.subhead}>The turbo <span>sets how fast it spools and how much air it can pass</span></div>
           <div className={styles.label}>Turbine Size</div>
           <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.labelTight}>Compressor Size</div>
@@ -150,6 +158,7 @@ export function InductionScreen({ active, onToggle }) {
             <br /><br />Note that this figure barely changes with fuel. E85 needs far more fuel by volume, but it also releases almost exactly the same energy per unit of <i>air</i> as gasoline, so airflow — not fuel type — sets the power ceiling. Octane still helps, but through better timing, not through a bigger number here.
           </ExpandableInfo>
 
+          <div className={styles.subhead}>Wastegate <span>decides where boost stops rising</span></div>
           <div className={styles.labelTight}>Wastegate Actuator</div>
           <Seg variant="rule" label="Wastegate actuator" options={WASTEGATE_OPTS.map((o) => ({ id: o.id, label: o.label }))} value={gate.type} onChange={(v) => setGate({ type: v })} equal />
           {gate.type === 'pneumatic' && (
@@ -162,10 +171,12 @@ export function InductionScreen({ active, onToggle }) {
 
           {!blower && (
             <div className={styles.intercoolerRow}>
+              <div className={styles.subhead}>Charge cooling <span>colder air is denser and slower to knock</span></div>
               <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
             </div>
           )}
 
+          <div className={styles.subhead}>Boost target <span>what the boost controller aims for at each speed</span></div>
           <div className={styles.boostLabel}>Boost Target Curve</div>
 
           <Panel tight style={{ marginBottom: 10 }}>
@@ -245,10 +256,9 @@ export function InductionScreen({ active, onToggle }) {
         </div>
       </div>
 
-      <Toggle label="Supercharger kit" sub="Belt-driven boost: no lag, paid for at the crank" checked={!!blower} onChange={(v) => setBlower(v ? (build.blowerId ?? 'tvs1900') : null)} />
-
       {blower && (
         <div className={styles.subPanelInner}>
+          <div className={styles.subhead}>The blower <span>its size and type set the boost curve&apos;s shape</span></div>
           <div className={styles.label}>Supercharger</div>
           <PickList
             options={BLOWER_OPTS.map((o) => ({ label: `${o.label}, ${BLOWER_KIND[o.type]}`, value: o.id }))}
@@ -260,6 +270,7 @@ export function InductionScreen({ active, onToggle }) {
           </div>
 
           <Panel tight style={{ marginBottom: 10 }}>
+            <div className={styles.subhead}>Pulley <span>the only boost control a blower has</span></div>
             <div className={styles.editorHead}>
               <span className={styles.editorRpm}>Pulley ratio</span>
               <span className={styles.editorValue} data-over={top?.overspeed ? 'true' : 'false'}>
@@ -306,6 +317,7 @@ export function InductionScreen({ active, onToggle }) {
           )}
 
           <div className={styles.intercoolerRow}>
+            <div className={styles.subhead}>Charge cooling <span>colder air is denser and slower to knock</span></div>
             <Toggle label="Intercooler" sub="Cools charge air, buys knock margin under boost" checked={mods.intercooler} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'mods', value: { ...mods, intercooler: v } })} />
           </div>
 
@@ -319,7 +331,11 @@ export function InductionScreen({ active, onToggle }) {
         </div>
       )}
 
-      <div className={styles.labelTight}>Nitrous Kit</div>
+      </section>
+
+      <section className={styles.group} aria-label="Nitrous">
+      <div className={styles.groupTitle}>Nitrous</div>
+      <p className={styles.groupWhat}>Extra oxygen, sprayed only while it is armed: more power on demand, with less knock margin while it flows. Off, it changes nothing.</p>
       <Seg variant="rule" label="Nitrous kit" options={[{ id: 'none', label: 'None' }, { id: 'wet', label: 'Wet' }, { id: 'dry', label: 'Dry' }]}
         value={nitrous ? nitrous.kit : 'none'} onChange={(v) => setNitrous(v === 'none' ? null : { kit: v })} equal />
       {nitrous && (
@@ -345,6 +361,20 @@ export function InductionScreen({ active, onToggle }) {
           </ExpandableInfo>
         </>
       )}
+      </section>
+
+      <section className={styles.group} aria-label="Manifold pressure sensor">
+      <div className={styles.groupTitle}>Manifold pressure sensor</div>
+      <p className={styles.groupWhat}>What the ECU reads load with. It makes no power: it decides whether the ECU can see the boost it has to fuel for.</p>
+      <Seg variant="rule" label="MAP sensor" options={Object.entries(LINEAR_SCALES.map).map(([id, s]) => ({ id, label: s.label.split(' (')[0] }))}
+        value={sensorHw.map} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'sensorHw', value: { ...sensorHw, map: v } })} equal />
+      <div className={styles.hint}>A sensor reads up to its rating and no further: a 1-bar sensor tops out at atmospheric and never sees boost.</div>
+      <SetupNote paths={['sensors.map']} okText="The ECU is set up for this sensor."
+        hardwareWarning={(turboOn || blower) && sensorHw.map === '1bar'
+          ? 'This engine makes boost, and a 1-bar sensor stops reading at atmospheric. The ECU will not see boost and will fuel too little under it. Fit 2.5-bar or bigger.'
+          : null} />
+
+      </section>
     </BuildSection>
   );
 }

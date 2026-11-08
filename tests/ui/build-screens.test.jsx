@@ -95,7 +95,7 @@ describe('InductionScreen', () => {
     // with `turboOn`, rather than on button presence, which does not.
     const subPanel = container.querySelector('[data-open]');
     expect(subPanel.getAttribute('data-open')).toBe('false');
-    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: 'Turbocharger' }));
     expect(subPanel.getAttribute('data-open')).toBe('true');
     expect(within(screen.getByTestId('boost-columns')).getAllByRole('button')).toHaveLength(8);
   });
@@ -105,6 +105,23 @@ describe('InductionScreen', () => {
     mount(<InductionScreen active={false} onToggle={onToggle} />);
     fireEvent.click(screen.getByText('Induction'));
     expect(onToggle).toHaveBeenCalledWith('induction');
+  });
+
+  it('picks one thing that forces the air in, and says what it does', () => {
+    mount(<InductionScreen active onToggle={noop} />);
+    const pick = (name) => within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name });
+    expect(pick('None').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('forced-what').textContent).toMatch(/No boost/);
+    fireEvent.click(pick('Supercharger'));
+    expect(pick('Supercharger').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('forced-what').textContent).toMatch(/belt/);
+    expect(screen.getByLabelText('Pulley ratio')).toBeTruthy();
+    // a turbo replaces the blower: the two are never fitted together
+    fireEvent.click(pick('Turbocharger'));
+    expect(pick('Supercharger').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByLabelText('Pulley ratio')).toBeNull();
+    fireEvent.click(pick('None'));
+    expect(screen.getByText('Not installed')).toBeTruthy();
   });
 
   it('holds only what forces air in: the intake is a bolt-on, not on this stage', () => {
@@ -140,6 +157,13 @@ describe('FuelSystemScreen', () => {
     expect(screen.getByText('91, 315cc (stock)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '650cc' }));
     expect(screen.getByText('91, 650cc')).toBeTruthy();
+  });
+
+  it('sets where the injectors spray, port or direct (moved from Heads and cam)', () => {
+    mount(<FuelSystemScreen active onToggle={noop} />);
+    const group = screen.getByRole('group', { name: 'Fuel injection' });
+    fireEvent.click(within(group).getByRole('button', { name: /Direct/ }));
+    expect(within(group).getByRole('button', { name: /Direct/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('reports which section it is when its header is clicked', () => {

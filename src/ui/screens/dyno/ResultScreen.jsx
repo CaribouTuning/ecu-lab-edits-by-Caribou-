@@ -24,7 +24,7 @@
  * Hue now carries series identity and opacity carries time.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 import { CartesianGrid, Legend, Line, LineChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -115,6 +115,31 @@ function niceScale(top) {
   const max = Math.ceil(top / step) * step;
   return { domain: [0, max], ticks: Array.from({ length: Math.round(max / step) + 1 }, (_, k) => k * step) };
 }
+/**
+ * The mixture axis: at least two ratios tall, on half-ratio steps. Left to 'auto', a pull
+ * held within 0.2 of its target filled the chart and repeated 12.7 down the axis, so a 1%
+ * wander read as a miss.
+ * @param {Array<object>} rows the chart data, with `afr` and `afrCommanded`
+ */
+export function afrScale(rows) {
+  const vals = rows.flatMap((d) => [d.afr, d.afrCommanded]).filter(Number.isFinite);
+  if (!vals.length) return { domain: [10, 15], ticks: [10, 11, 12, 13, 14, 15] };
+  let lo = Math.min(...vals); let hi = Math.max(...vals);
+  const mid = (lo + hi) / 2;
+  if (hi - lo < 2) { lo = mid - 1; hi = mid + 1; }
+  lo = Math.floor(lo * 2) / 2; hi = Math.ceil(hi * 2) / 2;
+  const step = hi - lo > 4 ? 1 : 0.5;
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 10) / 10);
+  return { domain: [lo, hi], ticks };
+}
+/** How far the measured mixture sits from the one asked for, as a tuner reads it: 1% lean. */
+function afrMiss(d) {
+  if (!Number.isFinite(d.afrCommanded) || d.afrCommanded <= 0) return '';
+  const pct = (d.afr / d.afrCommanded - 1) * 100;
+  if (Math.abs(pct) < 0.5) return ' · on target';
+  return ` · ${Math.abs(pct).toFixed(1)}% ${pct > 0 ? 'lean' : 'rich'}`;
+}
 const VALUE_AXIS = { stroke: 'var(--line-hi)', tickLine: false, axisLine: false, tick: { fill: 'var(--ink2)', fontSize: 11 } };
 const TOOLTIP = {
   contentStyle: { background: 'var(--panel2)', border: '1px solid var(--line-hi)', borderRadius: 6, fontSize: 12, padding: '6px 10px' },
@@ -159,6 +184,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
   const peakAt = chartData.reduce((b, d) => (d.hp > (b?.hp ?? -Infinity) ? d : b), null)?.rpm ?? last;
   const sweeping = !!running;
   const cursorRpm = sweeping ? last : Math.min(last, Math.max(first, picked ?? peakAt));
+  const afrAxis = useMemo(() => afrScale(chartData), [chartData]);
   const at = chartData.reduce((b, d) => (!b || Math.abs(d.rpm - cursorRpm) < Math.abs(b.rpm - cursorRpm) ? d : b), null);
   const moveTo = (state) => { const r = Number(state?.activeLabel); if (Number.isFinite(r)) setPicked(r); };
   const dragProps = {
@@ -231,7 +257,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
           <div className={styles.cursorRead}>
             <span className={styles.cursorRpm}>{at.rpm.toLocaleString('en-US')} <small>rpm</small></span>
             <span className={styles.cursorHp}>{Number(at.afr).toFixed(1)} <small>:1 measured</small></span>
-            <span className={styles.cursorPrev}>{Number(at.afrCommanded).toFixed(1)}:1 asked</span>
+            <span className={styles.cursorPrev}>{Number(at.afrCommanded).toFixed(1)}:1 asked{afrMiss(at)}</span>
             <span className={styles.cursorTq}>{Number(at.timing).toFixed(1)}<small>° spark</small></span>
           </div>
         )}
@@ -245,7 +271,7 @@ export function ResultScreen({ chartData, engineDerived, ghostLabel, bands = [],
             {cursorLine('afr')}
             {/* Mixture and spark on their own scales: on one axis, AFR around 12 against
                 timing up to 30 degrees drew the mixture as a flat line. */}
-            <YAxis {...VALUE_AXIS} yAxisId="afr" width={44} domain={['auto', 'auto']} tickFormatter={(v) => Number(v).toFixed(1)} />
+            <YAxis {...VALUE_AXIS} yAxisId="afr" width={44} {...afrAxis} tickFormatter={(v) => Number(v).toFixed(1)} />
             <YAxis {...VALUE_AXIS} yAxisId="deg" orientation="right" width={36} tickFormatter={(v) => `${v}°`} />
             <Tooltip {...TOOLTIP} formatter={(v, name) => [Number(v).toFixed(1), /Timing/.test(String(name)) ? `${name}, ° BTDC` : `${name}, :1`]} />
             <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />

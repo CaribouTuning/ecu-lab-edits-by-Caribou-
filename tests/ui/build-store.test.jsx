@@ -244,8 +244,9 @@ describe('opening and dismissing the overwrite prompt', () => {
  * @param {string} label
  * @returns {HTMLElement}
  */
-function toggleFor(label) {
-  return screen.getByRole('switch', { name: label });
+/** One of Induction's "what forces the air in" choices. */
+function chooseFor(label) {
+  return within(screen.getByRole('group', { name: 'Forced induction' })).getByRole('button', { name: label });
 }
 
 /**
@@ -325,7 +326,7 @@ describe('resetting the calibration to stock', () => {
     // Turbo on in BOTH runs, so the hardware half of the VE calculation is identical
     // and the only difference between them is the mod set.
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
     // Headers, the part that changes how the cylinder breathes: an intake only changes the
     // duct ahead of the throttle and compressor, which leaves VE at a given manifold
     // pressure alone, so with it this test could not fail. A bolt-on, on its own stage.
@@ -385,7 +386,7 @@ describe('correcting VE from a logged pull', () => {
     );
     enterSandbox();
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
     buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
 
@@ -430,7 +431,7 @@ describe('applying a fuel-trim histogram', () => {
     enterSandbox();
 
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
     // The intake is a bolt-on, on its own stage.
     buildPart('Bolt-ons');
     fireEvent.click(screen.getByRole('button', { name: /Intake/ }));
@@ -495,7 +496,7 @@ describe('the injector-duty preview call site', () => {
     // dial the boost target at 6500 RPM to its maximum.
     goTo('BUILD');
     fireEvent.click(screen.getByText('Induction'));
-    fireEvent.click(toggleFor('Turbo kit'));
+    fireEvent.click(chooseFor('Turbocharger'));
 
     buildPart('Induction');
     const columns = within(screen.getByTestId('boost-columns')).getAllByRole('button');
@@ -611,7 +612,7 @@ describe('every segmented control', () => {
     // of segmented controls those three stops reach today:
     //   BUILD 22 — Engine: Configuration, Block, Head, Valvetrain Layout, Valves per
     //     Cylinder, Cam Followers, Spark Plugs per Cylinder, Friction Level, Cam Phasers,
-    //     Fuel Injection, Ignition Coils, Plug Gap; Induction: MAP Sensor, Compressor, Turbos (single or
+    //     Ignition Coils, Plug Gap; Induction: What forces the air in, MAP Sensor, Compressor, Turbos (single or
     //     twin), Wastegate Actuator (the spring picker
     //     only appears for a pneumatic gate), Nitrous Kit (its shot and bottle pickers
     //     only appear with a kit fitted); Fuel: Octane, Regulation, Base Pressure,
@@ -620,7 +621,7 @@ describe('every segmented control', () => {
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
     //   (BUILD › ENGINE also has Pistons and rods, the bottom-end picker.)
-    expect(total).toBe(28);
+    expect(total).toBe(29);
   });
 });
 
@@ -636,6 +637,10 @@ describe('every toggle', () => {
     // earlier version of this test had exactly that bug.
     launch();
     fireEvent.click(screen.getByText('Induction'));
+    // With a supercharger and a nitrous kit fitted, Induction shows its intercooler and
+    // bottle-heater switches.
+    fireEvent.click(chooseFor('Supercharger'));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Nitrous kit' })).getByRole('button', { name: 'Wet' }));
     const switches = screen.getAllByRole('switch');
     expect(switches.length).toBeGreaterThan(1);
     switches.forEach((sw) => {
@@ -644,7 +649,7 @@ describe('every toggle', () => {
   });
 
   it('installs the turbo when switched on, and reports it', () => {
-    // The partner to the intercooler test below. Without this, breaking Turbo kit's
+    // The partner to the intercooler test below. Without this, breaking the turbo choice's
     // `checked` or `onChange` was caught only incidentally, by an unrelated duty-cycle
     // test whose threshold happens to need turboOn — change that number and a broken
     // turbo switch would pass the whole suite.
@@ -653,9 +658,9 @@ describe('every toggle', () => {
     const summary = () => screen.getByText(/Naturally aspirated|turbine, peak/).textContent;
     expect(summary()).toBe('Naturally aspirated');
 
-    fireEvent.click(screen.getByRole('switch', { name: /Turbo kit/ }));
+    fireEvent.click(chooseFor('Turbocharger'));
 
-    expect(screen.getByRole('switch', { name: /Turbo kit/ }).getAttribute('aria-checked')).toBe('true');
+    expect(chooseFor('Turbocharger').getAttribute('aria-pressed')).toBe('true');
     // And it reached the build, not just the switch: the section summary reads turboOn.
     expect(summary()).toMatch(/turbine, peak/);
   });

@@ -1,7 +1,8 @@
 /**
  * BUILD > Fuel System.
  *
- * What is physically FITTED: octane in the tank and the injectors bolted in. What
+ * What is physically FITTED: octane in the tank, where the injectors spray (port or direct;
+ * moved here from Heads and cam) and the injectors bolted in. What
  * the ECU BELIEVES is fitted — the injector scaling it calculates pulse width
  * against — lives on TUNE > Injectors instead, deliberately: `RESCALE ECU TO
  * ###cc` exists precisely because hardware and calibration can disagree, and
@@ -15,7 +16,7 @@
 import { Fuel } from 'lucide-react';
 import React from 'react';
 
-import { DEFAULT_ECU_HW, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS } from '../../../sim/index.js';
+import { DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS } from '../../../sim/index.js';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
@@ -70,6 +71,14 @@ export function FuelSystemScreen({ active, onToggle }) {
           <SetupNote paths={['config.flexEnabled']} okText="The ECU reads this sensor and fuels for the blend it measures." />
         </>
       )}
+
+      <div className={styles.labelSpaced}>Where the injectors spray</div>
+      <Seg label="Fuel injection" variant="rule" equal options={INJECTION_OPTS} value={build.engineConfig?.injection ?? 'port'} onChange={(v) => dispatch({ type: ACTIONS.SET_ENGINE_CONFIG_PATCH, patch: { injection: v === 'direct' ? 'direct' : 'port' } })} />
+      <ExpandableInfo title="Port injection versus direct injection">
+          <b className={styles.em}>Port injection</b> (multi-point manifold injection) puts one injector in each intake runner, aimed at the back of the intake valve. The fuel boils off that hot valve, so it cools the metal, not the air: the charge reaches the cylinder barely colder than it left the manifold. The Nissan VQs here are port-injected.
+          <br /><br /><b className={styles.em}>Direct injection</b> sprays into the cylinder itself, at far higher pressure. The fuel takes its heat of evaporation from the air, and measured on the same engine that is about 14 °C colder on gasoline and 49 °C on E85. Colder air is denser, so more of it gets in (about 6% on gasoline here), and colder end gas takes longer to light itself, so the knock limit rises. That is how the BMW and VW turbo engines here run their compression under boost. There is no port wall for fuel to soak into, either, so a direct-injected engine needs far less acceleration enrichment.
+          <br /><br />Swap one for the other and the fuel tables stay the engine&apos;s own: re-tune after the change, as you would on a real conversion.
+        </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Fuel Injectors</div>
       <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />

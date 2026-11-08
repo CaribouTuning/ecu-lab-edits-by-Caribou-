@@ -49,7 +49,7 @@ export function makeEcuLiveState() {
   return {
     knockRetard: 0, knockQuiet: 99, boostDuty: 0, boostI: 0, boostTargetRamped: 0,
     overboostT: 0, boostCutPsi: 0, fuelCutProt: false, limp: null,
-    camIn: 0, camEx: 0, camInVel: 0, film: 0, aePct: 0, prevTps: 0, sinceStart: 0,
+    camIn: 0, camEx: 0, camInVel: 0, film: 0, filmEst: 0, filmCompPct: 0, transPrev: 1, aePct: 0, prevTps: 0, sinceStart: 0,
     afterStartPct: 0, volts: 12.6, throttle: 0, extraFuelPct: 0, torqueRetard: 0,
     leanT: 0, oilT: 0, sMap: BARO_KPA, sIat: 25, sLambda: 1, sTps: 0, sEct: 20,
     protect: [], faultsSeen: [], railKpa: 300, oilKpa: 0, log: [],
@@ -255,7 +255,11 @@ export function liveStepEcu(st, dt, input, cfg) {
   if (s.running && idleZone && pedal < 3) {
     const starting = e.sinceStart < cal.idle.startHoldS;
     const holding = starting && s.rpm > idleTarget;
-    if (holding) { /* hold base air through the flare */ } else if (s.rpm < E.IDLE_CAPTURE_RPM) {
+    // The idle valve starts catching the engine where the overrun fuel comes back (raised on a
+    // cold engine), so the returning fuel meets a manifold it can burn in, not deep vacuum.
+    const fuelReturnRpm = cal.fuel.dfcoExitRpm + (cal.fuel.dfcoColdRpm ? read1(cal.fuel.dfcoColdRpm, e.sEct) : 0);
+    const captureRpm = Math.max(E.IDLE_CAPTURE_RPM, cal.fuel.dfcoEnabled ? fuelReturnRpm + 250 : 0);
+    if (holding) { /* hold base air through the flare */ } else if (s.rpm < captureRpm) {
       const err = idleTarget - s.rpm;
       const gain = err > 0 ? cal.idle.gainUp : cal.idle.gainDown;
       // Damping on the speed change over the last step — the derivative term. (Taken
@@ -293,8 +297,17 @@ export function liveStepEcu(st, dt, input, cfg) {
   if (burble) effThrottle = Math.max(effThrottle, ig.burbleAirPct ?? 3);
 
   // ---- OVERRUN FUEL CUT AND REV LIMITER.
-  const dfco = cal.fuel.dfcoEnabled && !burble && s.running && idleZone && pedal < 3
-    && s.rpm > (s.dfco ? cal.fuel.dfcoExitRpm : cal.fuel.dfcoEnterRpm) && e.sEct > cal.fuel.dfcoMinEctC;
+  // Cold, the cut comes in and the fuel comes back at higher speeds (the coolant table every
+  // factory fuel cut carries: Toyota US 4,506,638, Honda US 4,434,769), so a cold engine
+  // still cuts on the overrun, where a closed throttle holds the manifold so far into vacuum
+  // that a fuelled charge will not light, and does not stall as the fuel returns.
+  const dfcoCold = cal.fuel.dfcoColdRpm ? read1(cal.fuel.dfcoColdRpm, e.sEct) : 0;
+  // The ECU commands its own throttle blade, so it knows the moment the throttle is told to
+  // shut, a step before its position sensor reads it: the cut starts with the lift, not
+  // one fuelled step into a manifold already in deep vacuum.
+  const shutting = idleZone || bladeTarget < cal.idle.tpsIdlePct;
+  const dfco = cal.fuel.dfcoEnabled && !burble && s.running && shutting && pedal < 3
+    && s.rpm > (s.dfco ? cal.fuel.dfcoExitRpm : cal.fuel.dfcoEnterRpm) + dfcoCold && e.sEct > cal.fuel.dfcoMinEctC;
   s.dfco = dfco;
   let hardCut = limp ? Math.min(P.limpRpm, redline + cal.limiter.offsetRpm) : redline + cal.limiter.offsetRpm;
   if (cal.limiter.coldLimitRpm > 0 && e.sEct < cal.limiter.coldBelowC) hardCut = Math.min(hardCut, cal.limiter.coldLimitRpm);
@@ -450,23 +463,43 @@ export function liveStepEcu(st, dt, input, cfg) {
     const { X, tau: filmTau } = filmParams(s.coolantC, derived.injection);
     const injPerCycle = lastPt?.fuelCmd != null && !s.fuelCut ? lastPt.fuelCmd / 1000 : 0;
     const cycles = (s.rpm / 120) * dt;
-    // How full the port-wall film is against what steady running at this fuelling holds
-    // (X of each injection laid down, evaporating over tau: the X-tau model, Aquino, SAE
-    // 810494). The ECU keeps the same account from its own injection record and coolant
-    // temperature. A lift takes fuel out only for what the film gives back: after a fuel
-    // cut (the limiter, the overrun) the film is empty, and taking fuel out then just leaned
-    // the first injections past what the pistons should see.
-    const filmSteady = X * (lastPt?.fuelCmd ?? 0) / 1000 * (s.rpm / 120) * filmTau;
-    const filmFull = filmSteady > 0 ? clamp(e.film / filmSteady, 0, 1) : 0;
-    const aeWant = tpsRate > 5 ? read1(cal.fuel.accel, tpsRate) * cold
-      : tpsRate < -5 ? -read1(cal.fuel.accel, -tpsRate) * cold * cal.fuel.decelEnlean * filmFull : 0;
+    // The film is X of each injection laid down, evaporating over tau: the X-tau model
+    // (Aquino, SAE 810494). After a fuel cut (the limiter, the overrun) it is empty.
+    const aeWant = tpsRate > 5 ? read1(cal.fuel.accel, tpsRate) * cold : 0;
     const decayed = e.aePct * Math.exp(-dt / Math.max(0.02, cal.fuel.accelDecayS));
-    e.aePct = aeWant > 0 ? Math.max(decayed, aeWant) : aeWant < 0 ? Math.min(decayed, Math.max(-60, aeWant)) : decayed;
+    e.aePct = aeWant > 0 ? Math.max(decayed, aeWant) : decayed;
     if (Math.abs(e.aePct) < 0.05) e.aePct = 0;
+    // WALL-FILM COMPENSATION, the release side of the ECU's X-tau account (Aquino, SAE
+    // 810494): the ECU keeps its own estimate of the film from what it injected and its
+    // coolant sensor, and takes out of each injection what the film is giving back beyond
+    // what it is taking up, for as long as the film drains, not only while the throttle
+    // moves. Commanding c so that c (1 - X) + release = wanted. Its gain is the calibration's
+    // decel enleanment: 1 removes exactly the estimate, less leaves a lift rich (and a cold
+    // overrun popping as the misfired charge lights in the exhaust).
+    const est = filmParams(e.sEct, derived.injection);
+    const wanted = injPerCycle > 0 ? injPerCycle / Math.max(0.05, 1 + (e.filmCompPct ?? 0) / 100) : 0;
+    const releaseEst = cycles > 0 ? (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1) / cycles : 0;
+    const factor = wanted > 0 ? (wanted - releaseEst) / ((1 - est.X) * wanted) : 1;
+    // Both ways: what the film gives back is taken out (its gain the decel enleanment), and
+    // after a fuel cut, when the film is empty and takes up X of every injection until it
+    // is wet again, that is put back, so the fuel's return does not misfire lean. On a
+    // tip-in the acceleration enrichment already carries the film's uptake, so the account
+    // adds nothing while it runs.
+    e.filmCompPct = factor < 1
+      ? Math.max(-95, (factor - 1) * 100 * (cal.fuel.decelEnlean ?? 1))
+      : e.aePct > 0.5 ? 0 : Math.min(100, (factor - 1) * 100);
+    e.filmEst = Math.max(0, (e.filmEst ?? 0) + est.X * injPerCycle * Math.max(0.05, 1 + (e.aePct + e.filmCompPct) / 100) / Math.max(0.05, e.transPrev ?? 1) * cycles - (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1));
+    // The film works on the fuel injected THIS step, which is last step's command moved by
+    // the change in the transient correction since: its evaporation is a mass, not a share
+    // of the command, so sizing it on last step's command over-leaned the step a large
+    // correction came in on and over-richened the one after.
+    const transNow = 1 + (e.aePct + e.filmCompPct) / 100;
+    const injNow = injPerCycle * Math.max(0.05, transNow) / Math.max(0.05, e.transPrev ?? 1);
+    e.transPrev = transNow;
     const evap = e.film * clamp(dt / filmTau, 0, 1);
-    e.film = Math.max(0, e.film + X * injPerCycle * cycles - evap);
-    const deliveredPerCycle = injPerCycle > 0 ? (1 - X) * injPerCycle + evap / Math.max(1e-6, cycles) : 0;
-    const filmFactor = injPerCycle > 0 ? clamp(deliveredPerCycle / injPerCycle, 0.2, 3) : (s.cranking ? 1 - X : 1);
+    e.film = Math.max(0, e.film + X * injNow * cycles - evap);
+    const deliveredPerCycle = injNow > 0 ? (1 - X) * injNow + evap / Math.max(1e-6, cycles) : 0;
+    const filmFactor = injNow > 0 ? clamp(deliveredPerCycle / injNow, 0.2, 3) : (s.cranking ? 1 - X : 1);
 
     // Knock control: retard in steps on each event heard, recover slowly.
     const idleSpark = s.running && idleZone && pedal < 3 && s.rpm < E.IDLE_SPARK_MAX_RPM
@@ -502,7 +535,7 @@ export function liveStepEcu(st, dt, input, cfg) {
       cam: { intakeAdvDeg: e.camIn, exhaustRetDeg: e.camEx }, empKpa: steady.empKpa,
       dyn: {
         steadyTrims: false, sensedMapKpa: e.sMap, sensedTpsPct: e.sTps, sensedIatC: e.sIat, sensedEctC: e.sEct,
-        knockRetardDeg: e.knockRetard, stftPct: s.stft, ltftPct: s.ltft, aePct: e.aePct,
+        knockRetardDeg: e.knockRetard, stftPct: s.stft, ltftPct: s.ltft, aePct: e.aePct + (e.filmCompPct ?? 0),
         afterStartPct: s.running ? e.afterStartPct : 0, crankingPct, cylinderFuelFactor: filmFactor,
         cutFrac, cutType, extraRetardDeg: limiterRetard + e.torqueRetard, extraFuelPct: e.extraFuelPct,
         idleSparkDeg: idleSpark, cranking: s.cranking, decel: pedal < 3 && s.rpm > E.IDLE_SPARK_MAX_RPM && !dfco, burble,
@@ -696,7 +729,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     tps: Number(e.sTps.toFixed(1)), sMap: Math.round(e.sMap),
     ...(cal.config.airModel === 'alphan' ? { ecuLoad: Number((clamp(e.sTps, 0, 100) / 100 * BARO_KPA).toFixed(1)) } : {}),
     stft: Number(s.stft.toFixed(1)), ltft: Number(s.ltft.toFixed(1)),
-    ae: Number(e.aePct.toFixed(1)), knockRetard: Number(e.knockRetard.toFixed(1)), knockV: Number((e.knockV ?? 0).toFixed(3)),
+    ae: Number((e.aePct + (e.filmCompPct ?? 0)).toFixed(1)), knockRetard: Number(e.knockRetard.toFixed(1)), knockV: Number((e.knockV ?? 0).toFixed(3)),
     camIn: Number(e.camIn.toFixed(1)), camInTarget: Number((e.camInTarget ?? 0).toFixed(1)), camEx: Number(e.camEx.toFixed(1)),
     idleTarget: Math.round(e.idleTarget ?? 0), idleAir: Number((e.idleAir ?? 0).toFixed(1)), iat: Math.round(e.sIat), ect: Math.round(e.sEct),
     oil: Math.round(e.oilKpa), volts: Number(e.volts.toFixed(2)), sLambda: Number(e.sLambda.toFixed(3)), cut: Math.round(cutFrac * 100),
