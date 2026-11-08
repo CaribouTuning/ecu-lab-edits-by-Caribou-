@@ -81,7 +81,7 @@ export function EcuControlScreen({ section, title, icon, liveVars }) {
         <div className={styles.note}><Note>No nitrous kit fitted — these settings take effect once one is, on BUILD → INDUCTION.</Note></div>
       )}
       {section === 'vvt' && !vvt.intake && (
-        <div className={styles.note}><Note>This engine has fixed cams. Fit cam phasers on BUILD → ENGINE and the targets below start moving the valve events.</Note></div>
+        <div className={styles.note}><Note>This engine has fixed cams. Fit cam phasers on BUILD → HEADS AND CAM and the targets below start moving the valve events.</Note></div>
       )}
       <EcuSection section={section} title={title} icon={icon} liveVars={liveVars} />
     </div>

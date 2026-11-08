@@ -6,6 +6,7 @@
  */
 
 
+import { upgradeEcuCalibration } from '../../sim/index.js';
 import { EQUIPMENT, MILESTONES, STARTING_PAGES, STARTING_SECTIONS, TRAINING } from './catalog.js';
 import { customerCar } from './cars.js';
 import { dayOffers } from './generate.js';
@@ -163,6 +164,8 @@ export function reviveCareer(raw) {
   // is gone, so they and any job that stood in for one go.
   for (const k of ['cars', 'starterGiven', 'look', 'wardrobe', 'looks', 'found', 'races', 'raceDay', 'meetDay', 'meets', 'junk', 'daily', 'streak', 'decor', 'ach', 'track']) delete revived[k];
   revived.lifts = revived.lifts.filter((l) => l && jobById(l.jobId) && l.car?.build && l.car?.tune);
+  // A car on a lift keeps its calibration as saved, brought up to this build's settings.
+  revived.lifts = revived.lifts.map((l) => (l.car.tune.ecu ? { ...l, car: { ...l.car, tune: { ...l.car.tune, ecu: upgradeEcuCalibration(l.car.tune.ecu) } } } : l));
   return Array.isArray(c.offers) && c.offers.every((id) => typeof id === 'string' && jobById(id)) ? revived : withOffers(revived);
 }
 

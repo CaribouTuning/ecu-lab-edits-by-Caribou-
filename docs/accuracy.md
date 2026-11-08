@@ -413,6 +413,17 @@ the default engine against roughly 28–35 kPa on a real V6, and 21 kPa on the L
 the 17–20 inHg (about 34–43 kPa) its owners measure. The breathing matches GM's tables at
 30 kPa and the alternator's drag is carried, so the missing idle load is not yet found.
 
+**Best spark at light load** (November 2026). The spark table is written to the MBT rule
+(50% of the mass burned 8.5° after TDC, `mbtFromBurn`), which holds across engine types
+and dilution on real engines. The cycle's own IMEP disagrees at light load: on the default
+engine at a warm idle (800 RPM, 24 kPa, 22% residual, a 73° burn) the rule gives 37° and
+the cycle's IMEP peaks at 24°, 50% burned about 20° after TDC, though the curve is flat
+(4% between the two). At 2500 RPM and 30 kPa the cycle peaks at 44° where the rule asks
+for its 50° ceiling. The likely cause is the Woschni wall-heat term charging an early burn
+too much at low load. It is not refitted: no light-load pressure data is in hand, and
+the term sets every pull. Idle runs on the idle spark table (15°, `idle.sparkBase`)
+instead of the table's 800 RPM cell.
+
 **Low-speed breathing at full load** (October 2026). Against the full-load VE rows of seven
 distinct stock GM Gen III calibrations, a real engine keeps 0.76 of its peak VE at a sixth of
 its peak speed, 0.81 at a third and 0.83 at a little over half; the reference curve had

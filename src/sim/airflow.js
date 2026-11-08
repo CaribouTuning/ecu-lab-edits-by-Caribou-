@@ -456,3 +456,28 @@ const VE_GRID_KPA = 2;
 function reflectionCoefficient(areaRatio) {
   return (1 - areaRatio) / (1 + areaRatio);
 }
+
+/**
+ * What an exhaust pipe costs at full power: the share of its peak airflow the engine loses
+ * on this pipe against one too big to restrict it, from the same gas exchange that prices
+ * the pipe in every pull (its pressure drop at the flow the engine makes). Read over the
+ * top 1500 rpm, where the flow is greatest.
+ * @param {import('./engine.js').EngineConfig} cfg
+ * @param {object} mods
+ * @param {object} hw as for hardwareVeAt (turbo, turbine, fuel)
+ * @param {number} pipeDia inches
+ * @param {number} redline rpm
+ * @param {number} mapKpa manifold pressure at full throttle (atmosphere plus any boost)
+ * @returns {number} 0..1
+ */
+export function exhaustPowerCost(cfg, mods, hw, pipeDia, redline, mapKpa) {
+  const flow = (dia) => {
+    const ve = hardwareVeAt(cfg, mods, { ...hw, exhaustDia: dia });
+    let best = 0;
+    for (let rpm = Math.max(1500, redline - 1500); rpm <= redline; rpm += 500) best = Math.max(best, rpm * ve(rpm, mapKpa));
+    return best;
+  };
+  const free = flow(6.0);
+  return free > 0 ? Math.max(0, 1 - flow(pipeDia) / free) : 0;
+}
+

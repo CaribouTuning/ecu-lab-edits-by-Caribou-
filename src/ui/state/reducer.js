@@ -17,7 +17,7 @@
  * state it already holds.
  */
 
-import { applyWear, clone2D, DEFAULT_AFR, DEFAULT_TIMING, ECU_META, stockModsOf, layoutById, liveStep, makeLiveState, presetById, setCal } from '../../sim/index.js';
+import { applyWear, clone2D, DEFAULT_AFR, DEFAULT_TIMING, ECU_META, stockModsOf, layoutById, liveStep, makeLiveState, presetById, setCal, upgradeEcuCalibration } from '../../sim/index.js';
 
 import {
   HISTORY_LIMIT, RESTORE_ALL, RESTORE_CALIBRATION, restore, snapshot, snapshotsTuneField,
@@ -184,7 +184,7 @@ export const ACTIONS = Object.freeze({
  *   ecuInjectorCc: number, octaneIdx: number, ethanolPct: number, exhaustDiaIdx: number,
  *   ve: number[][], timing: number[][], afr: number[][],
  *   ecu?: object, mafScalar?: number, assumed?: string[], layout?: import('../../sim/layouts.js').Layout|null,
- *   factoryInduction?: BuildState['factoryInduction'],
+ *   factoryInduction?: BuildState['factoryInduction'], factoryInjIdx?: number,
  * }}} ApplyPresetAction
  */
 
@@ -653,6 +653,7 @@ function baseReducer(state, action) {
           // (presetId is cleared by the first one): what makes it "modified", not "your own".
           originPresetId: p.presetId ?? null,
           injIdx: p.injIdx,
+          factoryInjIdx: p.factoryInjIdx ?? p.injIdx,
           ecuInjectorCc: p.ecuInjectorCc,
           octaneIdx: p.octaneIdx,
           exhaustDiaIdx: p.exhaustDiaIdx,
@@ -836,7 +837,10 @@ function baseReducer(state, action) {
       // so a save from before a field existed still opens; never over an engine the player
       // has already put on the bench this session (the read is async).
       const fresh = makeInitialState();
-      const saved = { build: { ...fresh.build, ...action.build }, tune: { ...fresh.tune, ...action.tune, selection: null } };
+      // A saved calibration is brought up to this build's settings (upgradeEcuCalibration).
+      const tune = { ...fresh.tune, ...action.tune, selection: null };
+      if (tune.ecu) tune.ecu = upgradeEcuCalibration(tune.ecu);
+      const saved = { build: { ...fresh.build, ...action.build }, tune };
       if (state.session.mode === 'career') {
         const stashed = state.stash?.sandbox;
         if (stashed && stashed.build.engineReady !== false) return state;

@@ -416,7 +416,7 @@ export const ENGINE_PRESETS = [
   // duration stands in for a real cam card, and is set where peak POWER lands on the
   // published figure. Torque, and the speeds at which power and torque peak, are then
   // predictions, and `tests/presets.test.js` holds them to the same bands as the rest.
-  // GM's Gen III engines run the "Older (1990s-2000s)" friction level: that level IS
+  // GM's Gen III engines run the GM measured friction level (`older`): that level IS
   // GM's measured friction for this family ("Friction Torque" in the factory
   // calibrations of the LM7, LR4 and two Vortec small-blocks; see friction.js), so for
   // these it is in-sample, not a prediction.
@@ -963,6 +963,8 @@ export function applyPreset(preset, layout = null) {
       turbineCount: preset.induction.turbineCount ?? 1, compressorIdx: preset.induction.compressorIdx, boostCurve: boost,
     },
     injIdx: preset.parts.injectorIdx,
+    // The injector it left the factory with, so the screens mark that size "(stock)".
+    factoryInjIdx: preset.parts.injectorIdx,
     ecuInjectorCc: INJECTOR_OPTS[preset.parts.injectorIdx].cc,
     ...presetTank(preset),
     exhaustDiaIdx: preset.parts.exhaustDiaIdx,
@@ -1301,3 +1303,17 @@ export const PRESET_GROUPS = ENGINE_PRESETS.reduce((groups, preset) => {
   else groups.push({ manufacturer: preset.manufacturer, presets: [preset] });
   return groups;
 }, /** @type {{manufacturer: string, presets: Preset[]}[]} */ ([]));
+
+/**
+ * The injector a build's engine left the factory with: kept on the build since November
+ * 2026, read through its factory engine for a save from before.
+ * @param {{factoryInjIdx?: number|null, originPresetId?: string|null, presetId?: string|null}} build
+ * @returns {number|null}
+ */
+export function stockInjectorIdx(build) {
+  if (Number.isInteger(build?.factoryInjIdx)) return build.factoryInjIdx;
+  const id = build?.originPresetId ?? build?.presetId;
+  const p = id ? ENGINE_PRESETS.find((x) => x.id === id) : null;
+  return p ? p.parts.injectorIdx : null;
+}
+

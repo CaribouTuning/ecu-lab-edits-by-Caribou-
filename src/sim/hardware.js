@@ -100,8 +100,10 @@ export const TYPICAL_INTAKE_VALVE_SHARE = { 2: 0.445, 3: 0.36, 4: 0.36, 5: 0.30 
  *           measured friction and never to a power figure. See FRICTION_SCALE_OLDER.
  */
 export const FRICTION_LEVEL_OPTS = [
-  { id: 'modern', label: 'Modern (low friction)' },
-  { id: 'older', label: 'Older (1990s–2000s)' },
+  // Named for what each is, not an era: the 2005 VQ35DE Rev-Up runs the published level and
+  // the same years' LS1 GM's measured one.
+  { id: 'modern', label: 'Published model' },
+  { id: 'older', label: 'GM measured (1.6×)' },
 ];
 
 /** Selectable block and head materials. */
@@ -171,8 +173,20 @@ export const FUEL_CHOICES = [
  * lower density), so a V6 making 400 wheel hp on E85 needs about 1000 cc at 80% duty.
  * Appended, so a saved build's injector index means what it did.
  */
+/**
+ * An injector by size, marked "(stock)" when it is the one the engine left the factory with:
+ * every engine has its own (650 cc on the turbo BMWs, 440 on the HEMI), so the mark is not
+ * part of an option's name.
+ * @param {number} idx index into INJECTOR_OPTS
+ * @param {number|null} [stockIdx] the engine's factory injector
+ */
+export function injectorLabel(idx, stockIdx = null) {
+  const o = INJECTOR_OPTS[idx];
+  return o ? `${o.cc}cc${idx === stockIdx ? ' (stock)' : ''}` : '';
+}
+
 export const INJECTOR_OPTS = [
-  { label: '315cc (stock)', cc: 315 },
+  { label: '315cc', cc: 315 },
   { label: '440cc', cc: 440 },
   { label: '550cc', cc: 550 },
   { label: '650cc', cc: 650 },

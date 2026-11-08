@@ -295,7 +295,7 @@ export function deriveEngine(cfg) {
   const valvesPerCyl = cfg.valvesPerCyl ?? 4;
   const follower = cfg.follower ?? (valvetrain === 'dohc' ? 'flat' : 'roller');
   const valves = intakeValveAreaRatio({ bore: cfg.bore, valvesPerCyl, intakeValveMm: cfg.intakeValveMm });
-  const character = ratio > 1.08
+  const character = ratio > 1.05
     ? 'Oversquare — revs and breathes higher'
     : ratio < 0.95 ? 'Undersquare — stronger low-end torque' : 'Square — balanced';
   // Compression is passed through rather than only being folded into the two terms

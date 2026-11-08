@@ -149,6 +149,8 @@ function compressionDeduction(compression, headroom) {
  * @param {{size: string, boostCeiling: number, chokeFlowKgS?: number}} input.compressor
  *   the fitted compressor, already scaled for a twin setup (`compressorWithCount`)
  * @param {number} input.exhaustDiaError inches the fitted pipe differs from ideal
+ * @param {number|null} [input.exhaustPowerCost] share of full power the fitted pipe costs
+ *   (airflow.js exhaustPowerCost); graded on this when given
  * @param {number} input.dutyPreview injector duty at current demand, percent
  * @param {number} input.displacementL
  * @param {{label: string, bonus: number}} input.fuel the octane option fitted
@@ -156,7 +158,7 @@ function compressionDeduction(compression, headroom) {
  * @returns {{score: number, label: string, deductions: string[]}}
  */
 export function computeEngineerScore({
-  engineConfig, turboOn, peakBoostPsi, turbine, compressor, exhaustDiaError, dutyPreview,
+  engineConfig, turboOn, peakBoostPsi, turbine, compressor, exhaustDiaError, exhaustPowerCost = null, dutyPreview,
   displacementL, fuel, mods, supercharged = false,
 }) {
   let score = 100;
@@ -276,8 +278,13 @@ export function computeEngineerScore({
   }
   // Only a pipe too small for the power costs anything in the physics (its pressure drop at
   // high flow); an oversized one gains little and loses nothing, so it is not marked.
-  if (exhaustDiaError < -0.3) {
-    score -= 8; deductions.push('-8 Exhaust pipe too small for the power: back-pressure costs the top end');
+  // Graded by what the pipe costs in the physics when that is known (exhaustPowerCost):
+  // more than 5% of full power is a pipe too small for the engine, which no factory exhaust
+  // in the catalogue is. Without it, the shop rule against the pipe size.
+  if (exhaustPowerCost != null ? exhaustPowerCost > 0.05 : exhaustDiaError < -0.3) {
+    score -= 8; deductions.push(exhaustPowerCost != null
+      ? `-8 Exhaust pipe too small for the power: its back-pressure costs about ${Math.round(exhaustPowerCost * 100)}% at the top end`
+      : '-8 Exhaust pipe too small for the power: back-pressure costs the top end');
   }
   if (dutyPreview > 95) {
     score -= 12; deductions.push('-12 Injectors undersized for current demand');

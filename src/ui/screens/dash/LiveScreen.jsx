@@ -104,7 +104,10 @@ export function liveStatus(live, build) {
   if (live.dfco) return 'Overrun fuel cut: the injectors are off while it coasts down. Real ECUs do this, and it costs nothing.';
   if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
   if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
-  if (live.coolantC < 80) return 'Warming up: the ECU adds fuel until the coolant reaches 80 °C.';
+  // Read off the warm-up curve the ECU is running, not a fixed temperature: the player can
+  // reshape it on TUNE → FUEL.
+  const warm = live.ecu?.log?.[live.ecu.log.length - 1]?.warm ?? 0;
+  if (warm > 0.5) return `Warming up: the ECU is adding ${Math.round(warm)}% fuel for the cold engine, less as the coolant warms (warm-up enrichment, TUNE → FUEL).`;
   if (inj) return `The ECU is set for ${inj.set} cc injectors and ${inj.fitted} cc are fitted, so it is ${inj.fitted > inj.set ? 'over' : 'under'}fuelling everywhere by ${Math.round(Math.abs(inj.fitted / inj.set - 1) * 100)}%. Set the injector flow on TUNE → Injectors to ${inj.fitted} cc.`;
   if (live.closedLoop) return 'Warm and in closed loop: the ECU trims fuel against the O2 sensor.';
   return 'Open loop: the ECU follows your tables and ignores the O2 sensor.';

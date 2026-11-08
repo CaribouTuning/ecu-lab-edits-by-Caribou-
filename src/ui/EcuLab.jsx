@@ -20,15 +20,7 @@ import {
 } from 'lucide-react';
 
 import {
-  COMPRESSOR_OPTS, FUEL_CHOICES, SWEEP_START_RPM, compressorWithCount,
-  EXHAUST_DIA_OPTS,
-  INJECTOR_OPTS,
-  TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp,
-  computeEngineerScore, computePullScore, computeTuningScore,
-  applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, injectorDutyPreview, isLocatable, layoutById, presetById,
-  simulateSweep, turbineWithCount, failedPart, FAILURE_MODES,
-  veRecommendations, alphaNFillAt, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel,
-  veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull,
+  COMPRESSOR_OPTS, FUEL_CHOICES, SWEEP_START_RPM, compressorWithCount, EXHAUST_DIA_OPTS, INJECTOR_OPTS, TURBINE_OPTS, acousticDrive, blowerCurve, blowerOf, blowerSpeedRpm, calibrationAdvice, clamp, computeEngineerScore, computePullScore, computeTuningScore, applyPreset, cellsNotRunBy, stockCalibrationFor, deriveEngine, dutyPreviewRpm, evoAtdcDeg, exhaustGeometry, idealExhaustDiameter, exhaustPowerCost, injectorDutyPreview, isLocatable, layoutById, presetById, simulateSweep, turbineWithCount, failedPart, FAILURE_MODES, veRecommendations, alphaNFillAt, defaultEcuCalibration, dynoConditions, ecuHardwareOf, tankFuel, veTruthByPhaseFor, applyVeCorrections, intakeCamAt, scheduledVeAt, veCorrections, veSamplesFromLive, veSamplesFromPull, injectorLabel, stockInjectorIdx,
 } from '../sim/index.js';
 import {
   beepEngineAudio, createEngineAudio, setEngineAudioActive,
@@ -463,7 +455,7 @@ export function EcuLabApp() {
   const advisorPullMemo = useWhenWanted(advisorWanted, () => simulateSweep({
     loadKpa: 100, ve: deferredTables.ve, veTruth, timing: deferredTables.timing, afr: deferredTables.afr,
     turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label, fuel, injectorCc, ecuInjectorCc,
-    injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
+    injectorLabel: injectorLabel(injIdx, stockInjectorIdx(build)), mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu: ecuBundle, layout: deferredTables.layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
     health: advisorHealth,
@@ -674,7 +666,7 @@ export function EcuLabApp() {
    */
   const sweepArgs = (load, ecu) => ({
     loadKpa: load, ve, veTruth, timing, afr, turboOn, boostCurve, octaneBonus, octaneLabel: fuel.label,
-    fuel, injectorCc, ecuInjectorCc, injectorLabel: INJECTOR_OPTS[injIdx].label, mods, mafScalar, derived: engineDerived,
+    fuel, injectorCc, ecuInjectorCc, injectorLabel: injectorLabel(injIdx, stockInjectorIdx(build)), mods, mafScalar, derived: engineDerived,
     turbine, compressor, ecu, layout, exhaustDia: EXHAUST_DIA_OPTS[exhaustDiaIdx].dia,
     ...(blower ? { blower, blowerRatio } : {}), ...(nitrous ? { nitrous } : {}),
   });
@@ -709,6 +701,9 @@ export function EcuLabApp() {
       engineConfig, turboOn, peakBoostPsi: turboOn ? Math.max(...boostCurve) : blowerPeakPsi,
       supercharged: !!blower, turbine, compressor,
       exhaustDiaError, dutyPreview, displacementL: engineDerived.displacementL, fuel, mods,
+      // The pipe graded by what it costs in the physics, at this build's full-throttle boost.
+      exhaustPowerCost: exhaustPowerCost(engineConfig, mods, { turboOn, turbine: turboOn ? turbine : null, fuel },
+        EXHAUST_DIA_OPTS[exhaustDiaIdx].dia, engineDerived.redline, 101.3 + (turboOn ? Math.max(...boostCurve) : blowerPeakPsi) * 6.895),
     });
     const pull = computePullScore({ peakHp: r.peakHp, peakTq: r.peakTq, tuningScore: ts.score, engineerScore: es.score });
     // Banking the pull — result, wear, scores, pull count, run log — lands in the
@@ -1480,7 +1475,7 @@ export function EcuLabApp() {
                     ) : null}
                     {buildSection === 'induction' && <InductionScreen active onToggle={toggleBuildSection} />}
                     {buildSection === 'fuel' && <FuelSystemScreen active onToggle={toggleBuildSection} />}
-                    {buildSection === 'boltons' && <BoltonsScreen active onToggle={toggleBuildSection} idealExhaustDia={idealExhaustDia} />}
+                    {buildSection === 'boltons' && <BoltonsScreen active onToggle={toggleBuildSection} />}
                   </BuildBench>
                 </BuildLocked.Provider>
           </div>

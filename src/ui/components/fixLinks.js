@@ -23,6 +23,9 @@ import { groupByCause } from './fixOrder.js';
 const SCREENS = [
   { re: /\bBUILD (?:→|›|>) FUEL SYSTEM\b/, tab: 'build', section: 'fuel', label: 'BUILD › FUEL SYSTEM' },
   { re: /\bBUILD (?:→|›|>) INDUCTION\b/, tab: 'build', section: 'induction', label: 'BUILD › INDUCTION' },
+  { re: /\bBUILD (?:→|›|>) SHORT BLOCK\b/, tab: 'build', section: 'block', label: 'BUILD › SHORT BLOCK' },
+  { re: /\bBUILD (?:→|›|>) HEADS AND CAM\b/, tab: 'build', section: 'head', label: 'BUILD › HEADS AND CAM' },
+  { re: /\bBUILD (?:→|›|>) IGNITION\b/, tab: 'build', section: 'ignition', label: 'BUILD › IGNITION' },
   { re: /\bBUILD (?:→|›|>) ENGINE\b/, tab: 'build', section: 'engine', label: 'BUILD › ENGINE' },
   { re: /\bBUILD (?:→|›|>) (?:EXHAUST|BOLT-ONS)\b/, tab: 'build', section: 'boltons', label: 'BUILD › BOLT-ONS' },
   { re: /\bTUNE (?:→|›|>) AIRFLOW\b/, tab: 'tune', section: 'airflow', label: 'TUNE › AIRFLOW' },

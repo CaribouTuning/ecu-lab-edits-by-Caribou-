@@ -70,8 +70,8 @@ const BUILD_KEYS = [
   // APPLY_PRESET records the induction the engine left the factory with and the preset it
   // started as (RESET ALL TO STOCK and the base map are calibrated from them): undoing it
   // has to put back the previous engine's, or a reset after the undo would calibrate for
-  // the engine that was undone.
-  'factoryInduction', 'originPresetId',
+  // the engine that was undone. Its factory injector likewise (the size marked "(stock)").
+  'factoryInduction', 'originPresetId', 'factoryInjIdx',
 ];
 
 /**

@@ -114,7 +114,7 @@ function Troubleshooting() {
           ['Rich everywhere after new injectors', 'The ECU still thinks the old injectors are fitted', 'TUNE › INJECTORS: RESCALE'],
           ['Injectors maxed, lean at the top end', 'Not enough injector for the fuel the engine needs (a hardware limit)', 'BUILD › FUEL SYSTEM, then TUNE › INJECTORS'],
           ['Mixture misses the FUEL table’s target', 'The air estimate is wrong, not the target', 'AIRFLOW, SENSORS or INJECTORS: never the FUEL table'],
-          ['Valve float near redline', 'Springs too soft for the cam and RPM', 'BUILD › ENGINE (springs), or a lower rev limit'],
+          ['Valve float near redline', 'Springs too soft for the cam and RPM', 'BUILD › HEADS AND CAM (springs), or a lower rev limit'],
           ['Compressor past its range', 'More boost than this turbo makes efficiently', 'Less boost on TUNE › BOOST, or a bigger compressor on BUILD'],
           ['Overboost protection tripped', 'Boost overshooting its target', 'TUNE › BOOST'],
           ['False knock', 'Valvetrain noise heard as knock', 'TUNE › SPARK: raise the knock threshold just above the noise'],

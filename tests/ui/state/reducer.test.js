@@ -567,11 +567,11 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
   // the old test only compared a hand-built map against the local fixture's own key
   // set — never against what the reducer actually writes. This test instead seeds
   // EVERY field of EVERY slice with a sentinel a real write can never produce, dispatches
-  // for real, and asserts the walked set of changed fields against the 38-field
-  // contract this action documents: a stray write grows the changed set past 38, a
-  // dropped write shrinks it below 38, and the failure message names the field either
+  // for real, and asserts the walked set of changed fields against the 39-field
+  // contract this action documents: a stray write grows the changed set past 39, a
+  // dropped write shrinks it below 39, and the failure message names the field either
   // way.
-  it('changes exactly the 38 documented fields, plus the two history fields', () => {
+  it('changes exactly the 39 documented fields, plus the two history fields', () => {
     const before = makeSentinelState();
     const after = reducer(before, { type: ACTIONS.APPLY_PRESET, preset: N54_PRESET });
     const changed = changedFieldKeys(before, after);
@@ -585,6 +585,8 @@ describe('APPLY_PRESET — exact write surface (catches drift in both directions
       'build.engineReady', 'build.assumed',
       // The induction the engine left the factory with, for RESET ALL TO STOCK.
       'build.factoryInduction', 'build.originPresetId',
+      // and the injector it left the factory with, marked "(stock)" on screen.
+      'build.factoryInjIdx',
       // The factory car's ECU-side parts, which its factory calibration is set up for.
       'build.fuelSystem', 'build.sensorHw', 'build.wastegate', 'build.coil',
       'build.plugGapMm', 'build.ethanolPct',
@@ -1725,11 +1727,11 @@ describe('snapshot field coverage', () => {
   // module iterates over would let a key deleted from both the list AND this
   // expectation pass vacuously. That is exactly the vulnerability a reviewer found —
   // cutting BUILD_KEYS to 3 entries and TUNE_KEYS to 2 left all 871 tests green.
-  it('snapshots exactly the documented 26 build and 10 tune fields', () => {
+  it('snapshots exactly the documented 27 build and 10 tune fields', () => {
     const snap = snapshot(makeInitialState());
     expect(Object.keys(snap.build).sort()).toEqual([
       'assumed', 'blowerId', 'blowerRatio', 'boostCurve', 'coil', 'compressorIdx', 'ecuInjectorCc',
-      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'fuelSystem', 'injIdx', 'mafScalar',
+      'engineConfig', 'engineReady', 'ethanolPct', 'exhaustDiaIdx', 'factoryInduction', 'factoryInjIdx', 'fuelSystem', 'injIdx', 'mafScalar',
       'mods', 'nitrous', 'octaneIdx', 'originPresetId', 'plugGapMm', 'presetId', 'sensorHw', 'turbineCount',
       'turbineIdx', 'turboOn', 'wastegate',
     ]);

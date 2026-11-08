@@ -6,7 +6,10 @@
  * runs rich, misfires and pops, as an untuned engine does.
  */
 
+/* global structuredClone */
 import { describe, expect, it } from 'vitest';
+
+import { upgradeEcuCalibration } from '../src/sim/index.js';
 
 import { makeEngine, runLive } from './ecuHarness.js';
 import { seedRandomPerTest } from './seededRandom.js';
@@ -44,4 +47,28 @@ describe('the overrun on a stock calibration', () => {
     const { rows } = runLive(eng, { seconds: 15, pedal: blips, coolantC: 20 });
     expect(pops(rows)).toBeGreaterThan(20);
   });
+
+  it('a calibration saved before the fix is brought up to it on load, and stops popping', () => {
+    // What a SANDBOX save or a career car from before November 2026 holds: no overrun cut
+    // below 45 °C, decel enleanment 0.6, no cold-speed table, no idle spark table.
+    const eng = makeEngine({ preset: 'vq35de-revup' });
+    const old = structuredClone(eng.cal);
+    old.fuel.dfcoMinEctC = 45; old.fuel.decelEnlean = 0.6; delete old.fuel.dfcoColdRpm; delete old.idle.sparkBase;
+    const revs = (t) => (t > 3 && (t % 4) < 1.2 ? 100 : 0);
+    const run = (cal) => { for (const k of Object.keys(cal)) eng.cal[k] = cal[k]; return runLive(eng, { seconds: 16, pedal: revs, coolantC: 20 }).rows; };
+    expect(pops(run(old))).toBeGreaterThan(20);
+    expect(pops(run(upgradeEcuCalibration(old)))).toBe(0);
+  });
+
+  it('the upgrade keeps what the player set', () => {
+    const cal = structuredClone(makeEngine({ preset: 'vq35de-revup' }).cal);
+    cal.fuel.dfcoMinEctC = 30; cal.fuel.decelEnlean = 0.4; delete cal.idle.sparkBase;
+    const up = upgradeEcuCalibration(cal);
+    expect(up.fuel.dfcoMinEctC).toBe(30);
+    expect(up.fuel.decelEnlean).toBe(0.4);
+    expect(up.idle.sparkBase.z.length).toBeGreaterThan(0);
+    // a curve is one value, never merged cell by cell
+    expect(up.fuel.dfcoColdRpm).toEqual(cal.fuel.dfcoColdRpm);
+  });
 });
+

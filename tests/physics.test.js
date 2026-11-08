@@ -63,6 +63,9 @@ describe('engine architecture', () => {
 
   it('classifies bore/stroke character', () => {
     expect(S.deriveEngine({ ...STOCK, bore: 100, stroke: 80 }).character).toMatch(/Oversquare/);
+    // Square is within 5% either way: an LS1 (99 × 92 mm, 1.08) is oversquare, as it is described.
+    expect(S.deriveEngine({ ...STOCK, bore: 99, stroke: 92 }).character).toMatch(/Oversquare/);
+    expect(S.deriveEngine({ ...STOCK, bore: 86, stroke: 86 }).character).toMatch(/^Square/);
     expect(S.deriveEngine({ ...STOCK, bore: 80, stroke: 100 }).character).toMatch(/Undersquare/);
   });
 

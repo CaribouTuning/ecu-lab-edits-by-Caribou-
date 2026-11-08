@@ -57,7 +57,7 @@ export const HOW_TO_SEE = {
   score: 'DYNO › SCORE: the Tuning Score of the last pull.',
   fuelIs: 'BUILD › FUEL SYSTEM: the fuel the customer asked for.',
   naOnly: 'BUILD › INDUCTION: no turbo, supercharger or nitrous.',
-  maxRedline: 'BUILD › ENGINE: the rev limit.',
+  maxRedline: 'BUILD › SHORT BLOCK: the rev limit.',
 };
 
 /**

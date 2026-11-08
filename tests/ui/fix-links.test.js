@@ -25,10 +25,16 @@ describe('fixLinks', () => {
     expect(fixLinks(null)).toEqual([]);
   });
 
+  it('opens the BUILD stage that holds the part: short block, heads and cam, ignition', () => {
+    expect(fixLinks('lower static compression on BUILD → SHORT BLOCK')[0].href).toBe('#/build/block');
+    expect(fixLinks('raise the valve spring rate on BUILD → HEADS AND CAM')[0].href).toBe('#/build/head');
+    expect(fixLinks('fit higher-output coils on BUILD → IGNITION')[0].href).toBe('#/build/ignition');
+  });
+
   it('every link it can make is a route the app has', () => {
-    const all = 'BUILD → FUEL SYSTEM BUILD → INDUCTION BUILD → ENGINE BUILD → EXHAUST TUNE → AIRFLOW TUNE → SPARK TUNE → FUEL TUNE → INJECTORS TUNE → SENSORS TUNE → BOOST TUNE → VVT TUNE → IDLE TUNE → PROTECT TUNE → TORQUE TUNE → NITROUS';
+    const all = 'BUILD → FUEL SYSTEM BUILD → INDUCTION BUILD → SHORT BLOCK BUILD → HEADS AND CAM BUILD → IGNITION BUILD → ENGINE BUILD → EXHAUST TUNE → AIRFLOW TUNE → SPARK TUNE → FUEL TUNE → INJECTORS TUNE → SENSORS TUNE → BOOST TUNE → VVT TUNE → IDLE TUNE → PROTECT TUNE → TORQUE TUNE → NITROUS';
     const links = fixLinks(all);
-    expect(links).toHaveLength(15);
+    expect(links).toHaveLength(18);
     for (const l of links) expect(ROUTES[l.tab]).toContain(l.section);
   });
 

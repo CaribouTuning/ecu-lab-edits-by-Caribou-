@@ -2,19 +2,22 @@
  * BUILD > Bolt-ons (the route keeps its old id, `exhaust`).
  *
  * The parts that bolt on without changing what the engine is: the cold air intake, the
- * long-tube headers and the cat-back, then the exhaust pipe's diameter and how far that
- * sits from the shop-rule ideal for this build. Induction keeps what forces air in: the
- * turbo, the supercharger, their intercooler, and nitrous.
+ * long-tube headers and the cat-back, then the exhaust pipe's diameter and what it costs
+ * this engine at full power. Induction keeps what forces air in: the turbo, the
+ * supercharger, their intercooler, and nitrous.
  *
- * `idealExhaustDia` is the shell's: it also feeds `exhaustDiaError`, which several
- * other consumers (the score breakdown, the dyno payload) read, so the shell keeps
- * owning the one computation rather than this screen recomputing half of it.
+ * The pipe is sized from the physics (airflow.js exhaustPowerCost): what it costs against a
+ * pipe too big to restrict, on the same gas exchange every pull runs. A shop rule of an inch
+ * per 100 hp from a guessed 82 hp per litre had asked a stock LS1 for 4.65 in.
  */
 
 import { Flame } from 'lucide-react';
 import React, { useMemo } from 'react';
 
-import { CUSTOM_ENGINE_LIMITS, EXHAUST_DIA_OPTS, MOD_INFO, catalystLossShare, headDefaultsOf } from '../../../sim/index.js';
+import {
+  CUSTOM_ENGINE_LIMITS, EXHAUST_DIA_OPTS, MOD_INFO, TURBINE_OPTS, blowerCurve, blowerOf, catalystLossShare, deriveEngine,
+  exhaustPowerCost, headDefaultsOf, tankFuel, turbineWithCount,
+} from '../../../sim/index.js';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { PartRow } from '../../components/PartRow.jsx';
@@ -34,11 +37,9 @@ const MODS_HERE = ['intake', 'headers', 'exhaust'];
  * @param {object} props
  * @param {boolean} props.active whether this is BUILD's open section
  * @param {(section: string) => void} props.onToggle opens or closes a BUILD section
- * @param {number} props.idealExhaustDia the shop-rule ideal diameter for this
- *   build's displacement and boost, in inches
  * @returns {React.ReactElement}
  */
-export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
+export function BoltonsScreen({ active, onToggle }) {
   const [build, dispatch] = useBuild();
   const U = useUnits();
   const { exhaustDiaIdx, turboOn, boostCurve, mods, engineConfig } = build;
@@ -46,6 +47,21 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
   const defaults = useMemo(() => headDefaultsOf(engineConfig), [engineConfig]);
   const setCfg = (patch) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'engineConfig', value: { ...engineConfig, ...patch } });
   const catalyst = mods.catalyst ?? 'ceramic';
+
+  // What each pipe costs this engine at full throttle and full boost, and the smallest that
+  // costs under 1%. Solved only while this stage is open; each pipe is four cells of the
+  // gas exchange, kept per engine.
+  const sizing = useMemo(() => {
+    const fuel = tankFuel(build);
+    const blower = blowerOf(build);
+    const peakPsi = turboOn ? Math.max(...boostCurve) : blower ? Math.max(0, ...blowerCurve(build, fuel).map((p) => p.boostPsi)) : 0;
+    const hw = { turboOn, turbine: turboOn ? turbineWithCount(TURBINE_OPTS[build.turbineIdx], build.turbineCount ?? 1) : null, fuel };
+    const redline = deriveEngine(engineConfig).redline;
+    const cost = (dia) => exhaustPowerCost(engineConfig, mods, hw, dia, redline, 101.3 + peakPsi * 6.895);
+    const fitted = cost(EXHAUST_DIA_OPTS[exhaustDiaIdx].dia);
+    const free = EXHAUST_DIA_OPTS.find((o) => cost(o.dia) < 0.01) ?? EXHAUST_DIA_OPTS[EXHAUST_DIA_OPTS.length - 1];
+    return { fitted, freeDia: free.dia, boosted: peakPsi > 0 };
+  }, [build, engineConfig, mods, turboOn, boostCurve, exhaustDiaIdx]);
 
   // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
   // table: TUNE › AIRFLOW shows the gap, and you correct it from a log once you know why.
@@ -92,9 +108,8 @@ export function BoltonsScreen({ active, onToggle, idealExhaustDia }) {
 
       <div className={styles.label}>Exhaust Diameter</div>
       <Seg variant="rule" equal label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: U.metric ? U.fmtLength(o.dia) : o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
-      <div className={styles.idealNote}>
-        Estimated ideal for this build: ~{U.metric ? U.fmtLength(idealExhaustDia) : `${idealExhaustDia.toFixed(2)} in`}
-        {turboOn && Math.max(...boostCurve) > 0 && <span className={styles.raisedByBoost}> (raised by boost)</span>}
+      <div className={styles.idealNote} data-testid="exhaust-sizing">
+        This pipe costs about {(sizing.fitted * 100).toFixed(1)}% of full power{sizing.boosted ? ' at full boost' : ''}. The smallest that costs under 1%: {U.metric ? U.fmtLength(sizing.freeDia) : `${sizing.freeDia.toFixed(1)} in`}.
       </div>
       <ExpandableInfo title="Why bigger stops paying">
         The pipe costs pressure in proportion to the speed of the gas through it squared, so an undersized pipe holds back-pressure on the cylinders at high RPM, where the flow is greatest, and the engine loses top end. Past the size the power needs, the loss left is already small: a bigger pipe gains almost nothing and costs more. The pressure waves that scavenge the cylinder live in the header primaries, not in the pipe after the collector, so this sim gives an oversized cat-back no low-RPM penalty either.

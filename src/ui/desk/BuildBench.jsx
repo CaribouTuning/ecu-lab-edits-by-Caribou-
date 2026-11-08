@@ -18,7 +18,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import {
-  COIL_OPTS, EXHAUST_DIA_OPTS, FUEL_CHOICES, INJECTOR_OPTS, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf,
+  COIL_OPTS, EXHAUST_DIA_OPTS, FUEL_CHOICES, TURBINE_OPTS, VALVETRAIN_OPTS, blowerOf, injectorLabel, stockInjectorIdx,
 } from '../../sim/index.js';
 import { BuildBenchMode } from '../components/BuildSection.jsx';
 import { EngineStart } from '../screens/build/EngineStart.jsx';
@@ -68,7 +68,7 @@ export function partSummaries(build, derived, preset, U = unitsFor('imperial')) 
     head: `${vt}, ${cfg.valvesPerCyl ?? 4} valves, ${cfg.camDuration}°/${cfg.exhaustCamDuration ?? cfg.camDuration}° cam`,
     ignition: `${cfg.sparkPlugs ?? 1} plug${(cfg.sparkPlugs ?? 1) > 1 ? 's' : ''} a cylinder, ${(COIL_OPTS.find((o) => o.id === (build.coil ?? 'stock')) ?? COIL_OPTS[0]).label.toLowerCase()}, ${(build.plugGapMm ?? 1.0).toFixed(1)} mm gap`,
     induction: bolt ? `${turbo}, ${bolt}` : turbo,
-    fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${INJECTOR_OPTS[build.injIdx].label}`,
+    fuel: `${fuel.flex ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : fuel.label}, ${injectorLabel(build.injIdx, stockInjectorIdx(build))}`,
     boltons: ex ? `${pipe}, ${ex}` : pipe,
   };
 }

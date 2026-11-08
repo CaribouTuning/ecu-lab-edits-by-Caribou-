@@ -631,7 +631,7 @@ function TurboIt() {
       <Goal learn="add a turbo and tune it to make safe power." need="Chapters 3 and 4." />
       <P>A turbo packs more air into every cylinder, so the same engine can burn more fuel and make more power. It also heats and squeezes the charge, so the engine knocks at less spark than it did without it. Tuning a turbo is finding the spark and the mixture that use the extra air without knocking.</P>
       <Do steps={[
-        <>On <K>BUILD › INDUCTION</K>, fit the turbo kit and the intercooler, and set a mild boost curve: about 6 psi everywhere for a first pull.</>,
+        <>On <K>BUILD › INDUCTION</K>, choose Turbocharger under What forces the air in, switch the intercooler on, and set a mild boost curve: about 6 psi everywhere for a first pull.</>,
         <>On <K>BUILD › FUEL SYSTEM</K>, fit injectors big enough for the power (the Pull Log says so if they are not), and tell the ECU their size on <K>TUNE › INJECTORS</K>.</>,
         <>Make your first pull at a light throttle, then at full throttle. Read the <K>PULL LOG</K>: any knock names the RPM and the boost rows it happened in.</>,
         <>On <K>TUNE › SPARK</K>, take timing out of the boost rows where it knocked (the advice beside each cell gives the number), and richen those rows a little on <K>TUNE › FUEL</K>: about 11.5 to 12:1 on pump fuel.</>,

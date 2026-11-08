@@ -308,7 +308,7 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       cause: spark
         ? `The plug gap needs ${peak.sparkKvNeed} kV to break down at this cylinder pressure, and the coil can make ${peak.sparkKvHave} kV at this dwell. Boost and advance both raise the gas density at the gap, and it takes more voltage to arc through denser gas.`
         : `The mixture (λ ${peak.lambda}) is outside what a flame will cross — it lights at the plug and dies.`,
-      fix: spark ? 'Close the plug gap or fit higher-output coils on BUILD → ENGINE, or raise coil dwell on TUNE → SPARK.' : 'The mixture is too far off to light. Fix the fuelling entries in this log first: injector flow rate (TUNE → INJECTORS), the fuel the ECU assumes and the AFR target (TUNE → FUEL).',
+      fix: spark ? 'Close the plug gap or fit higher-output coils on BUILD → IGNITION, or raise coil dwell on TUNE → SPARK.' : 'The mixture is too far off to light. Fix the fuelling entries in this log first: injector flow rate (TUNE → INJECTORS), the fuel the ECU assumes and the AFR target (TUNE → FUEL).',
     });
   });
 

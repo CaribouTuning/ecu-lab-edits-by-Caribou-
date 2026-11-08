@@ -16,7 +16,9 @@
 import { Fuel } from 'lucide-react';
 import React from 'react';
 
-import { DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS } from '../../../sim/index.js';
+import {
+  DEFAULT_ECU_HW, INJECTION_OPTS, INJECTOR_OPTS, LINEAR_SCALES, FUEL_CHOICES, PUMP_OPTS, REGULATOR_OPTS, injectorLabel, stockInjectorIdx,
+} from '../../../sim/index.js';
 import { Toggle } from '../../primitives/Toggle.jsx';
 import { BuildSection } from '../../components/BuildSection.jsx';
 import { SetupNote } from '../../components/ecu/SetupNote.jsx';
@@ -49,7 +51,7 @@ export function FuelSystemScreen({ active, onToggle }) {
     <BuildSection
       active={active} onClick={() => onToggle('fuel')}
       icon={Fuel} label="Fuel System"
-      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label}, ${INJECTOR_OPTS[injIdx].label}`}
+      sub={`${flexTank ? `Flex E${Math.round(build.ethanolPct ?? 0)}` : FUEL_CHOICES[octaneIdx].label}, ${injectorLabel(injIdx, stockInjectorIdx(build))}`}
     >
       <div className={styles.label}>Fuel Octane</div>
       <Seg variant="rule" equal label="Fuel Octane" options={FUEL_CHOICES.map((o) => ({ label: o.label, id: o.label }))} value={FUEL_CHOICES[octaneIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'octaneIdx', value: FUEL_CHOICES.findIndex((o) => o.label === v) })} />
@@ -81,7 +83,7 @@ export function FuelSystemScreen({ active, onToggle }) {
         </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Fuel Injectors</div>
-      <PickList options={INJECTOR_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={INJECTOR_OPTS[injIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: INJECTOR_OPTS.findIndex((o) => o.label === v) })} />
+      <PickList options={INJECTOR_OPTS.map((o, i) => ({ label: injectorLabel(i, stockInjectorIdx(build)), value: String(i) }))} value={String(injIdx)} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: Number(v) })} />
 
       <div className={styles.labelSpaced}>Fuel Pump</div>
       <PickList options={PUMP_OPTS.map((o) => ({ label: o.label, value: o.id }))} value={PUMP_OPTS[fuelSystem.pumpIdx]?.id} onChange={(v) => setFs({ pumpIdx: PUMP_OPTS.findIndex((o) => o.id === v) })} />

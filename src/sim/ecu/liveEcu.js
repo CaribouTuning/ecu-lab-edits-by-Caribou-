@@ -477,7 +477,14 @@ export function liveStepEcu(st, dt, input, cfg) {
     // decel enleanment: 1 removes exactly the estimate, less leaves a lift rich (and a cold
     // overrun popping as the misfired charge lights in the exhaust).
     const est = filmParams(e.sEct, derived.injection);
-    const wanted = injPerCycle > 0 ? injPerCycle / Math.max(0.05, 1 + (e.filmCompPct ?? 0) / 100) : 0;
+    // Last step's command was sized for last step's air. At a fixed speed the air, and the
+    // fuel it needs, follow the manifold pressure the ECU reads, so the injection about to be
+    // made is that one moved by the pressure since. Without it, the fuel returning after an
+    // overrun cut was corrected for the 15 kPa of the cut while the idle valve had the
+    // manifold at 27, and the whole correction landed on twice the fuel: lean misfires.
+    const mapStep = clamp(e.sMap / Math.max(5, e.filmMapPrev ?? e.sMap), 0.25, 4);
+    e.filmMapPrev = e.sMap;
+    const wanted = injPerCycle > 0 ? injPerCycle * mapStep / Math.max(0.05, 1 + (e.filmCompPct ?? 0) / 100) : 0;
     const releaseEst = cycles > 0 ? (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1) / cycles : 0;
     const factor = wanted > 0 ? (wanted - releaseEst) / ((1 - est.X) * wanted) : 1;
     // Both ways: what the film gives back is taken out (its gain the decel enleanment), and
@@ -488,13 +495,13 @@ export function liveStepEcu(st, dt, input, cfg) {
     e.filmCompPct = factor < 1
       ? Math.max(-95, (factor - 1) * 100 * (cal.fuel.decelEnlean ?? 1))
       : e.aePct > 0.5 || pedal >= 3 ? 0 : Math.min(100, (factor - 1) * 100);
-    e.filmEst = Math.max(0, (e.filmEst ?? 0) + est.X * injPerCycle * Math.max(0.05, 1 + (e.aePct + e.filmCompPct) / 100) / Math.max(0.05, e.transPrev ?? 1) * cycles - (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1));
+    e.filmEst = Math.max(0, (e.filmEst ?? 0) + est.X * injPerCycle * mapStep * Math.max(0.05, 1 + (e.aePct + e.filmCompPct) / 100) / Math.max(0.05, e.transPrev ?? 1) * cycles - (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1));
     // The film works on the fuel injected THIS step, which is last step's command moved by
     // the change in the transient correction since: its evaporation is a mass, not a share
     // of the command, so sizing it on last step's command over-leaned the step a large
     // correction came in on and over-richened the one after.
     const transNow = 1 + (e.aePct + e.filmCompPct) / 100;
-    const injNow = injPerCycle * Math.max(0.05, transNow) / Math.max(0.05, e.transPrev ?? 1);
+    const injNow = injPerCycle * mapStep * Math.max(0.05, transNow) / Math.max(0.05, e.transPrev ?? 1);
     e.transPrev = transNow;
     const evap = e.film * clamp(dt / filmTau, 0, 1);
     e.film = Math.max(0, e.film + X * injNow * cycles - evap);
@@ -731,7 +738,7 @@ export function liveStepEcu(st, dt, input, cfg) {
     tps: Number(e.sTps.toFixed(1)), sMap: Math.round(e.sMap),
     ...(cal.config.airModel === 'alphan' ? { ecuLoad: Number((clamp(e.sTps, 0, 100) / 100 * BARO_KPA).toFixed(1)) } : {}),
     stft: Number(s.stft.toFixed(1)), ltft: Number(s.ltft.toFixed(1)),
-    ae: Number((e.aePct + (e.filmCompPct ?? 0)).toFixed(1)), knockRetard: Number(e.knockRetard.toFixed(1)), knockV: Number((e.knockV ?? 0).toFixed(3)),
+    ae: Number((e.aePct + (e.filmCompPct ?? 0)).toFixed(1)), warm: Number(read1(cal.fuel.warmup, e.sEct).toFixed(1)), knockRetard: Number(e.knockRetard.toFixed(1)), knockV: Number((e.knockV ?? 0).toFixed(3)),
     camIn: Number(e.camIn.toFixed(1)), camInTarget: Number((e.camInTarget ?? 0).toFixed(1)), camEx: Number(e.camEx.toFixed(1)),
     idleTarget: Math.round(e.idleTarget ?? 0), idleAir: Number((e.idleAir ?? 0).toFixed(1)), iat: Math.round(e.sIat), ect: Math.round(e.sEct),
     oil: Math.round(e.oilKpa), volts: Number(e.volts.toFixed(2)), sLambda: Number(e.sLambda.toFixed(3)), cut: Math.round(cutFrac * 100),

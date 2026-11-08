@@ -675,3 +675,45 @@ export function setCal(cal, path, value) {
   if (rest.length === 0) return { ...cal, [head]: value };
   return { ...cal, [head]: setCal(cal?.[head] ?? {}, rest.join('.'), value) };
 }
+
+/**
+ * Stock values a later build changed, as [path, old stock, new stock]. A saved calibration
+ * still holding the old stock value takes the new one; one the player edited keeps theirs.
+ * Without this a save from before the cold overrun fix (November 2026) kept no overrun
+ * fuel cut below 45 °C and popped on every cold lift, while a freshly loaded engine did not.
+ */
+/** @type {[string, number, number][]} */
+const STOCK_CHANGES = [
+  ['fuel.dfcoMinEctC', 45, -10],
+  ['fuel.decelEnlean', 0.6, 1],
+];
+
+/** Lays the defaults under a saved section: fills keys that did not exist when it was saved. */
+function fillMissing(saved, fresh) {
+  if (saved == null) return fresh;
+  if (typeof fresh !== 'object' || Array.isArray(fresh) || typeof saved !== 'object' || Array.isArray(saved)) return saved;
+  // A curve or a map is one value: {x, z} or {x, y, z}, never merged key by key.
+  if ('z' in fresh || 'z' in saved) return saved;
+  const out = { ...saved };
+  for (const [k, v] of Object.entries(fresh)) out[k] = fillMissing(saved[k], v);
+  return out;
+}
+
+const getPath = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+
+/**
+ * Brings a saved ECU calibration up to this build: settings that did not exist when it was
+ * saved come in at their stock value, and a stock value a later build changed moves with it
+ * where the player left it at the old stock. Nothing the player set is touched.
+ * @param {object|null|undefined} cal a saved calibration
+ * @returns {object|null|undefined}
+ */
+export function upgradeEcuCalibration(cal) {
+  if (!cal || typeof cal !== 'object') return cal;
+  const cyl = cal.fuel?.cylTrim?.length ?? cal.ignition?.cylTrim?.length ?? 6;
+  let out = fillMissing(cal, defaultEcuCalibration({ derived: { cyl } }));
+  for (const [path, from, to] of STOCK_CHANGES) {
+    if (getPath(cal, path) === from) out = setCal(out, path, to);
+  }
+  return out;
+}

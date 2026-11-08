@@ -32,6 +32,8 @@ import {
  * @property {number[]} boostCurve psi, indexed by RPM
  * @property {string|null} [originPresetId] the factory engine this build started as, kept
  *   through part changes (presetId is not); null for an engine of the player's own
+ * @property {number|null} [factoryInjIdx] the injector the engine left the factory with (the
+ *   size the screens mark "(stock)")
  * @property {{turboOn: boolean, turbineIdx: number, turbineCount?: number, compressorIdx: number, boostCurve: number[]}|null} [factoryInduction]
  *   the induction the engine left the factory with (null: naturally aspirated); what RESET
  *   ALL TO STOCK calibrates for
@@ -269,6 +271,9 @@ export function makeInitialState({ blank = false } = {}) {
       // The induction the engine left the factory with; none (naturally aspirated) until a
       // factory engine is chosen (APPLY_PRESET).
       factoryInduction: null,
+      // The injector the engine left the factory with: the size marked "(stock)". The default
+      // engine's own is the first, 315 cc; APPLY_PRESET writes each factory engine's.
+      factoryInjIdx: 0,
       // The factory engine this build started as (APPLY_PRESET), kept through part changes;
       // null for an engine of the player's own.
       originPresetId: null,

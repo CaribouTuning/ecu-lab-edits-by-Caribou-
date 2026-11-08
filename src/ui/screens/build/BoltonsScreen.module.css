@@ -18,7 +18,6 @@
   color: var(--ink2);
 }
 
-.raisedByBoost { color: var(--acc-ink); }
 
 /* Prose emphasis inside the ExpandableInfo panel. */
 .em { color: var(--ink); }
