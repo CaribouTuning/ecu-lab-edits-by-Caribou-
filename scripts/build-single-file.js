@@ -29,6 +29,7 @@ const grab = (re) => html.match(re)?.[1] ?? '';
 
 const title = grab(/<title>([\s\S]*?)<\/title>/);
 const description = grab(/<meta\s+name="description"\s+content="([^"]*)"/);
+const viewport = grab(/<meta\s+name="viewport"\s+content="([^"]*)"/);
 const inlineStyles = [...html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
 const body = grab(/<body[^>]*>([\s\S]*?)<\/body>/).replace(/<script\b[^>]*><\/script>/g, '');
 
@@ -50,8 +51,13 @@ const js = readFileSync(join(dist, jsSrc), 'utf8')
   .replace(/<\/script/gi, '<\\/script')
   .replace(/<!--/g, '<\\!--');
 
+// The charset first, inside the first 1024 bytes where a browser looks for it: opened as a
+// plain file with none, Chromium guessed Latin-1 and printed "99.0 Ã— 92.0" for "99.0 × 92.0".
 const page = [
+  '<meta charset="utf-8">',
   `<title>${title}</title>`,
+  // Without the viewport a phone lays the page out 980 px wide and shrinks it to fit.
+  viewport && `<meta name="viewport" content="${viewport}">`,
   '<meta name="color-scheme" content="dark">',
   description && `<meta name="description" content="${description}">`,
   ...inlineStyles.map((s) => `<style>${s}</style>`),

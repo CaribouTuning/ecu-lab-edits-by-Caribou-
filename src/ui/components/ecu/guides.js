@@ -155,6 +155,7 @@ export const FIELD_TIPS = {
   'idle.target': 'Idle speed by coolant temperature. Cold engines usually idle higher.',
   'idle.baseAir': 'Where the idle valve starts. Close to right means a steady idle straight after starting.',
   'idle.gainUp': 'How quickly the ECU adds air when idle drops. Too slow stalls; too fast hunts.',
+  'idle.sparkBase': 'The spark the engine idles on with the throttle shut. Factory tunes sit short of best torque, so idle control has spark in reserve.',
   'idle.sparkGain': 'How much the ECU uses timing to catch quick idle dips.',
   'idle.sparkLimit': 'The most timing idle control may add or remove.',
   'idle.acRpmAdd': 'Raises idle while the A/C is on.',

@@ -268,6 +268,9 @@ export function resolveEcuPoint({
     addT('IAT protection', -(sIatC - cal.protect.iatLimitC) * cal.protect.iatRetardPerC);
   }
   addT('High-det map', dyn.highDet ? -cal.ignition.highDetRetard : 0);
+  // The idle spark table takes over from the spark table as a closed throttle falls to idle.
+  const idleW = dyn.idleSparkBlend ?? 0;
+  if (idleW > 0 && cal.idle.sparkBase) addT('Idle spark table', idleW * (read1(cal.idle.sparkBase, sEctC) - timing));
   addT('Idle spark control', dyn.idleSparkDeg ?? 0);
   addT('Overrun retard', dyn.decel ? -cal.ignition.decelRetard : 0);
   addT('Limiter / torque retard', -(dyn.extraRetardDeg ?? 0));

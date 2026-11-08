@@ -407,8 +407,11 @@ at 800 RPM and 30–50 kPa against the stock LM7, LQ4 and LR4 tables, 4–6% at 
 (airflow.js; `OVERLAP_BACKFLOW_LOSS`, fitted to those tables, scaled by the cam's own
 overlap so a long cam idles on less vacuum): at 30 kPa the truck engines and the LS6 sit
 within ±4 VE points of GM's from 800 to 2400 RPM. The LS1 reads 5–9 high there, on a cam
-Pro's benchmark fits longer than its preset's. The default engine idles near 800 RPM on
-about 27 kPa, as a real V6 does.
+Pro's benchmark fits longer than its preset's. Warm idle still reads low on manifold
+pressure (November 2026, on the 15° idle spark table, `idle.sparkBase`): about 24 kPa on
+the default engine against roughly 28–35 kPa on a real V6, and 21 kPa on the LS1 against
+the 17–20 inHg (about 34–43 kPa) its owners measure. The breathing matches GM's tables at
+30 kPa and the alternator's drag is carried, so the missing idle load is not yet found.
 
 **Low-speed breathing at full load** (October 2026). Against the full-load VE rows of seven
 distinct stock GM Gen III calibrations, a real engine keeps 0.76 of its peak VE at a sixth of

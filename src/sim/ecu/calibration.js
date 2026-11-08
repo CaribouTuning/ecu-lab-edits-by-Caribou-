@@ -181,6 +181,10 @@ export function defaultEcuCalibration({ derived = {}, gate = { type: 'electronic
       gainDown: 0.00045,
       damp: 0.018,
       bleed: COEFF.IDLE_BLEED_RATE,
+      // The spark a closed throttle idles on, short of MBT so the idle controller has spark
+      // to add when a load lands: Nissan's VQ35DE service manual sets 15 ± 5° BTDC at idle.
+      // Blended in below IDLE_SPARK_MAX_RPM; above it the spark table runs.
+      sparkBase: curve(ECT_AXIS, () => 15),
       sparkGain: COEFF.IDLE_SPARK_GAIN,
       sparkLimit: COEFF.IDLE_SPARK_LIMIT,
       acRpmAdd: 50,
@@ -494,6 +498,8 @@ export const ECU_META = [
     help: 'How fast air is removed when idle is high.' },
   { path: 'idle.damp', section: 'idle', group: 'Airflow', label: 'Damping', kind: 'number', min: 0, max: 0.05, step: 0.0005, decimals: 4, pro: true,
     help: 'Opposes fast changes in engine speed so the controller does not chase its own overshoot.' },
+  { path: 'idle.sparkBase', section: 'idle', group: 'Spark', label: 'Idle spark', kind: 'curve', unit: '°', xLabel: 'Coolant °C', min: -10, max: 45, step: 0.5, decimals: 1,
+    help: 'The spark the engine idles on with the throttle shut, in place of the spark table, blended in as the revs fall toward idle. Factory calibrations idle well short of best torque (Nissan sets 15° BTDC on the VQ35DE): it takes more air to hold the speed, which steadies the idle, and it leaves spark in reserve for the idle controller to add when the A/C or a steering load lands. Advance it to best torque and the engine idles on less air, with nothing in hand.' },
   { path: 'idle.sparkGain', section: 'idle', group: 'Spark', label: 'Idle spark gain', kind: 'number', unit: '°/RPM', min: 0, max: 0.1, step: 0.002, decimals: 3,
     help: 'Spark moves torque on the very next firing, air takes several cycles to arrive. Idle spark catches fast dips; air handles the slow drift.' },
   { path: 'idle.sparkLimit', section: 'idle', group: 'Spark', label: 'Idle spark authority', kind: 'number', unit: '°', min: 0, max: 25, step: 1,

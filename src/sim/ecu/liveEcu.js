@@ -538,6 +538,8 @@ export function liveStepEcu(st, dt, input, cfg) {
         knockRetardDeg: e.knockRetard, stftPct: s.stft, ltftPct: s.ltft, aePct: e.aePct + (e.filmCompPct ?? 0),
         afterStartPct: s.running ? e.afterStartPct : 0, crankingPct, cylinderFuelFactor: filmFactor,
         cutFrac, cutType, extraRetardDeg: limiterRetard + e.torqueRetard, extraFuelPct: e.extraFuelPct,
+        idleSparkBlend: s.running && !s.cranking && idleZone && pedal < 3
+          ? clamp((E.IDLE_SPARK_MAX_RPM - s.rpm) / Math.max(100, E.IDLE_SPARK_MAX_RPM - idleTarget - 200), 0, 1) : 0,
         idleSparkDeg: idleSpark, cranking: s.cranking, decel: pedal < 3 && s.rpm > E.IDLE_SPARK_MAX_RPM && !dfco, burble,
         afrTarget: e.afrTargetF, oilC: s.oilC, highDet: e.highDet, launch: launchArmed, nitrousFrac,
       },
