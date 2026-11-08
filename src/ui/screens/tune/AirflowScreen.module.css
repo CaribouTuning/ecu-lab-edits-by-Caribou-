@@ -24,7 +24,7 @@
 @container tune (min-width: 990px) {
   .wrap {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 232px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     align-items: start;
   }

@@ -77,6 +77,10 @@ export function FuelScreen({ calAdvice, children }) {
           <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
             <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} />
           </GridOrSurface>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="afr" report={report} />
+          </AdvisorPanel>
 
           <ExpandableInfo title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits a little richer: with some extra fuel every bit of the oxygen finds fuel to burn, and the extra fuel absorbs heat as it vaporizes, which cools the charge and holds off knock. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
@@ -86,9 +90,6 @@ export function FuelScreen({ calAdvice, children }) {
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="afr" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={afr} setData={setTable} selection={selection} min={10} max={18} decimals={1} unit=":1" onClose={() => setSelection(null)} kind="afr" baseline={baseline.afr} axes={axes} />

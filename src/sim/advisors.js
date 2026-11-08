@@ -57,7 +57,15 @@ const PULL_CEILING_RPM = 160;
 const PULL_CEILING_KPA = 4;
 
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
-const MIX_NOTABLE_AFR = 0.45;
+export const MIX_NOTABLE_AFR = 0.45;
+
+/**
+ * How far the delivered mixture may miss the AFR table at full load before the fuelling
+ * (the air estimate, the injectors, the pump) is the fault rather than the table: past a
+ * wideband's and a tuner's tolerance. The pull log's "missed the table" entry and TUNE's
+ * mixture advisor read the same number, so the two cannot disagree.
+ */
+export const MISSED_MIX_AFR = 0.8;
 
 /**
  * The mixtures a production calibration actually runs at full load, as lambda. A cell
@@ -313,7 +321,7 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
  *   `camAt`, the intake cam advance the VVT calibration holds
  *   at a speed and pressure (crank degrees), when the engine has an intake phaser, and
  *   `health`, the engine's condition (absent: as new)
- * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[]}}
+ * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[], missedMix?: object[]}}
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
@@ -686,7 +694,12 @@ export function calibrationAdvice({
   // fuel. Marked so the report can say so instead of asking for retard it cannot give.
   for (const c of spark) c.sparkCannotFix = c.knockCeiling < SPARK_MIN_DEG;
   if (pull) {
-    return { spark, fuelAdv, wrongMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
+    // Where the engine did not get what the table asks for: the table is not the fault there,
+    // so the mixture advice says so and points at the fuelling (the same test as the log).
+    const missedMix = pull.points
+      .filter((p) => p.map >= 85 && !((p.nitrousLbMin ?? 0) > 0) && Math.abs(p.afr - p.afrCommanded) > MISSED_MIX_AFR)
+      .map((p) => ({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded }));
+    return { spark, fuelAdv, wrongMix, missedMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can
   // hold would protect it: full throttle at idle speed is the same tip-in as above, not a

@@ -1,4 +1,4 @@
-/* AdvisorPanel: a right-hand rail at >=560px, a tap-to-open disclosure below
+/* AdvisorPanel: under its table, open at >=560px, a tap-to-open disclosure below
    that. Chrome only — see the header comment in AdvisorPanel.jsx. */
 
 .panel {
@@ -9,6 +9,7 @@
   border-radius: 8px;
   background: var(--panel2);
   padding: 10px 12px;
+  margin: 10px 0 12px;
 }
 
 .head {
@@ -102,11 +103,6 @@
    tokens.css, which lists every file that uses it. Kept in sync by hand with
    StartScreen.module.css, TutorialScreen.module.css and AppShell.module.css. */
 @media (min-width: 560px) {
-  .panel {
-    position: sticky;
-    top: var(--sp-xl);
-  }
-
   .toggle {
     display: none;
   }

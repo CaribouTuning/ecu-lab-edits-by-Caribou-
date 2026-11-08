@@ -94,6 +94,10 @@ export function AirflowScreen({ children, veLog }) {
           <GridOrSurface data={ve} min={10} max={130} decimals={0} unit="%" title="Volumetric efficiency" axes={axes}>
             <TuningGrid data={ve} min={10} max={130} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.ve} diffView={diffView} diffScale={10} axes={axes} untuned={tune.untuned?.ve ?? null} unreached={unreached} />
           </GridOrSurface>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="ve" report={report} />
+          </AdvisorPanel>
           {veLog && (
             <VeLogCorrection corr={corr} axes={axes} pullCount={veLog.pull.length} liveCount={veLog.live.length}
               pullInfo={veLog.pullInfo} mafPct={mafErrorPct(samples)} airModel={veLog.airModel} onApply={veLog.onApply} />
@@ -106,9 +110,6 @@ export function AirflowScreen({ children, veLog }) {
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="ve" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={ve} setData={setTable} selection={selection} min={10} max={130} decimals={0} unit="%" onClose={() => setSelection(null)} kind="ve" baseline={baseline.ve} axes={axes} />

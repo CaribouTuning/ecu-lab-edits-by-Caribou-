@@ -220,8 +220,18 @@ function AfrAdvisory({ report }) {
     // FUEL had no clean state at all — the old banner simply did not render
     // when wrongMix was empty. The panel always renders something, so this is
     // genuinely new prose, not a moved state.
+    case 'table-missed': {
+      const w = detail.worst;
+      const pct = Math.round(Math.abs(w.afr / w.afrCommanded - 1) * 100);
+      return (
+        <div className={styles.prose}>
+          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). The table is not the fault, so do not change it to chase the number: the ECU&apos;s air estimate is about {pct}% {w.lean ? 'low' : 'high'} there. On <b className={styles.emInk}>TUNE › AIRFLOW</b>, use Correct VE from logs (or {w.lean ? 'raise' : 'lower'} those VE cells by about {pct}%), then check the injector flow on TUNE › INJECTORS and the MAF scaling on TUNE › SENSORS match the parts on BUILD.
+          {detail.alsoOff > 0 && <> Once it hits the table, {detail.alsoOff} high-load {detail.alsoOff === 1 ? 'cell is' : 'cells are'} still off best power: this page will list them.</>}
+        </div>
+      );
+    }
     case 'table-clean':
-      return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware.</div>;
+      return <div className={`${styles.prose} ${styles.ok}`}>AFR table sits on best power at every high-load cell for this hardware, and the engine gets what it asks for.</div>;
 
     // A single selected cell. None of these states existed before the panel —
     // FuelScreen never narrowed to a selection — so there is no old markup to

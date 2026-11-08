@@ -87,6 +87,10 @@ export function SparkScreen({ calAdvice, children }) {
           <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
             <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} />
           </GridOrSurface>
+          {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
+          <AdvisorPanel headline={report.headline} tone={report.tone}>
+            <TuneAdvisory kind="timing" report={report} />
+          </AdvisorPanel>
 
           <ExpandableInfo title="Why the app never rewrites your spark or fuel tables">
             The VE table can be corrected straight from logs because volumetric efficiency is a <b className={styles.emInk}>measurement of the hardware</b> — swap a cam and a tuner re-logs airflow, and the wideband says how far each cell was off. Even so, the app shows you the working and waits for you to apply it.
@@ -100,9 +104,6 @@ export function SparkScreen({ calAdvice, children }) {
           </ExpandableInfo>
           {children}
         </div>
-        <AdvisorPanel headline={report.headline} tone={report.tone}>
-          <TuneAdvisory kind="timing" report={report} />
-        </AdvisorPanel>
       </div>
       <div className={styles.spacer} />
       <SelectionDock data={timing} setData={setTable} selection={selection} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" onClose={() => setSelection(null)} kind="timing" baseline={baseline.timing} axes={axes} />

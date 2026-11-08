@@ -12,7 +12,7 @@
  */
 
 import { Flame } from 'lucide-react';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 import {
   CUSTOM_ENGINE_LIMITS, EXHAUST_DIA_OPTS, MOD_INFO, TURBINE_OPTS, blowerCurve, blowerOf, catalystLossShare, deriveEngine,
@@ -49,18 +49,24 @@ export function BoltonsScreen({ active, onToggle }) {
   const catalyst = mods.catalyst ?? 'ceramic';
 
   // What each pipe costs this engine at full throttle and full boost, and the smallest that
-  // costs under 1%. Solved only while this stage is open; each pipe is four cells of the
-  // gas exchange, kept per engine.
-  const sizing = useMemo(() => {
-    const fuel = tankFuel(build);
-    const blower = blowerOf(build);
-    const peakPsi = turboOn ? Math.max(...boostCurve) : blower ? Math.max(0, ...blowerCurve(build, fuel).map((p) => p.boostPsi)) : 0;
-    const hw = { turboOn, turbine: turboOn ? turbineWithCount(TURBINE_OPTS[build.turbineIdx], build.turbineCount ?? 1) : null, fuel };
-    const redline = deriveEngine(engineConfig).redline;
-    const cost = (dia) => exhaustPowerCost(engineConfig, mods, hw, dia, redline, 101.3 + peakPsi * 6.895);
-    const fitted = cost(EXHAUST_DIA_OPTS[exhaustDiaIdx].dia);
-    const free = EXHAUST_DIA_OPTS.find((o) => cost(o.dia) < 0.01) ?? EXHAUST_DIA_OPTS[EXHAUST_DIA_OPTS.length - 1];
-    return { fitted, freeDia: free.dia, boosted: peakPsi > 0 };
+  // costs under 1%. Each pipe is four cells of the gas exchange (about 0.1 s each for an
+  // engine not solved before), so it runs after the screen paints and once a slider has
+  // stopped moving, never inside a render: dragging the header tube stays smooth.
+  const [sizing, setSizing] = useState(/** @type {{fitted: number, freeDia: number, boosted: boolean}|null} */ (null));
+  useEffect(() => {
+    setSizing(null);
+    const t = setTimeout(() => {
+      const fuel = tankFuel(build);
+      const blower = blowerOf(build);
+      const peakPsi = turboOn ? Math.max(...boostCurve) : blower ? Math.max(0, ...blowerCurve(build, fuel).map((p) => p.boostPsi)) : 0;
+      const hw = { turboOn, turbine: turboOn ? turbineWithCount(TURBINE_OPTS[build.turbineIdx], build.turbineCount ?? 1) : null, fuel };
+      const redline = deriveEngine(engineConfig).redline;
+      const cost = (dia) => exhaustPowerCost(engineConfig, mods, hw, dia, redline, 101.3 + peakPsi * 6.895);
+      const fitted = cost(EXHAUST_DIA_OPTS[exhaustDiaIdx].dia);
+      const free = EXHAUST_DIA_OPTS.find((o) => cost(o.dia) < 0.01) ?? EXHAUST_DIA_OPTS[EXHAUST_DIA_OPTS.length - 1];
+      setSizing({ fitted, freeDia: free.dia, boosted: peakPsi > 0 });
+    }, 300);
+    return () => clearTimeout(t);
   }, [build, engineConfig, mods, turboOn, boostCurve, exhaustDiaIdx]);
 
   // Fitting a part (or taking it off) changes airflow but does NOT edit your logged VE
@@ -109,7 +115,9 @@ export function BoltonsScreen({ active, onToggle }) {
       <div className={styles.label}>Exhaust Diameter</div>
       <Seg variant="rule" equal label="Exhaust Diameter" options={EXHAUST_DIA_OPTS.map((o) => ({ label: U.metric ? U.fmtLength(o.dia) : o.label, id: o.label }))} value={EXHAUST_DIA_OPTS[exhaustDiaIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'exhaustDiaIdx', value: EXHAUST_DIA_OPTS.findIndex((o) => o.label === v) })} />
       <div className={styles.idealNote} data-testid="exhaust-sizing">
-        This pipe costs about {(sizing.fitted * 100).toFixed(1)}% of full power{sizing.boosted ? ' at full boost' : ''}. The smallest that costs under 1%: {U.metric ? U.fmtLength(sizing.freeDia) : `${sizing.freeDia.toFixed(1)} in`}.
+        {sizing
+          ? <>This pipe costs about {(sizing.fitted * 100).toFixed(1)}% of full power{sizing.boosted ? ' at full boost' : ''}. The smallest that costs under 1%: {U.metric ? U.fmtLength(sizing.freeDia) : `${sizing.freeDia.toFixed(1)} in`}.</>
+          : 'Working out what this pipe costs at full power…'}
       </div>
       <ExpandableInfo title="Why bigger stops paying">
         The pipe costs pressure in proportion to the speed of the gas through it squared, so an undersized pipe holds back-pressure on the cylinders at high RPM, where the flow is greatest, and the engine loses top end. Past the size the power needs, the loss left is already small: a bigger pipe gains almost nothing and costs more. The pressure waves that scavenge the cylinder live in the header primaries, not in the pipe after the collector, so this sim gives an oversized cat-back no low-RPM penalty either.

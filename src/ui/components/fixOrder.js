@@ -19,7 +19,7 @@
 /** @type {{id: string, label: string, types: string[]}[]} */
 export const FIX_STEPS = [
   { id: 'setup', label: 'Setup', types: ['pastTable', 'injscale', 'mapsensor', 'maf', 'wideband', 'fueltype'] },
-  { id: 'fuel', label: 'Fuel', types: ['rich', 'lean', 'valve', 'fuel', 'rail', 'dutyprot', 'leanprot', 'misfire'] },
+  { id: 'fuel', label: 'Fuel', types: ['missedmix', 'rich', 'lean', 'valve', 'fuel', 'rail', 'dutyprot', 'leanprot', 'misfire'] },
   { id: 'spark', label: 'Spark', types: ['knock', 'unheardknock', 'falseknock', 'knockprot', 'iatprot', 'egtprot', 'timing'] },
   { id: 'boost', label: 'Boost', types: ['underboost', 'backpressure', 'overboost', 'boostctl', 'compressor', 'blower'] },
   { id: 'nitrous', label: 'Nitrous', types: ['nitrouslean', 'nitrousknock', 'bottle', 'nitrouswindow'] },
@@ -66,17 +66,17 @@ export function inFixOrder(events) {
  * @type {Record<string, string[]>}
  */
 const CAUSED_BY = {
-  lean: ['pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband', 'rail', 'fuel'],
-  rich: ['pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband'],
+  lean: ['missedmix', 'pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband', 'rail', 'fuel'],
+  rich: ['missedmix', 'pastTable', 'injscale', 'maf', 'mapsensor', 'fueltype', 'wideband'],
   fuel: ['injscale'],
   dutyprot: ['fuel', 'injscale'],
   leanprot: ['lean', 'pastTable', 'injscale', 'maf', 'mapsensor', 'rail', 'fuel', 'dutyprot'],
   valve: ['lean', 'pastTable'],
-  misfire: ['lean', 'rich'],
-  knock: ['pastTable', 'lean', 'injscale', 'maf', 'mapsensor', 'fueltype'],
+  misfire: ['missedmix', 'lean', 'rich'],
+  knock: ['missedmix', 'pastTable', 'lean', 'injscale', 'maf', 'mapsensor', 'fueltype'],
   unheardknock: ['pastTable', 'lean', 'knock'],
   knockprot: ['knock', 'unheardknock', 'pastTable', 'lean'],
-  egtprot: ['lean', 'knock', 'pastTable'],
+  egtprot: ['missedmix', 'lean', 'knock', 'pastTable'],
   overboost: ['boostctl'],
   nitrousknock: ['nitrouslean'],
 };

@@ -14,7 +14,7 @@
  * `dash-screens.test.jsx` pins for HOME.
  */
 
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -184,8 +184,11 @@ describe('FuelSystemScreen', () => {
 });
 
 describe('BoltonsScreen', () => {
-  it('sizes the pipe from the physics: what it costs, and the smallest that costs under 1%', () => {
+  it('sizes the pipe from the physics: what it costs, and the smallest that costs under 1%', async () => {
     mount(<BoltonsScreen active onToggle={noop} />);
+    // Solved after the screen paints, off the render path.
+    expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/Working out/);
+    await waitFor(() => expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/This pipe costs/), { timeout: 15000 });
     expect(screen.getByTestId('exhaust-sizing').textContent).toMatch(/This pipe costs about \d+\.\d% of full power\. The smallest that costs under 1%: \d\.\d in/);
   });
 

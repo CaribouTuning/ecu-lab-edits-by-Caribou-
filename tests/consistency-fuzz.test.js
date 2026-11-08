@@ -82,6 +82,24 @@ describe('the advisor and the pull log agree on random builds', () => {
     expect(failures).toEqual([]);
   });
 
+  it('never send the player to the AFR table when the engine is missing it, and say so on TUNE too', () => {
+    // A player's turbo V8 ran 14.1:1 against a 12.9:1 target: the log said "richen the
+    // target", TUNE's mixture advisor passed the table. The table was right; the fuelling
+    // was not. On any build, a missed target is named on both screens, as the fuelling.
+    const failures = [];
+    for (const build of builds) {
+      const { pull, advice } = advise(makeEngine({ build }));
+      const missed = pull.events.filter((e) => e.type === 'missedmix');
+      if (missed.length && !(advice.missedMix ?? []).length) failures.push(`seed ${build.seed}: the log says the engine missed the AFR table, TUNE says nothing`);
+      for (const e of pull.events) {
+        if (/less fuel than the table asks for/.test(e.cause ?? '') && /richen the AFR target/.test(e.fix ?? '') && !/^Fuel first/.test(e.fix ?? '')) {
+          failures.push(`seed ${build.seed}: ${e.type} blames the target first though the engine missed it`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
   it('only send the player to screens that exist', () => {
     // Every "BUILD → X" or "TUNE → X" in a fix must name a real view, or the advice is
     // a dead end however right it is.

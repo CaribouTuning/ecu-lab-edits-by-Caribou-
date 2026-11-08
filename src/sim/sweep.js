@@ -14,7 +14,7 @@ import { clamp, curveAt, groupRuns, mergeNearbyRuns } from './math.js';
 import { solveInduction } from './turbo.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { evaluatePoint } from './point.js';
-import { KNOCK_SAFETY_DEG, UNDER_ADVANCED_DEG } from './advisors.js';
+import { KNOCK_SAFETY_DEG, MISSED_MIX_AFR, MIX_NOTABLE_AFR, UNDER_ADVANCED_DEG } from './advisors.js';
 import { bestPowerAfr } from './manifold.js';
 import { FAILURE_MODES, pointWear, sweepFailure, wearEffects } from './damage.js';
 import { trappedAirGrams } from './cycle.js';
@@ -399,6 +399,22 @@ export function simulateSweep({
   const lessBoost = blower
     ? 'fit a larger blower pulley (a lower drive ratio) on BUILD → INDUCTION'
     : 'lower the boost target there on BUILD → INDUCTION (Boost Target Curve)';
+  /**
+   * Why the engine got less fuel than the table asked for, and the page that fixes it, in
+   * the order a tuner checks: the injectors at their limit, the pump, the injector flow the
+   * ECU is set for, then the air estimate (the VE table), which a log corrects.
+   */
+  const deliveryFix = (peak, run, deliveryLean) => {
+    if (deliveryLean < 0) {
+      const over = Math.max(1, Math.round((1 - peak.afr / peak.afrCommanded) * 100));
+      return `The AFR table is right, but the ECU's air estimate is ${over}% high here, so it fuels for more air than the engine takes in and it runs ${(-deliveryLean).toFixed(1)} AFR rich of the table, costing power. On TUNE → AIRFLOW lower the VE cells in ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM by about ${over}%, or use Correct VE from logs there.`;
+    }
+    const pct = Math.max(1, Math.round((peak.afr / peak.afrCommanded - 1) * 100));
+    if (run.some((p) => p.fuelLimited)) return `Fuel first: the injectors are at their limit here, so the table's mixture cannot be delivered. On BUILD → FUEL SYSTEM fit larger injectors, then set their flow on TUNE → INJECTORS.`;
+    if (run.some((p) => p.fuelStarved)) return `Fuel first: the pump cannot hold rail pressure at this demand. Fit a bigger pump on BUILD → FUEL SYSTEM.`;
+    if (ecuInjectorCc && injectorCc && Math.abs(injectorCc / ecuInjectorCc - 1) > 0.02) return `Fuel first: the ECU is set for ${ecuInjectorCc} cc injectors and ${injectorCc} cc are fitted. Set the flow on TUNE → INJECTORS.`;
+    return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% low here, so it fuels for less air than the engine takes in and it runs ${deliveryLean.toFixed(1)} AFR lean of the table. On TUNE → AIRFLOW raise the VE cells in ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${needsMafRecal ? ' On a turbo or a new intake, check the MAF scaling on TUNE → SENSORS too.' : ''}`;
+  };
   knockRuns.forEach((run) => {
     const peak = ecu
       ? run.reduce((a, b) => (b.margin < a.margin ? b : a))
@@ -408,7 +424,17 @@ export function simulateSweep({
     const leanContrib = Math.max(0, peak.afr - peak.bestAfr) * 2.5;
     const causes = [];
     if (boosted) causes.push(`boost (up to ${Math.max(...run.map((p) => p.boostPsi)).toFixed(1)} psi here) eating into your margin`);
-    if (leanContrib >= 1.5) causes.push(`the mixture running leaner than the ${peak.bestAfr.toFixed(1)}:1 best-power target here (peak ${peak.afr.toFixed(1)}:1)${peak.fuelLimited ? ', partly from injectors maxing out' : ''}`);
+    // WHICH MIXTURE IS WRONG. The table can ask for the wrong mixture (the target), or the
+    // engine can miss what the table asks for (delivery: the ECU's air estimate, the
+    // injectors, the pump). The two have different fixes on different pages, and naming
+    // the target when the delivery was off sent the player to a table TUNE's own advisor
+    // had already passed. The target is judged by the advisor's own tolerance.
+    const deliveryLean = peak.afr - peak.afrCommanded;
+    const targetLean = peak.afrCommanded - peak.bestAfr;
+    const byDelivery = leanContrib >= 1.5 && deliveryLean > 0.3;
+    const byTarget = leanContrib >= 1.5 && targetLean > MIX_NOTABLE_AFR;
+    if (byDelivery) causes.push(`the mixture running ${peak.afr.toFixed(1)}:1 where the AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 (best power is ${peak.bestAfr.toFixed(1)}:1): the engine is getting less fuel than the table asks for`);
+    else if (leanContrib >= 1.5) causes.push(`the mixture running leaner than the ${peak.bestAfr.toFixed(1)}:1 best-power target here (peak ${peak.afr.toFixed(1)}:1)${peak.fuelLimited ? ', partly from injectors maxing out' : ''}`);
     if (causes.length === 0) causes.push(`the commanded timing itself being too aggressive for ${octaneLabel} octane and this compression ratio at this load`);
     const suggestedTiming = Math.max(SPARK_MIN_DEG, Math.round((peak.threshold - 1) * 2) / 2);
     const sparkCanFix = peak.threshold - 1 >= SPARK_MIN_DEG;
@@ -424,11 +450,10 @@ export function simulateSweep({
       // In the order a tuner works: mixture first (the knock limit moves with it), then
       // timing, then boost, then hardware.
       fix: [
-        leanContrib >= 1.5 && peak.afrCommanded - peak.bestAfr > 0.3
-          ? `On TUNE → FUEL, richen the AFR target in those cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)}) — it ran ${peak.afr.toFixed(1)}:1. Fuel first: a richer charge runs cooler and raises the knock limit.`
-          : leanContrib >= 1.5
-            ? `Fuel first: the AFR target asks for ${peak.afrCommanded.toFixed(1)}:1 but it ran ${peak.afr.toFixed(1)}:1, so correct the VE table there on TUNE → AIRFLOW until it hits the target — a lean charge knocks sooner.`
-            : null,
+        byDelivery ? deliveryFix(peak, run, deliveryLean) : null,
+        byTarget
+          ? `${byDelivery ? 'Then, o' : 'O'}n TUNE → FUEL, richen the AFR target in those cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)}): it asks for ${peak.afrCommanded.toFixed(1)}:1. A richer charge runs cooler and raises the knock limit.`
+          : null,
         sparkCanFix
           ? `On TUNE → SPARK, pull about ${Math.max(1, Math.ceil(-peak.margin + 1))}° of timing from ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM, to about ${suggestedTiming}° there (less either side, across ${rangeLabel(run)}). Aim for 0–1° of knock retard on the next pull.`
           : `Timing alone can't fix this: at ${peak.rpm} RPM it knocks even at ${SPARK_MIN_DEG}°, the most retard the SPARK table holds.`,
@@ -534,6 +559,26 @@ export function simulateSweep({
           : `On TUNE → FUEL, richen the AFR target in these cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)})${peak.boostPsi > 1 ? ' — richer than the NA best-power mixture, because boost needs the charge cooling' : ''}.${missedTarget(peak) ? ' Then correct the VE table there on TUNE → AIRFLOW, so the engine gets what the target asks for.' : ''}`,
     });
   });
+
+  // MISSED THE TARGET. The engine not getting the mixture its AFR table asks for, at full
+  // load, by more than a wideband's and a tuner's tolerance: the table is not the fault, the
+  // fuelling is (the air estimate, the injectors, the pump). Not dangerous in itself until
+  // it is lean enough for the event above, but every other entry in the log reads against
+  // a mixture the player did not ask for, so it goes first.
+  for (const lean of [true, false]) {
+    groupRuns(points, (p) => p.map >= 85 && !spraying(p) && !p.leanRisk && !p.valveRisk
+      && (lean ? p.afr - p.afrCommanded > MISSED_MIX_AFR : p.afrCommanded - p.afr > MISSED_MIX_AFR)).forEach((run) => {
+      const peak = run.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
+      const miss = peak.afr - peak.afrCommanded;
+      events.push({
+        type: 'missedmix', severity: 2, impact: Math.max(3, Math.round(8 * (0.3 + 0.7 * rangeFrac(run)))),
+        rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
+        msg: `Mixture ${lean ? 'leaner' : 'richer'} than the AFR table asks for across ${rangeLabel(run)}: ${peak.afr.toFixed(1)}:1 where it asks for ${peak.afrCommanded.toFixed(1)}:1`,
+        cause: `The AFR table asks for ${peak.afrCommanded.toFixed(1)}:1 at ${peak.rpm} RPM and ${Math.round(peak.map)} kPa and the engine got ${peak.afr.toFixed(1)}:1. The target is not the fault: what reaches the cylinder is not what the ECU meant to give it. ${lean ? 'Lean under load runs hotter and knocks sooner.' : 'Rich past best power costs torque and washes the bores.'}`,
+        fix: deliveryFix(peak, run, miss).replace(/^Fuel first: (.)/, (m, c) => c.toUpperCase()),
+      });
+    });
+  }
 
   groupRuns(points, (p) => p.valveRisk).forEach((run) => {
     const peak = run.reduce((a, b) => (b.afr > a.afr ? b : a));

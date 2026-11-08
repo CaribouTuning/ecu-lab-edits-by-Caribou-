@@ -178,6 +178,18 @@ export function fuelReport(calAdvice, selection) {
   // banner only ever showed one thing, the wrongMix count, and simply did not
   // render when it was empty. table-clean is new prose the panel needs
   // because, unlike the old banner, it always renders something.
+  // The engine missing what the table asks for comes first: until the fuelling delivers the
+  // table, no cell of it can be judged by what the engine got (the pull log says the same).
+  const missed = calAdvice.missedMix ?? [];
+  if (missed.length > 0) {
+    const worst = missed.reduce((a, b) => (Math.abs(b.afr - b.afrCommanded) > Math.abs(a.afr - a.afrCommanded) ? b : a));
+    return {
+      tone: 'warn',
+      headline: `The engine runs ${worst.lean ? 'leaner' : 'richer'} than this table asks for`,
+      state: 'table-missed',
+      detail: { worst, from: missed[0].rpm, to: missed[missed.length - 1].rpm, alsoOff: wrongMix.length },
+    };
+  }
   if (wrongMix.length > 0) {
     return {
       tone: 'warn',
