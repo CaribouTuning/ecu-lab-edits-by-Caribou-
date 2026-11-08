@@ -483,11 +483,11 @@ export function liveStepEcu(st, dt, input, cfg) {
     // Both ways: what the film gives back is taken out (its gain the decel enleanment), and
     // after a fuel cut, when the film is empty and takes up X of every injection until it
     // is wet again, that is put back, so the fuel's return does not misfire lean. On a
-    // tip-in the acceleration enrichment already carries the film's uptake, so the account
-    // adds nothing while it runs.
+    // tip-in the film's uptake is the acceleration enrichment's job (the player's table), so
+    // the account puts fuel back only on a closed throttle, for the fuel's return after a cut.
     e.filmCompPct = factor < 1
       ? Math.max(-95, (factor - 1) * 100 * (cal.fuel.decelEnlean ?? 1))
-      : e.aePct > 0.5 ? 0 : Math.min(100, (factor - 1) * 100);
+      : e.aePct > 0.5 || pedal >= 3 ? 0 : Math.min(100, (factor - 1) * 100);
     e.filmEst = Math.max(0, (e.filmEst ?? 0) + est.X * injPerCycle * Math.max(0.05, 1 + (e.aePct + e.filmCompPct) / 100) / Math.max(0.05, e.transPrev ?? 1) * cycles - (e.filmEst ?? 0) * clamp(dt / est.tau, 0, 1));
     // The film works on the fuel injected THIS step, which is last step's command moved by
     // the change in the transient correction since: its evaporation is a mass, not a share
