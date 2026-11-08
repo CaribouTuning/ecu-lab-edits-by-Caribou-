@@ -8,11 +8,16 @@ import { AdvisorPanel } from '../../src/ui/components/AdvisorPanel.jsx';
 afterEach(cleanup);
 
 describe('AdvisorPanel', () => {
-  it('starts collapsed and shows the headline while closed', () => {
-    render(<AdvisorPanel headline="3.5 deg past the knock limit" tone="danger"><p>body</p></AdvisorPanel>);
+  it('starts collapsed when all is well, and shows the headline while closed', () => {
+    render(<AdvisorPanel headline="Nothing flagged" tone="ok"><p>body</p></AdvisorPanel>);
     const panel = screen.getByTestId('advisor-panel');
     expect(panel.getAttribute('data-open')).toBe('false');
-    expect(screen.getByText('3.5 deg past the knock limit')).toBeTruthy();
+    expect(screen.getByText('Nothing flagged')).toBeTruthy();
+  });
+
+  it('opens itself on a warning: under the table on a phone, the reason it is there', () => {
+    render(<AdvisorPanel headline="3.5 deg past the knock limit" tone="danger"><p>body</p></AdvisorPanel>);
+    expect(screen.getByTestId('advisor-panel').getAttribute('data-open')).toBe('true');
   });
 
   it('toggles data-open when the toggle is clicked', () => {

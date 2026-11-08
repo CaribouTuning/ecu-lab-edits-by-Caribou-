@@ -272,7 +272,7 @@ describe('every screen the app sends a player to exists', () => {
   // has to be there, or the advice is a dead end however right it is. Scanned from the
   // source rather than from messages that happen to fire, so a rare event is covered too.
   const VIEWS = {
-    BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST', 'BOLT-ONS'],
+    BUILD: ['ENGINE', 'SHORT BLOCK', 'HEADS AND CAM', 'IGNITION', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST', 'BOLT-ONS'],
     TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
   };
   const files = [];

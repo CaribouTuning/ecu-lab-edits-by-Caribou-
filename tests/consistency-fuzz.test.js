@@ -104,7 +104,7 @@ describe('the advisor and the pull log agree on random builds', () => {
     // Every "BUILD → X" or "TUNE → X" in a fix must name a real view, or the advice is
     // a dead end however right it is.
     const views = {
-      BUILD: ['ENGINE', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST'],
+      BUILD: ['ENGINE', 'SHORT BLOCK', 'HEADS AND CAM', 'IGNITION', 'INDUCTION', 'FUEL SYSTEM', 'EXHAUST', 'BOLT-ONS'],
       TUNE: ['AIRFLOW', 'SPARK', 'FUEL', 'INJECTORS', 'SENSORS', 'BOOST', 'VVT', 'IDLE', 'PROTECT', 'TORQUE', 'NITROUS'],
     };
     const failures = [];
