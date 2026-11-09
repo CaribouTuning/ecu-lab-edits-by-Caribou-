@@ -52,3 +52,16 @@ describe('which cells the engine reaches', () => {
     expect(reachOf(/** @type {any} */ ({ ...turbo, boostCurve: Array(8).fill(14) }), pull(2))(4000)).toBeGreaterThan(190);
   });
 });
+
+describe('a naturally aspirated engine', () => {
+  it('fades every boost row: it never gets past the barometer', () => {
+    const na = { turboOn: false, boostCurve: [], blowerId: null };
+    const faded = unreachedCells(axes, reachOf(/** @type {any} */ (na), null));
+    // Rows 200 and 150 (indexes 0 and 1) at every speed; 100 kPa and below stay bright.
+    expect(faded.sort()).toEqual(['0:0', '0:1', '0:2', '1:0', '1:1', '1:2']);
+  });
+
+  it('a turbo past the 100 kPa row still lights the 150 row it interpolates into', () => {
+    expect(unreachedCells(axes, () => 112)).not.toContain('1:0');
+  });
+});

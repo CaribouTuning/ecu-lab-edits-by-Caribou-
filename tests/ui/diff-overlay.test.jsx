@@ -39,7 +39,7 @@ const writeVe = (fn) => act(() => {
   store.dispatch({ type: ACTIONS.SET_TABLE, table: 've', value: store.tune.ve.map((row, ri) => row.map((v, ci) => fn(v, ri, ci))) });
 });
 // LOAD = [200,150,100,70,40,20], RPM = [800,1500,2500,3500,4500,5500,6500,7500]
-const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: `${rpm} RPM, ${kpa} kPa` });
+const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: new RegExp(`^${rpm} RPM, ${kpa} kPa($|,)`) });
 const changes = () => fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
 
 describe('the CHANGES view', () => {

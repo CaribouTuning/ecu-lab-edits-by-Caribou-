@@ -11,6 +11,7 @@
 import React from 'react';
 
 import { blowerCurve, curveAt, reachKpaAt, tankFuel } from '../../sim/index.js';
+import { REACHABLE_SLACK_KPA } from '../../sim/tables.js';
 import { useBuild, useSession } from './StoreProvider.jsx';
 
 /**
@@ -51,7 +52,8 @@ export function reachOf(build, result) {
 /**
  * The cells (`row:col`) above the first load breakpoint at or past what the engine reaches
  * at that column's speed. The breakpoint just above the pressure is still read (the ECU
- * interpolates between the two either side), so it is reached; everything above it is not.
+ * interpolates between the two either side), so it is reached once the pressure is more
+ * than a couple of kPa past the one below; everything above it is not.
  * Only for a table on manifold pressure.
  * @param {import('../../sim/layouts.js').TableAxes} axes
  * @param {(rpm: number) => number} reach
@@ -61,8 +63,12 @@ export function unreachedCells(axes, reach) {
   if (axes.loadUnit !== 'kPa') return [];
   const keys = [];
   axes.rpm.forEach((rpm, ci) => {
-    const kpa = reach(rpm);
-    const at = axes.load.filter((l) => l >= kpa - 0.5);
+    // The pressure itself: reach carries the advisor's slack on top (REACHABLE_SLACK_KPA).
+    const kpa = reach(rpm) - REACHABLE_SLACK_KPA;
+    // The breakpoint above counts as read only once the pressure is more than the slack past
+    // the one below: an NA engine at the 101.3 kPa barometer puts 2.6% of its weight on a
+    // 150 kPa row, and a bright boost row on an NA engine reads as a mistake to a tuner.
+    const at = axes.load.filter((l) => l >= kpa - REACHABLE_SLACK_KPA);
     const edge = at.length ? Math.min(...at) : Math.max(...axes.load);
     axes.load.forEach((load, ri) => { if (load > edge + 0.5) keys.push(`${ri}:${ci}`); });
   });

@@ -120,7 +120,7 @@ describe('SelectionDock on a range', () => {
   });
 });
 
-const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: `${rpm} RPM, ${kpa} kPa` });
+const cell = (rpm, kpa) => within(screen.getByTestId('tuning-grid')).getByRole('button', { name: new RegExp(`^${rpm} RPM, ${kpa} kPa($|,)`) });
 const mouse = { pointerType: 'mouse', button: 0, buttons: 1 };
 
 describe('selecting a range on the grid', () => {
