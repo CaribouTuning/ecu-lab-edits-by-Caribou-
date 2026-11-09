@@ -27,6 +27,7 @@ import { COEFF } from '../../sim/index.js';
 
 import cut from './Apps.module.css';
 import styles from './Breathing.module.css';
+import { Plot, crankTicks } from './Plot.jsx';
 import { useUnits } from '../units.js';
 
 /** Seconds one engine cycle takes on screen, whatever the engine speed. */
@@ -359,31 +360,56 @@ function Lobe({ x, y, d, centre, size = 1 }) {
 }
 
 /** The side panel's small chart: a port's pressure against crank angle through the gas exchange. */
-function PortChart({ gx, ys, refKpa, d, tone, lift, marks, label }) {
+function PortChart({ gx, ys, refKpa, d, tone, lift, marks, title, refName, valveName }) {
   const tr = gx.trace;
-  const W = 300; const H = 120;
-  const lo = Math.min(...ys, refKpa) - 4; const hi = Math.max(...ys, refKpa) + 4;
-  const x = (dd) => 8 + ((dd - tr.deg[0]) / (tr.deg[tr.deg.length - 1] - tr.deg[0])) * (W - 16);
-  const y = (k) => H - 18 - ((k - lo) / (hi - lo)) * (H - 34);
+  const lo = Math.min(...ys, refKpa); const hi = Math.max(...ys, refKpa);
+  const pad = Math.max(4, (hi - lo) * 0.1);
+  const yDomain = /** @type {[number, number]} */ ([Math.floor((lo - pad) / 5) * 5, Math.ceil((hi + pad) / 5) * 5]);
+  const xDomain = /** @type {[number, number]} */ ([tr.deg[0], tr.deg[tr.deg.length - 1]]);
   const maxL = Math.max(...lift, 1);
-  const pts = tr.deg.map((dd, i) => `${x(dd).toFixed(1)},${y(ys[i]).toFixed(1)}`).join(' ');
-  const liftPts = `${x(tr.deg[0])},${H - 18} ${tr.deg.map((dd, i) => `${x(dd).toFixed(1)},${(H - 18 - (lift[i] / maxL) * 30).toFixed(1)}`).join(' ')} ${x(tr.deg[tr.deg.length - 1])},${H - 18}`;
   const now = readAt(tr.deg, ys, d);
+  const line = tone === 'in' ? 'var(--cut-fresh)' : 'var(--cut-burn)';
+  const refTone = tone === 'in' ? 'var(--cut-fresh)' : 'var(--cut-exhaust)';
+  // 0° is top dead centre between the exhaust and intake strokes (valve overlap); ±180° the
+  // bottom dead centres either side.
+  const dead = (dd) => (dd === 0 ? 'TDC' : Math.abs(dd) === 180 ? 'BDC' : '');
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={cut.pvSvg} role="img" aria-label={`${label}; now ${now == null ? 'outside the valve events' : `${f(now, 0)} kPa`}`}>
-      <polygon points={liftPts} className={tone === 'in' ? styles.liftFillIn : styles.liftFillEx} />
-      <line x1={8} x2={W - 8} y1={y(refKpa)} y2={y(refKpa)} className={tone === 'in' ? styles.refIn : styles.refEx} />
-      <polyline points={pts} className={tone === 'in' ? styles.portLineIn : styles.portLineEx} />
-      {marks.map(([dd, t], i) => (
-        <g key={t}>
-          <line x1={x(dd)} x2={x(dd)} y1={14} y2={H - 18} className={styles.grid} />
-          {/* A mark too close to the one before it says its name at the top instead. */}
-          <text x={x(dd)} y={i > 0 && Math.abs(x(dd) - x(marks[i - 1][0])) < 34 ? 24 : H - 6} className={cut.artText} textAnchor="middle">{t}</text>
-        </g>
-      ))}
-      {now != null && <circle cx={x(d)} cy={y(now)} r={4.5} className={cut.pvDot} />}
-      <text x={10} y={12} className={cut.artText}>{label}</text>
-    </svg>
+    <Plot
+      title={title}
+      sub={`cylinder 1, ${gx.rpm.toLocaleString('en-US')} rpm${now == null ? '' : `; now ${f(now, 0)} kPa`}`}
+      xLabel="crank angle, ° from overlap TDC"
+      yLabel="pressure, kPa (abs)"
+      xDomain={xDomain}
+      yDomain={yDomain}
+      xTicks={crankTicks(xDomain[0], xDomain[1], dead)}
+      ariaLabel={`${title}; now ${now == null ? 'outside the valve events' : `${f(now, 0)} kPa`}`}
+      legend={[
+        { label: 'port pressure', kind: 'line', tone: line },
+        { label: refName, kind: 'dash', tone: refTone },
+        { label: `${valveName} flow area (peak ${f(maxL, 0)} mm²)`, kind: 'fill', tone: refTone },
+      ]}
+    >
+      {({ x, y, Y1 }) => {
+        const pts = tr.deg.map((dd, i) => `${x(dd).toFixed(1)},${y(ys[i]).toFixed(1)}`).join(' ');
+        // The flow area on its own scale, its peak at a third of the plot's height.
+        const liftPts = `${x(tr.deg[0])},${Y1} ${tr.deg.map((dd, i) => `${x(dd).toFixed(1)},${(Y1 - (lift[i] / maxL) * (Y1 * 0.3)).toFixed(1)}`).join(' ')} ${x(tr.deg[tr.deg.length - 1])},${Y1}`;
+        return (
+          <>
+            <polygon points={liftPts} className={tone === 'in' ? styles.liftFillIn : styles.liftFillEx} />
+            <line x1={x(xDomain[0])} x2={x(xDomain[1])} y1={y(refKpa)} y2={y(refKpa)} className={tone === 'in' ? styles.refIn : styles.refEx} />
+            {marks.map(([dd, t], i) => (
+              <g key={t}>
+                <line x1={x(dd)} x2={x(dd)} y1={0} y2={Y1} className={styles.eventLine} />
+                {/* A mark too close to the one before it says its name lower down. */}
+                <text x={x(dd) + 3} y={i > 0 && Math.abs(x(dd) - x(marks[i - 1][0])) < 34 ? 30 : 18} className={styles.eventText}>{t}</text>
+              </g>
+            ))}
+            <polyline points={pts} className={tone === 'in' ? styles.portLineIn : styles.portLineEx} />
+            {now != null && <circle cx={x(d)} cy={y(now)} r={4} className={cut.pvDot} />}
+          </>
+        );
+      }}
+    </Plot>
   );
 }
 
@@ -453,9 +479,12 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
 
   return (
     <div className={cut.cutWrap} ref={wrapRef}>
-      <ol className={cut.strokeBar} aria-label="Cylinder 1's stroke">
-        {STROKES.map((name, j) => <li key={name} className={cut.strokePill} data-on={j === s1 ? 'true' : undefined}>{name}</li>)}
-      </ol>
+      <div className={cut.strokeRow}>
+        <span className={cut.strokeLabel}>Cylinder 1 is on its</span>
+        <ol className={cut.strokeBar} aria-label="Cylinder 1's stroke">
+          {STROKES.map((name, j) => <li key={name} className={cut.strokePill} data-on={j === s1 ? 'true' : undefined} aria-current={j === s1 ? 'step' : undefined}>{name}</li>)}
+        </ol>
+      </div>
       <div className={cut.cutSplit}>
         <svg viewBox={`0 0 ${W} ${H}`} className={cut.cutSvg} role="img"
           aria-label={`The intake at ${gx.rpm} RPM: plenum ${f(mapKpa, 0)} kPa, cylinder 1 on its ${STROKES[s1].toLowerCase()} stroke, its port at ${f(port1, 0)} kPa`}>
@@ -531,7 +560,7 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
               : 'Its intake valves are shut. The runner still rings with the wave the last opening started; the next cylinder in the firing order draws on the plenum.'}
           </p>
           <PortChart gx={gx} ys={gx.trace.inPortKpa} refKpa={mapKpa} d={wrap(d)} tone="in" lift={gx.trace.inAreaMm2}
-            marks={[[ev.ivo, 'IVO'], [ev.ivc, 'IVC']]} label="intake port, kPa; dashed: plenum; shaded: valve open" />
+            marks={[[ev.ivo, 'IVO'], [ev.ivc, 'IVC']]} title="Intake port pressure" refName="plenum pressure" valveName="intake valve" />
           <dl className={cut.liveEq}>
             <dt>Crank angle</dt><dd>{cardAngle(wrap(d))} (cylinder 1)</dd>
             <dt>Throttle</dt><dd>{f(throttleFrac * 100, 0)}% open: 101.3 → {f(mapKpa, 0)} kPa in the plenum</dd>
@@ -619,9 +648,12 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
 
   return (
     <div className={cut.cutWrap} ref={wrapRef}>
-      <ol className={cut.strokeBar} aria-label="Cylinder 1's stroke">
-        {STROKES.map((name, j) => <li key={name} className={cut.strokePill} data-on={j === s1 ? 'true' : undefined}>{name}</li>)}
-      </ol>
+      <div className={cut.strokeRow}>
+        <span className={cut.strokeLabel}>Cylinder 1 is on its</span>
+        <ol className={cut.strokeBar} aria-label="Cylinder 1's stroke">
+          {STROKES.map((name, j) => <li key={name} className={cut.strokePill} data-on={j === s1 ? 'true' : undefined} aria-current={j === s1 ? 'step' : undefined}>{name}</li>)}
+        </ol>
+      </div>
       <div className={cut.cutSplit}>
         <svg viewBox={`0 0 ${W} ${H}`} className={cut.cutSvg} role="img"
           aria-label={`The exhaust header at ${gx.rpm} RPM: cylinder 1 on its ${STROKES[s1].toLowerCase()} stroke, its port at ${f(port1, 0)} kPa, the collector at ${f(collKpa, 0)} kPa`}>
@@ -681,7 +713,7 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
               : 'Its exhaust valves are shut. The other cylinders\' pulses cross at the collector, each one\'s echo running back up the other primaries.'}
           </p>
           <PortChart gx={gx} ys={gx.trace.exPortKpa} refKpa={emp} d={wrap(d)} tone="ex" lift={gx.trace.exAreaMm2}
-            marks={[[ev.evo, 'EVO'], [echo, 'echo'], [ev.evc, 'EVC']]} label="exhaust port, kPa; dashed: collector; shaded: valve open" />
+            marks={[[ev.evo, 'EVO'], [echo, 'echo'], [ev.evc, 'EVC']]} title="Exhaust port pressure" refName="collector pressure" valveName="exhaust valve" />
           <dl className={cut.liveEq}>
             <dt>Crank angle</dt><dd>{cardAngle(wrap(d))} (cylinder 1)</dd>
             <dt>Wave speed</dt><dd>a = √(γRT) = √({f(COEFF.GAMMA_BURNED, 2)} × 287 × {f(gx.exhaustK, 0)}) = {f(a, 0)} m/s</dd>
@@ -785,8 +817,9 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {}, exhaustDia =
   ]);
   const dropTotal = dropRows.reduce((s, [, v]) => s + v, 0);
   // The pressure strip under the drawing.
-  const SH = 90; const pLo = Math.min(98, ...pipeCells.map(pAt)) - 1; const pHi = Math.max(ref + 6, ...pipeCells.map(pAt)) + 2;
-  const SY = (k) => SH - 14 - ((k - pLo) / (pHi - pLo)) * (SH - 26);
+  // Both traces and the air outside inside the plot, a kPa of room either side.
+  const pAll = [...pipeCells.map(pAt), ...pipeCells.map(staticAt), 101.3, ref];
+  const pLo = Math.min(...pAll) - 1; const pHi = Math.max(...pAll) + 1;
 
   const labels = /** @type {[string, number, number, number, number][]} */ ([
     ['From the collector', 8, y0 - 46, X(0.08), y0 - P / 2],
@@ -872,15 +905,36 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {}, exhaustDia =
           {dots(pathPts, flowT.current, 46, 3).map(([x, y], i) => <circle key={`g${i}`} cx={x} cy={y} r={2.2} className={cut.gasBurn} opacity={0.85} />)}
           <Labels items={labels} W={W} />
         </svg>
-        <svg viewBox={`0 0 ${W} ${SH}`} className={styles.chart} role="img" aria-label="Pressure along the exhaust, now and on average">
-          <line x1={X(0)} x2={X(L)} y1={SY(101.3)} y2={SY(101.3)} className={styles.grid} />
-          <polyline points={pipeCells.map((s) => `${X(s).toFixed(1)},${SY(staticAt(s)).toFixed(1)}`).join(' ')} className={styles.stripMean} />
-          <polyline points={pipeCells.map((s) => `${X(s).toFixed(1)},${SY(pAt(s)).toFixed(1)}`).join(' ')} className={styles.stripNow} />
-          <text x={X(0)} y={12} className={styles.lab}>pressure along the pipe, kPa: dashed the average (each part&apos;s loss), solid now (the pulses)</text>
-          <text x={X(L)} y={SY(101.3) - 4} className={styles.lab} textAnchor="end">101.3 outside</text>
-          <text x={X(0)} y={SH - 2} className={styles.lab}>{f(ref, 1)} at the collector</text>
-        </svg>
       </div>
+      <Plot
+        title="Exhaust pressure along the pipe"
+        sub={`${f(gx.exhaustFlowGs, 0)} g/s; ${f(ref, 1)} kPa at the collector, 101.3 outside`}
+        xLabel="distance from the collector, m"
+        yLabel="pressure, kPa (abs)"
+        xDomain={[0, L]}
+        yDomain={[Math.floor(pLo), Math.ceil(pHi)]}
+        height={170}
+        ariaLabel="Pressure along the exhaust, now and on average"
+        legend={[
+          { label: 'now (the pulses)', kind: 'line', tone: 'var(--cut-burn)' },
+          { label: 'average (each part\'s loss)', kind: 'dash', tone: 'var(--ink2)' },
+          { label: 'outside air, 101.3', kind: 'dots', tone: 'var(--ink3)' },
+        ]}
+      >
+        {({ x, y, Y1 }) => (
+          <>
+            {/** @type {[number, string][]} */ ([[SYS.catIn, 'cat'], [SYS.mufIn, 'muffler']]).filter(([, t]) => t !== 'cat' || catKind !== 'none').map(([sx, t]) => (
+              <g key={t}>
+                <line x1={x(sx)} x2={x(sx)} y1={0} y2={Y1} className={styles.eventLine} />
+                <text x={x(sx) + 3} y={18} className={styles.eventText}>{t}</text>
+              </g>
+            ))}
+            <line x1={x(0)} x2={x(L)} y1={y(101.3)} y2={y(101.3)} className={styles.ambient} />
+            <polyline points={pipeCells.map((sc) => `${x(sc).toFixed(1)},${y(staticAt(sc)).toFixed(1)}`).join(' ')} className={styles.stripMean} />
+            <polyline points={pipeCells.map((sc) => `${x(sc).toFixed(1)},${y(pAt(sc)).toFixed(1)}`).join(' ')} className={styles.stripNow} />
+          </>
+        )}
+      </Plot>
       <div className={styles.numbers}>
         <dl className={cut.liveEq}>
           <dt>Crank angle</dt><dd>{cardAngle(wrap(d))} (cylinder 1)</dd>

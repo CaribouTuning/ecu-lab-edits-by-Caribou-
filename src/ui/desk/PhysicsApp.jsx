@@ -26,6 +26,7 @@ import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { gasExchangeTrace } from '../../sim/index.js';
 import { TableSurface } from '../components/surface/TableSurface.jsx';
 
+import { Plot } from './Plot.jsx';
 import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
 import { EngineViewer } from './EngineViewer.jsx';
@@ -69,33 +70,43 @@ function Stage({ n, title, what, eq, rows, open = false, children }) {
  * @param {{p: any}} props
  */
 function PressureTrace({ p }) {
-  const W = 260; const H = 120;
-  const x = (deg) => ((deg + 60) / 160) * W;
   const peak = Math.max(10, p.peakPressure ?? 50);
-  const y = (bar) => H - 12 - (bar / (peak * 1.1)) * (H - 24);
   const start = (p.mfb50 ?? 10) - (p.burnDeg ?? 50) / 2;
-  const pts = [];
+  const curve = [];
   for (let deg = -60; deg <= 100; deg += 2) {
     const v = Math.max(0.15, Math.cos((deg * Math.PI) / 180 / 2.2));
     const motored = (p.map ?? 100) / 100 * (v ** 1.3) * 22 + 1;
     const xb = Math.max(0, (deg - start) / Math.max(10, p.burnDeg ?? 50));
     const burned = 1 - Math.exp(-5 * xb ** 3);
     const bump = burned * Math.exp(-Math.max(0, deg - (p.peakPressureDeg ?? 15)) / 45);
-    pts.push(`${x(deg).toFixed(1)},${y(motored + (peak - 23) * bump).toFixed(1)}`);
+    curve.push([deg, motored + (peak - 23) * bump]);
   }
   const spark = -(p.timing ?? 20);
+  const mfb = p.mfb50 ?? 10;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={styles.art}>
-      <line x1={x(0)} y1={6} x2={x(0)} y2={H - 12} className={styles.artGrid} />
-      <text x={x(0) + 3} y={14} className={styles.artText}>TDC</text>
-      <polyline points={pts.join(' ')} className={styles.artLine} />
-      <line x1={x(spark)} y1={H - 30} x2={x(spark)} y2={H - 12} className={styles.artWarn} />
-      <text x={x(spark) - 12} y={H - 34} className={styles.artText}>spark</text>
-      <line x1={x(p.mfb50 ?? 10)} y1={y(peak * 0.6)} x2={x(p.mfb50 ?? 10)} y2={H - 12} className={styles.artGrid} />
-      <text x={x(p.mfb50 ?? 10) + 3} y={y(peak * 0.6) + 4} className={styles.artText}>50% burned</text>
-      <line x1={0} y1={H - 12} x2={W} y2={H - 12} className={styles.artAxis} />
-      <text x={W - 70} y={H - 2} className={styles.artText}>crank angle</text>
-    </svg>
+    <Plot
+      title="Cylinder pressure around firing"
+      sub={`peak ${f(peak, 0)} bar at ${f(p.peakPressureDeg ?? 15, 0)}° ATDC`}
+      xLabel="crank angle, ° ATDC firing"
+      yLabel="pressure, bar"
+      xDomain={[-60, 100]}
+      yDomain={[0, Math.ceil((peak * 1.1) / 10) * 10]}
+      xTicks={[-60, -40, -20, 0, 20, 40, 60, 80, 100].map((v) => ({ v, label: v === 0 ? 'TDC' : String(v) }))}
+      ariaLabel={`Cylinder pressure: spark ${f(p.timing ?? 20, 0)}° BTDC, 50% burned ${f(mfb, 0)}° ATDC, peak ${f(peak, 0)} bar`}
+      legend={[
+        { label: 'cylinder pressure (shape drawn from the model\'s peak, spark and MFB50)', kind: 'line', tone: 'var(--acc)' },
+        { label: `spark, ${f(p.timing ?? 20, 0)}° BTDC`, kind: 'dash', tone: 'var(--warn)' },
+        { label: `50% burned (MFB50), ${f(mfb, 0)}° ATDC`, kind: 'dash', tone: 'var(--ink2)' },
+      ]}
+    >
+      {({ x, y, Y1 }) => (
+        <>
+          <line x1={x(spark)} x2={x(spark)} y1={0} y2={Y1} className={styles.artWarn} strokeDasharray="3 3" />
+          <line x1={x(mfb)} x2={x(mfb)} y1={0} y2={Y1} className={styles.artGrid} strokeDasharray="3 3" />
+          <polyline points={curve.map(([d, v]) => `${x(d).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} className={styles.artLine} />
+        </>
+      )}
+    </Plot>
   );
 }
 
@@ -116,6 +127,7 @@ function PressureTrace({ p }) {
  */
 export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, health = null, onRepair = null }) {
   const U = useUnits();
+  const rootRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
   const [load, setLoad] = useState(100);
@@ -146,24 +158,14 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
     : null), [breathing, p?.rpm, p?.map, advance]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!p) return <div className={styles.pad}>Build an engine first: the model needs something to run.</div>;
 
-  // The curve at the top, and the RPM picker it doubles as.
-  const CW = 600; const CH = 260;
-  const maxT = Math.max(...pts.map((q) => q.torque), 1);
-  const maxH = Math.max(...pts.map((q) => q.hp), 1);
+  // The curve at the top, in the units the player reads (units.js): power and torque
+  // converted, never hp and lb-ft drawn under a kW key.
+  const powerOf = (q) => U.power(q.hp); const torqueOf = (q) => U.torque(q.torque);
   const maxVe = Math.max(...pts.map((q) => q.ve ?? 0), 1);
-  const top = graph === 've' ? Math.max(110, maxVe * 1.1) : Math.max(maxT, maxH) * 1.1;
+  const top = graph === 've' ? Math.max(110, maxVe * 1.1) : Math.max(...pts.map((q) => Math.max(powerOf(q), torqueOf(q))), 1) * 1.1;
   const rpm0 = pts[0].rpm; const rpm1 = pts[pts.length - 1].rpm;
-  // A plot area inside the frame, room left for the value axis and below for the speeds.
-  const PL = 44; const PR = 10; const PT = 12; const PB = 26;
-  const cx = (rpm) => PL + ((rpm - rpm0) / Math.max(1, rpm1 - rpm0)) * (CW - PL - PR);
-  const cy = (v) => CH - PB - (v / top) * (CH - PT - PB);
-  const line = (k) => pts.map((q) => `${cx(q.rpm).toFixed(1)},${cy(q[k]).toFixed(1)}`).join(' ');
-  // Round steps for the gridlines: 1, 2 or 5 times a power of ten, about four of them.
-  const rough = top / 4; const mag = 10 ** Math.floor(Math.log10(rough));
-  const yStep = [1, 2, 5, 10].map((m) => m * mag).find((v) => v >= rough) ?? 10 * mag;
-  const yTicks = Array.from({ length: Math.floor(top / yStep) + 1 }, (_, k) => k * yStep);
-  const xTicks = [];
-  for (let r = Math.ceil(rpm0 / 1000) * 1000; r <= rpm1; r += 1000) xTicks.push(r);
+  const rpmTicks = [];
+  for (let r = Math.ceil(rpm0 / 1000) * 1000; r <= rpm1; r += 1000) rpmTicks.push({ v: r, label: `${r / 1000}k` });
 
   // The numbers each stage shows, worked from the point.
   const vCylL = derived?.perCylL ?? (derived?.displacementL ?? 3.5) / (derived?.cyl ?? 6);
@@ -192,8 +194,20 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
     ? `Volumetric efficiency against RPM; ${p.rpm} RPM chosen, ${f(p.ve, 0)} %`
     : `Torque and power against RPM; ${p.rpm} RPM chosen`;
 
+  // The page's sections, for the jump bar: on a phone the page is many screens long.
+  const sections = [
+    ['build', 'Build'], ['curves', 'Curves'],
+    ...(gx ? [['intake', 'Intake'], ['header', 'Header'], ['exhaust', 'Exhaust']] : []),
+    ...(health ? [['condition', 'Wear']] : []),
+    ['model', 'Model'], ['cylinder', 'Cylinder'],
+  ];
+  const jump = (k) => rootRef.current?.querySelector(`[data-sec="${k}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
-    <div className={`${styles.pad} ${styles.physics}`}>
+    <div className={`${styles.pad} ${styles.physics}`} ref={rootRef}>
+      <nav className={styles.physJump} aria-label="Physics sections">
+        {sections.map(([k, label]) => <button key={k} type="button" onClick={() => jump(k)}>{label}</button>)}
+      </nav>
       <div className={styles.physControls}>
         <label className={styles.ctl}>
           <span>Engine speed <b>{p.rpm} RPM</b></span>
@@ -208,7 +222,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         <p className={styles.ctlNote}>Your engine as built and tuned{fuel ? `, on ${fuel.label}` : ''}. Every panel, every number and the engine below follow these two.</p>
       </div>
       <div className={styles.physGrid}>
-        <section className={styles.physPanel} aria-label="Your build in the model">
+        <section className={styles.physPanel} aria-label="Your build in the model" data-sec="build">
           <h3 className={styles.panelTitle}>Your build in the model</h3>
           {/* The engine across the panel, framed whole at any width; the figures under it. */}
           {spec ? <div className={styles.buildEngine}><EngineViewer spec={spec} rpm={p.rpm} label="Your engine as built" /></div> : null}
@@ -219,9 +233,9 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
           </dl>
         </section>
 
-        <section className={styles.physPanel} aria-label="Graph">
+        <section className={styles.physPanel} aria-label="Graph" data-sec="curves">
           <div className={styles.panelHead}>
-            <h3 className={styles.panelTitle}>{graph === 've' ? 'VE against RPM' : graph === '3d' ? 'The VE map in 3-D' : 'Power and torque'}</h3>
+            <h3 className={styles.panelTitle}>{graph === '3d' ? 'The VE map in 3-D' : 'Full-throttle curves'}</h3>
             <div className={styles.graphBtns} role="group" aria-label="Graph">
               <button type="button" aria-pressed={graph === 've'} onClick={() => setGraph(graph === 've' ? 'power' : 've')} title="Show VE against RPM">VE</button>
               <button type="button" aria-pressed={graph === '3d'} onClick={() => setGraph(graph === '3d' ? 'power' : '3d')} title="Show the VE map in 3-D">3D</button>
@@ -231,40 +245,45 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
             <TableSurface x={veAxes.rpm} y={veLoads} z={veRows} lo={10} hi={130} xLabel="RPM" yLabel={veAxes.loadUnit} unit="%" decimals={0}
               title="Volumetric efficiency" xVar="rpm" yVar={veAxes.loadUnit === 'kPa' ? 'map' : null} />
           ) : (
-            <svg viewBox={`0 0 ${CW} ${CH}`} className={styles.curveSvg} role="img" aria-label={graphLabel}>
-              {yTicks.map((v) => (
-                <g key={`y${v}`}>
-                  <line x1={PL} x2={CW - PR} y1={cy(v)} y2={cy(v)} className={v === 0 ? styles.plotAxis : styles.plotGrid} />
-                  <text x={PL - 6} y={cy(v) + 4} className={styles.plotTick} textAnchor="end">{v}</text>
-                </g>
-              ))}
-              {xTicks.map((r) => (
-                <text key={`x${r}`} x={cx(r)} y={CH - 8} className={styles.plotTick} textAnchor="middle">{r / 1000}k</text>
-              ))}
-              {/* The chosen speed: a neutral cursor, not the warning colour. */}
-              <line x1={cx(p.rpm)} y1={PT} x2={cx(p.rpm)} y2={CH - PB} className={styles.plotCursor} />
-              {graph === 've' ? (
-                <>
-                  <polyline points={line('ve')} className={styles.plotLine} />
-                  <circle cx={cx(p.rpm)} cy={cy(p.ve ?? 0)} r="4.5" className={styles.plotDot} />
-                </>
-              ) : (
-                <>
-                  {/* Power in the accent and torque in the second hue, as the dyno draws them. */}
-                  <polyline points={line('torque')} className={styles.plotLine2} />
-                  <polyline points={line('hp')} className={styles.plotLine} />
-                  <circle cx={cx(p.rpm)} cy={cy(p.torque)} r="4.5" className={styles.plotDot2} />
-                  <circle cx={cx(p.rpm)} cy={cy(p.hp)} r="4.5" className={styles.plotDot} />
-                </>
-              )}
-            </svg>
+            <Plot
+              title={graph === 've' ? 'Volumetric efficiency' : 'Power and torque'}
+              sub={`${derived?.displacementL ? `${f(derived.displacementL, 1)} L, ` : ''}${fuel?.label ?? ''}; cursor at ${p.rpm.toLocaleString('en-US')} rpm`}
+              xLabel="engine speed, rpm"
+              yLabel={graph === 've' ? 'VE, %' : `${U.powerUnit} · ${U.torqueUnit}`}
+              xDomain={[rpm0, rpm1]}
+              yDomain={[0, top]}
+              xTicks={rpmTicks}
+              height={200}
+              ariaLabel={graphLabel}
+              legend={graph === 've'
+                ? [{ label: 'VE, %', kind: 'line', tone: 'var(--acc)' }]
+                : [{ label: `power, ${U.powerUnit}`, kind: 'line', tone: 'var(--acc)' }, { label: `torque, ${U.torqueUnit}`, kind: 'line', tone: 'var(--data2)' }]}
+            >
+              {({ x, y, Y0, Y1 }) => {
+                const line = (get) => pts.map((q) => `${x(q.rpm).toFixed(1)},${y(get(q)).toFixed(1)}`).join(' ');
+                return (
+                  <>
+                    {/* The chosen speed: a neutral cursor, not the warning colour. */}
+                    <line x1={x(p.rpm)} y1={Y0} x2={x(p.rpm)} y2={Y1} className={styles.plotCursor} />
+                    {graph === 've' ? (
+                      <>
+                        <polyline points={line((q) => q.ve ?? 0)} className={styles.plotLine} />
+                        <circle cx={x(p.rpm)} cy={y(p.ve ?? 0)} r="4" className={styles.plotDot} />
+                      </>
+                    ) : (
+                      <>
+                        {/* Power in the accent and torque in the second hue, as the dyno draws them. */}
+                        <polyline points={line(torqueOf)} className={styles.plotLine2} />
+                        <polyline points={line(powerOf)} className={styles.plotLine} />
+                        <circle cx={x(p.rpm)} cy={y(torqueOf(p))} r="4" className={styles.plotDot2} />
+                        <circle cx={x(p.rpm)} cy={y(powerOf(p))} r="4" className={styles.plotDot} />
+                      </>
+                    )}
+                  </>
+                );
+              }}
+            </Plot>
           )}
-          <div className={styles.plotKey}>
-            {graph === 've'
-              ? <span><i className={styles.keyAcc} aria-hidden="true" />VE, %</span>
-              : <><span><i className={styles.keyAcc} aria-hidden="true" />Power, {U.powerUnit}</span><span><i className={styles.key2} aria-hidden="true" />Torque, {U.torqueUnit}</span></>}
-            <span className={styles.plotUnit}>engine speed, rpm</span>
-          </div>
           <dl className={styles.readout}>
             <div><dt>Speed</dt><dd>{p.rpm.toLocaleString('en-US')} <small>rpm</small></dd></div>
             <div><dt>Power</dt><dd>{f(U.power(p.hp), 0)} <small>{U.powerUnit}</small></dd></div>
@@ -275,27 +294,27 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
 
         {gx ? (
           <>
-            <section className={styles.physPanel} aria-label="The intake manifold">
+            <section className={styles.physPanel} aria-label="The intake manifold" data-sec="intake">
               <h3 className={styles.panelTitle}>The intake: air filter, throttle, plenum and runners</h3>
               <IntakeCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} throttleFrac={Math.min(1, deferredLoad / 101.3)} />
             </section>
-            <section className={styles.physPanel} aria-label="The exhaust header">
+            <section className={styles.physPanel} aria-label="The exhaust header" data-sec="header">
               <h3 className={styles.panelTitle}>The exhaust header: ports, primaries and collector</h3>
               <HeaderCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} />
             </section>
-            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust system">
+            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust system" data-sec="exhaust">
               <h3 className={styles.panelTitle}>The exhaust system: converter, muffler and tailpipe</h3>
               <ExhaustSystemCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} mods={breathing?.mods} exhaustDia={breathing?.hwForVe?.exhaustDia ?? 3} />
             </section>
           </>
         ) : null}
         {health ? (
-          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="Engine condition">
+          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="Engine condition" data-sec="condition">
             <h3 className={styles.panelTitle}>Engine condition: what wears it, and what the wear does</h3>
             <EngineCondition health={health} point={p} pointsPerPull={pts.length} derived={derived} onRepair={onRepair} />
           </section>
         ) : null}
-        <section className={styles.physPanel} aria-label="The raw physics model">
+        <section className={styles.physPanel} aria-label="The raw physics model" data-sec="model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>
           <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>
       <Stage
@@ -370,7 +389,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
       </Stage>
         </section>
 
-        <section className={styles.physPanel} aria-label="The engine running">
+        <section className={styles.physPanel} aria-label="The engine running" data-sec="cylinder">
           <h3 className={styles.panelTitle}>The engine in action: one cylinder at {p.rpm} RPM, {f(p.map, 0)} kPa</h3>
           <EngineCutaway bore={bore || 90} stroke={stroke || 86} cr={derived?.compression ?? 10} camDuration={derived?.camDuration ?? 230} point={p} />
         </section>

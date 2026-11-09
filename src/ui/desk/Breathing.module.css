@@ -33,3 +33,6 @@
 .liftFillEx { fill: var(--cut-exhaust); opacity: 0.22; }
 .stripMean { fill: none; stroke: var(--ink2); stroke-width: 1.2; stroke-dasharray: 5 4; }
 .stripNow { fill: none; stroke: var(--cut-burn); stroke-width: 2; stroke-linejoin: round; }
+.eventLine { stroke: var(--ink3); stroke-width: 0.75; stroke-dasharray: 2 3; }
+.eventText { fill: var(--ink2); font: 600 9px var(--mono); }
+.ambient { stroke: var(--ink3); stroke-width: 1; stroke-dasharray: 1 3; }

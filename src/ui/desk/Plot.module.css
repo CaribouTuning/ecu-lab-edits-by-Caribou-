@@ -1,0 +1,23 @@
+/* Plot.jsx: a titled engineering plot. Fits its column at any width: the SVG scales, and
+   its text is sized in the SVG's units so it stays legible on a phone (320 wide). */
+
+.fig { margin: 0; padding: 10px 10px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel2); }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0 0 6px; }
+.title { font-size: var(--fs-sm); font-weight: 600; color: var(--ink); }
+.sub { font-size: var(--fs-xs); color: var(--ink2); font-variant-numeric: tabular-nums; }
+
+.box { width: 100%; min-width: 0; }
+.svg { display: block; max-width: 100%; overflow: visible; }
+.grid { stroke: var(--line); stroke-width: 0.75; }
+.frame { fill: none; stroke: var(--line-hi); stroke-width: 1; }
+.axis { stroke: var(--line-hi); stroke-width: 1; }
+.tick { fill: var(--ink2); font: 9.5px var(--mono); font-variant-numeric: tabular-nums; }
+.axisTitle { fill: var(--ink2); font: 10px var(--sans); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--ink2); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid var(--tone); }
+.legend i[data-kind='dash'] { border-top-style: dashed; border-top-width: 1.5px; }
+.legend i[data-kind='fill'] { height: 9px; border: 0; background: var(--tone); opacity: 0.35; border-radius: 2px; }
+.legend i[data-kind='dot'] { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--tone); }
+.legend i[data-kind='dots'] { border-top-style: dotted; border-top-width: 2px; }
