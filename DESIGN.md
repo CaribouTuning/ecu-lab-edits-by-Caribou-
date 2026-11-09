@@ -143,8 +143,10 @@ colours out of components, keep the accent from being a status colour, and keep
   locked table shows a padlock instead, and its name says so to a screen reader ("…,
   locked until the shop trains for it"). A count beside a row is how many log entries
   point there, as Mail counts unread mail.
-- **Tables**: heat colours on cells, and the selection drawn as an outline over them, so
-  a selected cell keeps its value's colour.
+- **Tables**: heat colours on cells, green for low values through yellow to red for high,
+  as tuning software shades a table (RomRaider's editor blends its hue from a blue minimum
+  to a red maximum, through green and yellow; `heat` in theme.js has the sources). The
+  selection is drawn as an outline over them, so a selected cell keeps its value's colour.
 - **Charts**: one-pixel grid, mono ticks, power in `--ink`, torque in `--cyan`, and a
   previous run dashed at half opacity.
 - **The advisor**: an inspector. The verdict's tone is a small dot by its headline,

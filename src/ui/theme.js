@@ -101,15 +101,16 @@ export const utilisationTone = (v) => (v > 90 ? 'danger' : v > 75 ? 'warn' : 'ok
 export const utilisationColor = (v) => T[utilisationTone(v)];
 
 /**
- * Heat-map colour for a table cell, low to high: deep navy, through slate grey, to brass.
+ * Heat-map colour for a table cell, low to high: green, through yellow, to red.
  *
- * Deliberately its own ramp rather than the status scale: a hot VE cell is not a
- * fault, and it must never compete visually with a real warning. And not a rainbow:
- * the old blue-green-yellow-red ramp put most of a real table in one band of green and
- * read as decoration. This one is ordered by lightness (darker is lower, the way a
- * cividis scale is), and it passes the hues between blue and gold almost without
- * colour, so no band of it looks like a status. Every step keeps white text at
- * 4.5:1 or better.
+ * The way tuning software shades a table: the cell's value sets its hue, and the higher
+ * the value the redder the cell. RomRaider's table editor blends the hue from its
+ * minimum colour to its maximum, light blue (153, 153, 255) to light red (255, 102, 102),
+ * which runs through green and yellow on the way (src/main/java/com/romraider/util/
+ * ColorScaler.java and Settings.java); TunerStudio's cells run blue - green - yellow -
+ * red (MSExtra forum, "Cell-value colors when increasing/decreasing Ign advance"). This
+ * ramp is that sweep's green-to-red part, which is what a tuner reads as a table's heat.
+ * Each step is dark enough that the cell's text (--ink) keeps 4.5:1 or better on it.
  *
  * @param {number} value cell value
  * @param {number} min low end of the scale
@@ -118,14 +119,14 @@ export const utilisationColor = (v) => T[utilisationTone(v)];
  */
 function heat(value, min, max) {
   const t = max > min ? clamp((value - min) / (max - min), 0, 1) : 0.5;
-  // [t, hue, saturation %, lightness %]: navy, slate, a grey turning warm, brass.
-  const stops = [[0, 224, 46, 17], [0.5, 214, 13, 27], [0.64, 52, 3, 30], [1, 41, 58, 36]];
+  // [t, hue, saturation %, lightness %]: green, yellow-green, yellow, orange, red.
+  const stops = [[0, 130, 50, 26], [0.33, 85, 55, 26], [0.5, 55, 65, 25], [0.75, 28, 70, 32], [1, 0, 68, 38]];
   let i = 1;
   while (i < stops.length - 1 && t > stops[i][0]) i += 1;
   const [t0, h0, s0, l0] = stops[i - 1];
   const [t1, h1, s1, l1] = stops[i];
   const k = (t - t0) / (t1 - t0);
-  const mix = (a, b) => a + (b - a) * k;
+  const mix = (x, y) => x + (y - x) * k;
   return `hsl(${mix(h0, h1).toFixed(0)}, ${mix(s0, s1).toFixed(0)}%, ${mix(l0, l1).toFixed(1)}%)`;
 }
 
