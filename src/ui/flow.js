@@ -85,7 +85,7 @@ export function nextStep(f) {
   if (f.attention.length) return fixStep(f.attention[0]);
   return {
     id: 'more',
-    text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the bench, or tune for more on the laptop.`,
+    text: `A clean pull${f.peakHp ? `, ${Math.round(f.peakHp)} whp` : ''}. Build more into it on the bench, or tune for more in TUNE.`,
     label: 'Build bench',
     go: 'build',
   };
@@ -99,7 +99,7 @@ export function nextStep(f) {
 function fixStep(a) {
   return {
     id: 'fix',
-    text: `The pull log points at ${a.label} ${a.count === 1 ? 'once' : `${a.count} times`}. Read it, then fix it on the laptop.`,
+    text: `The pull log points at ${a.label} ${a.count === 1 ? 'once' : `${a.count} times`}. Read it, then fix it in TUNE.`,
     label: a.label,
     go: `tune:${a.page}`,
   };

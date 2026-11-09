@@ -118,7 +118,7 @@ function FindYourWay() {
           { at: '[data-tour="strip-last-pull"]', text: 'LAST PULL: the peak power of your most recent dyno pull.' },
           { at: '[data-tour="strip-health"]', text: 'HEALTH: knock, heat and pressure wear the engine. The wrench next to it repairs it.' },
         ]}
-        caption="The nav and the status strip. LIVE runs the engine in real time; the laptop's LEARN app has this course and the articles; in CAREER you run a tuning shop of your own."
+        caption="The nav and the status strip. LIVE runs the engine in real time; the LEARN app has this course and the articles; in CAREER you run a tuning shop of your own."
       >
         <div style={{ height: 320, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -128,7 +128,7 @@ function FindYourWay() {
       </ScreenSnippet>
       <Do steps={[
         <>Tap each of <K>BUILD</K>, <K>TUNE</K> and <K>DYNO</K> once, to see where things live.</>,
-        <>This course is always in the laptop&apos;s <K>LEARN</K> app; the <K>(i)</K> button at the right of the strip opens the five-minute tutorial.</>,
+        <>This course is always in the <K>LEARN</K> app; the <K>(i)</K> button at the right of the strip opens the five-minute tutorial.</>,
       ]} />
       <Did>You know the working order a tuner uses: build it, tune it, measure it. The tabs run in that order, left to right.</Did>
     </>
@@ -685,7 +685,7 @@ function NextSteps() {
       <H>Practise</H>
       <P>The practice missions (below) put you in the real game with a checklist that ticks itself as you go. Start with <b>Your first pull</b>.</P>
       <H>Go deeper</H>
-      <P>The laptop&apos;s LEARN app has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 37 (correcting VE from logs, in depth), 39 (troubleshooting by symptom) and 40 (a full worked session).</P>
+      <P>The LEARN app has the whole subject in numbered articles. Good next reads: 12 (the tuning loop), 14 (every datalog column), 37 (correcting VE from logs, in depth), 39 (troubleshooting by symptom) and 40 (a full worked session).</P>
       <H>Real cars</H>
       <P>CAREER gives you a tuning shop of your own. Customers bring cars with real faults and describe what the car does, not what is wrong with it. Every fault is one this course taught you to diagnose. Training opens more of the ECU, and a dyno, more lifts and better tools open bigger jobs.</P>
       <Did>That is the course done. The loop is always the same: build it, set the tables, pull it, read the log, change one thing.</Did>
