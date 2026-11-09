@@ -2,7 +2,6 @@
 
 import React from 'react';
 
-import { Button } from '../primitives/Button.jsx';
 
 import styles from './StartScreen.module.css';
 
@@ -10,19 +9,25 @@ import styles from './StartScreen.module.css';
  * The three ways in, in the order a newcomer should meet them.
  *
  * CAREER is first and is the primary action, because a customer car with a fault in it
- * is the only one of the three that tells you what you are trying to achieve. A sandbox
+ * is the only one of the three that tells you what you are trying to achieve: it is a
+ * tuning shop of your own, with its own save, apart from SANDBOX. A sandbox
  * with no objective is the right tool once you know what you are doing and a poor place
  * to start, and the tutorial is a detour a returning player does not want.
+ *
+ * This screen keeps the look it has on DNiev/ecu-lab main: its own blue palette and
+ * buttons (StartScreen.module.css pins them), the gauge, the glow and the tracked
+ * capitals. `data-plain` and `data-keep-tracking` opt it out of sketch.css, which
+ * styles the shop and its software, not the title screen.
  */
 const WAYS_IN = [
-  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'Customer cars with real faults to diagnose' },
+  { key: 'career', label: 'CAREER', variant: 'primary', caption: 'Run a tuning shop: customers, real faults, your reputation' },
   { key: 'sandbox', label: 'SANDBOX', variant: 'ghost', caption: 'Build and tune anything, no objectives' },
-  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'The whole loop, one step at a time' },
+  { key: 'tutorial', label: 'TUTORIAL', variant: 'quiet', caption: 'Tuning and the game, in five minutes' },
 ];
 
 /**
  * @param {object} props
- * @param {() => void} props.onCareer open the job board
+ * @param {() => void} props.onCareer open the shop
  * @param {() => void} props.onStart open the sandbox
  * @param {() => void} props.onTutorial
  * @param {string} props.version
@@ -32,12 +37,12 @@ const WAYS_IN = [
 export function StartScreen({ onCareer, onStart, onTutorial, version, dial }) {
   const handlers = { career: onCareer, sandbox: onStart, tutorial: onTutorial };
   return (
-    <div className={styles.screen}>
+    <div className={styles.screen} data-plain>
       <div className={styles.glow} aria-hidden="true" />
       <div className={styles.inner}>
         {dial && <div className={styles.dial}>{dial}</div>}
-        <div className={styles.eyebrow}>CARIBOU TUNING</div>
-        <h1 className={styles.title}>Engine Management Sandbox</h1>
+        <div className={styles.eyebrow} data-keep-tracking>CARIBOU TUNING</div>
+        <h1 className={styles.title} data-keep-tracking>Engine Management Sandbox</h1>
         <p className={styles.blurb}>
           Design an engine. Tune it. Log it. Improve it. A free-tune sandbox built to
           teach real engine management, not just move sliders.
@@ -45,14 +50,14 @@ export function StartScreen({ onCareer, onStart, onTutorial, version, dial }) {
         <div className={styles.actions}>
           {WAYS_IN.map((way) => (
             <div key={way.key} className={styles.way}>
-              <Button
-                size="lg"
-                block
-                variant={/** @type {'primary'|'ghost'|'quiet'} */ (way.variant)}
+              <button
+                type="button"
+                data-keep-tracking
+                className={`${styles.btn} ${styles[way.variant]}`}
                 onClick={handlers[way.key]}
               >
                 {way.label}
-              </Button>
+              </button>
               <div className={styles.caption}>{way.caption}</div>
             </div>
           ))}

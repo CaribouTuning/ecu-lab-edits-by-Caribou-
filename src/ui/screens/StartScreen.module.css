@@ -77,3 +77,52 @@
   .actions { flex-direction: row; max-width: none; justify-content: center; align-items: flex-start; }
   .way { width: 250px; }
 }
+
+/*
+ * The title screen keeps DNiev/ecu-lab main's look: its palette is pinned here, so the
+ * shop's graphite theme (tokens.css) does not reach it. These are main's token values.
+ */
+.screen {
+  --bg: #0a0d14;
+  --panel2: #1a2130;
+  --panel3: #212a3c;
+  --line: #262f42;
+  --line-hi: #33405a;
+  --ink: #e9eef8;
+  --ink2: #8792a8;
+  --ink3: #5c6880;
+  --acc: #4c9eff;
+  --acc-ink: #8fc2ff;
+  --acc-on: #04162e;
+  --acc-rgb: 76, 158, 255;
+  --r-md: 9px;
+}
+
+/* main's Button (primitives/Button.module.css on main), lg and block. */
+.btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  padding: var(--sp-lg) 22px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: var(--fs-base);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.btn:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.primary { background: var(--acc); color: var(--acc-on); }
+.primary:hover { background: var(--acc-ink); }
+.ghost { background: transparent; border-color: var(--line); color: var(--ink2); }
+.ghost:hover { border-color: var(--line-hi); color: var(--ink); }
+.quiet { background: transparent; border-color: transparent; color: var(--ink2); }
+.quiet:hover { color: var(--ink); }
+
+/* main's ground round the edges too: an iPhone's safe areas and the rubber-band. */
+:global(html):has(.screen), :global(body):has(.screen) { background: #0a0d14; }

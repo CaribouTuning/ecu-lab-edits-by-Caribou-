@@ -42,7 +42,7 @@ describe('StartScreen', () => {
 
   it('says what each way in is for, so the first choice is not a guess', () => {
     start();
-    expect(screen.getByText('Customer cars with real faults to diagnose')).toBeTruthy();
+    expect(screen.getByText('Run a tuning shop: customers, real faults, your reputation')).toBeTruthy();
     expect(screen.getByText('Build and tune anything, no objectives')).toBeTruthy();
   });
 
@@ -53,3 +53,18 @@ describe('StartScreen', () => {
 });
 
 // TutorialScreen has its own file now: tests/ui/tutorial.test.jsx.
+
+describe('StartScreen keeps main\'s look', () => {
+  it('opts out of the shop\'s sketch styles and carries the gauge', () => {
+    render(<StartScreen onCareer={() => {}} onStart={() => {}} onTutorial={() => {}} version="v1" dial={<svg data-testid="dial" />} />);
+    // data-plain lets the glow show; data-keep-tracking keeps the tracked capitals.
+    expect(document.querySelector('[data-plain]')).toBeTruthy();
+    expect(screen.getByRole('heading').hasAttribute('data-keep-tracking')).toBe(true);
+    for (const name of ['CAREER', 'SANDBOX', 'TUTORIAL']) {
+      const b = screen.getByRole('button', { name });
+      expect(b.hasAttribute('data-keep-tracking')).toBe(true);
+      expect(b.className).not.toMatch(/ink-frame/);
+    }
+    expect(screen.getByTestId('dial')).toBeTruthy();
+  });
+});

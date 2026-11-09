@@ -49,6 +49,7 @@ import { PagePicker } from './components/PagePicker.jsx';
 import { ThrottleLoadContext } from './components/TuningGrid.jsx';
 import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
+import { DialMark } from './components/DialMark.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
 import { COURSE } from './tutorial/books.js';
 import { MissionCoach } from './tutorial/MissionCoach.jsx';
@@ -1335,6 +1336,7 @@ export function EcuLabApp() {
         }}
         onTutorial={goTutorial}
         version={BUILD_VERSION}
+        dial={<DialMark size={92} pct={0.62} />}
       />
     );
   }
