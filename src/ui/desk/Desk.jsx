@@ -347,7 +347,7 @@ export function Desk({
     <div className={styles.desk} data-mode={mode}>
       <ShopBackdrop key={stageKey} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} onFlat={onFlat} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
-      {mode === 'bay' && <FirstRun career={board} onSpot={setTourSpot} />}
+      {mode === 'bay' && <FirstRun career={board} phone={phone} onSpot={setTourSpot} />}
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (

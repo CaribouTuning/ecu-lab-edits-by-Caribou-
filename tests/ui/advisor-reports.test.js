@@ -345,3 +345,16 @@ describe('a range selection (#105)', () => {
     expect(fuelReport(cal, { type: 'range', r1: 2, c1: 2, r2: 4, c2: 4 }).detail.count).toBe(1);
   });
 });
+
+describe('sparkReport, fuel before spark', () => {
+  it('says to fix the fuelling first when the engine missed its AFR target', () => {
+    const r = sparkReport({ ...advice({ over: [cell(3, 4, true)] }), missedMix: [{ lean: false, cause: 'maf' }, { lean: true, cause: 'injectors' }] }, null);
+    expect(r.state).toBe('table-over');
+    expect(r.fuelFirst).toEqual({ lean: true, cause: 'injectors' });
+  });
+
+  it('adds nothing when the mixture is on target', () => {
+    expect(sparkReport(advice({ over: [cell(3, 4, true)] }), null).fuelFirst).toBeUndefined();
+    expect(sparkReport({ ...advice(), missedMix: [] }, null).fuelFirst).toBeUndefined();
+  });
+});

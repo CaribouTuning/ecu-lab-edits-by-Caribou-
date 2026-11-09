@@ -33,10 +33,21 @@ const STEPS = {
 const seen = (key) => { if (/** @type {any} */ (import.meta).env?.MODE === 'test') return true; try { return localStorage.getItem(key) === '1'; } catch { return false; } };
 
 /**
- * @param {{career: boolean, onSpot?: (spot: string|null) => void}} props
+ * On a phone the laptop is the phone itself (Desk.jsx), so the cards say so.
+ * @param {string} text
+ */
+const onPhone = (text) => text
+  .replace(/the laptop on the desk/g, 'your phone')
+  .replace(/Open the laptop/g, 'Open your phone')
+  .replace(/on the laptop/g, 'on your phone')
+  .replace(/to the laptop/g, 'to your phone')
+  .replace(/the laptop/g, 'your phone');
+
+/**
+ * @param {{career: boolean, phone?: boolean, onSpot?: (spot: string|null) => void}} props
  * @returns {React.ReactElement|null}
  */
-export function FirstRun({ career, onSpot }) {
+export function FirstRun({ career, phone = false, onSpot }) {
   const mode = career ? 'career' : 'sandbox';
   const key = `ecu-lab-first-run-${mode}`;
   const [shown, setShown] = useState(() => (seen(key) ? null : mode));
@@ -52,8 +63,8 @@ export function FirstRun({ career, onSpot }) {
   return (
     <div className={styles.card} role="dialog" aria-label={`How ${mode === 'career' ? 'CAREER' : 'SANDBOX'} works`}>
       <div className={styles.count}>{i + 1} of {steps.length}</div>
-      <h2 className={styles.title}>{step.title}</h2>
-      <p className={styles.text}>{step.text}</p>
+      <h2 className={styles.title}>{phone ? onPhone(step.title) : step.title}</h2>
+      <p className={styles.text}>{phone ? onPhone(step.text) : step.text}</p>
       <div className={styles.row}>
         <button type="button" className={styles.skip} onClick={done}>{last ? 'Close' : 'Skip'}</button>
         {i > 0 && <button type="button" className={styles.back} onClick={() => setI(i - 1)}>Back</button>}

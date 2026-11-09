@@ -27,10 +27,26 @@ import styles from './TuneAdvisory.module.css';
  * @returns {React.ReactElement|null}
  */
 export function TuneAdvisory({ kind, report }) {
-  if (kind === 'timing') return <TimingAdvisory report={report} />;
+  if (kind === 'timing') return <>{report.fuelFirst && <FuelFirst {...report.fuelFirst} />}<TimingAdvisory report={report} /></>;
   if (kind === 'afr') return <AfrAdvisory report={report} />;
   if (kind === 've') return <VeAdvisory report={report} />;
   return null;
+}
+
+/** Where each cause of a missed mixture is fixed, for the spark page's fuel-first note. */
+const FIX_PAGE = { injectors: 'BUILD › FUEL SYSTEM', pump: 'BUILD › FUEL SYSTEM', injscale: 'TUNE › INJECTORS', maf: 'TUNE › SENSORS', ve: 'TUNE › AIRFLOW' };
+
+/**
+ * Fuel before spark: the engine is missing its AFR table, so these knock limits are for the
+ * mixture it is getting, not the one it will get.
+ * @param {{lean: boolean, cause: string}} props
+ */
+function FuelFirst({ lean, cause }) {
+  return (
+    <div className={styles.prose} data-testid="fuel-first">
+      <b className={styles.emInk}>Fix the fuelling first.</b> The engine is running {lean ? 'leaner' : 'richer'} than its AFR table asks for (the pull log&apos;s first step: {FIX_PAGE[cause] ?? FIX_PAGE.ve}). The limits below are for the mixture it is getting now; {lean ? 'a lean charge knocks sooner, so they will rise once the fuelling is right, and spark taken out now goes back in' : 'they will move once the fuelling is right'}.
+    </div>
+  );
 }
 
 /**

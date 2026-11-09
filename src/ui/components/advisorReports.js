@@ -27,6 +27,8 @@ import { inRect, rectOf } from './selection.js';
  * @property {string} headline plain text, shown on the collapsed summary at <560px
  * @property {string} state which body the renderer should show
  * @property {object} detail numbers and cell records the body needs
+ * @property {{lean: boolean, cause: string}} [fuelFirst] spark only: the engine is missing its AFR
+ *   table, so the knock limits are for the mixture it is getting (fix the fuelling first)
  */
 
 /** English, not a template with a stray "1 cells" in it. */
@@ -47,6 +49,20 @@ function countIn(arr, selection) {
  * @returns {AdvisorReport}
  */
 export function sparkReport(calAdvice, selection) {
+  const report = sparkReportOf(calAdvice, selection);
+  // FUEL BEFORE SPARK. Where the engine is not getting the mixture its table asks for, the
+  // knock limits below are the ones for the mixture it is getting: a lean charge lowers them,
+  // and a tuner who retards to them now puts it all back once the fuelling is right.
+  const missed = (calAdvice.missedMix ?? []).find((p) => p.lean) ?? (calAdvice.missedMix ?? [])[0];
+  return missed ? { ...report, fuelFirst: { lean: missed.lean, cause: missed.cause ?? 've' } } : report;
+}
+
+/**
+ * @param {any} calAdvice
+ * @param {any} selection
+ * @returns {AdvisorReport}
+ */
+function sparkReportOf(calAdvice, selection) {
   const { spark, overAdvanced, underAdvanced, pastMbt } = calAdvice;
 
   if (selection && selection.type === 'cell') {

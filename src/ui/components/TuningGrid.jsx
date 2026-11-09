@@ -118,6 +118,30 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // back to one cell. A keyboard click carries `detail === 0` and always goes through.
   const lastPointer = React.useRef('');
 
+  // THE CELL STAYS IN SIGHT. On a phone the edit panel (SelectionDock, sticky at the
+  // bottom) slides up over the lower rows, and a tapped cell there was edited out of sight.
+  // Once the panel has drawn, the page scrolls just enough to lift the selected cell above it.
+  const gridRef = React.useRef(/** @type {HTMLDivElement|null} */ (null));
+  const selKey = selection?.type === 'cell' ? `${selection.row}:${selection.col}` : null;
+  React.useEffect(() => {
+    if (!selKey || typeof window === 'undefined') return undefined;
+    const raf = window.requestAnimationFrame(() => {
+      const cell = gridRef.current?.querySelector(`[data-rc="${selKey}"]`);
+      const dock = document.querySelector('[data-testid="selection-dock"]');
+      if (!cell || !dock) return;
+      const c = cell.getBoundingClientRect();
+      const dockTop = dock.getBoundingClientRect().top;
+      const over = c.bottom + 12 - dockTop;
+      if (over <= 0) return;
+      // The pane that scrolls: the nearest ancestor that can, else the page.
+      // (From outside the grid: the table's own sideways scroller computes overflow-y auto too.)
+      let el = gridRef.current?.parentElement ?? null;
+      while (el && !(el.scrollHeight > el.clientHeight + 4 && /(auto|scroll)/.test(window.getComputedStyle(el).overflowY))) el = el.parentElement;
+      (el ?? window).scrollBy({ top: over, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [selKey]);
+
   // A drag ends wherever the button comes up, which need not be over the grid.
   React.useEffect(() => {
     const end = () => { dragFrom.current = null; };
@@ -219,8 +243,11 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   return (
     <div
       data-testid="tuning-grid"
+      ref={gridRef}
       className={styles.grid}
       data-dense={dense || undefined}
+      // The column count, so the cells can share out a phone's width (TuningGrid.module.css).
+      style={/** @type {any} */ ({ '--cols': axes.rpm.length })}
       tabIndex={0}
       onKeyDown={onKeyDown}
       aria-label="Calibration table: arrows move, Shift+arrows select a range, plus and minus adjust"
@@ -256,6 +283,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
                     <button
                       type="button"
                       className={styles.cell}
+                      data-rc={`${ri}:${ci}`}
                       aria-label={`${axes.rpm[ci]} RPM, ${lx.text(load)} ${lx.unit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
                       data-untuned={untunedHere ? 'true' : undefined}
                       data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}

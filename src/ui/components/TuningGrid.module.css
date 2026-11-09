@@ -5,8 +5,15 @@
 .grid {
   --cw: 50px; --ch: 34px; --head-w: 52px;
   outline: none;
+  container-type: inline-size;
 }
 .grid[data-dense] { --cw: 42px; --ch: 28px; }
+/* On a phone the cells share out the width, down to 36px, so the game's 8 × 6 table is all on
+   screen: at a fixed 50px a 390px phone showed six of its eight columns, with nothing to say
+   the top of the rev range was off to the side. A bigger table still scrolls. */
+@container (max-width: 470px) {
+  .table { --head-w: 46px; --cw: max(36px, calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 1px) / var(--cols, 8))); }
+}
 .grid:focus-visible .scroll { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* The table scrolls sideways inside its own box, never the page; the load column stays put
