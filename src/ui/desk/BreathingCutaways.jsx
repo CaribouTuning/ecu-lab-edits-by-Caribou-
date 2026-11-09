@@ -125,12 +125,52 @@ const segs = (pts) => pts.slice(0, -1).map(([x0, y0], i) => {
   return [x0, y0, x1 + (x1 - x0) * 0.3, y1 + (y1 - y0) * 0.3];
 });
 
-/** Dots spread along a path, `t` (0-1, wrapping) how far the gas has moved. */
-const dots = (pts, t, count, jitter = 2.5) => Array.from({ length: count }, (_, i) => {
+/** A point a fraction `u` (0-1) of the way along a path sampled evenly by length, between its samples. */
+const pointAt = (pts, u) => {
+  const fi = clamp01(u) * (pts.length - 1);
+  const i = Math.min(pts.length - 2, Math.floor(fi)); const k = fi - i;
+  const [x0, y0] = pts[i]; const [x1, y1] = pts[i + 1];
+  return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k];
+};
+
+/**
+ * Flow streaks along a path: each a short line from where its gas was to where it is, so the
+ * direction is drawn rather than inferred. Dots stepped between a path's samples read as
+ * running backwards (a wagon wheel) once a frame's step neared half their spacing, as it did
+ * on a phone. `t` (wrapping) is how far the gas has moved; `tail` the streak's length, as a
+ * share of the path; a negative flow draws its tail ahead (gas going back).
+ */
+const streaks = (pts, t, count, tail = 0.05, back = false) => Array.from({ length: count }, (_, i) => {
   const u = ((((i / count) + t) % 1) + 1) % 1;
-  const p = pts[Math.min(pts.length - 1, Math.floor(u * (pts.length - 1)))];
-  return [p[0], p[1] + (((i * 7) % 5) - 2) * jitter];
+  const v = back ? Math.min(1, u + tail) : Math.max(0, u - tail);
+  return [...pointAt(pts, v), ...pointAt(pts, u)];
 });
+
+/** Flow streaks drawn: a fading tail and a bright head. */
+function Streaks({ items, tone, width = 2.4 }) {
+  return items.map(([x0, y0, x1, y1], i) => (
+    <g key={i}>
+      <line x1={x0} y1={y0} x2={x1} y2={y1} className={tone === 'fresh' ? cut.streakFresh : cut.streakBurn} strokeWidth={width} />
+      <circle cx={x1} cy={y1} r={width * 0.6} className={tone === 'fresh' ? cut.gasFresh : cut.gasBurn} />
+    </g>
+  ));
+}
+
+/**
+ * Section lining for the metal the drawing cuts through: thin lines at 45°, the convention
+ * for a sectioned part on an engineering drawing (ISO 128-50), so cut walls read as cut
+ * material rather than flat shapes. Referenced by the cut-metal classes (Apps.module.css).
+ */
+export function SectionHatch() {
+  return (
+    <defs>
+      <pattern id="cut-hatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+        <rect width="5" height="5" style={{ fill: 'var(--panel3)' }} />
+        <line x1="0" y1="0" x2="0" y2="5" style={{ stroke: 'var(--cut-metal)', strokeWidth: 0.6, opacity: 0.7 }} />
+      </pattern>
+    </defs>
+  );
+}
 
 /** Labels on leaders, as the combustion cutaway sets them. */
 function Labels({ items, W }) {
@@ -139,6 +179,7 @@ function Labels({ items, W }) {
       {items.map(([t, lx, ly, tx, ty]) => (
         <g key={t}>
           <line x1={lx < W / 2 ? lx + t.length * 5.4 + 4 : lx - t.length * 5.4 - 4} y1={ly - 3} x2={tx} y2={ty} className={cut.cutLeader} />
+          <circle cx={tx} cy={ty} r={1.8} className={cut.cutLeaderDot} />
           <text x={lx} y={ly} className={cut.cutLabel} textAnchor={lx < W / 2 ? 'start' : 'end'}>{t}</text>
         </g>
       ))}
@@ -216,7 +257,7 @@ function readers(gx) {
 }
 
 /** Fresh charge as a solid colour: brighter where the wave is high, darker in its suction. */
-const freshMix = (kpa, ref) => `color-mix(in srgb, var(--cut-fresh) ${Math.round((0.35 + 0.6 * clamp01(0.5 + (kpa - ref) / 36)) * 100)}%, var(--cut-metal-dark))`;
+const freshMix = (kpa, ref) => `color-mix(in srgb, var(--cut-fresh) ${Math.round((0.22 + 0.58 * clamp01(0.5 + (kpa - ref) / 36)) * 100)}%, var(--cut-metal-dark))`;
 /** Burned gas: grey, running to orange where it is pushed, to dark in the suction behind a pulse. */
 const hotMix = (kpa, ref) => (kpa >= ref
   ? `color-mix(in srgb, var(--cut-burn) ${Math.round(clamp01(0.2 + (kpa - ref) / 50) * 90)}%, var(--cut-exhaust))`
@@ -488,20 +529,21 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
       <div className={cut.cutSplit}>
         <svg viewBox={`0 0 ${W} ${H}`} className={cut.cutSvg} role="img"
           aria-label={`The intake at ${gx.rpm} RPM: plenum ${f(mapKpa, 0)} kPa, cylinder 1 on its ${STROKES[s1].toLowerCase()} stroke, its port at ${f(port1, 0)} kPa`}>
+          <SectionHatch />
           {/* air filter, its pleated element */}
-          <rect x={10} y={16} width={74} height={62} rx={9} className={cut.cutCase} />
+          <rect x={10} y={16} width={74} height={62} rx={3} className={cut.cutCase} />
           <rect x={18} y={24} width={28} height={46} rx={3} className={cut.cutOil} />
           {Array.from({ length: 6 }, (_, i) => <line key={i} x1={21 + i * 4.4} x2={21 + i * 4.4} y1={26} y2={68} className={cut.cutRing} />)}
           {/* the inlet duct, throttle body and the elbow into the plenum */}
-          <path d={roundedPath([[84, tbY], [232, tbY], [232, plTop + 6]], 22)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={30} />
+          <path d={roundedPath([[84, tbY], [232, tbY], [232, plTop + 6]], 22)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={24} />
           <path d={roundedPath([[84, tbY], [232, tbY], [232, plTop + 6]], 22)} fill="none" style={{ stroke: freshMix(101.3, mapKpa) }} strokeWidth={20} />
           <circle cx={tbX} cy={tbY} r={23} className={cut.cutCase} />
           <circle cx={tbX} cy={tbY} r={13} style={{ fill: freshMix(mapKpa, mapKpa) }} />
           <line x1={tbX} y1={tbY - 13} x2={tbX} y2={tbY + 13} className={cut.cutStem} transform={`rotate(${butterfly.toFixed(1)} ${tbX} ${tbY})`} />
           <circle cx={tbX} cy={tbY} r={2.5} className={cut.cutHub} />
           {/* plenum */}
-          <rect x={g.bx0 + 10} y={plTop} width={g.bx1 - g.bx0 + 20} height={plBot - plTop} rx={24} className={cut.cutCase} />
-          <rect x={g.bx0 + 18} y={plTop + 7} width={g.bx1 - g.bx0 + 4} height={plBot - plTop - 14} rx={18} style={{ fill: freshMix(mapKpa, mapKpa) }} />
+          <rect x={g.bx0 + 10} y={plTop} width={g.bx1 - g.bx0 + 20} height={plBot - plTop} rx={8} className={cut.cutCase} />
+          <rect x={g.bx0 + 18} y={plTop + 7} width={g.bx1 - g.bx0 + 4} height={plBot - plTop - 14} rx={4} style={{ fill: freshMix(mapKpa, mapKpa) }} />
           {/* head: cam cover, camshaft, the ports' channels and the valves */}
           <rect x={g.bx0} y={headTop} width={g.bx1 - g.bx0} height={deckY - headTop} className={cut.cutHead} />
           <rect x={g.bx0} y={headTop} width={g.bx1 - g.bx0} height={10} rx={3} className={cut.cutBlock} />
@@ -533,7 +575,7 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
             label="Each cylinder, at its own place in the firing order" />
           {/* runners: the wave in each, at its cylinder's place in the cycle */}
           {runners.map((pts, j) => (
-            <path key={`ro${j}`} d={roundedPath(pts, 18)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={RW + 8} />
+            <path key={`ro${j}`} d={roundedPath(pts, 18)} fill="none" stroke="var(--cut-metal)" strokeWidth={RW + 3} />
           ))}
           {runnerPts.map((pts, j) => {
             const dj = d - bank[j].offset;
@@ -544,10 +586,11 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
           })}
           {g.xs.map((x) => <rect key={`fl${x}`} x={x - RW / 2 - 6} y={flangeY - 5} width={RW + 12} height={8} rx={2} className={cut.cutBlock} />)}
           {/* the charge moving */}
-          {dots(inletPts, inlet.current, 18).map(([x, y], i) => <circle key={`a${i}`} cx={x} cy={y} r={2.2} className={cut.gasFresh} />)}
-          {runnerPts.map((pts, j) => (Math.abs(R.inFlow(d - bank[j].offset)) > 1
-            ? dots(pts, travel.current[j] ?? 0, 7, 1.5).map(([x, y], i) => <circle key={`d${j}-${i}`} cx={x} cy={y} r={2.2} className={cut.gasFresh} />)
-            : null))}
+          <Streaks items={streaks(inletPts, inlet.current, 14, 0.035)} tone="fresh" />
+          {runnerPts.map((pts, j) => {
+            const q = R.inFlow(d - bank[j].offset);
+            return Math.abs(q) > 1 ? <g key={`d${j}`}><Streaks items={streaks(pts, travel.current[j] ?? 0, 5, 0.09, q < 0)} tone="fresh" /></g> : null;
+          })}
           <Labels items={labels} W={W} />
         </svg>
         <div className={cut.cutSide}>
@@ -657,6 +700,7 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
       <div className={cut.cutSplit}>
         <svg viewBox={`0 0 ${W} ${H}`} className={cut.cutSvg} role="img"
           aria-label={`The exhaust header at ${gx.rpm} RPM: cylinder 1 on its ${STROKES[s1].toLowerCase()} stroke, its port at ${f(port1, 0)} kPa, the collector at ${f(collKpa, 0)} kPa`}>
+          <SectionHatch />
           {/* the block from outside; the head cut open along its exhaust ports */}
           <BlockFace g={g} top={deckY} bottom={blockBot} />
           <rect x={g.bx0} y={headTop} width={g.bx1 - g.bx0} height={deckY - headTop} className={cut.cutHead} />
@@ -679,8 +723,8 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
             );
           })}
           {/* the primaries, in front of the block: steel tube, the gas and its pulses inside */}
-          {primaries.map((pts, j) => <path key={`po${j}`} d={roundedPath(pts, 30)} fill="none" stroke="var(--cut-metal)" strokeWidth={PW + 7} strokeLinejoin="round" />)}
-          {primaries.map((pts, j) => <path key={`pi${j}`} d={roundedPath(pts, 30)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={PW + 2} strokeLinejoin="round" />)}
+          {primaries.map((pts, j) => <path key={`po${j}`} d={roundedPath(pts, 30)} fill="none" stroke="var(--cut-metal)" strokeWidth={PW + 3} strokeLinejoin="round" />)}
+          {primaries.map((pts, j) => <path key={`pi${j}`} d={roundedPath(pts, 30)} fill="none" stroke="var(--cut-metal-dark)" strokeWidth={PW + 1} strokeLinejoin="round" />)}
           {primaryPts.map((pts, j) => {
             const dj = d - bank[j].offset;
             const m = pts.length - 1;
@@ -694,13 +738,14 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
           <path d={`M${colX - inletHalf} ${colTop} L${colX + inletHalf} ${colTop} L${colX + outletHalf} ${colY} L${colX - outletHalf} ${colY} Z`} style={{ fill: hotMix(collKpa, emp) }} />
           <CylinderStrip bank={bank} d={d} R={R} derived={derived} W={W} y0={stripY} sparkD={sparkD} burnedAt={burnedAt}
             label="Each cylinder into this collector, in firing order" />
-          <path d={roundedPath(outlet, 26)} fill="none" stroke="var(--cut-metal)" strokeWidth={PW * 1.5 + 7} />
+          <path d={roundedPath(outlet, 26)} fill="none" stroke="var(--cut-metal)" strokeWidth={PW * 1.5 + 3} />
           <path d={roundedPath(outlet, 26)} fill="none" style={{ stroke: hotMix(collKpa, emp) }} strokeWidth={PW * 1.5} />
           {/* the burned gas moving out */}
-          {primaryPts.map((pts, j) => (R.exFlow(d - bank[j].offset) > 1
-            ? dots(pts, travel.current[j] ?? 0, 8, 1.4).map(([x, y], i) => <circle key={`e${j}-${i}`} cx={x} cy={y} r={2.2} className={cut.gasBurn} />)
-            : null))}
-          {dots(outletPts, out.current, 10, 2).map(([x, y], i) => <circle key={`o${i}`} cx={x} cy={y} r={2.2} className={cut.gasBurn} opacity={0.8} />)}
+          {primaryPts.map((pts, j) => {
+            const q = R.exFlow(d - bank[j].offset);
+            return Math.abs(q) > 1 ? <g key={`e${j}`}><Streaks items={streaks(pts, travel.current[j] ?? 0, 6, 0.07, q < 0)} tone="burn" /></g> : null;
+          })}
+          <Streaks items={streaks(outletPts, out.current, 7, 0.06)} tone="burn" />
           <Labels items={labels} W={W} />
         </svg>
         <div className={cut.cutSide}>
@@ -835,6 +880,7 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {}, exhaustDia =
       <div className={styles.scroller}>
         <svg viewBox={`0 0 ${W} ${H}`} className={`${cut.cutSvg} ${styles.svg}`} role="img"
           aria-label={`The exhaust system at ${gx.rpm} RPM: ${f(u, 0)} m/s in the pipe, ${f(dropTotal, 1)} kPa of back-pressure`}>
+          <SectionHatch />
           {/* the pipe: steel, and the gas in it */}
           <rect x={X(0) - 6} y={y0 - P / 2 - 4} width={X(L) - X(0) + 30} height={P + 8} rx={4} style={{ fill: 'var(--cut-metal)' }} />
           {pipeCells.map((s, i) => (
@@ -902,7 +948,7 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {}, exhaustDia =
           <ellipse cx={X(L) + 26} cy={y0} rx={4} ry={P / 2 + 8} style={{ fill: 'var(--panel3)' }} stroke="var(--ink-soft)" strokeWidth={1.5} />
           {puffs.map((t, i) => <circle key={i} cx={X(L) + 30 + t * 30} cy={y0 + (i % 2 ? -4 : 4) * t} r={4 + t * 10} className={cut.gasSpent} opacity={0.5 * (1 - t)} />)}
           {/* the gas moving, at the speed it really flows (slowed with the rest) */}
-          {dots(pathPts, flowT.current, 46, 3).map(([x, y], i) => <circle key={`g${i}`} cx={x} cy={y} r={2.2} className={cut.gasBurn} opacity={0.85} />)}
+          <Streaks items={streaks(pathPts, flowT.current, 30, 0.012)} tone="burn" width={2} />
           <Labels items={labels} W={W} />
         </svg>
       </div>

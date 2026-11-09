@@ -52,7 +52,8 @@ export function crankTicks(a, b, name = () => '') {
  * @param {[number, number]} props.xDomain
  * @param {[number, number]} props.yDomain
  * @param {{v: number, label: string}[]} [props.xTicks] default: round numbers
- * @param {number[]} [props.yTicks] default: round numbers
+ * @param {(number|{v: number, label: string})[]} [props.yTicks] default: round numbers; an object
+ *   labels a tick in other words (a log axis plotted as log10 of its value, labelled in it)
  * @param {LegendItem[]} [props.legend]
  * @param {string} props.ariaLabel what a screen reader hears, with the value now
  * @param {number} [props.height] the plot's height, px
@@ -79,7 +80,7 @@ export function Plot({ title, sub, xLabel, yLabel, xDomain, yDomain, xTicks, yTi
   const x = (v) => X0 + ((v - xa) / (xb - xa || 1)) * (X1 - X0);
   const y = (v) => Y1 - ((v - ya) / (yb - ya || 1)) * (Y1 - Y0);
   const xt = xTicks ?? niceTicks(xa, xb, Math.max(4, Math.round(W / 90))).map((v) => ({ v, label: String(v) }));
-  const yt = yTicks ?? niceTicks(ya, yb, 4);
+  const yt = (yTicks ?? niceTicks(ya, yb, 4)).map((t) => (typeof t === 'number' ? { v: t, label: Math.abs(t) >= 1000 ? t.toLocaleString('en-US') : String(t) } : t));
   return (
     <figure className={styles.fig}>
       <figcaption className={styles.head}>
@@ -88,10 +89,10 @@ export function Plot({ title, sub, xLabel, yLabel, xDomain, yDomain, xTicks, yTi
       </figcaption>
       <div ref={(el) => { boxRef.current = el; }} className={styles.box}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className={styles.svg} role="img" aria-label={ariaLabel}>
-        {yt.map((v) => (
-          <g key={`y${v}`}>
-            <line x1={X0} x2={X1} y1={y(v)} y2={y(v)} className={styles.grid} />
-            <text x={X0 - 5} y={y(v) + 3.5} className={styles.tick} textAnchor="end">{Math.abs(v) >= 1000 ? v.toLocaleString('en-US') : v}</text>
+        {yt.map((t) => (
+          <g key={`y${t.v}`}>
+            <line x1={X0} x2={X1} y1={y(t.v)} y2={y(t.v)} className={styles.grid} />
+            <text x={X0 - 5} y={y(t.v) + 3.5} className={styles.tick} textAnchor="end">{t.label}</text>
           </g>
         ))}
         {xt.map((t) => (

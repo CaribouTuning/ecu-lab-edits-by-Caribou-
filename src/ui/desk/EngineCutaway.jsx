@@ -14,6 +14,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 
+import { SectionHatch } from './BreathingCutaways.jsx';
+import { Plot } from './Plot.jsx';
 import styles from './Apps.module.css';
 
 /** How much slower than real life the crank is shown turning. */
@@ -172,14 +174,11 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
     : strokeIdx === 2 ? styles.gasBurn : styles.gasSpent;
   const gasOpacity = strokeIdx === 1 ? 0.55 + 0.4 * (1 - (V - m.vc) / (m.vMax - m.vc)) : strokeIdx === 2 ? 0.5 + 0.5 * (1 - (phi - 360) / 180) : 0.6;
 
-  // ---- the p-V diagram, drawn as the cycle goes ----
-  const PW = 150; const PH = 120;
+  // ---- the p-V diagram, drawn as the cycle goes: log pressure against volume, the way an
+  // indicator diagram is read (compression and expansion are straight lines of slope -n) ----
   const pMax = Math.max(10, (p.peakPressure ?? 60) * 1.1);
-  const vx = (v) => 10 + ((v - m.vc) / (m.vMax - m.vc)) * (PW - 20);
-  const py = (pr) => PH - 10 - (Math.log10(Math.max(0.3, pr)) - Math.log10(0.3)) / (Math.log10(pMax) - Math.log10(0.3)) * (PH - 20);
-  const loop = [];
-  for (let a = 0; a < 720; a += 6) loop.push(`${vx(m.vol(a % 360)).toFixed(1)},${py(m.pressure(a)).toFixed(1)}`);
-
+  const lg = (pr) => Math.log10(Math.max(0.3, pr));
+  const pvTicks = [0.5, 1, 2, 5, 10, 20, 50, 100].filter((b) => b <= pMax).map((b) => ({ v: Math.log10(b), label: String(b) }));
 
   return (
     <div className={styles.cutWrap}>
@@ -190,6 +189,7 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
       </ol>
       <div className={styles.cutSplit}>
         <svg viewBox={`0 0 ${W} 520`} className={styles.cutSvg} role="img" aria-label={`One cylinder cut away at ${f(phi, 0)}° of the cycle: ${STROKES[strokeIdx][0].toLowerCase()} stroke, ${f(P, 1)} bar`}>
+          <SectionHatch />
           {/* block: coolant jackets either side of the bore, its walls */}
           <rect x={cx - halfBore - 34} y={deckY} width={34} height={cy - rk - 30 - deckY} className={styles.cutBlock} />
           <rect x={cx + halfBore} y={deckY} width={34} height={cy - rk - 30 - deckY} className={styles.cutBlock} />
@@ -250,20 +250,36 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
           ])).map(([t, lx, ly, tx, ty]) => (
             <g key={t}>
               <line x1={lx < W / 2 ? lx + t.length * 5.2 + 4 : lx - t.length * 5.2 - 4} y1={ly - 3} x2={tx} y2={ty} className={styles.cutLeader} />
+              <circle cx={tx} cy={ty} r={1.8} className={styles.cutLeaderDot} />
               <text x={lx} y={ly} className={styles.cutLabel} textAnchor={lx < W / 2 ? 'start' : 'end'}>{t}</text>
             </g>
           ))}
         </svg>
         <div className={styles.cutSide}>
           <p className={styles.cutStroke}><b>{STROKES[strokeIdx][0]}.</b> {STROKES[strokeIdx][1]}</p>
-          <svg viewBox={`0 0 ${PW} ${PH}`} className={styles.pvSvg} role="img" aria-label={`Pressure against volume; now ${f(P, 1)} bar at ${f(V / 1000, 0)} cc`}>
-            <polyline points={loop.join(' ')} className={styles.pvLoop} />
-            <line x1={10} y1={PH - 10} x2={PW - 6} y2={PH - 10} className={styles.artAxis} />
-            <line x1={10} y1={6} x2={10} y2={PH - 10} className={styles.artAxis} />
-            <circle cx={vx(V)} cy={py(P)} r={4.5} className={styles.pvDot} />
-            <text x={14} y={14} className={styles.artText}>p (log)</text>
-            <text x={PW - 8} y={PH - 13} className={styles.artText} textAnchor="end">V</text>
-          </svg>
+          <Plot
+            title="Pressure against volume"
+            sub={`now ${f(P, 1)} bar at ${f(V / 1000, 0)} cc`}
+            xLabel="cylinder volume, cc"
+            yLabel="pressure, bar (log)"
+            xDomain={[m.vc / 1000, m.vMax / 1000]}
+            yDomain={[Math.log10(0.3), Math.log10(pMax)]}
+            yTicks={pvTicks}
+            height={170}
+            ariaLabel={`Pressure against volume; now ${f(P, 1)} bar at ${f(V / 1000, 0)} cc`}
+            legend={[{ label: 'the cycle', kind: 'line', tone: 'var(--cut-burn)' }, { label: 'now', kind: 'dot', tone: 'var(--acc)' }]}
+          >
+            {({ x, y }) => {
+              const loop = [];
+              for (let a = 0; a < 720; a += 4) loop.push(`${x(m.vol(a % 360) / 1000).toFixed(1)},${y(lg(m.pressure(a))).toFixed(1)}`);
+              return (
+                <>
+                  <polyline points={loop.join(' ')} className={styles.pvLoop} />
+                  <circle cx={x(V / 1000)} cy={y(lg(P))} r={4} className={styles.pvDot} />
+                </>
+              );
+            }}
+          </Plot>
           <dl className={styles.liveEq}>
             <dt>Crank angle</dt><dd>{f(phi, 0)}° of 720, {f(th, 0)}° from TDC</dd>
             <dt>Piston pin</dt><dd>x = r cos θ + √(l² − r² sin² θ) = {f(xNow, 1)} mm</dd>

@@ -28,9 +28,10 @@ export const ROUTES = {
   // it, and a tab absent from here is not addressable at all.
   live: ['engine'],
   dyno: ['result', 'data', 'log', 'score', 'history'],
-  // The laptop's two reading apps: LEARN's four shelves, and the PHYSICS model laid open.
+  // The laptop's two reading apps: LEARN's four shelves, and PHYSICS's pages, one at a time
+  // as TUNE's tables are (desk/PhysicsApp.jsx PHYSICS_PAGES; 'model' is the engine and its curves).
   learn: ['sources', 'ecu', 'engine', 'how'],
-  physics: ['model'],
+  physics: ['model', 'intake', 'header', 'exhaust', 'cylinder', 'calc', 'wear'],
 };
 
 /**

@@ -182,6 +182,8 @@
 .strokePill { padding: 4px 2px 5px; text-align: center; font-size: var(--fs-xs); font-weight: 500; color: var(--ink3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .strokePill[data-on] { color: var(--ink); font-weight: 600; border-bottom-color: var(--acc); }
 .cutSplit { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+/* A page of its own on a wide screen: the drawing beside its explanation, chart and sums. */
+@media (min-width: 1100px) { .physWide .cutSplit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; } }
 .cutSvg { width: 100%; height: auto; max-height: 560px; background: var(--bg); border-radius: var(--r-md); }
 .cutSide { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .cutStroke { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
@@ -196,11 +198,16 @@
 .cutControls button { padding: 4px 12px; border: 0; border-radius: 6px; background: var(--mac-control); color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer; }
 .cutControls input { flex: 1; accent-color: var(--acc); }
 .cutCoolant { fill: var(--cut-coolant); opacity: 0.8; }
-.cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--ink3); stroke-width: 1.2; }
+/* Cut metal is section-lined (SectionHatch in BreathingCutaways.jsx: 45° lines, ISO 128-50),
+   outlined in one thin line; where no hatch is defined it falls back to the flat fill. */
+.cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--cut-metal); stroke-width: 1; }
+svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, svg:has(:global(#cut-hatch)) .cutCase { fill: url(#cut-hatch); }
 .cutBore { stroke: var(--ink3); stroke-width: 2; }
-.cutLeader { stroke: var(--ink3); stroke-width: 0.8; }
-.cutHead { fill: var(--panel3); }
-.cutCase { fill: var(--panel3); }
+.cutLeader { stroke: var(--ink3); stroke-width: 0.75; }
+.cutLeaderDot { fill: var(--ink2); }
+/* Flow streaks: the tail fades behind the gas, the head is solid. */
+.streakFresh { stroke: var(--cut-fresh); stroke-linecap: round; opacity: 0.5; }
+.streakBurn { stroke: var(--cut-burn); stroke-linecap: round; opacity: 0.5; }
 .cutOil { fill: var(--cut-oil); opacity: 0.85; }
 .gasFresh { fill: var(--cut-fresh); }
 .gasBurn { fill: var(--cut-burn); }
@@ -220,7 +227,7 @@
 .cutPiston { fill: var(--cut-metal); stroke: var(--ink3); stroke-width: 1.2; }
 .cutRing { stroke: var(--cut-metal-dark); stroke-width: 1.5; }
 .cutArrow { fill: var(--acc-ink); }
-.cutLabel { fill: var(--ink); font-size: 10.5px; font-family: var(--sans); font-weight: 600; letter-spacing: 0.02em; }
+.cutLabel { fill: var(--ink-soft); font-size: 10px; font-family: var(--sans); font-weight: 500; }
 .physControls {
   /* The two inputs every panel below follows: a band across the top, not another card. */
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; margin: -16px -16px 18px; padding: 14px 16px;
@@ -322,19 +329,19 @@
 /* The dyno's Data page: the datalog, then the tables the pull read. */
 .dataTables { display: flex; flex-direction: column; gap: var(--sp-lg); padding-top: var(--sp-lg); }
 .dataTablesHead { margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
-/* The Physics page's jump bar: pinned to the top of the page as it scrolls, one row that
-   scrolls sideways on a phone. Each section stops below it (scroll-margin). */
-.physJump {
-  position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
-  margin: -4px -4px 10px; padding: 8px 4px; background: var(--bg); border-bottom: 1px solid var(--line);
+/* The Physics app's pages: a row of tabs where there is room, TUNE's page picker on a phone. */
+.physPicker { display: none; margin-bottom: 10px; }
+.physTabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.physTabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink2); font: 500 var(--fs-sm) var(--sans); cursor: pointer;
 }
-.physJump::-webkit-scrollbar { display: none; }
-.physJump button {
-  flex: none; padding: 5px 12px; border: 1px solid var(--line-hi); border-radius: 999px; background: transparent;
-  color: var(--ink2); font: 500 var(--fs-xs) var(--sans); cursor: pointer;
+.physTabs button:hover { color: var(--ink); background: var(--mac-control); }
+.physTabs button[aria-current='page'] { color: var(--mac-sel-ink); background: var(--mac-selected); }
+@media (max-width: 700px) {
+  .physPicker { display: block; }
+  .physTabs { display: none; }
 }
-.physJump button:hover { color: var(--ink); border-color: var(--ink3); }
-[data-sec] { scroll-margin-top: 52px; }
 /* On a phone each worked equation gets the full width, its name above it, so a formula is
    not broken a word at a time down a narrow column. */
 @media (max-width: 560px) {

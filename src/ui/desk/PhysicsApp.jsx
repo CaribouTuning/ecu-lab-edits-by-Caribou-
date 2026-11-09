@@ -26,6 +26,9 @@ import React, { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { gasExchangeTrace } from '../../sim/index.js';
 import { TableSurface } from '../components/surface/TableSurface.jsx';
 
+import { Calculator, Cylinder, Flame, Gauge, Waves, Wind, Wrench } from 'lucide-react';
+
+import { PagePicker } from '../components/PagePicker.jsx';
 import { Plot } from './Plot.jsx';
 import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
@@ -38,6 +41,22 @@ const R_AIR = 287;
 const NM_PER_LBFT = 1.3558;
 
 /** @param {number} v @param {number} [d] */
+/**
+ * The Physics app's pages, in the order the air goes through the engine and then the sums:
+ * the engine and its curves, the intake, the header, the exhaust, one cylinder firing, the
+ * model's calculations in order, and the wear. `needs`: a page shown only when the build has
+ * its data (the breathing trace, the damage model).
+ */
+export const PHYSICS_PAGES = /** @type {const} */ ([
+  { id: 'model', name: 'Engine overview', icon: Gauge },
+  { id: 'intake', name: 'Intake manifold', icon: Wind, needs: 'gx' },
+  { id: 'header', name: 'Exhaust header', icon: Flame, needs: 'gx' },
+  { id: 'exhaust', name: 'Exhaust system', icon: Waves, needs: 'gx' },
+  { id: 'cylinder', name: 'One cylinder', icon: Cylinder },
+  { id: 'calc', name: 'Calculations', icon: Calculator },
+  { id: 'wear', name: 'Engine wear', icon: Wrench, needs: 'health' },
+]);
+
 const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 /**
@@ -123,11 +142,12 @@ function PressureTrace({ p }) {
  *   the engine's breathing inputs, for the live gas-exchange diagram
  * @param {{piston: number, bearing: number, valve: number}|null} [props.health] each part's life left, percent
  * @param {(() => void)|null} [props.onRepair] rebuild the engine
+ * @param {string} [props.page] the open page (PHYSICS_PAGES), as TUNE opens one table at a time
+ * @param {((id: string) => void)|null} [props.onPage] open another page
  * @returns {React.ReactElement}
  */
-export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, health = null, onRepair = null }) {
+export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = null, sweepAt = null, breathing = null, health = null, onRepair = null, page = 'model', onPage = null }) {
   const U = useUnits();
-  const rootRef = useRef(/** @type {HTMLDivElement|null} */ (null));
   // The load the model runs at: manifold pressure, set by the throttle. Full throttle is
   // the advisor's own pull; any other is solved here, once per load, and kept.
   const [load, setLoad] = useState(100);
@@ -194,19 +214,27 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
     ? `Volumetric efficiency against RPM; ${p.rpm} RPM chosen, ${f(p.ve, 0)} %`
     : `Torque and power against RPM; ${p.rpm} RPM chosen`;
 
-  // The page's sections, for the jump bar: on a phone the page is many screens long.
-  const sections = [
-    ['build', 'Build'], ['curves', 'Curves'],
-    ...(gx ? [['intake', 'Intake'], ['header', 'Header'], ['exhaust', 'Exhaust']] : []),
-    ...(health ? [['condition', 'Wear']] : []),
-    ['model', 'Model'], ['cylinder', 'Cylinder'],
-  ];
-  const jump = (k) => rootRef.current?.querySelector(`[data-sec="${k}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // One page at a time, as TUNE opens one table: a page the build has nothing for is not offered.
+  const pages = PHYSICS_PAGES.filter((pg) => (pg.needs === 'gx' ? !!gx : pg.needs === 'health' ? !!health : true));
+  const open = pages.some((pg) => pg.id === page) ? page : 'model';
+  const pick = (id) => onPage?.(id);
 
   return (
-    <div className={`${styles.pad} ${styles.physics}`} ref={rootRef}>
-      <nav className={styles.physJump} aria-label="Physics sections">
-        {sections.map(([k, label]) => <button key={k} type="button" onClick={() => jump(k)}>{label}</button>)}
+    <div className={`${styles.pad} ${styles.physics}`}>
+      {/* The pages: one button naming the open page on a phone, which lists them all (as TUNE's
+          tables do); a row of tabs where there is room. */}
+      <div className={styles.physPicker}>
+        <PagePicker label="Physics pages" current={open} onPick={pick} pages={pages.map((pg) => ({ id: pg.id, name: pg.name, icon: pg.icon }))} />
+      </div>
+      <nav className={styles.physTabs} aria-label="Physics pages" data-plain="">
+        {pages.map((pg) => {
+          const Icon = pg.icon;
+          return (
+            <button key={pg.id} type="button" aria-current={open === pg.id ? 'page' : undefined} onClick={() => pick(pg.id)}>
+              <Icon size={14} aria-hidden="true" />{pg.name}
+            </button>
+          );
+        })}
       </nav>
       <div className={styles.physControls}>
         <label className={styles.ctl}>
@@ -222,7 +250,9 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         <p className={styles.ctlNote}>Your engine as built and tuned{fuel ? `, on ${fuel.label}` : ''}. Every panel, every number and the engine below follow these two.</p>
       </div>
       <div className={styles.physGrid}>
-        <section className={styles.physPanel} aria-label="Your build in the model" data-sec="build">
+        {open === 'model' && (
+          <>
+        <section className={styles.physPanel} aria-label="Your build in the model">
           <h3 className={styles.panelTitle}>Your build in the model</h3>
           {/* The engine across the panel, framed whole at any width; the figures under it. */}
           {spec ? <div className={styles.buildEngine}><EngineViewer spec={spec} rpm={p.rpm} label="Your engine as built" /></div> : null}
@@ -232,8 +262,12 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
             ))}
           </dl>
         </section>
+          </>
+        )}
 
-        <section className={styles.physPanel} aria-label="Graph" data-sec="curves">
+        {open === 'model' && (
+          <>
+        <section className={styles.physPanel} aria-label="Graph">
           <div className={styles.panelHead}>
             <h3 className={styles.panelTitle}>{graph === '3d' ? 'The VE map in 3-D' : 'Full-throttle curves'}</h3>
             <div className={styles.graphBtns} role="group" aria-label="Graph">
@@ -291,30 +325,40 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
             <div><dt>VE</dt><dd>{f(p.ve, 0)} <small>%</small></dd></div>
           </dl>
         </section>
+          </>
+        )}
 
         {gx ? (
           <>
-            <section className={styles.physPanel} aria-label="The intake manifold" data-sec="intake">
+            {open === 'intake' && (
+            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The intake manifold">
               <h3 className={styles.panelTitle}>The intake: air filter, throttle, plenum and runners</h3>
               <IntakeCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} throttleFrac={Math.min(1, deferredLoad / 101.3)} />
             </section>
-            <section className={styles.physPanel} aria-label="The exhaust header" data-sec="header">
+            )}
+            {open === 'header' && (
+            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust header">
               <h3 className={styles.panelTitle}>The exhaust header: ports, primaries and collector</h3>
               <HeaderCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} />
             </section>
-            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust system" data-sec="exhaust">
+            )}
+            {open === 'exhaust' && (
+            <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The exhaust system">
               <h3 className={styles.panelTitle}>The exhaust system: converter, muffler and tailpipe</h3>
               <ExhaustSystemCutaway gx={gx} point={p} derived={derived} engineConfig={breathing?.engineConfig} mods={breathing?.mods} exhaustDia={breathing?.hwForVe?.exhaustDia ?? 3} />
             </section>
+            )}
           </>
         ) : null}
-        {health ? (
-          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="Engine condition" data-sec="condition">
+        {health && open === 'wear' ? (
+          <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="Engine condition">
             <h3 className={styles.panelTitle}>Engine condition: what wears it, and what the wear does</h3>
             <EngineCondition health={health} point={p} pointsPerPull={pts.length} derived={derived} onRepair={onRepair} />
           </section>
         ) : null}
-        <section className={styles.physPanel} aria-label="The raw physics model" data-sec="model">
+        {open === 'calc' && (
+          <>
+        <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The raw physics model">
           <h3 className={styles.panelTitle}>The raw physics model</h3>
           <p className={styles.panelNote}>Every calculation the simulator makes at {p.rpm} RPM, in order. Open one for what it means and its numbers.</p>
       <Stage
@@ -388,11 +432,17 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
         </svg>
       </Stage>
         </section>
+          </>
+        )}
 
-        <section className={styles.physPanel} aria-label="The engine running" data-sec="cylinder">
+        {open === 'cylinder' && (
+          <>
+        <section className={`${styles.physPanel} ${styles.physWide}`} aria-label="The engine running">
           <h3 className={styles.panelTitle}>The engine in action: one cylinder at {p.rpm} RPM, {f(p.map, 0)} kPa</h3>
           <EngineCutaway bore={bore || 90} stroke={stroke || 86} cr={derived?.compression ?? 10} camDuration={derived?.camDuration ?? 230} point={p} />
         </section>
+          </>
+        )}
       </div>
     </div>
   );

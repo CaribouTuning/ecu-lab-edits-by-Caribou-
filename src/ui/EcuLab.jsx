@@ -1432,7 +1432,8 @@ export function EcuLabApp() {
         {tab === 'physics' && !inCareer && !engineMissing && (
           <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
             ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt}
-            breathing={physicsBreathing} health={health} onRepair={repairEngine} />
+            breathing={physicsBreathing} health={health} onRepair={repairEngine}
+            page={route.section ?? 'model'} onPage={(id) => goSection('physics', id)} />
         )}
 
         {/* ---------- LIVE: the engine running in real time ---------- */}

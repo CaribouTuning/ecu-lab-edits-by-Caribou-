@@ -21,6 +21,7 @@ import React from 'react';
 import { COEFF, FAILURE_MODES, pointWear, wearEffects } from '../../sim/index.js';
 
 import cut from './Apps.module.css';
+import { SectionHatch } from './BreathingCutaways.jsx';
 import styles from './EngineCondition.module.css';
 
 /** @param {number} v @param {number} [d] */
@@ -37,6 +38,7 @@ function PistonArt({ wear, leak, failed }) {
   const pits = Math.round(wear * 9);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={styles.art} role="img" aria-label={`Piston and rings, ${f((1 - wear) * 100, 0)}% of their life left`}>
+          <SectionHatch />
       <rect x={x0 - 12} y={top - 6} width={w + 24} height={112} className={cut.cutBlock} />
       <rect x={x0 - 4} y={top - 6} width={w + 8} height={112} style={{ fill: 'var(--bg)' }} />
       <rect x={x0} y={top} width={w} height={70} rx={4} className={cut.cutPiston} />
@@ -68,6 +70,7 @@ function BearingArt({ wear, failed }) {
   const R = 40;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={styles.art} role="img" aria-label={`Rod bearing, clearance ${f(k, 2)} times new`}>
+          <SectionHatch />
       <circle cx={cx} cy={cy} r={R + 18} className={cut.cutCase} />
       <circle cx={cx} cy={cy} r={R + film + 4} className={styles.shell} />
       <circle cx={cx} cy={cy} r={R + film} style={{ fill: 'var(--cut-oil)', opacity: failed ? 0.15 : 0.85 }} />
@@ -88,6 +91,7 @@ function ValveArt({ wear, failed }) {
   const notch = clamp01((wear - 0.3) / 0.7) * 34;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className={styles.art} role="img" aria-label={`Exhaust valve, ${f((1 - wear) * 100, 0)}% of its life left`}>
+          <SectionHatch />
       <rect x={20} y={seat} width={W - 40} height={30} className={cut.cutHead} />
       <path d={`M${cx - 52} ${seat} L${cx - 40} ${seat + 10} L${cx + 40} ${seat + 10} L${cx + 52} ${seat} Z`} style={{ fill: 'var(--bg)' }} />
       <line x1={cx} y1={12} x2={cx} y2={seat - 6} className={cut.cutStem} />

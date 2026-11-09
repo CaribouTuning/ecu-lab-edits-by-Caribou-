@@ -105,3 +105,10 @@ describe('formatRoute', () => {
     });
   });
 });
+
+describe('PHYSICS pages', () => {
+  it('every page the Physics app offers is a route, in the same order, as TUNE\'s tables are', async () => {
+    const { PHYSICS_PAGES } = await import('../../src/ui/desk/PhysicsApp.jsx');
+    expect(PHYSICS_PAGES.map((p) => p.id)).toEqual(ROUTES.physics);
+  });
+});

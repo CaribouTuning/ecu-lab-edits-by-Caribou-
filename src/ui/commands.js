@@ -66,6 +66,13 @@ export const SECTION_LABELS = {
   'dyno/log': { label: 'Pull Log', keywords: ['events'] },
   'dyno/score': { label: 'Score', keywords: ['grade'] },
   'dyno/history': { label: 'History', keywords: ['runs', 'previous'] },
+  'physics/model': { label: 'Engine overview', keywords: ['torque', 've', 'build'] },
+  'physics/intake': { label: 'Intake manifold', keywords: ['plenum', 'runner', 'ram', 'wave', 'throttle'] },
+  'physics/header': { label: 'Exhaust header', keywords: ['primaries', 'collector', 'scavenging', 'blowdown'] },
+  'physics/exhaust': { label: 'Exhaust system', keywords: ['back-pressure', 'catalytic converter', 'muffler', 'pipe'] },
+  'physics/cylinder': { label: 'One cylinder', keywords: ['piston', 'four strokes', 'p-v', 'indicator diagram'] },
+  'physics/calc': { label: 'Calculations', keywords: ['equations', 'model', 'sums'] },
+  'physics/wear': { label: 'Engine wear', keywords: ['damage', 'bearings', 'rings', 'condition'] },
 };
 
 /** DYNO sections that render nothing until there is a pull to show. */
