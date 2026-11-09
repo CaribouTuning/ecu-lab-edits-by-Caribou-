@@ -49,6 +49,11 @@ const ASSUMED_LABEL = {
   blockMaterial: (c) => `${c.blockMaterial.toLowerCase()} block`,
   headMaterial: (c) => `${c.headMaterial.toLowerCase()} head`,
   injection: (c) => `${c.injection === 'direct' ? 'direct' : 'port'} fuel injection`,
+  // "cast pistons, production rods" / "forged pistons and rods": what the assembly is.
+  bottomEnd: (c) => {
+    const { label } = BOTTOM_END_OPTS.find((o) => o.id === c.bottomEnd) ?? BOTTOM_END_OPTS[0];
+    return /\((.+)\)/.exec(label)?.[1] ?? label.toLowerCase();
+  },
 };
 
 /**

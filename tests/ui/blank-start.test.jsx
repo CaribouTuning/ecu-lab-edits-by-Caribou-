@@ -86,6 +86,9 @@ describe('figures the app assumed for the player\'s own engine', () => {
     const note = () => screen.queryByText(/Assumed, not entered/)?.parentElement?.textContent ?? '';
     expect(note()).toMatch(/I4 layout.*86 mm bore.*86 mm stroke.*10\.5:1 compression.*6,800 rpm redline/);
     expect(note()).toMatch(/intake cam duration 210°.*valvetrain DOHC.*4 valves per cylinder.*aluminum block.*aluminum head/i);
+    expect(note()).toMatch(/cast pistons, production rods/);
+    // Every assumed figure is named in words: no state key reaches the player.
+    expect(note()).not.toMatch(/\b[a-z]+[A-Z][a-zA-Z]*\b/);
     fireEvent.change(screen.getByRole('slider', { name: /Bore/ }), { target: { value: '90' } });
     expect(note()).not.toMatch(/mm bore/);
     expect(note()).toMatch(/mm stroke/);
