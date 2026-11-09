@@ -17,7 +17,9 @@ seedRandomPerTest();
 
 /** A turbo LS1 whose VE table's boost rows read `scale` of what they should. */
 function turboV8(scale) {
-  const eng = makeEngine({ preset: 'ls1', build: { turboOn: true, boostCurve: S.RPM.map((r) => (r < 1000 ? 0 : 5)), mods: { ...S.presetById('ls1').mods, intercooler: true } } });
+  // The MAF scaled for the turbo's plumbing first, as the log's MAF entry asks: what is left
+  // is the VE table.
+  const eng = makeEngine({ preset: 'ls1', build: { turboOn: true, mafScalar: 1 / 0.92, boostCurve: S.RPM.map((r) => (r < 1000 ? 0 : 5)), mods: { ...S.presetById('ls1').mods, intercooler: true } } });
   const args = eng.pullArgs(100);
   const rows = args.layout ? args.layout.ve.load : S.LOAD;
   args.ve = args.ve.map((row, ri) => (rows[ri] > 100 ? row.map((v) => v * scale) : row));
@@ -57,7 +59,8 @@ describe('the engine missing its AFR table', () => {
     const report = fuelReport(advice, null);
     expect(report.state).toBe('table-missed');
     expect(report.tone).toBe('warn');
-    expect(report.headline).toMatch(/leaner than this table asks for/);
+    expect(report.headline).toMatch(/than this table asks for/);
+    expect(advice.missedMix.some((p) => p.lean && p.cause === 've'), 'the lean miss under boost, named as the VE table').toBe(true);
   });
 
   it('a stock engine misses nothing, so neither screen raises it', () => {

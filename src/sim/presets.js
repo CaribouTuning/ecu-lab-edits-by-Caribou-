@@ -37,7 +37,7 @@ import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
 import { inductionAtMap } from './turbo.js';
 import {
-  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -820,7 +820,7 @@ export function factoryCalibration(preset, layout = null) {
   // VE: the engine's breathing at each cell. FUEL: the engine's own factory strategy
   // (factoryFuel.js, with its sources): lambda 1 where the ECU runs closed loop, enrichment
   // ramping in with load to a full-load target that varies with speed.
-  const ve = grid(L.ve, (rpm, kpa) => Number(veAt(rpm, kpa).toFixed(1)));
+  const ve = fitVeRows(L.ve, (rpm, v) => veAt(rpm, kpaOf(L.ve, rpm, v)), derived.redline);
   const fuelPlan = fuelStrategyFor(preset.fuelPlanId ?? preset.id, !!preset.induction.turboOn);
   const afr = grid(L.afr, (rpm, kpa) => Number((14.7 * factoryLambda(fuelPlan, rpm, kpa, !!preset.induction.turboOn, BARO_KPA)).toFixed(2)));
 
@@ -841,8 +841,11 @@ export function factoryCalibration(preset, layout = null) {
     // on the rows themselves; it is the between-row mixture the interpolation walk below
     // has to protect (point.js: airChargeBelievedG).
     const veTable = readTable(ve, L.ve, rpm, loadOf(L.ve, rpm, kpa));
-    const lambda = (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa)
-      * (veActual / veTable);
+    // In closed loop (below OPEN_LOOP_KPA) the trims hold the mixture on target whatever the
+    // VE table says, as TUNE's advisor prices it; open loop gets the table's error.
+    const lambda = kpa < OPEN_LOOP_KPA ? afrCommanded / 14.7
+      : (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa)
+        * (veActual / veTable);
     const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
@@ -1303,6 +1306,49 @@ export const PRESET_GROUPS = ENGINE_PRESETS.reduce((groups, preset) => {
   else groups.push({ manufacturer: preset.manufacturer, presets: [preset] });
   return groups;
 }, /** @type {{manufacturer: string, presets: Preset[]}[]} */ ([]));
+
+/**
+ * A factory VE table fitted the way a calibrator finishes one: each load row set so the
+ * ECU's straight-line blend between breakpoints matches the engine across the speeds it
+ * runs (least squares on a 100 rpm sweep, up to the redline), not just at the breakpoints.
+ * Sampled only at its breakpoints, an 8-column row missed the engine by up to 3.3% between
+ * them where the curve bends (the LM7 and LR4 near their limiters), so a stock engine ran
+ * lean of its own target. A light pull toward each breakpoint's own value holds the cells
+ * the engine never reaches (past the redline) where they were.
+ * @param {{rpm: number[], load: number[]}} axes
+ * @param {(rpm: number, load: number) => number} truthAt VE, percent
+ * @param {number} redline
+ * @returns {number[][]}
+ */
+export function fitVeRows(axes, truthAt, redline) {
+  const R = axes.rpm, n = R.length;
+  const PRIOR = 0.05;
+  return axes.load.map((v) => {
+    // Normal equations of a hat-function basis are tridiagonal: diag a, off-diagonal b, rhs d.
+    const a = new Array(n).fill(0), b = new Array(n).fill(0), d = new Array(n).fill(0);
+    const top = Math.min(R[n - 1], redline);
+    for (let rpm = R[0]; rpm <= top + 1e-9; rpm += 100) {
+      let i = 0;
+      while (i < n - 2 && rpm > R[i + 1]) i += 1;
+      const t = R[i + 1] === R[i] ? 0 : Math.min(1, Math.max(0, (rpm - R[i]) / (R[i + 1] - R[i])));
+      const y = truthAt(rpm, v);
+      const w0 = 1 - t, w1 = t;
+      a[i] += w0 * w0; a[i + 1] += w1 * w1; b[i] += w0 * w1;
+      d[i] += w0 * y; d[i + 1] += w1 * y;
+    }
+    for (let i = 0; i < n; i += 1) { const y = truthAt(R[i], v); a[i] += PRIOR; d[i] += PRIOR * y; }
+    // Thomas algorithm.
+    const c = new Array(n).fill(0), e = new Array(n).fill(0);
+    for (let i = 0; i < n; i += 1) {
+      const m = a[i] - (i > 0 ? b[i - 1] * c[i - 1] : 0);
+      c[i] = i < n - 1 ? b[i] / m : 0;
+      e[i] = (d[i] - (i > 0 ? b[i - 1] * e[i - 1] : 0)) / m;
+    }
+    const x = new Array(n).fill(0);
+    for (let i = n - 1; i >= 0; i -= 1) x[i] = e[i] - (i < n - 1 ? c[i] * x[i + 1] : 0);
+    return x.map((val) => Number(val.toFixed(1)));
+  });
+}
 
 /**
  * The injector a build's engine left the factory with: kept on the build since November

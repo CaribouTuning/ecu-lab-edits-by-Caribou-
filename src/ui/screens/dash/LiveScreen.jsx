@@ -92,6 +92,26 @@ function injectorMismatch(build) {
  *   size the ECU is set for, to say why an engine will not start
  * @returns {string}
  */
+/**
+ * An idle that hunts: over the last three seconds with the throttle shut near idle, the
+ * speed swings more than 150 rpm and crosses its target at least twice. A healthy idle
+ * holds within a few tens of rpm; an idle controller with its gains too high, or its
+ * damping too low, overshoots back and forth (the career's idle-hunt customer swings
+ * about 1,300 rpm).
+ * @param {object[]} log the ECU's live log, newest last
+ * @returns {{lo: number, hi: number, target: number}|null}
+ */
+export function idleHunt(log = []) {
+  const rows = log.slice(-60);
+  if (rows.length < 40 || rows.some((r) => (r.pedal ?? 0) >= 3 || !(r.idleTarget > 0) || r.rpm > r.idleTarget + 1200)) return null;
+  const target = rows.at(-1).idleTarget;
+  const rpms = rows.map((r) => r.rpm);
+  const lo = Math.min(...rpms), hi = Math.max(...rpms);
+  let crossings = 0;
+  for (let i = 1; i < rpms.length; i += 1) if ((rpms[i - 1] - target) * (rpms[i] - target) < 0) crossings += 1;
+  return hi - lo > 150 && crossings >= 2 ? { lo: Math.round(lo), hi: Math.round(hi), target } : null;
+}
+
 export function liveStatus(live, build) {
   const inj = injectorMismatch(build);
   // A cylinder far too rich to light: the plugs are wet and it cranks without firing.
@@ -104,6 +124,8 @@ export function liveStatus(live, build) {
   if (live.dfco) return 'Overrun fuel cut: the injectors are off while it coasts down. Real ECUs do this, and it costs nothing.';
   if (live.ecu?.knockNow) return `Knock. Your spark table asks for more advance than the engine tolerates at this speed and boost. The ECU is pulling ${(live.ecu.knockRetard ?? 0).toFixed(1)}° to protect it; take timing out of that part of the table.`;
   if ((live.ecu?.knockRetard ?? 0) > 0.5) return `Nothing is knocking now. The ECU is still giving back ${live.ecu.knockRetard.toFixed(1)}° it pulled for knock a moment ago, a little each second.`;
+  const hunt = live.running ? idleHunt(live.ecu?.log) : null;
+  if (hunt) return `The idle is hunting: ${hunt.lo.toLocaleString('en-US')}–${hunt.hi.toLocaleString('en-US')} rpm around its ${hunt.target} rpm target. The idle controller is overshooting: on TUNE → IDLE raise Damping (under Advanced settings) and lower the Air gain settings until it settles within a few tens of rpm.`;
   // Read off the warm-up curve the ECU is running, not a fixed temperature: the player can
   // reshape it on TUNE → FUEL.
   const warm = live.ecu?.log?.[live.ecu.log.length - 1]?.warm ?? 0;

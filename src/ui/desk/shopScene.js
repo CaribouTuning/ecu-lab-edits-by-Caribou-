@@ -22,6 +22,10 @@ import { dressShop } from './shopDetail.js';
 import { makeDyno, makeLift } from '../world/models/props.js';
 import { makeDebris, makeFlash, makeSmoke } from '../world/models/damageFx.js';
 
+/** Whether the player's system asks for reduced motion. One live query, read each frame. */
+const REDUCED_MOTION_QUERY = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const REDUCED_MOTION = () => !!REDUCED_MOTION_QUERY?.matches;
+
 const POSES = {
   desk: { pos: new THREE.Vector3(0, 1.75, 7.6), look: new THREE.Vector3(0, 1.55, -6), fov: 50 },
   bay: { pos: new THREE.Vector3(0, 4.2, 9.6), look: new THREE.Vector3(0, 0.9, -1.4), fov: 58 },
@@ -1121,7 +1125,8 @@ export function buildShopScene(stage, init) {
     update(dt, rpm, dynoRpm = 0) {
       OUTLINE_UNIFORMS.uTime.value += dt;
       t += dt;
-      blend = Math.min(1, blend + dt / 0.7);
+      // Reduced motion asked for: the camera cuts to the station rather than gliding to it.
+      blend = REDUCED_MOTION() ? 1 : Math.min(1, blend + dt / 0.7);
       const k = blend * blend * (3 - 2 * blend);
       now.pos.lerpVectors(from.pos, target.pos, k);
       now.look.lerpVectors(from.look, target.look, k);

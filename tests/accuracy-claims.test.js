@@ -195,14 +195,14 @@ describe('the known approximations are the size the pages say', () => {
     expect(offsets[offsets.length - 1]).toBeLessThanOrEqual(15);
   });
 
-  it('peak cylinder pressure: about 52-65 bar on the NA presets, 69-82 bar on the turbo presets', () => {
+  it('peak cylinder pressure: about 51-65 bar on the NA presets, 69-82 bar on the turbo presets', () => {
     for (const { peak, peakTq, boosted } of PRESETS) {
       const pmax = Math.max(peak.peakPressure, peakTq.peakPressure);
       if (boosted) {
         expect(pmax).toBeGreaterThanOrEqual(68.5);
         expect(pmax).toBeLessThanOrEqual(82.5);
       } else {
-        expect(pmax).toBeGreaterThanOrEqual(51.5);
+        expect(pmax).toBeGreaterThanOrEqual(50.5);
         expect(pmax).toBeLessThanOrEqual(65.5);
       }
     }

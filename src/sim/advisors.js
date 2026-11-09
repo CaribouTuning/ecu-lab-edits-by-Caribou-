@@ -7,14 +7,14 @@
  * The advisors report the gap; closing it is the player's job.
  */
 
-import { BARO_KPA, PSI_TO_KPA, R_AIR } from './constants.js';
+import { BARO_KPA, MIXTURE_TOLERANCE_PCT, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { hardwareVeAt } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
 import { chargeTempK, exhaustTempK } from './thermo.js';
-import { clamp, curveAt, interp1 } from './math.js';
+import { clamp, curveAt, groupRuns, interp1 } from './math.js';
 import { evaluatePoint } from './point.js';
 import { wearEffects } from './damage.js';
 import { reachableKpa } from './manifold.js';
@@ -59,13 +59,29 @@ const PULL_CEILING_KPA = 4;
 /** Mixture error worth reporting, AFR points. Below this it is calibration noise. */
 export const MIX_NOTABLE_AFR = 0.45;
 
+/** The pull log's and the mixture advisor's line for a missed mixture (constants.js). */
+export const MISSED_MIX_PCT = MIXTURE_TOLERANCE_PCT;
+
+/** Whether a pull point missed its AFR target by more than MISSED_MIX_PCT. @param {{afr: number, afrCommanded: number}} p */
+export const missesTarget = (p) => Math.abs(p.afr / p.afrCommanded - 1) * 100 > MISSED_MIX_PCT;
+
 /**
- * How far the delivered mixture may miss the AFR table at full load before the fuelling
- * (the air estimate, the injectors, the pump) is the fault rather than the table: past a
- * wideband's and a tuner's tolerance. The pull log's "missed the table" entry and TUNE's
- * mixture advisor read the same number, so the two cannot disagree.
+ * Why the engine missed the mixture its AFR table asks for, in the order a tuner checks:
+ * injectors out of time, the pump, the injector flow the ECU is set for, the MAF scaling,
+ * and only then the ECU's air estimate (the VE table). The pull log and TUNE's mixture
+ * advisor both name the fault from this, so the two send the player to the same page.
+ * @param {object[]} points the pull points where it missed
+ * @param {{injectorCc?: number, ecuInjectorCc?: number}} parts
+ * @returns {'injectors'|'pump'|'injscale'|'maf'|'ve'}
  */
-export const MISSED_MIX_AFR = 0.8;
+export function missedMixCause(points, { injectorCc, ecuInjectorCc } = {}) {
+  const lean = points.some((p) => p.afr > p.afrCommanded);
+  if (lean && points.some((p) => p.fuelLimited)) return 'injectors';
+  if (lean && points.some((p) => p.fuelStarved)) return 'pump';
+  if (injectorCc && ecuInjectorCc && Math.abs(injectorCc / ecuInjectorCc - 1) > 0.02) return 'injscale';
+  if (points.some((p) => p.mafFlag)) return 'maf';
+  return 've';
+}
 
 /**
  * The mixtures a production calibration actually runs at full load, as lambda. A cell
@@ -696,9 +712,16 @@ export function calibrationAdvice({
   if (pull) {
     // Where the engine did not get what the table asks for: the table is not the fault there,
     // so the mixture advice says so and points at the fuelling (the same test as the log).
+    /** @type {any[]} */
     const missedMix = pull.points
-      .filter((p) => p.map >= 85 && !((p.nitrousLbMin ?? 0) > 0) && Math.abs(p.afr - p.afrCommanded) > MISSED_MIX_AFR)
-      .map((p) => ({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded }));
+      .filter((p) => p.map >= 85 && !((p.nitrousLbMin ?? 0) > 0) && missesTarget(p));
+    // A cause for each run of neighbouring speeds missed the same way, as the log groups
+    // them: one build can miss lean on its VE table low down and on its injectors up top.
+    const runs = groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr > p.afrCommanded)
+      .concat(groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr <= p.afrCommanded));
+    const causeOf = new Map();
+    for (const run of runs) { const c = missedMixCause(run, { injectorCc, ecuInjectorCc }); for (const p of run) causeOf.set(p, c); }
+    for (const p of missedMix.splice(0)) missedMix.push({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded, cause: causeOf.get(p) ?? 've' });
     return { spark, fuelAdv, wrongMix, missedMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can

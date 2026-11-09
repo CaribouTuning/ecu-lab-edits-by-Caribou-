@@ -160,9 +160,9 @@ colours out of components, keep the accent from being a status colour, and keep
 - No idle animation on software: no pulsing badges or markers, and no shimmer. The
   dyno's standby light flashes three times when the player presses something that needs
   the machine on, then stops.
-- `prefers-reduced-motion` turns off the town's camera shake (`world/settings.js`) and the
-  CSS transitions that check for it. The shop camera's eased moves between stations do
-  not yet become cuts; that is a known gap.
+- `prefers-reduced-motion` turns the shop camera's eased moves between stations into cuts
+  (`desk/shopScene.js`), stops the physics cutaways' animation, and turns off the CSS
+  transitions that check for it.
 
 ## Things not to do
 

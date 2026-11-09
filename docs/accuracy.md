@@ -36,19 +36,19 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 262 lb-ft | 6400 / 6600 | 0.855 | 29.9° | 0.441 | 10.8 | 748 | 62 | 12.8 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 281 hp / 260 lb-ft | 6800 / 6700 | 0.877 | 30.4° | 0.437 | 10.6 | 762 | 62 | 12.6 |
-| BMW N54 | 302 hp / 295 lb-ft | 308 hp / 326 lb-ft | 5800 / 5900 | 0.851 | 18.8° | 0.433 | 11.1 | 764 | 71 | 18.6 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 331 hp / 347 lb-ft | 5500–6500 / 6200 | 0.962 | 15.3° | 0.388 | 11.0 | 798 | 69 | 19.7 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 369 hp / 376 lb-ft | 5800 / 6300 | 0.929 | 12.9° | 0.392 | 11.2 | 804 | 72 | 21.4 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 222 hp / 239 lb-ft | 4700–6200 / 5900 | 0.968 | 15.0° | 0.401 | 10.5 | 822 | 69 | 20.5 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 305 hp / 281 lb-ft | 5400–6500 / 6700 | 0.922 | 15.3° | 0.390 | 11.4 | 809 | 82 | 24.1 |
-| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 358 hp / 395 lb-ft | 5600 / 5400 | 0.840 | 27.4° | 0.473 | 10.3 | 742 | 57 | 11.9 |
-| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 400 hp / 382 lb-ft | 6000 / 6500 | 0.848 | 31.0° | 0.490 | 9.8 | 755 | 60 | 11.5 |
-| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 327 hp / 406 lb-ft | 5200 / 4700 | 0.841 | 26.7° | 0.482 | 10.1 | 756 | 52 | 11.6 |
-| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 288 hp / 361 lb-ft | 5200 / 4700 | 0.794 | 26.1° | 0.505 | 10.2 | 725 | 53 | 11.5 |
-| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 281 hp / 329 lb-ft | 5200 / 5700 | 0.841 | 29.6° | 0.493 | 9.9 | 748 | 52 | 11.7 |
-| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 496 hp / 487 lb-ft | 6000 / 6400 | 0.844 | 22.2° | 0.435 | 11.1 | 748 | 65 | 12.9 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 262 lb-ft | 6400 / 6600 | 0.852 | 29.9° | 0.443 | 10.8 | 747 | 62 | 12.8 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 281 hp / 259 lb-ft | 6800 / 6700 | 0.872 | 30.1° | 0.440 | 10.6 | 761 | 61 | 12.6 |
+| BMW N54 | 302 hp / 295 lb-ft | 308 hp / 326 lb-ft | 5800 / 5900 | 0.847 | 19.0° | 0.435 | 11.1 | 762 | 72 | 18.6 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 331 hp / 346 lb-ft | 5500–6500 / 6200 | 0.960 | 15.3° | 0.388 | 11.0 | 798 | 69 | 19.7 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 369 hp / 378 lb-ft | 5800 / 6300 | 0.929 | 12.9° | 0.392 | 11.2 | 804 | 72 | 21.4 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 222 hp / 240 lb-ft | 4700–6200 / 5900 | 0.962 | 14.7° | 0.403 | 10.5 | 822 | 69 | 20.6 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 305 hp / 279 lb-ft | 5400–6500 / 6700 | 0.920 | 15.3° | 0.390 | 11.4 | 809 | 82 | 23.9 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 358 hp / 395 lb-ft | 5600 / 5400 | 0.837 | 27.5° | 0.475 | 10.3 | 741 | 57 | 11.9 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 400 hp / 382 lb-ft | 6000 / 6500 | 0.847 | 31.0° | 0.490 | 9.8 | 754 | 60 | 11.5 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 327 hp / 405 lb-ft | 5200 / 4800 | 0.835 | 27.3° | 0.488 | 10.0 | 755 | 51 | 11.5 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 287 hp / 360 lb-ft | 5200 / 4700 | 0.789 | 26.1° | 0.509 | 10.2 | 723 | 53 | 11.5 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 280 hp / 329 lb-ft | 5200 / 4900 | 0.828 | 26.1° | 0.480 | 10.3 | 737 | 54 | 11.7 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 498 hp / 486 lb-ft | 6000 / 6400 | 0.847 | 22.2° | 0.433 | 11.1 | 749 | 65 | 12.9 |
 
 Cam durations are published figures where a source was found, with the source beside
 each in `src/sim/presets.js` (the LS1, LQ4, LS6, LM7, LR4, 6.4 HEMI and N54; the VQ35DE and
@@ -331,7 +331,7 @@ Learn article 34. None of them changes the direction of any lesson.
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
 7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 69–82 bar
-   (NA presets about 52–65) against about 100–120 bar quoted for production turbo engines
+   (NA presets about 51–65) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
 8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor

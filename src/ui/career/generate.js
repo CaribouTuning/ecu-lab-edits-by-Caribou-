@@ -17,7 +17,7 @@
  * real fix passes it.
  */
 
-import { INJECTOR_OPTS, OCTANE_OPTS, presetById } from '../../sim/index.js';
+import { INJECTOR_OPTS, MIXTURE_TOLERANCE_PCT, OCTANE_OPTS, presetById } from '../../sim/index.js';
 
 import { IDLES, SAFE, withMods } from './criteria.js';
 
@@ -145,7 +145,7 @@ const FAULTS = {
     checks: (_level) => [
       // Headers and a cat-back change how the engine breathes by a few percent, so the job is
       // finishing the tune: within 2%, where a professional holds full-throttle mixture.
-      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
+      { type: 'mixture', kind: 'complaint', pct: MIXTURE_TOLERANCE_PCT, label: 'On target at full throttle, all the way to redline' },
     ],
     symptom: (r) => r.pick([
       'Headers and a cat-back went on. My gauge says it goes lean under load.',

@@ -223,9 +223,16 @@ function AfrAdvisory({ report }) {
     case 'table-missed': {
       const w = detail.worst;
       const pct = Math.round(Math.abs(w.afr / w.afrCommanded - 1) * 100);
+      const fix = {
+        injectors: <>The injectors are at their limit there: fit larger ones on <b className={styles.emInk}>BUILD › FUEL SYSTEM</b>, then set their flow on TUNE › INJECTORS.</>,
+        pump: <>The pump cannot hold rail pressure at that demand: fit a bigger one on <b className={styles.emInk}>BUILD › FUEL SYSTEM</b>.</>,
+        injscale: <>The ECU is set for a different injector than the one fitted: set the flow on <b className={styles.emInk}>TUNE › INJECTORS</b> first, then pull again.</>,
+        maf: <>The MAF is mis-scaled for the parts fitted: set the MAF scalar on <b className={styles.emInk}>TUNE › SENSORS</b> first, then pull again.</>,
+        ve: <>The ECU&apos;s air estimate is about {pct}% {w.lean ? 'low' : 'high'} there: on <b className={styles.emInk}>TUNE › AIRFLOW</b>, use Correct VE from logs (or {w.lean ? 'raise' : 'lower'} those VE cells by about {pct}%).</>,
+      }[w.cause ?? 've'];
       return (
         <div className={styles.prose}>
-          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). The table is not the fault, so do not change it to chase the number: the ECU&apos;s air estimate is about {pct}% {w.lean ? 'low' : 'high'} there. On <b className={styles.emInk}>TUNE › AIRFLOW</b>, use Correct VE from logs (or {w.lean ? 'raise' : 'lower'} those VE cells by about {pct}%), then check the injector flow on TUNE › INJECTORS and the MAF scaling on TUNE › SENSORS match the parts on BUILD.
+          At full throttle from {detail.from.toLocaleString('en-US')} to {detail.to.toLocaleString('en-US')} RPM the engine got <b className={styles.emInk}>{w.afr.toFixed(1)}:1</b> where this table asks for <b className={styles.emInk}>{w.afrCommanded.toFixed(1)}:1</b> (worst at {w.rpm.toLocaleString('en-US')} RPM, {Math.round(w.map)} kPa). The table is not the fault, so do not change it to chase the number. {fix}
           {detail.alsoOff > 0 && <> Once it hits the table, {detail.alsoOff} high-load {detail.alsoOff === 1 ? 'cell is' : 'cells are'} still off best power: this page will list them.</>}
         </div>
       );

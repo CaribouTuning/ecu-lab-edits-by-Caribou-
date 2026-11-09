@@ -10,7 +10,7 @@
  * physics layer testable in plain Node.
  */
 
-import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET } from './constants.js';
+import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET, MIXTURE_TOLERANCE_PCT } from './constants.js';
 import { COEFF } from './coefficients.js';
 import {
   cycleInputsFor, cylinderVolumeM3, knockLimitedSpark, lateSparkQuench, mbtFromBurn, paToBar, runCycle, trappedAirGrams,
@@ -365,7 +365,11 @@ export function evaluatePoint({
   // oil film off the bores, fouls plugs and costs power. Slower than knock, still damage.
   const richRisk = lambdaActual < COEFF.RICH_DAMAGE_LAMBDA && mapKpa >= 55;
   const valveRisk = leanRisk && boostPsi > 3;
-  const mafFlag = Math.abs(trimPct) > 8 && (mods.intake || mods.turboFitted);
+  // A MAF reading the air wrong by more than a professional's tolerance
+  // (MIXTURE_TOLERANCE_PCT) fuels the engine that far off. It was "more than 8%", and a turbo's
+  // plumbing on its own reads exactly 8% low: the turbo conversion ran 8% lean with no
+  // MAF entry in the log, and the advice fell through to the VE table.
+  const mafFlag = Math.abs(trimPct) > MIXTURE_TOLERANCE_PCT && (mods.intake || mods.turboFitted);
   const injMismatch = Math.abs(injectorCc / ecuInjectorCc - 1) > 0.05;
 
   // What only exists once the ECU is modelled. Kept out of the base record entirely when

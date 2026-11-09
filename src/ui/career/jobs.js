@@ -25,6 +25,7 @@
  * engine alive, and request is anything else they asked for.
  */
 
+import { MIXTURE_TOLERANCE_PCT } from '../../sim/index.js';
 import { IDLES, SAFE, withMods } from './criteria.js';
 import { generatedJob } from './generate.js';
 
@@ -116,7 +117,7 @@ export const JOBS = [
     checks: [
       // Within 2%, where a professional holds full-throttle mixture: headers change the
       // engine's breathing by a few percent, not a gross amount.
-      { type: 'mixture', kind: 'complaint', pct: 2, label: 'On target at full throttle, all the way to redline' },
+      { type: 'mixture', kind: 'complaint', pct: MIXTURE_TOLERANCE_PCT, label: 'On target at full throttle, all the way to redline' },
       ...SAFE, IDLES,
     ],
     hint: 'Much better through the middle, but right at the top before the limiter it still goes lean on my gauge.',

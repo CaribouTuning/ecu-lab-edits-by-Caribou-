@@ -1,6 +1,6 @@
 /**
  * The loop a player runs after bolting a turbo on: pull, read the log and TUNE's advice,
- * change the cells it names, pull again. It has to end somewhere true: clean at every
+ * do what they name (the log's MAF and VE entries, TUNE's cells), pull again. It has to end somewhere true: clean at every
  * throttle (no "safe at full throttle, knocks at half"), a Tuning Score of 100, and more
  * power than the engine made before the turbo. Each of those once failed: the advice never
  * converged, part-throttle rows stayed past the knock limit, and an over-retarded tune
@@ -32,8 +32,26 @@ function adviceAt(eng, load) {
 
 /** Rounds of pull-and-correct until TUNE names nothing at any throttle; how many it took. */
 function tuneFromTheAdvice(eng) {
-  for (let round = 1; round <= 6; round++) {
+  for (let round = 1; round <= 9; round++) {
     let changed = 0;
+    // The log's setup entries first, as a player works it: the MAF scalar its MAF entry
+    // names, then the VE table corrected from the log where the engine missed its table.
+    const log = eng.pull(100);
+    const maf = log.events.find((e) => e.type === 'maf');
+    const named = maf && /to about ([0-9.]+), which cancels/.exec(maf.fix);
+    if (named) { eng.build.mafScalar = Number(named[1]); changed++; continue; }
+    // Every throttle's log where the engine missed its table: the VE tool learns from any pull.
+    const missed = LOADS.map((l) => (l === 100 ? log : eng.pull(l))).filter((r) => r.events.some((e) => e.type === 'missedmix'));
+    if (missed.length) {
+      const axes = S.layoutById(eng.tables.layout).ve;
+      const { ratio } = S.veCorrections(missed.flatMap((r) => S.veSamplesFromPull(r.points)), axes);
+      // The column past the redline the log cannot reach: its trend carried on by hand, as
+      // the missed-mixture entry asks.
+      const carried = ratio.map((row) => { let last = null; return row.map((r) => (r == null ? last : (last = r))); });
+      const next = S.applyVeCorrections(eng.tables.ve, carried, 1);
+      for (let r = 0; r < next.length; r++) eng.tables.ve[r] = next[r];
+      changed++;
+    }
     for (const load of LOADS) {
       const { a } = adviceAt(eng, load);
       for (const c of [...a.overAdvanced, ...a.pastMbt, ...a.underAdvanced]) { eng.tables.timing[c.ri][c.ci] = c.suggested; changed++; }
@@ -45,7 +63,8 @@ function tuneFromTheAdvice(eng) {
 }
 
 function expectTunedTurbo(eng, naHp) {
-  expect(tuneFromTheAdvice(eng)).toBeLessThanOrEqual(4);
+  // The log's setup (the MAF scalar, then VE) takes a round or two before TUNE's cells.
+  expect(tuneFromTheAdvice(eng)).toBeLessThanOrEqual(7);
   for (const load of LOADS) {
     const { pull, a } = adviceAt(eng, load);
     expect(a.overAdvanced, `past the knock limit at ${load}% throttle`).toEqual([]);
