@@ -106,7 +106,8 @@ describe('navigation', () => {
       // bench computer, which only that place has.
       LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
       LEARN: () => screen.getByRole('navigation', { name: 'Learn shelves' }),
-      PHYSICS: () => screen.getByText('Air in'),
+      // PHYSICS opens on its engine overview, one page at a time as TUNE's tables (its pages' tabs).
+      PHYSICS: () => screen.getByRole('navigation', { name: 'Physics pages' }),
       BUILD: () => screen.getByRole('navigation', { name: 'Engine parts' }),
     };
     for (const tab of ['TUNE', 'DYNO', 'LIVE', 'LEARN', 'PHYSICS', 'BUILD']) {

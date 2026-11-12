@@ -115,6 +115,19 @@ export const tokens = Object.freeze({
   marker: '#1f4c9a',
   order: '#fbfaf6',
 
+  // The title screen keeps DNiev/ecu-lab main's palette (StartScreen.module.css).
+  startBg: '#0a0d14',
+  startPanel2: '#1a2130',
+  startPanel3: '#212a3c',
+  startLine: '#262f42',
+  startLineHi: '#33405a',
+  startInk: '#e9eef8',
+  startInk2: '#8792a8',
+  startInk3: '#5c6880',
+  startAcc: '#4c9eff',
+  startAccInk: '#8fc2ff',
+  startAccOn: '#04162e',
+  startAccRgb: '76, 158, 255',
   // The laptop's software, drawn as a native Mac app in dark mode with the Graphite
   // accent (Desk.module.css .window remaps the neutral tokens to these).
   macWindow: '#0f1420',

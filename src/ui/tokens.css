@@ -63,6 +63,19 @@
   /* The laptop's software, drawn as a native Mac app in dark mode with the Graphite
      accent: neutral greys, a grey selection, and the window's traffic lights. Applied by
      remapping the neutral tokens inside a window (Desk.module.css .window). */
+  /* The title screen keeps DNiev/ecu-lab main's palette (StartScreen.module.css). */
+  --start-bg: #0a0d14;
+  --start-panel2: #1a2130;
+  --start-panel3: #212a3c;
+  --start-line: #262f42;
+  --start-line-hi: #33405a;
+  --start-ink: #e9eef8;
+  --start-ink2: #8792a8;
+  --start-ink3: #5c6880;
+  --start-acc: #4c9eff;
+  --start-acc-ink: #8fc2ff;
+  --start-acc-on: #04162e;
+  --start-acc-rgb: 76, 158, 255;
   --mac-window: #0f1420;
   --mac-titlebar: #171e2e;
   --mac-sidebar: #131a28;

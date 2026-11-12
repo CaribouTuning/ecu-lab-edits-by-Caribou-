@@ -80,21 +80,21 @@
 
 /*
  * The title screen keeps DNiev/ecu-lab main's look: its palette is pinned here, so the
- * shop's graphite theme (tokens.css) does not reach it. These are main's token values.
+ * shop's graphite theme does not reach it. These are main's token values (tokens.css --start-*).
  */
 .screen {
-  --bg: #0a0d14;
-  --panel2: #1a2130;
-  --panel3: #212a3c;
-  --line: #262f42;
-  --line-hi: #33405a;
-  --ink: #e9eef8;
-  --ink2: #8792a8;
-  --ink3: #5c6880;
-  --acc: #4c9eff;
-  --acc-ink: #8fc2ff;
-  --acc-on: #04162e;
-  --acc-rgb: 76, 158, 255;
+  --bg: var(--start-bg);
+  --panel2: var(--start-panel2);
+  --panel3: var(--start-panel3);
+  --line: var(--start-line);
+  --line-hi: var(--start-line-hi);
+  --ink: var(--start-ink);
+  --ink2: var(--start-ink2);
+  --ink3: var(--start-ink3);
+  --acc: var(--start-acc);
+  --acc-ink: var(--start-acc-ink);
+  --acc-on: var(--start-acc-on);
+  --acc-rgb: var(--start-acc-rgb);
   --r-md: 9px;
 }
 
@@ -125,4 +125,4 @@
 .quiet:hover { color: var(--ink); }
 
 /* main's ground round the edges too: an iPhone's safe areas and the rubber-band. */
-:global(html):has(.screen), :global(body):has(.screen) { background: #0a0d14; }
+:global(html):has(.screen), :global(body):has(.screen) { background: var(--start-bg); }

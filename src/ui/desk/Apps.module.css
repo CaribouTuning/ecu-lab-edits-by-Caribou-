@@ -179,7 +179,7 @@
 .strokeRow { display: flex; flex-direction: column; gap: 4px; }
 .strokeLabel { font-size: var(--fs-xs); color: var(--ink2); }
 .strokeBar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }
-.strokePill { padding: 4px 2px 5px; text-align: center; font-size: var(--fs-xs); font-weight: 500; color: var(--ink3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.strokePill { padding: 4px 2px 5px; text-align: center; font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .strokePill[data-on] { color: var(--ink); font-weight: 600; border-bottom-color: var(--acc); }
 .cutSplit { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
 /* A page of its own on a wide screen: the drawing beside its explanation, chart and sums. */
