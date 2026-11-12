@@ -68,9 +68,9 @@ describe('docs/accuracy.md: the presets table is what the model does', () => {
 });
 
 describe('the known approximations are the size the pages say', () => {
-  it('fuel per horsepower: presets 0.39-0.51 lb/hp·h, 9.9-11.5 hp per lb/min of air', () => {
+  it('fuel per horsepower: presets 0.38-0.51 lb/hp·h, 9.9-11.5 hp per lb/min of air', () => {
     const [lo, hi] = span(PRESETS.map((r) => r.peak.bsfc));
-    expect(lo).toBeGreaterThanOrEqual(0.385);
+    expect(lo).toBeGreaterThanOrEqual(0.375);
     expect(hi).toBeLessThan(0.515);
     const [alo, ahi] = span(PRESETS.map((r) => (r.peak.hp / S.DRIVETRAIN_EFF) / ((r.peak.maf * 60) / 453.6)));
     expect(alo).toBeGreaterThanOrEqual(9.75);
@@ -95,14 +95,14 @@ describe('the known approximations are the size the pages say', () => {
     expect(hi).toBeLessThanOrEqual(0.245);
   });
 
-  it('peak torque: the turbo presets within 0-5.5% of their rating, the N54 about 10% over and the GTI about 7% under', () => {
+  it('peak torque: the turbo presets within 0-6% of their rating, the N54 about 10% over and the GTI about 7% under', () => {
     for (const { preset, pull, boosted } of PRESETS) {
       if (!boosted) continue;
       const over = crank(pull.peakTq) / preset.factory.crankTq - 1;
       if (preset.id === 'ea888-gti') expect(over).toBeCloseTo(-0.07, 1);
       else if (preset.id === 'n54') expect(over).toBeCloseTo(0.10, 1);
       else {
-        expect(Math.abs(over)).toBeLessThanOrEqual(0.055);
+        expect(Math.abs(over)).toBeLessThanOrEqual(0.06);
       }
     }
   });

@@ -275,11 +275,11 @@ Each of these is measured, written down in the code where it arises, and taught 
 Learn article 34. None of them changes the direction of any lesson.
 
 1. **Air per horsepower is close; fuel per horsepower now in the real band.** The presets
-   burn 0.39–0.51 lb/hp·h at peak power and make 9.9–11.5 crank hp per lb/min of air,
+   burn 0.38–0.51 lb/hp·h at peak power and make 9.9–11.5 crank hp per lb/min of air,
    against 0.45–0.60 and about 10–11 for real engines of their kind. The spread is the
    factories' own mixtures: the GM trucks run GM's stock enrichment, lambda 0.76–0.81, and
    burn the most (the LM7 0.51); the direct-injection B58 and EA888 hold near stoichiometric
-   and burn the least (0.39–0.40). The Golf R makes the most per pound of air, 11.5. Learn article 34 used to say the
+   and burn the least (0.38–0.40). The Golf R makes the most per pound of air, 11.5. Learn article 34 used to say the
    model got 10–15% more power from each pound of air than a real engine; most of that was
    the rich flame credited with heat its CO and H₂ never release (see "Rich flames" above),
    and it went with it. Friction before October 2026 was the rest (src/sim/friction.js).
@@ -300,7 +300,7 @@ Learn article 34. None of them changes the direction of any lesson.
    EA888s near TDC. Against GM's own spark tables the knock model is within about 3° below
    2000 RPM, so it was not loosened without data that says it should be (a datalog of a stock
    EA888 with spark and knock retard would settle it). Nothing holds the torque flat the way
-   a factory torque limit does. Peak torque lands within 0–5.5% of the rating on the B58s and
+   a factory torque limit does. Peak torque lands within 0–6% of the rating on the B58s and
    the Golf R. The N54 reads about 10% over its rating, and so do real ones: a stock 335i
    measured 300 lb-ft at the wheels on a DynoJet (Automobile, via bimmerfile.com,
    2010-09-14) against 295 rated at the crank. The GTI peaks about 7% under.
