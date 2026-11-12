@@ -35,7 +35,7 @@ import { DEFAULT_ECU_HW, factoryIntakeSchedule, intakeCamAt, scheduledVeAt, tank
 import { deriveEngine, valveFloatRpm } from './engine.js';
 import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
-import { inductionAtMap } from './turbo.js';
+import { inductionAtFullThrottle, inductionAtMap } from './turbo.js';
 import {
   CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
@@ -278,7 +278,7 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      // At 190: power -3.9%, torque +5.5%, peaking at 6200 inside BMW's 5800-6500 band (the
+      // At 190: power -3.4%, torque +5.4%, peaking at 6200 inside BMW's 5800-6500 band (the
       // charge heated at the compressor's own map efficiency, the blowdown from the seat's
       // pressure; checked again at 182-190, where shorter cams cost power: 186 read -4.5%).
       camDuration: 190, exhaustCamDuration: 190, springRate: 62,
@@ -394,7 +394,7 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      // At 190: power -0.1%, torque +0.8%. Refitted from 198 when the charge began heating
+      // At 190: power 0.0%, torque +0.8%. Refitted from 198 when the charge began heating
       // at the IS38's own map efficiency rather than a fixed 70% (198 then read +5.1%).
       camDuration: 190, exhaustCamDuration: 190, springRate: 54,
       redline: 6800,
@@ -808,9 +808,27 @@ export function factoryCalibration(preset, layout = null) {
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
   // The charge heated as the dyno heats it: at the compressor map's efficiency where this
   // cell's flow sits (chargeHeatEff), or the fixed one without a turbo.
+  /** The full-throttle state at a speed: where a cell above the turbo's reach is read. */
+  const edgeMemo = new Map();
+  const edgeAt = (rpm) => {
+    if (!edgeMemo.has(rpm)) {
+      edgeMemo.set(rpm, inductionAtFullThrottle({
+        rpm, boostTargetPsi: curveAt(preset.induction.boost, rpm), turbine,
+        compressor: presetCompressor(preset), veAt: (m) => veAt(rpm, m), derived,
+        intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
+        intakeKAtEff: (b, eta) => chargeTempK(b, preset.mods.intercooler, undefined, eta),
+      }));
+    }
+    return edgeMemo.get(rpm);
+  };
+  // A cell the turbo cannot reach at this speed heats at the compressor's efficiency at the
+  // edge it does reach, so the row past reach continues the one below it rather than
+  // stepping to another heat, which the interpolated spark would carry onto the cells the
+  // engine runs on.
   const chargeKAt = (rpm, kpa) => {
     const boostPsi = boostPsiAt(rpm, kpa);
-    return chargeTempK(boostPsi, preset.mods.intercooler, undefined, chargeHeatEff({ boostPsi, compressorEff: inductionAt(rpm, kpa)?.compressorEff ?? null }));
+    const eff = preset.induction.turboOn ? (inductionAt(rpm, kpa) ?? edgeAt(rpm)).compressorEff : null;
+    return chargeTempK(boostPsi, preset.mods.intercooler, undefined, chargeHeatEff({ boostPsi, compressorEff: eff ?? null }));
   };
   const airAt = (rpm, kpa) => trappedAirGrams({ veActual: veAt(rpm, kpa), mapKpa: kpa, chargeK: chargeKAt(rpm, kpa), sweptM3 });
   /** Manifold pressure for a load-axis value: itself, or the pressure trapping that air. */

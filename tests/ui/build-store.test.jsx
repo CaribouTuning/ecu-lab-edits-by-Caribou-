@@ -608,12 +608,12 @@ describe('every segmented control', () => {
     total += expectEverySegHasOneSelection();
 
     // Guard the sweep itself: if navigation silently failed, the per-tab assertions
-    // above would each pass on whatever happened to be showing. Twenty-six is the count
+    // above would each pass on whatever happened to be showing. Twenty-eight is the count
     // of segmented controls those three stops reach today:
-    //   BUILD 22 — Engine: Configuration, Block, Head, Valvetrain Layout, Valves per
+    //   BUILD 21 — Engine: Configuration, Block, Head, Valvetrain Layout, Valves per
     //     Cylinder, Cam Followers, Spark Plugs per Cylinder, Friction Level, Cam Phasers,
-    //     Ignition Coils, Plug Gap; Induction: What forces the air in, MAP Sensor, Compressor, Turbos (single or
-    //     twin), Wastegate Actuator (the spring picker
+    //     Ignition Coils, Plug Gap; Induction: What forces the air in, MAP Sensor, Turbos (single or
+    //     twin; the compressor is a list, with the factory ones, not a segmented control), Wastegate Actuator (the spring picker
     //     only appears for a pneumatic gate), Nitrous Kit (its shot and bottle pickers
     //     only appear with a kit fitted); Fuel: Octane, Regulation, Base Pressure,
     //     Wideband Controller; Exhaust: Diameter, Catalytic Converter.
@@ -621,7 +621,7 @@ describe('every segmented control', () => {
     //     Scaling, and the ECU's Pressure Compensation.
     //   DYNO 1 — the manifold-pressure picker.
     //   (BUILD › ENGINE also has Pistons and rods, the bottom-end picker.)
-    expect(total).toBe(29);
+    expect(total).toBe(28);
   });
 });
 

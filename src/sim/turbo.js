@@ -360,6 +360,23 @@ export function solveInduction({
  *   compressor efficiency, so the state is the one the dyno solves (its map's efficiency)
  * @returns {{boostPsi: number, empKpa: number, compressorEff: number}|null}
  */
+/**
+ * The induction state at full throttle at this speed: the highest manifold pressure the
+ * turbo reaches here, with its boost, backpressure and the compressor's efficiency there.
+ * A table cell above it is one the engine never runs; read at this edge, as the ECU reads
+ * past its axes, it continues the table the engine does run on.
+ *
+ * @param {Omit<Parameters<typeof inductionAtMap>[0], 'mapKpa'>} input
+ * @returns {{mapKpa: number, boostPsi: number, empKpa: number, compressorEff: number}}
+ */
+export function inductionAtFullThrottle({ rpm, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff = null }) {
+  const s = solveInduction({
+    rpm, loadKpa: BARO_KPA, turboOn: true, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff,
+    lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
+  });
+  return { mapKpa: s.mapKpa, boostPsi: s.boostPsi, empKpa: s.empKpa, compressorEff: s.compressorEff };
+}
+
 /** How close to the full-throttle pressure counts as full throttle, kPa. */
 const INDUCTION_MATCH_KPA = 0.5;
 
@@ -368,7 +385,7 @@ export function inductionAtMap({ rpm, mapKpa, boostTargetPsi, turbine, compresso
     rpm, loadKpa, turboOn: true, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff,
     lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
   });
-  const full = at(BARO_KPA);
+  const full = inductionAtFullThrottle({ rpm, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff });
   // The pressure full throttle tops out at is reached there, with that state's own
   // backpressure; above it, nothing reaches it.
   if (mapKpa > full.mapKpa + INDUCTION_MATCH_KPA) return null;
