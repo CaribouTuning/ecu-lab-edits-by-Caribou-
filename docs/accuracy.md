@@ -307,8 +307,9 @@ Learn article 34. None of them changes the direction of any lesson.
    enrichment effect is smaller; the physics-invariant test asserts the cooling from 85 kPa
    up.
 4. **Best power: where a real engine's is, since October 2026.** With fixed air and spark at
-   MBT, the model makes its most power near λ 0.90, within 0.5% of it from λ 0.86 to 0.95,
-   3% less at λ 0.75 and about 3% less at stoichiometric. A real engine makes its best power
+   MBT, the model makes its most power near λ 0.92, within 0.5% of it from λ 0.88 to 0.95,
+   and about 4% less at stoichiometric (the VQ35DE Rev-Up at 5000 RPM, full throttle;
+   `tests/accuracy-claims.test.js`). A real engine makes its best power
    at λ 0.86–0.91, and loses 3–5% at stoichiometric. Two things put it there. Molar expansion
    (above): the products of a rich charge hold the most moles. And dissociation: its flame is hot enough to dissociate CO₂ and water, which holds back
    energy until the gas recombines late in expansion, and that costs a stoichiometric mixture

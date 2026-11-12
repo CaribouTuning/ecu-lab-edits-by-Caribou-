@@ -224,7 +224,7 @@ function FuelLesson() {
         The game&apos;s log for this point: {p.fuelMass} mg of fuel and {p.duty}% duty. Duty is the injector&apos;s time budget. Past about 90% there is no time left, and the mixture goes lean whatever the table asks for (Lesson 5.1).
       </Worked>
       <Do steps={[
-        <>Open <K>TUNE › FUEL</K> and find the 100 kPa row: it asks for 12.6–13.2:1 across the rev range, richest where torque peaks.</>,
+        <>Open <K>TUNE › FUEL</K> and find the 100 kPa row: it asks for about 12.9:1 low in the revs, a little richer as they rise, about 12.4:1 at the top, where the exhaust is hottest.</>,
         <>Find the 40 kPa row: it asks for 14.7:1.</>,
       ]} />
       <Did>You followed one cylinder&apos;s air all the way to how long the injector stays open. The ECU never commands &ldquo;fuel&rdquo;: it commands time.</Did>

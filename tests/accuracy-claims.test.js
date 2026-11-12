@@ -155,6 +155,28 @@ describe('the known approximations are the size the pages say', () => {
     }
   });
 
+  it('best power with spark at its best: near lambda 0.92, within 0.5% from 0.88 to 0.95, about 4% less at stoichiometric', () => {
+    const eng = makeEngine({ build: {} });
+    const mbtHp = (afr) => {
+      let best = 0;
+      for (let t = 5; t <= 45; t += 1) {
+        const p = S.evaluatePoint({
+          rpm: 5000, mapKpa: 100, boostPsi: 0, veVal: eng.veTruth(5000, 100), timingVal: t, afrCommanded: afr, fuel: eng.fuel,
+          mods: { ...eng.build.mods, turboFitted: false }, mafScalar: 1, mafErrorBase: 1, injectorCc: 1000, ecuInjectorCc: 1000,
+          derived: eng.derived, compressor: eng.compressor, turbine: null,
+        });
+        if (!((p.knockPull ?? 0) > 0)) best = Math.max(best, p.hp);
+      }
+      return best;
+    };
+    const lambdas = [0.88, 0.90, 0.92, 0.95, 1.0];
+    const hp = Object.fromEntries(lambdas.map((l) => [l, mbtHp(l * 14.7)]));
+    const peak = Math.max(...Object.values(hp));
+    for (const l of [0.88, 0.90, 0.92, 0.95]) expect(hp[l] / peak).toBeGreaterThan(0.994);
+    expect(1 - hp[1.0] / peak).toBeGreaterThan(0.025);
+    expect(1 - hp[1.0] / peak).toBeLessThan(0.05);
+  });
+
   it('best power: very rich costs power, about 7% from lambda 0.88 to 0.70', () => {
     const [best, rich] = [13.0, 10.3].map((afr) => egtAt(ENGINES[0], afr).hp);
     expect(1 - rich / best).toBeGreaterThan(0.05);
