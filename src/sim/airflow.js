@@ -339,9 +339,9 @@ function buildVeReader(cfg, mods, hw) {
  * and the open period as the gas exchange does (exhaust opening to intake closing, through
  * blowdown, the exhaust stroke, overlap and the intake stroke). One crank frame for both:
  * 0° is top dead centre between the exhaust and intake strokes and 360° is firing TDC.
- * Where they meet at exhaust opening they disagree: the gas exchange starts its blowdown from
- * `COEFF.EVO_PRESSURE_RATIO_*`, fitted to the closed cycle's pressure at ITS (later) opening,
- * so the record steps down there. docs/accuracy.md has the numbers.
+ * Where they meet at exhaust opening they agree to within the cycle's scatter: the gas
+ * exchange starts its blowdown from `COEFF.EVO_PRESSURE_RATIO_*`, the closed cycle's pressure
+ * at ITS (later) opening, carried back to the seat along the burned gas's isentrope.
  * @param {{deg: number[], bar: number[], burned: number[]}} cycleTrace `runCycle`'s trace
  *   (degrees from firing TDC), a pull point's `cycleTrace`
  * @param {{deg: number[], cylKpa: number[]}} exchangeTrace `gasExchangeTrace`'s `trace`

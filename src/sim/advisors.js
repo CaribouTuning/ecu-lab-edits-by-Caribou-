@@ -14,7 +14,7 @@ import { hardwareVeAt } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
 import { exhaustManifoldKpa } from './friction.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
 import { clamp, curveAt, groupRuns, interp1 } from './math.js';
 import { evaluatePoint } from './point.js';
 import { wearEffects } from './damage.js';
@@ -204,8 +204,10 @@ export function veRecommendations(currentVe, cfg, mods, hw, axes = GAME_LAYOUT.v
  * @param {object} input
  * @returns {number} MBT spark advance, degrees BTDC
  */
-function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null }) {
-  const chargeK = chargeTempK(Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA), mods.intercooler);
+function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, turbine, exhaustDia = null, compressorEff = null }) {
+  const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
+  // Heated as the dyno heats it: at the compressor map's efficiency at this cell.
+  const chargeK = chargeTempK(boostPsi, mods.intercooler, undefined, chargeHeatEff({ boostPsi, compressorEff }));
   const airG = trappedAirGrams({
     veActual: veCell, mapKpa, chargeK,
     sweptM3: (derived.displacementL / derived.cyl) / 1000,
@@ -396,6 +398,7 @@ export function calibrationAdvice({
         rpm, mapKpa, boostTargetPsi: curveAt(boostCurve, rpm), turbine, compressor,
         veAt: (m) => (truthAt ? truthAt(rpm, m) : read('ve', rpm, m)), derived,
         intakeKAt: (b) => chargeTempK(b, mods.intercooler),
+        intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta),
       });
       inductionMemo.set(key, s ?? plain);
     }
@@ -527,6 +530,7 @@ export function calibrationAdvice({
       const mbt = mbtAtRow({
         rpm, mapKpa: gradeKpa, veCell, afrCell,
         fuel, mods, derived, turboOn, turbine, exhaustDia,
+        compressorEff: inductionAt(rpm, gradeKpa).compressorEff ?? null,
       });
       const safeTiming = clamp(
         Math.round(Math.min(knockCeiling, mbt) * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG,

@@ -26,8 +26,9 @@ const R_UNIVERSAL = 8.314462;
  * @param {number} boostPsi gauge boost pressure, psi
  * @param {boolean} intercooler whether an intercooler is fitted
  * @param {{ambientK?: number, baroKpa?: number}} [env] ambient conditions
- * @param {number} [isenEff] the compressor's adiabatic efficiency, for a supercharger;
- *   absent, the turbo's fixed polytropic figure
+ * @param {number} [isenEff] the compressor's isentropic efficiency where it is running: a
+ *   supercharger's own, or a turbo's off its map (`chargeHeatEff`); absent, the fixed
+ *   polytropic `COMP_ISEN_EFF`
  * @returns {number} charge temperature, K
  */
 export function chargeTempK(boostPsi, intercooler, env, isenEff = null) {
@@ -35,9 +36,10 @@ export function chargeTempK(boostPsi, intercooler, env, isenEff = null) {
   const baroKpa = env?.baroKpa ?? BARO_KPA;
   if (boostPsi <= 0) return ambientK;
   const pressureRatio = (baroKpa + boostPsi * PSI_TO_KPA) / baroKpa;
-  // Isentropic compression, degraded by the compressor's efficiency. The turbo keeps the
-  // one fixed efficiency it always had (see docs/accuracy.md); a supercharger passes its
-  // own, which is how a Roots blower heats the charge more than a twin-screw at equal boost.
+  // Isentropic compression, degraded by the compressor's efficiency (Watson & Janota;
+  // Heywood eq. 6.33). A turbo passes its map's efficiency at the point it is running, so
+  // off the island the charge runs hotter; a supercharger passes its own, which is how a
+  // Roots blower heats the charge more than a twin-screw at equal boost.
   const tCompressed = isenEff == null
     ? ambientK * Math.pow(pressureRatio, GAMMA_EXP / COMP_ISEN_EFF)
     : ambientK * (1 + (Math.pow(pressureRatio, GAMMA_EXP) - 1) / isenEff);
@@ -506,4 +508,17 @@ export const KG_KWH_PER_LB_HPH = 0.608277;
  */
 export function brakeThermalEfficiency(bsfcLbHpH, lhvJPerKg) {
   return 3.6e6 / (Math.max(0.05, bsfcLbHpH) * KG_KWH_PER_LB_HPH * lhvJPerKg);
+}
+
+/**
+ * The adiabatic efficiency the charge is heated at: a supercharger's own, a turbo
+ * compressor's off its map at this point, or none (no boost, or no map to read: the
+ * fixed `COMP_ISEN_EFF` in `chargeTempK`).
+ * @param {{blower?: {boostPsi: number, eta: number}|null, boostPsi: number, compressorEff?: number|null}} input
+ * @returns {number|undefined}
+ */
+export function chargeHeatEff({ blower = null, boostPsi, compressorEff = null }) {
+  if (blower && blower.boostPsi > 0) return blower.eta;
+  if (!blower && boostPsi > 0 && compressorEff != null && compressorEff > 0) return compressorEff;
+  return undefined;
 }

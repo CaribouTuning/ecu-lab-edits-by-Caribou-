@@ -429,7 +429,9 @@ export function liveStepEcu(st, dt, input, cfg) {
       // how anti-lag spools a turbo on the line.
       lambda: 1, exhaustK: Math.max(INDUCTION_REF_EXHAUST_K, e.egtK), baroKpa: baro,
       exhaust: { pipeDiaIn: hw.exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods },
-      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, env, eta) } : {}),
+      // The charge heat at the compressor's own efficiency, a turbo's off its map or a blower's.
+      intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, env, eta),
+      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio } : {}),
     });
     const spooling = steady.boostPsi > s.boostPsi;
     const flowFrac = clamp(rpmC / Math.max(1, redline) * aFrac, 0.02, 1);
@@ -552,6 +554,7 @@ export function liveStepEcu(st, dt, input, cfg) {
         afrTarget: e.afrTargetF, oilC: s.oilC, highDet: e.highDet, launch: launchArmed, nitrousFrac,
       },
       ...(steady.blower ? { blower: steady.blower } : {}),
+      ...(hw.turboOn ? { compressorEff: steady.compressorEff } : {}),
     });
     pt = evaluatePoint(/** @type {any} */ (res.input));
     e.egtK += (pt.egt + 273.15 - e.egtK) * clamp(dt / E.EGT_FILTER_S, 0, 1);

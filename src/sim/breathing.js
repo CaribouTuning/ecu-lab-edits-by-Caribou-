@@ -104,9 +104,9 @@ export const DURATION_CHECK_LIFT_M = 0.050 * 0.0254;
  * @param {{ivcAbdc: number, durationDeg: number, exhaustDurationDeg?: number, exhaustRetardDeg?: number,
  *   maxLiftM?: number, exhaustMaxLiftM?: number, iclDeg?: number|null, lsaDeg?: number|null, intakeAdvanceDeg?: number}} cam each lobe's duration at 0.050 inch and
  *   its valve's maximum lift; the exhaust lobe is the intake's where not given
- * @returns {{ivo: number, ivc: number, evo: number, evc: number, rampShare: number, rampLiftShare: number,
- *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, and each
- *   lobe's ramps as `liftShare` takes them
+ * @returns {{ivo: number, ivc: number, evo: number, evc: number, evoCheck: number, rampShare: number, rampLiftShare: number,
+ *   exhaustRampShare: number, exhaustRampLiftShare: number}} seat-to-seat events, the exhaust
+ *   lobe's opening at the checking height, and each lobe's ramps as `liftShare` takes them
  */
 export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = durationDeg, exhaustRetardDeg = 0, maxLiftM = 0, exhaustMaxLiftM = maxLiftM, iclDeg = null, lsaDeg = null, intakeAdvanceDeg = 0 }) {
   /** One lobe from its duration at 0.050 inch: its seat-to-seat length and its ramps. */
@@ -140,6 +140,9 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
     ivc: centre + inLobe.seat / 2,
     evo: exCentre - exLobe.seat / 2,
     evc: exCentre + exLobe.seat / 2,
+    // Where the exhaust lobe passes the checking height on its way up: the closed cycle's
+    // exhaust opening (cycle.js evoAtdcDeg), which the blowdown's starting pressure is read at.
+    evoCheck: exCentre - exhaustDurationDeg / 2,
     rampShare: inLobe.rampShare, rampLiftShare: inLobe.rampLiftShare,
     exhaustRampShare: exLobe.rampShare, exhaustRampLiftShare: exLobe.rampLiftShare,
   };
@@ -170,7 +173,7 @@ export function valveEvents({ ivcAbdc, durationDeg, exhaustDurationDeg = duratio
  *   from a flow bench, m^2; without it the throat times the universal Cd
  * @property {number} [runnerReflection] pressure reflection coefficient where the intake
  *   runner opens into the plenum, (A1 - A2)/(A1 + A2): close to -1, the plenum being large
- * @property {{ivo: number, ivc: number, evo: number, evc: number, rampShare?: number, rampLiftShare?: number,
+ * @property {{ivo: number, ivc: number, evo: number, evc: number, evoCheck?: number, rampShare?: number, rampLiftShare?: number,
  *   exhaustRampShare?: number, exhaustRampLiftShare?: number}} events
  */
 
@@ -250,7 +253,15 @@ export function gasExchange(g, op) {
   let v = volume(theta);
   // Each valve's flow at the last step, where its next solve starts.
   let lastEx = null; let lastIn = null;
-  const pEvo = Math.max(pExh * 1.05, pPlenum * clamp(COEFF.EVO_PRESSURE_RATIO_AT_0 + COEFF.EVO_PRESSURE_RATIO_PER_RPM * rpm, 3.5, 6.2));
+  // The ratio is the closed cycle's pressure at ITS exhaust opening, the lobe's checking
+  // height, some 35-45 degrees after the valve leaves its seat. Back at the seat the gas is at
+  // a smaller volume and so a higher pressure: carried back along the burned gas's isentrope
+  // (its own gamma), which matches the closed cycle's pressure at the seat angle to within
+  // its scatter (docs/accuracy.md). Starting the blowdown from the later angle's pressure
+  // made it about a third too weak.
+  const evoCheck = g.events.evoCheck ?? evo;
+  const backToSeat = (volume(evoCheck) / volume(evo)) ** COEFF.GAMMA_BURNED;
+  const pEvo = Math.max(pExh * 1.05, pPlenum * backToSeat * clamp(COEFF.EVO_PRESSURE_RATIO_AT_0 + COEFF.EVO_PRESSURE_RATIO_PER_RPM * rpm, 3.5, 6.2));
   let t = exhaustK * (pEvo / pExh) ** ((COEFF.GAMMA_BURNED - 1) / COEFF.GAMMA_BURNED);
   let m = pEvo * v / (R_AIR * t);
   let fresh = 0;

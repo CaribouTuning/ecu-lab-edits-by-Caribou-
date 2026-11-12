@@ -18,7 +18,7 @@
 
 import {
   COMPRESSOR_OPTS, CONFIG_OPTS, CYL_COUNT, EXHAUST_DIA_OPTS, INJECTOR_OPTS, MATERIAL_OPTS, OCTANE_OPTS, TURBINE_OPTS,
-  VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount,
+  VALVES_PER_CYL_OPTS, VALVETRAIN_OPTS, compressorWithCount, idealExhaustDiameter, turbineWithCount, factoryCompressorIdx,
 } from './hardware.js';
 import { BARO_KPA, INJ_DEADTIME_MS, PSI_TO_KPA, RHO_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
@@ -29,7 +29,7 @@ import { exhaustManifoldKpa } from './friction.js';
 import { factoryLambda, fuelStrategyFor } from './factoryFuel.js';
 import { peakMapKpaOf, reachableKpa } from './manifold.js';
 import { mafErrorFactor } from './sweep.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
 import { defaultEcuCalibration } from './ecu/calibration.js';
 import { DEFAULT_ECU_HW, factoryIntakeSchedule, intakeCamAt, scheduledVeAt, tankFuel } from './ecu/context.js';
 import { deriveEngine, valveFloatRpm } from './engine.js';
@@ -173,7 +173,7 @@ export const ENGINE_PRESETS = [
       redline: 7000,
     },
     induction: {
-      turboOn: true, turbineIdx: 0, compressorIdx: 0,
+      turboOn: true, turbineIdx: 0, compressorIdx: factoryCompressorIdx('td03-10tk3'),
       // Two small turbos (Mitsubishi TD03s), each with its own turbine and compressor.
       // Backpressure is solved from turbine flow area, not assumed proportional to boost,
       // so the count is load-bearing: a pair of small housings passes twice the exhaust of
@@ -218,7 +218,7 @@ export const ENGINE_PRESETS = [
       redline: 7000,
     },
     induction: {
-      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      turboOn: true, turbineIdx: 1, compressorIdx: factoryCompressorIdx('b58'),
       // One twin-scroll turbo rather than the N54's pair. A twin-scroll housing keeps
       // the exhaust pulses of the two cylinder groups separated right up to the
       // turbine, so a single larger turbo spools nearly as early as two small ones —
@@ -260,7 +260,10 @@ export const ENGINE_PRESETS = [
     years: '2019-present',
     blurb: 'The same three litres with more boost and a far sharper calibration — 382 hp from an identical short block. What the Golf R is to the GTI, one engine family later.',
     factory: {
-      crankHp: 382, crankHpRpm: 5800,   // 382 hp @ 5800 rpm
+      // BMW rates it over a band, as it does the M0: 285 kW (382 hp) at 5800-6500 rpm in its
+      // own technical data (BMW Thailand M340i xDrive spec sheet; BMW Canada 2020MY product
+      // guide, 'engine speed at maximum power' to 6500). Launch press kits quote 5800 alone.
+      crankHp: 382, crankHpRpm: [5800, 6500],  // plateau-rated
       crankTq: 369, crankTqRpm: 1800,   // 369 lb-ft, flat 1800-5000
       displacementL: 3.00,
     },
@@ -275,14 +278,14 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      // At 190: power -3.3%, torque +2.0%, the flat top 6300-6700 against a published 5800.
-      // Longer cams land power nearer (198: +0.1%) but hold it to 6800: the fitted boost
-      // taper below carries 10.75 psi to the limiter, which is what keeps the peak late.
+      // At 190: power -3.9%, torque +5.5%, peaking at 6200 inside BMW's 5800-6500 band (the
+      // charge heated at the compressor's own map efficiency, the blowdown from the seat's
+      // pressure; checked again at 182-190, where shorter cams cost power: 186 read -4.5%).
       camDuration: 190, exhaustCamDuration: 190, springRate: 62,
       redline: 7000,
     },
     induction: {
-      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      turboOn: true, turbineIdx: 1, compressorIdx: factoryCompressorIdx('b58'),
       // The revised engine runs meaningfully more boost than the M0 through the same
       // architecture — roughly 1.2 bar against 0.9. Nothing about the short block
       // changed, which is the entire lesson of shipping both.
@@ -356,7 +359,7 @@ export const ENGINE_PRESETS = [
       redline: 6500,
     },
     induction: {
-      turboOn: true, turbineIdx: 0, compressorIdx: 1,
+      turboOn: true, turbineIdx: 0, compressorIdx: factoryCompressorIdx('is20'),
       // IHI IS20: quick-spooling, so boost is in by 2500. It peaks around 14 psi in
       // the low-mid range where the plateau torque figure is rated, then the ECU
       // eases off toward redline the way the taper above does for the N54 — the
@@ -391,12 +394,13 @@ export const ENGINE_PRESETS = [
       // Cams: no factory figure for this engine's lobes was found, only aftermarket ones, so
       // both durations are FITTED, on the gas-exchange model through the app's own pull, to the
       // published power and torque; the exhaust lobe is given the intake's for want of a source.
-      // At 198: power +2.5%, torque +0.8%.
-      camDuration: 198, exhaustCamDuration: 198, springRate: 54,
+      // At 190: power -0.1%, torque +0.8%. Refitted from 198 when the charge began heating
+      // at the IS38's own map efficiency rather than a fixed 70% (198 then read +5.1%).
+      camDuration: 190, exhaustCamDuration: 190, springRate: 54,
       redline: 6800,
     },
     induction: {
-      turboOn: true, turbineIdx: 1, compressorIdx: 1,
+      turboOn: true, turbineIdx: 1, compressorIdx: factoryCompressorIdx('is38'),
       // IS38 at 1.2 bar / 17.4 psi, held through the mid-range where this engine's
       // plateau torque is rated, then the same top-end taper as the smaller turbos
       // above — a bigger compressor gives it less of a fall-off, which is exactly
@@ -795,13 +799,19 @@ export function factoryCalibration(preset, layout = null) {
         rpm, mapKpa: kpa, boostTargetPsi: curveAt(preset.induction.boost, rpm), turbine,
         compressor: presetCompressor(preset), veAt: (m) => veAt(rpm, m), derived,
         intakeKAt: (b) => chargeTempK(b, preset.mods.intercooler),
+        intakeKAtEff: (b, eta) => chargeTempK(b, preset.mods.intercooler, undefined, eta),
       }));
     }
     return memo.get(key);
   };
   const boostPsiAt = (rpm, kpa) => inductionAt(rpm, kpa)?.boostPsi ?? boostAt(kpa);
   const sweptM3 = (derived.displacementL / derived.cyl) / 1000;
-  const chargeKAt = (rpm, kpa) => chargeTempK(boostPsiAt(rpm, kpa), preset.mods.intercooler);
+  // The charge heated as the dyno heats it: at the compressor map's efficiency where this
+  // cell's flow sits (chargeHeatEff), or the fixed one without a turbo.
+  const chargeKAt = (rpm, kpa) => {
+    const boostPsi = boostPsiAt(rpm, kpa);
+    return chargeTempK(boostPsi, preset.mods.intercooler, undefined, chargeHeatEff({ boostPsi, compressorEff: inductionAt(rpm, kpa)?.compressorEff ?? null }));
+  };
   const airAt = (rpm, kpa) => trappedAirGrams({ veActual: veAt(rpm, kpa), mapKpa: kpa, chargeK: chargeKAt(rpm, kpa), sweptM3 });
   /** Manifold pressure for a load-axis value: itself, or the pressure trapping that air. */
   const kpaOf = (axes, rpm, v) => {
@@ -832,7 +842,6 @@ export function factoryCalibration(preset, layout = null) {
   // pre-compensated with. That is `evaluatePoint`'s own arithmetic.
   const cellAt = (rpm, kpa) => {
     const induction = inductionAt(rpm, kpa);
-    const boostPsi = induction ? induction.boostPsi : boostAt(kpa);
     const veActual = veAt(rpm, kpa);
     const afrCommanded = readTable(afr, L.afr, rpm, loadOf(L.afr, rpm, kpa));
     // The ECU fuels for the air its VE table CLAIMS. Between rows that is the table's
@@ -846,7 +855,7 @@ export function factoryCalibration(preset, layout = null) {
     const lambda = kpa < OPEN_LOOP_KPA ? afrCommanded / 14.7
       : (afrCommanded / 14.7) / effectiveMafFactor(mafErrorFactor(preset.mods, preset.induction.turboOn) * mafScalar, kpa)
         * (veActual / veTable);
-    const chargeK = chargeTempK(boostPsi, preset.mods.intercooler);
+    const chargeK = chargeKAt(rpm, kpa);
     const airChargeG = trappedAirGrams({ veActual, mapKpa: kpa, chargeK, sweptM3 });
     const exhaustFlowKgS = (airChargeG / 1000) * (1 + 1 / (fuel.stoich * lambda)) * derived.cyl * (rpm / 2) / 60;
     // On the engine's own pipe and bolt-ons: the backpressure the pull and the advisor

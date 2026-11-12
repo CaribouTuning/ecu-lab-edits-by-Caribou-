@@ -143,7 +143,13 @@ export function InductionScreen({ active, onToggle }) {
           <div className={styles.label}>Turbine Size</div>
           <PickList options={TURBINE_OPTS.map((o) => ({ label: o.label, value: o.label }))} value={TURBINE_OPTS[turbineIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_TURBINE, value: TURBINE_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.labelTight}>Compressor Size</div>
-          <Seg variant="rule" equal label="Compressor Size" options={COMPRESSOR_OPTS.map((o) => ({ label: o.label, id: o.label }))} value={COMPRESSOR_OPTS[compressorIdx].label} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
+          {/* The aftermarket sizes, and the engine's own factory compressor where it left the
+              factory with one (or is running one now): the factory units are for their engines. */}
+          <PickList options={COMPRESSOR_OPTS
+            .filter((o, idx) => !o.factory || idx === compressorIdx || idx === build.factoryInduction?.compressorIdx)
+            .map((o) => ({ label: o.factory ? `Factory: ${o.label}` : o.label, value: o.label }))}
+            value={COMPRESSOR_OPTS[compressorIdx].label}
+            onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'compressorIdx', value: COMPRESSOR_OPTS.findIndex((o) => o.label === v) })} />
           <div className={styles.ceilingNote}>Ceiling before it runs outside its efficient range: ~{U.fmtBoost(ceiling, U.metric ? 2 : 0)}</div>
           <div className={styles.labelTight}>Turbos</div>
           <Seg variant="rule" label="Number of turbos" options={[{ id: 1, label: 'Single' }, { id: 2, label: 'Twin' }]} value={turbineCount} onChange={(v) => set('turbineCount', Number(v))} equal />

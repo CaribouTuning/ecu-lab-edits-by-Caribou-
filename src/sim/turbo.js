@@ -234,20 +234,32 @@ export function solveInduction({
   const stateAt = (boostPsi) => {
     const mapKpa = throttledKpa + boostPsi * PSI_TO_KPA;
     const airFlowKgS = airFlowAt(mapKpa, boostPsi);
-    const fuelFlowKgS = airFlowKgS / Math.max(1, lambda * COEFF.EXHAUST_STOICH_REF);
     if (!turboOn) {
       return { mapKpa, empKpa: naEmpKpa(airFlowKgS), canMake: 0, map: compressorMap(compressor, 0, 1) };
     }
-    const empKpa = turbineBackPressureKpa(airFlowKgS + fuelFlowKgS, exhaustK, turbine.effectiveAreaM2, baroKpa);
+    // The charge leaves the compressor as hot as the map's efficiency at this flow says
+    // (T2 = T1 [1 + (PR^((γ-1)/γ) - 1) / η], Watson & Janota ch. 3; Heywood eq. 6.33), so
+    // the flow and the efficiency are found together: a few passes settle them.
+    let flowKgS = airFlowKgS;
+    if (intakeKAtEff && boostPsi > 0) {
+      for (let i = 0; i < COEFF.COMPRESSOR_EFF_PASSES; i += 1) {
+        const eff = compressorMap(compressor, flowKgS, mapKpa / baroKpa).eff;
+        flowKgS = airFlowAtK(mapKpa, intakeKAtEff(boostPsi, eff));
+      }
+    }
+    const fuelKgS = flowKgS / Math.max(1, lambda * COEFF.EXHAUST_STOICH_REF);
+    const empKpa = turbineBackPressureKpa(flowKgS + fuelKgS, exhaustK, turbine.effectiveAreaM2, baroKpa);
+    // The compressor's work is priced on the air it takes in (its inlet, before any heat of
+    // compression or intercooling): W = cp T1 (PR^((γ-1)/γ) - 1) / η.
     const solved = achievableBoostPsi({
-      airFlowKgS, fuelFlowKgS, exhaustK, intakeK: intakeKAt(boostPsi),
+      airFlowKgS: flowKgS, fuelFlowKgS: fuelKgS, exhaustK, intakeK: intakeKAt(0),
       empKpa, turbine, compressor, currentPr: mapKpa / baroKpa, baroKpa, rpm,
     });
     // CHOKE IS A MASS FLOW LIMIT, not merely an efficiency penalty. Once the inducer is
     // at Mach 1 no more air goes through it at any shaft speed, so a boost that would
     // push more than that flow through the compressor cannot be held.
-    const chokeCap = airFlowKgS > compressor.chokeFlowKgS
-      ? boostPsi * (compressor.chokeFlowKgS / airFlowKgS)
+    const chokeCap = flowKgS > compressor.chokeFlowKgS
+      ? boostPsi * (compressor.chokeFlowKgS / flowKgS)
       : Infinity;
     return { mapKpa, empKpa, canMake: Math.min(solved.boostPsi, chokeCap), map: solved.map };
   };
@@ -344,21 +356,23 @@ export function solveInduction({
  * @param {(mapKpa: number) => number} input.veAt
  * @param {import('./engine.js').DerivedEngine} input.derived
  * @param {(boostPsi: number) => number} input.intakeKAt
- * @returns {{boostPsi: number, empKpa: number}|null}
+ * @param {(boostPsi: number, isenEff: number) => number} [input.intakeKAtEff] the charge at a
+ *   compressor efficiency, so the state is the one the dyno solves (its map's efficiency)
+ * @returns {{boostPsi: number, empKpa: number, compressorEff: number}|null}
  */
 /** How close to the full-throttle pressure counts as full throttle, kPa. */
 const INDUCTION_MATCH_KPA = 0.5;
 
-export function inductionAtMap({ rpm, mapKpa, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt }) {
+export function inductionAtMap({ rpm, mapKpa, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff = null }) {
   const at = (loadKpa) => solveInduction({
-    rpm, loadKpa, turboOn: true, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt,
+    rpm, loadKpa, turboOn: true, boostTargetPsi, turbine, compressor, veAt, derived, intakeKAt, intakeKAtEff,
     lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
   });
   const full = at(BARO_KPA);
   // The pressure full throttle tops out at is reached there, with that state's own
   // backpressure; above it, nothing reaches it.
   if (mapKpa > full.mapKpa + INDUCTION_MATCH_KPA) return null;
-  if (mapKpa >= full.mapKpa - INDUCTION_MATCH_KPA) return { boostPsi: full.boostPsi, empKpa: full.empKpa };
+  if (mapKpa >= full.mapKpa - INDUCTION_MATCH_KPA) return { boostPsi: full.boostPsi, empKpa: full.empKpa, compressorEff: full.compressorEff };
   let lo = 0;
   let hi = BARO_KPA;
   for (let i = 0; i < 20; i += 1) {
@@ -366,5 +380,5 @@ export function inductionAtMap({ rpm, mapKpa, boostTargetPsi, turbine, compresso
     if (at(mid).mapKpa < mapKpa) lo = mid; else hi = mid;
   }
   const s = at((lo + hi) / 2);
-  return { boostPsi: s.boostPsi, empKpa: s.empKpa };
+  return { boostPsi: s.boostPsi, empKpa: s.empKpa, compressorEff: s.compressorEff };
 }

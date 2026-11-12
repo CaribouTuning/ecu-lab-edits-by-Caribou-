@@ -36,19 +36,19 @@ against the model by `tests/accuracy-claims.test.js`; the rated figures are the 
 
 | Engine | Rated | Simulated | Peak power RPM (rated / sim) | λ | Timing | BSFC lb/hp·h | hp per lb/min air | EGT °C | Peak cyl. bar | BMEP bar at peak torque |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 286 hp / 262 lb-ft | 6400 / 6600 | 0.852 | 29.9° | 0.443 | 10.8 | 747 | 62 | 12.8 |
-| Nissan VQ35HR | 306 hp / 268 lb-ft | 281 hp / 259 lb-ft | 6800 / 6700 | 0.872 | 30.1° | 0.440 | 10.6 | 761 | 61 | 12.6 |
-| BMW N54 | 302 hp / 295 lb-ft | 308 hp / 326 lb-ft | 5800 / 5900 | 0.847 | 19.0° | 0.435 | 11.1 | 762 | 72 | 18.6 |
-| BMW B58B30M0 | 320 hp / 330 lb-ft | 331 hp / 346 lb-ft | 5500–6500 / 6200 | 0.960 | 15.3° | 0.388 | 11.0 | 798 | 69 | 19.7 |
-| BMW B58B30M1 | 382 hp / 369 lb-ft | 369 hp / 378 lb-ft | 5800 / 6300 | 0.929 | 12.9° | 0.392 | 11.2 | 804 | 72 | 21.4 |
-| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 222 hp / 240 lb-ft | 4700–6200 / 5900 | 0.962 | 14.7° | 0.403 | 10.5 | 822 | 69 | 20.6 |
-| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 305 hp / 279 lb-ft | 5400–6500 / 6700 | 0.920 | 15.3° | 0.390 | 11.4 | 809 | 82 | 23.9 |
-| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 358 hp / 395 lb-ft | 5600 / 5400 | 0.837 | 27.5° | 0.475 | 10.3 | 741 | 57 | 11.9 |
-| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 400 hp / 382 lb-ft | 6000 / 6500 | 0.847 | 31.0° | 0.490 | 9.8 | 754 | 60 | 11.5 |
-| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 327 hp / 405 lb-ft | 5200 / 4800 | 0.835 | 27.3° | 0.488 | 10.0 | 755 | 51 | 11.5 |
-| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 287 hp / 360 lb-ft | 5200 / 4700 | 0.789 | 26.1° | 0.509 | 10.2 | 723 | 53 | 11.5 |
-| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 280 hp / 329 lb-ft | 5200 / 4900 | 0.828 | 26.1° | 0.480 | 10.3 | 737 | 54 | 11.7 |
-| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 498 hp / 486 lb-ft | 6000 / 6400 | 0.847 | 22.2° | 0.433 | 11.1 | 749 | 65 | 12.9 |
+| Nissan VQ35DE Rev-Up | 300 hp / 260 lb-ft | 285 hp / 262 lb-ft | 6400 / 6600 | 0.851 | 29.9° | 0.444 | 10.8 | 747 | 61 | 12.8 |
+| Nissan VQ35HR | 306 hp / 268 lb-ft | 279 hp / 259 lb-ft | 6800 / 6600 | 0.868 | 30.4° | 0.441 | 10.7 | 758 | 62 | 12.6 |
+| BMW N54 | 302 hp / 295 lb-ft | 307 hp / 328 lb-ft | 5800 / 5900 | 0.847 | 19.1° | 0.435 | 11.1 | 762 | 72 | 18.8 |
+| BMW B58B30M0 | 320 hp / 330 lb-ft | 328 hp / 348 lb-ft | 5500–6500 / 6100 | 0.961 | 14.6° | 0.388 | 11.0 | 799 | 69 | 19.8 |
+| BMW B58B30M1 | 382 hp / 369 lb-ft | 367 hp / 389 lb-ft | 5800–6500 / 6200 | 0.932 | 12.5° | 0.391 | 11.2 | 804 | 72 | 22.1 |
+| VW EA888.3 (GTI) | 220 hp / 258 lb-ft | 222 hp / 242 lb-ft | 4700–6200 / 5900 | 0.962 | 14.8° | 0.403 | 10.6 | 822 | 70 | 20.8 |
+| VW EA888.3 (Golf R) | 292 hp / 280 lb-ft | 292 hp / 282 lb-ft | 5400–6500 / 6700 | 0.920 | 16.5° | 0.386 | 11.5 | 803 | 81 | 24.2 |
+| GM LS1 (C5 Corvette) | 350 hp / 375 lb-ft | 355 hp / 394 lb-ft | 5600 / 5400 | 0.837 | 27.9° | 0.475 | 10.3 | 740 | 57 | 11.8 |
+| GM LS6 (Cadillac CTS-V) | 400 hp / 395 lb-ft | 396 hp / 381 lb-ft | 6000 / 6400 | 0.846 | 30.5° | 0.489 | 9.9 | 753 | 60 | 11.5 |
+| GM LQ4 Vortec 6000 | 325 hp / 370 lb-ft | 326 hp / 405 lb-ft | 5200 / 4800 | 0.835 | 27.4° | 0.488 | 10.0 | 755 | 51 | 11.5 |
+| GM LM7 Vortec 5300 | 295 hp / 335 lb-ft | 286 hp / 360 lb-ft | 5200 / 4700 | 0.788 | 26.1° | 0.510 | 10.2 | 723 | 53 | 11.5 |
+| GM LR4 Vortec 4800 | 285 hp / 295 lb-ft | 279 hp / 329 lb-ft | 5200 / 4900 | 0.829 | 26.3° | 0.480 | 10.3 | 737 | 54 | 11.7 |
+| Chrysler 6.4 HEMI (392) | 475 hp / 470 lb-ft | 496 hp / 476 lb-ft | 6000 / 6300 | 0.845 | 21.9° | 0.433 | 11.2 | 747 | 66 | 12.6 |
 
 Cam durations are published figures where a source was found, with the source beside
 each in `src/sim/presets.js` (the LS1, LQ4, LS6, LM7, LR4, 6.4 HEMI and N54; the VQ35DE and
@@ -65,6 +65,8 @@ its rating. Where the model still misses, measured (KNOWN_GAPS in `tests/presets
   published 4000. GM rates them on 87 regular, which the fuel list does not carry; calibrated
   and run on 87 they read 1.2–1.9 points lower, so the octane is part of it, not all.
 - **The N54 reads about 10% over its rated torque**, inside what stock cars measure on a dyno.
+- **The VQ35DE Rev-Up makes 5% under its 300 hp** (285) on its published cams; it read 4.7%
+  under before the blowdown began from the seat's pressure.
 
 The twin-plug HEMI runs about 22° of spark at peak power where one-plug engines run 26–31°:
 two flames burn the charge faster (engine.js), so best torque needs less advance.
@@ -142,6 +144,14 @@ Known limits of the air model, measured:
 - **An exhaust port's restriction is priced in the residual it leaves, not in pumping
   work.** Pumping (`friction.js`) is taken on the manifold's pressure; the cylinder's own
   pressure on the exhaust stroke, which a choked port raises, is not yet integrated into it.
+  It cannot simply be swapped in. Measured in November 2026 (the gas exchange's own ∮p dV,
+  exhaust BDC to intake BDC, full throttle, 2.5 in pipe), the cylinder's loop is about three
+  times the manifold difference: on the VQ35DE Rev-Up 30 kPa at 2500 RPM and 136 kPa at
+  6000, against 10 and 41 kPa across the manifolds. Headers take 26 kPa of it off at 6000,
+  which would be about 2% of power: the size of the missing header gain. But real full-load
+  pumping losses at rated speed are some tens of kPa (Heywood 1988, ch. 13), so the model's
+  exhaust stroke holds too much pressure (its blowdown runs late into the stroke). That has
+  to be found and fixed first, or the swap would take power off every engine at speed.
 - **A catalyst's removal pays less than test-pipe dynos claim** (about 0.4% against 1–3% on
   NA engines): the model prices the converter at about 5 kPa at full flow on a 3 in system,
   in line with measured converter drops, and its saving as pumping work and residual.
@@ -265,19 +275,20 @@ Each of these is measured, written down in the code where it arises, and taught 
 Learn article 34. None of them changes the direction of any lesson.
 
 1. **Air per horsepower is close; fuel per horsepower now in the real band.** The presets
-   burn 0.39–0.51 lb/hp·h at peak power and make 9.8–11.4 crank hp per lb/min of air,
+   burn 0.39–0.51 lb/hp·h at peak power and make 9.9–11.5 crank hp per lb/min of air,
    against 0.45–0.60 and about 10–11 for real engines of their kind. The spread is the
    factories' own mixtures: the GM trucks run GM's stock enrichment, lambda 0.76–0.81, and
    burn the most (the LM7 0.51); the direct-injection B58 and EA888 hold near stoichiometric
-   and burn the least (0.39–0.40). The Golf R makes the most per pound of air, 11.4. Learn article 34 used to say the
+   and burn the least (0.39–0.40). The Golf R makes the most per pound of air, 11.5. Learn article 34 used to say the
    model got 10–15% more power from each pound of air than a real engine; most of that was
    the rich flame credited with heat its CO and H₂ never release (see "Rich flames" above),
    and it went with it. Friction before October 2026 was the rest (src/sim/friction.js).
    Generic builds: 0.54–0.68 on a 9:1 turbo build on pump fuel, the upper end without an
    intercooler.
 2. **Turbo torque at low speed is close.** At 1500–2000 RPM the turbo presets make from 1%
-   more to 21% less torque than the makers' published plateaus (the N54 at 2000 RPM on its
-   rating, the B58s 2–12% under, the EA888s 15–21%); it was 16–54% before October 2026 and
+   more to 24% less torque than the makers' published plateaus (the N54 at 2000 RPM on its
+   rating, the B58s 2–12% under, the EA888s 16–24%, the GTI's 24% at 1500 with its spark
+   at the table's −5° floor); it was 16–54% before October 2026 and
    5–26% before the gas-exchange air model. Two things carry it:
    - **Low-speed breathing** now comes from the gas exchange itself (above): the valves, the
      cam's events and the tuned runner, with nothing fitted per engine.
@@ -332,14 +343,32 @@ Learn article 34. None of them changes the direction of any lesson.
    intercooler barely lowers it, so the denser charge can knock slightly sooner. With any
    sensible turbine the intercooler buys margin, as it does on a real engine.
 7. **Peak cylinder pressure runs low under boost.** The turbo presets peak at 69–82 bar
-   (NA presets about 51–65) against about 100–120 bar quoted for production turbo engines
+   (NA presets about 51–66) against about 100–120 bar quoted for production turbo engines
    (the weakest source here). The model's mechanical limit, `PEAK_PRESSURE_LIMIT_BAR`
    (105), is set on the model's own scale, so its warnings are consistent with each other.
-8. **Compressor heat at one efficiency.** Charge temperature uses a fixed 70% compressor
-   efficiency (`COMP_ISEN_EFF`). The compressor map decides how much boost the turbo can
-   hold, but running off the middle of it does not heat the charge further, as it would
-   on a real turbo; the pull log's compressor event is the only cost. The next model
-   improvement worth making.
+8. **Compressor heat comes from the map, since November 2026.** A turbo's charge used to
+   heat at one fixed 70% efficiency (`COMP_ISEN_EFF`) wherever the compressor ran. It now
+   heats at the map's efficiency at the operating point. The temperature rise is
+   T₁[(PR^((γ−1)/γ) − 1)/η] (Watson & Janota, *Turbocharging the Internal Combustion
+   Engine*; Heywood, *Internal Combustion Engine Fundamentals*, eq. 6.33), and the work to
+   drive it is priced on the inlet temperature, not the outlet. The solve iterates the
+   efficiency with the flow it sets (`COMPRESSOR_EFF_PASSES`). At 2 bar with no
+   intercooler, the outlet is about 111 °C at 76% and 134 °C at 60%, so running into surge
+   or choke now costs charge density and knock margin, as on a real turbo. The factory
+   calibration, the advisor and the pull all read the same efficiency (`chargeHeatEff`).
+   For that to mean anything, the turbo presets now carry their own compressors instead of
+   a generic size about twice as large:
+   - **Mitsubishi TD03-10TK3 (N54):** surge and choke volume flows at 2 bar from the
+     Mitsubishi catalogue (as distributed by saito.it).
+   - **IS20 (GTI), IS38 (Golf R), BMTS B58:** that compressor scaled by inducer area
+     (affinity laws; Dixon & Hall, *Fluid Mechanics and Thermodynamics of
+     Turbomachinery*).
+
+   The peak efficiency (76%) and its position on the map are typical of small automotive
+   compressor wheels, not published for these four, and remain the weakest input here.
+   BUILD › Induction lists each one as `Factory: …`. The fitted Golf R cam was refitted
+   under the new heat, from 198° to 190°. BMW rates the B58 M1 over 5800–6500 RPM in its
+   own technical data, not at 5800 alone, and the table now says so.
 9. **Wheel horsepower** is crank × 0.85 for every car.
 10. **E85 starts as easily cold as gasoline.** Charge cooling assumes the fuel evaporates by
    the spark, bounded only by the fuel vapour's dew point at the top of compression
@@ -448,33 +477,26 @@ so; the tutorials, missions and the career always run on it.
 
 ## Open for the maintainers
 
-- **The blowdown starts from the wrong crank angle's pressure.** The closed cycle opens the
-  exhaust valve at its effective (0.050 in) event, about 130° ATDC on the VQ35DE Rev-Up; the
-  gas exchange opens it at the seat, about 90° ATDC. `COEFF.EVO_PRESSURE_RATIO_*` was fitted
-  to the cycle's pressure at the later angle and is applied at the earlier one, where the
-  cycle says the gas is still at a higher pressure. Measured at full load (`fourStrokeTrace`, the Physics app's
-  One cylinder p-V diagram shows the step):
-
-  | Engine | RPM | Cycle at the seat opening | Gas exchange starts at |
-  |---|---|---|---|
-  | VQ35DE Rev-Up | 2500 | 8.8 bar | 5.1 bar |
-  | VQ35DE Rev-Up | 4500 | 9.7 bar | 6.1 bar |
-  | VQ35DE Rev-Up | 6500 | 8.6 bar | 6.0 bar |
-  | BMW N54 | 2500 | 14.3 bar | 8.0 bar |
-  | BMW N54 | 4500 | 13.4 bar | 9.1 bar |
-  | BMW N54 | 6500 | 10.1 bar | 8.2 bar |
-
-  The blowdown is about a third weaker than the cycle says, which understates the exhaust
-  pulse's scavenging and its push on a turbine (`TURBINE_PULSE_RECOVERY` was fitted with it).
-  The cure is to start the gas exchange from the cycle's own pressure at its opening angle,
-  which moves the VE truth, needs `BREATH_VALVE_CD` and `TURBINE_PULSE_RECOVERY` refitted and
-  the fingerprint regenerated: a physics change of its own, not part of this one.
 - **Some coefficient comments quoted measurements from earlier models.** The audit
   re-measured each one that states a model output and corrected it in place, keeping the
   old figure where it explains a past decision.
 
 ## Fixed by this audit
 
+- **The blowdown started from the wrong crank angle's pressure.** The closed cycle opens the
+  exhaust valve at the lobe's checking height (0.050 in), about 130° ATDC on the VQ35DE
+  Rev-Up; the gas exchange opens it at the seat, about 90° ATDC, but started its blowdown
+  from the cycle's pressure at the later angle, about a third too low (the cycle gave 8.8 bar
+  at the seat at 2500 RPM where the gas exchange started from 5.1). That pressure is now
+  carried back to the seat along the burned gas's isentrope, with the model's own γ
+  (1.235): 1.53× on the N54 and 1.59× on the VQ, against 1.23–1.79× read off the cycle
+  itself. Nothing new was fitted. Full-load VE moves by at most 1.5 points, down at high
+  speed; at the lightest loads and high speed it falls by up to 4 (about 40% VE), where the
+  stronger blowdown leaves more burned gas behind. Every factory engine stays within its
+  bands (the B58 M1 now peaks at 6200, inside BMW's 5800–6500).
+  The headers' gain did not move (see the header limit above). The turbine's pulse term
+  reads the opening pressure as before, because `TURBINE_PULSE_RECOVERY` is fitted on that
+  reading and only their product means anything there.
 - **Exhaust blowdown** expanded the exhaust to atmospheric pressure instead of the
   exhaust manifold's, so boosted engines read 150–200 °C cooler than the turbine-side
   correlation for the same point, and cooler than NA engines. It now blows down into the

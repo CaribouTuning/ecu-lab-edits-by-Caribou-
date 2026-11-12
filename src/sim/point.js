@@ -23,11 +23,13 @@ import { bestPowerAfr } from './manifold.js';
 import { clamp } from './math.js';
 import { OPEN_LOOP_KPA, effectiveMafFactor } from './tables.js';
 import { N2O, N2O_AIR_EQUIV, chargeWithNitrousK, perCylinderEvent } from './nitrous.js';
-import { chargeTempK, exhaustTempK } from './thermo.js';
+import { chargeHeatEff, chargeTempK, exhaustTempK } from './thermo.js';
 
 /**
  * @typedef {object} PointInput
  * @property {boolean} [traceCycle] return the closed cycle's pressure trace as `cycleTrace`
+ * @property {number|null} [compressorEff] a turbo compressor's adiabatic efficiency at this
+ *   point, off its map (`solveInduction`); the charge is heated at it
  * @property {number} rpm engine speed
  * @property {number} mapKpa manifold absolute pressure, kPa
  * @property {number} boostPsi gauge boost, psi
@@ -142,14 +144,16 @@ import { chargeTempK, exhaustTempK } from './thermo.js';
 export function evaluatePoint({
   rpm, mapKpa, boostPsi, veVal, veActualVal, timingVal, afrCommanded,
   fuel, mods, mafScalar, mafErrorBase,
-  injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false,
+  injectorCc, ecuInjectorCc, derived, compressor, turbine = null, traceCycle = false, compressorEff = null,
   empKpa: empOverride, wastegateRelief = 0, ecu: E = null, blower = null, nitrous = null, cam = null, wear = null,
   exhaustDia = null,
 }) {
   // A supercharger brings its own compressor: its ceiling and its efficiency, which set
   // how hot the charge arrives. Without one, the turbo's compressor as always.
   const compressorOver = blower ? false : boostPsi > compressor.boostCeiling;
-  const isenEff = blower && blower.boostPsi > 0 ? blower.eta : undefined;
+  // The charge is heated at the compressor's own efficiency where this point sits: a
+  // supercharger's, or a turbo's off its map (solveInduction's compressorEff).
+  const isenEff = chargeHeatEff({ blower, boostPsi, compressorEff });
   const chargeK = E ? chargeTempK(boostPsi, mods.intercooler, E.env, isenEff) : chargeTempK(boostPsi, mods.intercooler, undefined, isenEff);
   const chargeC = chargeK - KELVIN_OFFSET;
 

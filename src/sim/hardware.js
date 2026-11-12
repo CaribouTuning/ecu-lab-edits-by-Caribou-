@@ -307,6 +307,15 @@ export const turboAirflowNeedKgS = (displacementL, rpm, boostPsi = 0) =>
  * `compressorOver` flag are written against it, but it does not limit the physics;
  * the map does.
  */
+/** Inlet air density Mitsubishi's volume flows are read at: 20 °C, 101.325 kPa, kg/m³. */
+const MITSUBISHI_INLET_DENSITY = 1.204;
+
+/**
+ * @typedef {{label: string, size: string, id?: string, factory?: boolean, boostCeiling: number,
+ *   etaMax: number, pkFlowKgS: number, pkPr: number, surgeSlope: number, chokeFlowKgS: number}} CompressorOpt
+ */
+
+/** @type {CompressorOpt[]} */
 export const COMPRESSOR_OPTS = [
   {
     label: 'Small', size: 'small', boostCeiling: 12,
@@ -320,7 +329,38 @@ export const COMPRESSOR_OPTS = [
     label: 'Large', size: 'large', boostCeiling: 30,
     etaMax: 0.80, pkFlowKgS: 0.28, pkPr: 2.4, surgeSlope: 0.150, chokeFlowKgS: 0.50,
   },
+  // THE FACTORY COMPRESSORS, one per turbo engine in the catalogue. The three sizes above are
+  // aftermarket classes, and the smallest of them surges at twice the flow of the N54's real
+  // compressor: on the factory engines they held full boost at low speed past their surge
+  // line. Mitsubishi publishes each of its compressors' surge and choke flows at 2 bar
+  // absolute (Mitsubishi Turbocharger performance data, Saito, the Italian distributor:
+  // TD03-10TK3 surge 0.034 m³/s, choke 0.13 m³/s, 2.7 bar maximum). The IHI and BMTS units
+  // publish no map; their flows are the TD03-10TK3's scaled by inducer area, as a family of
+  // similar compressors at one tip speed passes volume flow in proportion to it (the
+  // affinity laws: Dixon & Hall, Fluid Mechanics and Thermodynamics of Turbomachinery,
+  // ch. 1), on the inducers the wheels' sellers agree on: TD03-10TK3 35.6 mm, IHI IS20
+  // 42.5 mm, IHI IS38 45.2 mm, BMTS 7643147 (B58) 50.7 mm. They land on Mitsubishi's own
+  // neighbours: the IS20 on the TD04-14T (0.048/0.18), the IS38 on the TD04H-15T
+  // (0.055/0.20). Volume flow is turned into mass at 20 °C and 1 atm, 1.204 kg/m³. The
+  // island's centre sits at 57% of choke flow, as on the classes above, and at PR 2.0,
+  // where the catalogue quotes its flows; the peak efficiency is the small class's.
+  .../** @type {[string, string, number, number][]} */ ([
+    ['Mitsubishi TD03-10TK3 (N54, each)', 'td03-10tk3', 1.0, 24],
+    ['IHI IS20 (EA888 GTI)', 'is20', (42.5 / 35.6) ** 2, 26],
+    ['IHI IS38 (EA888 Golf R)', 'is38', (45.2 / 35.6) ** 2, 28],
+    ['BMTS twin-scroll (B58)', 'b58', (50.7 / 35.6) ** 2, 28],
+  ]).map(([label, id, area, ceiling]) => {
+    const surgeKgS = 0.034 * area * MITSUBISHI_INLET_DENSITY;
+    const chokeKgS = 0.13 * area * MITSUBISHI_INLET_DENSITY;
+    return {
+      label, size: 'small', id, factory: true, boostCeiling: ceiling,
+      etaMax: 0.76, pkFlowKgS: chokeKgS * 0.57, pkPr: 2.0, surgeSlope: surgeKgS, chokeFlowKgS: chokeKgS,
+    };
+  }),
 ];
+
+/** The index of a factory compressor in COMPRESSOR_OPTS, by its id. @param {string} id */
+export const factoryCompressorIdx = (id) => COMPRESSOR_OPTS.findIndex((c) => c.id === id);
 
 /**
  * Superchargers, from their makers' published figures (see src/sim/blower.js for the

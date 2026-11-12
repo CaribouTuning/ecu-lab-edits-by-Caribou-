@@ -197,6 +197,11 @@ const KNOWN_GAPS = {
   // stock baseline read 298 (f30.bimmerpost.com). The model's wheel torque sits under those
   // measurements, so its ceiling is the measured figure, not the rating.
   n54: { tqHighWheel: 300 },
+  // MEASURED (November 2026): the VQ35DE Rev-Up makes 285 hp against its 300, -5.1%, on its
+  // published cams. It read -4.7% until the blowdown began from the seat's pressure, which
+  // took about 1 hp off it at the top; the catalogue as a whole sits near -1%, so this is the
+  // engine's own miss and not one the shared Cd would close.
+  'vq35de-revup': { hp: -0.051 },
   // MEASURED on the gas-exchange model (November 2026), BREATH_VALVE_CD 0.61: the VQ35HR
   // makes 8-9% under its 306 hp on every intake cam from 218 to 234 (its own figure is
   // inferred, see presets.js), so its cam is not what it is short of. Its revised head and

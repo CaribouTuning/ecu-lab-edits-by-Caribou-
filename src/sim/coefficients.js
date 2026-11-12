@@ -505,9 +505,16 @@ export const COEFF = {
   // roughly a third to a half of the blowdown energy. FITTED on one engine only, the N54's
   // published torque plateau (300 lb-ft from 1400 RPM); the B58s and the EA888s are the
   // check (docs/accuracy.md, "Turbo spool").
+  // Passes of the turbo's flow-and-efficiency solve: the charge heat depends on where the
+  // point sits on the compressor map, which depends on the flow the heat allows. Two settle
+  // it to well under a tenth of a percent of flow (a numerical setting, not a fitted one).
+  COMPRESSOR_EFF_PASSES: 2,
   TURBINE_PULSE_RECOVERY: 0.35,
   // Cylinder pressure at exhaust valve opening over manifold pressure, as a line in RPM
-  // through the crank-angle cycle's own full-load values (turbo.js exhaustPulsePressureKpa).
+  // through the crank-angle cycle's own full-load values (turbo.js exhaustPulsePressureKpa),
+  // at the cycle's opening: the exhaust lobe's checking height. The gas exchange carries it
+  // back to the seat along the burned gas's isentrope (breathing.js); the turbine's pulse
+  // term reads it as it stands, with TURBINE_PULSE_RECOVERY fitted on that reading.
   EVO_PRESSURE_RATIO_AT_0: 2.75,
   EVO_PRESSURE_RATIO_PER_RPM: 0.00092,
   // AFR the exhaust-mass estimate assumes. Only total mass matters, so gasoline is close

@@ -24,7 +24,7 @@ import { needsAirmass, readEcuTable } from '../layouts.js';
 import { clamp } from '../math.js';
 import { evaluatePoint } from '../point.js';
 import { CURVE_RPM, RPM } from '../tables.js';
-import { chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
+import { chargeHeatEff, chargeTempK, INDUCTION_REF_EXHAUST_K } from '../thermo.js';
 import { solveInduction } from '../turbo.js';
 import { boostTarget, steadyGate } from './boost.js';
 import { DYNO_GEAR } from './calibration.js';
@@ -183,14 +183,15 @@ export function cylinderDistribution(derived, configuration) {
  * @param {number} [input.cylIdx] which cylinder, when solving them separately
  * @param {ReturnType<typeof import('../blower.js').solveBlower>} [input.blower] a
  *   supercharger's state at this point: its efficiency sets the charge the IAT sensor reads
+ * @param {number|null} [input.compressorEff] a turbo compressor's efficiency at this point, off its map
  * @returns {{input: object, sensed: object, breakdown: object}}
  */
 export function resolveEcuPoint({
-  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx, blower = null,
+  cal, hw, cond, tables, rpm, mapKpa, boostPsi, veActual, cam, empKpa, dyn = {}, cylIdx, blower = null, compressorEff = null,
 }) {
   const env = cond.env;
   const faults = /** @type {Record<string, any>} */ (cond.faults ?? {});
-  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env, blower && blower.boostPsi > 0 ? blower.eta : undefined);
+  const chargeK = chargeTempK(boostPsi, hw.mods.intercooler, env, chargeHeatEff({ blower, boostPsi, compressorEff }));
 
   // ---- SENSORS. The ECU knows nothing it cannot measure.
   const mapPart = hw.sensorHw?.map ?? '3bar';
@@ -424,6 +425,7 @@ export function resolveEcuPoint({
       turbine: hw.turboOn ? hw.turbine : null, exhaustDia: hw.exhaustDia ?? null,
       ...(empKpa != null ? { empKpa } : {}),
       ...(blower ? { blower } : {}),
+      ...(compressorEff != null ? { compressorEff } : {}),
       // A wet kit's fuel jet is an orifice on the same rail as the injectors, so it flows
       // with the pressure the pump holds.
       ...(nitrous ? { nitrous: { n2oKgS: nitrous.n2oKgS, fuelKgS: nitrous.wetFuelKgS * rail.flowScale, frac: nFrac, bottleK: cond.nitrous?.bottleK ?? env.ambientK, bottlePsi: nitrous.bottlePsi } } : {}),
@@ -675,6 +677,7 @@ function settle({ cal, hw, cond, tables, rpm, loadKpa, throttlePct, gear }, m) {
       cutType: m.cutType, highDet: m.highDet, nitrousFrac: m.nitrousFrac,
     },
     ...(solved.man.blower ? { blower: solved.man.blower } : {}),
+    ...(hw.turboOn ? { compressorEff: solved.man.compressorEff } : {}),
   });
   return { pt, resolved, solved };
 }
@@ -759,7 +762,9 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
       throttle: { boreM: throttleBoreM(hw.derived), coldAirIntake: !!hw.mods.intake },
       exhaust: { pipeDiaIn: hw.exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods: hw.mods },
-      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
+      // The charge heat at the compressor's own efficiency, a turbo's off its map or a blower's.
+      intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta),
+      ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });
     if (Math.abs(next.intakeAdvDeg - cam.intakeAdvDeg) < 0.5 && Math.abs(next.exhaustRetDeg - cam.exhaustRetDeg) < 0.5) break;

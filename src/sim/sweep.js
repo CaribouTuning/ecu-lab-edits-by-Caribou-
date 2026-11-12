@@ -260,7 +260,8 @@ export function simulateSweep({
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
       throttle: { boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake },
       exhaust: { pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods },
-      ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
+      intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta),
+      ...(blower ? { blower, blowerRatio } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the
     // calibration up into the high-MAP rows automatically.
@@ -278,7 +279,7 @@ export function simulateSweep({
         rpm, mapKpa: man.mapKpa, boostPsi: man.boostPsi,
         veVal, veActualVal, timingVal, afrCommanded, fuel, mods: modsWithTurbo,
         mafScalar, mafErrorBase, injectorCc, ecuInjectorCc, derived, compressor,
-        turbine: turboOn ? turbine : null, empKpa: man.empKpa,
+        turbine: turboOn ? turbine : null, empKpa: man.empKpa, compressorEff: turboOn ? man.compressorEff : null,
         ...(man.blower ? { blower: man.blower } : {}),
         ...(wearFx ? { wear: wearFx } : {}),
       }),
@@ -727,7 +728,7 @@ export function simulateSweep({
       type: 'compressor', severity: 2, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
       msg: `Compressor pushed past its efficient range across ${rangeLabel(run)} (target up to ${peak.boostPsi.toFixed(1)} psi)`,
-      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. On a real turbo that air leaves hotter, less dense and more knock-prone; this app prices the compressor's heat at one fixed efficiency, so here the warning is the main cost (see Learn article 34).`,
+      cause: `This compressor's practical ceiling is lower than the boost you're asking for here — beyond it, the compressor is working outside its efficient map. That air leaves hotter, less dense and more knock-prone, so this pull's charge temperature already carries the cost.`,
       fix: `On BUILD → INDUCTION, keep the boost target at or under this compressor's ~${compressor?.boostCeiling ?? peak.boostPsi} psi ceiling in this range, or fit a larger compressor.`,
     });
   });
