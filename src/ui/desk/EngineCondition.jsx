@@ -18,16 +18,15 @@
 
 import React from 'react';
 
-import { COEFF, FAILURE_MODES, pointWear, wearEffects } from '../../sim/index.js';
+import { COEFF, FAILURE_MODES, clamp, pointWear, wearEffects } from '../../sim/index.js';
 
 import cut from './Apps.module.css';
-import { SectionHatch } from './BreathingCutaways.jsx';
+import { SectionHatch } from './cutawayParts.jsx';
 import styles from './EngineCondition.module.css';
+import { fixed as f } from '../format.js';
 
-/** @param {number} v @param {number} [d] */
-const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 /** @param {number} x */
-const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const clamp01 = (x) => clamp(x, 0, 1);
 /** Health as a tone: the app's own thresholds (the desk warns under 60, alarms under 30). */
 const toneOf = (h) => (h <= 0 ? 'failed' : h < 30 ? 'danger' : h < 60 ? 'warn' : 'ok');
 

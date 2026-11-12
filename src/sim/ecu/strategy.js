@@ -19,7 +19,7 @@
 import { throttleBoreM } from '../throttle.js';
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA } from '../constants.js';
 import { trappedAirGrams } from '../cycle.js';
-import { OCTANE_OPTS } from '../hardware.js';
+import { OCTANE_OPTS, STOCK_EXHAUST_DIA_IN } from '../hardware.js';
 import { needsAirmass, readEcuTable } from '../layouts.js';
 import { clamp } from '../math.js';
 import { evaluatePoint } from '../point.js';
@@ -758,7 +758,7 @@ export function solveOperatingPoint({ cal, hw, cond, rpm, loadKpa, throttlePct, 
       intakeKAt: (b) => chargeTempK(b, hw.mods.intercooler, env),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K, baroKpa: env.baroKpa,
       throttle: { boreM: throttleBoreM(hw.derived), coldAirIntake: !!hw.mods.intake },
-      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods: hw.mods },
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods: hw.mods },
       ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, hw.mods.intercooler, env, eta) } : {}),
     });
     const next = camTargets({ cal: cal.vvt, vvt: hw.vvt, rpm, mapKpa: man.mapKpa });

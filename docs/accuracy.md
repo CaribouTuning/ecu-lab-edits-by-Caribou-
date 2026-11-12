@@ -447,6 +447,27 @@ so; the tutorials, missions and the career always run on it.
 
 ## Open for the maintainers
 
+- **The blowdown starts from the wrong crank angle's pressure.** The closed cycle opens the
+  exhaust valve at its effective (0.050 in) event, about 130° ATDC on the VQ35DE Rev-Up; the
+  gas exchange opens it at the seat, about 90° ATDC. `COEFF.EVO_PRESSURE_RATIO_*` was fitted
+  to the cycle's pressure at the later angle and is applied at the earlier one, where the
+  cycle says the gas is still at a higher pressure. Measured at full load (`fourStrokeTrace`, the Physics app's
+  One cylinder p-V diagram shows the step):
+
+  | Engine | RPM | Cycle at the seat opening | Gas exchange starts at |
+  |---|---|---|---|
+  | VQ35DE Rev-Up | 2500 | 8.8 bar | 5.1 bar |
+  | VQ35DE Rev-Up | 4500 | 9.7 bar | 6.1 bar |
+  | VQ35DE Rev-Up | 6500 | 8.6 bar | 6.0 bar |
+  | BMW N54 | 2500 | 14.3 bar | 8.0 bar |
+  | BMW N54 | 4500 | 13.4 bar | 9.1 bar |
+  | BMW N54 | 6500 | 10.1 bar | 8.2 bar |
+
+  The blowdown is about a third weaker than the cycle says, which understates the exhaust
+  pulse's scavenging and its push on a turbine (`TURBINE_PULSE_RECOVERY` was fitted with it).
+  The cure is to start the gas exchange from the cycle's own pressure at its opening angle,
+  which moves the VE truth, needs `BREATH_VALVE_CD` and `TURBINE_PULSE_RECOVERY` refitted and
+  the fingerprint regenerated: a physics change of its own, not part of this one.
 - **Some coefficient comments quoted measurements from earlier models.** The audit
   re-measured each one that states a model output and corrected it in place, keeping the
   old figure where it explains a past decision.

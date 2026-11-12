@@ -675,6 +675,9 @@ export function EcuLabApp() {
   // The Physics app's part-throttle pulls: the same model and calibration as the dyno,
   // at the load its throttle asks for. Stable while the setup is, so it can cache them.
   const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One point of that pull with its closed cycle traced, for the Physics app's cylinder: the
+  // pressure the model integrated at the speed and throttle the page shows.
+  const physicsCycleAt = useCallback((load, rpm) => simulateSweep({ ...sweepArgs(load, ecuBundle), onlyRpm: rpm, traceRpm: rpm }).points[0]?.cycleTrace ?? null, [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
   // And the breathing diagrams' inputs: the engine as built, its bolt-ons and pipe, its cams.
   const physicsBreathing = useMemo(() => ({ engineConfig, mods, hwForVe, camAt }), [engineConfig, mods, hwForVe, camAt]);
 
@@ -1431,7 +1434,7 @@ export function EcuLabApp() {
         )}
         {tab === 'physics' && !inCareer && !engineMissing && (
           <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
-            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt}
+            ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt} cycleAt={physicsCycleAt}
             breathing={physicsBreathing} health={health} onRepair={repairEngine}
             page={route.section ?? 'model'} onPage={(id) => goSection('physics', id)} />
         )}

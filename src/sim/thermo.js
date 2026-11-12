@@ -8,7 +8,7 @@
  */
 
 import {
-  AMBIENT_K, BARO_KPA, COMP_ISEN_EFF, GAMMA_EXP, IC_EFFECTIVENESS, PSI_TO_KPA,
+  AMBIENT_K, BARO_KPA, COMP_ISEN_EFF, GAMMA_EXP, IC_EFFECTIVENESS, PSI_TO_KPA, R_AIR,
 } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
@@ -470,3 +470,40 @@ export function exhaustTempK({ chargeIndex, lambda, knockRetardDeg = 0 }) {
  * ends up with three exhaust temperatures.
  */
 export const INDUCTION_REF_EXHAUST_K = exhaustTempK({ chargeIndex: 1, lambda: 1 });
+
+/**
+ * Density of the charge from the ideal gas law, rho = p / (R T): what each litre of cylinder
+ * can hold at this manifold pressure and temperature.
+ * @param {number} pressureKpa absolute
+ * @param {number} tempK
+ * @returns {number} kg/m³
+ */
+export function airDensityKgM3(pressureKpa, tempK) {
+  return (pressureKpa * 1000) / (R_AIR * tempK);
+}
+
+/**
+ * Volumetric efficiency measured from the air the engine drew in: the air in each cylinder
+ * over the air a cylinder would hold at the manifold's pressure and temperature. What a tuner
+ * calls VE when it is worked out from a logged MAF.
+ * @param {{airMgPerCyl: number, mapKpa: number, chargeK: number, cylL: number}} input
+ * @returns {number} percent
+ */
+export function measuredVePct({ airMgPerCyl, mapKpa, chargeK, cylL }) {
+  return ((airMgPerCyl / 1e6) / (airDensityKgM3(mapKpa, chargeK) * (cylL / 1000))) * 100;
+}
+
+/** kg/kWh in one lb/hp·h. */
+export const KG_KWH_PER_LB_HPH = 0.608277;
+
+/**
+ * Brake thermal efficiency from brake specific fuel consumption and the fuel's lower heating
+ * value: the share of the fuel's energy that reaches the crank, 3.6 MJ/kWh over the fuel
+ * energy each kWh took.
+ * @param {number} bsfcLbHpH lb/hp·h
+ * @param {number} lhvJPerKg the fuel's lower heating value (`OCTANE_OPTS` lhv)
+ * @returns {number} 0-1
+ */
+export function brakeThermalEfficiency(bsfcLbHpH, lhvJPerKg) {
+  return 3.6e6 / (Math.max(0.05, bsfcLbHpH) * KG_KWH_PER_LB_HPH * lhvJPerKg);
+}

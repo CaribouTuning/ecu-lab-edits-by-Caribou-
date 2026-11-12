@@ -8,16 +8,15 @@
 
 import React from 'react';
 
+import { KELVIN_OFFSET, R_AIR, airDensityKgM3, measuredVePct } from '../../sim/index.js';
 import { useBuild, useSession } from '../state/StoreProvider.jsx';
 import { liveStatus } from '../screens/dash/LiveScreen.jsx';
 
 import styles from './BenchScreens.module.css';
+import { fixed as f } from '../format.js';
 
 const SEGMENTS = 40;
-const R_AIR = 287;
 
-/** @param {number} v @param {number} [d] */
-const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 /** @param {number} v */
 const unit01 = (v) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
 
@@ -120,17 +119,17 @@ export function LivePhysics({ derived }) {
   const running = live.running && rpm > 50;
   // A four-stroke fills each cylinder once every two turns of the crank.
   const fills = (rpm / 120) * cyl;
-  const tK = live.sensedIat + 273.15;
-  const rho = (live.sensedMap * 1000) / (R_AIR * tK);
+  const tK = live.sensedIat + KELVIN_OFFSET;
+  const rho = airDensityKgM3(live.sensedMap, tK);
   const airMg = running ? (live.sensedMaf / fills) * 1000 : NaN;
-  const ve = running ? (airMg / 1e6) / (rho * (vCylL / 1000)) * 100 : NaN;
+  const ve = running ? measuredVePct({ airMgPerCyl: airMg, mapKpa: live.sensedMap, chargeK: tK, cylL: vCylL }) : NaN;
   const cycleMs = running ? 120000 / rpm : NaN;
   const pw = live.live ? Number(live.live.pw) : NaN;
   const timing = live.live ? Number(live.live.timing) : NaN;
   const leadMs = running ? (timing / (6 * rpm)) * 1000 : NaN;
   const piston = running ? (2 * ((derived?.stroke ?? 0) / 1000) * rpm) / 60 : NaN;
   const rows = /** @type {[string, React.ReactNode, string][]} */ ([
-    ['Air density', <>ρ = MAP / (R·T) = {f(live.sensedMap * 1000, 0)} / (287 × {f(tK, 0)}) = <b>{f(rho, 3)} kg/m³</b></>, 'thinner air, hotter or at less pressure, carries less oxygen'],
+    ['Air density', <>ρ = MAP / (R·T) = {f(live.sensedMap * 1000, 0)} / ({R_AIR} × {f(tK, 0)}) = <b>{f(rho, 3)} kg/m³</b></>, 'thinner air, hotter or at less pressure, carries less oxygen'],
     ['Cylinder fills', <>{f(rpm, 0)} rpm ÷ 120 × {cyl} = <b>{f(running ? fills : NaN, 0)} a second</b></>, 'a four-stroke fills each cylinder every second turn'],
     ['Air per fill', <>MAF ÷ fills = {f(live.sensedMaf, 1)} g/s ÷ {f(running ? fills : NaN, 0)} = <b>{f(airMg, 0)} mg</b></>, 'what each cylinder took in, as the MAF sees it'],
     ['Filling', <>m ÷ (ρ · V<sub>cyl</sub>) = <b>{f(ve, 0)} %</b></>, 'volumetric efficiency, measured: how full against how full it could be'],

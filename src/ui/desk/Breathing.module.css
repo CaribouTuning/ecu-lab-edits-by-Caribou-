@@ -1,4 +1,4 @@
-/* The Physics app's breathing cutaways (BreathingCutaways.jsx): their charts, the back-pressure
+/* The Physics app's breathing cutaways (IntakeCutaway.jsx, HeaderCutaway.jsx, ExhaustSystemCutaway.jsx): their charts, the back-pressure
    box and the wide exhaust drawing's scroller. The drawings use the combustion cutaway's own
    classes (Apps.module.css). */
 

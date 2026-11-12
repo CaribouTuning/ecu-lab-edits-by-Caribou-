@@ -7,6 +7,7 @@
  * that only says something is wrong teaches nothing.
  */
 
+import { STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { BARO_KPA } from './constants.js';
 import { throttleBoreM } from './throttle.js';
 import { COEFF } from './coefficients.js';
@@ -196,6 +197,10 @@ export function dutyPreviewRpm(derived) {
  * says where, which part and how. Without it the engine is new, and the result is
  * exactly what it always was.
  *
+ * `traceRpm` keeps the closed cycle's pressure trace at that speed (the point's
+ * `cycleTrace`); `onlyRpm` runs that one speed and skips the rest, for a caller that wants
+ * one point the way the pull makes it.
+ *
  * @param {object} input
  * @returns {{points: object[], events: object[], wear: object, peakHp: number, peakTq: number, loadKpa: number, needsMafRecal: boolean,
  *   failure?: {rpm: number, part: import('./damage.js').Part, title: string, cause: string}|null}}
@@ -204,7 +209,7 @@ export function simulateSweep({
   loadKpa, ve, veTruth, timing, afr, turboOn, boostCurve, octaneLabel,
   fuel, injectorCc, ecuInjectorCc, injectorLabel, mods, mafScalar, derived,
   turbine, compressor, ecu = null, blower = null, blowerRatio = 1, nitrous = null, layout = null, health = null,
-  exhaustDia = null, traceRpm = null,
+  exhaustDia = null, traceRpm = null, onlyRpm = null,
 }) {
   const wearFx = health ? wearEffects(health, derived.cyl) : null;
   if (turboOn) assertBoostCurve(boostCurve);
@@ -226,6 +231,8 @@ export function simulateSweep({
   let bottle = nc ? { massKg: (nitrous.bottleLb ?? 10) * 0.45359237, tempK: nc.bottleK } : null;
   const dtPerPoint = SWEEP_STEP_RPM / ECU_COEFF.DYNO_SWEEP_RPM_PER_S;
   for (let rpm = SWEEP_START_RPM; rpm <= endRpm; rpm += SWEEP_STEP_RPM) {
+    // One speed only (the Physics page's cylinder at the speed it shows): the rest are skipped.
+    if (onlyRpm != null && rpm !== onlyRpm) continue;
     if (ecu) {
       // The limiter cuts before the pull gets there: those points are never reached.
       if (rpm >= hardCut) break;
@@ -252,7 +259,7 @@ export function simulateSweep({
       intakeKAt: (boostPsi) => chargeTempK(boostPsi, mods.intercooler),
       lambda: 1, exhaustK: INDUCTION_REF_EXHAUST_K,
       throttle: { boreM: throttleBoreM(derived), coldAirIntake: !!mods.intake },
-      exhaust: { pipeDiaIn: exhaustDia ?? 3.0, mods },
+      exhaust: { pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods },
       ...(blower ? { blower, blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, undefined, eta) } : {}),
     });
     // Tables are indexed by ACTUAL manifold pressure, so adding boost walks the

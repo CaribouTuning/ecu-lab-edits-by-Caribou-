@@ -7,8 +7,9 @@
  * The advisors report the gap; closing it is the player's job.
  */
 
-import { BARO_KPA, MIXTURE_TOLERANCE_PCT, PSI_TO_KPA, R_AIR } from './constants.js';
+import { BARO_KPA, GASOLINE_STOICH, MIXTURE_TOLERANCE_PCT, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
+import { STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { hardwareVeAt } from './airflow.js';
 import { chargeIndexOf } from './knock.js';
 import { mbtForCell, trappedAirGrams } from './cycle.js';
@@ -209,7 +210,7 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
     veActual: veCell, mapKpa, chargeK,
     sweptM3: (derived.displacementL / derived.cyl) / 1000,
   });
-  const lambda = afrCell / 14.7;
+  const lambda = afrCell / GASOLINE_STOICH;
   // Burnable mass releases the heat; delivered mass evaporates. Fixed together with
   // `factoryCalibration` — a spark advisor that disagrees with the generator is the
   // false alarm #34 removed.
@@ -222,7 +223,7 @@ function mbtAtRow({ rpm, mapKpa, veCell, afrCell, fuel, mods, derived, turboOn, 
       turboOn, turbine: turboOn ? turbine : null,
       exhaustFlowKgS: ((airG + burnedFuelG) / 1000) * derived.cyl * (rpm / 2) / 60,
       exhaustK: exhaustTempK({ chargeIndex: chargeIndexOf(veCell, mapKpa), lambda }),
-      pipeDiaIn: exhaustDia ?? 3.0, mods,
+      pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods,
     }),
   });
 }
@@ -238,10 +239,10 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
   // edge applies from full load (MIX_FULL_LOAD_KPA) up.
   const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
   const portEdge = pt.bestAfr + MIX_NOTABLE_AFR;
-  const partEdge = 14.7 + MIX_NOTABLE_AFR;
+  const partEdge = GASOLINE_STOICH + MIX_NOTABLE_AFR;
   // Direct injection: stoichiometric stays a factory choice at full load too.
-  const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? 14.7 + MIX_DI_MARGIN_AFR : 0);
-  const outside = pt.afr > leanEdge || pt.afr < 14.7 * MIX_RICHEST_LAMBDA;
+  const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? GASOLINE_STOICH + MIX_DI_MARGIN_AFR : 0);
+  const outside = pt.afr > leanEdge || pt.afr < GASOLINE_STOICH * MIX_RICHEST_LAMBDA;
   const suggestedAfr = outside ? current * (pt.bestAfr / Math.max(0.1, pt.afr)) : current;
   return {
     ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current,
@@ -714,7 +715,7 @@ export function calibrationAdvice({
     // so the mixture advice says so and points at the fuelling (the same test as the log).
     /** @type {any[]} */
     const missedMix = pull.points
-      .filter((p) => p.map >= 85 && !((p.nitrousLbMin ?? 0) > 0) && missesTarget(p));
+      .filter((p) => p.map >= OPEN_LOOP_KPA && !((p.nitrousLbMin ?? 0) > 0) && missesTarget(p));
     // A cause for each run of neighbouring speeds missed the same way, as the log groups
     // them: one build can miss lean on its VE table low down and on its injectors up top.
     const runs = groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr > p.afrCommanded)

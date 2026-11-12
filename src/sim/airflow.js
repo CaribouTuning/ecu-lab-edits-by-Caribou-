@@ -7,15 +7,15 @@
  * (breathing.js): valves, cam events, the intake runner and the exhaust it pushes against.
  */
 
-import { AMBIENT_K, BARO_KPA, PSI_TO_KPA } from './constants.js';
+import { AMBIENT_K, BARO_KPA, GAMMA_AIR, GASOLINE_STOICH, KPA_PER_BAR, PSI_TO_KPA, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
-import { CYL_COUNT } from './hardware.js';
+import { CYL_COUNT, STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { CAM_BASE_DURATION, deriveEngine, intakeValveAreaRatio, valveFloatRpm } from './engine.js';
 import { clamp } from './math.js';
 import { chargeTempK, INDUCTION_REF_EXHAUST_K } from './thermo.js';
 import { turbineBackPressureKpa } from './turbo.js';
 import { rubbingFmepPa } from './friction.js';
-import { catalystLossShare, exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
+import { catalystLossShare, catalystSubstrate, exhaustPipeFlow, exhaustSystemDropKpa, gasExchange, valveEvents } from './breathing.js';
 import { LOAD, RPM } from './tables.js';
 
 /**
@@ -85,7 +85,7 @@ function tunedRunnerM(base, tuneRpm, derived = null, cyl = null) {
       for (let i = 0; i < 2; i++) {
         r = gasExchange(g, { ...op, rpm, exhaustKpa: emp, runnerWaves: r?.runnerWaves });
         const exh = r.freshKg * (cyl ?? 6) * (rpm / 120) * 1.07;
-        emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: 3.0 });
+        emp = BARO_KPA + exhaustSystemDropKpa({ flowKgS: exh, exhaustK: op.exhaustK - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn: STOCK_EXHAUST_DIA_IN });
       }
       return (r.ve / 100) * COEFF.BREATH_IMEP_PER_VE_PA - fmep[n] - (emp - BARO_KPA) * 1000;
     });
@@ -278,10 +278,10 @@ function buildVeReader(cfg, mods, hw) {
   const { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg } = hw;
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
-  const pipeDiaIn = exhaustDia ?? 3.0;
+  const pipeDiaIn = exhaustDia ?? STOCK_EXHAUST_DIA_IN;
   // The longer lobe floats first (engine.js `deriveEngine`).
   const finish = veFinish(cfg, fuel);
-  const stoich = fuel?.stoich ?? 14.7;
+  const stoich = fuel?.stoich ?? GASOLINE_STOICH;
   const cache = new Map();
 
   /** The gas exchange at one grid node, computed once. */
@@ -334,6 +334,41 @@ function buildVeReader(cfg, mods, hw) {
 }
 
 /**
+ * The cylinder's pressure through all four strokes, from the model's two records of it: the
+ * closed cycle as `runCycle` integrates it (intake valve closing to exhaust valve opening)
+ * and the open period as the gas exchange does (exhaust opening to intake closing, through
+ * blowdown, the exhaust stroke, overlap and the intake stroke). One crank frame for both:
+ * 0° is top dead centre between the exhaust and intake strokes and 360° is firing TDC.
+ * Where they meet at exhaust opening they disagree: the gas exchange starts its blowdown from
+ * `COEFF.EVO_PRESSURE_RATIO_*`, fitted to the closed cycle's pressure at ITS (later) opening,
+ * so the record steps down there. docs/accuracy.md has the numbers.
+ * @param {{deg: number[], bar: number[], burned: number[]}} cycleTrace `runCycle`'s trace
+ *   (degrees from firing TDC), a pull point's `cycleTrace`
+ * @param {{deg: number[], cylKpa: number[]}} exchangeTrace `gasExchangeTrace`'s `trace`
+ *   (degrees from the overlap TDC)
+ * @returns {{phi: number[], bar: number[], burned: number[]}} sorted by crank angle, 0-720°
+ */
+export function fourStrokeTrace(cycleTrace, exchangeTrace) {
+  const rows = [];
+  // The two records overlap, because they time the valves differently: the closed cycle
+  // closes and opens them at their effective (0.050 in) events, the gas exchange at the seat,
+  // so it opens the exhaust valve some 40 degrees sooner. From the moment either valve is off
+  // its seat, the gas exchange's record is the one that describes the cylinder.
+  const openFrom = exchangeTrace.deg[0] + 720; // its exhaust opening, in this frame
+  const openTo = exchangeTrace.deg[exchangeTrace.deg.length - 1]; // its intake closing
+  cycleTrace.deg.forEach((d, i) => {
+    const phi = 360 + d;
+    if (phi > openTo && phi < openFrom) rows.push([phi, cycleTrace.bar[i], cycleTrace.burned[i]]);
+  });
+  exchangeTrace.deg.forEach((d, i) => {
+    const phi = d < 0 ? d + 720 : d;
+    rows.push([phi, exchangeTrace.cylKpa[i] / KPA_PER_BAR, phi >= openFrom ? 1 : 0]);
+  });
+  rows.sort((a, b) => a[0] - b[0]);
+  return { phi: rows.map((r) => r[0]), bar: rows.map((r) => r[1]), burned: rows.map((r) => r[2]) };
+}
+
+/**
  * One operating point's gas exchange laid open, for the Physics page's live diagram: the
  * same geometry, exhaust back-pressure passes and runner waves as the VE truth computes at
  * that speed and manifold pressure (`buildVeReader`), its last pass kept crank degree by
@@ -349,8 +384,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   const { turboOn = false, turbine = null, exhaustDia, fuel, intakeCamAdvanceDeg = 0, exhaustCamRetardDeg = 0 } = hw ?? {};
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
-  const pipeDiaIn = exhaustDia ?? 3.0;
-  const stoich = fuel?.stoich ?? 14.7;
+  const pipeDiaIn = exhaustDia ?? STOCK_EXHAUST_DIA_IN;
+  const stoich = fuel?.stoich ?? GASOLINE_STOICH;
   const boostPsi = Math.max(0, (mapKpa - BARO_KPA) / PSI_TO_KPA);
   const intakeK = chargeTempK(boostPsi, !!mods.intercooler);
   const tex = INDUCTION_REF_EXHAUST_K;
@@ -366,8 +401,8 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
   // The same loss as exhaustSystemDropKpa, part by part, at the flow just found.
   const part = (k) => exhaustSystemDropKpa({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, mods: {} }) * (k / partK0);
   const partK0 = COEFF.EXH_K_MANIFOLD + COEFF.EXH_K_CATALYST + COEFF.EXH_K_CATBACK;
-  const sound = Math.sqrt(COEFF.GAMMA_BURNED * 287 * tex);
-  const soundIn = Math.sqrt(1.4 * 287 * intakeK);
+  const sound = Math.sqrt(COEFF.GAMMA_BURNED * R_AIR * tex);
+  const soundIn = Math.sqrt(GAMMA_AIR * R_AIR * intakeK);
   const degPerSec = rpm * 6;
   return {
     rpm, mapKpa, empKpa: emp, exhaustFlowGs: exhKgS * 1000,
@@ -396,6 +431,14 @@ export function gasExchangeTrace(cfg, mods, hw, rpm, mapKpa) {
       catback: part(mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK),
       turbine: turboOn && turbine ? turbineBackPressureKpa(exhKgS, tex, turbine.effectiveAreaM2) - BARO_KPA : 0,
     },
+    // The exhaust pipe's gas as that loss prices it (all of the flow, through the one pipe), and
+    // the catalyst's honeycomb: the Physics page shows the working of both.
+    exhaustPipe: {
+      gasK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn, flowKgS: exhKgS,
+      soundMs: Math.sqrt(COEFF.GAMMA_BURNED * R_AIR * (tex - COEFF.EXHAUST_PIPE_COOLING_K)),
+      ...exhaustPipeFlow({ flowKgS: exhKgS, exhaustK: tex - COEFF.EXHAUST_PIPE_COOLING_K, pipeDiaIn }),
+    },
+    catalyst: mods.catalyst === 'none' ? null : catalystSubstrate(mods.catalyst === 'metallic' ? 'metallic' : 'ceramic'),
   };
 }
 

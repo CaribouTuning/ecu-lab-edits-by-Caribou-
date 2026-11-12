@@ -377,6 +377,9 @@ export const BLOWER_OPTS = [
  * builds at the extremes carry a penalty no purchasable part can clear. Half-inch steps
  * put the worst-case gap at 0.25".
  */
+/** The pipe a build has when it says none: a 3.0 in cat-back, as most of the factory engines. */
+export const STOCK_EXHAUST_DIA_IN = 3.0;
+
 export const EXHAUST_DIA_OPTS = [
   { label: '2.0"', dia: 2.0 },
   { label: '2.5"', dia: 2.5 },

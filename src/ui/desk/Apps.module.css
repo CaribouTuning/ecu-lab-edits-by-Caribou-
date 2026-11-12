@@ -198,7 +198,7 @@
 .cutControls button { padding: 4px 12px; border: 0; border-radius: 6px; background: var(--mac-control); color: var(--ink); font-weight: 500; font-size: var(--fs-sm); cursor: pointer; }
 .cutControls input { flex: 1; accent-color: var(--acc); }
 .cutCoolant { fill: var(--cut-coolant); opacity: 0.8; }
-/* Cut metal is section-lined (SectionHatch in BreathingCutaways.jsx: 45° lines, ISO 128-50),
+/* Cut metal is section-lined (SectionHatch in cutawayParts.jsx: 45° lines, ISO 128-50),
    outlined in one thin line; where no hatch is defined it falls back to the flat fill. */
 .cutBlock, .cutHead, .cutCase { fill: var(--cut-metal-dark); stroke: var(--cut-metal); stroke-width: 1; }
 svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, svg:has(:global(#cut-hatch)) .cutCase { fill: url(#cut-hatch); }

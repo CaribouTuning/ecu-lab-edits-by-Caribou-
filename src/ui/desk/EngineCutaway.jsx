@@ -12,19 +12,19 @@
  * 360 TDC between compression and power (where the spark fires), 540 BDC, 720 TDC.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-import { SectionHatch } from './BreathingCutaways.jsx';
+import { COEFF, cylinderVolumeM3 } from '../../sim/index.js';
+
+import { SectionHatch } from './cutawayParts.jsx';
 import { Plot } from './Plot.jsx';
 import styles from './Apps.module.css';
+import { fixed as f } from '../format.js';
 
 /** How much slower than real life the crank is shown turning. */
 const SLOW = 60;
 const RAD = Math.PI / 180;
-const GAMMA = 1.32;
 
-/** @param {number} v @param {number} [d] */
-const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
 const STROKES = [
   ['Intake', 'The piston goes down and pulls the fresh mixture in through the open intake valve.'],
@@ -33,62 +33,70 @@ const STROKES = [
   ['Exhaust', 'The exhaust valve opens and the piston pushes the spent gas out.'],
 ];
 
+/** Linear read of a sorted record at `x`, held at its ends. */
+const readSorted = (xs, ys, x) => {
+  if (x <= xs[0]) return ys[0];
+  if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
+  let lo = 0; let hi = xs.length - 1;
+  while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+  const k = (x - xs[lo]) / (xs[hi] - xs[lo] || 1);
+  return ys[lo] + (ys[hi] - ys[lo]) * k;
+};
+
 /**
- * The engine's geometry and the pressure in its cylinder at any crank angle.
- * @param {{bore: number, stroke: number, cr: number, map: number, peak: number, peakDeg: number, timing: number, burnDeg: number, camDuration: number}} e
+ * The cylinder as the model has it, at any crank angle of the 720: its geometry (the
+ * slider-crank on the model's rod ratio), its valve events and lift (the gas exchange's), and
+ * its pressure and burned share (the four-stroke record: the closed cycle as `runCycle`
+ * integrated it, the open period as the gas exchange did). Crank angle `phi`: 0° is top dead
+ * centre between the exhaust and intake strokes, 360° firing TDC. Nothing here is a second
+ * model: it reads the model's numbers and draws them.
+ * @param {{bore: number, stroke: number, cr: number, timing: number,
+ *   trace: {phi: number[], bar: number[], burned: number[]},
+ *   gx: {events: {ivo: number, ivc: number, evo: number, evc: number}, trace: {deg: number[], inAreaMm2: number[], exAreaMm2: number[]}}}} e
  */
 export function cylinderModel(e) {
   const r = e.stroke / 2; // crank throw, mm
-  const l = e.stroke * 1.75; // rod, mm
+  const l = r * COEFF.ROD_RATIO; // rod, mm: the model's rod ratio (rod over crank radius)
   const area = (Math.PI * e.bore * e.bore) / 4; // mm²
   const swept = area * e.stroke; // mm³
-  const vc = swept / Math.max(1.5, e.cr - 1); // clearance volume, mm³
-  /** Piston pin's distance from the crank centre, mm. @param {number} th crank angle, ° from TDC */
-  const x = (th) => r * Math.cos(th * RAD) + Math.sqrt(l * l - (r * Math.sin(th * RAD)) ** 2);
-  /** Volume above the piston, mm³. */
-  const vol = (th) => vc + area * (l + r - x(th));
+  const vc = swept / Math.max(1.5, e.cr - 1); // clearance volume, mm³: the compression ratio's definition
+  /** Volume above the piston, mm³ (the cycle's own slider-crank). @param {number} th crank angle, ° from TDC */
+  const vol = (th) => cylinderVolumeM3(th, vc, swept, COEFF.ROD_RATIO);
+  /** Piston pin's distance from the crank centre, mm. */
+  const x = (th) => l + r - (vol(th) - vc) / area;
   const vMax = vol(180);
-  // Valve events, from the cam's duration (advertised, centred as a typical cam is).
-  const dur = Math.max(180, e.camDuration || 230);
-  const ivo = -(dur - 180) * 0.35; const ivc = ivo + dur; // intake opens before TDC, closes after BDC
-  const evc = 720 + (dur - 180) * 0.35; const evo = evc - dur;
-  /** Lift as a share of full, 0-1. */
-  const lift = (phi, open, close) => (phi > open && phi < close ? Math.sin(((phi - open) / (close - open)) * Math.PI) : 0);
+  // Valve events in this frame: the gas exchange measures from the overlap TDC, the exhaust
+  // events before it (negative), so they sit at the end of the 720 here.
+  const ev = e.gx.events;
+  const ivo = ev.ivo; const ivc = ev.ivc; const evo = ev.evo + 720; const evc = ev.evc + 720;
+  const tr = e.gx.trace;
+  const maxIn = Math.max(...tr.inAreaMm2, 1); const maxEx = Math.max(...tr.exAreaMm2, 1);
+  /** A valve's opening as a share of its full flow area, read from the gas exchange's record. */
+  const liftOf = (areas, maxA) => (phi) => {
+    const d = phi > 360 ? phi - 720 : phi; // the record's frame
+    if (d < tr.deg[0] || d > tr.deg[tr.deg.length - 1]) return 0;
+    return readSorted(tr.deg, areas, d) / maxA;
+  };
+  const liftIn = liftOf(tr.inAreaMm2, maxIn);
+  const liftEx = liftOf(tr.exAreaMm2, maxEx);
   const sparkPhi = 360 - e.timing;
-  const burn = Math.max(20, e.burnDeg || 50);
-  /** Share of the charge burned, Wiebe. */
-  const burned = (phi) => {
-    const t = (phi - sparkPhi) / burn;
-    return t <= 0 ? 0 : 1 - Math.exp(-5 * Math.min(2, t) ** 3);
-  };
-  const pIvc = Math.max(0.2, e.map / 100); // bar at intake valve closing
-  /** The charge squeezed and let out again with no burn: p V^γ held constant. */
-  const motored = (phi) => pIvc * (vMax / vol(((phi % 360) + 360) % 360)) ** GAMMA;
-  // The burn multiplies that curve: heat released at constant-ish volume raises the
-  // pressure by a factor, and the burned gas then expands along its own polytrope. K is
-  // sized so the peak lands where the model put it, at the angle it put it.
-  const peakPhi = 360 + (e.peakDeg || 15);
-  const K = Math.max(0, e.peak / motored(peakPhi) - 1) / Math.max(0.3, burned(peakPhi));
+  const wrap720 = (phi) => ((phi % 720) + 720) % 720;
+  /** Share of the charge burned, as the cycle integrated it. */
+  const burned = (phi) => readSorted(e.trace.phi, e.trace.burned, wrap720(phi));
   /** Cylinder pressure, bar absolute. */
-  const pressure = (phi) => {
-    const q = ((phi % 720) + 720) % 720;
-    if (q < 180) return pIvc * 0.97; // intake: about the manifold pressure
-    if (q < 540) return motored(q) * (1 + K * burned(q)); // compression, burn, expansion
-    // exhaust: the blowdown as the valve opens, then about atmospheric
-    const end = motored(540) * (1 + K);
-    return 1.1 + (end - 1.1) * Math.exp(-(q - 540) / 12);
-  };
-  return { r, l, area, swept, vc, vMax, x, vol, ivo, ivc, evo, evc, lift, sparkPhi, burned, pressure };
+  const pressure = (phi) => readSorted(e.trace.phi, e.trace.bar, wrap720(phi));
+  return { r, l, area, swept, vc, vMax, x, vol, ivo, ivc, evo, evc, liftIn, liftEx, sparkPhi, burned, pressure };
 }
 
 /**
  * @param {object} props
  * @param {number} props.bore mm @param {number} props.stroke mm @param {number} props.cr compression ratio
- * @param {number} props.camDuration °
  * @param {object} props.point the model's answer at the chosen RPM and load (a pull point)
+ * @param {{phi: number[], bar: number[], burned: number[]}} props.trace the four strokes' pressure (`fourStrokeTrace`)
+ * @param {any} props.gx the gas exchange at that speed and load (`gasExchangeTrace`)
  * @returns {React.ReactElement}
  */
-export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
+export function EngineCutaway({ bore, stroke, cr, point: p, trace, gx }) {
   const [phi, setPhi] = useState(300);
   const [playing, setPlaying] = useState(true);
   const raf = useRef(0);
@@ -107,10 +115,7 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
     return () => cancelAnimationFrame(raf.current);
   }, [playing, rpm]);
 
-  const m = cylinderModel({
-    bore, stroke, cr, camDuration, map: p.map ?? 100, peak: p.peakPressure ?? 60, peakDeg: p.peakPressureDeg ?? 15,
-    timing: p.timing ?? 20, burnDeg: p.burnDeg ?? 50,
-  });
+  const m = useMemo(() => cylinderModel({ bore, stroke, cr, timing: p.timing ?? 20, trace, gx }), [bore, stroke, cr, p.timing, trace, gx]);
   const th = phi % 360; // crank angle from TDC, for the kinematics
   const strokeIdx = Math.floor(phi / 180) % 4;
   const P = m.pressure(phi);
@@ -133,8 +138,8 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
   const roofY = deckY - 22; // the pent roof's peak
   const crankPinX = cx + rk * Math.sin(th * RAD);
   const crankPinY = cy - rk * Math.cos(th * RAD);
-  const liftIn = m.lift(phi < 600 ? phi : phi - 720, m.ivo, m.ivc);
-  const liftEx = m.lift(phi < 100 ? phi + 720 : phi, m.evo, m.evc);
+  const liftIn = m.liftIn(phi);
+  const liftEx = m.liftEx(phi);
   const maxLift = halfBore * 0.22;
   const valve = (side, lift) => {
     const s = side === 'in' ? -1 : 1;
@@ -280,11 +285,14 @@ export function EngineCutaway({ bore, stroke, cr, camDuration, point: p }) {
               );
             }}
           </Plot>
+          <p className={styles.panelNote}>The loop is the model&apos;s own: the closed cycle as integrated, then the gas exchange from the moment the exhaust valve leaves its seat. The step there is where the two calculations meet and disagree: the blowdown starts about a third lower than the cycle&apos;s pressure at that angle (an open item, in docs/accuracy.md).</p>
           <dl className={styles.liveEq}>
             <dt>Crank angle</dt><dd>{f(phi, 0)}° of 720, {f(th, 0)}° from TDC</dd>
             <dt>Piston pin</dt><dd>x = r cos θ + √(l² − r² sin² θ) = {f(xNow, 1)} mm</dd>
             <dt>Volume</dt><dd>V = V<sub>c</sub> + A(l + r − x) = {f(m.vc / 1000, 0)} + {f(m.area / 100, 1)} cm² × {f((m.l + m.r - xNow) / 10, 2)} cm = {f(V / 1000, 0)} cc</dd>
-            <dt>Pressure</dt><dd>{strokeIdx === 1 ? <>p = p<sub>ivc</sub>(V<sub>max</sub>/V)<sup>1.32</sup> = </> : strokeIdx === 2 ? <>p = p<sub>ivc</sub>(V<sub>max</sub>/V)<sup>1.32</sup> × (1 + K x<sub>b</sub>), x<sub>b</sub> = {f(m.burned(phi) * 100, 0)}% burned = </> : strokeIdx === 0 ? <>p ≈ MAP = </> : <>p ≈ exhaust back-pressure = </>}{f(P, 1)} bar</dd>
+            <dt>Pressure</dt><dd>{f(P, 1)} bar, {strokeIdx === 1 || strokeIdx === 2
+              ? <>the closed cycle as integrated: slider-crank volume, Wiebe heat release, wall heat ({f(m.burned(phi) * 100, 0)}% burned)</>
+              : <>the gas exchange: the valves&apos; flow against the runner and primary waves</>}</dd>
             <dt>Valves</dt><dd>intake {f(liftIn * 100, 0)}% open, exhaust {f(liftEx * 100, 0)}% open</dd>
             <dt>Spark</dt><dd>{f(p.timing, 1)}° before TDC (φ = {f(m.sparkPhi, 0)}°)</dd>
           </dl>

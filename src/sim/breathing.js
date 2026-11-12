@@ -31,12 +31,12 @@
  * where it matters, below.
  */
 
-import { BARO_KPA, R_AIR } from './constants.js';
+import { BARO_KPA, GAMMA_AIR, R_AIR } from './constants.js';
 import { COEFF } from './coefficients.js';
 import { clamp } from './math.js';
 
 const DEG = Math.PI / 180;
-const GAMMA = 1.4;
+const GAMMA = GAMMA_AIR;
 const CV = R_AIR / (GAMMA - 1);
 const CP = CV + R_AIR;
 
@@ -519,9 +519,6 @@ function solveFlow(flowAt, lo, hi, guess = null) {
   return lo + ((hi - lo) * gLo) / (gLo - gHi);
 }
 
-/** Atmospheric, for callers that do not carry a barometer. */
-export const BREATH_BARO_KPA = BARO_KPA;
-
 /**
  * Pressure lost through the exhaust system downstream of the ports, kPa: a sum of loss
  * coefficients times the dynamic pressure in the pipe, dp = K * rho * u^2 / 2. The pipe is
@@ -544,13 +541,10 @@ export const BREATH_BARO_KPA = BARO_KPA;
  */
 export function exhaustSystemDropKpa({ flowKgS, exhaustK, pipeDiaIn, mods = {}, baroKpa = BARO_KPA }) {
   if (!(flowKgS > 0)) return 0;
-  const area = (Math.PI / 4) * (pipeDiaIn * 0.0254) ** 2;
   const k = (mods.headers ? COEFF.EXH_K_HEADERS : COEFF.EXH_K_MANIFOLD) + COEFF.EXH_K_CATALYST * catalystLossShare(mods.catalyst)
     + (mods.exhaust ? COEFF.EXH_K_CATBACK_FREE : COEFF.EXH_K_CATBACK);
   // Density at the tailpipe end, near atmospheric: the drop is small against it.
-  const rho = (baroKpa * 1000) / (R_AIR * exhaustK);
-  const u = flowKgS / (rho * area);
-  return (k * rho * u * u) / 2 / 1000;
+  return k * exhaustPipeFlow({ flowKgS, exhaustK, pipeDiaIn, baroKpa }).dynamicKpa;
 }
 
 /**
@@ -569,10 +563,35 @@ export function exhaustSystemDropKpa({ flowKgS, exhaustK, pipeDiaIn, mods = {}, 
 export function catalystLossShare(catalyst) {
   if (catalyst === 'none') return 0;
   if (catalyst !== 'metallic') return 1;
-  const resistance = (cpsi, wallIn) => {
-    const pitch = 1 / Math.sqrt(cpsi);
-    const channel = pitch - wallIn;
-    return 1 / (((channel / pitch) ** 2) * channel * channel);
-  };
-  return resistance(COEFF.CAT_METALLIC_CPSI, COEFF.CAT_METALLIC_WALL_IN) / resistance(COEFF.CAT_CERAMIC_CPSI, COEFF.CAT_CERAMIC_WALL_IN);
+  const resistance = (sub) => 1 / (sub.openArea * sub.channelIn * sub.channelIn);
+  return resistance(catalystSubstrate('metallic')) / resistance(catalystSubstrate('ceramic'));
+}
+
+/**
+ * A catalyst substrate's honeycomb, from its cell density and wall: the cell pitch is
+ * 1 / sqrt(cells per square inch), the channel the pitch less one wall, the open frontal
+ * area the channel over the pitch, squared. What `catalystLossShare` prices, and what the
+ * Physics page draws and shows the working of.
+ * @param {'ceramic'|'metallic'} kind
+ * @returns {{cpsi: number, wallIn: number, pitchIn: number, channelIn: number, openArea: number}}
+ */
+export function catalystSubstrate(kind) {
+  const cpsi = kind === 'metallic' ? COEFF.CAT_METALLIC_CPSI : COEFF.CAT_CERAMIC_CPSI;
+  const wallIn = kind === 'metallic' ? COEFF.CAT_METALLIC_WALL_IN : COEFF.CAT_CERAMIC_WALL_IN;
+  const pitchIn = 1 / Math.sqrt(cpsi);
+  const channelIn = pitchIn - wallIn;
+  return { cpsi, wallIn, pitchIn, channelIn, openArea: (channelIn / pitchIn) ** 2 };
+}
+
+/**
+ * The gas in the exhaust pipe as `exhaustSystemDropKpa` prices it: its density near the
+ * tailpipe, its speed and its dynamic pressure, which every part's loss is a multiple of.
+ * @param {{flowKgS: number, exhaustK: number, pipeDiaIn: number, baroKpa?: number}} input
+ * @returns {{areaM2: number, densityKgM3: number, speedMs: number, dynamicKpa: number}}
+ */
+export function exhaustPipeFlow({ flowKgS, exhaustK, pipeDiaIn, baroKpa = BARO_KPA }) {
+  const areaM2 = (Math.PI / 4) * (pipeDiaIn * 0.0254) ** 2;
+  const densityKgM3 = (baroKpa * 1000) / (R_AIR * exhaustK);
+  const speedMs = Math.max(0, flowKgS) / (densityKgM3 * areaM2);
+  return { areaM2, densityKgM3, speedMs, dynamicKpa: (densityKgM3 * speedMs * speedMs) / 2 / 1000 };
 }

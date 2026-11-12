@@ -16,6 +16,7 @@
  * ran, unchanged.
  */
 
+import { STOCK_EXHAUST_DIA_IN } from '../hardware.js';
 import { BARO_KPA, DRIVETRAIN_EFF, KELVIN_OFFSET, PSI_TO_KPA, R_AIR } from '../constants.js';
 import { COEFF } from '../coefficients.js';
 import { ENGINE_INERTIA, liveRandom, readSpeedAndAirflow, STALL_RPM } from '../liveCore.js';
@@ -427,7 +428,7 @@ export function liveStepEcu(st, dt, input, cfg) {
       // exhaust (a two-step's spark cut) carries more energy to the turbine, which is
       // how anti-lag spools a turbo on the line.
       lambda: 1, exhaustK: Math.max(INDUCTION_REF_EXHAUST_K, e.egtK), baroKpa: baro,
-      exhaust: { pipeDiaIn: hw.exhaustDia ?? 3.0, mods },
+      exhaust: { pipeDiaIn: hw.exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods },
       ...(hw.blower ? { blower: hw.blower, blowerRatio: hw.blowerRatio, intakeKAtEff: (b, eta) => chargeTempK(b, mods.intercooler, env, eta) } : {}),
     });
     const spooling = steady.boostPsi > s.boostPsi;

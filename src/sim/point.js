@@ -10,6 +10,7 @@
  * physics layer testable in plain Node.
  */
 
+import { STOCK_EXHAUST_DIA_IN } from './hardware.js';
 import { DRIVETRAIN_EFF, INJ_DEADTIME_MS, KELVIN_OFFSET, MIXTURE_TOLERANCE_PCT } from './constants.js';
 import { COEFF } from './coefficients.js';
 import {
@@ -261,7 +262,7 @@ export function evaluatePoint({
   const empKpa = empOverride ?? exhaustManifoldKpa({
     turboOn: !!mods.turboFitted, exhaustFlowKgS, exhaustK: turbineInletK,
     turbine, wastegateRelief, ...(E?.env?.baroKpa ? { baroKpa: E.env.baroKpa } : {}),
-    pipeDiaIn: exhaustDia ?? 3.0, mods,
+    pipeDiaIn: exhaustDia ?? STOCK_EXHAUST_DIA_IN, mods,
   });
 
   // --- THE CYCLE ITSELF. Everything from here is read off an integrated pressure
