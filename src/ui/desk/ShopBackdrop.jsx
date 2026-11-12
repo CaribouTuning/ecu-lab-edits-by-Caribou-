@@ -63,11 +63,11 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
   const key = JSON.stringify(engineSpec);
-  useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { live.current.spec = engineSpec; live.current.specDirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content: the object is new every render, and re-sending it would rebuild the 3D model each frame
   const damageKey = JSON.stringify(damage);
-  useEffect(() => { live.current.damage = damage; live.current.damageDirty = true; }, [damageKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { live.current.damage = damage; live.current.damageDirty = true; }, [damageKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content, as the engine is
   const carsKey = JSON.stringify(cars ?? null);
-  useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { live.current.cars = cars; live.current.carsDirty = true; }, [carsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content, as the engine is
   /** @type {React.MutableRefObject<Record<string, HTMLButtonElement|null>>} */
   const spots = useRef({});
   const v = new THREE.Vector3();

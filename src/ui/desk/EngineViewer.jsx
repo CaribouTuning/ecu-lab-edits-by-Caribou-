@@ -28,7 +28,7 @@ export function EngineViewer({ spec, rpm = 0, label = 'The engine as built', cap
   const live = useRef({ spec, rpm, yaw: 0.7, drag: /** @type {null|number} */ (null), dirty: true });
   live.current.rpm = rpm;
   const key = JSON.stringify(spec);
-  useEffect(() => { live.current.spec = spec; live.current.dirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { live.current.spec = spec; live.current.dirty = true; }, [key]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed on the content: the object is new every render, and re-sending it would rebuild the 3D model each frame
 
   const { canvasRef, failed } = useStage((stage) => {
     stage.setTime(0, true);

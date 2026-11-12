@@ -51,9 +51,8 @@ export function IntakeCutaway({ gx, point, derived, engineConfig, throttleFrac =
   const tbX = 146; const tbY = 46;
   const runners = useMemo(() => g.xs.map((x) => /** @type {[number, number][]} */ ([[x + g.pitch * 0.22, plBot - 6], [x + g.pitch * 0.22, plBot + 22], [x, plBot + 66], [x, flangeY]])), [g.xs, g.pitch]);
   const runnerPts = useMemo(() => runners.map((pts) => roundedAlong(pts, 22, 18)), [runners]);
-  /** @type {[number, number][]} */
-  const inletPath = [[24, tbY], [tbX, tbY], [232, tbY], [232, plTop + 8], [W - 40, plTop + 26]];
-  const inletPts = useMemo(() => roundedAlong(inletPath, 40, 18), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The air's way in: the filter, the throttle body, the elbow and along the plenum.
+  const inletPts = useMemo(() => roundedAlong(/** @type {[number, number][]} */ ([[24, tbY], [tbX, tbY], [232, tbY], [232, plTop + 8], [W - 40, plTop + 26]]), 40, 18), [tbX, tbY, plTop, W]);
   const half = gx.runnerRoundTripDeg / 2;
   const mapKpa = gx.mapKpa;
   const s1 = strokeOf(d);

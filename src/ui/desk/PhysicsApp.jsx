@@ -173,14 +173,15 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
   const i = Math.min(pts.length - 1, idx ?? peakIdx);
   const p = pts[i];
   // The gas exchange at the chosen speed and throttle, once, for all three breathing diagrams.
-  const advance = breathing?.camAt && p ? breathing.camAt(p.rpm, p.map ?? 100) : 0;
-  const gx = useMemo(() => (breathing && p
-    ? gasExchangeTrace(breathing.engineConfig, breathing.mods ?? {}, { ...breathing.hwForVe, intakeCamAdvanceDeg: advance }, p.rpm, p.map ?? 100)
-    : null), [breathing, p?.rpm, p?.map, advance]); // eslint-disable-line react-hooks/exhaustive-deps
+  const atRpm = p?.rpm ?? null; const atMap = p?.map ?? 100;
+  const advance = breathing?.camAt && atRpm != null ? breathing.camAt(atRpm, atMap) : 0;
+  const gx = useMemo(() => (breathing && atRpm != null
+    ? gasExchangeTrace(breathing.engineConfig, breathing.mods ?? {}, { ...breathing.hwForVe, intakeCamAdvanceDeg: advance }, atRpm, atMap)
+    : null), [breathing, atRpm, atMap, advance]);
   // The closed cycle at that speed and throttle, as the pull integrates it; only on the pages
   // that draw it (a point of the pull is not free).
   const wantsCycle = page === 'calc' || page === 'cylinder';
-  const cycle = useMemo(() => (wantsCycle && cycleAt && p ? cycleAt(deferredLoad, p.rpm) : null), [wantsCycle, cycleAt, deferredLoad, p?.rpm]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cycle = useMemo(() => (wantsCycle && cycleAt && atRpm != null ? cycleAt(deferredLoad, atRpm) : null), [wantsCycle, cycleAt, deferredLoad, atRpm]);
   const fourStroke = useMemo(() => (cycle && gx?.trace ? fourStrokeTrace(cycle, gx.trace) : null), [cycle, gx]);
   if (!p) return <div className={styles.pad}>Build an engine first: the model needs something to run.</div>;
 

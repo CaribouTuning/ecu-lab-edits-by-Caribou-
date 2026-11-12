@@ -5,7 +5,7 @@
  * exhaust pipe, catalyst and losses); the shared parts are in cutawayParts.jsx.
  */
 
-import React, { useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 
 import cut from './Apps.module.css';
 import styles from './Breathing.module.css';
@@ -50,14 +50,14 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {} }) {
   const slowMo = CYCLE_SECONDS / (120 / gx.rpm);
   tickRef.current = (dt) => { flowT.current += (u / slowMo / L) * dt; };
   const half = gx.primaryRoundTripDeg / 2;
-  const collRaw = (dd) => bank.reduce((sum, c) => sum + R.exPort(dd - c.offset - half), 0) / bank.length;
+  const collRaw = useCallback((dd) => bank.reduce((sum, c) => sum + R.exPort(dd - c.offset - half), 0) / bank.length, [R, bank, half]);
   // The collector's pulses about their own average over the cycle (the average is the static
   // back-pressure, drawn separately), and their size, which sets the colour scale.
   const pulse = useMemo(() => {
     const xs = []; for (let dd = -360; dd < 360; dd += 4) xs.push(collRaw(dd));
     const mean = xs.reduce((a0, b0) => a0 + b0, 0) / xs.length;
     return { mean, amp: Math.max(1, ...xs.map((v) => Math.abs(v - mean))) };
-  }, [R, bank, half]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [collRaw]);
   const collAt = (dd) => collRaw(dd) - pulse.mean;
   const degPerSec = gx.rpm * 6;
   // A pulse runs at a + u; the converter's cells and the muffler's chambers take it out.
@@ -80,11 +80,12 @@ export function ExhaustSystemCutaway({ gx, engineConfig, mods = {} }) {
   // Muffler gas path: in through the perforated inlet tube to the rear chamber, back through
   // the return tube to the front one, out through the outlet tube.
   const mx0 = X(SYS.mufIn); const mx1 = X(SYS.mufOut); const mw = mx1 - mx0;
-  /** @type {[number, number][]} */
-  const mufPath = free ? [[mx0, y0], [mx1, y0]] : [[mx0, y0 - 18], [mx0 + mw * 0.82, y0 - 18], [mx0 + mw * 0.92, y0], [mx0 + mw * 0.82, y0 + 18], [mx0 + mw * 0.18, y0 + 18], [mx0 + mw * 0.08, y0], [mx0 + mw * 0.2, y0 - 2], [mx1, y0 - 2]];
-  /** @type {[number, number][]} */
-  const fullPath = [[X(0), y0], [mx0, y0], ...mufPath.slice(free ? 0 : 0), [X(L), y0], [W - 6, y0]];
-  const pathPts = useMemo(() => along(fullPath, 160), [free, mx0, mx1]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mufPath = useMemo(() => /** @type {[number, number][]} */ (free ? [[mx0, y0], [mx1, y0]] : [[mx0, y0 - 18], [mx0 + mw * 0.82, y0 - 18], [mx0 + mw * 0.92, y0], [mx0 + mw * 0.82, y0 + 18], [mx0 + mw * 0.18, y0 + 18], [mx0 + mw * 0.08, y0], [mx0 + mw * 0.2, y0 - 2], [mx1, y0 - 2]]), [free, mx0, mx1, mw, y0]);
+  const pipeStart = X(0); const pipeEnd = X(L);
+  // The gas's whole way through: the pipe, the muffler's passes, the tailpipe. Laid out once
+  // per drawing: it changes only with the muffler and the drawing's width.
+  const pathPts = useMemo(() => along(/** @type {[number, number][]} */ ([[pipeStart, y0], [mx0, y0], ...mufPath, [pipeEnd, y0], [W - 6, y0]]), 160),
+    [mufPath, mx0, pipeStart, pipeEnd, y0, W]);
   const puffs = Array.from({ length: 4 }, (_, i) => ((flowT.current * 3 + i / 4) % 1));
   const dropRows = /** @type {[string, number][]} */ ([
     [geo.headers ? 'Headers' : 'Cast manifold', drop.manifold],

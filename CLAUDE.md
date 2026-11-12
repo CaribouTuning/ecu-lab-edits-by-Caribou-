@@ -149,6 +149,16 @@ remaining risk is the same Node major with a different libm, which is what step 
   Wiebe tail plus `lateSparkQuench`, which is zero for any spark up to 5° ATDC) costs work
   and lights in the manifold (`afterfire`, EGT). The audio's pops read that share. Keep the
   quench at zero near MBT, or every retarded boost cell loses power.
+- **The Physics app draws the model, never a model of its own.** Its pages read
+  `gasExchangeTrace` (the breathing, the exhaust pipe's flow and the catalyst), a pull point's
+  `cycleTrace` (`simulateSweep` with `onlyRpm` and `traceRpm`) joined by `fourStrokeTrace`, and
+  the thermo helpers (`airDensityKgM3`, `measuredVePct`, `brakeThermalEfficiency`). A sum a
+  diagram needs goes into `src/sim` first: the cylinder cutaway once had its own slider-crank,
+  cam timing and Wiebe burn, and the exhaust diagram its own pipe flow, at half the model's.
+  The drawings share their parts in `desk/cutawayParts.jsx`; every trace is a `desk/Plot.jsx`
+  with numbered axes and units. Open item: the gas exchange's blowdown starts about a third
+  below the closed cycle's pressure at the seat opening (docs/accuracy.md, "Open for the
+  maintainers"); the p-V diagram shows the step.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

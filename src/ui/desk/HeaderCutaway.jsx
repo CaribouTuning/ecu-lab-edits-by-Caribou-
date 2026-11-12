@@ -52,8 +52,8 @@ export function HeaderCutaway({ gx, point, derived, engineConfig }) {
   }), [g.xs, bank.length, colX, spacing]);
   const primaryPts = useMemo(() => primaries.map((p) => roundedAlong(p, 26, 30)), [primaries]);
   /** @type {[number, number][]} */
-  const outlet = [[colX, colY - 2], [colX, colY + 24], [W - 4, colY + 24]];
-  const outletPts = useMemo(() => roundedAlong(outlet, 20, 26), [colX, colY]); // eslint-disable-line react-hooks/exhaustive-deps
+  const outlet = useMemo(() => [[colX, colY - 2], [colX, colY + 24], [W - 4, colY + 24]], [colX, colY, W]);
+  const outletPts = useMemo(() => roundedAlong(outlet, 20, 26), [outlet]);
   const half = gx.primaryRoundTripDeg / 2;
   const emp = gx.empKpa;
   const s1 = strokeOf(d);

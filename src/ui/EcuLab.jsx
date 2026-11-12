@@ -212,7 +212,7 @@ function useSettled(value) {
     if (SETTLE_MS === 0 || settled === value) return undefined;
     const t = window.setTimeout(() => setSettled(value), SETTLE_MS);
     return () => window.clearTimeout(t);
-  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- restarts on a new value only; `settled` catching up must not restart it
   return SETTLE_MS === 0 ? value : settled;
 }
 
@@ -674,10 +674,10 @@ export function EcuLabApp() {
 
   // The Physics app's part-throttle pulls: the same model and calibration as the dyno,
   // at the load its throttle asks for. Stable while the setup is, so it can cache them.
-  const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
+  const physicsSweepAt = useCallback((load) => simulateSweep(sweepArgs(load, ecuBundle)), [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps -- the advisor's pull is made of the same inputs, so it changes exactly when these would
   // One point of that pull with its closed cycle traced, for the Physics app's cylinder: the
   // pressure the model integrated at the speed and throttle the page shows.
-  const physicsCycleAt = useCallback((load, rpm) => simulateSweep({ ...sweepArgs(load, ecuBundle), onlyRpm: rpm, traceRpm: rpm }).points[0]?.cycleTrace ?? null, [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps
+  const physicsCycleAt = useCallback((load, rpm) => simulateSweep({ ...sweepArgs(load, ecuBundle), onlyRpm: rpm, traceRpm: rpm }).points[0]?.cycleTrace ?? null, [advisorPull]); // eslint-disable-line react-hooks/exhaustive-deps -- as physicsSweepAt
   // And the breathing diagrams' inputs: the engine as built, its bolt-ons and pipe, its cams.
   const physicsBreathing = useMemo(() => ({ engineConfig, mods, hwForVe, camAt }), [engineConfig, mods, hwForVe, camAt]);
 
@@ -905,7 +905,7 @@ export function EcuLabApp() {
     if (!sandboxLoaded || !sandboxBench || sandboxBench.build.engineReady === false) return undefined;
     const t = setTimeout(() => { saveSandbox(sandboxBench); }, 600);
     return () => clearTimeout(t);
-  }, [sandboxLoaded, sandboxBench?.build, sandboxBench?.tune]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sandboxLoaded, sandboxBench?.build, sandboxBench?.tune]); // eslint-disable-line react-hooks/exhaustive-deps -- saves when the bench's build or tune changes, not when the wrapper object is rebuilt
 
   // Career state is written back whenever it moves. A save call inside `doRun` could
   // not cover the pin: pinning is a dispatch like any other and has no natural "and now
