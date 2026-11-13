@@ -51,6 +51,7 @@ import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
+import { warm } from './sim/warm.js';
 import { StoreProvider, useBuild, useCareer, useHistory, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
 import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
@@ -189,18 +190,25 @@ const SETTLE_MS = /** @type {any} */ (import.meta).env?.MODE === 'test' ? 0 : 18
 /**
  * A value once it has stopped changing for SETTLE_MS: the same value, later. Under the test
  * runner it is the value itself, so a test that sets a part sees the engine for it at once.
+ * A new `jump` (a whole engine put on the bench, a reset, an undo: hardware no slider drags)
+ * takes the value at once, so the engine is never seen with one part settled and the rest new:
+ * the old block on the new turbo once cost a whole breathing grid nobody would read.
  * @template T
  * @param {T} value
+ * @param {string} [jump] what no drag changes; a new one settles at once
  * @returns {T}
  */
-function useSettled(value) {
+function useSettled(value, jump = '') {
   const [settled, setSettled] = useState(value);
+  const [lastJump, setLastJump] = useState(jump);
+  const jumped = jump !== lastJump;
+  if (jumped) { setLastJump(jump); setSettled(value); }
   useEffect(() => {
     if (SETTLE_MS === 0 || settled === value) return undefined;
     const t = window.setTimeout(() => setSettled(value), SETTLE_MS);
     return () => window.clearTimeout(t);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps -- restarts on a new value only; `settled` catching up must not restart it
-  return SETTLE_MS === 0 ? value : settled;
+  return SETTLE_MS === 0 || jumped ? value : settled;
 }
 
 /** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
@@ -221,8 +229,10 @@ export function EcuLabApp() {
   // the full-throttle pull, the advice) follows a slider once it stops for a moment, not at
   // every step of a drag, which held the page for most of a second a step. The controls
   // read the store themselves and move at once; every other field here is the live one.
-  const settledCfg = useSettled(liveBuild.engineConfig);
-  const settledMods = useSettled(liveBuild.mods);
+  const jump = [liveBuild.presetId, liveBuild.engineReady, liveBuild.engineConfig?.configuration, liveBuild.turboOn, liveBuild.turbineIdx,
+    liveBuild.turbineCount, liveBuild.compressorIdx, liveBuild.exhaustDiaIdx, liveBuild.blowerId].join('|');
+  const settledCfg = useSettled(liveBuild.engineConfig, jump);
+  const settledMods = useSettled(liveBuild.mods, jump);
   const build = useMemo(
     () => (settledCfg === liveBuild.engineConfig && settledMods === liveBuild.mods ? liveBuild : { ...liveBuild, engineConfig: settledCfg, mods: settledMods }),
     [liveBuild, settledCfg, settledMods],
@@ -428,16 +438,34 @@ export function EcuLabApp() {
   // LIVE or the laptop's other apps shows them: computed on every BUILD slider step they
   // froze the page for seconds at a time. They are worked out when TUNE, DYNO or PHYSICS is
   // open, and kept, so coming back with nothing changed is instant.
-  const advisorShown = tab === 'tune' || tab === 'dyno' || tab === 'physics';
+  // Nor before there is an engine: SANDBOX's placeholder behind the start screen is nobody's
+  // engine and no screen shows advice on it, yet working it out cost a second of the gas exchange.
+  const advisorShown = (tab === 'tune' || tab === 'dyno' || tab === 'physics') && build.engineReady !== false;
   // And only after the screen that wants it has painted: opening TUNE draws TUNE at once,
   // then works the advice out, rather than holding the tap for a second first.
   const [advisorPainted, setAdvisorPainted] = useState(false);
+  // The store as the advice will read it, for the simulator worker: the build, the tables and
+  // calibration, and the conditions a pull is made in.
+  const warmStateRef = useRef(null);
+  warmStateRef.current = { build, tune: { ve: tune.ve, timing: tune.timing, afr: tune.afr, layout: tune.layout, ecu: tune.ecu }, session: { env: session.env, faults: session.faults, liveAux: session.liveAux, loadKpa: 100 } };
   useEffect(() => {
     if (!advisorShown) { setAdvisorPainted(false); return undefined; }
-    let t = 0;
-    const raf = requestAnimationFrame(() => { t = window.setTimeout(() => setAdvisorPainted(true), 0); });
-    return () => { cancelAnimationFrame(raf); window.clearTimeout(t); };
-  }, [advisorShown]);
+    // A new engine, or new parts, on the bench while the advice is up: the last advice stays
+    // shown (useWhenWanted keeps it) until the new breathing is solved and it is worked out again.
+    setAdvisorPainted(false);
+    let t = 0; let alive = true;
+    // The advice's first pull solves breathing this engine has not run yet, seconds of it on a
+    // new build: the worker solves it off this thread first (sim/warm.js), so the page stays
+    // live and the advice then reads it back at once. Same code, same numbers.
+    const raf = requestAnimationFrame(() => {
+      t = window.setTimeout(() => {
+        const st = warmStateRef.current;
+        const ready = warm('advice', { state: st }) ?? Promise.resolve();
+        ready.then(() => { if (alive) setAdvisorPainted(true); });
+      }, 0);
+    });
+    return () => { alive = false; cancelAnimationFrame(raf); window.clearTimeout(t); };
+  }, [advisorShown, build]);
   // Tests render synchronously and read the advice in the same act(): no frame to wait for.
   const advisorWanted = advisorShown && (advisorPainted || IMMEDIATE_ADVISOR);
   const advisorPullMemo = useWhenWanted(advisorWanted, () => simulateSweep({
@@ -667,7 +695,17 @@ export function EcuLabApp() {
   // And the breathing diagrams' inputs: the engine as built, its bolt-ons and pipe, its cams.
   const physicsBreathing = useMemo(() => ({ engineConfig, mods, hwForVe, camAt }), [engineConfig, mods, hwForVe, camAt]);
 
+  // A pull asked for before this engine's breathing is solved waits for the simulator worker
+  // to solve it (sim/warm.js), the button already showing the sweep, rather than solving it
+  // here and holding the page: the same numbers either way.
   const doRun = () => {
+    if (engineMissing || blown) return;
+    const ready = warm('advice', { state: warmStateRef.current });
+    if (!ready) { runNow(); return; }
+    dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'running', value: true });
+    ready.then(runNow);
+  };
+  const runNow = () => {
     // No engine chosen: there is nothing to pull, and the placeholder figures behind the gate are nobody's.
     if (engineMissing || blown) return;
     const a = ensureAudio();

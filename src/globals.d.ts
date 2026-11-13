@@ -21,3 +21,9 @@ interface Window {
   __ecuUpdate?: (career: any) => void;
   __ecuCareer?: any;
 }
+
+/** Vite's inline worker import (sim/warm.js): a Worker class built into the bundle as a blob. */
+declare module '*?worker&inline' {
+  const WorkerFactory: new () => Worker;
+  export default WorkerFactory;
+}

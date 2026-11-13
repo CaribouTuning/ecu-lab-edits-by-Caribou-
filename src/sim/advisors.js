@@ -65,6 +65,13 @@ export const MISSED_MIX_PCT = MIXTURE_TOLERANCE_PCT;
 
 /** Whether a pull point missed its AFR target by more than MISSED_MIX_PCT. @param {{afr: number, afrCommanded: number}} p */
 export const missesTarget = (p) => Math.abs(p.afr / p.afrCommanded - 1) * 100 > MISSED_MIX_PCT;
+/**
+ * Whether a pull point ran without nitrous spraying. A spraying point is the nitrous's to judge
+ * (TUNE → NITROUS: its retard and its fuel, which the pull log names): the base tables meet
+ * neither its charge nor its spark there, so they are never graded against it.
+ * @param {{nitrousLbMin?: number}} p
+ */
+export const offSpray = (p) => !((p.nitrousLbMin ?? 0) > 0);
 
 /**
  * Why the engine missed the mixture its AFR table asks for, in the order a tuner checks:
@@ -340,7 +347,9 @@ export function reachKpaAt({ turboOn, boostCurve, pull = null }) {
  *   `camAt`, the intake cam advance the VVT calibration holds
  *   at a speed and pressure (crank degrees), when the engine has an intake phaser, and
  *   `health`, the engine's condition (absent: as new)
- * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[], missedMix?: object[]}}
+ * @returns {{spark: object[], fuelAdv: object[], overAdvanced: object[], underAdvanced: object[], pastMbt: object[], wrongMix: object[], missedMix?: object[], spray?: {knockDeg: number, mixOffPct: number, rich: boolean}|null}}
+ *   `spray`: what a pull met while its nitrous sprayed (worst knock past the limit, worst
+ *   mixture miss), which the base tables are not judged on
  */
 export function calibrationAdvice({
   ve, veTruth, timing, afr, layout = null, derived, fuel, mods, turboOn, boostCurve,
@@ -432,7 +441,7 @@ export function calibrationAdvice({
   const pullNear = (rpm, mapKpa) => {
     let best = null; let bestD = Infinity;
     for (const p of pull?.points ?? []) {
-      if (Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
+      if (!offSpray(p) || Math.abs(p.rpm - rpm) > PULL_CEILING_RPM || Math.abs(p.map - mapKpa) > PULL_CEILING_KPA || !Number.isFinite(p.threshold)) continue;
       const d = Math.abs(p.rpm - rpm) / PULL_CEILING_RPM + Math.abs(p.map - mapKpa) / PULL_CEILING_KPA;
       if (d < bestD) { bestD = d; best = p; }
     }
@@ -687,7 +696,7 @@ export function calibrationAdvice({
   // with the correction the log itself implies.
   if (pull) {
     for (const p of pull.points) {
-      if (!(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
+      if (!offSpray(p) || !(p.leanRisk || p.richRisk) || p.fuelLimited || !(p.afr > 0)) continue;
       const near = fuelAdv.filter((c) => !c.bracketOnly && c.map >= OPEN_LOOP_KPA);
       if (!near.length) continue;
       const row = near.reduce((a, c) => (Math.abs(c.map - p.map) < Math.abs(a.map - p.map) ? c : a)).map;
@@ -719,7 +728,7 @@ export function calibrationAdvice({
     // so the mixture advice says so and points at the fuelling (the same test as the log).
     /** @type {any[]} */
     const missedMix = pull.points
-      .filter((p) => p.map >= OPEN_LOOP_KPA && !((p.nitrousLbMin ?? 0) > 0) && missesTarget(p));
+      .filter((p) => p.map >= OPEN_LOOP_KPA && offSpray(p) && missesTarget(p));
     // A cause for each run of neighbouring speeds missed the same way, as the log groups
     // them: one build can miss lean on its VE table low down and on its injectors up top.
     const runs = groupRuns(pull.points, (p) => missedMix.includes(p) && p.afr > p.afrCommanded)
@@ -727,7 +736,15 @@ export function calibrationAdvice({
     const causeOf = new Map();
     for (const run of runs) { const c = missedMixCause(run, { injectorCc, ecuInjectorCc }); for (const p of run) causeOf.set(p, c); }
     for (const p of missedMix.splice(0)) missedMix.push({ rpm: p.rpm, map: p.map, afr: p.afr, afrCommanded: p.afrCommanded, lean: p.afr > p.afrCommanded, cause: causeOf.get(p) ?? 've' });
-    return { spark, fuelAdv, wrongMix, missedMix, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
+    // What the pull met while the nitrous sprayed, which the base tables are never judged on:
+    // TUNE → NITROUS answers it (its retard and its fuel), and TUNE's pages say so.
+    const sprayPts = pull.points.filter((p) => !offSpray(p));
+    const spray = sprayPts.length ? {
+      knockDeg: Number(Math.max(0, ...sprayPts.map((p) => -(p.margin ?? 0))).toFixed(1)),
+      mixOffPct: Number(Math.max(0, ...sprayPts.filter((p) => p.afrCommanded > 0).map((p) => Math.abs(p.afr / p.afrCommanded - 1) * 100)).toFixed(0)),
+      rich: sprayPts.some((p) => p.afr < p.afrCommanded * (1 - MISSED_MIX_PCT / 100)),
+    } : null;
+    return { spark, fuelAdv, wrongMix, missedMix, spray, ...judgeAgainstPull(spark, pull, (p) => cellsInForce(p.rpm, loadOf(T, p.rpm, p.map), T)) };
   }
   // Nor is a cell called dangerous for knock in the idle column where no spark the table can
   // hold would protect it: full throttle at idle speed is the same tip-in as above, not a
@@ -741,7 +758,7 @@ export function calibrationAdvice({
 }
 
 /** A cell carrying less than this share of a point's timing is not "in force" there. */
-const IN_FORCE_WEIGHT = 0.15;
+export const IN_FORCE_WEIGHT = 0.15;
 
 /** Below this speed an engine is cranking or stalling, not running under load. */
 const CRANKING_MAX_RPM = 600;
@@ -831,6 +848,9 @@ function judgeAgainstPull(spark, pull, inForce) {
   const knockBy = new Map();
   const marginBy = new Map();
   for (const p of pull.points) {
+    // A spraying point's knock is the nitrous's (`offSpray`): judged against the base cells it
+    // told the player to pull timing the engine needs off the spray.
+    if (!offSpray(p)) continue;
     for (const { ri, ci, w } of inForce(p)) {
       if (w < IN_FORCE_WEIGHT) continue;
       const key = `${ri}|${ci}`;

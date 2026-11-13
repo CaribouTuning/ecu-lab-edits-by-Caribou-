@@ -36,6 +36,7 @@ const VERDICT = {
  *   onWork: () => void,
  *   setTab: (t: string) => void,
  *   takeJob: (id: string) => void,
+ *   taking?: string|null,
  *   setLesson: (id: string|null) => void,
  *   confirmReset: boolean,
  *   setConfirmReset: (v: boolean) => void,
@@ -43,7 +44,7 @@ const VERDICT = {
  *   variant?: 'page'|'drawer',
  * }} props
  */
-export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLesson, confirmReset, setConfirmReset, unseen, variant = 'page' }) {
+export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking = null, setLesson, confirmReset, setConfirmReset, unseen, variant = 'page' }) {
   const last = career.last;
   const tier = repTier(career.rep);
   const nextTier = nextRepTier(career.rep);
@@ -120,7 +121,7 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
               <p className={styles.small}><b>Wants:</b> {job.wants}</p>
               <div className={styles.meta}><span>Pays <b>{money(job.pay)}</b></span><span>Reputation <b>+{job.rep}</b></span></div>
               {blocked.length > 0 && <p className={styles.blocked}><Lock size={12} aria-hidden="true" /> Needs {blocked.join(', ')}</p>}
-              <Button size="sm" disabled={blocked.length > 0} onClick={() => takeJob(job.id)} aria-label={`Take ${job.customer.name}'s car`}>Take the car</Button>
+              <Button size="sm" disabled={blocked.length > 0 || taking === job.id} aria-busy={taking === job.id || undefined} onClick={() => takeJob(job.id)} aria-label={`Take ${job.customer.name}'s car`}>{taking === job.id ? 'Bringing it in…' : 'Take the car'}</Button>
             </section>
           );
         })}

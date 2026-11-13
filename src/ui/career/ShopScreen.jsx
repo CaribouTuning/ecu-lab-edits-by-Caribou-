@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 
 import { ACTIONS } from '../state/reducer.js';
 import { useCareer } from '../state/StoreProvider.jsx';
+import { warm } from '../sim/warm.js';
 
 import { repTier } from './catalog.js';
 import { isMaster } from './story.js';
@@ -29,6 +30,15 @@ export function CareerOffice({ onWork }) {
   const [speech, setSpeech] = useState(/** @type {string|null} */ (null));
   const [lesson, setLesson] = useState(/** @type {string|null} */ (null));
   const [confirmReset, setConfirmReset] = useState(false);
+  // A customer's car is built on its factory calibration, seconds of the gas exchange the first
+  // time an engine is seen: the simulator worker builds the waiting cars' engines as soon as the
+  // customers are shown (sim/warm.js), and taking one waits for its own, the button saying so.
+  const [taking, setTaking] = useState(/** @type {string|null} */ (null));
+  const presetOf = (id) => jobById(id)?.car?.preset ?? null;
+  useEffect(() => {
+    if (tab !== 'customers' || !career) return;
+    for (const j of board(career)) { const pr = j.car?.preset; if (pr) warm('preset', { id: pr }); }
+  }, [tab, career]);
 
   const last = career?.last;
   const unseen = last && last.seq !== career.lastSeen;
@@ -49,10 +59,17 @@ export function CareerOffice({ onWork }) {
 
   const takeJob = (id) => {
     const job = jobById(id);
-    update(accept(career, id));
-    setArriving(id);
-    setSpeech(job.says);
-    setTab('today');
+    const go = () => {
+      setTaking(null);
+      update(accept(career, id));
+      setArriving(id);
+      setSpeech(job.says);
+      setTab('today');
+    };
+    const ready = presetOf(id) ? warm('preset', { id: presetOf(id) }) : null;
+    if (!ready) { go(); return; }
+    setTaking(id);
+    ready.then(go);
   };
 
   const TABS = [
@@ -85,7 +102,7 @@ export function CareerOffice({ onWork }) {
       </nav>
 
       <ShopPanel
-        tab={tab} career={career} update={update} onWork={onWork} setTab={setTab} takeJob={takeJob}
+        tab={tab} career={career} update={update} onWork={onWork} setTab={setTab} takeJob={takeJob} taking={taking}
         setLesson={setLesson} confirmReset={confirmReset} setConfirmReset={setConfirmReset} unseen={!!unseen}
       />
 

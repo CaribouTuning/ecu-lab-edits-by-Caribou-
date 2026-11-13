@@ -11,6 +11,7 @@ import React, { useState } from 'react';
 
 import { PRESET_GROUPS, applyPreset } from '../../../sim/index.js';
 import { ownEnginePatch } from '../../state/ownEngine.js';
+import { warm } from '../../sim/warm.js';
 import { ACTIONS } from '../../state/reducer.js';
 import { useBuild } from '../../state/StoreProvider.jsx';
 
@@ -74,7 +75,18 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
   const U = useUnits();
   const [path, setPath] = useState(/** @type {null|'factory'} */ (null));
   const [picked, setPicked] = useState(/** @type {any} */ (null));
-  const load = (preset) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); onDone?.(); };
+  // A factory engine's calibration is worked out from its breathing, seconds of the gas
+  // exchange on a new engine: the simulator worker starts it as soon as the engine is picked
+  // (sim/warm.js), and putting it on the bench waits for that, not for a frozen screen.
+  const [loading, setLoading] = useState(/** @type {string|null} */ (null));
+  const pick = (p) => { setPicked(p); if (p) warm('preset', { id: p.id }); };
+  const load = (preset) => {
+    const put = () => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: applyPreset(preset) }); setLoading(null); onDone?.(); };
+    const ready = warm('preset', { id: preset.id });
+    if (!ready) { put(); return; }
+    setLoading(preset.id);
+    ready.then(put);
+  };
   const create = (patch) => { dispatch({ type: ACTIONS.APPLY_PRESET, preset: patch }); onDone?.(); };
 
   if (!path) {
@@ -106,7 +118,7 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
       </div>
       <div className={styles.catalog} data-plain="">
         <PrebuiltEngines
-            onPick={(p) => setPicked(picked?.id === p.id ? null : p)} picked={picked}
+            onPick={(p) => pick(picked?.id === p.id ? null : p)} picked={picked}
             detail={(p) => (
               <div className={styles.sheet} role="region" aria-label={`${p.name} specifications`}>
                 <dl className={styles.specs}>
@@ -117,7 +129,7 @@ export function EngineStart({ onCancel, onDone, replacing = false } = {}) {
                   <div><dt>Redline</dt><dd>{p.engine.redline.toLocaleString('en-US')} rpm</dd></div>
                   <div className={styles.wide}><dt>Factory rating</dt><dd>{U.fmtPower(p.factory.crankHp)}, {U.fmtTorque(p.factory.crankTq)}</dd></div>
                 </dl>
-                <button type="button" className={styles.use} onClick={() => load(p)} aria-label={`Use ${p.name}`}>{replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
+                <button type="button" className={styles.use} onClick={() => load(p)} disabled={loading === p.id} aria-busy={loading === p.id || undefined} aria-label={`Use ${p.name}`}>{loading === p.id ? 'Putting it on the bench…' : replacing ? 'Replace the engine and its tune' : 'Put it on the bench'}</button>
               </div>
             )}
           />

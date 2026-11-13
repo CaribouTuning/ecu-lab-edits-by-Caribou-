@@ -232,18 +232,52 @@ export function hardwareVeAt(cfg, mods, hw = {}) {
   // The same engine's breathing is asked for by its factory calibration, its VE truth, the
   // advisor and every pull: one grid per engine, kept, so no cell is solved twice. Keyed on
   // everything below that the gas exchange reads.
-  const key = JSON.stringify([cfg, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
+  // The bottom end's rating is the store's, not the breathing's: a catalogue engine carries it once
+  // loaded and not in its factory calibration, and keying on it solved the same grid twice.
+  const { bottomEndRatedRpm: _rated, bottomEnd: _parts, ...breathed } = cfg;
+  const key = JSON.stringify([breathed, !!mods.headers, !!mods.intercooler, turboOn, turbine?.effectiveAreaM2 ?? null,
     exhaustDia, fuel?.stoich ?? null, intakeCamAdvanceDeg, exhaustCamRetardDeg, COEFF.BREATH_VALVE_CD]);
   const kept = VE_READERS.get(key);
   if (kept) { VE_READERS.delete(key); VE_READERS.set(key, kept); return kept; }
-  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg });
+  const reader = buildVeReader(cfg, mods, { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg }, key);
   VE_READERS.set(key, reader);
-  if (VE_READERS.size > VE_READERS_KEPT) VE_READERS.delete(VE_READERS.keys().next().value);
+  if (VE_READERS.size > VE_READERS_KEPT) { const gone = VE_READERS.keys().next().value; VE_READERS.delete(gone); VE_NODES.delete(gone); }
   return reader;
 }
 
 /** Engines' breathing grids kept, most recently used last. */
 const VE_READERS = new Map();
+/** Each kept grid's solved nodes, by the same key: what another thread can be handed. */
+const VE_NODES = new Map();
+/** Nodes solved elsewhere for a grid not built here yet, waiting for it. */
+const VE_SEEDS = new Map();
+
+/**
+ * Everything the gas exchange has solved in this thread: each engine's grid nodes and its
+ * tuned runner lengths. Another thread running the same code on the same engine hands this
+ * back (`seedBreathing`), so the work is done once, off the thread that draws the screen.
+ * @returns {{grids: [string, [number, number][]][], runners: [string, number][]}}
+ */
+export function breathingSnapshot() {
+  return { grids: [...VE_NODES].map(([k, m]) => [k, [...m]]), runners: [...RUNNER_CACHE] };
+}
+
+/**
+ * Takes in nodes and runner lengths another thread solved with this same code
+ * (`breathingSnapshot`). They are the numbers this thread would compute, so a reading is the
+ * same whichever thread solved it; only the time is saved.
+ * @param {ReturnType<typeof breathingSnapshot>} snap
+ */
+export function seedBreathing(snap) {
+  for (const [k, v] of snap?.runners ?? []) if (!RUNNER_CACHE.has(k)) RUNNER_CACHE.set(k, v);
+  for (const [k, nodes] of snap?.grids ?? []) {
+    const live = VE_NODES.get(k);
+    const into = live ?? VE_SEEDS.get(k) ?? new Map();
+    for (const [n, v] of nodes) if (!into.has(n)) into.set(n, v);
+    if (!live) VE_SEEDS.set(k, into);
+  }
+  while (VE_SEEDS.size > VE_READERS_KEPT) VE_SEEDS.delete(VE_SEEDS.keys().next().value);
+}
 /** How many: an engine's phases and bolt-on variants several times over, a few MB at most. */
 const VE_READERS_KEPT = 48;
 
@@ -272,9 +306,10 @@ function veFinish(cfg, fuel) {
  * @param {import('./engine.js').EngineConfig} cfg
  * @param {{headers?: boolean, intercooler?: boolean}} mods
  * @param {object} hw
+ * @param {string|null} [key] the grid's key in `VE_READERS`, to register its nodes under
  * @returns {(rpm: number, mapKpa: number) => number}
  */
-function buildVeReader(cfg, mods, hw) {
+function buildVeReader(cfg, mods, hw, key = null) {
   const { turboOn, turbine, exhaustDia, fuel, intakeCamAdvanceDeg, exhaustCamRetardDeg } = hw;
   const g = breathingGeometry(cfg, { intakeCamAdvanceDeg, exhaustCamRetardDeg, headers: !!mods.headers });
   const cyl = CYL_COUNT[cfg.configuration];
@@ -282,7 +317,10 @@ function buildVeReader(cfg, mods, hw) {
   // The longer lobe floats first (engine.js `deriveEngine`).
   const finish = veFinish(cfg, fuel);
   const stoich = fuel?.stoich ?? GASOLINE_STOICH;
-  const cache = new Map();
+  // Nodes another thread already solved for this engine (`seedBreathing`), and this grid's
+  // own nodes registered for handing on (`breathingSnapshot`).
+  const cache = (key != null && VE_SEEDS.get(key)) || new Map();
+  if (key != null) { VE_SEEDS.delete(key); VE_NODES.set(key, cache); }
 
   /** The gas exchange at one grid node, computed once. */
   const node = (ri, mi) => {

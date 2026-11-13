@@ -27,14 +27,30 @@ import styles from './TuneAdvisory.module.css';
  * @returns {React.ReactElement|null}
  */
 export function TuneAdvisory({ kind, report }) {
-  if (kind === 'timing') return <>{report.fuelFirst && <FuelFirst {...report.fuelFirst} />}<TimingAdvisory report={report} /></>;
-  if (kind === 'afr') return <AfrAdvisory report={report} />;
+  if (kind === 'timing') return <>{report.sprayFirst && <SprayFirst {...report.sprayFirst} />}{report.fuelFirst && <FuelFirst {...report.fuelFirst} />}<TimingAdvisory report={report} /></>;
+  if (kind === 'afr') return <>{report.sprayFirst && <SprayFirst {...report.sprayFirst} />}<AfrAdvisory report={report} /></>;
   if (kind === 've') return <VeAdvisory report={report} />;
   return null;
 }
 
 /** Where each cause of a missed mixture is fixed, for the spark page's fuel-first note. */
 const FIX_PAGE = { injectors: 'BUILD › FUEL SYSTEM', pump: 'BUILD › FUEL SYSTEM', injscale: 'TUNE › INJECTORS', maf: 'TUNE › SENSORS', ve: 'TUNE › AIRFLOW' };
+
+/**
+ * The nitrous's trouble, on the page a player would otherwise look at: knock or a missed
+ * mixture while spraying is fixed on TUNE › NITROUS, as the pull log says, and this table is
+ * judged off the spray.
+ * @param {{knockDeg?: number, mixOffPct?: number, rich?: boolean}} props
+ */
+function SprayFirst({ knockDeg, mixOffPct, rich }) {
+  return (
+    <div className={styles.prose} data-testid="spray-first">
+      {knockDeg != null
+        ? <><b className={styles.emInk}>Knock while the nitrous sprays.</b> The pull ran up to {knockDeg.toFixed(1)}° past the knock limit with the nitrous on. That is the spray&apos;s: raise the retard while spraying on TUNE › NITROUS (the pull log names how much). This table is judged with the nitrous off.</>
+        : <><b className={styles.emInk}>The spray mixture is off.</b> While the nitrous sprays it runs {mixOffPct}% {rich ? 'richer' : 'leaner'} than this table asks for. That is the kit&apos;s fuel: correct it on TUNE › NITROUS (the pull log names how much), and leave this table as it is.</>}
+    </div>
+  );
+}
 
 /**
  * Fuel before spark: the engine is missing its AFR table, so these knock limits are for the
@@ -123,7 +139,7 @@ function TimingAdvisory({ report }) {
         <div className={styles.prose}>
           <CellStats cell={detail.cell} />
           {detail.cell.knockingOnPull ? 'The engine knocked while it was reading this cell on a full-throttle pull. ' : ''}{detail.cell.sparkCannotFix
-            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Lower the boost at this speed (BOOST, or a torque limit), or run better fuel.'
+            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Lower the boost at this speed (the boost target of a turbo, or the drive ratio of a supercharger, on BUILD → INDUCTION), cool the charge (an intercooler, on BUILD → INDUCTION), or run better fuel.'
             : 'Past the knock limit the engine is damaging itself. Pull this cell back to the suggested value, or lower.'}
         </div>
       );

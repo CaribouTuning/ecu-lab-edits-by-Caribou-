@@ -27,6 +27,8 @@ import { inRect, rectOf } from './selection.js';
  * @property {string} headline plain text, shown on the collapsed summary at <560px
  * @property {string} state which body the renderer should show
  * @property {object} detail numbers and cell records the body needs
+ * @property {{knockDeg?: number, mixOffPct?: number, rich?: boolean}} [sprayFirst] spark and fuel: the nitrous
+ *   knocked or missed its mixture while spraying, which TUNE → NITROUS answers
  * @property {{lean: boolean, cause: string}} [fuelFirst] spark only: the engine is missing its AFR
  *   table, so the knock limits are for the mixture it is getting (fix the fuelling first)
  */
@@ -54,8 +56,26 @@ export function sparkReport(calAdvice, selection) {
   // knock limits below are the ones for the mixture it is getting: a lean charge lowers them,
   // and a tuner who retards to them now puts it all back once the fuelling is right.
   const missed = (calAdvice.missedMix ?? []).find((p) => p.lean) ?? (calAdvice.missedMix ?? [])[0];
-  return missed ? { ...report, fuelFirst: { lean: missed.lean, cause: missed.cause ?? 've' } } : report;
+  const withFuel = missed ? { ...report, fuelFirst: { lean: missed.lean, cause: missed.cause ?? 've' } } : report;
+  return withSpray(withFuel, calAdvice, 'knock');
 }
+
+/**
+ * The nitrous's own trouble, named on the page a player would otherwise look at: knock or a
+ * missed mixture while spraying belongs to TUNE → NITROUS, and this table is not judged on it.
+ * @param {AdvisorReport} report @param {any} calAdvice @param {'knock'|'mix'} what
+ * @returns {AdvisorReport}
+ */
+function withSpray(report, calAdvice, what) {
+  const s = calAdvice.spray;
+  if (!s) return report;
+  if (what === 'knock' && s.knockDeg > 0) return { ...report, sprayFirst: { knockDeg: s.knockDeg } };
+  if (what === 'mix' && s.mixOffPct > MIX_OFF_SPRAY_PCT) return { ...report, sprayFirst: { mixOffPct: s.mixOffPct, rich: s.rich } };
+  return report;
+}
+
+/** A spray mixture off its target by more than this, percent, is named on FUEL (as the log's). */
+const MIX_OFF_SPRAY_PCT = 6;
 
 /**
  * @param {any} calAdvice
@@ -152,6 +172,15 @@ function sparkReportOf(calAdvice, selection) {
  * @returns {AdvisorReport}
  */
 export function fuelReport(calAdvice, selection) {
+  return withSpray(fuelReportOf(calAdvice, selection), calAdvice, 'mix');
+}
+
+/**
+ * @param {any} calAdvice
+ * @param {any} selection
+ * @returns {AdvisorReport}
+ */
+function fuelReportOf(calAdvice, selection) {
   const { fuelAdv, wrongMix } = calAdvice;
 
   if (selection && selection.type === 'cell') {

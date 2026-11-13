@@ -81,6 +81,28 @@ describe('the layout switch', () => {
     return reducer(s, /** @type {any} */ (layoutSwitch(s, 'engine')));
   };
 
+  it('grows the game grid too when a build reaches past it, so the pull log\'s "Extend the axes" is always there to press', () => {
+    // An LS1 starts on the 8 × 6; a TVS1900 at 2.4:1 makes more than its 200 kPa top row.
+    let s = reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById('ls1')) });
+    const was = s.tune;
+    expect(S.layoutById(was.layout).id).toBe('game');
+    s = { ...s, session: { ...s.session, mode: 'career' } };
+    s = reducer(reducer(s, { type: ACTIONS.SET_BUILD_FIELD, field: 'blowerId', value: 'tvs1900' }), { type: ACTIONS.SET_BUILD_FIELD, field: 'blowerRatio', value: 2.4 });
+    expect(engineOutgrowsTables(s)).toBe(true);
+    const ext = reducer(s, extendAxes(s));
+    const from = S.layoutById(was.layout).timing;
+    const to = S.layoutById(ext.tune.layout).timing;
+    // Still the game grid, a row taller; every breakpoint and cell it had is where it was.
+    expect(S.layoutById(ext.tune.layout).id).toBe('game');
+    expect(to.load[0]).toBeGreaterThan(200);
+    expect(to.load.slice(-from.load.length)).toEqual(from.load);
+    expect(to.rpm).toEqual(from.rpm);
+    const added = to.load.length - from.load.length;
+    expect(ext.tune.timing.slice(added)).toEqual(was.timing);
+    expect(ext.tune.untuned.timing).toHaveLength(added * to.rpm.length);
+    expect(engineOutgrowsTables(ext)).toBe(false);
+  });
+
   it('regenerates an untouched factory calibration on the new breakpoints, and undo puts the engine\'s own back', () => {
     let s = onLs1();
     s = reducer(s, { type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: { type: 'cell', row: 2, col: 3 } });

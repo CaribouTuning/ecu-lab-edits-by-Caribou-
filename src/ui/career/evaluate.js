@@ -70,7 +70,9 @@ function check(c, ctx) {
   const wot = r.points.filter((p) => p.openLoop && !(p.nitrousLbMin > 0));
   switch (c.type) {
     case 'events': {
-      const hit = r.events.filter((e) => c.types.includes(e.type));
+      // A miss the log calls grid-bound is as close as the shop's fixed breakpoints go
+      // (sweep.js `gridBound`): the career offers no finer layout, so it is not held against you.
+      const hit = r.events.filter((e) => c.types.includes(e.type) && !e.gridBound);
       return { check: c, pass: hit.length === 0, measured: hit.length ? hit.map((e) => e.msg).join('; ') : 'none in the log' };
     }
     case 'mixture': {

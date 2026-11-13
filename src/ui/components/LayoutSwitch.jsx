@@ -55,7 +55,8 @@ export function LayoutSwitch() {
   // The game's 8 × 6 first: where every engine that fits it starts, and quick to read and tune on
   // any screen. The finer grid sized to the engine, and the engine computer's own, beside it.
   const options = [
-    { id: 'game', label: '8 × 6' },
+    // Its size as it stands: extending the game grid for boost adds rows to it.
+    { id: 'game', label: active.id === 'game' ? `${active.ve.rpm.length} × ${active.ve.load.length}` : '8 × 6' },
     { id: 'engine', label: 'Sized, 16 × 16' },
     ...[...new Set([own, ECU_LAYOUTS[active.id] ? active.id : null].filter(Boolean))]
       .map((id) => ({ id, label: ECU_LAYOUTS[id].ecu.split(',')[0] })),

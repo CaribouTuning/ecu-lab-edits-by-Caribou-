@@ -73,8 +73,8 @@ remaining risk is the same Node major with a different libm, which is what step 
   whether the miss scales with that distance before suspecting the preset data.
 - **SANDBOX opens with no engine** (`makeInitialState({ blank: true })`, `build.engineReady` false):
   the placeholder hardware behind that gate is nobody's engine and no screen shows it. The
-  career's cars start from the ready default instead; the tutorial, the course and the practice
-  missions use the Nissan VQ35DE Rev-Up preset (`LESSON_ENGINE`), which a player can pick. A player's
+  career's cars start from the ready default instead; the tutorial and the practice missions
+  use the Nissan VQ35DE Rev-Up preset (`LESSON_ENGINE`), which a player can pick. A player's
   own engine is built by `validateCustomEngine` + `customEnginePatch` (sim/presets.js), which
   generates its calibration from the physics. The advisor, the pull log and the Tuning Score
   must tell one story: a stock calibration is clean on TUNE at every load, and RESET ALL TO
@@ -84,7 +84,8 @@ remaining risk is the same Node major with a different libm, which is what step 
   an intercooler with its factory turbo (`stockModsOf`). The game never fills tables for the
   player. Every engine that fits it starts on the game's 8 × 6 grid (`presetLayout`; only one
   that revs past 7,750 RPM or makes more than 200 kPa gets breakpoints sized to it), and the
-  sized 16 × 16 is on TUNE's layout switch. In SANDBOX a build that reaches past its tables extends the axes as the same
+  sized 16 × 16 is on TUNE's layout switch. Both grow (`engineOutgrowsTables`, `extendAxes`):
+  the pull log's "Extend the axes" must always have a button to press. In SANDBOX a build that reaches past its tables extends the axes as the same
   write (`withRowsForTheBuild` in reducer.js): `extendAxes` only ever APPENDS rows and columns
   (never re-sample a tuned table: that once turned a typed 11° into 21°) and fills them from
   the edge, marked not tuned, and TUNE fades the cells the engine does not reach yet
@@ -142,6 +143,17 @@ remaining risk is the same Node major with a different libm, which is what step 
   truth prices it, so a pull, the live engine or the advisor that leaves it out runs the
   car on a 3.0 in pipe and disagrees with its own factory calibration. `src/sim/rig.js`,
   `pullInputs.js` and EcuLab's sweeps all carry it.
+- **The log, the advisor and the score tell one story, and the tests play it**
+  (`tests/guidedPlayer.js`: a player acting only on log fix text, TUNE's listed cells and LIVE's
+  idle advice). Every story job and the SANDBOX builds in `tests/guided-workflow.test.js` must
+  finish. The log calls spark short only where a cell has the room (`judgeAgainstPull`'s rule,
+  mirrored in sweep.js); a mixture miss the VE cells already fit to within half the tolerance is
+  `gridBound` (the breakpoints, not the table), which a career job does not count. While nitrous
+  sprays a point is TUNE → NITROUS's (`offSpray`), never the base tables'.
+- **Slow work runs in a Web Worker** (`ui/sim/warm.js`, `simWorker.js`, inlined by Vite's
+  `?worker&inline`): the same code solves the breathing there and the page seeds the nodes
+  (`seedBreathing`), so the numbers are identical (tests/sim-worker.test.js). With no worker
+  (tests, jsdom) `warm` returns null and callers run at once.
 - **Live noise is seeded** (`liveCore.js liveRandom`, mulberry32 in `s.rng`), so a LIVE run
   replays exactly; do not call `Math.random` in the simulation.
 - **The overrun burble is physics, not a sound effect.** `ignition.burble*` keeps fuel on

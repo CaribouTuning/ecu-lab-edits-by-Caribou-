@@ -362,3 +362,4 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
 .learnTurn button[data-next] { margin-left: auto; text-align: right; }
 .learnTurn button span { display: flex; flex-direction: column; }
 .learnTurn button small { font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }
+.learnWorking { margin: 18px 0; font-size: var(--fs-sm); color: var(--ink2); }

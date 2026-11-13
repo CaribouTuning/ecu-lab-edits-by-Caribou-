@@ -54,17 +54,21 @@ export function layoutFor(build, choice) {
   return ECU_LAYOUTS[choice] ? oemLayout(choice, engine.ve) : engine;
 }
 
+/** The layouts whose breakpoints are the game's to add to: its own grid and the sized one. */
+const EXTENDABLE = new Set(['game', 'engine']);
+
 /**
  * Whether the engine reaches past its tables' breakpoints: more boost than the top load
  * row, or a limiter past the last RPM column. A real ECU reads the edge there; the player
- * extends the axes when they are ready to tune the new cells (`extendAxes`). Only for
- * breakpoints sized to the engine: an engine computer's own do not move.
+ * extends the axes when they are ready to tune the new cells (`extendAxes`). For the game's
+ * grid and breakpoints sized to the engine: an engine computer's own do not move. The game
+ * grid grows by whole rows above its top (and columns past its last), every cell it had kept.
  * @param {Pick<StoreState, 'build'|'tune'>} state
  * @returns {boolean}
  */
 export function engineOutgrowsTables(state) {
   const { build, tune } = state;
-  if (!tune.layout || typeof tune.layout !== 'object' || tune.layout.id !== 'engine') return false;
+  if (!tune.layout || typeof tune.layout !== 'object' || !EXTENDABLE.has(tune.layout.id)) return false;
   const want = buildLayout(build).ve;
   const have = tune.layout.ve;
   return want.load[0] > have.load[0] + 0.5 || want.rpm[want.rpm.length - 1] > have.rpm[have.rpm.length - 1] + 0.5;
