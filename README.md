@@ -17,8 +17,8 @@ pull, and read a log that explains what went right or wrong.
 It is a teaching tool, not a game with a horsepower slider.
 
 Three ways in, all in the same shop. **SANDBOX** is free play: the laptop on the desk has
-Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide
-and the Tuning Course) and Physics (the engine model laid open on your own engine, a page at a
+Build (the engine, drawn in 3D as you change it), Tune (the ECU's tables), Learn (the guide to
+tuning, a page at a time) and Physics (the engine model laid open on your own engine, a page at a
 time: the curves, the intake, the exhaust, one cylinder firing, every calculation and the
 wear); shut it and the dyno, the build bench and the engine stand are in the shop behind it.
 On a phone the laptop is the phone: the same apps on a home screen. **TUTORIAL** is five

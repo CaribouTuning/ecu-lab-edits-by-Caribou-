@@ -9,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 
 import { newCareer } from '../src/ui/career/shop.js';
 import { CHAPTERS, advanceSaga, isMaster, messagesFor, openChapter, readMessage, sagaOf, unreadCount } from '../src/ui/career/story.js';
-import { CHAPTERS as COURSE } from '../src/ui/tutorial/lessons.jsx';
 
 /** @returns {any[]} */
 const pass = (n) => Array.from({ length: n }, (_, i) => ({ jobId: `j${i}`, verdict: 'pass', paid: 100, repChange: 1, boosted: false, peakHp: 200 }));
@@ -77,11 +76,16 @@ describe('the story', () => {
     expect(() => messagesFor(c)).not.toThrow();
   });
 
-  it('teaches from real sources: every lesson names where it comes from, and its course lesson exists', () => {
-    const lessonIds = COURSE.flatMap((p) => p.lessons.map((l) => l.id));
+  it('teaches from real sources: every lesson names where it comes from, and every Learn article it cites exists', () => {
     for (const ch of CHAPTERS) {
       expect(ch.lesson.sources.length, ch.id).toBeGreaterThan(0);
-      if (ch.lesson.course) expect(lessonIds, ch.id).toContain(ch.lesson.course);
+      for (const src of ch.lesson.sources) {
+        expect(src, ch.id).not.toMatch(/Tuning Course/);
+        // "Learn, articles 37 and 38": the guide has 42.
+        for (const n of (src.match(/Learn, articles? ([\d, and]+)/)?.[1].match(/\d+/g) ?? [])) {
+          expect(Number(n), `${ch.id}: ${src}`).toBeLessThanOrEqual(42);
+        }
+      }
     }
   });
 });

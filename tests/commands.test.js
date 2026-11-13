@@ -40,13 +40,15 @@ describe('pageCommands', () => {
     ]);
     expect(list).toContain('page:live');
     expect(list.some((id) => id.startsWith('page:live/'))).toBe(false);
-    // The laptop's reading apps: LEARN's four shelves, and PHYSICS's pages, one at a time as TUNE's.
-    expect(list.slice(-13)).toEqual([
-      'page:learn', 'page:learn/sources', 'page:learn/ecu', 'page:learn/engine', 'page:learn/how',
+    // The laptop's reading apps: LEARN's pages and PHYSICS's pages, one at a time as TUNE's.
+    expect(list.slice(-19)).toEqual([
+      'page:learn', 'page:learn/start', 'page:learn/air', 'page:learn/fuel', 'page:learn/spark', 'page:learn/pull',
+      'page:learn/job', 'page:learn/boost', 'page:learn/ecu', 'page:learn/engine', 'page:learn/model',
       'page:physics', 'page:physics/model', 'page:physics/intake', 'page:physics/header', 'page:physics/exhaust',
       'page:physics/cylinder', 'page:physics/calc', 'page:physics/wear',
     ]);
-    expect(list).toHaveLength(6 + 27 + 7);
+    // Tabs, their sections (LEARN's ten pages among them), and PHYSICS's seven pages.
+    expect(list).toHaveLength(6 + 33 + 7);
   });
 
   it('prints the tab before a section, and not before a tab', () => {

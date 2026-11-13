@@ -138,7 +138,7 @@ function WorkedSession() {
   const entries = (d) => d.result.events.map((e) => e.type).join(', ') || 'clean';
   return (
     <>
-      The whole job from chapter 4 of the Tuning Course, with every step&apos;s pull. These are real pulls of the Nissan VQ35DE Rev-Up, the engine the course uses, worked out by the game when you opened this article.
+      A whole job, a bolt-on and its retune, with every step&apos;s pull. These are real pulls of the Nissan VQ35DE Rev-Up, the engine the tutorial and these articles use, worked out by the game when you opened this article.
       <Table
         head={['Step', 'Peak', 'Pull Log']}
         rows={[
@@ -170,6 +170,24 @@ function HowItRuns() {
   );
 }
 
+/** Article 42: the order of work on a car you have never tuned. */
+function AnyCar() {
+  return (
+    <>
+      Every car you meet will name its tables differently, read its load on a different axis (manifold pressure, grams of air per cylinder, or throttle) and hide its settings in different places. The engine underneath is the same air pump, so the order of work is the same. Tuners who have done hundreds of cars still work through it in this order, because each step stands on the one before it.
+      <br /><br /><b className={styles.em}>1. Before you touch the tune: make sure the engine is healthy and save the stock file.</b> A tune cannot fix low compression, a vacuum leak, a weak fuel pump or a worn plug, and it will be blamed for them (article 15). Read the original calibration out of the car and keep a copy you never edit: it is your way back. Make a baseline pull on the stock tune and save its log, so every change after it has something to be measured against (article 12).
+      <br /><br /><b className={styles.em}>2. Get the logging right.</b> You cannot tune what you cannot see. At a minimum: a wideband lambda sensor (the factory narrowband only knows rich or lean of stoichiometric), knock retard, short and long term fuel trims, the load the ECU is using, intake air temperature and injector duty (article 14). Know what injectors and fuel the car has; if either changed, enter them before anything else (articles 9 and 28).
+      <br /><br /><b className={styles.em}>3. Make the ECU&apos;s air sum true.</b> Fuel and spark are both looked up by load, so if the ECU is wrong about how much air is in the cylinder, every table after it is wrong in the same way. On a speed-density car that is the VE table; on a MAF car, the MAF scaling (articles 7, 37 and 38). Correct it from steady logs until the trims sit within a few percent across the cells you drive in, and the measured lambda matches the commanded lambda at full throttle.
+      <br /><br /><b className={styles.em}>4. Then set the mixture you want.</b> With the air sum true, the lambda target table now means what it says. Choose full-throttle targets for the engine and fuel in front of you, richer under boost for the cooling (articles 3 and 10).
+      <br /><br /><b className={styles.em}>5. Then spark, in small steps, from the safe side.</b> Add a degree or two at a time in the load rows you are working on, pull, and read both the torque and the knock (articles 4 and 5). Stop where torque stops rising (that is MBT) or where knock begins, whichever comes first, and leave a margin back from knock: a hot day or a worse tank of fuel will move it. Knock control is a safety net, not a tuning tool (article 29).
+      <br /><br /><b className={styles.em}>6. Boost last, a step at a time.</b> More boost is more air, which moves the air sum, the fuel and the knock limit together. Raise it in steps and repeat steps 3 to 5 at each one (articles 17 and 18). Watch injector duty and charge temperature as you go: running out of injector or intercooler is a hardware limit, not a table (article 15).
+      <br /><br /><b className={styles.em}>7. Prove it.</b> Pull again on the same conditions and compare with the baseline. Repeat the pull: a gain that does not repeat is noise. Then log the car the way it will be driven, warm and heat-soaked, because a tune that is safe on one cool pull and not on the fifth is not finished (article 16).
+      <br /><br />The rest of the ECU (idle, cold start, transient fuel, the controllers and protections) is usually right from the factory and wants changing only when the hardware has changed (articles 26 to 31). In this game every step above is on a screen you have used: BUILD for the hardware, TUNE for the tables, the dyno and its log for the measuring. That is the whole job, on any car.
+      <br /><br /><b className={styles.em}>Where it comes from:</b> the order is the one the tuning guides in article 33 give (HP Tuners&apos; beginner&apos;s guide, UpRev&apos;s Nissan guide, Driven Racing Oil&apos;s guide) and the one set out at length in Greg Banish, <i>Engine Management: Advanced Tuning</i> (CarTech, 2007).
+    </>
+  );
+}
+
 /**
  * @returns {React.ReactElement}
  */
@@ -183,6 +201,7 @@ export function LearnDeep() {
       <Article g="ecu" lazy title="39. Troubleshooting by symptom"><Troubleshooting /></Article>
       <Article g="ecu" lazy title="40. A whole session, worked through"><WorkedSession /></Article>
       <Article g="how" lazy title="41. How the simulator runs: steps in time and crank angle"><HowItRuns /></Article>
+      <Article g="ecu" title="42. Any car, in order: how to approach a tune you have never seen"><AnyCar /></Article>
     </>
   );
 }

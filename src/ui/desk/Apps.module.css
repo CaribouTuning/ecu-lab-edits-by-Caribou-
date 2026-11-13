@@ -240,77 +240,75 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
 .ctlNote { grid-column: 1 / -1; margin: 0; font-size: var(--fs-xs); color: var(--ink2); }
 
 /* ---------- CAREER: Pops's messages, as the phone's Messages and Mail draw them ---------- */
-.msgs { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; min-height: 100%; background: var(--bg); font-family: var(--sans); }
-.msgList { min-width: 0; display: flex; flex-direction: column; padding: 8px 0 16px; border-right: 1px solid var(--line); background: var(--bg); }
-.msgTitle { margin: 4px 16px 8px; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
-.msgProgress { display: flex; flex-direction: column; gap: 6px; margin: 0 12px 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); font-size: var(--fs-sm); color: var(--ink2); }
-.msgProgress b { color: var(--ink); }
-.msgBar { height: 4px; border-radius: 2px; background: var(--panel3); overflow: hidden; }
-.msgBar span { display: block; height: 100%; background: var(--msg-sent); }
-.msgRows { display: flex; flex-direction: column; }
+.msgs { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; height: 100%; min-height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', var(--sans); }
+/* The conversation list, as iMessage lays it out: a large title, then one row per person. */
+.msgList { min-width: 0; min-height: 0; height: 100%; overflow-y: auto; display: flex; flex-direction: column; padding: 8px 0 16px; border-right: 1px solid var(--line); background: var(--bg); }
+/* The large title, where the window's own bar does not already name the app. */
+.msgTitle { margin: 6px 16px 10px; font-size: 32px; font-weight: 700; letter-spacing: 0.005em; color: var(--ink); }
 .msgRow {
-  display: flex; gap: 10px; align-items: center; padding: 10px 12px 10px 4px; border: 0; border-radius: 0;
-  background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit;
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 16px 10px 4px; border: 0; background: transparent;
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
 }
 .msgRow:hover { background: var(--panel); }
 .msgRow[aria-current='page'] { background: var(--msg-sent); }
-.msgRow[aria-current='page'] :is(small, .msgRowPreview, .msgRowSubject) { color: var(--app-glyph); }
-.msgDotSlot { flex: none; width: 12px; display: grid; place-items: center; }
+.msgRow[aria-current='page'] :is(small, .msgRowPreview) { color: var(--app-glyph); }
+.msgDotSlot { flex: none; width: 14px; display: grid; place-items: center; }
 .msgDot { width: 10px; height: 10px; border-radius: 50%; background: var(--msg-sent); display: block; }
 .msgRow[aria-current='page'] .msgDot { background: var(--app-glyph); }
+/* iOS's contact with no photo: an initial on a grey gradient disc. Fixed size, never squeezed. */
 .avatar {
-  flex: none; align-self: flex-start; aspect-ratio: 1; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
-  background: linear-gradient(var(--app-search-hi), var(--app-search-lo)); color: var(--app-glyph); font-size: 19px; font-weight: 600;
+  flex: none; display: grid; place-items: center; aspect-ratio: 1; border-radius: 50%;
+  background: linear-gradient(180deg, #a5abb8, #858a96); color: #fff; font-weight: 600; line-height: 1;
 }
-.avatar[data-small='true'] { align-self: flex-start; width: 36px; height: 36px; font-size: 16px; }
-.msgRowText {
-  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px;
-  padding-bottom: 10px; margin-bottom: -10px; border-bottom: 1px solid var(--line);
-}
+.msgRowText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .msgRowTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.msgRowTop b { font-size: var(--fs-md); font-weight: 600; }
-.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-sm); color: var(--ink2); flex: none; }
-.msgRowSubject, .msgRowPreview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
-.msgRowSubject { display: flex; align-items: center; gap: 5px; color: var(--ink-soft); }
-.msgRowSubject svg { flex: none; }
-.msgRowSubject[data-unread='true'] { color: var(--ink); font-weight: 600; }
-.msgRowPreview { color: var(--ink2); }
-.msgView { min-width: 0; padding: 14px 22px 28px; }
-.msgEmpty { color: var(--ink2); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
-.msgBack {
-  display: none; align-items: center; gap: 0; margin: 0 0 6px -6px; padding: 4px 4px; border: 0;
-  background: transparent; color: var(--msg-sent); font: inherit; font-size: var(--fs-md); cursor: pointer;
+.msgRowTop b { font-size: 16px; font-weight: 600; }
+.msgRowTop small { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; color: var(--ink2); flex: none; }
+.msgRowPreview {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 14px; line-height: 1.3; color: var(--ink2);
 }
-/* A text: the thread, Pops's bubbles grey on the left, yours blue on the right. */
-.threadHead { display: flex; flex-direction: column; align-items: center; gap: 3px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.threadHead b { font-size: var(--fs-sm); font-weight: 600; }
-.threadHead small { font-size: var(--fs-xs); color: var(--ink2); }
-.threadDay { align-self: center; margin: 0 0 4px; font-size: var(--fs-xs); color: var(--ink2); }
-.bubbles { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding-top: 12px; max-width: 640px; margin: 0 auto; }
-.bubble { margin: 0; max-width: 78%; padding: 8px 14px; border-radius: 18px; background: var(--msg-got); color: var(--ink); font-size: var(--fs-md); line-height: 1.4; }
-.bubble[data-me='true'] { align-self: flex-end; margin-top: 8px; background: var(--msg-sent); color: var(--app-glyph); }
-/* An email: Mail's page, the subject over who it is from. */
-.mail { max-width: 720px; }
-.msgSubject { margin: 4px 0 12px; font-size: 22px; font-weight: 700; line-height: 1.25; }
-.mailFrom { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
-.mailFrom > span { display: flex; flex-direction: column; flex: 1; }
-.mailFrom b { font-size: var(--fs-base); font-weight: 600; }
-.mailFrom small { font-size: var(--fs-xs); color: var(--ink2); }
-.mailWhen { align-self: flex-start; }
-.msgPara { margin: 0 0 12px; font-size: var(--fs-md); line-height: 1.6; color: var(--ink); }
-.msgLesson { margin: 18px 0 14px; padding: 14px 16px; border-radius: 12px; background: var(--panel); }
-.msgLesson h4 { margin: 0 0 8px; font-size: var(--fs-base); color: var(--acc-ink); }
-.msgLesson ul { margin: 0 0 10px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink); }
-.msgSources { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink2); line-height: 1.5; }
-.msgCourse { padding: 8px 14px; border: 0; border-radius: 10px; background: var(--msg-sent); color: var(--app-glyph); font: inherit; font-weight: 600; font-size: var(--fs-sm); cursor: pointer; }
-.msgGoal { padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); font-size: var(--fs-sm); }
+.msgRowPreview[data-unread='true'] { color: var(--ink); }
+/* The thread scrolls inside itself, so its header stays put as iMessage's does. */
+.msgView { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
+.msgEmpty { color: var(--ink2); text-align: center; margin-top: 30%; font-size: var(--fs-md); }
+/* The thread's header: back on the left, the contact centred under their picture. */
+.threadHead {
+  position: sticky; top: 0; z-index: 1; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center;
+  padding: 6px 4px 8px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.msgBack { display: none; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; background: transparent; color: var(--msg-sent); cursor: pointer; }
+.threadWho { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.threadWho b { display: inline-flex; align-items: center; gap: 1px; font-size: 12px; font-weight: 500; color: var(--ink); }
+.threadWho small { font-size: 11px; color: var(--ink2); }
+/* Bubbles: his grey on the left, yours blue on the right; the last of a run carries the tail. */
+.bubbles { flex: 1; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 8px 12px 20px; width: 100%; max-width: 680px; margin: 0 auto; box-sizing: border-box; }
+.threadDay { align-self: center; margin: 14px 0 6px; font-size: 11px; font-weight: 500; color: var(--ink2); text-align: center; }
+.threadNote { align-self: center; margin: 14px 0 0; font-size: 11px; color: var(--ink2); }
+.bubble {
+  position: relative; margin: 0; max-width: 78%; padding: 7px 12px; border-radius: 18px;
+  background: var(--msg-got); color: var(--ink); font-size: 16px; line-height: 1.3; overflow-wrap: anywhere;
+}
+.bubble[data-tail='true'] { border-bottom-left-radius: 4px; margin-bottom: 6px; }
+.bubble[data-me='true'] { align-self: flex-end; background: var(--msg-sent); color: #fff; }
+.bubble[data-me='true'][data-tail='true'] { border-bottom-left-radius: 18px; border-bottom-right-radius: 4px; }
+.bubble[data-pay='true'] { padding: 10px 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; background: var(--msg-got); }
+.bubble[data-goal='true'] b { color: var(--warn-ink, var(--ink)); }
+/* What Ray taught him: a card in the thread, as iMessage shows a link with its preview. */
+.linkCard { max-width: 82%; margin: 0; border-radius: 18px; overflow: hidden; background: var(--msg-got); color: var(--ink); }
+.linkCard[data-tail='true'] { border-bottom-left-radius: 4px; margin-bottom: 6px; }
+.linkCardHead { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 8px; background: color-mix(in srgb, var(--msg-sent) 22%, var(--msg-got)); }
+.linkCardHead small { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink2); }
+.linkCardHead b { font-size: 16px; font-weight: 600; line-height: 1.25; }
+.linkCard ul { margin: 0; padding: 10px 14px 4px 30px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
+.linkCardFoot { margin: 0; padding: 6px 14px 10px; font-size: 12px; line-height: 1.4; color: var(--ink2); }
 @media (max-width: 700px) {
   .msgs { grid-template-columns: minmax(0, 1fr); }
   .msgs[data-open] .msgList { display: none; }
   .msgs:not([data-open]) .msgView { display: none; }
   .msgList { border-right: 0; }
-  .msgBack { display: inline-flex; }
-  .msgView { padding: 8px 14px 24px; }
+  .msgBack { display: grid; }
+  .msgTitle { display: none; }
 }
 
 /* ---- the dyno computer's run sheet, before the first pull ---- */
@@ -349,3 +347,18 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
   .liveEq dt { margin-top: 8px; font-size: var(--fs-xs); }
   .liveEq dt:first-child { margin-top: 0; }
 }
+
+/* ---------- Learn: a page's heading, and turning to the next ---------- */
+.learnHead { margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line-hi); }
+.learnHead small { font-size: var(--fs-xs); color: var(--ink2); }
+.learnHead h2 { margin: 2px 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+.learnHead p { margin: 0; max-width: 70ch; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-soft); }
+.learnTurn { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-hi); }
+.learnTurn button {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 12px; max-width: 48%;
+  border: 1px solid var(--line-hi); border-radius: 10px; background: var(--panel); color: var(--ink);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; text-align: left; cursor: pointer;
+}
+.learnTurn button[data-next] { margin-left: auto; text-align: right; }
+.learnTurn button span { display: flex; flex-direction: column; }
+.learnTurn button small { font-size: var(--fs-xs); font-weight: 500; color: var(--ink2); }

@@ -44,7 +44,7 @@ export const TRAINING = [
       'The best point is MBT, minimum advance for best torque. Past it you gain nothing but knock risk. More boost, heat or compression lowers the knock limit, and the ECU’s knock control will pull timing back out, costing power.',
       'How to tell on a car: too little timing runs hot at the exhaust and down on power with a clean log; too much shows the ECU pulling timing in the log, and makes less power, not more.',
     ],
-    deeper: 'The Tuning Course, lessons 2.3 and 3.4',
+    deeper: 'Learn articles 4 and 5, and 12, the loop',
   },
   {
     id: 'idle', title: 'Idle control', price: 400, rep: 0, pages: ['idle'],
@@ -110,7 +110,7 @@ export const TRAINING = [
       'Breathing parts and a longer cam move the power up the rev range and cost idle quality and low-speed torque. Compression is free power until it meets the fuel’s knock limit. Boost is the biggest lever, and it needs injectors, spark and fuel to match.',
       'Build first, then tune: every hardware change makes the VE table out of date, so log it again. A build is only done when the whole list is met on the dyno and it is safe.',
     ],
-    deeper: 'The Tuning Course, chapter 4, and Learn articles 17, 35 and 40',
+    deeper: 'Learn articles 17, 35 and 40',
   },
   {
     id: 'torque', title: 'Torque management', price: 800, rep: 30, pages: ['torque'],

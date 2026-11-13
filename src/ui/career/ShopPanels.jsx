@@ -225,9 +225,9 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, setLes
 
 /**
  * The lesson a course opens with, as a dialog.
- * @param {{lesson: string|null, onClose: () => void, onLearn?: () => void}} props
+ * @param {{lesson: string|null, onClose: () => void}} props
  */
-export function LessonDialog({ lesson, onClose, onLearn }) {
+export function LessonDialog({ lesson, onClose }) {
   const t = lesson ? TRAINING.find((x) => x.id === lesson) : null;
   if (!t) return null;
   return (
@@ -236,10 +236,9 @@ export function LessonDialog({ lesson, onClose, onLearn }) {
         <div className={styles.cardTag}>Training: {t.title}</div>
         {t.lesson.map((para) => <p key={para} className={styles.lessonText}>{para}</p>)}
         <p className={styles.small}><b>Opens:</b> {[...t.pages.map((pg) => `TUNE › ${pg.toUpperCase()}`), ...(t.sections ?? []).map((sc) => `the ECU settings on TUNE › ${sc.toUpperCase()}`)].join(', ')}.</p>
-        {t.deeper && <p className={styles.small}><b>Go deeper:</b> {t.deeper}{onLearn ? '.' : ''}</p>}
+        {t.deeper && <p className={styles.small}><b>Go deeper:</b> {t.deeper}.</p>}
         <div className={styles.row}>
           <Button size="sm" onClick={onClose}>Got it</Button>
-          {onLearn && <Button size="sm" variant="ghost" onClick={onLearn}>Open the course</Button>}
         </div>
       </div>
     </div>

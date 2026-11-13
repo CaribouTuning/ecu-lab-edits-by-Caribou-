@@ -97,8 +97,7 @@
 
 .minutes { font-weight: 600; color: var(--ink-soft); font-size: var(--fs-sm); }
 
-.lessonList,
-.missionList { margin: 0; padding: 0; list-style: none; }
+.lessonList { margin: 0; padding: 0; list-style: none; }
 
 .lessonLink {
   display: flex;
@@ -120,31 +119,6 @@
 .lessonNum { flex: 0 0 30px; font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--acc-ink); font-size: var(--fs-sm); }
 .lessonTitle { flex: 1; }
 .tick { color: var(--ok); flex-shrink: 0; }
-
-.mission,
-.practice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-lg);
-  padding: var(--sp-md) var(--sp-lg);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--panel);
-}
-
-.mission { margin-bottom: var(--sp-sm); }
-
-.practice {
-  margin: var(--sp-xxl) 0 var(--sp-lg);
-  border-color: var(--acc);
-  background: var(--acc-bg);
-  flex-wrap: wrap;
-}
-
-.practiceTag { font-size: var(--fs-micro); font-weight: 600; color: var(--acc-ink); }
-.practiceTitle { margin: 2px 0; font-size: var(--fs-base); font-weight: 600; color: var(--ink); }
-.practiceText { font-size: var(--fs-sm); line-height: 1.5; color: var(--ink-soft); }
 
 /* Finishing a chapter is worth saying. */
 .chapterDone {

@@ -10,7 +10,7 @@ import React from 'react';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import EcuLab from '../../src/ui/EcuLab.jsx';
-import { enterSandbox, goTo, enterCareer, factoryEngine, customEngine } from './nav.js';
+import { enterSandbox, goTo, factoryEngine, customEngine } from './nav.js';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
 const hadResizeObserver = 'ResizeObserver' in window;
@@ -106,29 +106,6 @@ describe('figures the app assumed for the player\'s own engine', () => {
     fireEvent.click(parts().getByRole('button', { name: /^Engine/ }));
     expect(note()).not.toMatch(/cam duration/);
     expect(note()).toMatch(/valvetrain DOHC/);
-  });
-});
-
-describe('a practice mission with no engine chosen yet', () => {
-  const openCourse = () => act(() => { window.location.hash = '#/course'; window.dispatchEvent(new window.HashChangeEvent('hashchange')); });
-
-  it('puts the engine the missions were written around on the bench, from SANDBOX', () => {
-    launchBlank();
-    openCourse();
-    fireEvent.click(screen.getByRole('button', { name: 'Start practice: Find the knock limit' }));
-    expect(screen.queryByTestId('engine-start')).toBeNull();
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up/);
-    expect(within(screen.getByRole('region', { name: 'Practice mission' })).getByText('0/4')).toBeTruthy();
-  });
-
-  it('does the same when started from CAREER, whose SANDBOX car is the one with no engine', async () => {
-    window.location.hash = '';
-    render(<EcuLab blankStart />);
-    await enterCareer();
-    openCourse();
-    fireEvent.click(screen.getByRole('button', { name: 'Start practice: Your first pull' }));
-    expect(screen.queryByTestId('engine-start')).toBeNull();
-    expect(screen.getByTestId('build-line').textContent).toMatch(/^Nissan VQ35DE Rev-Up/);
   });
 });
 

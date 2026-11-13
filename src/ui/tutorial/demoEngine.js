@@ -1,5 +1,5 @@
 /**
- * The engine the tutorial and the Tuning Course talk about: the Nissan VQ35DE Rev-Up, loaded
+ * The engine the tutorial and the Learn guide talk about: the Nissan VQ35DE Rev-Up, loaded
  * as a player loads it from BUILD (and the engine a practice mission puts on the bench).
  * SANDBOX opens with no engine, so the lessons name a prebuilt one the player can pick;
  * the old default engine is not in the catalogue and no player could have matched it.

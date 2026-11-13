@@ -21,10 +21,9 @@ export const stock = () => runDemo('stock');
  * throttle this engine is knock-limited through the low and middle revs, as a real 10.3:1
  * engine on pump fuel is, and the stock table sits about 2° short of that limit.
  */
-export const SPARK_ADDED_DEG = 4;
 export const overAdvanced = () => runDemo('over-advanced', (s) => ({
   ...s,
-  tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (layoutById(s.tune.layout).timing.load[ri] >= 70 ? v + SPARK_ADDED_DEG : v))) },
+  tune: { ...s.tune, timing: s.tune.timing.map((row, ri) => row.map((v) => (layoutById(s.tune.layout).timing.load[ri] >= 70 ? v + 4 : v))) },
 }));
 
 /** A cold air intake fitted, and nothing retuned. */

@@ -2,8 +2,7 @@
  * The five-minute tutorial: the basics of tuning and of the app, and nothing more.
  *
  * Five cards, one idea each, about a minute apiece. Each shows at most one real game
- * screen. Everything deeper lives in the Tuning Course (lessons.jsx), opened from
- * the LEARN app, where there is room for worked maths and practice missions.
+ * screen. Everything deeper lives in the LEARN app, page by page.
  */
 
 import React from 'react';
@@ -47,7 +46,7 @@ function FindYourWay() {
           { at: '[data-tour="nav-dyno"]', text: <><K>DYNO</K>: measures it. Nothing is known until you pull.</> },
           { at: '[data-tour="strip-last-pull"]', text: 'Your last pull’s peak power, always in view.' },
         ]}
-        caption="The real frame around every screen. LIVE runs the engine in real time; the LEARN app has the course and the articles; in CAREER you run a tuning shop of your own."
+        caption="The real frame around every screen. LIVE runs the engine in real time; the LEARN app teaches tuning a page at a time; in CAREER you run a tuning shop of your own."
       >
         <div style={{ height: 290, display: 'flex', flexDirection: 'column' }}>
           <AppShell route={{ view: 'app', tab: 'tune', section: 'airflow' }} onNavigate={() => {}} onTutorial={() => {}} onRepair={() => {}}>
@@ -61,7 +60,7 @@ function FindYourWay() {
 
 /**
  * The AIRFLOW table on its own: the real grid, in the snippet's sandbox store, without
- * the page's explainers and panels, which are the course's business.
+ * the page's explainers and panels, which are Learn's business.
  */
 function AirflowGrid() {
   const [tune, dispatch] = useTune();
@@ -134,12 +133,12 @@ function TheLoop() {
         <><b>Repeat.</b></>,
       ]} />
       <P>Some problems are parts, not tables (injectors that run out of time, valves that float), and the log says which. When it does, change the part on <K>BUILD</K> or ask less of it.</P>
-      <P><b>Want the full course?</b> The <K>LEARN</K> app has <b>The Tuning Course</b>: 16 lessons, about 40 minutes, with live screens, worked maths, a real bolt-on retune and practice missions that tick themselves off in the game. Take it any time.</P>
+      <P><b>Want to go deeper?</b> The <K>LEARN</K> app takes you through the whole job a page at a time: air and VE, fuel, spark and knock, reading a pull, a whole retune worked through, and boost. Read a page, then go and do it on your own engine.</P>
     </>
   );
 }
 
-/** @type {import('./lessons.jsx').Chapter[]} */
+/** @type {import('./books.js').Chapter[]} */
 export const QUICK_CHAPTERS = [
   { id: 'quick', title: 'Tuning in five minutes', minutes: 5, lessons: [
     { id: 'q-air-pump', title: 'An engine is an air pump', Body: AirPump },

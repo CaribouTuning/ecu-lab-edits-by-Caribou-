@@ -13,7 +13,7 @@
  * are a master tuner, and the shop is Ray's again.
  *
  * Every lesson is something the simulator already teaches, in its own words, and says
- * where it comes from: the Tuning Course, Pops's tips (tips.js, checked against
+ * where it comes from: the Learn guide's articles, Pops's tips (tips.js, checked against
  * docs/accuracy.md), and the published sources in the Learn guide (articles 21, 22, 33).
  * The procedural customers carry on alongside, and once the story is finished, without end.
  *
@@ -30,7 +30,6 @@ import { tipFor } from './tips.js';
  * @property {string} title
  * @property {string[]} points
  * @property {string[]} sources where it comes from
- * @property {string} [course] the Tuning Course lesson that goes further
  */
 
 /**
@@ -64,8 +63,7 @@ export const CHAPTERS = [
         'Power comes from burning fuel, and fuel can only burn with air. Everything a tune does is about getting air in, matching the fuel to it, and lighting it at the right time.',
         'How full a cylinder gets, against how full it could be, is volumetric efficiency (VE). Around 85 to 95 percent is a good naturally aspirated engine at peak torque.',
       ],
-      sources: ['The Tuning Course: “An engine is an air pump”', 'Heywood, Internal Combustion Engine Fundamentals (Learn, article 21)'],
-      course: 'air-pump',
+      sources: ['Learn, articles 1 and 2: the air pump, and volumetric efficiency', 'Heywood, Internal Combustion Engine Fundamentals (Learn, article 21)'],
     },
     goal: 'Hand back one customer’s car with the job done.',
     met: (c) => passed(c) >= 1,
@@ -85,8 +83,7 @@ export const CHAPTERS = [
         'Under full load an engine runs richer, around lambda 0.83 to 0.87 (about 12.5 to 13:1), because the extra fuel cools the chamber and protects the pistons.',
         'Too rich washes oil off the bores and fouls plugs; too lean burns hot enough to hurt a piston. Neither shows on a power graph until it is too late.',
       ],
-      sources: ['The Tuning Course: “FUEL: the mixture you ask for”', 'Pops’s tips: AFR, Mixture', 'Learn, article 34: full-throttle mixture checked against real engines'],
-      course: 'fuel',
+      sources: ['Learn, articles 3 and 8: lambda, and the fuel each cylinder needs', 'Pops’s tips: AFR, Mixture', 'Learn, article 34: full-throttle mixture checked against real engines'],
     },
     goal: 'Do three customer jobs well.',
     met: (c) => passed(c) >= 3,
@@ -104,8 +101,7 @@ export const CHAPTERS = [
         'The spark fires before the piston reaches the top, so the flame has burned half the charge just after it, about 8 to 10 degrees after top dead centre. That is MBT, minimum advance for best torque.',
         'Earlier than that fights the piston on its way up; later wastes the push. Past MBT you gain nothing but cylinder pressure and knock risk.',
       ],
-      sources: ['The Tuning Course: “SPARK: when to light it”', 'Heywood, the 8–10° ATDC MFB50 optimum (Learn, articles 4 and 21)'],
-      course: 'spark',
+      sources: ['Learn, article 4: why timing makes torque', 'Heywood, the 8–10° ATDC MFB50 optimum (Learn, articles 4 and 21)'],
     },
     goal: 'Take the Ignition timing course at the Tuning Academy.',
     met: (c) => (c.trained ?? []).includes('spark'),
@@ -124,8 +120,7 @@ export const CHAPTERS = [
         'The habit that matters most: change one thing at a time and measure it, and put reliability ahead of the peak number (Driven Racing Oil, “A Complete Guide to High-Performance Engine Tuning”).',
         'A chassis dyno reads wheel power, lower than the crank figure by the drivetrain’s losses, roughly 12 to 18 percent. A car’s advertised power is measured at the crank.',
       ],
-      sources: ['The Tuning Course: “Your first pull”, “Pull again and prove it”', 'Driven Racing Oil guide (Learn, article 33)', 'Pops’s tips: Dyno'],
-      course: 'first-pull',
+      sources: ['Learn, articles 12 and 14: the loop, and reading the datalog', 'Driven Racing Oil guide (Learn, article 33)', 'Pops’s tips: Dyno'],
     },
     goal: 'Do five customer jobs well.',
     met: (c) => passed(c) >= 5,
@@ -144,8 +139,7 @@ export const CHAPTERS = [
         'The simulator models it the way the literature does: the end gas’s ignition delay, from Douaud and Eyzat (SAE 780080), added up through the cycle with the Livengood–Wu integral. When the sum reaches one, it knocks.',
         'Octane is knock resistance, not energy. A good tune leaves a margin to the knock limit.',
       ],
-      sources: ['Learn, articles 5 and 21: Douaud & Eyzat SAE 780080; Livengood & Wu (1955)', 'Pops’s tips: Knock, Octane', 'The Tuning Course: “Change one thing, pull again”'],
-      course: 'one-thing',
+      sources: ['Learn, articles 5 and 21: Douaud & Eyzat SAE 780080; Livengood & Wu (1955)', 'Pops’s tips: Knock, Octane', 'Learn, article 12: change one thing, pull again'],
     },
     goal: 'Take the Knock control course.',
     met: (c) => (c.trained ?? []).includes('knock'),
@@ -165,8 +159,7 @@ export const CHAPTERS = [
         'Long-term fuel trim is the ECU’s memory of how wrong its fuel table is. A big number is a clue that air or fuel metering is off.',
         'Production ECUs are calibrated the same way: base fuel from airflow, a compensation table, injector latency against voltage (UpRev, “Nissan Tuning Guide”).',
       ],
-      sources: ['The Tuning Course: “Correct VE from the log”, “Rescale the MAF”', 'UpRev, Nissan Tuning Guide (Learn, article 33)', 'Pops’s tips: MAF, Fuel trims'],
-      course: 'maf',
+      sources: ['Learn, articles 37 and 38: VE from logs, MAF and speed-density', 'UpRev, Nissan Tuning Guide (Learn, article 33)', 'Pops’s tips: MAF, Fuel trims'],
     },
     goal: 'Reach 20 reputation: a Local shop.',
     met: (c) => (c.rep ?? 0) >= 20,
@@ -221,8 +214,7 @@ export const CHAPTERS = [
         'At light load the ECU watches the oxygen sensor and trims the mixture to stoichiometric. At full throttle it stops listening and trusts the table, which is exactly where a wrong table hurts.',
         'Fit bigger injectors and the ECU still pulses them for the old size unless you tell it the new flow rate.',
       ],
-      sources: ['Pops’s tips: Closed loop, Injectors', 'The Tuning Course: “The datalog: asked against got”'],
-      course: 'datalog',
+      sources: ['Pops’s tips: Closed loop, Injectors', 'Learn, article 14: the datalog, asked against got'],
     },
     goal: 'Reach 60 reputation: a Known tuner.',
     met: (c) => (c.rep ?? 0) >= 60,
@@ -241,8 +233,7 @@ export const CHAPTERS = [
         'A tune finds what the hardware can do; it cannot add what is not there. Past the limits of air, fuel and knock, the gains have to come from parts.',
         'Reliability first, then the number: an engine is only finished if it survives the pull.',
       ],
-      sources: ['The Tuning Course: “What you cannot tune away”', 'Driven Racing Oil guide (Learn, article 33)'],
-      course: 'limits',
+      sources: ['Learn, article 15: what tuning can fix, and what it can’t', 'Driven Racing Oil guide (Learn, article 33)'],
     },
     goal: 'Build an engine to order and hand it back with the job done.',
     met: built,
@@ -279,8 +270,7 @@ export const CHAPTERS = [
         'Mixture, timing and the air the engine can breathe are the three things a tune works on, and every suite splits the job between an editor that changes the calibration and a scanner that logs what the engine did with it (HP Tuners).',
         'The loop never changes: change, pull, read, adjust.',
       ],
-      sources: ['HP Tuners, A Beginner’s Guide to Engine Tuning (Learn, article 33)', 'Learn, article 12: the loop', 'The Tuning Course: “Where to go next”'],
-      course: 'next',
+      sources: ['HP Tuners, A Beginner’s Guide to Engine Tuning (Learn, article 33)', 'Learn, article 12: the loop', 'Learn, article 40: a whole session, worked through'],
     },
     goal: 'Reach 250 reputation: a Destination shop.',
     met: (c) => (c.rep ?? 0) >= 250,

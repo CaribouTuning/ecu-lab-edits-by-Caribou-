@@ -1,13 +1,12 @@
 /**
- * The two things the lesson reader shows: the five-minute tutorial and the Tuning
- * Course. Same reader, same lesson parts; they differ in length, in what the contents
- * page promises, and in where finishing takes you.
+ * What the lesson reader shows: the five-minute tutorial. Everything deeper is in the
+ * Learn app.
  */
 
-import { CHAPTERS, OUTCOMES } from './lessons.jsx';
 import { QUICK_CHAPTERS, QUICK_OUTCOMES } from './quickTour.jsx';
 
-/** @typedef {import('./lessons.jsx').Chapter} Chapter */
+/** @typedef {{id: string, title: string, Body: () => import('react').ReactElement}} Lesson */
+/** @typedef {{id: string, title: string, minutes: number, lessons: Lesson[]}} Chapter */
 
 /**
  * @typedef {object} Book
@@ -18,7 +17,6 @@ import { QUICK_CHAPTERS, QUICK_OUTCOMES } from './quickTour.jsx';
  * @property {string[]} outcomes
  * @property {Chapter[]} chapters
  * @property {(Chapter['lessons'][number] & {chapter: Chapter, number: string})[]} lessons every lesson in reading order, numbered
- * @property {boolean} showResult whether the contents page opens on the stock engine's dyno pull
  * @property {string} doneLabel the last lesson's button
  */
 
@@ -36,19 +34,5 @@ export const TUTORIAL = {
   outcomes: QUICK_OUTCOMES,
   chapters: QUICK_CHAPTERS,
   lessons: numbered(QUICK_CHAPTERS),
-  showResult: false,
   doneLabel: 'START TUNING',
-};
-
-/** @type {Book} */
-export const COURSE = {
-  id: 'course',
-  label: 'COURSE',
-  title: 'The Tuning Course',
-  lede: `About ${CHAPTERS.reduce((m, c) => m + c.minutes, 0)} minutes, in ${CHAPTERS.length} chapters of short lessons. Every screen in it is the real game screen, running live, and every number is the one your own game will show. Take it in any order, a lesson at a time.`,
-  outcomes: OUTCOMES,
-  chapters: CHAPTERS,
-  lessons: numbered(CHAPTERS),
-  showResult: true,
-  doneLabel: 'BACK TO LEARN',
 };

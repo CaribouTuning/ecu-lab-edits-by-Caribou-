@@ -30,7 +30,7 @@ export const ROUTES = {
   dyno: ['result', 'data', 'log', 'score', 'history'],
   // The laptop's two reading apps: LEARN's four shelves, and PHYSICS's pages, one at a time
   // as TUNE's tables are (desk/PhysicsApp.jsx PHYSICS_PAGES; 'model' is the engine and its curves).
-  learn: ['sources', 'ecu', 'engine', 'how'],
+  learn: ['start', 'air', 'fuel', 'spark', 'pull', 'job', 'boost', 'ecu', 'engine', 'model'],
   physics: ['model', 'intake', 'header', 'exhaust', 'cylinder', 'calc', 'wear'],
 };
 
@@ -52,8 +52,8 @@ export const TAB_NAMES = {
 
 /**
  * @typedef {Object} Route
- * @property {'start'|'tutorial'|'course'|'shop'|'desk'|'bay'|'messages'|'app'} view - Which top-level screen is showing:
- *   the start screen, the five-minute tutorial, the Tuning Course (opened from Learn), the
+ * @property {'start'|'tutorial'|'shop'|'desk'|'bay'|'messages'|'app'} view - Which top-level screen is showing:
+ *   the start screen, the five-minute tutorial, the
  *   career's shop, SANDBOX's laptop desktop, SANDBOX's shop floor with the laptop shut, or
  *   an app (a laptop app, or the dyno or engine stand in the shop).
  * @property {string|null} tab - The active tab key (a key of `ROUTES`), or
@@ -74,9 +74,6 @@ const START_ROUTE = { view: 'start', tab: null, section: null };
 
 /** @type {Route} */
 const TUTORIAL_ROUTE = { view: 'tutorial', tab: null, section: null };
-
-/** @type {Route} */
-const COURSE_ROUTE = { view: 'course', tab: null, section: null };
 
 /** @type {Route} */
 const SHOP_ROUTE = { view: 'shop', tab: null, section: null };
@@ -121,10 +118,6 @@ export function parseRoute(hash) {
     return { ...TUTORIAL_ROUTE };
   }
 
-  if (first === 'course') {
-    return { ...COURSE_ROUTE };
-  }
-
   if (first === 'shop') {
     return { ...SHOP_ROUTE };
   }
@@ -166,10 +159,6 @@ export function formatRoute(route) {
 
   if (view === 'tutorial') {
     return '#/tutorial';
-  }
-
-  if (view === 'course') {
-    return '#/course';
   }
 
   if (view === 'shop') {

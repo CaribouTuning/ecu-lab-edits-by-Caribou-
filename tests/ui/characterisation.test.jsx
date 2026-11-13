@@ -105,7 +105,8 @@ describe('navigation', () => {
       // The live engine is the engine stand in the shop: its marker is the stand's own
       // bench computer, which only that place has.
       LIVE: () => screen.getByRole('region', { name: 'Engine computer' }),
-      LEARN: () => screen.getByRole('navigation', { name: 'Learn shelves' }),
+      // LEARN opens on its first page, one page at a time as PHYSICS's (its pages' tabs).
+      LEARN: () => screen.getByRole('navigation', { name: 'Learn pages' }),
       // PHYSICS opens on its engine overview, one page at a time as TUNE's tables (its pages' tabs).
       PHYSICS: () => screen.getByRole('navigation', { name: 'Physics pages' }),
       BUILD: () => screen.getByRole('navigation', { name: 'Engine parts' }),

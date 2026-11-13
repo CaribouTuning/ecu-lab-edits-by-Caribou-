@@ -20,10 +20,9 @@ import styles from './ShopScreen.module.css';
 /**
  * @param {object} props
  * @param {() => void} props.onWork opens the game on the car on the bay
- * @param {() => void} [props.onLearn] opens the Tuning Course
  * @returns {React.ReactElement|null}
  */
-export function CareerOffice({ onWork, onLearn }) {
+export function CareerOffice({ onWork }) {
   const [career, dispatch] = useCareer();
   const [tab, setTab] = useState('today');
   const [arriving, setArriving] = useState(/** @type {string|null} */ (null));
@@ -90,7 +89,7 @@ export function CareerOffice({ onWork, onLearn }) {
         setLesson={setLesson} confirmReset={confirmReset} setConfirmReset={setConfirmReset} unseen={!!unseen}
       />
 
-      <LessonDialog lesson={lesson} onClose={() => setLesson(null)} onLearn={onLearn} />
+      <LessonDialog lesson={lesson} onClose={() => setLesson(null)} />
     </div>
   );
 }

@@ -63,7 +63,6 @@ describe('formatRoute', () => {
     const cases = [
       { view: 'start', tab: null, section: null },
       { view: 'tutorial', tab: null, section: null },
-      { view: 'course', tab: null, section: null },
       { view: 'shop', tab: null, section: null },
       { view: 'desk', tab: null, section: null },
       { view: 'bay', tab: null, section: null },
@@ -81,7 +80,8 @@ describe('formatRoute', () => {
     // literal checks pin formatRoute's output to a concrete, independently-known shape.
     expect(formatRoute({ view: 'start', tab: null, section: null })).toBe('#/');
     expect(formatRoute({ view: 'tutorial', tab: null, section: null })).toBe('#/tutorial');
-    expect(formatRoute({ view: 'course', tab: null, section: null })).toBe('#/course');
+    // The Tuning Course is gone; an old link to it lands on the start screen.
+    expect(parseRoute('#/course')).toEqual({ view: 'start', tab: null, section: null });
     expect(formatRoute({ view: 'shop', tab: null, section: null })).toBe('#/shop');
     expect(formatRoute({ view: 'desk', tab: null, section: null })).toBe('#/desk');
     expect(formatRoute({ view: 'bay', tab: null, section: null })).toBe('#/bay');

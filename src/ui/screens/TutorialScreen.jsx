@@ -1,23 +1,18 @@
 /**
- * The lesson reader, for both books (tutorial/books.js): the five-minute tutorial and
- * the Tuning Course that the LEARN app opens.
+ * The lesson reader for the five-minute tutorial (tutorial/books.js).
  *
  * A contents page first, doing what the best tutorials do first: what the reader will
- * be able to do by the end, what they need, how long it takes, and (for the course)
- * the finished result, a real dyno pull of the engine they are about to tune. Then the
- * lessons, one idea each, showing the real game screens (ScreenSnippet). Lessons read
- * are ticked on the contents page, and a book reopens where the player left it.
+ * be able to do by the end, what they need and how long it takes. Then the lessons, one
+ * idea each, showing the real game screens (ScreenSnippet). Lessons read are ticked on
+ * the contents page, and the tutorial reopens where the player left it. Everything
+ * deeper is in the Learn app.
  */
 
-import { Check, ChevronLeft, List as ListIcon, Play } from 'lucide-react';
+import { Check, ChevronLeft, List as ListIcon } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { Button } from '../primitives/Button.jsx';
-import { ResultScreen } from './dyno/ResultScreen.jsx';
 import { TUTORIAL } from '../tutorial/books.js';
-import { MISSIONS } from '../tutorial/missions.js';
-import { peaks, stock } from '../tutorial/scenarios.js';
-import { ScreenSnippet } from '../tutorial/ScreenSnippet.jsx';
 
 import styles from './TutorialScreen.module.css';
 
@@ -49,12 +44,10 @@ function saveProgress(bookId, p) {
 /**
  * @param {object} props
  * @param {import('../tutorial/books.js').Book} [props.book] which book; the tutorial by default
- * @param {() => void} props.onDone leaves the book: for the game, or back to Learn
- * @param {(missionId: string) => void} [props.onPractice] starts a practice mission in the game
- * @param {() => void} [props.onCourse] opens the Tuning Course, offered at the tutorial's end
+ * @param {() => void} props.onDone leaves the book, for the game
  * @returns {React.ReactElement}
  */
-export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }) {
+export function TutorialScreen({ book = TUTORIAL, onDone }) {
   const LESSONS = book.lessons;
   const bookName = book.label[0] + book.label.slice(1).toLowerCase();
   const [progress, setProgress] = useState(() => loadProgress(book.id));
@@ -80,11 +73,11 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
       <div className={styles.screen}>
         <div className={styles.bar}>
           <div className={styles.count}>{bookName} contents</div>
-          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'Skip' : 'Close'}</Button>
+          <Button variant="quiet" size="sm" onClick={onDone}>Skip</Button>
         </div>
         <div className={styles.body} ref={top}>
           <div className={styles.inner}>
-            <Contents book={book} read={progress.read} onOpen={setAt} onPractice={onPractice} />
+            <Contents book={book} read={progress.read} onOpen={setAt} />
           </div>
         </div>
         <div className={styles.actions}>
@@ -101,7 +94,6 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
   const chapterNo = book.chapters.indexOf(lesson.chapter) + 1;
   const multiChapter = book.chapters.length > 1;
   const chapterEnd = last || LESSONS[at + 1].chapter !== lesson.chapter;
-  const mission = lesson.mission ? MISSIONS.find((m) => m.id === lesson.mission) : null;
   const { Body } = lesson;
 
   return (
@@ -112,7 +104,7 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
           <Button variant="quiet" size="sm" onClick={() => setAt(null)}>
             <ListIcon size={14} aria-hidden="true" /> CONTENTS
           </Button>
-          <Button variant="quiet" size="sm" onClick={onDone}>{book === TUTORIAL ? 'Skip' : 'Close'}</Button>
+          <Button variant="quiet" size="sm" onClick={onDone}>Skip</Button>
         </div>
       </div>
 
@@ -121,16 +113,6 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
           <div className={styles.eyebrow}>{multiChapter ? `Chapter ${chapterNo}: ` : ''}{lesson.chapter.title}</div>
           <h1 className={styles.title}><span className={styles.num}>{lesson.number}</span> {lesson.title}</h1>
           <Body />
-          {mission && onPractice && (
-            <div className={styles.practice}>
-              <div>
-                <div className={styles.practiceTag}>Practice in the game</div>
-                <div className={styles.practiceTitle}>{mission.title}</div>
-                <div className={styles.practiceText}>{mission.blurb} A checklist follows you through the game and ticks itself as you go.</div>
-              </div>
-              <Button onClick={() => onPractice(mission.id)}><Play size={14} aria-hidden="true" /> START PRACTICE</Button>
-            </div>
-          )}
           {chapterEnd && multiChapter && (
             <div className={styles.chapterDone} role="status">
               <Check size={16} aria-hidden="true" /> Chapter {chapterNo} complete: {lesson.chapter.title}.
@@ -153,9 +135,6 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
         <Button size="lg" variant="ghost" onClick={() => setAt(at === 0 ? null : at - 1)}>
           <ChevronLeft size={16} aria-hidden="true" /> BACK
         </Button>
-        {last && onCourse && (
-          <Button size="lg" variant="ghost" onClick={onCourse}>Open the course</Button>
-        )}
         <Button size="lg" onClick={() => (last ? onDone() : setAt(at + 1))}>
           {last ? book.doneLabel : 'NEXT'}
         </Button>
@@ -169,9 +148,8 @@ export function TutorialScreen({ book = TUTORIAL, onDone, onPractice, onCourse }
  * @param {import('../tutorial/books.js').Book} props.book
  * @param {string[]} props.read lesson ids already read
  * @param {(index: number) => void} props.onOpen
- * @param {(missionId: string) => void} [props.onPractice]
  */
-function Contents({ book, read, onOpen, onPractice }) {
+function Contents({ book, read, onOpen }) {
   return (
     <>
       <h1 className={styles.title}>{book.title}</h1>
@@ -185,8 +163,6 @@ function Contents({ book, read, onOpen, onPractice }) {
         <div className={styles.sectionHead}>You need</div>
         <p className={styles.need}>No car knowledge. Multiplication helps. Sound is optional.</p>
       </div>
-
-      {book.showResult && <EndResult />}
 
       <nav aria-label={`${book.title} contents`}>
         {book.chapters.map((c, ci) => (
@@ -215,42 +191,6 @@ function Contents({ book, read, onOpen, onPractice }) {
         ))}
       </nav>
 
-      {onPractice && (
-        <>
-          <div className={styles.sectionHead}>Practice missions</div>
-          <p className={styles.need}>Hands-on, in the real game. A checklist follows you and ticks itself as you do each step.</p>
-          <ul className={styles.missionList}>
-            {MISSIONS.map((m) => (
-              <li key={m.id} className={styles.mission}>
-                <div>
-                  <div className={styles.practiceTitle}>{m.title}</div>
-                  <div className={styles.practiceText}>{m.blurb}</div>
-                </div>
-                <Button size="sm" variant="ghost" onClick={() => onPractice(m.id)} aria-label={`Start practice: ${m.title}`}>START</Button>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </>
-  );
-}
-
-/** Where the course is going: the engine the reader is about to tune, on the dyno. */
-function EndResult() {
-  const d = stock();
-  const { hp, tq } = peaks(d);
-  return (
-    <>
-      <div className={styles.sectionHead}>Where you are going</div>
-      <ScreenSnippet
-        where="DYNO"
-        demo={d}
-        height={250}
-        caption={`The engine these lessons use, the Nissan VQ35DE Rev-Up, on the dyno: ${hp.hp} whp at ${hp.rpm} RPM and ${tq.torque} lb-ft at ${tq.rpm} RPM. By lesson 3.1 you will run this pull yourself; by chapter 4 you will fit a part, retune for it and prove it made more.`}
-      >
-        <ResultScreen chartData={d.chartData} engineDerived={d.derived} bands={d.bands} wholePullCount={d.wholePullCount} />
-      </ScreenSnippet>
     </>
   );
 }

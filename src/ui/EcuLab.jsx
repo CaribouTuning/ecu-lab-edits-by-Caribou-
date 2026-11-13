@@ -51,9 +51,6 @@ import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
 import { DialMark } from './components/DialMark.jsx';
 import { TutorialScreen } from './screens/TutorialScreen.jsx';
-import { COURSE } from './tutorial/books.js';
-import { MissionCoach } from './tutorial/MissionCoach.jsx';
-import { markOf } from './tutorial/missions.js';
 import { StoreProvider, useBuild, useCareer, useHistory, useSandboxStash, useSession, useTune } from './state/StoreProvider.jsx';
 import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
@@ -129,16 +126,6 @@ function useWhenWanted(wanted, compute, deps) {
   if (wanted) now();
   return { value: memo.current.value, now };
 }
-
-/** The engine a practice mission is built around, put on the bench when the player has none yet. */
-const MISSION_ENGINE = 'vq35de-revup';
-
-/** Where each practice mission starts: the screen its first step is about. */
-const MISSION_START = {
-  'first-pull': ['build', 'engine'],
-  'knock-limit': ['tune', 'spark'],
-  'bolt-on': ['build', 'induction'],
-};
 
 /**
  * CAREER: an ECU settings block the shop has not trained for, in place of the block.
@@ -537,7 +524,6 @@ export function EcuLabApp() {
   }, [navigate]);
   const toggleBuildSection = makeToggleSection('build');
   const goTutorial = () => navigate({ view: 'tutorial', tab: null, section: null });
-  const goCourse = () => navigate({ view: 'course', tab: null, section: null });
   const goMenu = () => navigate({ view: 'start', tab: null, section: null });
 
   /**
@@ -1348,64 +1334,28 @@ export function EcuLabApp() {
   if (appView === 'shop' && !inCareer) return <div style={{ minHeight: 'var(--app-h, 100dvh)', background: 'var(--bg)' }} />;
   if (appView === 'tutorial') {
     return (
-      // Keyed per book: the tutorial and the course are the same component at the same
-      // place in the tree, and without a key the course would open on whatever page
-      // the tutorial was showing.
-      <TutorialScreen
-        key="tutorial"
-        // From CAREER the tutorial was a detour: back to the shop.
-        onDone={() => (inCareer ? changeTab('shop') : goTab('build'))}
-        onCourse={goCourse}
-      />
-    );
-  }
-  if (appView === 'course') {
-    return (
-      <TutorialScreen
-        key="course"
-        book={COURSE}
-        onDone={() => (inCareer ? changeTab('shop') : goSection('learn', 'how'))}
-        onPractice={(id) => {
-          // Practice is SANDBOX's: from CAREER, the customer's car goes back on its lift
-          // first (a no-op in SANDBOX).
-          dispatch({ type: ACTIONS.ENTER_SANDBOX });
-          // Marked against SANDBOX's car, which is the one on the bench from here on.
-          let start = sandboxStash ?? { session, tune };
-          // The missions are written for a stock engine on the bench. A player who has not
-          // chosen one yet (SANDBOX's own car: from CAREER, the stashed one) gets the Nissan
-          // VQ35DE Rev-Up they were written around, and the mission is marked against ITS
-          // tables, not the placeholders behind the start screen.
-          if ((sandboxStash?.build ?? build).engineReady === false) {
-            const engine = applyPreset(presetById(MISSION_ENGINE));
-            dispatch({ type: ACTIONS.APPLY_PRESET, preset: engine });
-            start = { session: start.session, tune: { ...start.tune, ve: engine.ve, timing: engine.timing } };
-          }
-          dispatch({ type: ACTIONS.SET_SESSION_FIELD, field: 'mission', value: { id, step: 0, marks: [markOf(start)] } });
-          const where = MISSION_START[id] ?? ['build', 'engine'];
-          goSection(where[0], where[1]);
-        }}
-      />
+      // From CAREER the tutorial was a detour: back to the shop.
+      <TutorialScreen onDone={() => (inCareer ? changeTab('shop') : goTab('build'))} />
     );
   }
 
   // The screen for this route: the same whether CAREER's shell or SANDBOX's laptop frames it.
   const screen = (
     <>
-        {!inCareer && <MissionCoach route={route} onCourse={goCourse} />}
         {/* ---------- CAREER's job board, on the shop wall: today, customers, upgrades, the books ---------- */}
         {appView === 'messages' && inCareer && (
-          <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} onCourse={goCourse} />
+          <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} />
         )}
         {appView === 'shop' && inCareer && (
           portraitPhone
             ? (
               <Station kind="board" flat app>
-                <Surface name="board" kind="board" label="Job board" inline><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
+                <Surface name="board" kind="board" label="Job board" inline><CareerOffice onWork={() => goTab('tune')} /></Surface>
               </Station>
             )
             : (
               <Station kind="board">
-                <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} onLearn={goCourse} /></Surface>
+                <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} /></Surface>
               </Station>
             )
         )}
@@ -1758,7 +1708,7 @@ export function EcuLabApp() {
     if (t === 'board') { changeTab('shop'); return; }
     if (t === 'messages') { deskGo('messages'); return; }
     if (t !== 'learn') { changeTab(t); return; }
-    goSection('learn', 'how');
+    goSection('learn', 'start');
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
   const deskGo = (view) => {

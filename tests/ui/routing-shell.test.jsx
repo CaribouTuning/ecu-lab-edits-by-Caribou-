@@ -114,10 +114,9 @@ describe('clicking a tab', () => {
     // headers are a list you can see whole instead of the first one's long contents.
     goTo('BUILD');
     expect(window.location.hash).toBe('#/build');
-    // LEARN is the exception, on purpose: the laptop opens it on "How it works", the
-    // shelf a newcomer wants, not on the reference list that heads its sidebar.
+    // LEARN opens on its first page, "Start here", as a book opens on page one.
     goTo('LEARN');
-    expect(window.location.hash).toBe('#/learn/how');
+    expect(window.location.hash).toBe('#/learn/start');
   });
 
   it('routes every TUNE sub-tab to the screen with a matching id, not just a highlighted button', () => {

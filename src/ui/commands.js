@@ -30,7 +30,7 @@ export const TAB_KEYWORDS = {
   tune: ['calibration', 'tables'],
   live: ['engine', 'sound', 'rev', 'stand'],
   dyno: ['pull', 'power'],
-  learn: ['guide', 'articles', 'course'],
+  learn: ['guide', 'articles', 'how to tune'],
   physics: ['model', 'equations', 'how it works'],
 };
 
@@ -39,10 +39,16 @@ export const TAB_KEYWORDS = {
  * headings. A tab with one section (LIVE) has no entry: its tab command is the page.
  */
 export const SECTION_LABELS = {
-  'learn/sources': { label: 'Sources', keywords: ['references', 'reading', 'papers'] },
-  'learn/ecu': { label: 'The ECU', keywords: ['engine computer', 'fuel', 'tables'] },
-  'learn/engine': { label: 'The Engine', keywords: ['ve', 'lambda', 'knock', 'timing'] },
-  'learn/how': { label: 'How It Works', keywords: ['guide', 'simulator', 'model'] },
+  'learn/start': { label: 'Start here', keywords: ['basics', 'loop', 'horsepower', 'torque'] },
+  'learn/air': { label: 'Air and VE', keywords: ['ve', 'maf', 'speed density', 'sensors'] },
+  'learn/fuel': { label: 'Fuel', keywords: ['lambda', 'afr', 'injectors', 'trims'] },
+  'learn/spark': { label: 'Spark and knock', keywords: ['timing', 'mbt', 'knock', 'octane'] },
+  'learn/pull': { label: 'Reading a pull', keywords: ['logs', 'dyno sheet', 'troubleshooting'] },
+  'learn/job': { label: 'A whole job', keywords: ['worked example', 'session', 'habits'] },
+  'learn/boost': { label: 'Boost and adders', keywords: ['turbo', 'supercharger', 'nitrous'] },
+  'learn/ecu': { label: 'The rest of the ECU', keywords: ['engine computer', 'controllers', 'limiters'] },
+  'learn/engine': { label: 'Engine science', keywords: ['heat', 'otto cycle', 'sound'] },
+  'learn/model': { label: 'The model and sources', keywords: ['references', 'reading', 'simulator'] },
   'build/engine': { label: 'Engine', keywords: ['preset', 'factory engine', 'custom'] },
   'build/block': { label: 'Short block', keywords: ['bore', 'stroke', 'compression', 'pistons', 'rods'] },
   'build/head': { label: 'Heads and cam', keywords: ['cam', 'springs', 'valves', 'vvt', 'ports', 'runner'] },

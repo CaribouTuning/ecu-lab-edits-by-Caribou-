@@ -1,7 +1,7 @@
 /**
  * LEARN: the guide, how it works.
  *
- * The plain-language guide: forty-one numbered articles, in reading order, from
+ * The plain-language guide: forty-two numbered articles, in reading order, from
  * "an engine is an air pump" to the published
  * correlations the engine model implements and the limits it does not cross.
  *
@@ -28,7 +28,7 @@ import styles from './LearnScreen.module.css';
  * @param {object} props
  * @param {boolean} props.active whether this is HOME's open section
  * @param {(section: string) => void} props.onToggle opens or closes a HOME section
- * @param {string|null} [props.shelf] show only this shelf's articles (the Learn app's sidebar)
+ * @param {string|null} [props.shelf] show only this page's articles (the Learn app's pages, learnShelf.jsx)
  * @param {boolean} [props.bare] the articles alone, without the collapsible section around them
  * @returns {React.ReactElement}
  */
@@ -36,22 +36,14 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
   const body = (
     <LearnShelf.Provider value={shelf}>
     <div className={shelf ? styles.shelved : undefined}>
-      {/* The course is the way through this subject for someone learning it; the
-          articles below are the reference it draws on. */}
-      <a className={styles.course} href="#/course">
-        <span className={styles.courseTag}>The tuning course</span>
-        <span className={styles.courseTitle}>Learn to tune, start to finish</span>
-        <span className={styles.courseText}>16 short lessons, about 40 minutes, a lesson at a time. Live game screens, worked maths with your engine&apos;s own numbers, a real bolt-on retune, and practice missions that tick themselves off in the game.</span>
-        <span className={styles.courseCta}>Open the course ›</span>
-      </a>
       <div className={styles.intro}>The articles: read in order, or dip in. Each explains a piece of what the live engine is doing right now.</div>
       {/* Reading paths: most readers arrive with a question, not a free afternoon. */}
       <div className={styles.paths}>
         <div className={styles.pathsHead}>Where to start</div>
-        <div><b className={styles.em}>New to tuning:</b> the Tuning Course above, then 1–5 and 12–16.</div>
-        <div><b className={styles.em}>Just fitted a part:</b> 42 and 43, then 45 for a whole job worked through.</div>
-        <div><b className={styles.em}>Something is wrong on the dyno:</b> 44, troubleshooting by symptom.</div>
-        <div><b className={styles.em}>How the game works it out:</b> 6–11, 26, 39 and 46.</div>
+        <div><b className={styles.em}>New to tuning:</b> 1–5, then 12–16, then 42 for the order of work on any car.</div>
+        <div><b className={styles.em}>Just fitted a part:</b> 37 and 38, then 40 for a whole job worked through.</div>
+        <div><b className={styles.em}>Something is wrong on the dyno:</b> 39, troubleshooting by symptom.</div>
+        <div><b className={styles.em}>How the game works it out:</b> 6–11, 26, 34 and 41.</div>
       </div>
 
       <div className={`${styles.part} ${styles.partFirst}`}>Part 1: Fundamentals</div>
@@ -376,6 +368,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br /><b className={styles.em}>HP Tuners, &ldquo;A Beginner&apos;s Guide to Engine Tuning&rdquo;.</b> Horsepower, torque and their units; mixture, timing and exhaust flow as the three things a tune works on; and the split every tuning suite has between an editor that changes the calibration and a scanner that logs what the engine did with it — TUNE and the dyno datalog here.
         <br /><br /><b className={styles.em}>Driven Racing Oil, &ldquo;A Complete Guide to High-Performance Engine Tuning&rdquo;.</b> The whole job at a glance — remap, mixture, timing, forced induction, cams — and the two habits that matter most: change one thing at a time and measure it, and put reliability ahead of the peak number.
         <br /><br /><b className={styles.em}>C. F. Aquino, &ldquo;Transient A/F Control Characteristics of the 5 Liter Central Fuel Injection Engine&rdquo;, SAE 810494.</b> Where the X-τ wall-film model comes from.
+        <br /><br /><b className={styles.em}>G. Banish, <i>Engine Management: Advanced Tuning</i> (CarTech, 2007).</b> A working tuner&apos;s book on the whole calibration: the air model first, then fuel, then spark, then the rest, which is the order article 42 follows.
         <br /><br /><b className={styles.em}>J. B. Heywood, <i>Internal Combustion Engine Fundamentals</i>.</b> The engine side of all of it — including why a spark needs more voltage the denser the gas across the gap.
       </Article>
 
