@@ -258,7 +258,7 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
 /* iOS's contact with no photo: an initial on a grey gradient disc. Fixed size, never squeezed. */
 .avatar {
   flex: none; display: grid; place-items: center; aspect-ratio: 1; border-radius: 50%;
-  background: linear-gradient(180deg, #a5abb8, #858a96); color: #fff; font-weight: 600; line-height: 1;
+  background: linear-gradient(180deg, var(--msg-avatar-hi), var(--msg-avatar-lo)); color: var(--app-glyph); font-weight: 600; line-height: 1;
 }
 .msgRowText { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .msgRowTop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -290,7 +290,7 @@ svg:has(:global(#cut-hatch)) .cutBlock, svg:has(:global(#cut-hatch)) .cutHead, s
   background: var(--msg-got); color: var(--ink); font-size: 16px; line-height: 1.3; overflow-wrap: anywhere;
 }
 .bubble[data-tail='true'] { border-bottom-left-radius: 4px; margin-bottom: 6px; }
-.bubble[data-me='true'] { align-self: flex-end; background: var(--msg-sent); color: #fff; }
+.bubble[data-me='true'] { align-self: flex-end; background: var(--msg-sent); color: var(--app-glyph); }
 .bubble[data-me='true'][data-tail='true'] { border-bottom-left-radius: 18px; border-bottom-right-radius: 4px; }
 .bubble[data-pay='true'] { padding: 10px 16px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; background: var(--msg-got); }
 .bubble[data-goal='true'] b { color: var(--warn-ink, var(--ink)); }

@@ -187,6 +187,9 @@ export const tokens = Object.freeze({
   appGlyph: '#ffffff',
   msgSent: '#1d8cff',
   msgGot: '#2a2d34',
+  // iOS's contact with no photo: a grey disc, lighter at the top (the Messages avatar).
+  msgAvatarHi: '#a5abb8',
+  msgAvatarLo: '#858a96',
 
   // Type.
   mono: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace",

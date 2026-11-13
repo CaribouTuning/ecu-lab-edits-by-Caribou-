@@ -127,6 +127,9 @@
   --app-glyph: #ffffff;
   --msg-sent: #1d8cff;
   --msg-got: #2a2d34;
+  /* iOS's contact with no photo: a grey disc, lighter at the top. */
+  --msg-avatar-hi: #a5abb8;
+  --msg-avatar-lo: #858a96;
 
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
