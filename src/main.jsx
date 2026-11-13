@@ -13,6 +13,9 @@ import './ui/sketch.css';
 
 import EcuLab from './ui/EcuLab.jsx';
 import { ErrorBoundary } from './ui/ErrorBoundary.jsx';
+import { trackVisibleHeight } from './ui/visibleHeight.js';
+
+trackVisibleHeight();
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

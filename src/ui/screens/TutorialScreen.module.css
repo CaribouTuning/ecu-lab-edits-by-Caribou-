@@ -4,7 +4,7 @@
 .screen {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: var(--app-h, 100dvh);
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);

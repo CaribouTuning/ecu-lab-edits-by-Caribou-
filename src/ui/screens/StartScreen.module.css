@@ -3,7 +3,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100dvh;
+  min-height: var(--app-h, 100dvh);
   padding: var(--sp-xxl);
   position: relative;
   overflow: hidden;

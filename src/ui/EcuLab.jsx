@@ -1345,7 +1345,7 @@ export function EcuLabApp() {
   }
   // Until ENTER_CAREER has landed the bench still holds SANDBOX's car, so the shop
   // waits for it rather than offering to work on the wrong one.
-  if (appView === 'shop' && !inCareer) return <div style={{ minHeight: '100dvh', background: 'var(--bg)' }} />;
+  if (appView === 'shop' && !inCareer) return <div style={{ minHeight: 'var(--app-h, 100dvh)', background: 'var(--bg)' }} />;
   if (appView === 'tutorial') {
     return (
       // Keyed per book: the tutorial and the course are the same component at the same
@@ -1856,7 +1856,7 @@ export function EcuLabApp() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxHeight: '100dvh', background: 'var(--bg)', color: 'var(--ink)', fontFamily: T.sans, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'var(--app-h, 100dvh)', maxHeight: 'var(--app-h, 100dvh)', background: 'var(--bg)', color: 'var(--ink)', fontFamily: T.sans, overflow: 'hidden' }}>
       {/* Both modes work on a laptop on the desk in your shop (desk/Desk.jsx): apps in
           windows, the dyno and the engine stand as pages. CAREER's laptop offers Build and
           Tune, keeps the job's bar at the top of every window, and shutting it walks you

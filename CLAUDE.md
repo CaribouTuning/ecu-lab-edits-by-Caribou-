@@ -156,9 +156,12 @@ remaining risk is the same Node major with a different libm, which is what step 
   diagram needs goes into `src/sim` first: the cylinder cutaway once had its own slider-crank,
   cam timing and Wiebe burn, and the exhaust diagram its own pipe flow, at half the model's.
   The drawings share their parts in `desk/cutawayParts.jsx`; every trace is a `desk/Plot.jsx`
-  with numbered axes and units. Open item: the gas exchange's blowdown starts about a third
-  below the closed cycle's pressure at the seat opening (docs/accuracy.md, "Open for the
-  maintainers"); the p-V diagram shows the step.
+  with numbers and units on its axes. The gas exchange starts its blowdown from the closed
+  cycle's opening pressure, carried back to the seat along the burned gas's isentrope
+  (breathing.js), so the p-V diagram's two records meet within the cycle's scatter.
+- **The page's height is `var(--app-h, 100dvh)`, never a bare `100dvh`.** Embedded as an
+  artifact on iOS, the frame is taller than the part on screen, and the bottom of every
+  screen was cut off. `ui/visibleHeight.js` measures the visible part and sets `--app-h`.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

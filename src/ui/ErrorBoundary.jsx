@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component {
 
     return (
       <div style={{
-        minHeight: '100dvh', background: T.bg, color: T.ink, fontFamily: T.sans,
+        minHeight: 'var(--app-h, 100dvh)', background: T.bg, color: T.ink, fontFamily: T.sans,
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: 24, gap: 14,
       }}>

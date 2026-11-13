@@ -12,7 +12,7 @@
   max-height: min(480px, calc(100vh - 96px));
   /* dvh accounts for an on-screen keyboard shrinking the visual viewport; the vh line
      above is the fallback for browsers that don't support the unit. */
-  max-height: min(480px, calc(100dvh - 96px));
+  max-height: min(480px, calc(var(--app-h, 100dvh) - 96px));
   margin: 12vh auto auto;
   overflow: hidden;
 }
