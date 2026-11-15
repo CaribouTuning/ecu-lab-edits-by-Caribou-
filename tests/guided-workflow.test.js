@@ -125,6 +125,26 @@ describe('SANDBOX: any engine, changed any way that makes sense, tunes clean and
   }, 300_000);
 });
 
+describe('a turbo on any naturally aspirated engine, fitted as BUILD fits one, tunes clean from full-throttle pulls alone', () => {
+  // What a player does: switch the turbo on, draw a boost target, maybe fit an intercooler,
+  // then pull on the dyno and do what the log and TUNE say. No part-throttle logging.
+  const turboed = (id, psi, ic) => {
+    let st = build(build(preset(id), 'turboOn', true), 'boostCurve', [0, psi * 0.4, psi, psi, psi, psi, psi, psi]);
+    if (ic) st = build(st, 'mods', { ...st.build.mods, intercooler: true });
+    return st;
+  };
+  it.each([['vq35hr', 6, true], ['vq35hr', 10, false], ['vq35hr', 14, true], ['ls1', 10, true], ['lr4', 14, false], ['hemi-392', 6, true]])('%s at %i psi (intercooler: %s)', (id, psi, ic) => {
+    process.env.GUIDED_FULL_ONLY = '1';
+    try {
+      const stock = pull(preset(id)).peakHp;
+      const r = finish(turboed(id, psi, ic));
+      expect(r.left, r.path.join(' | ')).toEqual([]);
+      expect(r.cells, r.path.join(' | ')).toBe(0);
+      expect(r.hp).toBeGreaterThan(stock);
+    } finally { delete process.env.GUIDED_FULL_ONLY; }
+  }, 300_000);
+});
+
 describe('the log calls spark short only where the advisor lists a cell', () => {
   it('holds for every timing entry along the way', () => {
     let st = build(build(preset('ls1'), 'blowerId', 'tvs1900'), 'blowerRatio', 2.4);

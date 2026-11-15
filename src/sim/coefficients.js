@@ -874,7 +874,12 @@ export const COEFF = {
   BEST_AFR_NA: 12.85,          // lambda ~0.87, mid of the published best-torque band
   BEST_AFR_BOOST_SHIFT: 0.08,  // AFR richer per psi of boost
   BEST_AFR_BOOST_CAP: 0.65,    // richest the target is allowed to shift (lambda ~0.83)
-  RICH_DAMAGE_LAMBDA: 0.75,    // below this under load, unburnt fuel starts causing harm
+  // Below this under load, unburnt fuel starts causing harm. Under the richest power
+  // enrichment any factory runs (the LM7's λ 0.749 among 26 stock GM calibrations,
+  // gm-benchmark.json; the TUNE advisor's MIX_RICHEST_LAMBDA 0.74), so a mixture a factory or
+  // a careful boost tune runs (11:1 is λ 0.75) is never called damaging. At 0.75 a turbo VQ
+  // on an 11.2:1 target read "dangerously rich" for a 2% miss.
+  RICH_DAMAGE_LAMBDA: 0.70,
   LEAN_DAMAGE_AFR: 15.2,
 
   // --- Idle control (live engine) ---

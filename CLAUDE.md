@@ -154,7 +154,12 @@ remaining risk is the same Node major with a different libm, which is what step 
   logs on all loads at once (the pull plus LIVE), one change a round. A fix the log names
   must be exact enough to follow (a row, a speed, a share); a protection that hides its own
   cause (a boost cut) must name it. Run the SANDBOX matrix (`scripts/sandbox-matrix.js`: every preset × bolt-ons, cam,
-  compression, turbo, more boost, blower, nitrous, E85, rev limit) after changing log text.
+  compression, turbo, more boost, blower, nitrous, E85, rev limit) after changing log text,
+  and the turbo builds with `GUIDED_FULL_ONLY=1` too (full-throttle pulls only, as most
+  players make): a player who turbocharged a VQ35HR once could not get a clean log. The
+  player follows a knock entry's steps in order (mixture, timing, then boost only where it
+  says timing cannot), and a hand edit the log asks for names each cell, never a whole
+  region that Correct VE from logs is also fixing (the two fought).
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.

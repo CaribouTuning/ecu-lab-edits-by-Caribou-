@@ -114,6 +114,9 @@ function tableRowsAt(mapKpa, layout = null, airmassG = 0) {
   return `the ${fmt(lo)} and ${fmt(hi)} ${u} load rows (it ran at ${fmt(v)} ${u}, between them)`;
 }
 
+/** While the nitrous sprays, richer than this is fuel the spray does not need (a wet kit is held near 11.5:1). */
+const SPRAY_RICHEST_LAMBDA = 0.75;
+
 /**
  * The ECU's hardware for a pull: the build's `EcuHardware`, completed with the pull's own
  * engine, induction and injectors.
@@ -435,10 +438,13 @@ export function simulateSweep({
   // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
   // through a row in one or two speeds): it leaves them as they are, so the log must not send
   // the player back to it for them.
-  const tooThin = (p) => {
-    if (!veFit) return false;
+  // Named one by one: the cells with data are Correct VE from logs' to fix, and a hand edit to
+  // them too fought it (a speed between two columns moved both, the speeds on them each one).
+  const thinCells = (p) => {
+    if (!veFit) return [];
     const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
-    return cells.some(({ ri, ci }) => veFit.ratio[ri]?.[ci] == null);
+    return cells.filter(({ ri, ci }) => veFit.ratio[ri]?.[ci] == null)
+      .map(({ ri, ci }) => `the ${Math.round(veAxes.load[ri])} kPa cell at ${veAxes.rpm[ci]} RPM`);
   };
   const deliveryFix = (peak, run, deliveryLean) => {
     const lean = deliveryLean > 0;
@@ -464,8 +470,9 @@ export function simulateSweep({
           const below = at;
           return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here'} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop's tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.`;
         }
-        const thin = !unlogged && tooThin(peak);
-        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%${thin ? '. This pull crossed those cells too briefly for Correct VE from logs to trust, so it leaves them alone: change them by hand, or log more time there on LIVE and correct from that.' : ', or use Correct VE from logs there, which reads this pull and writes it for you.'}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about the same share, carrying on the trend of the cells before it.` : ''}`;
+        const thin = unlogged ? [] : thinCells(peak);
+        const them = thin.length > 1 ? 'them' : 'it';
+        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${thin.length ? ` Correct VE from logs leaves ${thin.join(' and ')} alone (this pull crossed ${them} too briefly to trust): ${lean ? 'raise' : 'lower'} ${them} by hand by about ${pct}%, or log more time there on LIVE and correct from that.` : ''}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about the same share, carrying on the trend of the cells before it.` : ''}`;
       }
     }
   };
@@ -680,14 +687,23 @@ export function simulateSweep({
     });
   });
 
-  groupRuns(points, (p) => p.richRisk).forEach((run) => {
+  // Rich enough to harm the engine, or, while the nitrous sprays, richer than a wet kit's
+  // working mixture: about 11.5:1 is where the spray is held (the EGT entry says so), so
+  // past 11:1 (λ 0.75) the spray's own fuel is the player's to take out on TUNE → NITROUS.
+  // Not where the EGT protection added the fuel: that richness is the protection's, on purpose.
+  const sprayRich = (p) => spraying(p) && p.lambda < SPRAY_RICHEST_LAMBDA && !(p.protect ?? []).includes('egt');
+  groupRuns(points, (p) => p.richRisk || sprayRich(p)).forEach((run) => {
     const peak = run.reduce((a, b) => (b.lambda < a.lambda ? b : a));
-    const sev = clamp((0.75 - peak.lambda) / 0.35, 0, 1);
-    const impact = Math.max(6, Math.round((12 + sev * 26) * (0.35 + 0.65 * rangeFrac(run))));
+    const danger = run.some((p) => p.richRisk);
+    const sev = clamp((COEFF.RICH_DAMAGE_LAMBDA - peak.lambda) / 0.35, 0, 1);
+    const impact = danger ? Math.max(6, Math.round((12 + sev * 26) * (0.35 + 0.65 * rangeFrac(run))))
+      : Math.max(2, Math.round(4 * (0.3 + 0.7 * rangeFrac(run))));
     events.push({
-      type: 'rich', severity: 3, impact,
+      type: 'rich', severity: danger ? 3 : 1, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
-      msg: `Dangerously rich across ${rangeLabel(run)} — down to lambda ${peak.lambda.toFixed(2)} (${peak.afr.toFixed(1)}:1)`,
+      msg: danger
+        ? `Dangerously rich across ${rangeLabel(run)} — down to lambda ${peak.lambda.toFixed(2)} (${peak.afr.toFixed(1)}:1)`
+        : `Richer than the spray needs across ${rangeLabel(run)} — down to ${peak.afr.toFixed(1)}:1 while the nitrous sprays, where about 11.5:1 makes the power`,
       cause: spraying(peak) && baseVeOff(peak) > 0.08
         ? `This is while the nitrous sprays, but most of the extra fuel is the base tune's: the VE table here reads ${Math.round(baseVeOff(peak) * 100)}% more air than the engine really gets, and a speed-density ECU fuels for the air the table says. The nitrous's own fuel comes on top of that.`
         : spraying(peak)

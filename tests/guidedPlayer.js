@@ -15,6 +15,11 @@ import { layoutSwitch } from '../src/ui/state/layoutSwitch.js';
 import { pullInputs } from '../src/ui/state/pullInputs.js';
 import { reducer as RED } from '../src/ui/state/reducer.js';
 
+/**
+ * The throttles the player pulls at: full throttle only (the dyno's Run, what most players do)
+ * when GUIDED_FULL_ONLY is set, else full, 70 % and 40 % (a player who also logs part throttle).
+ */
+const loads = () => (typeof process !== 'undefined' && process.env?.GUIDED_FULL_ONLY ? [100] : [100, 70, 40]);
 const at = (st, load) => ({ ...st, session: { ...st.session, loadKpa: load } });
 export const pull = (st, load = 100) => S.simulateSweep(pullInputs(at(st, load)).args);
 export const setCal = (st, path, v) => ({ ...st, tune: { ...st.tune, ecu: S.setCal(st.tune.ecu, path, v) } });
@@ -55,11 +60,19 @@ export function round(st) {
       // No figure: a step at a time, pulling again, until the spray reads what the log asks.
       st = setCal(st, 'nitrous.fuelTrimPct', S.getCal(st.tune.ecu, 'nitrous.fuelTrimPct') + 10); did.push('N2O fuel +10');
     }
+    else if (e.type === 'egtprot' && /run a smaller shot on TUNE → NITROUS/.test(fix) && st.build.nitrous?.shotHp > 25) {
+      // The log says the heat is the shot's own: a tuner steps the jet down.
+      st = setBuild(st, { nitrous: { ...st.build.nitrous, shotHp: st.build.nitrous.shotHp - 25 } }); did.push(`shot down to ${st.build.nitrous.shotHp} hp`);
+    }
     else if (e.type === 'falseknock') {
       const t = S.getCal(st.tune.ecu, 'ignition.knockThreshold'); st = setCal(st, 'ignition.knockThreshold', { ...t, z: t.z.map((v) => v * 1.1) }); did.push('knock threshold +10%');
     }
     else if (/set the Table layout to Sized, 16 × 16/.test(fix) && st.tune.layout?.id !== 'engine') { st = RED(st, layoutSwitch(st, 'engine')); did.push('layout: sized 16x16'); }
-    else if (st.build.turboOn && /lower the boost target (there|across)/.test(fix) && !/fit an intercooler/.test(fix)) {
+    // The boost is the last of the knock entry's steps: taken only where the log says timing
+    // cannot do it (no spark the table holds is safe). Otherwise the mixture and the timing
+    // come first, from the log's fuel entries and TUNE's cells, as the entry lists them.
+    else if (st.build.turboOn && /lower the boost target (there|across)/i.test(fix) && !/fit an intercooler/.test(fix)
+      && (e.type !== 'knock' || /Timing alone can't fix this/.test(fix))) {
       // The log names the range; a tuner takes a psi and a half out there and pulls again.
       const curve = st.build.boostCurve.map((b, i) => (S.CURVE_RPM[i] >= e.rpmStart - 500 && S.CURVE_RPM[i] <= e.rpmEnd + 500 && b > 0 ? Math.max(0, b - 1.5) : b));
       if (curve.some((b, i) => b !== st.build.boostCurve[i])) { st = setBuild(st, { boostCurve: curve }); did.push(`boost -1.5 psi ${e.rpmStart}-${e.rpmEnd}`); } else cannot.push(e.type);
@@ -93,7 +106,7 @@ export function round(st) {
   // change something); the hand edits it names are for the cells the log cannot reach.
   // Correct VE from logs reads the last pull with the LIVE log, which covers the other loads:
   // the pulls at each throttle stand in for both, fitted together.
-  const loadPulls = [p, pull(st, 70), pull(st, 40)];
+  const loadPulls = loads().map((l) => (l === 100 ? p : pull(st, l)));
   const viaLogs = loadPulls.some((r) => r.events.some((e) => ['missedmix', 'rich', 'lean'].includes(e.type)
     && /or use Correct VE from logs there/.test(String(e.fix ?? ''))));
   if (viaLogs) {
@@ -105,8 +118,8 @@ export function round(st) {
   // on whichever throttle's pull met it.
   // One pull at a time, as Correct VE from logs reads one: pulls at different throttles can
   // ask for opposite edits to the same cell, and doing both undid each other every round.
-  const handText = /column is past the \d+ RPM redline|too briefly for Correct VE from logs/;
-  const handPulls = [[p, pull(st, 70), pull(st, 40)].find((r) => r.events.some((e) => handText.test(String(e.fix ?? '')))) ?? p];
+  const handText = /column is past the \d+ RPM redline|too briefly to trust/;
+  const handPulls = [loads().map((l) => (l === 100 ? p : pull(st, l))).find((r) => r.events.some((e) => handText.test(String(e.fix ?? '')))) ?? p];
   for (const e of handPulls.flatMap((r) => r.events)) {
     const fix = String(e.fix ?? '');
     const col = /The (\d+) RPM column is past the \d+ RPM redline[^:]*: (lower|raise) it by hand/.exec(fix);
@@ -122,21 +135,24 @@ export function round(st) {
     if (did.includes(tag)) continue;
     st = { ...st, tune: { ...st.tune, ve } }; did.push(tag);
   }
-  // Cells a pull crossed too briefly for Correct VE from logs: the log names the rows, the speed
-  // and the share to change by hand.
+  // Cells a pull crossed too briefly for Correct VE from logs: the log names each one and the
+  // share to move it by hand.
   for (const e of handPulls.flatMap((r) => r.events)) {
     const fix = String(e.fix ?? '');
-    if (!/too briefly for Correct VE from logs/.test(fix)) continue;
-    const m = /(raise|lower) the VE cells in the ([0-9.]+)(?: and ([0-9.]+))? kPa load rows?(?: \(it ran at [0-9.]+ kPa, between them\))? around (\d+) RPM by about (\d+)%/.exec(fix);
+    const m = /Correct VE from logs leaves (.+?) alone \(this pull crossed (?:it|them) too briefly to trust\): (raise|lower) (?:it|them) by hand by about (\d+)%/.exec(fix);
     if (!m) continue;
     const ax = S.layoutById(st.tune.layout).ve;
-    const rpm = Number(m[4]); const f = 1 + (m[1] === 'lower' ? -1 : 1) * Number(m[5]) / 100;
-    const lo = Math.max(...ax.rpm.filter((r) => r <= rpm)); const hi = Math.min(...ax.rpm.filter((r) => r >= rpm));
-    const tag = `VE ${m[1]} ${m[5]}% by hand at ${m[2]}${m[3] ? `/${m[3]}` : ''} kPa ${rpm} RPM`;
-    if (did.includes(tag)) continue;
+    const f = 1 + (m[2] === 'lower' ? -1 : 1) * Number(m[3]) / 100;
     const ve = st.tune.ve.map((r) => [...r]);
-    for (const kpa of [m[2], m[3]].filter(Boolean).map(Number)) { const ri = rowNear(ax, kpa); ax.rpm.forEach((r, ci) => { if (ri >= 0 && (r === lo || r === hi)) ve[ri][ci] = Number((ve[ri][ci] * f).toFixed(1)); }); }
-    st = { ...st, tune: { ...st.tune, ve } }; did.push(tag);
+    let moved = 0;
+    for (const c of m[1].matchAll(/the ([0-9.]+) kPa cell at (\d+) RPM/g)) {
+      const tag = `VE ${m[2]} ${m[3]}% by hand: ${c[1]} kPa at ${c[2]} RPM`;
+      if (did.includes(tag)) continue;
+      const ri = rowNear(ax, Number(c[1])); const ci = ax.rpm.indexOf(Number(c[2]));
+      if (ri < 0 || ci < 0) continue;
+      ve[ri][ci] = Number((ve[ri][ci] * f).toFixed(1)); did.push(tag); moved += 1;
+    }
+    if (moved) st = { ...st, tune: { ...st.tune, ve } };
   }
   // Lean protection that took the boost out: the log names the rows, the range and the share.
   for (const e of p.events) {
@@ -151,7 +167,7 @@ export function round(st) {
   }
   if (did.length) return { st, did, cannot };
   // VE from logs wherever the engine missed its table, at every throttle the player can pull.
-  const pulls = [100, 70, 40].map((l) => (l === 100 ? p : pull(st, l)));
+  const pulls = loads().map((l) => (l === 100 ? p : pull(st, l)));
   // Any other miss the log asks the VE table to answer, from the same samples.
   const missed = pulls.some((r) => r.events.some((e) => ['missedmix', 'rich', 'lean'].includes(e.type) && !e.gridBound && !/while spraying/.test(String(e.fix))));
   if (missed) {
