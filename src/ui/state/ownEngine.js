@@ -6,7 +6,7 @@
  * until they edit a table themselves (EngineScreen's short-block note).
  */
 
-import { customEnginePatch, validateCustomEngine } from '../../sim/index.js';
+import { customEnginePatch, layoutById, startUpTiming, validateCustomEngine } from '../../sim/index.js';
 
 /** Typical figures, none of them anyone's engine in particular. */
 export const TYPICAL_OWN_ENGINE = Object.freeze({ configuration: 'I4', bore: 86, stroke: 86, compression: 10.5, redline: 6800 });
@@ -17,5 +17,7 @@ const FIRST_FIGURES = ['configuration', 'bore', 'stroke', 'compression', 'redlin
 /** @returns {object} the APPLY_PRESET patch for a new engine of the player's own */
 export function ownEnginePatch() {
   const v = /** @type {any} */ (validateCustomEngine(TYPICAL_OWN_ENGINE));
-  return customEnginePatch(v.engine, [...FIRST_FIGURES, ...v.assumed]);
+  const p = customEnginePatch(v.engine, [...FIRST_FIGURES, ...v.assumed]);
+  // A start-up map, as `ownEngineBaseMap` writes when the block changes: timing to find.
+  return { ...p, timing: startUpTiming(p.timing, layoutById(p.layout).timing) };
 }

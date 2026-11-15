@@ -43,6 +43,7 @@ import { tipFor } from './tips.js';
  * @property {(c: Career) => boolean} met
  * @property {string} done Pops's text when it is
  * @property {number} reward
+ * @property {string[]} focus the walk-in work that practises what it teaches (generate.js template ids)
  */
 
 const passed = (/** @type {Career} */ c) => (c.history ?? []).filter((h) => h.verdict === 'pass').length;
@@ -51,7 +52,7 @@ const built = (/** @type {Career} */ c) => (c.history ?? []).some((h) => h.verdi
 /** @type {Chapter[]} */
 export const CHAPTERS = [
   {
-    id: 'keys', title: 'The keys', subject: 'Ray’s shop is yours',
+    id: 'keys', focus: ['intake', 'injectors'], title: 'The keys', subject: 'Ray’s shop is yours',
     body: [
       'Kid, it’s your uncle. I know you’ve wondered why the shop stayed shut all these years. After your dad passed I couldn’t bring myself to turn the key. Ray was the best tuner this town ever had, and I just fried eggs.',
       'You keep asking how he did it. So here it is: the shop is yours. The laptop on the desk is his, the job board is on the wall, and his dyno is still in the bay. I’ll text you what he taught me, one thing at a time. Do the work, and you’ll know what he knew.',
@@ -71,7 +72,7 @@ export const CHAPTERS = [
     reward: 200,
   },
   {
-    id: 'fuel', title: 'Fuel first', subject: 'What Ray said about fuel',
+    id: 'fuel', focus: ['intake', 'injectors', 'headers'], title: 'Fuel first', subject: 'What Ray said about fuel',
     body: [
       'Your dad used to say a tuner earns his money in the fuel table. Get the mixture wrong and nothing else you do matters.',
       'Do a few more jobs. Watch the air-fuel ratio in every log you pull.',
@@ -91,7 +92,7 @@ export const CHAPTERS = [
     reward: 300,
   },
   {
-    id: 'spark', title: 'Learn the spark', subject: 'Timing, and why it is not more',
+    id: 'spark', focus: ['headers', 'intake'], title: 'Learn the spark', subject: 'Timing, and why it is not more',
     body: [
       'You can’t touch the ignition tables until the Academy trains you on them. Ray did the same course, years ago. Go and do it.',
     ],
@@ -109,7 +110,7 @@ export const CHAPTERS = [
     reward: 300,
   },
   {
-    id: 'measure', title: 'Measure it', subject: 'Ray’s dyno',
+    id: 'measure', focus: ['cam', 'retarded'], title: 'Measure it', subject: 'Ray’s dyno',
     body: [
       'Your dad never guessed. Every change went on that dyno before the car went home, and he wrote the number on the ticket.',
       'Do it his way: change one thing, pull, read the log, then the next thing.',
@@ -128,7 +129,7 @@ export const CHAPTERS = [
     reward: 300,
   },
   {
-    id: 'knock', title: 'Knock', subject: 'The noise that ends engines',
+    id: 'knock', focus: ['retarded', 'cam'], title: 'Knock', subject: 'The noise that ends engines',
     body: [
       'More timing makes more power, right up until it doesn’t. The Academy runs a knock control course. Take it before you get greedy.',
     ],
@@ -147,7 +148,7 @@ export const CHAPTERS = [
     reward: 400,
   },
   {
-    id: 'local', title: 'A local shop', subject: 'Read the logs, not your gut',
+    id: 'local', focus: ['e85', 'cam', 'retarded'], title: 'A local shop', subject: 'Read the logs, not your gut',
     body: [
       'You’re getting cars with bolt-ons now. Ray hated a tune that hid a problem. When the intake changes, the sensor reading changes. Fix the reading, not the symptom.',
       'Build the shop up until people call it a local shop.',
@@ -167,7 +168,7 @@ export const CHAPTERS = [
     reward: 400,
   },
   {
-    id: 'power', title: 'Torque and power', subject: 'What the customer feels',
+    id: 'power', focus: ['cam', 'pair', 'turbo'], title: 'Torque and power', subject: 'What the customer feels',
     body: [
       'A customer told me today his car felt quicker but your sheet said it made less peak power. Ray had that conversation a hundred times.',
       'Ten clean jobs, and you’ll be able to explain it in your sleep.',
@@ -186,7 +187,7 @@ export const CHAPTERS = [
     reward: 500,
   },
   {
-    id: 'boost', title: 'Boost', subject: 'Free air is not free',
+    id: 'boost', focus: ['turbo'], title: 'Boost', subject: 'Free air is not free',
     body: [
       'The quick cars all have turbos now. Learn boost control at the Academy, and learn why the good ones run an intercooler.',
     ],
@@ -204,7 +205,7 @@ export const CHAPTERS = [
     reward: 600,
   },
   {
-    id: 'known', title: 'A known tuner', subject: 'The open-loop trap',
+    id: 'known', focus: ['turbo', 'e85', 'pair'], title: 'A known tuner', subject: 'The open-loop trap',
     body: [
       'People drive in from other towns now. That’s a known tuner. Get there: the cars that come in with parts bolted on and never tuned are where you show the difference.',
     ],
@@ -222,7 +223,7 @@ export const CHAPTERS = [
     reward: 800,
   },
   {
-    id: 'engine', title: 'Ray’s engines', subject: 'He built them too',
+    id: 'engine', focus: ['build-na'], title: 'Ray’s engines', subject: 'He built them too',
     body: [
       'There’s something I never told you. Ray didn’t only tune engines, he built them, on the stand where yours sits now. The last one he built is still in a customer’s car.',
       'Learn engine building at the Academy, and build one to order. Do it right.',
@@ -241,7 +242,7 @@ export const CHAPTERS = [
     reward: 1500,
   },
   {
-    id: 'respected', title: 'A respected shop', subject: 'The shop people talk about',
+    id: 'respected', focus: ['build-boost', 'turbo'], title: 'A respected shop', subject: 'The shop people talk about',
     body: [
       'Ray’s shop was the one other tuners sent their hard cases to. Get it back there.',
     ],
@@ -259,7 +260,7 @@ export const CHAPTERS = [
     reward: 1500,
   },
   {
-    id: 'master', title: 'Master tuner', subject: 'The last thing he taught me',
+    id: 'master', focus: [], title: 'Master tuner', subject: 'The last thing he taught me',
     body: [
       'There’s one more step. Ray didn’t become a master because of a number on a sheet. People drove across the state to have him tune their cars, because he told them the truth about their engines.',
       'Make the shop a destination. When you get there, you’ll be what he was.',
@@ -288,6 +289,26 @@ export const sagaOf = (c) => {
     done: !!s.done,
   };
 };
+
+/**
+ * How far the shop is towards the open chapter's goal, where it is a count (jobs done well, a
+ * reputation): `null` for a goal that is done or not (a course, an engine built).
+ * @param {Career} c
+ * @returns {{have: number, need: number, unit: string}|null}
+ */
+export function goalProgress(c) {
+  const ch = openChapter(c);
+  if (!ch) return null;
+  const jobs = /^Do (one|three|five|ten) customer jobs? well|^Hand back one/.exec(ch.goal);
+  const need = { one: 1, three: 3, five: 5, ten: 10 };
+  if (jobs) return { have: Math.min(passed(c), need[jobs[1] ?? 'one'] ?? 1), need: need[jobs[1] ?? 'one'] ?? 1, unit: 'jobs done well' };
+  const rep = /^Reach (\d+) reputation/.exec(ch.goal);
+  if (rep) return { have: Math.min(c.rep ?? 0, Number(rep[1])), need: Number(rep[1]), unit: 'reputation' };
+  return null;
+}
+
+/** The walk-in work the open chapter practises; none once the story is over. @param {Career} c */
+export const chapterFocus = (c) => openChapter(c)?.focus ?? [];
 
 /** The open chapter, or null once the story is over. @param {Career} c */
 export const openChapter = (c) => { const s = sagaOf(c); return s.done ? null : CHAPTERS[s.ch] ?? null; };

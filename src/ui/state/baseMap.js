@@ -106,7 +106,8 @@ export function isOwnEngine(build) {
  * The safe base map for an engine of the player's own as its block and head now stand, on
  * the induction it was created with (naturally aspirated: `build.factoryInduction`), with
  * the bolt-ons fitted. What a tuner loads so a new engine starts and survives a first pull:
- * generated from the physics with a factory's knock margin, conservative, not tuned. A
+ * generated from the physics, its full-load spark START_UP_RETARD_DEG short of the target
+ * (sim/presets.js `startUpTiming`): conservative, not tuned. A
  * turbo, a supercharger, nitrous, a fuel or an injector change is not in it: no tuner
  * would calculate boost cells for a customer, so those cells are the player's to tune.
  * @param {import('./initialState.js').StoreState['build']} build

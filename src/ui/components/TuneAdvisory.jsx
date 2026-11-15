@@ -139,7 +139,7 @@ function TimingAdvisory({ report }) {
         <div className={styles.prose}>
           <CellStats cell={detail.cell} />
           {detail.cell.knockingOnPull ? 'The engine knocked while it was reading this cell on a full-throttle pull. ' : ''}{detail.cell.sparkCannotFix
-            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Lower the boost at this speed (the boost target of a turbo, or the drive ratio of a supercharger, on BUILD → INDUCTION), cool the charge (an intercooler, on BUILD → INDUCTION), or run better fuel.'
+            ? 'No spark setting is safe here: even the most retard the table can hold is past the knock limit at the boost this cell sees. Retard alone cannot fix it. Richen this cell on TUNE → FUEL if the advisor lists it there (a richer charge raises the knock limit), lower the boost at this speed (the boost target of a turbo, or the drive ratio of a supercharger, on BUILD → INDUCTION), cool the charge (an intercooler, on BUILD → INDUCTION), or run better fuel.'
             : 'Past the knock limit the engine is damaging itself. Pull this cell back to the suggested value, or lower.'}
         </div>
       );

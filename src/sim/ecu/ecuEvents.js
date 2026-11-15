@@ -7,6 +7,7 @@
  */
 
 import { COEFF } from '../coefficients.js';
+import { BARO_KPA, GASOLINE_STOICH, PSI_TO_KPA } from '../constants.js';
 import { clamp, groupRuns, mergeNearbyRuns } from '../math.js';
 
 import { LINEAR_SCALES } from './sensors.js';
@@ -35,9 +36,10 @@ const REPORT = Object.freeze({
  * @param {import('./strategy.js').EcuHardware} ctx.hw
  * @param {number} ctx.hardCut
  * @param {number} ctx.endRpm
+ * @param {boolean} [ctx.intercooled] an intercooler is fitted: the iatprot fix cannot ask for one
  * @returns {object[]}
  */
-export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
+export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled = false }) {
   const events = [];
   if (!points.length) return events;
   const label = (run) => (run[0].rpm === run[run.length - 1].rpm ? `${run[0].rpm} RPM` : `${run[0].rpm}–${run[run.length - 1].rpm} RPM`);
@@ -93,6 +95,22 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
     });
   });
 
+  // A boost cut hides its own cause: the pull logs the engine after boost came out, where the
+  // mixture is fine, so Correct VE from logs never sees the cells that ran lean. The trip
+  // says how lean, and the boost it was asking for says where.
+  const boostCutLean = (run, tripLambda) => {
+    if (cal.protect.leanAction !== 'boost-cut') return null;
+    // What the boost controller was asked for before the protection cut it (`boostSteps`:
+    // the point's own `boostTarget` is after the cut).
+    const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
+    const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
+    const cut = run.filter((p) => request(p) - (p.boostPsi ?? 0) > 1);
+    if (!cut.length) return null;
+    const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
+    const wanted = (cut[0].afrCommanded ?? GASOLINE_STOICH) / GASOLINE_STOICH;
+    const pct = Math.max(1, Math.round((tripLambda / wanted - 1) * 100));
+    return `The protection took the boost out, so this pull logged the engine where the mixture is fine, and Correct VE from logs cannot see the cells that ran lean. It tripped at λ ${tripLambda.toFixed(2)} asking for about ${asked} kPa: on TUNE → AIRFLOW raise the VE cells in the rows around ${asked} kPa across ${label(cut)} by about ${pct}%, then pull again. Once the boost stays in, Correct VE from logs finishes the job.`;
+  };
   groupRuns(points, (p) => has(p, 'lean')).forEach((run) => {
     // The reading that TRIPPED it: the logged point is after the protection acted, and
     // with boost out it reads richer than the limit it crossed.
@@ -107,18 +125,24 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
         : `Under boost the mixture was leaner than the λ ${cal.protect.leanLambda} limit, so the ECU ${cal.protect.leanAction === 'fuel-cut' ? 'cut fuel' : cal.protect.leanAction === 'torque' ? 'closed the throttle' : 'took boost out'} to save the pistons.`,
       fix: misread ? 'On TUNE → SENSORS, set the wideband scaling to match the controller.'
         : (peak.nitrousLbMin ?? 0) > 0 ? 'It went lean while the nitrous sprayed: on TUNE → NITROUS, raise Fuel correction while spraying (and on a dry kit, Dry kit fuel). The protection saved the engine; it is not a tune.'
-          : 'The protection saved the engine; it is not the fix. Fix the fuelling entries in this log first. If there are none, check in this order: injector flow rate (TUNE → INJECTORS), VE table (TUNE → AIRFLOW), the boost AFR target (TUNE → FUEL), then injector duty and fuel pump (BUILD → FUEL SYSTEM).',
+          : boostCutLean(run, tripped(peak)) ?? 'The protection saved the engine; it is not the fix. Fix the fuelling entries in this log first. If there are none, check in this order: injector flow rate (TUNE → INJECTORS), VE table (TUNE → AIRFLOW), the boost AFR target (TUNE → FUEL), then injector duty and fuel pump (BUILD → FUEL SYSTEM).',
     });
   });
 
   groupRuns(points, (p) => has(p, 'egt')).forEach((run) => {
-    const peak = run.reduce((a, b) => (b.egt > a.egt ? b : a));
+    // The reading that tripped it, not the cooler one logged after the enrichment acted.
+    const egtOf = (p) => p.egtTripC ?? p.egt;
+    const peak = run.reduce((a, b) => (egtOf(b) > egtOf(a) ? b : a));
     events.push({
       type: 'egtprot', severity: 1, impact: imp(6, run), ...span(run),
-      msg: `Component protection enriching across ${label(run)} (EGT ${peak.egt} °C against a ${cal.protect.egtLimitC} °C limit)`,
+      msg: `Component protection enriching across ${label(run)} (EGT ${egtOf(peak)} °C against a ${cal.protect.egtLimitC} °C limit)`,
       cause: `The exhaust was hotter than the ${hw.turboOn ? 'turbine and exhaust valves' : 'exhaust valves and catalytic converter'} are calibrated for, so the ECU added fuel. Extra fuel absorbs heat evaporating and leaves the burn cooler — at the cost of fuel and some power.${(peak.nitrousLbMin ?? 0) > 0 ? ' Nitrous raises exhaust heat on its own: more fuel burns every cycle, and the retard it needs finishes the burn later.' : ''}`,
       fix: (peak.nitrousLbMin ?? 0) > 0
-        ? 'This is the protection doing its job on the heat nitrous brings. Keep the retard while spraying on TUNE → NITROUS to what the knock needs — more burns later and hotter in the exhaust — and hold the spray mixture near 11.5:1 rather than leaner.'
+        // Leaner than 11.5:1 while spraying, the spray fuel is the lever; at it already, the
+        // heat is the shot's own, and only a smaller shot takes it out.
+        ? (peak.afr > 11.6
+          ? `It ran ${peak.afr.toFixed(1)}:1 while spraying: raise Fuel correction while spraying on TUNE → NITROUS until the spray reads about 11.5:1, and keep the retard while spraying to what the knock needs (more burns later and hotter in the exhaust).`
+          : `It already ran ${peak.afr.toFixed(1)}:1 while spraying, so the heat is the shot's own: run a smaller shot on TUNE → NITROUS, or leave the protection to enrich, which is it doing its job. More retard while spraying than the knock needs makes it hotter.`)
         : 'High EGT means the burn is finishing late. First check this range is not losing timing to knock retard (a knock entry in this log). Then set a slightly richer WOT AFR target here on TUNE → FUEL, so the calibration does on purpose what the protection is doing for you.',
     });
   });
@@ -215,7 +239,10 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm }) {
       type: 'iatprot', severity: 1, impact: imp(6, run), ...span(run),
       msg: `Intake-temperature protection pulling timing across ${label(run)} (intake air up to ${Math.round(peak.sensedIat)} °C against a ${cal.protect.iatLimitC} °C limit)`,
       cause: `Hot intake air knocks sooner, so the ECU takes ${cal.protect.iatRetardPerC}° of timing out for every degree over the limit — about ${pulled.toFixed(1)}° here, whatever the SPARK table says.`,
-      fix: 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target there. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
+      // An intercooler already fitted cannot be fitted again: the boost there is the lever.
+      fix: intercooled
+        ? `The intercooler is already doing its work: the charge comes out of the compressor too hot for it at this boost. Lower the boost target across ${label(run)} on BUILD → INDUCTION (Boost Target Curve), or run better fuel, which takes the heat with less retard. Raising the IAT limit on TUNE → PROTECT only removes the safety net.`
+        : 'Cool the charge: fit an intercooler on BUILD → INDUCTION, or lower the boost target there. Raising the IAT limit on TUNE → PROTECT only removes the safety net.',
     });
   });
 

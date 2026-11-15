@@ -432,6 +432,14 @@ export function simulateSweep({
       return r != null && Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2;
     });
   };
+  // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
+  // through a row in one or two speeds): it leaves them as they are, so the log must not send
+  // the player back to it for them.
+  const tooThin = (p) => {
+    if (!veFit) return false;
+    const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
+    return cells.some(({ ri, ci }) => veFit.ratio[ri]?.[ci] == null);
+  };
   const deliveryFix = (peak, run, deliveryLean) => {
     const lean = deliveryLean > 0;
     const pct = Math.max(1, Math.round(Math.abs(peak.afr / peak.afrCommanded - 1) * 100));
@@ -456,7 +464,8 @@ export function simulateSweep({
           const below = at;
           return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here'} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop's tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.`;
         }
-        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about the same share, carrying on the trend of the cells before it.` : ''}`;
+        const thin = !unlogged && tooThin(peak);
+        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%${thin ? '. This pull crossed those cells too briefly for Correct VE from logs to trust, so it leaves them alone: change them by hand, or log more time there on LIVE and correct from that.' : ', or use Correct VE from logs there, which reads this pull and writes it for you.'}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about the same share, carrying on the trend of the cells before it.` : ''}`;
       }
     }
   };
@@ -490,7 +499,10 @@ export function simulateSweep({
     events.push({
       type: 'knock', severity: 3, impact,
       rpmStart: run[0].rpm, rpmEnd: run[run.length - 1].rpm,
-      msg: `Knock across ${rangeLabel(run)}${/** @type {any} */ (run).intermittent ? ' (on and off)' : ''} — ECU pulled up to ${Math.max(...run.map((p) => p.knockPull)).toFixed(1)}° (peak near ${peak.rpm} RPM)`,
+      // Past the limit before the controller has pulled anything: say so, not "pulled 0.0°".
+      msg: `Knock across ${rangeLabel(run)}${/** @type {any} */ (run).intermittent ? ' (on and off)' : ''} — ${Math.max(...run.map((p) => p.knockPull)) >= 0.05
+        ? `ECU pulled up to ${Math.max(...run.map((p) => p.knockPull)).toFixed(1)}°`
+        : `up to ${Math.max(...run.map((p) => -(p.margin ?? 0))).toFixed(1)}° past the knock limit, before the knock control pulled any timing`} (peak near ${peak.rpm} RPM)`,
       cause: `Caused by ${causes.join(' and ')}. This spans ${Math.round(rangeFrac(run) * 100)}% of the RPM sweep${avgPull >= 2 ? `, averaging ${avgPull.toFixed(1)}° of retard — a common tuner's rule of thumb treats anything sustained above about 2° as a warning of expensive engine damage, not an acceptable operating point` : ''}.`,
       // In the order a tuner works: mixture first (the knock limit moves with it), then
       // timing, then boost, then hardware.
@@ -884,7 +896,7 @@ export function simulateSweep({
   }
 
   if (ecu) {
-    events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm }));
+    events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm, intercooled: !!mods?.intercooler }));
   }
   if (failure) {
     events.push({

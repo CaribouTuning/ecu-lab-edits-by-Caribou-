@@ -61,6 +61,17 @@ const MIN_ECT_C = 75;
 const sample = (parts) => ({ ...parts, ratio: parts.lambdaRatio * parts.trim * parts.maf * parts.rescale });
 
 /**
+ * Whether a protection changed the fuel the ECU meant to give, so the mixture no longer reads
+ * the air estimate: EGT enrichment adds fuel, and a starved rail delivers less. The others
+ * (lean, knock, duty, overboost) cut boost or throttle and leave the fuelling as calculated,
+ * and the point's sensed pressure is what it ran at: still a true sample of the VE there.
+ * Leaving them out once made a lean the lean protection caught uncorrectable: every lean
+ * point was protected, so Correct VE from logs never saw one.
+ * @param {string[]|undefined} protect
+ */
+const fuelledByProtection = (protect) => (protect ?? []).some((k) => k === 'egt' || k === 'fuelpressure' || k === 'nitrous lean');
+
+/**
  * Samples from a dyno pull. A pull runs at full throttle, open loop, so its mixture
  * error is all the ECU's air estimate. Only valid while the tables it was taken with are
  * the ones on screen — the caller drops a stale pull.
@@ -72,7 +83,7 @@ export function veSamplesFromPull(points) {
   const out = [];
   for (const p of points ?? []) {
     if (!p.openLoop || !(p.sensedLambda > 0) || !(p.afrCommanded > 0)) continue;
-    if ((p.nitrousLbMin ?? 0) > 0 || p.fuelLimited || p.fuelStarved || (p.protect?.length ?? 0) > 0) continue;
+    if ((p.nitrousLbMin ?? 0) > 0 || p.fuelLimited || p.fuelStarved || fuelledByProtection(p.protect)) continue;
     if ((p.cutPct ?? 0) > 0 || (p.misfire ?? 0) > 0) continue;
     const s = sample({
       rpm: p.rpm, mapKpa: p.ecuLoad ?? p.sensedMap ?? p.map, lambdaRatio: p.sensedLambda / (p.afrCommanded / 14.7),
@@ -103,7 +114,7 @@ export function veSamplesFromLive(rows, ve, axes) {
     prev = r;
     if (!steady || !r.running || r.rpm < 600 || r.ect < MIN_ECT_C) continue;
     if (Math.abs(r.ae ?? 0) >= 1 || (r.cut ?? 0) > 0 || (r.nitrous ?? 0) > 0 || (r.misfire ?? 0) > 0) continue;
-    if ((r.protect?.length ?? 0) > 0 || !(r.veTable > 0) || !(r.lambdaTarget > 0) || !(r.sLambda > 0)) continue;
+    if (fuelledByProtection(r.protect) || !(r.veTable > 0) || !(r.lambdaTarget > 0) || !(r.sLambda > 0)) continue;
     const s = sample({
       rpm: r.rpm, mapKpa: load, lambdaRatio: r.sLambda / r.lambdaTarget,
       trim: (1 + (r.stft ?? 0) / 100) * (1 + (r.ltft ?? 0) / 100), maf: 1 + (r.mafPct ?? 0) / 100,

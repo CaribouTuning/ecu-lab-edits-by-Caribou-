@@ -25,7 +25,7 @@ import {
   GAME_LAYOUT, kpaForLoad, layoutById, loadForKpa, needsAirmass, readEcuTable, sameAxes, truthReader,
 } from './layouts.js';
 import {
-  OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG, interpolationRoomDeg,
+  IDLE_COLUMN_MAX_RPM, interpolationRoomDeg, OPEN_LOOP_KPA, REACHABLE_SLACK_KPA, SPARK_MAX_DEG, SPARK_MIN_DEG,
 } from './tables.js';
 
 /**
@@ -554,7 +554,11 @@ export function calibrationAdvice({
         knockLimited: knockCeiling < mbt,
         unbounded: pt.threshold >= COEFF.KNOCK_UNBOUNDED_BTDC,
       });
-      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct'));
+      // Direct injection may run stoichiometric under load, as the factory does, but not
+      // where no spark the table holds is safe: there a factory map enriches to raise the
+      // knock limit, and the pull log's knock entry asks for it. One story either way.
+      const noSafeSpark = knockCeiling < SPARK_MIN_DEG;
+      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct' && !noSafeSpark));
     });
   });
 
@@ -762,9 +766,6 @@ export const IN_FORCE_WEIGHT = 0.15;
 
 /** Below this speed an engine is cranking or stalling, not running under load. */
 const CRANKING_MAX_RPM = 600;
-
-/** Columns at or below this speed are the idle columns: run under MBT on purpose. */
-const IDLE_COLUMN_MAX_RPM = 1000;
 
 /**
  * How much each spark-table cell contributes to the timing read at one operating point,

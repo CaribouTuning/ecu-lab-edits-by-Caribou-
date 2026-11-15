@@ -527,6 +527,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
   // AFTER the protection acted — boost out, so richer — and reporting that reading made
   // the log say "λ 0.96, leaner than the λ 1.02 limit".
   let leanTripLambda = 0;
+  // The exhaust temperature that tripped the EGT enrichment: the logged point is after it
+  // acted, cooler than the limit it crossed (as `leanTripLambda` is for the lean protection).
+  let egtTripC = 0;
   const mod = { ...NO_INTERVENTION };
   // The pump's delivery against how freely the system leaks: a weak pump or low oil, and
   // worn crank bearings (damage.js `oilConductance`).
@@ -583,7 +586,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     }
     if (P.egtEnabled && pt.egt > P.egtLimitC) {
       const want = Math.min(P.egtEnrichMaxPct, mod.extraFuelPct + ((pt.egt - P.egtLimitC) / 10) * P.egtEnrichPctPer10C);
-      if (want > mod.extraFuelPct + E.EGT_ENRICH_DEADBAND_PCT) { mod.extraFuelPct = want; changed = true; protect.add('egt'); }
+      if (want > mod.extraFuelPct + E.EGT_ENRICH_DEADBAND_PCT) { mod.extraFuelPct = want; changed = true; protect.add('egt'); egtTripC = Math.max(egtTripC, pt.egt); }
     }
     // Heavy knock control drops the ECU onto its high-detonation map.
     if (!mod.highDet && cal.ignition.highDetRetard > 0 && pt.knockPull > cal.ignition.highDetTriggerDeg) {
@@ -640,6 +643,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     torqueLimitNm: Math.round(Math.min(read1(cal.torque.limitByGear, gear), read1(cal.torque.limitByRpm, rpm))),
     protect: [...protect],
     ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
+    ...(egtTripC > 0 ? { egtTripC: Math.round(egtTripC) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },
     // The closed cycle's pressure trace at the settled point, for the Physics page: the same
     // resolved inputs evaluated once more with the trace kept.

@@ -149,7 +149,18 @@ remaining risk is the same Node major with a different libm, which is what step 
   finish. The log calls spark short only where a cell has the room (`judgeAgainstPull`'s rule,
   mirrored in sweep.js); a mixture miss the VE cells already fit to within half the tolerance is
   `gridBound` (the breakpoints, not the table), which a career job does not count. While nitrous
-  sprays a point is TUNE → NITROUS's (`offSpray`), never the base tables'.
+  sprays a point is TUNE → NITROUS's (`offSpray`), never the base tables'. The player works as
+  the app lets them: TUNE's cells from the full-throttle pull (`advisorPull`), Correct VE from
+  logs on all loads at once (the pull plus LIVE), one change a round. A fix the log names
+  must be exact enough to follow (a row, a speed, a share); a protection that hides its own
+  cause (a boost cut) must name it. Run the SANDBOX matrix (`scripts/sandbox-matrix.js`: every preset × bolt-ons, cam,
+  compression, turbo, more boost, blower, nitrous, E85, rev limit) after changing log text.
+- **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
+  and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
+  factory engines and the career's cars keep their factory calibration.
+- **VE learning drops only the points whose fuel the ECU changed** (`fuelledByProtection`:
+  EGT enrichment, a starved rail). A boost cut or knock retard leaves the fuelling as
+  calculated; dropping those once made a lean the lean protection caught uncorrectable.
 - **Slow work runs in a Web Worker** (`ui/sim/warm.js`, `simWorker.js`, inlined by Vite's
   `?worker&inline`): the same code solves the breathing there and the page seeds the nodes
   (`seedBreathing`), so the numbers are identical (tests/sim-worker.test.js). With no worker

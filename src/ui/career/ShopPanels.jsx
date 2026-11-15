@@ -15,6 +15,7 @@ import { jobById } from './jobs.js';
 import {
   blockers, board, buy, cannotBuy, cannotTrain, capacity, giveUp, newCareer, nextDay, overhead, train,
 } from './shop.js';
+import { CHAPTERS, chapterFocus, goalProgress, openChapter, sagaOf } from './story.js';
 import styles from './ShopScreen.module.css';
 
 export const money = (n) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
@@ -25,6 +26,33 @@ const VERDICT = {
   fail: { title: 'Not fixed yet', tone: 'warn' },
   unsafe: { title: 'Sent home unsafe', tone: 'danger' },
 };
+
+/**
+ * Where the story stands: the open chapter, its goal, and how far the shop is towards it,
+ * so a day starts with what it is for. Pops's email explains it; this keeps it in sight.
+ * @param {{career: import('./shop.js').Career}} props
+ */
+function StoryGoal({ career }) {
+  const ch = openChapter(career);
+  if (!ch) return null;
+  const at = sagaOf(career).ch;
+  const prog = goalProgress(career);
+  return (
+    <section className={styles.card} data-goal="" aria-label="Your goal">
+      <div className={styles.cardTag}>Chapter {at + 1} of {CHAPTERS.length} · {ch.title}</div>
+      <p className={styles.goalText}>{ch.goal}</p>
+      {prog && (
+        <div className={styles.goalProgress}>
+          <div className={styles.goalBar} role="progressbar" aria-valuemin={0} aria-valuemax={prog.need} aria-valuenow={prog.have} aria-label={`${prog.have} of ${prog.need} ${prog.unit}`}>
+            <span style={{ width: `${Math.round((prog.have / prog.need) * 100)}%` }} />
+          </div>
+          <small>{prog.have} of {prog.need} {prog.unit}</small>
+        </div>
+      )}
+      <p className={styles.small}>Pops explains it in Messages. Customers whose work practises it are listed first.</p>
+    </section>
+  );
+}
 
 /**
  * One tab of the shop's paperwork.
@@ -49,11 +77,16 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking
   const tier = repTier(career.rep);
   const nextTier = nextRepTier(career.rep);
   const working = career.working ? jobById(career.working) : null;
-  const waiting = board(career);
+  // Walk-ins that practise what the open chapter teaches come first, marked: the story's
+  // curriculum, without changing who walks in (the economy's pace is set on the offers).
+  const focus = chapterFocus(career);
+  const practises = (j) => !!j.template && focus.includes(j.template);
+  const waiting = board(career).map((j, i) => ({ j, i })).sort((a, b) => Number(practises(b.j)) - Number(practises(a.j)) || a.i - b.i).map(({ j }) => j);
   return (
   <main className={variant === 'drawer' ? styles.drawerPanel : styles.panel}>
     {tab === 'today' && (
       <>
+        <StoryGoal career={career} />
         {unseen && (
           <section className={styles.card} data-tone={VERDICT[last.verdict].tone} aria-label="Job result">
             <div className={styles.cardTag}>{VERDICT[last.verdict].title}: {jobById(last.jobId).customer.name}</div>
@@ -110,13 +143,14 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking
 
     {tab === 'customers' && (
       <>
+        <StoryGoal career={career} />
         <p className={styles.intro}>{career.lifts.length}/{capacity(career)} lifts in use. Customers describe what the car does; working out why is the job.</p>
         {waiting.map((job) => {
           const blocked = blockers(career, job);
           return (
             <section key={job.id} className={styles.card} aria-label={`${job.customer.name}, ${job.customer.car}`}>
               <div className={styles.cardTag}>{job.customer.name}, {job.customer.car}</div>
-              <p className={styles.small}>{job.build ? 'An engine build' : `${job.generated ? 'Walk-in, ' : ''}${TIER_NAME[job.tier]} job`}</p>
+              <p className={styles.small}>{job.build ? 'An engine build' : `${job.generated ? 'Walk-in, ' : ''}${TIER_NAME[job.tier]} job`}{practises(job) ? ' · practises this chapter' : ''}</p>
               <p className={styles.quote}>&ldquo;{job.says}&rdquo;</p>
               <p className={styles.small}><b>Wants:</b> {job.wants}</p>
               <div className={styles.meta}><span>Pays <b>{money(job.pay)}</b></span><span>Reputation <b>+{job.rep}</b></span></div>

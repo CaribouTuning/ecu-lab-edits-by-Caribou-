@@ -37,7 +37,7 @@ import { BOTTOM_END_OPTS, DEFAULT_BOTTOM_END } from './bottomEnd.js';
 import { clamp, curveAt } from './math.js';
 import { inductionAtFullThrottle, inductionAtMap } from './turbo.js';
 import {
-  CURVE_RPM, effectiveMafFactor, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
+  CURVE_RPM, effectiveMafFactor, IDLE_COLUMN_MAX_RPM, interpolationRoomDeg, OPEN_LOOP_KPA, RPM, SPARK_MAX_DEG,
   SPARK_MIN_DEG,
 } from './tables.js';
 
@@ -1303,7 +1303,32 @@ export function baseMapFor(build, layout = null) {
     fuel: tankFuel(/** @type {any} */ (build)),
     fuelPlanId: build.originPresetId ?? build.presetId ?? null,
   };
-  return factoryCalibration(hardware, layout);
+  const cal = factoryCalibration(hardware, layout);
+  return { ...cal, timing: startUpTiming(cal.timing, layoutById(cal.layout).timing) };
+}
+
+/**
+ * How far a start-up map's spark sits short of the engine's target at full load. A base
+ * map is what a tuner loads so a new or changed engine starts and survives its first pull,
+ * not a tune: the timing is the tuner's to find on the dyno, so it starts short of it.
+ */
+export const START_UP_RETARD_DEG = 4;
+
+/**
+ * A start-up map's spark: the factory rule's timing with START_UP_RETARD_DEG taken out of
+ * the full-load cells (from where open loop begins, OPEN_LOOP_KPA, up), so the first pull is
+ * safe and the timing left is the player's to find from the log and TUNE. Light load and
+ * idle keep theirs: no tuner chases power there, and the idle needs its spark reserve.
+ * @param {number[][]} timing
+ * @param {import('./layouts.js').TableAxes} axes the spark table's breakpoints
+ * @returns {number[][]}
+ */
+export function startUpTiming(timing, axes) {
+  const top = Math.max(...axes.load);
+  const full = (load) => (axes.loadUnit === 'kPa' ? load >= OPEN_LOOP_KPA : load >= top * 0.6);
+  return timing.map((row, ri) => (full(axes.load[ri])
+    ? row.map((v, ci) => (axes.rpm[ci] > IDLE_COLUMN_MAX_RPM ? Math.max(SPARK_MIN_DEG, v - START_UP_RETARD_DEG) : v))
+    : [...row]));
 }
 
 /**
