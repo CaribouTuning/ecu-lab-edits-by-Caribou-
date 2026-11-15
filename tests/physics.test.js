@@ -599,10 +599,11 @@ describe('dyno sweep', () => {
       mods: { ...S.DEFAULT_MODS, intercooler: true },
       sweep: { afr: leanAfrAt(0) }, // row 0 = 200 kPa, boosted
     }],
+    // Injectors three-quarters bigger than the ECU is set for: well past λ 0.70, where rich harm starts.
     ['rich', (p) => p.richRisk, {
       cfg: { ...STOCK, camDuration: 290, springRate: 20, compression: 13.5 },
       turboOn: true, boostCurve: [18, 25, 25, 25, 25, 25, 25, 25],
-      injectorCc: 400, ecuInjectorCc: 315,
+      injectorCc: 550, ecuInjectorCc: 315,
     }],
     ['maf', (p) => p.mafFlag, {
       mods: { ...S.DEFAULT_MODS, intake: true },
