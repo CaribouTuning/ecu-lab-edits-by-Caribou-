@@ -61,6 +61,7 @@ export function fixLinks(text) {
  * @returns {Record<string, number>} TUNE section id → event count
  */
 export function tuneAttention(events) {
+  // Keys go in as the causes come, so the object's order is the log's: the first cause's page first.
   /** @type {Record<string, number>} */
   const counts = {};
   // Causes, not symptoms: a symptom clears with its cause's fix (fixOrder.js

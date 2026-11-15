@@ -117,7 +117,8 @@ export function LogScreen({ flagged = [], axes = GAME_LAYOUT.timing }) {
                   <div className={styles.eventTitle}>
                     <AlertTriangle size={14} className={styles.eventIcon} />
                     <span>
-                      <span className={styles.eventStep} data-step={step.id}>{step.index} · {step.label}</span>
+                      {/* The step of the tuner's order it belongs to, not a count of entries: two fuel causes are both step 2. */}
+                      <span className={styles.eventStep} data-step={step.id}>Step {step.index} · {step.label}</span>
                       {e.msg}
                     </span>
                   </div>

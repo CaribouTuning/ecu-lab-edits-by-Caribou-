@@ -37,7 +37,7 @@
  *   same setup, only its curves are gone, as after a reload)
  * @property {number} [peakHp] that pull's peak, at the wheels
  * @property {{page: string, label: string, count: number}[]} attention the pages the fresh
- *   pull's log points at, most entries first
+ *   pull's log points at, in the log's order (its first cause first)
  * @property {boolean} [working] CAREER: a car is on the bay
  * @property {number} [unread] CAREER: Pops's unread messages
  * @property {boolean} [newShop] CAREER: no job finished yet, so Pops's first messages are how
@@ -45,6 +45,8 @@
  * @property {boolean} [buildJob] CAREER: an engine-building job
  * @property {string|null} [failed] what failed, when the engine has: nothing else can be done
  *   with it until it is rebuilt
+ * @property {boolean} [running] a pull is being made: its log is not up yet, so nothing it
+ *   found can be said (the result is banked as the sweep starts, its log shown as it ends)
  */
 
 /**
@@ -65,6 +67,8 @@ export function nextStep(f) {
   if (f.failed && !f.engineMissing && (f.mode !== 'career' || f.working)) {
     return { id: 'rebuild', text: `The engine has failed: ${f.failed}. Rebuild it on the stand before anything else.`, label: 'Engine stand', go: 'live' };
   }
+  // Mid-pull the log is not up: "a clean pull" then was said of a pull whose findings had not shown yet.
+  if (f.running && !f.engineMissing) return { id: 'pulling', text: 'The pull is running. Its log comes up when it finishes.', label: 'Dyno', go: 'dyno' };
   if (f.mode === 'career') {
     if (!f.working) {
       const many = (f.unread ?? 0) > 1;

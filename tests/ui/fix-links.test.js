@@ -80,4 +80,15 @@ describe('fixLinks', () => {
     ]);
     expect(counts).toEqual({ fuel: 1 });
   });
+
+  it('lists the pages in the log\'s fix order, so the next step is the log\'s first cause', () => {
+    // Two causes send the player to INJECTORS, one to SENSORS: the MAF is set up first, so
+    // SENSORS leads. Counted, the step once sent the player to INJECTORS first.
+    const counts = tuneAttention([
+      { type: 'fuel', rpmStart: 5600, rpmEnd: 5700, fix: 'Fit larger injectors, then enter their flow on TUNE → INJECTORS.' },
+      { type: 'dutyprot', rpmStart: 5800, rpmEnd: 7500, fix: 'Enter their flow rate on TUNE → INJECTORS.' },
+      { type: 'maf', rpmStart: 1500, rpmEnd: 7500, fix: 'On TUNE → SENSORS, raise the MAF scalar.' },
+    ]);
+    expect(Object.keys(counts)[0]).toBe('sensors');
+  });
 });

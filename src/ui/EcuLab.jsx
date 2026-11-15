@@ -669,10 +669,13 @@ export function EcuLabApp() {
   );
   // The hardware on the stand, signed, and the hardware it last ran on: the game's flow asks
   // to hear an engine again after a part goes on it (flow.js). A cursor is not hardware.
-  const hwSig = useMemo(() => JSON.stringify({ ...build, boostSel: 0, presetPrompt: null }), [build]);
+  // The hardware, not the ECU's settings kept beside it on the build (the MAF scalar and the
+  // injector flow the ECU is set for are TUNE's): setting one sent a tuner back to the stand.
+  const hwSig = useMemo(() => JSON.stringify({ ...build, boostSel: 0, presetPrompt: null, mafScalar: null, ecuInjectorCc: null }), [build]);
   const [heardSig, setHeardSig] = useState(/** @type {string|null} */ (null));
   const liveRunning = !!session.live.running;
-  useEffect(() => { if (liveRunning) setHeardSig(hwSig); }, [liveRunning, hwSig]);
+  // Heard on the stand, or run on the dyno: a pull has run it too.
+  useEffect(() => { if (liveRunning || running) setHeardSig(hwSig); }, [liveRunning, running, hwSig]);
 
   /**
    * Everything a dyno pull is solved from, in one place.
@@ -1779,9 +1782,11 @@ export function EcuLabApp() {
       : failedWhere === 'stand' ? `stand:${liveFailure.t}` : null,
   };
   // ---- the game's flow: the next step, from what is true now (flow.js) ----
+  // In the log's order (fixLinks.js `tuneAttention` walks the causes as the log lists them):
+  // the next step is the log's first cause, as the log says to fix the top one first.
+  // Sorted by count, it once sent the player to Injectors while the log's first entry was the MAF.
   const attentionList = Object.entries(attention)
-    .map(([page, count]) => ({ page, count, label: tuneViews.find((v) => v.id === page)?.name ?? page }))
-    .sort((a, b) => b.count - a.count);
+    .map(([page, count]) => ({ page, count, label: tuneViews.find((v) => v.id === page)?.name ?? page }));
   const step = nextStep({
     mode: inCareer ? 'career' : 'sandbox',
     engineMissing,
@@ -1799,6 +1804,7 @@ export function EcuLabApp() {
     newShop: inCareer && (career.history?.length ?? 0) === 0,
     buildJob: buildOpen,
     failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
+    running,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (

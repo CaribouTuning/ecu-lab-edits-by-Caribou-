@@ -81,3 +81,12 @@ describe('a failed engine', () => {
     expect(sandbox({ failed: 'burnt-through exhaust valve', engineMissing: true }).id).toBe('choose');
   });
 });
+
+describe('a pull being made', () => {
+  it('says nothing about the pull until its log is up (it once read "a clean pull" mid-sweep)', () => {
+    const s = sandbox({ heard: true, pulled: true, fresh: true, running: true, peakHp: 309, attention: [] });
+    expect(s.id).toBe('pulling');
+    expect(s.text).not.toMatch(/clean/);
+    expect(sandbox({ heard: true, pulled: true, fresh: true, running: false, peakHp: 309, attention: [] }).id).toBe('more');
+  });
+});
