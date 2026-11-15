@@ -942,6 +942,23 @@ export function factoryCalibration(preset, layout = null) {
       if (room < timing[ri][ci]) timing[ri][ci] = Number(clamp(Math.floor(room * 2) / 2, SPARK_MIN_DEG, SPARK_MAX_DEG).toFixed(1));
     }
   });
+  // A NATURALLY ASPIRATED FACTORY MAP ENDS AT FULL THROTTLE. Its maker never ran it in boost,
+  // so its cells past what the engine can reach hold its full-throttle values, which is what
+  // its ECU reads there anyway: past its last breakpoint it reads that row. A turbo or a
+  // supercharger bolted on runs that full-throttle spark, mixture target and VE into boost,
+  // and knocks and runs lean as a real engine on its stock tune does. Generated from the
+  // physics at 150 and 200 kPa instead, the "stock" spark table already knew what boost needs,
+  // and a turbo on it ran within a few tenths of a degree of the knock limit untuned.
+  if (!preset.induction.turboOn) {
+    const plateau = (table, axes) => axes.rpm.forEach((rpm, ci) => {
+      const reach = loadOf(axes, rpm, reachableKpa({ turboOn: false, boostCurve: peakBoostCurve, rpm }));
+      const atReach = readTable(table, axes, rpm, reach);
+      axes.load.forEach((l, ri) => { if (l > reach) table[ri][ci] = Number(atReach.toFixed(2)); });
+    });
+    plateau(timing, T);
+    plateau(afr, L.afr);
+    plateau(ve, L.ve);
+  }
   // Tables written for the boost the engine will actually be asked for: where the limit
   // took boost out, the calibration is generated again at the limited curve (once — the
   // limit is already met there), so RESET, which starts from that curve, gives it back.

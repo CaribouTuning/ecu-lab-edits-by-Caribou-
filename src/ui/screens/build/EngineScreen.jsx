@@ -355,7 +355,10 @@ export function EngineScreen({ active, onToggle, part, engineDerived, activePres
         )}
         {undoable && (
           <div className={styles.undoLine}>
-            <span>{fromEmpty ? `${top.label.replace('Preset · ', '')} is on the bench with its factory calibration. Undo takes it off.` : `${top.label} replaced your tune. Undo restores the tables and hardware as they were before it.`}</span>
+            {/* An engine of your own has no factory calibration: it runs on a start-up map. */}
+            <span>{fromEmpty
+              ? (isOwnEngine(build) ? 'Your engine is on the bench, on a safe start-up map with timing left to find. Undo takes it off.' : `${top.label.replace('Preset · ', '')} is on the bench with its factory calibration. Undo takes it off.`)
+              : `${top.label} replaced your tune. Undo restores the tables and hardware as they were before it.`}</span>
             <Button
               variant="quiet" size="sm"
               aria-label={`Undo ${top.label}`}

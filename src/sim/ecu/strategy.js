@@ -530,6 +530,9 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
   // The exhaust temperature that tripped the EGT enrichment: the logged point is after it
   // acted, cooler than the limit it crossed (as `leanTripLambda` is for the lean protection).
   let egtTripC = 0;
+  // The knock retard that tripped the knock protection's boost cut: after the cut the pull
+  // logs the engine at less boost, where it may not knock at all.
+  let knockTripDeg = 0;
   const mod = { ...NO_INTERVENTION };
   // The pump's delivery against how freely the system leaks: a weak pump or low oil, and
   // worn crank bearings (damage.js `oilConductance`).
@@ -593,7 +596,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
       mod.highDet = true; changed = true; protect.add('highdet');
     }
     if (P.knockEnabled && hw.turboOn && pt.knockPull > P.knockRetardDeg && mod.boostCutPsi < E.BOOST_CUT_STACK_MAX_PSI) {
-      mod.boostCutPsi += P.knockBoostCutPsi; changed = true; protect.add('knock');
+      mod.boostCutPsi += P.knockBoostCutPsi; changed = true; protect.add('knock'); knockTripDeg = Math.max(knockTripDeg, pt.knockPull);
     }
     if (P.dutyEnabled && hw.turboOn && pt.duty > P.dutyLimitPct && mod.boostCutPsi < E.BOOST_CUT_STACK_MAX_PSI) {
       mod.boostCutPsi += P.boostCutPsi; changed = true; protect.add('duty');
@@ -644,6 +647,7 @@ export function ecuSteadyPoint({ cal, hw, cond, tables, rpm, loadKpa, traceCycle
     protect: [...protect],
     ...(leanTripLambda > 0 ? { leanTripLambda: Number(leanTripLambda.toFixed(3)) } : {}),
     ...(egtTripC > 0 ? { egtTripC: Math.round(egtTripC) } : {}),
+    ...(knockTripDeg > 0 ? { knockTripDeg: Number(knockTripDeg.toFixed(1)) } : {}),
     breakdown: { ...resolved.breakdown, boost: solved.steps },
     // The closed cycle's pressure trace at the settled point, for the Physics page: the same
     // resolved inputs evaluated once more with the trace kept.

@@ -877,8 +877,11 @@ function judgeAgainstPull(spark, pull, inForce) {
         overAdvanced.push(c);
         continue;
       }
-      // Clean on the pull: never advise more advance than the pull had room for.
-      c.suggested = clamp(Math.min(c.suggested, halfDown(c.current + marginBy.get(key) - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
+      // Clean on the pull: as much advance as the pull measured room for, to MBT. The pull is
+      // the evidence here: capped by the knock limit at the row's own pressure as well, a cell
+      // the engine reads below that pressure was held short of what the pull showed it could
+      // take, and the log (which reads the pull) called spark short where TUNE listed nothing.
+      c.suggested = clamp(Math.min(halfDown(c.mbt), halfDown(c.current + marginBy.get(key) - KNOCK_SAFETY_DEG)), SPARK_MIN_DEG, SPARK_MAX_DEG);
       c.delta = Number((c.suggested - c.current).toFixed(1));
       if (c.current - c.mbt > ADVANCE_TOLERANCE_DEG) pastMbt.push(c);
       else if (!idle && c.delta > UNDER_ADVANCED_DEG) underAdvanced.push(c);

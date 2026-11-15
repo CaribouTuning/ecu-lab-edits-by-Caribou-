@@ -154,6 +154,17 @@ export function round(st) {
     }
     if (moved) st = { ...st, tune: { ...st.tune, ve } };
   }
+  // Knock protection that took the boost out: the log names the rows, the range and the degrees.
+  for (const e of p.events) {
+    const m = /take about (\d+)° out of the cells in the rows around (\d+) kPa across (\d+)(?:–(\d+))? RPM/.exec(String(e.fix ?? ''));
+    if (e.type !== 'knockprot' || !m) continue;
+    const ax = S.layoutById(st.tune.layout).timing;
+    const deg = Number(m[1]); const kpa = Number(m[2]); const lo = Number(m[3]); const hi = Number(m[4] ?? m[3]);
+    const below = Math.max(...ax.load.filter((l) => l <= kpa)); const above = Math.min(...ax.load.filter((l) => l >= kpa));
+    const timing = st.tune.timing.map((r) => [...r]);
+    ax.load.forEach((l, ri) => { if (l !== below && l !== above) return; ax.rpm.forEach((r, ci) => { if (r >= lo - 500 && r <= hi + 500) timing[ri][ci] = Math.max(S.SPARK_MIN_DEG, timing[ri][ci] - deg); }); });
+    st = { ...st, tune: { ...st.tune, timing } }; did.push(`spark -${deg}° around ${kpa} kPa ${lo}-${hi} (knock protection)`);
+  }
   // Lean protection that took the boost out: the log names the rows, the range and the share.
   for (const e of p.events) {
     const m = /raise the VE cells in the rows around (\d+) kPa across (\d+)(?:–(\d+))? RPM by about (\d+)%/.exec(String(e.fix ?? ''));

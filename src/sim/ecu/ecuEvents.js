@@ -98,12 +98,12 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
   // A boost cut hides its own cause: the pull logs the engine after boost came out, where the
   // mixture is fine, so Correct VE from logs never sees the cells that ran lean. The trip
   // says how lean, and the boost it was asking for says where.
+  // What the boost controller was asked for before a protection cut it (`boostSteps`: the
+  // point's own `boostTarget` is after the cut).
+  const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
+  const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
   const boostCutLean = (run, tripLambda) => {
     if (cal.protect.leanAction !== 'boost-cut') return null;
-    // What the boost controller was asked for before the protection cut it (`boostSteps`:
-    // the point's own `boostTarget` is after the cut).
-    const step = (p, re) => (p.boostSteps ?? []).find((x) => re.test(x.label))?.value;
-    const request = (p) => step(p, /^Throttle request/) ?? step(p, /^Base target/) ?? p.boostTarget ?? 0;
     const cut = run.filter((p) => request(p) - (p.boostPsi ?? 0) > 1);
     if (!cut.length) return null;
     const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
@@ -246,6 +246,18 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
     });
   });
 
+  // A knock cut hides its own cause, as a lean cut does: the pull logs the engine at the boost
+  // left after the cut, often clean, so no knock entry stands above this one to follow. The
+  // retard that tripped it says how far past the limit the cells were, and the boost it was
+  // asking for says which rows.
+  const hiddenKnock = (run) => {
+    const cut = run.filter((p) => (p.knockTripDeg ?? 0) > 0 && request(p) - (p.boostPsi ?? 0) > 1);
+    if (!cut.length) return null;
+    const trip = Math.max(...cut.map((p) => p.knockTripDeg));
+    const asked = Math.round(BARO_KPA + Math.max(...cut.map(request)) * PSI_TO_KPA);
+    const take = Math.max(2, Math.round(trip - 1));
+    return `The protection took the boost out, so this pull logged the engine below the boost that knocked, and the knock entry it would have made is not here. It tripped with the knock control pulling ${trip.toFixed(1)}° asking for about ${asked} kPa: on TUNE → SPARK take about ${take}° out of the cells in the rows around ${asked} kPa across ${label(cut)}, then pull again. Better fuel or less boost there (BUILD) raises or meets the limit instead.`;
+  };
   groupRuns(points, (p) => has(p, 'knock')).forEach((run) => {
     // Point at the entry that is actually driving it: noise, the spray, or real knock.
     const fromNoise = run.some((p) => (p.knockFalse ?? 0) > REPORT.FALSE_KNOCK_DEG);
@@ -257,7 +269,9 @@ export function ecuSweepEvents(points, { cal, hw, hardCut, endRpm, intercooled =
       type: 'knockprot', severity: 2, impact: imp(10, run), ...span(run),
       msg: `Knock protection cut boost across ${label(run)}`,
       cause: `Knock control was pulling more than ${cal.protect.knockRetardDeg}° — running that much retard is hot and inefficient, so the ECU took ${cal.protect.knockBoostCutPsi} psi out as well.`,
-      fix: `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works.`,
+      fix: source.length || !hiddenKnock(run)
+        ? `This follows from ${source.length ? source.join(' and ') : 'the knock entry in this log (AFR target, then timing, in those cells on TUNE → FUEL and TUNE → SPARK)'}: fix ${source.length > 1 ? 'those' : 'that'} and this goes away. Lowering the boost target there on BUILD → INDUCTION also works.`
+        : hiddenKnock(run),
     });
   });
 

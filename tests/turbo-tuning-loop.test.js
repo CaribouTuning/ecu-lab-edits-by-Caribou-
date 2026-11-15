@@ -52,7 +52,9 @@ function tuneFromTheAdvice(eng) {
       for (let r = 0; r < next.length; r++) eng.tables.ve[r] = next[r];
       changed++;
     }
-    for (const load of LOADS) {
+    // TUNE's cells as the app gives them: judged against a full-throttle pull whatever the
+    // player pulled at (EcuLab.jsx `advisorPull`). Every throttle is still checked after.
+    for (const load of [100]) {
       const { a } = adviceAt(eng, load);
       for (const c of [...a.overAdvanced, ...a.pastMbt, ...a.underAdvanced]) { eng.tables.timing[c.ri][c.ci] = c.suggested; changed++; }
       for (const c of a.wrongMix) if (c.suggested != null) { eng.tables.afr[c.ri][c.ci] = c.suggested; changed++; }

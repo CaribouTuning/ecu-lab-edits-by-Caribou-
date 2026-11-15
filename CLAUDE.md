@@ -160,6 +160,14 @@ remaining risk is the same Node major with a different libm, which is what step 
   player follows a knock entry's steps in order (mixture, timing, then boost only where it
   says timing cannot), and a hand edit the log asks for names each cell, never a whole
   region that Correct VE from logs is also fixing (the two fought).
+- **A naturally aspirated factory map ends at full throttle** (`factoryCalibration`): its cells
+  past what the engine reaches hold the full-throttle values, which its ECU reads there anyway.
+  A turbo on the stock tune runs NA spark and mixture into boost, knocks and leans as a real
+  one does, and the log and TUNE lead from there. Generated from the physics at 150-200 kPa,
+  the "stock" table once ran a turbo within tenths of the knock limit untuned. A protection
+  that cuts boost hides its cause (lean or knock): the log names the cells at the boost it
+  asked for (`boostCutLean`, `hiddenKnock` in ecuEvents.js, from `leanTripLambda`/`knockTripDeg`).
+  TUNE judges a cell the pull used by the margin the pull measured, to MBT (`judgeAgainstPull`).
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.
