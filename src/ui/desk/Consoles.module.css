@@ -75,7 +75,7 @@
   position: relative; width: 56px; height: 56px; border-radius: 50%;
   /* The collar: a dark ring the cap sits in. */
   box-shadow: 0 0 0 5px rgba(var(--shadow-rgb), 0.75), 0 0 0 6px color-mix(in srgb, var(--ink) 10%, transparent);
-  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--lit) 100%, var(--ink) 18%) 0%, var(--lit) 55%, color-mix(in srgb, var(--lit) 70%, rgba(var(--shadow-rgb), 1)) 100%);
+  background: var(--lit);
   transition: transform 0.06s ease, filter 0.12s ease;
 }
 /* The cap's own edge, under its dome. */
@@ -91,7 +91,6 @@
 .bigButton[data-busy]:disabled .cap { --lit: color-mix(in srgb, var(--ok) 32%, var(--panel2)); --rim: color-mix(in srgb, var(--ok-line) 60%, rgba(var(--shadow-rgb), 1)); }
 .bigLabel {
   font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; color: var(--ink);
-  text-shadow: 0 1px 0 rgba(var(--shadow-rgb), 0.6);
 }
 .bigButton:disabled .bigLabel { color: var(--ink2); }
 

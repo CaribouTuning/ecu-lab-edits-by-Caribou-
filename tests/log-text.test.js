@@ -69,3 +69,15 @@ describe('a start-up map is a start, not a tune', () => {
   });
 });
 
+
+describe('a setting the log names is on the page, not folded away', () => {
+  it('names no setting that sits under Advanced settings', async () => {
+    // The pull log once said "On TUNE → BOOST, raise Maximum duty", and Maximum duty was
+    // folded under Advanced settings, where a player following the log could not find it.
+    const { readFileSync } = await import('node:fs');
+    const text = ['src/sim/sweep.js', 'src/sim/ecu/ecuEvents.js', 'src/sim/advisors.js']
+      .map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
+    const named = S.ECU_META.filter((m) => m.pro && text.includes(m.label)).map((m) => `${m.section}: ${m.label}`);
+    expect(named).toEqual([]);
+  });
+});

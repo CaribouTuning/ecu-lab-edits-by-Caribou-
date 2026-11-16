@@ -24,6 +24,7 @@ import { ACTIONS } from '../../state/reducer.js';
 import { useBuild, useTune } from '../../state/StoreProvider.jsx';
 import { UndoControls } from '../UndoControls.jsx';
 
+import { PickList } from '../PickList.jsx';
 import { CalTable } from './CalTable.jsx';
 import styles from './EcuSection.module.css';
 import { PAGE_GUIDES, tipFor } from './guides.js';
@@ -172,42 +173,40 @@ function isChanged(meta, value, def) {
 function PageGuide({ guide, changedCount }) {
   return (
     <div className={styles.guide}>
-      <Info label="When to use this page" text={(
-        <dl className={styles.guideList}>
-          <dt>Come here when</dt>
-          <dd>{guide.when}</dd>
-          <dt>Safe to leave</dt>
-          <dd>{guide.leave}</dd>
-        </dl>
+      <Info label="About this page" text={(
+        <>
+          <p className={styles.guideDoes}>{guide.does}</p>
+          <dl className={styles.guideList}>
+            <dt>Come here when</dt>
+            <dd>{guide.when}</dd>
+            <dt>Safe to leave</dt>
+            <dd>{guide.leave}</dd>
+          </dl>
+        </>
       )}>
-        <p className={styles.guideDoes}>{guide.does}</p>
+        <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
+          {changedCount > 0
+            ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`
+            : 'All factory settings. Nothing here needs changing to make a good tune.'}
+        </div>
       </Info>
-      <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
-        {changedCount > 0
-          ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`
-          : 'All factory settings. Nothing here needs changing to make a good tune.'}
-      </div>
     </div>
   );
 }
 
 /**
- * A setting's short tip, with its full explanation behind "Why?".
+ * What a setting does: its short tip, and the full explanation where it says more. Shown
+ * behind the info button on the setting's name, so the page reads as names and controls.
  * @param {{meta: import('../../../sim/ecu/calibration.js').EcuFieldMeta}} props
  */
-function Help({ meta }) {
-  const [open, setOpen] = React.useState(false);
+function HelpText({ meta }) {
   const tip = tipFor(meta);
-  // "Why?" only when the full explanation says something the tip does not — a near
-  // restatement behind a link is a click that teaches nothing.
+  // The full explanation only when it says something the tip does not.
   const more = meta.help !== tip && meta.help.length > tip.length + 40;
   return (
     <div className={styles.help}>
       {tip}
-      {more && !open && (
-        <> <button type="button" className={styles.why} onClick={() => setOpen(true)}>Why?</button></>
-      )}
-      {open && <div className={styles.whyText}>{meta.help}</div>}
+      {more && <div className={styles.whyText}>{meta.help}</div>}
     </div>
   );
 }
@@ -234,7 +233,12 @@ function Field({ meta, value, def, onChange, liveVars }) {
     return (
       <div className={styles.field}>
         <FieldHead meta={meta} changed={changed} />
-        <Seg variant="rule" label={meta.label} options={meta.options} value={value} onChange={onChange} equal />
+        {/* Short names sit in one row; long ones (an air-mass strategy) in a grid of keys,
+            rather than wrapping to three lines each. */}
+        {meta.options.some((o) => String(o.label).length > 14)
+          ? <PickList label={meta.label} columns={2} options={meta.options.map((o) => ({ value: String(o.id), label: o.label }))} value={String(value)}
+            onChange={(v) => { const o = meta.options.find((x) => String(x.id) === v); if (o) onChange(o.id); }} />
+          : <Seg variant="rule" label={meta.label} options={meta.options} value={value} onChange={onChange} equal />}
       </div>
     );
   }
@@ -290,7 +294,7 @@ function TableField({ meta, value, def, onChange, marker, changed, axisVars }) {
       </button>
       {open && (
         <div className={styles.tableBody} id={bodyId}>
-          <Help meta={meta} />
+          <HelpText meta={meta} />
           <CalTable table={value} def={def} meta={meta} onChange={onChange} marker={marker} axisVars={axisVars} />
         </div>
       )}
@@ -302,11 +306,12 @@ function TableField({ meta, value, def, onChange, marker, changed, axisVars }) {
 function FieldHead({ meta, changed }) {
   return (
     <div className={styles.fieldHead}>
-      <div className={styles.label}>
-        {meta.label}
-        {changed && <span className={styles.dot} aria-label="modified" />}
-      </div>
-      <Help meta={meta} />
+      <Info label={`About ${meta.label}`} text={<HelpText meta={meta} />}>
+        <div className={styles.label}>
+          {meta.label}
+          {changed && <span className={styles.dot} aria-label="modified" />}
+        </div>
+      </Info>
     </div>
   );
 }

@@ -130,6 +130,7 @@ export const FIELD_TIPS = {
   'boost.gearLimit': 'The most boost allowed in each gear. Lower 1st and 2nd if the car spins its tyres.',
   'boost.iatComp': 'Takes boost away as the intake air gets hot.',
   'boost.baseDuty': 'The wastegate duty the ECU starts from for each boost target. Get this close and boost arrives cleanly.',
+  'boost.maxDuty': 'The most wastegate duty the controller may ask for. Raise it when boost falls short of the target with the duty already at this limit.',
   'boost.kp': 'How hard the ECU reacts to a boost error right now. Too high and boost oscillates.',
   'nitrous.minRpm': 'Nitrous opens above this speed. Too low and a big shot breaks parts or backfires.',
   'nitrous.maxRpm': 'Nitrous shuts off above this. Keep it under the rev limiter.',

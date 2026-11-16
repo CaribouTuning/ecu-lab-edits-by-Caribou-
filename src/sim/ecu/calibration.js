@@ -461,7 +461,7 @@ export const ECU_META = [
     help: 'Duty accumulated per psi of error per second. It removes steady error, but winds up while the turbo spools and overshoots when it arrives.' },
   { path: 'boost.iWindowPsi', section: 'boost', group: 'Closed loop', label: 'Integral active within', kind: 'number', unit: 'psi', min: 0.5, max: 30, step: 0.5, decimals: 1, pro: true,
     help: 'The integrator only runs this close to target — the usual defence against wind-up while spooling.' },
-  { path: 'boost.maxDuty', section: 'boost', group: 'Closed loop', label: 'Maximum duty', kind: 'number', unit: '%', min: 0, max: 100, step: 1, pro: true,
+  { path: 'boost.maxDuty', section: 'boost', group: 'Closed loop', label: 'Maximum duty', kind: 'number', unit: '%', min: 0, max: 100, step: 1,
     help: 'The most duty the controller may command.' },
   { path: 'boost.rampPsiS', section: 'boost', group: 'Closed loop', label: 'Target ramp rate', kind: 'number', unit: 'psi/s', min: 1, max: 200, step: 1, pro: true,
     help: 'How fast the target may rise — a gentler ramp is easier on traction and on the controller.' },

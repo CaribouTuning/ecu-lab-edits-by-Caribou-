@@ -16,6 +16,7 @@ import React from 'react';
 import { Trophy } from 'lucide-react';
 
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Info } from '../../primitives/Info.jsx';
 import { Note } from '../../primitives/Note.jsx';
 import { useSession } from '../../state/StoreProvider.jsx';
 import { statusColor } from '../../theme.js';
@@ -78,7 +79,11 @@ export function ScoreScreen({ scores, stale = false }) {
           );
         })}
       </section>
-      <p className={styles.explain}>Pull score rewards actual output (peak whp plus torque), scaled by how clean (Tuning) and how sound (Engineer) the build is, so a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling: every pull is a chance to beat your best.</p>
+      <div className={styles.explain}>
+        <Info label="How the scores are worked out" text="Pull score rewards actual output (peak whp plus torque), scaled by how clean (Tuning) and how sound (Engineer) the build is, so a big, slightly imperfect pull can still out-score a small, spotless one. It has no ceiling: every pull is a chance to beat your best.">
+          <span>How the scores are worked out</span>
+        </Info>
+      </div>
       {(scores.tuning.deductions.length > 0 || scores.engineer.deductions.length > 0) && (
         <section className={styles.list} aria-label="What cost points">
           <h3 className={styles.listHead}>What cost points</h3>

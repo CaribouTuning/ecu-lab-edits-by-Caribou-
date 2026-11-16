@@ -6,6 +6,8 @@
   --panel: #0d1421;
   --panel2: #111827;
   --panel3: #1a2333;
+  /* A field you type a value into. */
+  --input: #0b1220;
 
   --line: #1e293b;
   --line-hi: #334155;

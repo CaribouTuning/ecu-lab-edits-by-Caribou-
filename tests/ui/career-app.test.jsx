@@ -86,6 +86,10 @@ describe('CAREER in the app', () => {
     await screen.findByText(/Job done/, {}, { timeout: 10000 });
     expect(money()).not.toContain('$1,000');
     expect(screen.getByTestId('shop-rep').textContent).not.toMatch(/^Reputation0/);
+    // Finished work is listed apart from the cars still in the shop, with what it paid.
+    const done = screen.getByRole('region', { name: 'Completed' });
+    expect(within(done).getByText(/Day 1 · Marcus, job done/)).toBeTruthy();
+    expect(within(done).getByText(/^\$[\d,]+$/)).toBeTruthy();
 
     // Saved, with the car gone home.
     await waitFor(async () => {

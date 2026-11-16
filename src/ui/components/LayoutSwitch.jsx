@@ -21,6 +21,7 @@ export function LayoutSwitch() {
   const [build, dispatch] = useBuild();
   const [tune] = useTune();
   const [session] = useSession();
+  const [picking, setPicking] = React.useState(false);
   // The engine reaches past its tables (a turbo fitted, the limiter raised): the ECU reads
   // the edge there until the player extends the axes. Offered in the career too, where the
   // layout itself is not the player's to choose.
@@ -70,8 +71,19 @@ export function LayoutSwitch() {
   return (
     <>
     {extend}
-    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 0 }}>
-      {options.length > 1 && (
+    <div data-testid="layout-switch" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* One line: which grid, its span, and Change. The picker opens only when asked for:
+          a layout is set once, and three keys above every table read as one more thing to do. */}
+      <Info label="About the table layout" text={why}>
+        <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums' }}>
+          Table layout <b style={{ color: 'var(--ink)', fontWeight: 600 }}>{options.find((o) => o.id === active.id)?.label ?? active.ecu}</b>
+          {' · '}{active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm, {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa
+        </span>
+        {options.length > 1 && (
+          <Button size="sm" variant="quiet" aria-expanded={picking} onClick={() => setPicking(!picking)}>{picking ? 'Done' : 'Change'}</Button>
+        )}
+      </Info>
+      {picking && options.length > 1 && (
         <Seg
           label="Table layout"
           options={options}
@@ -81,11 +93,6 @@ export function LayoutSwitch() {
           onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
         />
       )}
-      <Info label="About the table layout" text={why}>
-        <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
-          {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm by {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa, {active.ve.rpm.length} × {active.ve.load.length} cells
-        </span>
-      </Info>
     </div>
     </>
   );

@@ -12,6 +12,7 @@ import React from 'react';
 
 import { GAME_LAYOUT } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
+import { Info } from '../primitives/Info.jsx';
 import { Note } from '../primitives/Note.jsx';
 import { VE_LOG_GOOD_PCT } from './advisorReports.js';
 
@@ -114,9 +115,11 @@ export function VeLogCorrection({ corr, pullCount, liveCount, pullInfo, mafPct, 
             <Button size="sm" onClick={() => onApply(0.5)} disabled={inSync}>Apply half</Button>
             <Button size="sm" variant="ghost" onClick={() => onApply(1)} disabled={inSync}>Apply all</Button>
           </div>
-          <p className={styles.hint}>
-            Tuners apply about half, log again and repeat until every cell is within 2–3%. Only cells with data change; applying also resets the fuel trims, which had been covering the same error. A pull is used only while it matches the tune on screen.
-          </p>
+          <div className={styles.hint}>
+            <Info label="How to apply a VE correction" text="Tuners apply about half, log again and repeat until every cell is within 2–3%. Only cells with data change; applying also resets the fuel trims, which had been covering the same error. A pull is used only while it matches the tune on screen.">
+              <span>Apply half, log again, repeat</span>
+            </Info>
+          </div>
         </>
       )}
     </section>

@@ -82,7 +82,7 @@ export function FuelScreen({ calAdvice, children }) {
             <TuneAdvisory kind="afr" report={report} />
           </AdvisorPanel>
 
-          <ExpandableInfo title="Why AFR trades power for safety">
+          <ExpandableInfo quiet title="Why AFR trades power for safety">
             14.7:1 is stoichiometric — burns all the fuel and oxygen with nothing left over, great for emissions and cruise. Peak power sits a little richer: with some extra fuel every bit of the oxygen finds fuel to burn, and the extra fuel absorbs heat as it vaporizes, which cools the charge and holds off knock. Go leaner than that under load and you lose power and raise both knock risk and exhaust gas temperature at once — which is why lean-under-boost is especially dangerous to valves and pistons.
             <br /><br /><b className={styles.em}>Best power is not one number.</b> Naturally aspirated engines make best torque near lambda 0.85-0.92 (about 12.5-13.5:1 on gasoline). Under boost, best power moves richer — near lambda 0.82-0.85 (about 12.0-12.5:1) — because you are deliberately buying charge cooling to hold off knock. This sandbox moves its best-power target with your boost level, so the same AFR table that was ideal naturally aspirated reads genuinely lean once you are on 8 psi.
             <br /><br /><b className={styles.em}>Reading it in lambda:</b> lambda is AFR divided by the fuel's stoichiometric point, so lambda 0.85 means the same relative richness on any fuel. That is why tuners talk in lambda once E85 enters the picture — 12.5:1 means something completely different on E85 than on pump gas.

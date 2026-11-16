@@ -34,6 +34,8 @@ export const tokens = Object.freeze({
   panel: '#0d1421',
   panel2: '#111827',
   panel3: '#1a2333',
+  // A field you type a value into.
+  input: '#0b1220',
 
   // Borders.
   line: '#1e293b',

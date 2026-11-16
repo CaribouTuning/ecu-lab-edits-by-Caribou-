@@ -24,16 +24,18 @@ import { inertWhen } from './inert.js';
  * @param {React.ReactNode} props.children the prose revealed when it opens
  * @param {boolean} [props.lazy] mount the children only once first opened, for an
  *   article carrying a live game screen that should not run while nobody is reading it
+ * @param {boolean} [props.quiet] a quiet line with an info mark, as on the build bench, for
+ *   a working screen (TUNE) where the controls come first
  * @returns {React.ReactElement}
  */
-export function ExpandableInfo({ title, children, lazy = false }) {
+export function ExpandableInfo({ title, children, lazy = false, quiet: quietProp = false }) {
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState(!lazy);
   if (open && !opened) setOpened(true);
   const bodyId = useId();
   // On the build bench the sheet is controls first: the explanation is a quiet line under
   // the control it explains, opened when wanted, not a full-width bar between every two.
-  const quiet = useContext(BuildBenchMode);
+  const quiet = useContext(BuildBenchMode) || quietProp;
   return (
     // A ruled row, as a contents list draws one, not a card: a stack of these is a list of
     // articles, and a stack of identical rounded boxes read as a template.

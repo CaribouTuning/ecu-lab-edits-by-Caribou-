@@ -45,6 +45,13 @@ body { font-family: var(--sans); font-variant-numeric: tabular-nums; }
   border: 2px solid var(--line-hi); border-radius: inherit;
 }
 
+/* A field you type into: the input surface and a hairline edge (focus is the ring below). Zero
+   specificity (:where), so a component's own field style still wins. */
+:where(input:is([type='number'], [type='text'], [type='search'], :not([type]))) {
+  background-color: var(--input); border: 1px solid var(--line); color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Sliders and ticks in the interface's own key colour rather than the browser's blue. */
 input[type='range'], input[type='checkbox'], input[type='radio'] { accent-color: var(--acc); }
 

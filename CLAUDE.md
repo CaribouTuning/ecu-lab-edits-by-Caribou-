@@ -206,6 +206,9 @@ remaining risk is the same Node major with a different libm, which is what step 
   off), and the 3D shop is not drawn while an app covers it (`ShopBackdrop` `covered`).
   An app's pages on a phone are `PageTabs` (every page in sight), never a drop-down; a long
   explanation goes behind an `Info` button (primitives/Info.jsx), never removed.
+  On TUNE a setting shows its name and its control, its tip behind its info button, and
+  `pro` settings fold under Advanced settings: a setting the pull log names must never be
+  `pro` (tests/log-text.test.js), or a player following the log cannot find it.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

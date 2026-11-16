@@ -124,10 +124,14 @@ describe('the sensor note on BUILD', () => {
 });
 
 describe('the page guide', () => {
-  it('says what the page is for and that nothing has been changed', () => {
+  it('says that nothing has been changed, and what the page is for one tap away', () => {
     mount(<EcuSection section="idle" title="Idle" />);
-    expect(screen.getByText(PAGE_GUIDES.idle.does)).toBeTruthy();
     expect(screen.getByText(/All factory settings/)).toBeTruthy();
+    // The page reads as names and controls: its guide is folded behind an info button.
+    expect(screen.queryByText(PAGE_GUIDES.idle.does)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'About this page' }));
+    expect(screen.getByText(PAGE_GUIDES.idle.does)).toBeTruthy();
+    expect(screen.getByText('Come here when')).toBeTruthy();
   });
 
   it('counts a changed setting, and Factory puts it back', () => {
@@ -181,12 +185,15 @@ describe('the page guide', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('shows a short tip, with the full explanation one tap away', () => {
+  it('shows each setting by name, with its tip and full explanation one tap away', () => {
     mount(<EcuSection section="idle" title="Idle" />);
-    expect(screen.getByText(FIELD_TIPS['idle.acAirAdd'], { exact: false })).toBeTruthy();
-    const whys = screen.getAllByRole('button', { name: 'Why?' });
-    fireEvent.click(whys[0]);
-    expect(screen.queryAllByRole('button', { name: 'Why?' })).toHaveLength(whys.length - 1);
+    const tip = FIELD_TIPS['idle.acAirAdd'];
+    expect(screen.queryByText(tip, { exact: false })).toBeNull();
+    const about = screen.getByRole('button', { name: 'About A/C air feed-forward' });
+    fireEvent.click(about);
+    expect(screen.getByText(tip, { exact: false })).toBeTruthy();
+    fireEvent.click(about);
+    expect(screen.queryByText(tip, { exact: false })).toBeNull();
   });
 });
 

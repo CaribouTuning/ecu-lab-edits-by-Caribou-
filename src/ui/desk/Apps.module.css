@@ -3,9 +3,6 @@
 .pad { padding: 16px; }
 .lead { margin: 0 0 14px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink2); max-width: 70ch; }
 
-/* ---------- Learn: shelves down the side (TUNE's sidebar, below) ---------- */
-.sideBody { min-width: 0; padding: 14px 16px; }
-
 /* ---------- Physics: four panels, as drawn ---------- */
 .physGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 32px; align-items: start; }
 @media (max-width: 900px) { .physGrid { grid-template-columns: 1fr; } }
@@ -37,27 +34,15 @@
 .buildRow2 dd { margin: 0; display: flex; flex-direction: column; gap: 1px; }
 .buildRow2 dd b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .buildRow2 dd span { color: var(--ink2); font-size: var(--fs-xs); }
-.cylArt { width: 100%; height: auto; }
 .piston { animation: piston 1s ease-in-out infinite alternate; }
 @keyframes piston { to { transform: translateY(var(--travel)); } }
-.artDot { fill: var(--cyan); stroke: var(--bg); stroke-width: 3; }
-.artDotAcc { fill: var(--acc); stroke: var(--bg); stroke-width: 3; }
-.strokes { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.strokeStep {
-  display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1.5px solid var(--line-hi);
-  border-radius: var(--hand-c); font-size: var(--fs-xs); color: var(--ink2);
-  animation: strokeOn 2s steps(1) infinite;
-}
-.strokeStep b { color: var(--ink); font-size: var(--fs-sm); }
-@keyframes strokeOn { 0% { background: var(--acc-bg); border-color: var(--acc); } 25% { background: transparent; border-color: var(--line-hi); } }
-@media (prefers-reduced-motion: reduce) { .piston, .strokeStep { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .piston { animation: none; } }
 @media (max-width: 560px) {
   .buildRow2 { grid-template-columns: 96px 1fr; gap: 10px; }
-  .strokes { grid-template-columns: repeat(2, 1fr); }
 }
 .art path, .art rect, .art line { filter: url(#hand-jitter); }
 .rpm { width: 100%; margin: 6px 0 2px; accent-color: var(--acc); }
-.curveNums { font-size: var(--fs-sm); color: var(--ink2); font-variant-numeric: tabular-nums; }
+
 /* The Physics graph's traces, drawn inside Plot.jsx's axes. */
 .plotCursor { stroke: var(--ink2); stroke-width: 1; stroke-dasharray: 3 3; }
 .plotLine { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; }
@@ -99,21 +84,14 @@
 .nums dd { margin: 0; font-family: var(--sans); font-variant-numeric: tabular-nums; color: var(--ink); }
 /* The pictures' strokes and fills, from the theme. */
 .artLine { fill: none; stroke: var(--acc); stroke-width: 2.2; }
-.artLine2 { fill: none; stroke: var(--data2); stroke-width: 2.2; }
 .artWarn { fill: none; stroke: var(--warn); stroke-width: 2; }
 .artGrid { stroke: var(--line-hi); stroke-width: 1; stroke-dasharray: 3 3; }
-.artAxis { stroke: var(--ink3); stroke-width: 1; }
 .artText { fill: var(--ink2); font-size: 9px; font-family: var(--sans); }
-.artText2 { fill: var(--cyan); font-size: 9px; font-family: var(--sans); }
-.curveText { fill: var(--ink2); font-size: 14px; font-family: var(--sans); }
-.curveTextAcc { fill: var(--acc); font-size: 14px; font-family: var(--sans); }
-.curveText2 { fill: var(--data2); font-size: 14px; font-family: var(--sans); }
 .artBox { fill: var(--panel); stroke: var(--ink3); stroke-width: 1.5; }
 .artBox2 { fill: var(--panel3); stroke: var(--ink3); stroke-width: 1.5; }
 .artFill { fill: var(--acc); opacity: 0.75; }
 .artFill2 { fill: var(--ok); opacity: 0.8; }
 .artDanger { fill: var(--danger); opacity: 0.8; }
-
 
 /* ---------- Tune: one row of tabs, VE first ---------- */
 /* Tune as a Mac app: a source-list sidebar of the ECU's tables beside the open one. */
@@ -188,7 +166,6 @@
 .cutSide { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .cutStroke { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
 .cutStroke b { color: var(--ink); }
-.pvSvg { width: 100%; height: auto; max-height: 180px; background: var(--panel2); border-radius: var(--r-sm); }
 .pvLoop { fill: none; stroke: var(--cut-burn); stroke-width: 1.6; }
 .pvDot { fill: var(--acc); stroke: var(--bg); stroke-width: 2; }
 .liveEq { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 0; font-size: var(--fs-xs); }

@@ -43,7 +43,7 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
           label="Selection mode"
           value={rangeMode ? 'range' : 'cell'}
           onChange={(id) => { setRangeMode(id === 'range'); setSelection(null); }}
-          options={[{ id: 'cell', label: 'Single cell' }, { id: 'range', label: 'Select range' }]}
+          options={[{ id: 'cell', label: 'Cell' }, { id: 'range', label: 'Range' }]}
         />
         {/* Changing VIEW keeps the selection: it is the same cells, drawn differently. */}
         <Seg
@@ -53,9 +53,9 @@ export function SelectModeBar({ rangeMode, setRangeMode, setSelection, diffView,
           options={[{ id: 'values', label: 'Values' }, { id: 'changes', label: 'Changes' }]}
         />
         <Button
-          variant="quiet" size="sm"
+          variant="quiet" size="sm" aria-label="Select all"
           onClick={() => setSelection({ type: 'range', r1: 0, c1: 0, r2: dims.rows - 1, c2: dims.cols - 1 })}
-        >Select all</Button>
+        >All</Button>
       </div>
       {diffView && (
         <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 6 }}>

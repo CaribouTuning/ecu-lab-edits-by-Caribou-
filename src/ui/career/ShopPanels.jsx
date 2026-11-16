@@ -4,7 +4,7 @@
  * show exactly the same cards, from the same code.
  */
 
-import { Check, Lock } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Lock, X } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '../primitives/Button.jsx';
@@ -94,7 +94,7 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking
             <ul className={styles.checks}>
               {last.results.map((r) => (
                 <li key={r.label} data-pass={r.pass ? 'true' : 'false'}>
-                  <span className={styles.mark} aria-hidden="true">{r.pass ? '✓' : '✗'}</span>
+                  <span className={styles.mark} aria-hidden="true">{r.pass ? <Check size={14} /> : <X size={14} />}</span>
                   <span>
                     <b>{r.label}</b><span className={styles.measured}>{r.measured}</span>
                     {!r.pass && r.type && HOW_TO_SEE[r.type] && <span className={styles.how}>How to see it: {HOW_TO_SEE[r.type]}</span>}
@@ -138,6 +138,21 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking
             </section>
           );
         })}
+        {/* Finished work, apart from the cars still in the shop: the last three jobs (a car
+            handed back ends the day), the money in a column. The whole record is in Books. */}
+        {career.history.length > 0 && (
+          <section className={styles.card} aria-label="Completed">
+            <div className={styles.cardTag}>Completed</div>
+            <ul className={styles.ledger}>
+              {career.history.slice(0, 3).map((h, i) => (
+                <li key={i} data-verdict={h.verdict}>
+                  <span>Day {h.day} · {jobById(h.jobId)?.customer.name}, {VERDICT[h.verdict]?.title.toLowerCase()}</span>
+                  <b>{money(h.paid)}</b>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </>
     )}
 
@@ -226,7 +241,7 @@ export function ShopPanel({ tab, career, update, onWork, setTab, takeJob, taking
         <section className={styles.card} aria-label="Milestones">
           <div className={styles.cardTag}>Milestones: {career.milestones.length} of {MILESTONES.length}</div>
           <ul className={styles.plain}>
-            {MILESTONES.map((m) => <li key={m.id} data-done={career.milestones.includes(m.id) ? 'true' : 'false'}>{career.milestones.includes(m.id) ? '★' : '☆'} {m.title}</li>)}
+            {MILESTONES.map((m) => <li key={m.id} data-done={career.milestones.includes(m.id) ? 'true' : 'false'}>{career.milestones.includes(m.id) ? <CheckCircle2 size={14} aria-hidden="true" /> : <Circle size={14} aria-hidden="true" />} {m.title}</li>)}
           </ul>
         </section>
         <section className={styles.card} aria-label="Job history">

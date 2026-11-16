@@ -20,11 +20,12 @@ import styles from './PickList.module.css';
  * @param {(value: string) => void} props.onChange
  * @param {number} [props.columns] lay short choices out as a grid of this many columns
  *   (injector sizes), rather than one ruled row each
+ * @param {string} [props.label] the choice's name, for the group
  * @returns {React.ReactElement}
  */
-export function PickList({ options, value, onChange, columns = 0 }) {
+export function PickList({ options, value, onChange, columns = 0, label }) {
   return (
-    <div className={styles.list} data-plain="" data-grid={columns > 0 || undefined}
+    <div className={styles.list} data-plain="" data-grid={columns > 0 || undefined} role={label ? 'group' : undefined} aria-label={label}
       style={columns > 0 ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}>
       {options.map((o) => (
         <button key={o.value} type="button" className={styles.option} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>

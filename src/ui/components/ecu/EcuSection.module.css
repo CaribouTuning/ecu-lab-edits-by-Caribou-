@@ -85,7 +85,7 @@
 }
 
 .fieldHead {
-  flex: 1 1 200px;
+  flex: 1 1 120px;
   min-width: 0;
 }
 
@@ -99,9 +99,8 @@
 }
 
 .help {
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  line-height: 1.45;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
   color: var(--ink2);
 }
 
@@ -220,8 +219,8 @@
 .table[data-open] > .summary::before { transform: rotate(90deg); }
 
 .summaryName {
-  font-size: var(--fs-base);
-  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -265,7 +264,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 0 12px;
+  padding: 8px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
@@ -302,7 +301,7 @@
 
 .guideStatus {
   font-size: var(--fs-xs);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ok-ink);
 }
 
@@ -351,17 +350,6 @@
   color: var(--warn-ink);
   font-size: var(--fs-xs);
   font-weight: 600;
-}
-
-.why {
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--acc-ink);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 .whyText {

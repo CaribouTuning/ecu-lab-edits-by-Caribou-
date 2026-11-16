@@ -28,7 +28,6 @@
 
 .row > .tag { margin-left: var(--sp-lg); }
 
-.tag { font-size: var(--fs-micro); font-weight: 600; color: var(--ink2); flex-shrink: 0; }
 .title { flex: 1; min-width: 0; font-size: var(--fs-base); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chevron { flex-shrink: 0; transition: transform 0.15s ease; }
 .head[aria-expanded='true'] .chevron { transform: rotate(180deg); }

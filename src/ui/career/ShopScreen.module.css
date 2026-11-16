@@ -150,7 +150,9 @@
 
 /* Milestones and the work done: a plain list, separated as a table's rows are. */
 .plain { display: flex; flex-direction: column; width: 100%; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); color: var(--ink); font-variant-numeric: tabular-nums; }
-.plain li { padding: 6px 0; border-top: 1px solid var(--line); }
+.plain li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.plain li > svg { flex: none; color: var(--ink2); }
+.plain li[data-done='true'] > svg { color: var(--ok); }
 .plain li:first-child { border-top: 0; padding-top: 0; }
 .plain li[data-done='false'] { color: var(--ink2); }
 
@@ -189,3 +191,11 @@
   .tab { padding: 0 6px; gap: 3px; }
   .count { min-width: 16px; padding: 1px 4px; }
 }
+
+/* Completed work: who, how it went, and the money right-aligned so the column compares. */
+.ledger { display: flex; flex-direction: column; width: 100%; margin: 0; padding: 0; list-style: none; font-size: var(--fs-sm); }
+.ledger li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); color: var(--ink2); }
+.ledger li:first-child { border-top: 0; padding-top: 0; }
+.ledger b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ledger li[data-verdict='pass'] b { color: var(--ok-ink); }
+.ledger li[data-verdict='unsafe'] b { color: var(--danger-ink); }
