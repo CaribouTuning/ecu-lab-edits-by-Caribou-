@@ -84,3 +84,12 @@ The MTX ECU viewer (mtx-automotive.com/ecu-viewer) is a bin-file viewer with a 2
 and a diff mode. It names no ECU family, axis scaling or calibration limit, so it supplied
 nothing to check these against. Its diff mode (two files, changed regions counted and
 stepped through) is the same idea as TUNE's CHANGES view.
+
+## Checked against outside sources (16 November 2026)
+
+Two questions from a realism audit of the tunes the advice leads to.
+
+| Claim in the model | Finding | Standing |
+|---|---|---|
+| The mixture to advise under boost (`BEST_AFR_BOOST_SHIFT`, `BEST_AFR_BOOST_CAP`; advice and pull-log text only, the cycle prices torque) | [HP Academy, Practical Standalone Tuning, "Choosing air fuel ratio"](https://www.hpacademy.com/courses/practical-standalone-tuning/step-7-steady-state-fuel-tuning-choosing-air-fuel-ratio): "Most boosted engines will want to see a lambda of 0.78 to 0.80 at high boost to ensure engine safety"; its naturally aspirated example targets λ 0.90 at full throttle, 0.87 from 5000 RPM. It gives no figure for moderate boost. | **Changed.** The advice used to stop at 12.2:1 (λ 0.83). It now richens 0.1 AFR a psi to 11.6:1 (λ 0.79) at about 12.5 psi. The rate below the cap is a choice, not a sourced figure. |
+| A full-load spark line that climbs steeply with speed (knock-limited at low speed) | Measured knock-limited spark advance on production engines at full throttle, 97 octane: about 27° at 2000 RPM to 54° at 5000 on a Nissan L18, 22° to 48° on a VW 1800, so about 9° per 1000 RPM (University of Cape Town thesis, "The effects of inlet swirl on knock limits in spark ignition engines", Fig. 4.3.1). The model's limit rises 4-5° per 1000 RPM on the VQ35DE and LS1. | **Unchanged.** The shape is physics, and the model's is gentler than measured. Its absolute level at low speed sits under what LS1 owners report for GM's high-octane table (about 28° from 5600 RPM, 29° at 3200 on a 2000 calibration, forum posts only); no factory table could be sourced, so the knock model was not refitted to anecdotes. |
