@@ -30,7 +30,7 @@ import { TableSurface } from '../components/surface/TableSurface.jsx';
 
 import { Calculator, Cylinder, Flame, Gauge, Waves, Wind, Wrench } from 'lucide-react';
 
-import { PagePicker } from '../components/PagePicker.jsx';
+import { PageTabs } from '../components/PageTabs.jsx';
 import { Plot } from './Plot.jsx';
 import styles from './Apps.module.css';
 import { EngineCutaway } from './EngineCutaway.jsx';
@@ -52,13 +52,13 @@ const NM_PER_LBFT = 1.3558;
  * its data (the breathing trace, the damage model).
  */
 export const PHYSICS_PAGES = /** @type {const} */ ([
-  { id: 'model', name: 'Engine overview', icon: Gauge },
-  { id: 'intake', name: 'Intake manifold', icon: Wind, needs: 'gx' },
-  { id: 'header', name: 'Exhaust header', icon: Flame, needs: 'gx' },
-  { id: 'exhaust', name: 'Exhaust system', icon: Waves, needs: 'gx' },
-  { id: 'cylinder', name: 'One cylinder', icon: Cylinder, needs: 'gx' },
-  { id: 'calc', name: 'Calculations', icon: Calculator },
-  { id: 'wear', name: 'Engine wear', icon: Wrench, needs: 'health' },
+  { id: 'model', name: 'Engine overview', short: 'Overview', icon: Gauge },
+  { id: 'intake', name: 'Intake manifold', short: 'Intake', icon: Wind, needs: 'gx' },
+  { id: 'header', name: 'Exhaust header', short: 'Header', icon: Flame, needs: 'gx' },
+  { id: 'exhaust', name: 'Exhaust system', short: 'Exhaust', icon: Waves, needs: 'gx' },
+  { id: 'cylinder', name: 'One cylinder', short: 'Cylinder', icon: Cylinder, needs: 'gx' },
+  { id: 'calc', name: 'Calculations', short: 'Calcs', icon: Calculator },
+  { id: 'wear', name: 'Engine wear', short: 'Wear', icon: Wrench, needs: 'health' },
 ]);
 
 
@@ -233,7 +233,7 @@ export function PhysicsApp({ points, derived, fuel, spec, ve = null, veAxes = nu
       {/* The pages: one button naming the open page on a phone, which lists them all (as TUNE's
           tables do); a row of tabs where there is room. */}
       <div className={styles.physPicker}>
-        <PagePicker label="Physics pages" current={open} onPick={pick} pages={pages.map((pg) => ({ id: pg.id, name: pg.name, icon: pg.icon }))} />
+        <PageTabs when="(max-width: 700px)" label="Physics pages" current={open} onPick={pick} pages={pages.map((pg) => ({ id: pg.id, name: pg.name, short: pg.short, icon: pg.icon }))} />
       </div>
       <nav className={styles.physTabs} aria-label="Physics pages" data-plain="">
         {pages.map((pg) => {

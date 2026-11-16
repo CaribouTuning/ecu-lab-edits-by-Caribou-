@@ -63,7 +63,7 @@ describe('the shop floor marker for a step', () => {
     expect(spotOf('live')).toBe('stand');
     expect(spotOf('dyno')).toBe('dyno');
     expect(spotOf('ticket')).toBe('dyno');
-    expect(spotOf('board')).toBe('board');
+    expect(spotOf('board')).toBe('laptop');
     expect(spotOf('tune:fuel')).toBe('laptop');
     expect(spotOf('messages')).toBe('laptop');
   });

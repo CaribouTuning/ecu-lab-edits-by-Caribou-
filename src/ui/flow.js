@@ -3,7 +3,7 @@
  *
  * Both modes are one loop, the loop a tuner works in. SANDBOX: choose an engine and build it
  * on the stand, then start it and hear it on the run stand, pull it on the dyno, read what the pull's log says and
- * fix that on the laptop, pull again. CAREER: take a customer's car from the job board, pull
+ * fix that on the laptop, pull again. CAREER: take a customer's car in the Jobs app, pull
  * it on the dyno, fix what the log points at, pull again, and hand it back. This works
  * out which step the player is on from what is true now (no checklist to fall out of step
  * with the game), and the chrome shows it in the same words wherever they are: over the
@@ -18,7 +18,7 @@
  *   live       the run stand's computer
  *   dyno       the dyno
  *   tune:PAGE  that page of the laptop's Tune app
- *   board      the job board on the shop wall
+ *   board      the Jobs app (the shop's customers and books)
  *   messages   Pops's messages, on the laptop
  *   ticket     the job ticket, open, where the car is handed back
  * @typedef {'build'|'live'|'dyno'|'board'|'messages'|'ticket'|`tune:${string}`} Go
@@ -73,7 +73,7 @@ export function nextStep(f) {
     if (!f.working) {
       const many = (f.unread ?? 0) > 1;
       if (f.unread && f.newShop) return { id: 'read', text: `Pops sent you ${many ? `${f.unread} messages` : 'a message'}: how the shop works. Read ${many ? 'them' : 'it'} before the first job.`, label: 'Messages', go: 'messages' };
-      return { id: 'take', text: `No car on the bay. Take a customer's car from the job board.${f.unread ? ` Pops sent you ${many ? `${f.unread} messages` : 'a message'} too.` : ''}`, label: 'Job board', go: 'board' };
+      return { id: 'take', text: `No car on the bay. Take a customer's car in the Jobs app.${f.unread ? ` Pops sent you ${many ? `${f.unread} messages` : 'a message'} too.` : ''}`, label: 'Jobs', go: 'board' };
     }
     if (f.buildJob && !f.pulled) return { id: 'build-job', text: 'An engine-building job: build it to the ticket on the build bench.', label: 'Build bench', go: 'build' };
     if (!f.fresh) {
@@ -112,12 +112,11 @@ function fixStep(a) {
 /**
  * Which of the shop floor's places a step is at: its marker is the one lit.
  * @param {Go} go
- * @returns {'build'|'stand'|'dyno'|'laptop'|'board'}
+ * @returns {'build'|'stand'|'dyno'|'laptop'}
  */
 export function spotOf(go) {
   if (go === 'build') return 'build';
   if (go === 'live') return 'stand';
   if (go === 'dyno' || go === 'ticket') return 'dyno';
-  if (go === 'board') return 'board';
   return 'laptop';
 }

@@ -11,7 +11,7 @@
  * aria-controls and inert (issue 81).
  */
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Info } from 'lucide-react';
 import React, { useContext, useId, useState } from 'react';
 
 
@@ -39,11 +39,11 @@ export function ExpandableInfo({ title, children, lazy = false }) {
     // articles, and a stack of identical rounded boxes read as a template.
     <div style={quiet ? { margin: '0 0 2px' } : { borderBottom: '1px solid var(--line)' }}>
       <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen((o) => !o)} style={quiet
-        // On the build bench: a plain link to the explanation, no icon and no chevron. One of
-        // these sits under many controls, and an icon on each made a column of identical rows.
-        ? { display: 'inline-block', padding: '8px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink2)', fontSize: 12, fontWeight: 500, textAlign: 'left', textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: 3 }
+        // On the build bench: a quiet line under the control, a 16 px info mark and what it
+        // explains, in the secondary ink; the mark turns blue while it is open.
+        ? { display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 32, padding: '4px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink2)', fontSize: 12, fontWeight: 500, textAlign: 'left' }
         : { width: '100%', minHeight: 44, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 2px', background: 'none', border: 'none', cursor: 'pointer' }}>
-        {quiet ? title : (
+        {quiet ? <><Info aria-hidden="true" size={16} style={{ flex: 'none', color: open ? 'var(--acc-ink)' : 'var(--ink2)' }} /><span>{title}</span></> : (
           <span style={{ color: 'var(--ink)', fontSize: 13.5, fontWeight: 600, textAlign: 'left', lineHeight: 1.35 }}>{title}</span>
         )}
         {!quiet && <ChevronDown aria-hidden="true" size={15} style={{ color: 'var(--ink2)', flexShrink: 0, marginLeft: 8, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />}

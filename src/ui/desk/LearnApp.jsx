@@ -8,7 +8,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
-import { PagePicker } from '../components/PagePicker.jsx';
+import { PageTabs } from '../components/PageTabs.jsx';
 import { LearnScreen } from '../screens/dash/LearnScreen.jsx';
 import { LEARN_PAGES } from '../screens/dash/learnShelf.jsx';
 import { warm } from '../sim/warm.js';
@@ -55,7 +55,7 @@ export function LearnApp({ shelf, onShelf }) {
   return (
     <div className={styles.pad} data-learn-top="">
       <div className={styles.physPicker}>
-        <PagePicker label="Learn pages" current={page.id} onPick={go} pages={LEARN_PAGES.map((pg) => ({ id: pg.id, name: pg.name, icon: pg.icon }))} />
+        <PageTabs when="(max-width: 700px)" label="Learn pages" current={page.id} onPick={go} pages={LEARN_PAGES.map((pg) => ({ id: pg.id, name: pg.name, short: pg.short, icon: pg.icon }))} />
       </div>
       <nav className={styles.physTabs} aria-label="Learn pages" data-plain="">
         {LEARN_PAGES.map((pg) => {

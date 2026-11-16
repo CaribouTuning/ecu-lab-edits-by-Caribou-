@@ -38,7 +38,7 @@ export function CareerBar({ career, onShop, onHandBack, openAsk = 0, onAsked }) 
       <section className={styles.bar} aria-label="Job ticket">
         <div className={styles.row}>
           <span className={styles.title}>No car on the bay</span>
-          <Button size="sm" variant="ghost" onClick={onShop}>Job board</Button>
+          <Button size="sm" variant="ghost" onClick={onShop}>Jobs</Button>
         </div>
       </section>
     );
@@ -51,7 +51,7 @@ export function CareerBar({ career, onShop, onHandBack, openAsk = 0, onAsked }) 
           <span className={styles.title}>{job.customer.name}, {job.customer.car}</span>
           <ChevronDown size={15} aria-hidden="true" className={styles.chevron} />
         </button>
-        <Button size="sm" variant="ghost" onClick={onShop}>Job board</Button>
+        <Button size="sm" variant="ghost" onClick={onShop}>Jobs</Button>
       </div>
       {open && (
         <div className={styles.body}>

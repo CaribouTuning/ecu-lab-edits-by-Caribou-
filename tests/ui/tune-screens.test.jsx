@@ -120,7 +120,7 @@ describe('AirflowScreen', () => {
     // only appears once a cell is clicked, same as inside the full app.
     expect(screen.queryByTestId('selection-dock')).toBeNull();
     const grid = screen.getByTestId('tuning-grid');
-    fireEvent.click(within(grid).getAllByRole('button').at(-1));
+    fireEvent.click(within(grid).getAllByRole('button').filter((b) => b.closest('td')).at(-1));
     expect(screen.getByTestId('selection-dock')).toBeTruthy();
   });
 

@@ -1,0 +1,25 @@
+/* The page tabs: shown only where a parent's stylesheet lets it (a phone); a sidebar does
+   the job wherever there is room. Every page in sight, in rows that wrap. */
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 4px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.tab {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 0; min-height: 48px; padding: 6px 2px 5px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--ink2);
+  font-family: var(--sans); font-size: var(--fs-xs); font-weight: 500; line-height: 1.15; text-align: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.tab:active { background: var(--panel3); }
+.tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tab[aria-current='page'] { background: var(--mac-selected); color: var(--ink); font-weight: 600; }
+.tab[aria-current='page'] > svg { color: var(--acc-ink); }
+.tab[data-locked] { color: var(--ink2); opacity: 0.75; }
+.name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* How many of the last pull's log entries name the page. */
+.flag {
+  position: absolute; top: 3px; right: 6px; min-width: 16px; padding: 0 4px; border-radius: 8px;
+  background: var(--warn); color: var(--bg); font-size: var(--fs-micro); font-weight: 700; line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}

@@ -198,6 +198,14 @@ remaining risk is the same Node major with a different libm, which is what step 
 - **The page's height is `var(--app-h, 100dvh)`, never a bare `100dvh`.** Embedded as an
   artifact on iOS, the frame is taller than the part on screen, and the bottom of every
   screen was cut off. `ui/visibleHeight.js` measures the visible part and sets `--app-h`.
+- **The UI's look is DESIGN.md's direction 7**: one slate palette (tokens.css; the `--mac-*`
+  tokens hold the same values), blue only for the thing to do, a selection a lighter slate
+  (`--mac-selected`). CAREER's jobs are the Jobs app on the laptop and the phone (`DESK_APPS`
+  `jobs`, route `#/shop`), never a board on the shop wall. On a phone the in-game phone fills
+  the screen and draws no status bar or home bar of its own (they read as the screen cut
+  off), and the 3D shop is not drawn while an app covers it (`ShopBackdrop` `covered`).
+  An app's pages on a phone are `PageTabs` (every page in sight), never a drop-down; a long
+  explanation goes behind an `Info` button (primitives/Info.jsx), never removed.
 - **Offline tooling may be Python** (validation, analysis, plotting, data generation in
   `scripts/`). The simulation itself runs in the browser and stays JavaScript.
 

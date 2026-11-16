@@ -30,39 +30,39 @@ export const camelToKebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLo
 export const tokens = Object.freeze({
   // Surfaces, darkest to lightest. The base is blue-black rather than neutral grey
   // because red reads harder against blue than against grey.
-  bg: '#0e0e0d',
-  panel: '#161615',
-  panel2: '#1d1d1b',
-  panel3: '#272724',
+  bg: '#090d16',
+  panel: '#0d1421',
+  panel2: '#111827',
+  panel3: '#1a2333',
 
   // Borders.
-  line: '#302f2b',
-  lineHi: '#46443e',
+  line: '#1e293b',
+  lineHi: '#334155',
 
   // Text, four steps from primary to faintest.
-  ink: '#ecebe5',
-  inkSoft: '#d2d0c8',
-  ink2: '#a6a399',
-  ink3: '#8a877f',
+  ink: '#f8fafc',
+  inkSoft: '#cbd5e1',
+  ink2: '#94a3b8',
+  ink3: '#64748b',
 
   // Accent. `accOn` is text placed ON an accent fill — it must never be a grey.
-  acc: '#e8e5da',
-  accInk: '#f6f4ee',
-  accBg: '#2a2925',
-  accOn: '#121210',
+  acc: '#3b82f6',
+  accInk: '#93c5fd',
+  accBg: '#13233f',
+  accOn: '#ffffff',
   // Keyboard focus: a white ring, the brightest thing on the screen, never a status colour.
   focus: '#ffffff',
 
   // Status. Reserved for engine state. Never used as decoration.
-  ok: '#35e08a',
-  okInk: '#7fe8b4',
-  okBg: '#0d2419',
-  warn: '#ffb020',
-  warnInk: '#ffd07a',
-  warnBg: '#2a2110',
-  danger: '#ff4d4d',
-  dangerInk: '#ff9d9d',
-  dangerBg: '#2a1414',
+  ok: '#10b981',
+  okInk: '#6ee7b7',
+  okBg: '#062a1f',
+  warn: '#f59e0b',
+  warnInk: '#fcd34d',
+  warnBg: '#2a1e05',
+  danger: '#ef4444',
+  dangerInk: '#fca5a5',
+  dangerBg: '#2a0e0e',
 
   // Status borders. One step brighter than the matching *Bg so a status box reads as
   // a bounded object rather than a wash — without reaching the full status hue, which
@@ -71,9 +71,9 @@ export const tokens = Object.freeze({
   // Button's danger variant) deliberately uses the saturated hue instead, because it
   // needs to read louder than something that merely reports; that is not an
   // inconsistency to "fix" by pointing it at these tokens too.
-  okLine: '#1e5238',
-  warnLine: '#5c4415',
-  dangerLine: '#5c2626',
+  okLine: '#14532d',
+  warnLine: '#78350f',
+  dangerLine: '#7f1d1d',
   violetLine: '#3b3363',
 
   // Secondary data hue, for charts that must plot two series at once (power vs
@@ -103,17 +103,8 @@ export const tokens = Object.freeze({
   cutBurn: '#ff7a2e',
   cutExhaust: '#8c8f96',
 
-  // The app icons on the desktop and the home screen: a cream card with the doodle inked
-  // on it in near-black over a pale blue wash, and the name on a cream label.
-  tile: '#f7f2e6',
+  // Ink on a paper swatch (CAREER's car picker).
   tileInk: '#1f1c18',
-  tileWash: '#bcd2ee',
-  // The job board: a whiteboard, its aluminium frame, the marker written on it, and the
-  // printed work orders held on it.
-  board: '#eceeec',
-  boardLine: '#b9bec3',
-  marker: '#1f4c9a',
-  order: '#fbfaf6',
 
   // The title screen keeps DNiev/ecu-lab main's palette (StartScreen.module.css).
   startBg: '#0a0d14',
@@ -130,23 +121,23 @@ export const tokens = Object.freeze({
   startAccRgb: '76, 158, 255',
   // The laptop's software, drawn as a native Mac app in dark mode with the Graphite
   // accent (Desk.module.css .window remaps the neutral tokens to these).
-  macWindow: '#0f1420',
-  macTitlebar: '#171e2e',
-  macSidebar: '#131a28',
-  macBox: '#131824',
-  macControl: '#212a3c',
-  macControlHi: '#2f3d58',
-  macSelected: '#3a6fb0',
-  macRowSel: '#26385a',
-  macSeparator: '#262f42',
-  macLabel: '#e9eef8',
-  macLabel2: '#93a0b8',
-  macLabel3: '#8a97ae',
+  macWindow: '#090d16',
+  macTitlebar: '#111827',
+  macSidebar: '#0d1421',
+  macBox: '#0d1421',
+  macControl: '#1a2333',
+  macControlHi: '#273449',
+  macSelected: '#334155',
+  macRowSel: '#13233f',
+  macSeparator: '#1e293b',
+  macLabel: '#f8fafc',
+  macLabel2: '#94a3b8',
+  macLabel3: '#64748b',
   macSelInk: '#ffffff',
-  screenAcc: '#4c9eff',
-  screenAccInk: '#8fc2ff',
-  screenAccBg: '#0f2033',
-  screenAccOn: '#04162e',
+  screenAcc: '#3b82f6',
+  screenAccInk: '#93c5fd',
+  screenAccBg: '#13233f',
+  screenAccOn: '#ffffff',
   // `data2` on those screens: cyan beside this blue accent read as the same line.
   screenData2: '#f28fbf',
   macRed: '#ff5f57',
@@ -156,8 +147,8 @@ export const tokens = Object.freeze({
 
   // The laptop's and the phone's wallpaper: the Caribou badge in neutral chrome on a
   // graphite ground (no blue, no reflection).
-  wallSky: '#1a1a18',
-  wallSky2: '#0b0b0a',
+  wallSky: '#0d1421',
+  wallSky2: '#090d16',
   chromeHi: '#ffffff',
   chromeMid: '#d4d2cb',
   chromeLo: '#7a786f',
@@ -197,7 +188,7 @@ export const tokens = Object.freeze({
 
   // Bare RGB triplets, so translucent washes can be built from the same colours
   // rather than re-typing them at a new alpha. See accAlpha/shadowAlpha below.
-  accRgb: '232, 229, 218',
+  accRgb: '59, 130, 246',
   shadowRgb: '0, 0, 0',
   glassRgb: '255, 255, 255',
 

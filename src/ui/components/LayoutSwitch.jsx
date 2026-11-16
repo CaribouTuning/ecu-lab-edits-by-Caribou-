@@ -11,6 +11,7 @@ import React from 'react';
 import { ECU_LAYOUTS, PRESET_ECU_LAYOUT, layoutById } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Seg } from '../primitives/Seg.jsx';
+import { Info } from '../primitives/Info.jsx';
 import { baseMapAction, offersBaseMap } from '../state/baseMap.js';
 import { engineOutgrowsTables, extendAxes, layoutSwitch } from '../state/layoutSwitch.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
@@ -61,7 +62,7 @@ export function LayoutSwitch() {
     ...[...new Set([own, ECU_LAYOUTS[active.id] ? active.id : null].filter(Boolean))]
       .map((id) => ({ id, label: ECU_LAYOUTS[id].ecu.split(',')[0] })),
   ];
-  // One line: the axes' size and span, the whole story in the tooltip.
+  // One line: the axes' size and span, the whole story behind its info button.
   const why = active.id === 'engine'
     ? `The range this engine runs, at the depth of a typical standalone or factory computer. Like a real ECU's, they never move a value you have tuned: a build that reaches past them adds rows and columns (in SANDBOX as you build; in CAREER when you extend them), and past the edge the ECU reads the edge.`
     : active.id === 'game' ? 'The game\'s 8 × 6 grid: few enough cells to read at a glance and tune on a phone. "Sized" lays 16 × 16 breakpoints over the range this engine runs, for finer control between speeds and loads.'
@@ -69,7 +70,7 @@ export function LayoutSwitch() {
   return (
     <>
     {extend}
-    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 0 }} title={why}>
+    <div data-testid="layout-switch" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 0 }}>
       {options.length > 1 && (
         <Seg
           label="Table layout"
@@ -80,9 +81,11 @@ export function LayoutSwitch() {
           onChange={(id) => { if (String(id) !== active.id) dispatch(/** @type {any} */ (layoutSwitch({ build, tune }, String(id)))); }}
         />
       )}
-      <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
-        {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm by {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa, {active.ve.rpm.length} × {active.ve.load.length} cells
-      </span>
+      <Info label="About the table layout" text={why}>
+        <span style={{ fontSize: 12, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums', padding: '6px 0' }}>
+          {active.ve.rpm[0]}–{active.ve.rpm[active.ve.rpm.length - 1].toLocaleString('en-US')} rpm by {active.ve.load[active.ve.load.length - 1]}–{active.ve.load[0]} kPa, {active.ve.rpm.length} × {active.ve.load.length} cells
+        </span>
+      </Info>
     </div>
     </>
   );

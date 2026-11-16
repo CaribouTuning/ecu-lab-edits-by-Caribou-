@@ -56,9 +56,9 @@ direction 6: the laptop's software should look like a native Mac app.
 
 **The world is drawn; the software is a Mac app.**
 
-- **The physical world is inked.** The 3D shop, the laptop and phone bodies, the shop's
-  markers and paper on the job board keep the pen: the sketch post-process
-  (`desk/stage.js`), wobbly outlines (`--ink-a/b/c/round`) and `.ink-frame-lg`.
+- **The 3D shop keeps its look; the devices are plain.** The shop has its sketch
+  post-process (`desk/stage.js`). The laptop's and the phone's bodies are a plain bezel
+  (`.ink-frame-lg`): the wobbly outlines went with direction 7 below.
 - **The laptop's software is a Mac app in dark mode.** A menu bar along the top of the
   screen names the app (ECU Lab). Each app opens in a window with traffic lights and a
   centred title, and a status bar along its bottom carries the engine line and readouts.
@@ -79,9 +79,23 @@ direction 6: the laptop's software should look like a native Mac app.
   map slots under them. The open table has one toolbar line, and the advisor is an
   inspector beside it. The inspector sits beside the table only when Tune's own width
   holds all 16 columns (a container query); otherwise it goes under the table.
-- **Interaction is with the thing.** The dyno, the engine stand and the job board are
-  operated on the objects in the shop, not through a panel beside the 3D view
-  (`desk/Station.jsx`, `desk/ShopBackdrop.jsx`).
+- **Interaction is with the thing.** The dyno and the engine stand are operated on the
+  objects in the shop, not through a panel beside the 3D view (`desk/Station.jsx`,
+  `desk/ShopBackdrop.jsx`). CAREER's jobs are an app (Jobs) on the laptop and the phone,
+  not a board on the wall: a whiteboard of paper work orders was the one light screen in
+  a dark game, and on a phone it could not be read.
+- **A phone is the phone.** Played on a phone, the in-game phone fills the screen and draws
+  no status bar or home indicator of its own: a second set inside the real one read as the
+  screen cut off. Notifications and settings sit in each app's top bar.
+
+### Direction 7: one instrument palette
+
+The owner then asked for one palette across every screen, the Jobs app included: a deep
+slate ground, three surface steps, slate text greys, and colour only for meaning (blue the
+thing to do, green good, amber a warning, red critical). It replaced the warm greys of
+direction 5 and the separate Mac greys, so the shop's pages and the laptop's apps are now
+the same colours. A selection stays a lighter slate key (`--mac-selected`), so blue is
+left to actions and data.
 
 ## Typography
 
@@ -99,26 +113,21 @@ direction 6: the laptop's software should look like a native Mac app.
 
 ## Colour
 
-The table below is the ground outside the laptop: the start screen, the shop's pages and
-the dyno. The laptop's own software uses the `--mac-*` tokens described above (window
-#1e1e1e, sidebar #262626, controls #3d3d3d, selection #6a6a6a, text #e6e6e6 / #a6a6a6 /
-#8c8c8c).
+One palette, inside the laptop and out (the `--mac-*` tokens hold the same values, so the
+remapping in Desk.module.css changes nothing visible).
 
 | Token | Value | Use |
 |---|---|---|
-| `--bg` | #0e0e0d | The ground |
-| `--panel`, `--panel2`, `--panel3` | #161615, #1d1d1b, #272724 | Surfaces, one step each |
-| `--line`, `--line-hi` | #302f2b, #46443e | Rules, and a stronger rule for a control's edge |
-| `--ink`, `--ink-soft`, `--ink2`, `--ink3` | #ecebe5, #d2d0c8, #a6a399, #8a877f | Text, from primary to quiet. `--ink3` is 5.38:1 on `--bg`. |
-| `--acc` / `--acc-on` | #e8e5da / #121210 | A selected key: light with dark text, 14.87:1 |
+| `--bg` | #090d16 | The ground |
+| `--panel`, `--panel2`, `--panel3` | #0d1421, #111827, #1a2333 | Surfaces: secondary, elevated, a control's well |
+| `--line`, `--line-hi` | #1e293b, #334155 | Rules, and a stronger rule for a control's edge |
+| `--ink`, `--ink-soft`, `--ink2`, `--ink3` | #f8fafc, #cbd5e1, #94a3b8, #64748b | Text, from primary to quiet |
+| `--acc` / `--acc-on` | #3b82f6 / #ffffff | The thing to do: a primary button, the next step |
+| `--mac-selected` | #334155 | A selected segment or chip |
 | `--focus` | #ffffff | The keyboard focus ring, 2 px |
-| `--ok`, `--warn`, `--danger` | green, amber, red | Status only, never decoration |
+| `--ok`, `--warn`, `--danger` | #10b981, #f59e0b, #ef4444 | Status only, never decoration |
 | `--cyan` | #38d9f0 | The torque curve, and the second series in a chart |
 | `--violet` | #a78bfa | A third series, where there is one |
-
-The greys are warm, not blue, so they sit with the inked shop. The previous palette was
-a navy ground with a SaaS blue accent. It read as a template, and its blue collided
-with the data colours.
 
 Contract tests (`tests/tokens.test.js`, `tests/no-hardcoded-colours.test.js`) keep
 colours out of components, keep the accent from being a status colour, and keep

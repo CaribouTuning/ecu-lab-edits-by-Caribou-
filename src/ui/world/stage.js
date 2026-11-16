@@ -68,8 +68,11 @@ export function createStage(canvas, opts = {}) {
   // has, on everything at once, without a line mesh per box.
   // The shop (`real`) keeps its light in half floats, smoothed edges and all, so the film
   // response is applied once, after the lines: a lit room with an engineer's drawing over it.
+  // Half floats need a GPU that can draw into them (EXT_color_buffer_float or _half_float);
+  // one that cannot would leave the target incomplete and the shop black, so it gets 8 bits.
+  const halfFloat = renderer.extensions.has('EXT_color_buffer_float') || renderer.extensions.has('EXT_color_buffer_half_float');
   const target = new THREE.WebGLRenderTarget(8, 8, opts.real
-    ? { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, type: THREE.HalfFloatType, samples: 4 }
+    ? { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: true, type: halfFloat ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: 4 }
     : { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
   target.depthTexture = new THREE.DepthTexture(8, 8);
   target.depthTexture.minFilter = THREE.NearestFilter;

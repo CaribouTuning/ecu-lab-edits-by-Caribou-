@@ -28,22 +28,21 @@ import { FirstRun } from './FirstRun.jsx';
 import styles from './Desk.module.css';
 
 /**
- * The desktop's apps: Tune and Learn, Physics, and in CAREER Pops's messages. An engine is
- * not built on a laptop: Build is the engine stand's, in the shop (SHOP_PAGES).
+ * The desktop's apps: Tune, Learn, Physics, and in CAREER the shop's Jobs and Pops's
+ * messages. An engine is not built on a laptop: Build is the engine stand's, in the shop
+ * (SHOP_PAGES).
  */
 export const DESK_APPS = [
   { id: 'tune', label: 'Tune', name: 'TUNE' },
-  { id: 'learn', label: 'Learn', name: 'LEARN' },
-  { id: 'physics', label: 'Physics', name: 'PHYSICS' },
+  // CAREER: today's cars, the customers waiting, upgrades, training and the books.
+  { id: 'jobs', label: 'Jobs', name: 'JOB BOARD' },
   // CAREER: Pops's emails and texts.
   { id: 'messages', label: 'Messages', name: 'MESSAGES' },
+  { id: 'learn', label: 'Learn', name: 'LEARN' },
+  { id: 'physics', label: 'Physics', name: 'PHYSICS' },
 ];
-
-/**
- * CAREER's job board on an upright phone: the wall is out of the picture there, so the board
- * is an app on the phone's home screen. Everywhere else it is the board on the shop's wall.
- */
-const JOBS_APP = { id: 'office', label: 'Jobs', name: 'JOB BOARD' };
+/** The apps only CAREER has. */
+const CAREER_ONLY = ['jobs', 'messages'];
 
 /**
  * The wallpaper: the Caribou Tuning badge in chrome on a plain graphite ground. Drawn from
@@ -93,13 +92,13 @@ const SurfacesContext = createContext(/** @type {Surfaces} */ ({ surfaces: null 
 export const useSurfaces = () => useContext(SurfacesContext);
 
 /** The shop's pages, opened from the shop floor rather than the laptop. */
-export const SHOP_PAGES = { dyno: 'Dyno', build: 'Build bench', live: 'Engine stand', office: 'Job board' };
+export const SHOP_PAGES = { dyno: 'Dyno', build: 'Build bench', live: 'Engine stand' };
 
-/** Where the camera goes for each page: the dyno, the build bench, the run stand, the board on the wall. */
-/** @type {Record<string, 'dyno'|'stand'|'build'|'board'>} */
+/** Where the camera goes for each page: the dyno and the run stand. */
+/** @type {Record<string, 'dyno'|'stand'>} */
 // The build bench is reached by its place in the shop but opens full screen: its sheets have
 // too much on them for a monitor in the scene.
-const PAGE_SCENES = { dyno: 'dyno', live: 'stand', office: 'board' };
+const PAGE_SCENES = { dyno: 'dyno', live: 'stand' };
 
 /**
  * The apps' icons, as a phone draws them: a rounded tile in its own colour, a white glyph on
@@ -140,9 +139,6 @@ function useMedia(q) {
 
 /** @returns {boolean} whether the screen is a phone's */
 const usePhone = () => useMedia(PHONE_QUERY);
-
-/** @returns {boolean} whether it is a phone held upright, where the shop's left wall is out of the picture */
-export const usePortraitPhone = () => useMedia('(max-width: 560px) and (orientation: portrait)');
 
 /** The time on the taskbar, kept current. */
 function Clock() {
@@ -192,7 +188,7 @@ function NextStrip({ next, place }) {
  * @param {() => void} props.onDesktop back to the desktop
  * @param {() => void} props.onBay shut the laptop and look at the shop
  * @param {string[]} [props.apps] which apps the desktop offers, by id (default: SANDBOX's four)
- * @param {boolean} [props.board] CAREER: the shop has its job board
+ * @param {boolean} [props.career] CAREER (the first-run tour is the career's)
  * @param {Record<string, number>} [props.badges] a count to show on an app's icon
  * @param {() => void} [props.onSearch] @param {() => void} [props.onMenu] @param {() => void} [props.onTutorial] @param {() => void} [props.onRepair]
  * @param {Notice[]} [props.notices] what the notifications list holds
@@ -210,7 +206,7 @@ function NextStrip({ next, place }) {
  * @returns {React.ReactElement}
  */
 export function Desk({
-  mode, app, onOpen, onDesktop, onBay, apps = null, board = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, children,
+  mode, app, onOpen, onDesktop, onBay, apps = null, career = false, badges = {}, onSearch, onMenu, onTutorial, onRepair, notices = [], engineSpec, rpm = 0, dynoRpm = 0, cars, damage = null, status = null, footer = null, next = null, children,
 }) {
   const [menu, setMenu] = useState(/** @type {null|'settings'|'notices'} */ (null));
   const units = useUnitSystem();
@@ -227,13 +223,11 @@ export function Desk({
   const [stageKey, setStageKey] = useState(0);
   const toggle3d = () => { write3d(threeD ? 'off' : 'force'); setThreeD(!threeD); setStageKey((k) => k + 1); };
   const onFlat = useCallback(() => setThreeD(false), []);
-  const portraitPhone = usePortraitPhone();
-  const appInfo = DESK_APPS.find((a) => a.id === app) ?? (app === 'office' && portraitPhone ? JOBS_APP : undefined);
+  const appInfo = DESK_APPS.find((a) => a.id === app);
   const pick = (id) => {
     if (id === 'dyno') onOpen('dyno');
     else if (id === 'build') onOpen('build');
     else if (id === 'stand') onOpen('live');
-    else if (id === 'board') onOpen('board');
     else onDesktop();
   };
   const open = mode === 'desktop' || mode === 'app';
@@ -277,34 +271,30 @@ export function Desk({
       {notices.length > 0 && <span className={styles.badge} data-tone={flagged ? 'warn' : 'ok'}>{notices.length}</span>}
     </button>
   );
-  const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : a.id !== 'messages'));
+  const shownApps = DESK_APPS.filter((a) => (apps ? apps.includes(a.id) : !CAREER_ONLY.includes(a.id)));
 
   // On a phone the device in your hand is a phone: a home screen of apps, a status bar,
   // apps full screen, and putting it down shows the shop.
   const device = phone ? (
     <div className={styles.phone} data-state={open ? 'open' : 'shut'} data-home={mode === 'desktop' ? 'true' : undefined} aria-hidden={!open}>
-      <div className={styles.statusBar}>
-        <Clock />
-        <span className={styles.statusRight}>
-          {noticesBtn}
-          {settingsBtn}
-          <span className={styles.battery} aria-hidden="true"><span /></span>
-        </span>
-        {settingsMenu}
-        {noticesMenu}
-      </div>
+      {/* The phone in your hand has its own clock, battery and home bar: the game draws none
+          of them (a second set, inside the real one, read as the screen cut off). */}
       {mode === 'app' && appInfo ? (
         <section className={styles.phoneApp} aria-label={appInfo.label}>
           <header className={styles.phoneAppBar}>
-            {/* Home puts the phone down: back in the shop, stood looking at all of it (the
-                phone's own home screen is one tap away, picking it up again). */}
-            <button type="button" className={styles.phoneBack} onClick={onBay} aria-label={`Close ${appInfo.label} and look at the shop`}>
-              <ChevronLeft size={18} aria-hidden="true" /><span>Home</span>
+            <button type="button" className={styles.phoneBack} onClick={onDesktop} aria-label={`Close ${appInfo.label}: back to the apps`} tabIndex={open ? 0 : -1}>
+              <ChevronLeft size={18} aria-hidden="true" /><span>Apps</span>
             </button>
             <span className={styles.phoneAppTitle}>{appInfo.label}</span>
-            <button type="button" className={styles.phoneBack} onClick={onSearch} aria-label="Search pages and actions">
-              <Search size={17} aria-hidden="true" />
-            </button>
+            <span className={styles.phoneBarRight}>
+              <button type="button" className={styles.taskBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
+                <Search size={16} aria-hidden="true" />
+              </button>
+              {noticesBtn}
+              {settingsBtn}
+            </span>
+            {settingsMenu}
+            {noticesMenu}
           </header>
           {next && <NextStrip next={next} place="phone" />}
           <div className={styles.windowBody}>{footer && <div className={styles.phoneStrip}>{footer}</div>}{children}</div>
@@ -314,6 +304,12 @@ export function Desk({
           {/* The badge whole: a phone is taller than the picture is wide, and filling it
               cropped the name ("CARIBO") off both sides. */}
           <Wallpaper whole />
+          <div className={styles.homeTop}>
+            {noticesBtn}
+            {settingsBtn}
+            {settingsMenu}
+            {noticesMenu}
+          </div>
           {next && <NextStrip next={next} place="phone" />}
           <div className={styles.appGrid}>
             {shownApps.map((a) => (
@@ -322,12 +318,6 @@ export function Desk({
                 <span className={styles.phoneIconLabel}>{a.label}</span>
               </button>
             ))}
-            {board && portraitPhone && (
-              <button type="button" className={styles.phoneIcon} onClick={() => onOpen('board')} aria-label="JOB BOARD" data-tour="nav-jobs" tabIndex={open ? 0 : -1}>
-                <AppTile id="jobs" badge={badges.jobs} />
-                <span className={styles.phoneIconLabel}>{JOBS_APP.label}</span>
-              </button>
-            )}
           </div>
           <div className={styles.dock}>
             <button type="button" className={styles.dockBtn} onClick={onSearch} aria-label="Search pages and actions" tabIndex={open ? 0 : -1}>
@@ -339,15 +329,14 @@ export function Desk({
           </div>
         </div>
       )}
-      <button type="button" className={styles.homeBar} onClick={onDesktop} aria-label="Desktop" tabIndex={open ? 0 : -1}><span /></button>
     </div>
   ) : null;
 
   return (
     <div className={styles.desk} data-mode={mode}>
-      <ShopBackdrop key={stageKey} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} board={board} boardOnWall={!portraitPhone} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} onFlat={onFlat} />
+      <ShopBackdrop key={stageKey} mode={scene ?? (mode === 'bay' ? 'bay' : mode === 'page' ? 'page' : 'desk')} phone={phone} covered={phone && mode === 'app'} engineSpec={engineSpec} rpm={rpm} dynoRpm={dynoRpm} cars={cars} damage={damage} nextSpot={tourSpot ?? (next && !next.here ? next.spot : null)} onSurfaces={setSurfaces} onPick={pick} onLook={onBay} onFlat={onFlat} />
       {mode === 'bay' && next && <div className={styles.bayNext}><NextStrip next={next} place="bay" /></div>}
-      {mode === 'bay' && <FirstRun career={board} phone={phone} onSpot={setTourSpot} />}
+      {mode === 'bay' && <FirstRun career={career} phone={phone} onSpot={setTourSpot} />}
 
       {mode !== 'page' && phone && device}
       {mode !== 'page' && !phone && (

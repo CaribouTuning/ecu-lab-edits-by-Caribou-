@@ -2,38 +2,38 @@
    tests/tokens.test.js — change one and you must change the other. */
 
 :root {
-  --bg: #0e0e0d;
-  --panel: #161615;
-  --panel2: #1d1d1b;
-  --panel3: #272724;
+  --bg: #090d16;
+  --panel: #0d1421;
+  --panel2: #111827;
+  --panel3: #1a2333;
 
-  --line: #302f2b;
-  --line-hi: #46443e;
+  --line: #1e293b;
+  --line-hi: #334155;
 
-  --ink: #ecebe5;
-  --ink-soft: #d2d0c8;
-  --ink2: #a6a399;
-  --ink3: #8a877f;
+  --ink: #f8fafc;
+  --ink-soft: #cbd5e1;
+  --ink2: #94a3b8;
+  --ink3: #64748b;
 
-  --acc: #e8e5da;
-  --acc-ink: #f6f4ee;
-  --acc-bg: #2a2925;
-  --acc-on: #121210;
+  --acc: #3b82f6;
+  --acc-ink: #93c5fd;
+  --acc-bg: #13233f;
+  --acc-on: #ffffff;
   --focus: #ffffff;
 
-  --ok: #35e08a;
-  --ok-ink: #7fe8b4;
-  --ok-bg: #0d2419;
-  --warn: #ffb020;
-  --warn-ink: #ffd07a;
-  --warn-bg: #2a2110;
-  --danger: #ff4d4d;
-  --danger-ink: #ff9d9d;
-  --danger-bg: #2a1414;
+  --ok: #10b981;
+  --ok-ink: #6ee7b7;
+  --ok-bg: #062a1f;
+  --warn: #f59e0b;
+  --warn-ink: #fcd34d;
+  --warn-bg: #2a1e05;
+  --danger: #ef4444;
+  --danger-ink: #fca5a5;
+  --danger-bg: #2a0e0e;
 
-  --ok-line: #1e5238;
-  --warn-line: #5c4415;
-  --danger-line: #5c2626;
+  --ok-line: #14532d;
+  --warn-line: #78350f;
+  --danger-line: #7f1d1d;
   --violet-line: #3b3363;
 
   --cyan: #38d9f0;
@@ -53,13 +53,7 @@
   --cut-fresh: #5aa9ff;
   --cut-burn: #ff7a2e;
   --cut-exhaust: #8c8f96;
-  --tile: #f7f2e6;
   --tile-ink: #1f1c18;
-  --tile-wash: #bcd2ee;
-  --board: #eceeec;
-  --board-line: #b9bec3;
-  --marker: #1f4c9a;
-  --order: #fbfaf6;
   /* The laptop's software, drawn as a native Mac app in dark mode with the Graphite
      accent: neutral greys, a grey selection, and the window's traffic lights. Applied by
      remapping the neutral tokens inside a window (Desk.module.css .window). */
@@ -76,30 +70,30 @@
   --start-acc-ink: #8fc2ff;
   --start-acc-on: #04162e;
   --start-acc-rgb: 76, 158, 255;
-  --mac-window: #0f1420;
-  --mac-titlebar: #171e2e;
-  --mac-sidebar: #131a28;
-  --mac-box: #131824;
-  --mac-control: #212a3c;
-  --mac-control-hi: #2f3d58;
-  --mac-selected: #3a6fb0;
-  --mac-row-sel: #26385a;
-  --mac-separator: #262f42;
-  --mac-label: #e9eef8;
-  --mac-label2: #93a0b8;
-  --mac-label3: #8a97ae;
+  --mac-window: #090d16;
+  --mac-titlebar: #111827;
+  --mac-sidebar: #0d1421;
+  --mac-box: #0d1421;
+  --mac-control: #1a2333;
+  --mac-control-hi: #273449;
+  --mac-selected: #334155;
+  --mac-row-sel: #13233f;
+  --mac-separator: #1e293b;
+  --mac-label: #f8fafc;
+  --mac-label2: #94a3b8;
+  --mac-label3: #64748b;
   --mac-sel-ink: #ffffff;
-  --screen-acc: #4c9eff;
-  --screen-acc-ink: #8fc2ff;
-  --screen-acc-bg: #0f2033;
-  --screen-acc-on: #04162e;
+  --screen-acc: #3b82f6;
+  --screen-acc-ink: #93c5fd;
+  --screen-acc-bg: #13233f;
+  --screen-acc-on: #ffffff;
   --screen-data2: #f28fbf;
   --mac-red: #ff5f57;
   --mac-yellow: #febc2e;
   --mac-green: #28c840;
   --mac-light-ink: #4d0000;
-  --wall-sky: #1a1a18;
-  --wall-sky2: #0b0b0a;
+  --wall-sky: #0d1421;
+  --wall-sky2: #090d16;
   --chrome-hi: #ffffff;
   --chrome-mid: #d4d2cb;
   --chrome-lo: #7a786f;
@@ -134,7 +128,7 @@
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-  --acc-rgb: 232, 229, 218;
+  --acc-rgb: 59, 130, 246;
   --shadow-rgb: 0, 0, 0;
   --glass-rgb: 255, 255, 255;
 

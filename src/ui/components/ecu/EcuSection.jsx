@@ -17,6 +17,7 @@ import {
   ECU_META, GAME_LAYOUT, defaultEcuCalibration, deriveEngine, ecuHardwareOf, engineLayout, fitsGameGrid, getCal, peakMapKpaOf, setCal, setupMismatches,
 } from '../../../sim/index.js';
 import { Eyebrow } from '../../primitives/Eyebrow.jsx';
+import { Info } from '../../primitives/Info.jsx';
 import { Seg } from '../../primitives/Seg.jsx';
 import { Switch } from '../../primitives/Toggle.jsx';
 import { ACTIONS } from '../../state/reducer.js';
@@ -171,13 +172,16 @@ function isChanged(meta, value, def) {
 function PageGuide({ guide, changedCount }) {
   return (
     <div className={styles.guide}>
-      <p className={styles.guideDoes}>{guide.does}</p>
-      <dl className={styles.guideList}>
-        <dt>Come here when</dt>
-        <dd>{guide.when}</dd>
-        <dt>Safe to leave</dt>
-        <dd>{guide.leave}</dd>
-      </dl>
+      <Info label="When to use this page" text={(
+        <dl className={styles.guideList}>
+          <dt>Come here when</dt>
+          <dd>{guide.when}</dd>
+          <dt>Safe to leave</dt>
+          <dd>{guide.leave}</dd>
+        </dl>
+      )}>
+        <p className={styles.guideDoes}>{guide.does}</p>
+      </Info>
       <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
         {changedCount > 0
           ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`

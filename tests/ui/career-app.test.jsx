@@ -62,14 +62,11 @@ describe('CAREER in the app', () => {
     expect(window.location.hash).toBe('#/tune/airflow');
     expect(screen.getByRole('region', { name: 'Tune' })).toBeTruthy();
     expect(screen.getByText(/Marcus, 2006 Nissan 350Z/)).toBeTruthy();
-    // The same laptop as SANDBOX's, with the career's apps: Tune and the messages, not the
+    // The same laptop as SANDBOX's, with the career's apps: Tune, Jobs, the messages and the
     // reading apps, and not Build: an engine is built on its stand in the shop.
     fireEvent.click(screen.getByRole('button', { name: 'Desktop' }));
     expect(screen.queryByRole('button', { name: 'BUILD' })).toBeNull();
-    // The shop's paperwork is not on the laptop: it is the job board on the shop wall.
-    expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'LEARN' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'PHYSICS' })).toBeNull();
+    for (const app of ['JOB BOARD', 'MESSAGES', 'LEARN', 'PHYSICS']) expect(screen.getByRole('button', { name: app })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'TUNE' }));
 
     // A new shop has not trained for spark: the page is there, and locked.

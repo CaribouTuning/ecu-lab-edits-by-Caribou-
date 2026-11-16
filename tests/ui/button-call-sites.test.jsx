@@ -101,7 +101,8 @@ async function sweep() {
     // Selecting a grid cell mounts the SelectionDock and its DONE button.
     const grid = screen.queryByTestId('tuning-grid');
     if (grid) {
-      const cells = within(grid).getAllByRole('button');
+      // A cell: the grid's notes carry info buttons of their own.
+      const cells = within(grid).getAllByRole('button').filter((b) => b.closest('td'));
       fireEvent.click(cells[cells.length - 1]);
       collect();
     }

@@ -34,7 +34,7 @@ import deskApps from './desk/Apps.module.css';
 import { BuildBench } from './desk/BuildBench.jsx';
 import { MessagesApp } from './desk/MessagesApp.jsx';
 import { advanceSaga, openChapter, unreadCount } from './career/story.js';
-import { Desk, usePortraitPhone } from './desk/Desk.jsx';
+import { Desk } from './desk/Desk.jsx';
 import { LearnApp } from './desk/LearnApp.jsx';
 import { PhysicsApp } from './desk/PhysicsApp.jsx';
 import { engineSpecOf } from './world/models/engine.js';
@@ -45,7 +45,7 @@ import { jobById } from './career/jobs.js';
 import { canReadCareer, deliver, pageUnlocked, reviveCareer, sectionUnlocked, storeCar, trainingFor } from './career/shop.js';
 import { CareerOffice } from './career/ShopScreen.jsx';
 import { BuildLocked } from './components/BuildSection.jsx';
-import { PagePicker } from './components/PagePicker.jsx';
+import { PageTabs } from './components/PageTabs.jsx';
 import { ThrottleLoadContext } from './components/TuningGrid.jsx';
 import { useUnits } from './units.js';
 import { StartScreen } from './screens/StartScreen.jsx';
@@ -211,16 +211,15 @@ function useSettled(value, jump = '') {
   return SETTLE_MS === 0 || jumped ? value : settled;
 }
 
-/** The apps on CAREER's laptop: the car on the bay's build and tune. Everything else is
- *  out in the shop: the dyno, the build bench, the engine stand, the job board. */
-const CAREER_APPS = ['tune', 'messages'];
+/** The apps on CAREER's laptop and phone: Tune for the car on the bay, Jobs (the shop's
+ *  customers and books), Pops's messages, and the two reading apps. The dyno, the build
+ *  bench and the engine stand are out in the shop. */
+const CAREER_APPS = ['tune', 'jobs', 'messages', 'learn', 'physics'];
 
 export function EcuLabApp() {
   // Navigation lives in the URL, not in state: see src/ui/routing.js.
   const [route, navigate] = useRoute();
   const appView = route.view;
-  // An upright phone has CAREER's job board as an app; every other screen has it on the wall.
-  const portraitPhone = usePortraitPhone();
   const tab = route.tab;
   // The BUILD slice (hardware and ECU configuration), destructured so read sites below
   // use a bare `engineConfig` / `mods` / ...; writes go through `dispatch`.
@@ -979,10 +978,6 @@ export function EcuLabApp() {
       })();
       return () => { cancelled = true; };
     }
-    // The two reading apps are SANDBOX's: CAREER goes to its job board.
-    if (mode === 'career' && appView === 'app' && (tab === 'learn' || tab === 'physics')) {
-      navigate({ view: 'shop', tab: null, section: null });
-    }
     // Pops's messages are CAREER's.
     if (appView === 'messages' && mode !== 'career') navigate({ view: 'desk', tab: null, section: null });
     return undefined;
@@ -1249,13 +1244,13 @@ export function EcuLabApp() {
   const TUNE_VIEWS = [
     // `label` is how the advisor's and the pull log's copy names the page ("TUNE › SPARK");
     // `name` is the tab's own, the way tuning software names its worksheets.
-    { id: 'airflow', label: 'AIRFLOW', name: 'Airflow (VE)', icon: Grid3x3, row: 0 },
+    { id: 'airflow', label: 'AIRFLOW', name: 'Airflow (VE)', short: 'VE', icon: Grid3x3, row: 0 },
     { id: 'spark', label: 'SPARK', name: 'Spark', icon: Zap, row: 0 },
     { id: 'fuel', label: 'FUEL', name: 'Fuel', icon: Droplets, row: 0 },
     { id: 'injectors', label: 'INJECTORS', name: 'Injectors', icon: Fuel, row: 0 },
     { id: 'sensors', label: 'SENSORS', name: 'Sensors', icon: Activity, row: 0 },
     { id: 'boost', label: 'BOOST', name: 'Boost', icon: Gauge, row: 1 },
-    { id: 'vvt', label: 'VVT', name: 'Cam timing', icon: RotateCw, row: 1 },
+    { id: 'vvt', label: 'VVT', name: 'Cam timing', short: 'Cams', icon: RotateCw, row: 1 },
     { id: 'idle', label: 'IDLE', name: 'Idle', icon: Timer, row: 1 },
     { id: 'protect', label: 'PROTECT', name: 'Protection', icon: ShieldAlert, row: 1 },
     { id: 'torque', label: 'TORQUE', name: 'Torque', icon: Crosshair, row: 1 },
@@ -1383,32 +1378,20 @@ export function EcuLabApp() {
   // The screen for this route: the same whether CAREER's shell or SANDBOX's laptop frames it.
   const screen = (
     <>
-        {/* ---------- CAREER's job board, on the shop wall: today, customers, upgrades, the books ---------- */}
+        {/* ---------- CAREER: Pops's messages, and the Jobs app (today, customers, upgrades, the books) ---------- */}
         {appView === 'messages' && inCareer && (
           <MessagesApp career={career} update={(next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next })} />
         )}
-        {appView === 'shop' && inCareer && (
-          portraitPhone
-            ? (
-              <Station kind="board" flat app>
-                <Surface name="board" kind="board" label="Job board" inline><CareerOffice onWork={() => goTab('tune')} /></Surface>
-              </Station>
-            )
-            : (
-              <Station kind="board">
-                <Surface name="board" kind="board" label="Job board"><CareerOffice onWork={() => goTab('tune')} /></Surface>
-              </Station>
-            )
-        )}
-        {appView === 'app' && inCareer && !career.working && (() => {
+        {appView === 'shop' && inCareer && <CareerOffice onWork={() => goTab('tune')} />}
+        {appView === 'app' && inCareer && !career.working && tab !== 'learn' && (() => {
           const empty = (
             <div style={{ padding: 16 }}>
               <Panel>
                 <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>The bay is empty</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginBottom: 12 }}>
-                  There is no customer car to work on. Take one in from the job board.
+                  There is no customer car to work on. Take one in from the Jobs app.
                 </div>
-                <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
+                <Button size="sm" onClick={() => changeTab('shop')}>Open Jobs</Button>
               </Panel>
             </div>
           );
@@ -1419,11 +1402,11 @@ export function EcuLabApp() {
           }
           return empty;
         })()}
-        {/* ---------- LEARN and PHYSICS: the laptop's two reading apps (SANDBOX) ---------- */}
-        {tab === 'learn' && !inCareer && (
+        {/* ---------- LEARN and PHYSICS: the reading apps (PHYSICS reads the car on the bay) ---------- */}
+        {tab === 'learn' && (
           <LearnApp shelf={route.section} onShelf={(id) => goSection('learn', id)} />
         )}
-        {tab === 'physics' && !inCareer && !engineMissing && (
+        {tab === 'physics' && !engineMissing && (!inCareer || career.working) && (
           <PhysicsApp points={advisorPull.points} derived={engineDerived} fuel={fuel} spec={engineSpecOf(build, engineDerived)}
             ve={ve} veAxes={(layout ?? layoutById(tune.layout)).ve} sweepAt={physicsSweepAt} cycleAt={physicsCycleAt}
             breathing={physicsBreathing} health={health} onRepair={repairEngine}
@@ -1511,11 +1494,11 @@ export function EcuLabApp() {
                 send you there, shown only while that pull still describes this setup. */}
             <nav className={deskApps.tuneSidebar} aria-label="ECU tables">
               <div className={deskApps.sideHead}>Tables</div>
-              {/* On a phone: one button naming the open page, which lists them all. */}
+              {/* On a phone: every page as a small tab, all in sight. */}
               <div className={deskApps.tunePicker}>
-                <PagePicker label="Tuning pages" current={tuneView} onPick={(id) => { goSection('tune', id); setSelection(null); }}
+                <PageTabs when="(max-width: 560px)" label="Tuning pages" current={tuneView} onPick={(id) => { goSection('tune', id); setSelection(null); }}
                   pages={tuneViews.map((v) => ({
-                    id: v.id, name: v.name ?? v.label, icon: v.icon,
+                    id: v.id, name: v.name ?? v.label, short: v.short, icon: v.icon,
                     locked: inCareer && !pageUnlocked(career, v.id), flagged: attention[v.id] ?? 0,
                   }))} />
               </div>
@@ -1554,9 +1537,9 @@ export function EcuLabApp() {
                       <Lock size={15} aria-hidden="true" /> Your shop has not learned this yet
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6, marginBottom: 12 }}>
-                      {course ? <>The <b style={{ color: 'var(--ink)' }}>{course.title}</b> course opens this page. It is on the job board, under Training.</> : 'Training opens this page.'}
+                      {course ? <>The <b style={{ color: 'var(--ink)' }}>{course.title}</b> course opens this page. It is in the Jobs app, under Training.</> : 'Training opens this page.'}
                     </div>
-                    <Button size="sm" onClick={() => changeTab('shop')}>Go to the job board</Button>
+                    <Button size="sm" onClick={() => changeTab('shop')}>Open Jobs</Button>
                   </Panel>
                 </div>
               );
@@ -1746,7 +1729,7 @@ export function EcuLabApp() {
   // Moving round the laptop and the shop is moving between screens, so it costs what a nav
   // tap does (`changeTab`): the tuning grid's cursor does not come back with you.
   const deskOpen = (t) => {
-    if (t === 'board') { changeTab('shop'); return; }
+    if (t === 'board' || t === 'jobs') { changeTab('shop'); return; }
     if (t === 'messages') { deskGo('messages'); return; }
     if (t !== 'learn') { changeTab(t); return; }
     goSection('learn', 'start');
@@ -1756,7 +1739,7 @@ export function EcuLabApp() {
     navigate({ view, tab: null, section: null });
     dispatch({ type: ACTIONS.SET_TUNE_FIELD, field: 'selection', value: null });
   };
-  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' ? (portraitPhone ? 'app' : 'page') : appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' || tab === 'build' ? 'page' : 'app';
+  const deskMode = appView === 'bay' ? 'bay' : appView === 'desk' ? 'desktop' : appView === 'shop' || appView === 'messages' ? 'app' : tab === 'dyno' || tab === 'live' || tab === 'build' ? 'page' : 'app';
   // CAREER: the car you are working on is the one on the dyno, and another job's car (if a
   // lift holds one) is up on the lift. SANDBOX keeps the shop's own two.
   const lookOf = (jobId) => { const c = jobId ? jobById(jobId)?.customer : null; return c ? { body: c.body, color: c.color } : null; };
@@ -1858,12 +1841,12 @@ export function EcuLabApp() {
           frame it fills. */}
       <PullTraceContext.Provider value={advisorPull.points}>
       <Desk
-        mode={deskMode} app={appView === 'shop' ? 'office' : appView === 'messages' ? 'messages' : tab}
+        mode={deskMode} app={appView === 'shop' ? 'jobs' : appView === 'messages' ? 'messages' : tab}
         badges={inCareer ? { messages: unreadCount(career) } : {}}
         apps={inCareer ? CAREER_APPS : null}
         onOpen={deskOpen}
         onDesktop={() => deskGo('desk')}
-        onBay={() => deskGo('bay')} board={inCareer}
+        onBay={() => deskGo('bay')} career={inCareer}
         onSearch={openPalette} onMenu={goMenu} onTutorial={goTutorial} onRepair={repairEngine}
         notices={deskNotices}
         engineSpec={engineSpecOf(build, engineDerived)} rpm={session.live.running ? session.live.rpm : 0} dynoRpm={running ? dynoRpm : 0} cars={shopCars} damage={shopDamage}

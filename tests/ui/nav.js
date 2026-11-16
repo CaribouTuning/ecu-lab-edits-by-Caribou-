@@ -85,14 +85,12 @@ export async function enterCareer() {
   await screen.findByRole('button', { name: 'Open the laptop' });
 }
 
-/** CAREER: look up from the laptop at the shop and walk over to the job board on the wall. */
+/** CAREER: open the Jobs app on the laptop (from the shop floor, open the laptop first). */
 export async function openJobBoard() {
-  if (!document.querySelector('[data-spot]')) {
-    const desk = button('Desktop');
-    if (desk) fireEvent.click(desk);
-    fireEvent.click(screen.getByRole('button', { name: 'Look up at the shop' }));
-  }
-  fireEvent.click(screen.getByRole('button', { name: /Job board/ }));
+  const desk = button('Desktop');
+  if (desk) fireEvent.click(desk);
+  else fireEvent.click(screen.getAllByRole('button', { name: 'Open the laptop' })[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'JOB BOARD' }));
   await screen.findByTestId('shop-money');
 }
 

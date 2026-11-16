@@ -83,7 +83,7 @@ export function FuelSystemScreen({ active, onToggle }) {
         </ExpandableInfo>
 
       <div className={styles.labelSpaced}>Fuel Injectors</div>
-      <PickList options={INJECTOR_OPTS.map((o, i) => ({ label: injectorLabel(i, stockInjectorIdx(build)), value: String(i) }))} value={String(injIdx)} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: Number(v) })} />
+      <PickList options={INJECTOR_OPTS.map((o, i) => ({ label: injectorLabel(i, stockInjectorIdx(build)), value: String(i) }))} value={String(injIdx)} onChange={(v) => dispatch({ type: ACTIONS.SET_BUILD_FIELD, field: 'injIdx', value: Number(v) })} columns={3} />
 
       <div className={styles.labelSpaced}>Fuel Pump</div>
       <PickList options={PUMP_OPTS.map((o) => ({ label: o.label, value: o.id }))} value={PUMP_OPTS[fuelSystem.pumpIdx]?.id} onChange={(v) => setFs({ pumpIdx: PUMP_OPTS.findIndex((o) => o.id === v) })} />

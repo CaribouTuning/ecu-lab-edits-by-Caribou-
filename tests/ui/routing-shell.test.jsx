@@ -247,7 +247,7 @@ describe('the engine stand\'s parts', () => {
 
     enterSandbox();
     expect(screen.queryByTestId('shop-money')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Job board' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'JOB BOARD' })).toBeNull();
   });
 });
 

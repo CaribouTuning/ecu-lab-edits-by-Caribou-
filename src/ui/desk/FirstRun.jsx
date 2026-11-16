@@ -1,7 +1,7 @@
 /**
  * The first time the shop opens in a mode, a few short cards over the 3D shop say how the
  * game goes: in SANDBOX the build, run, pull and fix loop and how to experiment; in CAREER
- * the job board's customers and how a job is done and handed back. Shown once per mode
+ * the Jobs app's customers and how a job is done and handed back. Shown once per mode
  * (remembered in this browser), skippable, and never a screen of its own.
  */
 
@@ -20,10 +20,10 @@ const STEPS = {
   ],
   career: [
     { title: 'Ray’s shop is yours', text: 'You run a tuning shop. The dyno, the stands and the laptop are all here. Click or tap a thing to use it.' },
-    { title: '1. Take a job', text: 'The job board (on the wall, or the Jobs app on a phone) lists today’s customers. Each says what their car does, never what is wrong with it. Take one, and the car goes on the dyno.', spot: 'board' },
+    { title: '1. Take a job', text: 'The Jobs app, on the laptop or the phone, lists today’s customers. Each says what their car does, never what is wrong with it. Take one, and the car goes on the dyno.', spot: 'laptop' },
     { title: '2. Find the fault', text: 'Pull the car on the dyno. The pull log points at what is wrong.', spot: 'dyno' },
     { title: '3. Fix it, prove it', text: 'Fix it on the laptop, then pull again. Power bought with knock or a lean top end does not pass.', spot: 'laptop' },
-    { title: '4. Hand it back', text: 'When the pull is clean, hand the car back from its ticket and get paid. Money buys lifts and tools, training opens more of the ECU, and new customers come every day.', spot: 'board' },
+    { title: '4. Hand it back', text: 'When the pull is clean, hand the car back from its ticket and get paid. Money buys lifts and tools, training opens more of the ECU, and new customers come every day.', spot: 'laptop' },
     { title: 'Pops will text you', text: 'Your uncle sends lessons and goals to the laptop. Read them first: the bar at the top always shows the next step.' },
   ],
 };

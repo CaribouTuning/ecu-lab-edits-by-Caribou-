@@ -1,11 +1,10 @@
 /**
- * A place in the shop you walk up to: the dyno, the engine on its stand, the job board.
+ * A place in the shop you walk up to: the dyno, the engine on its stand, the build bench.
  *
  * Its controls are not a panel laid over the picture: they are on the things in the room
  * (ShopBackdrop.jsx lays each `Surface` onto its face). The dyno's software is on its
  * computer's monitor and the RUN button on the cart's console; the engine stand's cart has
- * its own screen and its start switch and throttle; the job board's tickets are pinned on
- * the board. You stand at it framed to use it: every face is full size from where you are,
+ * its own screen and its start switch and throttle. You stand at it framed to use it: every face is full size from where you are,
  * and a tap on it is a tap on what is under your finger.
  *
  * Where there is no WebGL (an old browser, a test runner) there is no room to put them in,
@@ -21,13 +20,12 @@ import styles from './Station.module.css';
 
 /**
  * One face of a thing in the shop, and what is on it.
- * @param {{name: string, label: string, kind: 'monitor'|'console'|'board', inline?: boolean, children: React.ReactNode}} props
- * `inline`: drawn where it is rendered, not on the thing in the shop (the job board, as an app on a phone)
+ * @param {{name: string, label: string, kind: 'monitor'|'console', children: React.ReactNode}} props
  * @returns {React.ReactElement}
  */
-export function Surface({ name, label, kind, inline = false, children }) {
+export function Surface({ name, label, kind, children }) {
   const { surfaces } = useSurfaces();
-  const el = inline ? null : surfaces?.[name] ?? null;
+  const el = surfaces?.[name] ?? null;
   const face = (
     // A machine's screen and a sheet of paper are not hand-drawn: no wobble, no pen line.
     <section className={styles.face} data-kind={kind} aria-label={label} data-plain="">
@@ -88,12 +86,10 @@ export function Computer({ label, screens, current, onScreen, title, status = nu
 
 /**
  * A place in the shop: its surfaces, in the room or (with no room) one after the other.
- * @param {{kind: 'dyno'|'stand'|'build'|'board', flat?: boolean, app?: boolean, children: React.ReactNode}} props
- * `flat`: lay the faces out one after the other even where there is a room (see Surface `inline`)
- * `app`: the face is an app's whole screen (a phone's job board), edge to edge
+ * @param {{kind: 'dyno'|'stand'|'build', children: React.ReactNode}} props
  * @returns {React.ReactElement}
  */
-export function Station({ kind, flat = false, app = false, children }) {
+export function Station({ kind, children }) {
   const { surfaces } = useSurfaces();
-  return <div className={styles.station} data-station={kind} data-flat={flat || !surfaces ? 'true' : undefined} data-app={app ? 'true' : undefined}>{children}</div>;
+  return <div className={styles.station} data-station={kind} data-flat={!surfaces ? 'true' : undefined}>{children}</div>;
 }

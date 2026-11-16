@@ -26,6 +26,7 @@ import React from 'react';
 
 import { GAME_LAYOUT, addRect, diffTable } from '../../sim/index.js';
 import { diffTint, heat } from '../theme.js';
+import { Info } from '../primitives/Info.jsx';
 
 import styles from './TuningGrid.module.css';
 import { anchorOf, formatDelta, inRect, opLabel, rectOf, signed, spanSelection, stepsFor } from './selection.js';
@@ -316,14 +317,18 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
       </div>
     )}
     {notReached.size > 0 && (
-      <p data-testid="unreached-note" className={styles.note}>
-        Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.
-      </p>
+      <div data-testid="unreached-note" className={styles.note}>
+        <Info label="About the faded cells" text="Faded cells are above the boost this engine makes at that speed (on its last full-throttle pull, or its boost target before the first). They brighten once the engine reaches them.">
+          <span>Faded: past what the engine reaches</span>
+        </Info>
+      </div>
     )}
     {notTuned.size > 0 && (
-      <p data-testid="untuned-note" className={styles.note}>
-        Dashed cells are not tuned yet: they hold the edge row&apos;s values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.
-      </p>
+      <div data-testid="untuned-note" className={styles.note}>
+        <Info label="About the dashed cells" text="Dashed cells are not tuned yet: they hold the edge row's values, which is what the ECU read there before the axes were extended. Each one is yours once you change it.">
+          <span>Dashed: not tuned yet</span>
+        </Info>
+      </div>
     )}
     </div>
   );

@@ -55,7 +55,7 @@ export const CHAPTERS = [
     id: 'keys', focus: ['intake', 'injectors'], title: 'The keys', subject: 'Ray’s shop is yours',
     body: [
       'Kid, it’s your uncle. I know you’ve wondered why the shop stayed shut all these years. After your dad passed I couldn’t bring myself to turn the key. Ray was the best tuner this town ever had, and I just fried eggs.',
-      'You keep asking how he did it. So here it is: the shop is yours. The laptop on the desk is his, the job board is on the wall, and his dyno is still in the bay. I’ll text you what he taught me, one thing at a time. Do the work, and you’ll know what he knew.',
+      'You keep asking how he did it. So here it is: the shop is yours. The laptop on the desk is his, his customers are in the Jobs app, and his dyno is still in the bay. I’ll text you what he taught me, one thing at a time. Do the work, and you’ll know what he knew.',
       'Start small. Take a customer off the board, find out what’s wrong, fix it, and hand it back right.',
     ],
     lesson: {

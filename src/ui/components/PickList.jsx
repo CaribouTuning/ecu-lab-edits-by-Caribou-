@@ -18,11 +18,14 @@ import styles from './PickList.module.css';
  * @param {Array<{value: string, label: string, sub?: string}>} props.options
  * @param {string} props.value
  * @param {(value: string) => void} props.onChange
+ * @param {number} [props.columns] lay short choices out as a grid of this many columns
+ *   (injector sizes), rather than one ruled row each
  * @returns {React.ReactElement}
  */
-export function PickList({ options, value, onChange }) {
+export function PickList({ options, value, onChange, columns = 0 }) {
   return (
-    <div className={styles.list} data-plain="">
+    <div className={styles.list} data-plain="" data-grid={columns > 0 || undefined}
+      style={columns > 0 ? { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` } : undefined}>
       {options.map((o) => (
         <button key={o.value} type="button" className={styles.option} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
           <span className={styles.label}>{o.label}</span>

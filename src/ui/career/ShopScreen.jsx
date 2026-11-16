@@ -1,6 +1,6 @@
 /**
- * CAREER's job board: the shop's paperwork, on the board on the wall and in the laptop's
- * Shop app. Today's cars, the customers waiting, what to buy, what to learn, and the books.
+ * CAREER's Jobs app, on the laptop and the phone: the shop's paperwork. Today's cars, the
+ * customers waiting, what to buy, what to learn, and the books.
  * Everything here is a decision about the shop; the tuning itself happens at the stations
  * and on the laptop, on the customer's car, with the job ticket above them.
  */
@@ -26,8 +26,6 @@ import styles from './ShopScreen.module.css';
 export function CareerOffice({ onWork }) {
   const [career, dispatch] = useCareer();
   const [tab, setTab] = useState('today');
-  const [arriving, setArriving] = useState(/** @type {string|null} */ (null));
-  const [speech, setSpeech] = useState(/** @type {string|null} */ (null));
   const [lesson, setLesson] = useState(/** @type {string|null} */ (null));
   const [confirmReset, setConfirmReset] = useState(false);
   // A customer's car is built on its factory calibration, seconds of the gas exchange the first
@@ -46,24 +44,15 @@ export function CareerOffice({ onWork }) {
   // A finished job's result is shown on Today when the board is next opened.
   useEffect(() => { if (unseen) setTab('today'); }, [unseen]);
 
-  useEffect(() => {
-    if (!arriving) return undefined;
-    const t = setTimeout(() => { setArriving(null); setSpeech(null); }, 5200);
-    return () => clearTimeout(t);
-  }, [arriving]);
-
   if (!career) return null;
   const update = (next) => dispatch({ type: ACTIONS.CAREER_UPDATE, career: next });
   const tier = repTier(career.rep);
   const waiting = board(career);
 
   const takeJob = (id) => {
-    const job = jobById(id);
     const go = () => {
       setTaking(null);
       update(accept(career, id));
-      setArriving(id);
-      setSpeech(job.says);
       setTab('today');
     };
     const ready = presetOf(id) ? warm('preset', { id: presetOf(id) }) : null;
@@ -84,22 +73,19 @@ export function CareerOffice({ onWork }) {
     <div className={styles.officeScreen}>
       <header className={styles.top}>
         <div className={styles.stats} aria-label="Shop status">
-          <span className={styles.stat}><span className={styles.statKey}>Day</span>{career.day}</span>
-          <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>Cash</span>{money(career.money)}</span>
-          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>Reputation</span>{career.rep}, {isMaster(career) ? 'master tuner' : tier.title.toLowerCase()}</span>
+          <span className={styles.stat}><span className={styles.statKey}>Day</span><span className={styles.statValue}>{career.day}</span></span>
+          <span className={styles.stat} data-testid="shop-money"><span className={styles.statKey}>Cash</span><span className={styles.statValue}>{money(career.money)}</span></span>
+          <span className={styles.stat} data-testid="shop-rep"><span className={styles.statKey}>Reputation</span><span className={styles.statValue}>{career.rep}, {isMaster(career) ? 'master tuner' : tier.title.toLowerCase()}</span></span>
         </div>
+        <nav className={styles.tabs} aria-label="Shop" data-plain="">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" className={styles.tab} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
+              <span>{t.label}</span>
+              {t.count > 0 && <span className={styles.count}>{t.count}</span>}
+            </button>
+          ))}
+        </nav>
       </header>
-
-      {speech && <p className={styles.office} role="status">“{speech}”</p>}
-
-      <nav className={styles.tabs} aria-label="Shop">
-        {TABS.map((t) => (
-          <button key={t.id} type="button" className={styles.tab} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
-            <span>{t.label}</span>
-            {t.count > 0 && <span className={styles.count}>{t.count}</span>}
-          </button>
-        ))}
-      </nav>
 
       <ShopPanel
         tab={tab} career={career} update={update} onWork={onWork} setTab={setTab} takeJob={takeJob} taking={taking}

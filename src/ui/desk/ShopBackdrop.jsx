@@ -1,15 +1,15 @@
 /**
  * Your shop, drawn behind the laptop (shopScene.js), and its things to use when the laptop
- * is shut: the dyno, the build bench, the engine stand, the job board and the laptop itself.
+ * is shut: the dyno, the build bench, the engine stand and the laptop itself. (CAREER's jobs
+ * are an app on the laptop and the phone, not a board on the wall.)
  *
  * The things are the buttons: a click or a tap on the dyno, an engine, a cart's screen, the
- * desk or the board goes there (`pickAt`). Each also has a real button kept on it as the
+ * desk goes there (`pickAt`). Each also has a real button kept on it as the
  * camera moves, unseen until the keyboard reaches it, for keyboard and screen reader; with
  * no WebGL at all they are a row of plain buttons over a plain backdrop.
  *
- * Walked up to the dyno, the stand or the board, the page's own controls are laid onto the
- * things themselves: the dyno computer's screen and console, the stand cart's, the board's
- * cork (`surfaces`). They are ordinary page elements, laid flat over where each face is on
+ * Walked up to the dyno or the stand, the page's own controls are laid onto the things
+ * themselves: the dyno computer's screen and console, the stand cart's (`surfaces`). They are ordinary page elements, laid flat over where each face is on
  * screen, so they are as real to a pointer, a keyboard or a screen reader as anywhere else.
  * `onSurfaces` hands them to the page, which renders into them.
  */
@@ -29,12 +29,11 @@ export const HOTSPOTS = [
   { id: 'build', label: 'Build bench', hint: 'Build the engine, a part at a time' },
   { id: 'stand', label: 'Engine stand', hint: 'Start the engine and run it on the stand' },
   { id: 'laptop', label: 'Open the laptop', hint: 'Back to the desktop' },
-  { id: 'board', label: 'Job board', hint: 'Today, customers, upgrades, training and the books' },
 ];
 
 /**
  * @param {object} props
- * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'build'|'board'} props.mode the laptop open, the shop with it shut, a
+ * @param {'desk'|'bay'|'page'|'dyno'|'stand'|'build'} props.mode the laptop open, the shop with it shut, a
  *   page over it all, or walked up to one thing in it (the camera on it, the page see-through)
  * @param {import('../world/models/engine.js').EngineSpec} props.engineSpec the engine on the stand
  * @param {number} props.rpm the stand's engine speed, 0 when it is off
@@ -43,8 +42,7 @@ export const HOTSPOTS = [
  * @param {{piston: number, bearing: number, valve: number, failed: 'piston'|'bearing'|'valve'|null, where: 'stand'|'dyno'|null, key: string|null}|null} [props.damage]
  *   the engine's condition, drawn on it; `key` names a failure, which plays once where it happened
  * @param {boolean} [props.phone] the device is a phone, not the laptop
- * @param {boolean} [props.board] CAREER: the job board is on the wall
- * @param {boolean} [props.boardOnWall] false: it is not drawn there (an upright phone has it as an app)
+ * @param {boolean} [props.covered] an app fills the screen over it: it is not drawn
  * @param {(s: Record<string, HTMLElement>|null) => void} [props.onSurfaces] the faces the page renders into
  * @param {string|null} [props.nextSpot] the hotspot the game's next step is at: its marker is lit
  * @param {(id: string) => void} props.onPick a hotspot was chosen
@@ -52,13 +50,12 @@ export const HOTSPOTS = [
  * @param {() => void} [props.onFlat] the 3D could not draw and the flat shop is showing instead
  * @returns {React.ReactElement}
  */
-export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall = true, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook, onFlat }) {
-  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, board, boardOnWall, moving: false, next: nextSpot, nextDirty: true });
+export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec, rpm, dynoRpm = 0, cars, damage = null, nextSpot = null, onSurfaces, onPick, onLook, onFlat }) {
+  const live = useRef({ mode, rpm, dynoRpm, spec: engineSpec, specDirty: false, cars, carsDirty: false, damage, damageDirty: true, onSurfaces, onPick, covered, moving: false, next: nextSpot, nextDirty: true });
   live.current.mode = mode;
+  live.current.covered = covered;
   live.current.onSurfaces = onSurfaces;
   live.current.onPick = onPick;
-  live.current.board = board;
-  live.current.boardOnWall = boardOnWall;
   if (live.current.next !== nextSpot) { live.current.next = nextSpot; live.current.nextDirty = true; }
   live.current.rpm = rpm;
   live.current.dynoRpm = dynoRpm;
@@ -94,7 +91,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
     const onMove = (/** @type {PointerEvent} */ e) => {
       if (live.current.mode !== 'bay' || e.pointerType === 'touch') return;
       const at = shop.pickAt(...ndc(e));
-      const id = at === 'board' && !live.current.board ? null : at;
+      const id = at;
       if (id === hovered) return;
       hovered = id;
       shop.hover(id ?? live.current.next);
@@ -107,7 +104,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
       // A tap or a click, not the end of a drag.
       if (live.current.mode !== 'bay' || live.current.moving || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 8) return;
       const id = shop.pickAt(...ndc(e));
-      if (id && (id !== 'board' || live.current.board)) live.current.onPick?.(id);
+      if (id) live.current.onPick?.(id);
     };
     stage.canvas.addEventListener('pointermove', onMove);
     stage.canvas.addEventListener('pointerdown', onDown);
@@ -116,7 +113,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
     layer.className = styles.surfaceLayer;
     host?.appendChild(layer);
     /** Which place each face belongs to: it shows only there. */
-    const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', buildMonitor: 'build', board: 'board' };
+    const PLACE = { dynoMonitor: 'dyno', dynoConsole: 'dyno', standMonitor: 'stand', standConsole: 'stand', buildMonitor: 'build' };
     const faces = Object.entries(shop.surfaces).map(([name, sf]) => {
       const el = document.createElement('div');
       el.className = styles.surface;
@@ -158,21 +155,25 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
       update(dt) {
         const l = live.current;
         fit();
-        shop.setBoardOnWall(l.boardOnWall);
-        shop.setTickets(l.mode !== 'board');
         // The next step's station shows itself: its screen a little brighter than the rest.
         if (l.nextDirty) { l.nextDirty = false; shop.hover(l.next); shop.mark(l.next); }
         // Behind a page the shop is dimmed and still, and walked up to the dyno or the stand
         // nothing moves until it runs: draw it a few times a second, not sixty, so the
         // page's own numbers have the machine to themselves.
         const station = l.mode === 'dyno' || l.mode === 'stand' || l.mode === 'build';
-        const scene = station || l.mode === 'board';
+        const scene = station;
         if (scene) measureFrame();
         shop.setPose(l.mode === 'page' ? 'desk' : l.mode);
-        const busy = scene && (shop.moving() || shop.busy() || l.damageDirty || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || l.specDirty);
+        // Wholly behind an app (a phone's app fills its screen): nothing of it shows, so it is
+        // not drawn at all until it is uncovered (or the camera is still on its way).
+        if (l.covered && !shop.moving()) return false;
+        const desk = l.mode === 'desk';
+        const busy = (scene || desk) && (shop.moving() || shop.busy() || l.damageDirty || l.specDirty
+          || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || (desk && (l.rpm > 0 || l.dynoRpm > 0)));
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,
-        // and leaves the readouts over it the rest of the machine.
-        if (l.mode === 'page' || scene) {
+        // and leaves the readouts over it the rest of the machine. Behind the open laptop the
+        // shop is still too, unless an engine in it is running.
+        if (l.mode === 'page' || scene || desk) {
           idle += dt;
           if (idle < (busy ? 1 / 30 : 0.25)) return false;
           dt = idle;
@@ -212,7 +213,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
           // once the camera has stopped (not again every frame on the way). Never narrower
           // than its controls need in one row: a narrow screen shows the whole control box
           // a little smaller rather than cutting its right end off.
-          const minPx = f.name.endsWith('Console') ? (bh > bw ? 220 : 420) : f.name === 'board' ? 300 : 340;
+          const minPx = f.name.endsWith('Console') ? (bh > bw ? 220 : 420) : 340;
           if (!moving || f.pw === 0) {
             const pw = Math.round(Math.max(minPx, bw));
             const ph = Math.round((pw * bh) / bw);
@@ -254,7 +255,7 @@ export function ShopBackdrop({ mode, phone = false, board = false, boardOnWall =
       {mode === 'bay' && (
         <div className={failed ? styles.spotRow : styles.spotLayer} role={failed ? 'list' : undefined} aria-label={failed ? 'The shop' : undefined}>
           {failed && <h2 className={styles.spotRowHead}>The shop</h2>}
-          {HOTSPOTS.filter((h) => h.id !== 'board' || (board && boardOnWall)).map((h) => (
+          {HOTSPOTS.map((h) => (
             <button
               key={h.id}
               ref={(el) => { spots.current[h.id] = el; }}
