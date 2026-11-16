@@ -139,6 +139,96 @@ function bracket(axis, v) {
   return [[axis.length - 1, 1]];
 }
 
+/** How hard the fit holds a cell to its own average, per unit of its data's weight. */
+const FIT_HOLD = 0.25;
+
+/**
+ * THE CELLS SOLVED TOGETHER, NOT ONE AT A TIME. The ECU reads every sample through up to four
+ * cells blended, so what one cell must change by depends on what its neighbours change by. A
+ * per-cell average of the samples near it (what a tuning tool's histogram shows) does not see
+ * that: a cell between a rich neighbour and a lean one was handed the mean of both errors,
+ * and Correct VE from logs had to be applied, logged and applied again, three to five times
+ * on a factory turbo engine with E85. Least squares finds the factors that make each sample's
+ * blend right at once: minimise over the cells' factors m
+ *
+ *     Σ_samples (Σ_cells w · m − ratio)²  +  FIT_HOLD · Σ_cells weight · (m − mean)²
+ *
+ * where a cell with no fit keeps factor 1 and `mean` is the cell's per-cell average, which
+ * holds a cell the data barely touches near what its own samples say. Each sample's ratio is
+ * read as the factor on the blend, which assumes the neighbouring cells hold similar VE: true
+ * within a table's few percent between neighbours, and what the per-cell average assumes too.
+ *
+ * @param {VeSample[]} samples
+ * @param {number[]} rows @param {number[]} cols
+ * @param {(VeCell|null)[][]} cell the per-cell averages; null where the data is too thin
+ * @returns {[number, number, number][]} [row, col, factor] for every fitted cell
+ */
+function fitRatios(samples, rows, cols, cell) {
+  const index = new Map();
+  const at = [];
+  cell.forEach((row, ri) => row.forEach((c, ci) => { if (c) { index.set(ri * cols.length + ci, at.length); at.push([ri, ci]); } }));
+  const n = at.length;
+  if (!n) return [];
+  const N = Array.from({ length: n }, () => new Float64Array(n));
+  const b = new Float64Array(n);
+  for (const s of samples) {
+    const terms = [];
+    let rhs = s.ratio;
+    for (const [ri, wr] of bracket(rows, s.mapKpa)) {
+      for (const [ci, wc] of bracket(cols, s.rpm)) {
+        const w = wr * wc;
+        if (w <= 0) continue;
+        const k = index.get(ri * cols.length + ci);
+        if (k === undefined) rhs -= w; else terms.push([k, w]);
+      }
+    }
+    for (const [i, wi] of terms) {
+      b[i] += wi * rhs;
+      for (const [j, wj] of terms) N[i][j] += wi * wj;
+    }
+  }
+  at.forEach(([ri, ci], i) => {
+    const c = /** @type {VeCell} */ (cell[ri][ci]);
+    N[i][i] += FIT_HOLD * c.weight;
+    b[i] += FIT_HOLD * c.weight * c.ratio;
+  });
+  const x = solveDense(N, b);
+  if (!x) return [];
+  // Within what one log can say about a cell: no further than the per-cell reading itself
+  // could go (veSamplesFromPull keeps 0.6 to 1.6), so a weakly tied cell cannot run away.
+  return at.map(([ri, ci], i) => [ri, ci, Math.min(1.6, Math.max(0.6, x[i]))]);
+}
+
+/**
+ * Gaussian elimination with partial pivoting, in place on copies. Null if singular.
+ * @param {Float64Array[]} A @param {Float64Array} y
+ * @returns {Float64Array|null}
+ */
+function solveDense(A, y) {
+  const n = y.length;
+  const M = A.map((r) => Float64Array.from(r));
+  const v = Float64Array.from(y);
+  for (let c = 0; c < n; c += 1) {
+    let p = c;
+    for (let r = c + 1; r < n; r += 1) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+    if (Math.abs(M[p][c]) < 1e-12) return null;
+    [M[c], M[p]] = [M[p], M[c]]; [v[c], v[p]] = [v[p], v[c]];
+    for (let r = c + 1; r < n; r += 1) {
+      const f = M[r][c] / M[c][c];
+      if (!f) continue;
+      for (let k = c; k < n; k += 1) M[r][k] -= f * M[c][k];
+      v[r] -= f * v[c];
+    }
+  }
+  const x = new Float64Array(n);
+  for (let r = n - 1; r >= 0; r -= 1) {
+    let sum = v[r];
+    for (let k = r + 1; k < n; k += 1) sum -= M[r][k] * x[k];
+    x[r] = sum / M[r][r];
+  }
+  return x;
+}
+
 /**
  * @typedef {object} VeCell
  * @property {number} ratio the correction the cell's data asks for
@@ -187,6 +277,8 @@ export function veCorrections(samples, axes) {
     for (const k of keys) out[k] = /** @type {any} */ (a)[k] / a.weight;
     return /** @type {VeCell} */ (out);
   }));
+  const fitted = fitRatios(samples, rows, cols, cell);
+  for (const [ri, ci, r] of fitted) /** @type {any} */ (cell[ri][ci]).ratio = r;
   return {
     ratio: cell.map((row) => row.map((c) => (c ? c.ratio : null))),
     weight: acc.map((row) => row.map((a) => a.weight)),

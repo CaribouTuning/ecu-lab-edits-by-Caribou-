@@ -122,8 +122,8 @@ export function round(st) {
   const handPulls = [loads().map((l) => (l === 100 ? p : pull(st, l))).find((r) => r.events.some((e) => handText.test(String(e.fix ?? '')))) ?? p];
   for (const e of handPulls.flatMap((r) => r.events)) {
     const fix = String(e.fix ?? '');
-    const col = /The (\d+) RPM column is past the \d+ RPM redline[^:]*: (lower|raise) it by hand/.exec(fix);
-    const pct = /by about (\d+)%/.exec(fix);
+    const col = /The (\d+) RPM column is past the \d+ RPM redline[^:]*: (lower|raise) it by hand by about (\d+)%/.exec(fix);
+    const pct = col ? [col[0], col[3]] : null;
     const rows = /in the ([0-9.]+)(?: and ([0-9.]+))? kPa load rows?/.exec(fix);
     if (!col || !pct || !rows) continue;
     const ax = S.layoutById(st.tune.layout).ve;

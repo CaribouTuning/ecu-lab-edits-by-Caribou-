@@ -160,6 +160,16 @@ remaining risk is the same Node major with a different libm, which is what step 
   player follows a knock entry's steps in order (mixture, timing, then boost only where it
   says timing cannot), and a hand edit the log asks for names each cell, never a whole
   region that Correct VE from logs is also fixing (the two fought).
+- **A tune that follows the advice must look like one a tuner would load, in 2-4 pulls.**
+  Under boost the mixture target richens 0.1 AFR a psi to λ 0.79 (HP Academy: 0.78-0.80 at
+  high boost), and a boosted cell is held to 0.2 AFR of it (`MIX_NOTABLE_BOOST_AFR`). Rows past
+  the one bracketing the reach carry no more spark and no leaner mixture than it
+  (`beyondReachCells`); a column past the redline is not advised (`pastLimit`). The row above
+  a cell is judged at the value it is told to come down to, or the pair swap advice pull after
+  pull. A sensor or injector scaling entry owns the lean it causes: the lean-protection entry
+  then asks for it first, not VE as well (the two corrected the same lean twice). Correct VE
+  from logs solves the cells together (`fitRatios`, least squares) rather than averaging each.
+  Count the pulls with `scripts/sandbox-matrix.js` after changing any of it.
 - **A naturally aspirated factory map ends at full throttle** (`factoryCalibration`): its cells
   past what the engine reaches hold the full-throttle values, which its ECU reads there anyway.
   A turbo on the stock tune runs NA spark and mixture into boost, knocks and leans as a real
@@ -201,9 +211,10 @@ remaining risk is the same Node major with a different libm, which is what step 
 - **The UI's look is DESIGN.md's direction 7**: one slate palette (tokens.css; the `--mac-*`
   tokens hold the same values), blue only for the thing to do, a selection a lighter slate
   (`--mac-selected`). CAREER's jobs are the Jobs app on the laptop and the phone (`DESK_APPS`
-  `jobs`, route `#/shop`), never a board on the shop wall. On a phone the in-game phone fills
-  the screen and draws no status bar or home bar of its own (they read as the screen cut
-  off), and the 3D shop is not drawn while an app covers it (`ShopBackdrop` `covered`).
+  `jobs`, route `#/shop`), never a board on the shop wall. On a phone the in-game phone draws no
+  status bar or home bar of its own (they read as the screen cut off); its home screen is held
+  over the shop, an open app fills the screen, and the 3D shop is not drawn while an app covers
+  it (`ShopBackdrop` `covered`). Behind the laptop the shop draws as it always has.
   An app's pages on a phone are `PageTabs` (every page in sight), never a drop-down; a long
   explanation goes behind an `Info` button (primitives/Info.jsx), never removed.
   On TUNE a setting shows its name and its control, its tip behind its info button, and

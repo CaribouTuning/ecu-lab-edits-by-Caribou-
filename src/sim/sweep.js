@@ -471,8 +471,12 @@ export function simulateSweep({
           return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here'} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop's tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.`;
         }
         const thin = unlogged ? [] : thinCells(peak);
+        // The column past the redline carries only `share` of the blend at this speed, so it
+        // has to move by the miss over that share: asked for the miss itself, a player moved
+        // it 4% at a time, pull after pull (an LR4 with its limiter raised took eleven).
+        const colPct = unlogged ? Math.min(25, Math.max(pct, Math.round(pct / share))) : pct;
         const them = thin.length > 1 ? 'them' : 'it';
-        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${thin.length ? ` Correct VE from logs leaves ${thin.join(' and ')} alone (this pull crossed ${them} too briefly to trust): ${lean ? 'raise' : 'lower'} ${them} by hand by about ${pct}%, or log more time there on LIVE and correct from that.` : ''}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about the same share, carrying on the trend of the cells before it.` : ''}`;
+        return `Fuel first: the AFR table is right, but the ECU's air estimate is ${pct}% ${lean ? 'low' : 'high'} here, so it fuels for ${lean ? 'less' : 'more'} air than the engine takes in and it runs ${Math.abs(deliveryLean).toFixed(1)} AFR ${lean ? 'lean' : 'rich'} of the table${lean ? '' : ', costing power'}. On TUNE → AIRFLOW ${lean ? 'raise' : 'lower'} the VE cells in ${where} by about ${pct}%, or use Correct VE from logs there, which reads this pull and writes it for you.${thin.length ? ` Correct VE from logs leaves ${thin.join(' and ')} alone (this pull crossed ${them} too briefly to trust): ${lean ? 'raise' : 'lower'} ${them} by hand by about ${pct}%, or log more time there on LIVE and correct from that.` : ''}${unlogged ? ` The ${above} RPM column is past the ${endRpm} RPM redline, where a pull cannot log it, so Correct VE from logs cannot reach it: ${lean ? 'raise' : 'lower'} it by hand by about ${colPct}%, carrying on the trend of the cells before it (at ${peak.rpm} RPM the ECU reads it for only ${Math.round(share * 100)}% of the blend, so it moves by more than the miss).` : ''}`;
       }
     }
   };
@@ -913,6 +917,18 @@ export function simulateSweep({
 
   if (ecu) {
     events.push(...ecuSweepEvents(points, { cal: ecu.cal, hw: ecuHw, hardCut, endRpm, intercooled: !!mods?.intercooler }));
+    // ONE CAUSE, ONE FIX. Where this log already names a sensor or injector scaling error, that
+    // error IS the lean the protection caught: the airflow or the fuel the ECU computes is off
+    // by it everywhere. Asked as well to raise the VE cells for the same lean, a player did
+    // both, corrected it twice, and spent the next pulls taking the excess back out (an EA888
+    // with bolt-ons took twenty). Scaling first, then a pull to see what is left.
+    const scaling = events.find((e) => e.type === 'maf' || e.type === 'injscale');
+    if (scaling) {
+      for (const e of events) {
+        if (e.type !== 'leanprot' || !/raise the VE cells/.test(String(e.fix ?? ''))) continue;
+        e.fix = `This lean is the ${scaling.type === 'maf' ? 'airflow sensor reading low' : 'injector scaling'} the log names above, everywhere at once: fix that first on ${scaling.type === 'maf' ? 'TUNE → SENSORS' : 'TUNE → INJECTORS'} and pull again, before touching the VE table on TUNE → AIRFLOW. The protection saved the engine; it is not the fix.`;
+      }
+    }
   }
   if (failure) {
     events.push({

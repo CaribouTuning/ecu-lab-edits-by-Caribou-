@@ -16,7 +16,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createStage } from '../world/stage.js';
 import { createGovernor } from './stageGovernor.js';
 
-const RUNG_KEY = 'ecu-lab-stage-rung';
+// Versioned: a phone that stepped down while the shop was still drawn, unseen, behind its
+// apps (every frame, under a full-screen app) kept the lowest resolution for two weeks, and
+// the shop came back blurry. That cost is gone (ShopBackdrop `covered`), so every device
+// starts again from full resolution.
+const RUNG_KEY = 'ecu-lab-stage-rung-2';
 /** A remembered rung is trusted for this long (ms): a phone changes, an update changes the scene. */
 const RUNG_TTL_MS = 14 * 24 * 3600 * 1000;
 

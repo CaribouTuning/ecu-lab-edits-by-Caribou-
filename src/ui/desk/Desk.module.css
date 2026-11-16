@@ -333,8 +333,6 @@
   box-shadow: 0 0 0 2px var(--pen);
 }
 @media (max-height: 500px) { .phone[data-home] { inset: 5% 14%; border-radius: 26px; } }
-/* Upright, the phone in your hand is the phone: its home screen fills it, as an app does. */
-@media (max-width: 600px) and (min-height: 501px) { .phone[data-home] { inset: 0; border: 0; border-radius: 0; box-shadow: none; } }
 /* Put down: it fades and the shop is there (no transform: see .lid). */
 .phone[data-state='shut'] { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.3s ease, visibility 0s linear 0.3s; }
 @media (prefers-reduced-motion: reduce) { .phone { transition: none; } }

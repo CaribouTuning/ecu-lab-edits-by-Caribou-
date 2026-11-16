@@ -872,8 +872,15 @@ export const COEFF = {
 
   // --- Mixture targets ---
   BEST_AFR_NA: 12.85,          // lambda ~0.87, mid of the published best-torque band
-  BEST_AFR_BOOST_SHIFT: 0.08,  // AFR richer per psi of boost
-  BEST_AFR_BOOST_CAP: 0.65,    // richest the target is allowed to shift (lambda ~0.83)
+  // Under boost the target richens for knock and exhaust temperature, not for power (the
+  // cycle prices torque; this is only the advice): HP Academy's Practical Standalone Tuning,
+  // "Choosing air fuel ratio": "Most boosted engines will want to see a lambda of 0.78 to
+  // 0.80 at high boost to ensure engine safety". 0.1 AFR a psi reaches the cap, 11.6:1
+  // (lambda 0.79), at about 12.5 psi; at 8 psi it asks 12.05:1 (lambda 0.82). It once
+  // stopped at 12.2:1 (lambda 0.83), and a turbo tune that followed the advice ran pump gas
+  // into boost leaner than a tuner would, on a few degrees of spark.
+  BEST_AFR_BOOST_SHIFT: 0.10,  // AFR richer per psi of boost
+  BEST_AFR_BOOST_CAP: 1.25,    // richest the target is allowed to shift (lambda ~0.79)
   // Below this under load, unburnt fuel starts causing harm. Under the richest power
   // enrichment any factory runs (the LM7's λ 0.749 among 26 stock GM calibrations,
   // gm-benchmark.json; the TUNE advisor's MIX_RICHEST_LAMBDA 0.74), so a mixture a factory or

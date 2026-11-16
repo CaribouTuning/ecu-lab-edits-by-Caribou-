@@ -4,7 +4,8 @@
  * cam, compression, a turbo, more boost, a supercharger, nitrous, E85, the rev limit), then
  * tuned by the guided player (tests/guidedPlayer.js), who acts only on what the game says.
  *
- * DONE means nothing left in the log to act on and nothing listed on TUNE. Run it after any
+ * DONE means nothing left in the log to act on and nothing listed on TUNE; `pulls` counts the
+ * dyno pulls it took, the last one clean (aim for 2-4). Run it after any
  * change to the pull log's text or the advisor: a build that stays OPEN is a dead end a
  * player would meet. It takes a few minutes per shard.
  *
@@ -51,7 +52,7 @@ for (const id of ids) for (const [name, mod] of Object.entries(MODS)) {
   const cells = a.overAdvanced.length + a.pastMbt.length + a.underAdvanced.length + a.wrongMix.length;
   const gain = (p.peakHp / stockHp - 1) * 100;
   const ok = !left.length && !cells;
-  console.log(`${ok ? 'DONE' : 'OPEN'} ${id} | ${name} | stock ${stockHp} → ${p.peakHp} whp (${gain >= 0 ? '+' : ''}${gain.toFixed(1)}%) score ${S.computeTuningScore(p).score} ${((Date.now() - t0) / 1000).toFixed(0)}s | ${path.join(' | ')}`);
+  console.log(`${ok ? 'DONE' : 'OPEN'} pulls=${path.length + 1} ${id} | ${name} | stock ${stockHp} → ${p.peakHp} whp (${gain >= 0 ? '+' : ''}${gain.toFixed(1)}%) score ${S.computeTuningScore(p).score} ${((Date.now() - t0) / 1000).toFixed(0)}s | ${path.join(' | ')}`);
   for (const e of left) console.log(`      ${e.type}: ${e.msg} || ${String(e.fix).slice(0, 220)}`);
   if (cells) console.log(`      TUNE lists ${cells}`);
   for (const e of p.events.filter((e) => !FAULTS.includes(e.type) && !S.HARDWARE_EVENT_TYPES?.has?.(e.type))) console.log(`      other: ${e.type} -${e.impact} ${e.msg} || ${String(e.fix).slice(0, 160)}`);

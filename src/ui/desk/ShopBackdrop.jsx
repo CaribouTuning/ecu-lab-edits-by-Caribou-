@@ -167,13 +167,11 @@ export function ShopBackdrop({ mode, phone = false, covered = false, engineSpec,
         // Wholly behind an app (a phone's app fills its screen): nothing of it shows, so it is
         // not drawn at all until it is uncovered (or the camera is still on its way).
         if (l.covered && !shop.moving()) return false;
-        const desk = l.mode === 'desk';
-        const busy = (scene || desk) && (shop.moving() || shop.busy() || l.damageDirty || l.specDirty
-          || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0) || (desk && (l.rpm > 0 || l.dynoRpm > 0)));
+        const busy = scene && (shop.moving() || shop.busy() || l.damageDirty || l.specDirty
+          || (l.mode === 'dyno' && l.dynoRpm > 0) || (l.mode === 'stand' && l.rpm > 0));
         // While it runs, thirty frames a second is plenty for a turning engine or wheels,
-        // and leaves the readouts over it the rest of the machine. Behind the open laptop the
-        // shop is still too, unless an engine in it is running.
-        if (l.mode === 'page' || scene || desk) {
+        // and leaves the readouts over it the rest of the machine.
+        if (l.mode === 'page' || scene) {
           idle += dt;
           if (idle < (busy ? 1 / 30 : 0.25)) return false;
           dt = idle;

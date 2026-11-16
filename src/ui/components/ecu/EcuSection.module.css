@@ -193,7 +193,6 @@
 }
 
 .table {
-  border-bottom: 1px solid var(--line);
   padding: 4px 0;
 }
 
@@ -202,21 +201,21 @@
   align-items: center;
   gap: var(--sp-sm);
   width: 100%;
-  padding: 8px 0;
+  min-height: 44px;
+  padding: 8px 10px 8px 12px;
   cursor: pointer;
-  background: transparent;
-  border: none;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
 }
-
-.summary::before {
-  content: '▸';
-  color: var(--ink2);
-  font-size: var(--fs-sm);
-  transition: transform 0.15s;
-}
-
-.table[data-open] > .summary::before { transform: rotate(90deg); }
+.summary:hover { border-color: var(--line-hi); }
+.summary:active { background: var(--panel3); }
+.table[data-open] > .summary { border-color: var(--line-hi); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+/* The chevron at the row's end, as a disclosure row has it: down to open, up when open. */
+.summaryChev { flex: none; color: var(--ink2); transition: transform 0.15s; }
+.table[data-open] .summaryChev { transform: rotate(180deg); color: var(--acc-ink); }
 
 .summaryName {
   font-size: var(--fs-sm);
@@ -235,21 +234,32 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-sm);
-  padding-bottom: var(--sp-sm);
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line-hi);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
 }
 
 .more {
-  display: inline-flex;
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
   align-items: center;
   gap: 6px;
-  align-self: flex-start;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px 10px 8px 12px;
   font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--acc-ink);
-  background: transparent;
-  border: none;
-  padding: 4px 0;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
 }
+.more:hover { border-color: var(--line-hi); }
+.more > svg { color: var(--ink2); }
 
 .chev { transition: transform 0.15s; }
 .chevOpen { transform: rotate(180deg); transition: transform 0.15s; }

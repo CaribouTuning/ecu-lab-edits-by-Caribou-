@@ -291,6 +291,7 @@ function TableField({ meta, value, def, onChange, marker, changed, axisVars }) {
         <span className={styles.summaryAxes}>{meta.kind === 'map' ? `${meta.xLabel} × ${meta.yLabel}` : meta.xLabel}</span>
         {changed && <span className={styles.dot} aria-label="modified" />}
         {marker && <span className={styles.liveDot} aria-label="engine is reading this table" />}
+        <ChevronDown size={16} className={styles.summaryChev} aria-hidden="true" />
       </button>
       {open && (
         <div className={styles.tableBody} id={bodyId}>
