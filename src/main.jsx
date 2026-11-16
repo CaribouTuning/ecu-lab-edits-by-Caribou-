@@ -7,7 +7,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-import '@fontsource/patrick-hand/latin-400.css';
 import './ui/tokens.css';
 import './ui/sketch.css';
 

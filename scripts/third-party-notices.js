@@ -33,10 +33,5 @@ the dependencies, regenerate it with \`node scripts/third-party-notices.js\`.
 | Package | Version | Licence | Copyright | Source |
 |---|---|---|---|---|
 ${rows.join('\n')}
-
-The Patrick Hand typeface (@fontsource/patrick-hand) is licensed under the SIL Open Font
-Licence 1.1, which allows it to be bundled and redistributed with software provided its
-licence and copyright notice travel with it. The full text is in
-\`node_modules/@fontsource/patrick-hand/LICENSE\`, and in the package it comes from.
 `);
 console.log(`wrote THIRD-PARTY-NOTICES.md (${rows.length} packages)`);
