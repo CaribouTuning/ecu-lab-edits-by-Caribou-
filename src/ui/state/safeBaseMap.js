@@ -175,6 +175,8 @@ const BOOST_STEP_PSI = 4;
 export function boostSteps(build) {
   if (!build.turboOn) return [];
   const target = Math.max(0, ...build.boostCurve);
+  // A turbo asked for no boost has no steps to take: "hold it at 0 psi" says nothing.
+  if (target <= 0) return [];
   const gate = ecuHardwareOf(build).gate;
   const low = gate?.type === 'pneumatic' ? Math.min(target, gate.springPsi) : target / 2;
   const n = Math.max(1, Math.ceil((target - low) / BOOST_STEP_PSI));
