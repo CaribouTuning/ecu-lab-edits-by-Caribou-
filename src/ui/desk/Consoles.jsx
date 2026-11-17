@@ -134,7 +134,7 @@ export function StandConsole({ onStart, onStop, onToggleSound, onTestSound, onTh
 export function StandStatus() {
   const [session] = useSession();
   const live = /** @type {Record<string, any>} */ (session.live);
-  if (live.cranking && !live.running) return <span>Cranking…</span>;
-  if (!live.running) return <span>Engine off</span>;
-  return <span><span role="status" aria-label="Engine speed">{Math.round(live.sensedRpm)}</span> rpm</span>;
+  if (live.cranking && !live.running) return <><span data-led="busy" aria-hidden="true" /><span>Cranking…</span></>;
+  if (!live.running) return <><span data-led="off" aria-hidden="true" /><span>Engine off</span></>;
+  return <><span data-led="on" aria-hidden="true" /><span><span role="status" aria-label="Engine speed">{Math.round(live.sensedRpm)}</span> rpm</span></>;
 }

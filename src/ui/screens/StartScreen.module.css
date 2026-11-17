@@ -57,7 +57,7 @@
 .title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
 .subtitle { margin: 6px 0 0; font-size: var(--fs-sm); color: var(--ink2); }
 .blurb { margin: 22px 0 0; font-size: var(--fs-sm); line-height: 1.55; color: var(--ink2); }
-.version { margin-top: auto; padding-top: 24px; font-size: var(--fs-xs); color: var(--ink3); font-variant-numeric: tabular-nums; }
+.version { margin-top: auto; padding-top: 24px; font-size: var(--fs-xs); color: var(--ink2); font-variant-numeric: tabular-nums; }
 
 /* The ways in: a list, each row an icon, a name and its line, a chevron. */
 .ways { display: flex; flex-direction: column; justify-content: center; padding: 28px; }
@@ -98,6 +98,7 @@
 .wayBody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .wayName { font-size: var(--fs-md); font-weight: 600; }
 .wayCaption { font-size: var(--fs-sm); line-height: 1.4; color: var(--ink2); }
+/* decorative: the chevron is a graphic, not text */
 .wayChev { flex: none; color: var(--ink3); transition: transform 0.12s ease, color 0.12s ease; }
 .way:hover .wayChev { color: var(--ink2); transform: translateX(2px); }
 

@@ -1461,7 +1461,7 @@ export function EcuLabApp() {
             <Surface name="standMonitor" kind="monitor" label="Engine computer">
               <Computer
                 label="Engine computer" current={standScreen} onScreen={setStandScreen}
-                title="Engine stand" status={<StandStatus />}
+                title="Engine stand" look="stand" status={<StandStatus />}
                 screens={[{ id: 'bars', label: 'Run' }, { id: 'sensors', label: 'Sensors' }, { id: 'ecu', label: 'ECU' }, { id: 'physics', label: 'Physics' }]}
               >
                 {blown && <EngineFailed part={blown} onRepair={repairEngine} />}
@@ -1616,7 +1616,7 @@ export function EcuLabApp() {
               <Surface name="dynoMonitor" kind="monitor" label="Dyno computer">
               <Computer
                 label="Dyno computer" screens={keys} current={shown} onScreen={pick}
-                title="Caribou Dyno"
+                title="Caribou Dyno" look="dyno" live={running}
                 status={running ? `${Math.round(currentRpm)} rpm` : result ? `Peak ${U.fmtWheel(result.peakHp)}, ${U.fmtTorque(result.peakTq)}` : null}
               >
                 {blown && !running && <EngineFailed part={blown} onRepair={repairEngine} />}
