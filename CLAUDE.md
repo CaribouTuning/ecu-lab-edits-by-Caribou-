@@ -205,11 +205,22 @@ remaining risk is the same Node major with a different libm, which is what step 
   The guide is the build's own, never a generic list (`buildChanges`): it names what was changed
   and lists only what those parts need (injectors where they changed, the air meter where the
   build moved its scaling, a boost target for a turbo at 0 psi, nitrous last), each step saying why,
-  in plain words with each term explained; the mixture is read on the fuel in the tank (E85 9.8).
+  in plain words with each term explained. The FUEL table is on petrol's scale whatever the fuel
+  (14.7 is lambda 1; `point.js` converts with the tank's stoichiometric ratio), so the guide keeps
+  cruise at 14.7 on E85 too and says why; never tell a player to type E85's 9.8 into it.
   The guide follows the same order, defers to the pull log for the full-throttle steps, and its
   spark and mixture steps read TUNE's advisor (`guidedSteps` `advice`), so they never disagree;
   tests/tune-guide.test.js follows it literally. It holds boost low with TUNE → BOOST's Boost
   limit by gear (4th is the dyno's), not by editing the build, which would reset the choice.
+- **Tests that play the game do what the app offers.** Correct VE from logs reads the last pull
+  only (EcuLab.jsx `veLog`), so `tests/guidedPlayer.js` corrects from one pull at a time, lightest
+  throttle first; pooling throttles into one fit split the difference on a boosted engine and
+  never converged. Custom engines are played the way BUILD makes them: the figures, then the base
+  map that follows them (`ownEngineBaseMap`), then the parts; patching the figures alone leaves a
+  2-litre four's tables on a V8. A miss the breakpoints cannot follow is `gridBound` in the log
+  (flat: the fit has nothing left to change; ripple: even the best fit these cells can make still
+  misses) and costs the score next to nothing; the advisor does not grade mixture at a column
+  past the redline (no pull runs there; the log judges it blended).
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.

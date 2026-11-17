@@ -29,8 +29,18 @@ const FUELLING = ['injscale', 'maf', 'missedmix', 'rich', 'lean', 'misfire'];
 function veFromLogs(st, pulls) {
   const axes = S.layoutById(st.tune.layout).ve;
   const { ratio } = S.veCorrections(pulls.flatMap((r) => S.veSamplesFromPull(r.points)), axes);
-  const carried = ratio.map((row) => { let last = null; return row.map((r) => (r == null ? last : (last = r))); });
-  return { ...st, tune: { ...st.tune, ve: S.applyVeCorrections(st.tune.ve, carried, 1) } };
+  return { ...st, tune: { ...st.tune, ve: S.applyVeCorrections(st.tune.ve, ratio, 1) } };
+}
+/**
+ * Correct VE from logs as the app's AIRFLOW button does it: from one pull, the last one, on
+ * the tune it was taken on (EcuLab.jsx `veLog`). A player who works several throttles pulls
+ * one, corrects from it, then pulls the next, lightest first, as the guide teaches; pooling
+ * them into one fit is not something the game offers, and on a boosted engine it split the
+ * difference between throttles that ask different things of the same cells.
+ */
+function veFromEachPull(st) {
+  for (const load of [...loads()].sort((a, b) => a - b)) st = veFromLogs(st, [pull(st, load)]);
+  return st;
 }
 /** One round: what the log says first (setup, then fuelling, then spark), then TUNE. */
 export function round(st) {
@@ -122,15 +132,20 @@ export function round(st) {
   const viaLogs = loadPulls.some((r) => r.events.some((e) => ['missedmix', 'rich', 'lean'].includes(e.type)
     && /or use Correct VE from logs there/.test(String(e.fix ?? ''))));
   if (viaLogs) {
-    const next = veFromLogs(st, loadPulls);
+    const next = veFromEachPull(st);
     const moved = next.tune.ve.some((row, ri) => row.some((v, ci) => Math.abs(v / st.tune.ve[ri][ci] - 1) > 0.005));
-    if (moved) return { st: next, did: ['VE from logs (the log\'s first step)'], cannot };
+    // Then, in the same sitting, the cells the entry says the button leaves alone, by hand
+    // (below): they are the ones it cannot reach, so the two never move the same cell.
+    if (moved) { st = next; did.push('VE from logs (the log\'s first step)'); }
   }
   // A column past the redline: the log says by how much to move it by hand, and in which rows,
   // on whichever throttle's pull met it.
   const handText = /column is past the \d+ RPM redline|too briefly to trust/;
   const handPulls = [loads().map((l) => (l === 100 ? p : pull(st, l))).find((r) => r.events.some((e) => handText.test(String(e.fix ?? '')))) ?? p];
-  for (const e of handPulls.flatMap((r) => r.events)) {
+  // The column past the redline is the button's first ("carries it on from the column before
+  // it"); by hand only "if the miss stays after that", so not in the round the button ran.
+  const ranButton = did.length > 0;
+  for (const e of ranButton ? [] : handPulls.flatMap((r) => r.events)) {
     const fix = String(e.fix ?? '');
     const col = /The (\d+) RPM column is past the \d+ RPM redline[^:]*: (lower|raise) it by hand by about (\d+)%/.exec(fix);
     const pct = col ? [col[0], col[3]] : null;
@@ -181,7 +196,7 @@ export function round(st) {
   // Any other miss the log asks the VE table to answer, from the same samples.
   const missed = pulls.some((r) => r.events.some((e) => ['missedmix', 'rich', 'lean'].includes(e.type) && !e.gridBound && !/while spraying/.test(String(e.fix))));
   if (missed) {
-    const next = veFromLogs(st, pulls);
+    const next = veFromEachPull(st);
     if (next.tune.ve.some((row, ri) => row.some((v, ci) => Math.abs(v / st.tune.ve[ri][ci] - 1) > 0.005))) return { st: next, did: ['VE from logs'], cannot };
   }
   // TUNE's cells. TUNE judges them against a full-throttle pull whatever throttle the player
