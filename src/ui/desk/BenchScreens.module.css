@@ -3,14 +3,15 @@
 .bars { display: flex; flex-direction: column; gap: 10px; }
 .status { margin: 0 0 10px; font-size: var(--fs-sm); line-height: 1.45; color: var(--ink2); }
 .rpmHead { display: flex; align-items: baseline; gap: 8px; }
-.rpmNum { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 44px; font-weight: 600; line-height: 1; color: var(--ink); }
+.rpmNum { font-family: var(--sans); font-variant-numeric: tabular-nums; font-size: 52px; font-weight: 700; letter-spacing: -0.02em; line-height: 1; color: var(--ink); }
 .rpmNum[data-cut='true'] { color: var(--danger); }
 .rpmUnit { font-size: var(--fs-sm); font-weight: 600; color: var(--ink2); }
 
-/* The digital bar: unlit segments are there, dark, the way an LED bar's are. */
+/* The digital bar: unlit segments are there, dark, the way an LED bar's are; lit, green, then
+   amber near the redline and red past it, as a dash's shift lights run. */
 .segments { display: grid; grid-template-columns: repeat(40, 1fr); gap: 2px; height: 22px; }
 .seg { border-radius: 1px; background: var(--panel3); }
-.seg[data-on='true'][data-zone='acc'] { background: var(--acc); }
+.seg[data-on='true'][data-zone='acc'] { background: var(--ok); }
 .seg[data-on='true'][data-zone='warn'] { background: var(--warn); }
 .seg[data-on='true'][data-zone='danger'] { background: var(--danger); }
 .seg[data-zone='danger']:not([data-on]) { background: var(--danger-bg); }
@@ -54,7 +55,7 @@
 .veAt { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 5; }
 
 @media (max-width: 560px), (max-height: 500px) {
-  .rpmNum { font-size: 32px; }
+  .rpmNum { font-size: 38px; }
   .segments { height: 30px; gap: 2px; }
   .physRow { grid-template-columns: 1fr; gap: 2px; }
 }
