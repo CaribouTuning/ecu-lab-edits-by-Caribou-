@@ -44,7 +44,7 @@ function workerOf() {
  * Solve a task's breathing off the drawing thread. Resolves when it has been handed back; null
  * where there is no worker, for the caller to go straight on as it always did (and stay
  * synchronous where it was).
- * @param {'preset'|'advice'|'demo'} task
+ * @param {'preset'|'advice'|'demo'|'safemap'} task
  * @param {object} payload
  * @returns {Promise<void>|null}
  */

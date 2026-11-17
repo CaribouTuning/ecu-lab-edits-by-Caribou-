@@ -57,7 +57,10 @@ import { PullTraceContext } from './components/surface/TableSurface.jsx';
 import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
-import { baseMapAction, buildName, offersBaseMap, originPreset } from './state/baseMap.js';
+import { buildName, offersBaseMap, originPreset } from './state/baseMap.js';
+import { offersTuneStart } from './state/tuneStart.js';
+import { safeBaseMap } from './state/safeBaseMap.js';
+import { TuneStart } from './components/TuneStart.jsx';
 import { redoLabel, undoLabel } from './state/history.js';
 import { diffMeasuredInputs, pullSignature, measuredInputs } from './state/pullSignature.js';
 import { ghostLabel, ghostRun, makeRunRecord } from './state/runLog.js';
@@ -1437,9 +1440,10 @@ export function EcuLabApp() {
                     full
                     part={buildSection ?? 'engine'} onPart={(id) => goSection('build', id)}
                     preset={originPreset(build)} derived={engineDerived} rpm={session.live.running ? session.live.rpm : 0}
-                    onBaseMap={offersBaseMap(build) && !inCareer ? () => dispatch(baseMapAction(build)) : null}
+                    onBaseMap={offersBaseMap(build) && !inCareer ? () => dispatch(/** @type {any} */ (safeBaseMap({ build, tune, session }).action)) : null}
                     // Back to the factory engine as built: asked first when the tables hold work.
                     onRun={() => { setStandScreen('bars'); goTab('live'); }}
+                    onTune={offersTuneStart({ mode: session.mode, build }) ? () => goSection('tune', 'airflow') : null}
                     locked={inCareer && !buildOpen}
                     onStock={(p) => dispatch(tune.tablesDirty ? { type: ACTIONS.SET_PRESET_PROMPT, value: p } : { type: ACTIONS.APPLY_PRESET, preset: applyPreset(p) })}
                     notice={inCareer ? (buildOpen
@@ -1528,6 +1532,8 @@ export function EcuLabApp() {
               <div className={deskApps.sideMaps}><MapSlots /></div>
             </nav>
             <div className={deskApps.tuneMain}>
+            {/* SANDBOX, an engine just built: how to start (a safe base map, a guide, or the advice). */}
+            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart onGo={(id) => (id === 'dyno' ? changeTab('dyno') : goSection('tune', id))} /></div>}
             {tuneOpen && lockedPage && (() => {
               const course = trainingFor(lockedPage);
               return (

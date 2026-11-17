@@ -101,13 +101,14 @@ function useTall() {
  *   derived once per build, not here on every live-engine step)
  * @param {number} [props.rpm] the engine's speed when it is running on the stand
  * @param {React.ReactNode} props.children the open part's options
+ * @param {(() => void)|null} [props.onTune] SANDBOX: open TUNE to start the tune of the engine just built
  * @param {(() => void)|null} [props.onBaseMap] load a base start-up map for the parts fitted,
  *   offered on a factory engine with parts changed (null: not offered)
  * @param {boolean} [props.full] full screen (the bench's own page) rather than inside a
  *   monitor: the engine turns at the head of the parts list, always in view
  * @returns {React.ReactElement}
  */
-export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, full = false, onBaseMap = null, children }) {
+export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm = 0, locked = false, notice = null, full = false, onBaseMap = null, onTune = null, children }) {
   const [build] = useBuild();
   const [tune] = useTune();
   // Swapping the engine on the bench: the same two ways in as an empty bench, in the sheet.
@@ -198,7 +199,12 @@ export function BuildBench({ part, onPart, preset, onStock, onRun, derived, rpm 
                 Next: {BENCH_PARTS[BENCH_PARTS.indexOf(open) + 1].label}
               </button>
             ) : (
-              <button type="button" className={styles.stepGo} onClick={onRun}>Start it on the engine stand</button>
+              onTune ? (
+                <>
+                  <button type="button" className={styles.stepBtn} onClick={onRun}>Start it on the stand</button>
+                  <button type="button" className={styles.stepGo} onClick={onTune}>Next: start the tune</button>
+                </>
+              ) : <button type="button" className={styles.stepGo} onClick={onRun}>Start it on the engine stand</button>
             )}
           </footer>
         )}

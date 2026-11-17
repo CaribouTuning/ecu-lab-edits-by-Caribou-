@@ -12,7 +12,6 @@ import { ECU_LAYOUTS, PRESET_ECU_LAYOUT, layoutById } from '../../sim/index.js';
 import { Button } from '../primitives/Button.jsx';
 import { Seg } from '../primitives/Seg.jsx';
 import { Info } from '../primitives/Info.jsx';
-import { baseMapAction, offersBaseMap } from '../state/baseMap.js';
 import { engineOutgrowsTables, extendAxes, layoutSwitch } from '../state/layoutSwitch.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 
@@ -26,26 +25,14 @@ export function LayoutSwitch() {
   // the edge there until the player extends the axes. Offered in the career too, where the
   // layout itself is not the player's to choose.
   const outgrown = engineOutgrowsTables({ build, tune });
-  // A factory engine with parts changed: its tables are the factory's, written for parts it
-  // no longer has. Tuning them is the point; a base start-up map is there for a player who
-  // wants to see where a tuner would start. Offered, never loaded by the build change.
-  // Not in the career: a customer's car is the job, and a base map would hand over the answer.
-  const baseMap = session.mode !== 'career' && offersBaseMap(build);
-  const extend = outgrown || baseMap ? (
+  // A base map for a built engine is TuneStart's (components/TuneStart.jsx), above the pages.
+  const extend = outgrown ? (
     <div data-testid="extend-axes" style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: '4px 0 10px' }}>
       {outgrown && (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <Button size="sm" variant="primary" onClick={() => dispatch(/** @type {any} */ (extendAxes({ build, tune })))}>Extend the axes to this engine</Button>
           <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5 }}>
             The engine now reaches past these tables. Past the edge the ECU reads the edge row; extending adds the cells, marked not tuned, for you to tune.
-          </span>
-        </div>
-      )}
-      {baseMap && (
-        <div data-testid="base-map-offer" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-          <Button size="sm" variant="ghost" onClick={() => dispatch(/** @type {any} */ (baseMapAction(build)))}>Load a base start-up map</Button>
-          <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.5 }}>
-            These are the factory&apos;s tables, and the parts have changed. Tune them from the pull log, or load what a tuner would start from for these parts: safe and conservative, not tuned. It replaces your tables; Undo brings them back.
           </span>
         </div>
       )}

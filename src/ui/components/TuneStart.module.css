@@ -1,0 +1,62 @@
+/* TUNE's "Start the tune" card (SANDBOX): three ways in, then the base map's result or the
+   guide's steps. A grouped card on the app's greys; blue only on the thing to do. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.card[data-tone='ok'] { box-shadow: inset 3px 0 0 var(--ok); }
+.card[data-tone='warn'] { box-shadow: inset 3px 0 0 var(--warn); }
+
+.title { margin: 0; font-size: var(--fs-md); font-weight: 600; }
+.lead { margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.lead b { color: var(--ink); font-weight: 600; }
+.note { margin: 0; font-size: var(--fs-sm); color: var(--ink2); }
+
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 44px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.option:hover { border-color: var(--acc); }
+.option:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.option:disabled { cursor: progress; opacity: 0.6; }
+.optionIcon { color: var(--acc); }
+.optionName { font-size: var(--fs-base); font-weight: 600; }
+.optionText { font-size: var(--fs-sm); line-height: 1.45; color: var(--ink2); }
+
+.steps { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.step { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.step:first-child { border-top: 0; padding-top: 0; }
+.stepMark { flex: none; margin-top: 2px; color: var(--ink2); }
+.step[data-done='true'] .stepMark { color: var(--ok); }
+.stepBody { flex: 1; min-width: 0; }
+.stepName { font-size: var(--fs-sm); font-weight: 600; }
+.stepText { margin-top: 2px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+
+.parts { display: flex; flex-direction: column; gap: 4px; }
+.partsTitle { font-size: var(--fs-xs); font-weight: 600; color: var(--warn-ink); }
+.partsList { margin: 0; padding-left: 18px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.partsList b { color: var(--ink); font-weight: 600; }
+
+.actions { display: flex; justify-content: flex-end; }
+
+.again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs-sm); color: var(--ink2); }

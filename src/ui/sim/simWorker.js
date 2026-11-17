@@ -7,12 +7,14 @@
  *   preset  a factory engine put on the bench: its factory calibration (`applyPreset`)
  *   advice  TUNE's advice for the store as it stands: the full-throttle pull and the advisor
  *   demo    one of the Learn guide's worked examples (tutorial/scenarios.js), by name
+ *   safemap SANDBOX's safe base map for the store as it stands: its checking pulls (safeBaseMap.js)
  */
 
 import {
   applyPreset, breathingSnapshot, calibrationAdvice, intakeCamAt, presetById, simulateSweep,
 } from '../../sim/index.js';
 import { pullInputs } from '../state/pullInputs.js';
+import { safeBaseMap } from '../state/safeBaseMap.js';
 import * as SCENARIOS from '../tutorial/scenarios.js';
 
 /** The grids this task added to: only those go back. */
@@ -35,6 +37,8 @@ function run({ task, payload }) {
       exhaustDia: args.exhaustDia, injectorCc: args.injectorCc, ecuInjectorCc: args.ecuInjectorCc, mafScalar: args.mafScalar,
       mafErrorBase, pull,
     });
+  } else if (task === 'safemap') {
+    safeBaseMap(payload.state);
   } else if (task === 'demo') {
     // `veHalfPasses` takes its pass count: the four the guide shows.
     for (const name of payload.names) { const f = /** @type {any} */ (SCENARIOS)[name]; if (typeof f === 'function') f(name === 'veHalfPasses' ? 4 : undefined); }
