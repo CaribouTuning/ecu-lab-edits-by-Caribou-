@@ -191,7 +191,10 @@ remaining risk is the same Node major with a different libm, which is what step 
   Academy, Practical Standalone Tuning step 7; webinar 129): fuel first from low load up (VE
   from 40 % then 70 % throttle logs), then full throttle; a turbo at its wastegate spring
   (`boostSteps`) and raised in steps, stopping at a step no map can make clean; nitrous only
-  once proven dry. Where it knocks, the knock retard plus `SAFE_KNOCK_MARGIN_DEG` comes out.
+  once proven dry. Where it knocks, the knock retard plus `SAFE_KNOCK_MARGIN_DEG` comes out; once
+  clean, the full-throttle spark is evened to `SAFE_SPARK_GAP_DEG` (6°) under the measured knock limit
+  both ways (`evenedSpark`, each cell by its share of every point it is blended into), and proven
+  again: the generated start-up map once ran a turbo VQ35DE at -4° at 1500 RPM with no boost yet.
   It never changes a part, names the ones that limit the build, and shows its work (`steps`).
   Before any pull it tells the ECU what is fitted (the injectors' flow, the MAF scaling): run on
   the wrong injector scaling the checks were rich enough to hide knock. Only real knock counts
