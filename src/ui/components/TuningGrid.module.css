@@ -3,11 +3,14 @@
    that carries the data rather than decorating it. */
 
 .grid {
-  --cw: 50px; --ch: 34px; --head-w: 52px;
+  --cw-min: 50px; --ch: 36px; --head-w: 52px;
   outline: none;
   container-type: inline-size;
 }
-.grid[data-dense] { --cw: 42px; --ch: 28px; }
+.grid[data-dense] { --cw-min: 42px; --ch: 28px; }
+/* The cells share out the width the table has, as a tuning program's grid fills its pane,
+   from the narrowest a value reads at to where a wider cell only spreads the numbers apart. */
+.table { --cw: clamp(var(--cw-min), calc((100cqw - var(--head-w) - (var(--cols, 8) + 3) * 1px) / var(--cols, 8)), 112px); }
 /* On a phone the cells share out the width, down to 36px, so the game's 8 × 6 table is all on
    screen: at a fixed 50px a 390px phone showed six of its eight columns, with nothing to say
    the top of the rev range was off to the side. A bigger table still scrolls. */
@@ -20,6 +23,7 @@
    so a row is never a run of numbers with no name. */
 .scroll {
   overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+  width: fit-content; max-width: 100%;
   border: 1px solid var(--line); border-radius: var(--r-md); background: var(--line);
   scrollbar-width: thin; scrollbar-color: var(--line-hi) transparent;
   /* The pinned axes and the selected cell layer over the cells, never over the edit panel. */
