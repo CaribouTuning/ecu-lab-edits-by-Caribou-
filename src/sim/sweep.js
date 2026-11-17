@@ -423,14 +423,34 @@ export function simulateSweep({
   // what is left is the engine's VE bending between breakpoints faster than the straight line
   // the ECU reads between them.
   const veAxes = layout?.ve ?? { rpm: RPM, load: LOAD, loadUnit: 'kPa' };
-  const veFit = veAxes.loadUnit === 'kPa' ? veCorrections(veSamplesFromPull(points), veAxes) : null;
-  const gridBound = (p) => {
-    if (!veFit) return false;
+  const veSamples = veAxes.loadUnit === 'kPa' ? veSamplesFromPull(points) : [];
+  const veFit = veAxes.loadUnit === 'kPa' ? veCorrections(veSamples, veAxes) : null;
+  // The best fit these breakpoints could make at all, every sample counted however thin: where
+  // even that leaves a point missing, the engine's air flow swings faster than the straight
+  // line between breakpoints, and no value in those cells, by hand or from the log, fits it.
+  const veFitAll = veFit ? veCorrections(veSamples, veAxes, { minWeight: 1e-6, minShare: 1e-6 }) : null;
+  const sampleAt = new Map(veSamples.map((x) => [x.rpm, x]));
+  const flat = (p) => {
     const cells = cellsInForce(p.rpm, p.ecuLoad ?? p.sensedMap ?? p.map, veAxes).filter((c) => c.w >= IN_FORCE_WEIGHT);
     return cells.length > 0 && cells.every(({ ri, ci }) => {
       const r = veFit.ratio[ri]?.[ci];
       return r != null && Math.abs(r - 1) * 100 < MIXTURE_TOLERANCE_PCT / 2;
     });
+  };
+  const ripple = (p) => {
+    const x = sampleAt.get(p.rpm);
+    if (!x) return false;
+    const cells = cellsInForce(p.rpm, x.mapKpa, veAxes).filter((c) => c.w > 0);
+    const w = cells.reduce((a, c) => a + c.w, 0);
+    if (!(w > 0)) return false;
+    const fitted = cells.reduce((a, c) => a + c.w * (veFitAll.ratio[c.ri]?.[c.ci] ?? 1), 0) / w;
+    return Math.abs(x.ratio / fitted - 1) * 100 > MIXTURE_TOLERANCE_PCT;
+  };
+  /** @returns {false|'flat'|'ripple'} why the breakpoints are the limit here, if they are */
+  const gridBound = (p) => {
+    if (!veFit) return false;
+    if (flat(p)) return 'flat';
+    return ripple(p) ? 'ripple' : false;
   };
   // Cells the pull crossed too briefly for Correct VE from logs to trust (a boost rise climbs
   // through a row in one or two speeds): it leaves them as they are, so the log must not send
@@ -461,9 +481,13 @@ export function simulateSweep({
         // one, the column above is not what it reads.
         const share = above != null && at != null ? (peak.rpm - at) / (above - at) : 0;
         const unlogged = above != null && above > endRpm && share >= IN_FORCE_WEIGHT;
-        if (!unlogged && gridBound(peak)) {
+        const bound = unlogged ? false : gridBound(peak);
+        if (bound) {
           const below = at;
-          return `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here'} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM), and moving a cell by hand only moves the miss to the speed beside it. On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop's tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.`;
+          const between = below != null && above != null ? `between the ${below} and ${above} RPM columns` : 'here';
+          return `${bound === 'flat'
+            ? `The VE table already matches this pull as closely as its breakpoints allow: Correct VE from logs finds less than ${MIXTURE_TOLERANCE_PCT / 2}% to change in any cell around ${peak.rpm} RPM. This engine's air flow bends ${between} faster than the straight line the ECU reads between them, so the speeds between miss (${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM),`
+            : `No VE value in these cells fits this pull: the engine's air flow swings ${between} faster than the straight line the ECU reads between breakpoints, so even the best fit these cells can make still leaves it about ${pct}% ${lean ? 'lean' : 'rich'} at ${peak.rpm} RPM while the speeds beside it go the other way,`} and moving a cell by hand only moves the miss to the speed beside it. ${layout?.id === 'engine' ? 'These are already the Sized 16 × 16 breakpoints, the finest this ECU offers: this is as close as they go, within what a tuner accepts at full throttle, and it costs the score next to nothing.' : 'On TUNE, set the Table layout to Sized, 16 × 16, whose breakpoints sit closer together, then use Correct VE from logs again. A CAREER shop\'s tables keep their breakpoints: there this is as close as they go, and a job does not count it against you.'}`;
         }
         const thin = unlogged ? [] : thinCells(peak);
         // The column past the redline carries only `share` of the blend at this speed, so it
@@ -513,7 +537,7 @@ export function simulateSweep({
       fix: [
         byDelivery ? deliveryFix(peak, run, deliveryLean) : null,
         byTarget
-          ? `${byDelivery ? 'Then, o' : 'O'}n TUNE → FUEL, richen the AFR target in those cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)}): it asks for ${peak.afrCommanded.toFixed(1)}:1. A richer charge runs cooler and raises the knock limit.`
+          ? `${byDelivery ? 'Then, o' : 'O'}n TUNE → FUEL, richen the AFR target in those cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)}): it asks for ${peak.afrCommanded.toFixed(1)}:1. A richer charge runs cooler and raises the knock limit.`
           : null,
         sparkCanFix
           ? `On TUNE → SPARK, pull about ${Math.max(1, Math.ceil(-peak.margin + 1))}° of timing from ${tableRowsAt(peak.map, layout, peak.airCharge)} around ${peak.rpm} RPM, to about ${suggestedTiming}° there (less either side, across ${rangeLabel(run)}). Aim for 0–1° of knock retard on the next pull.`
@@ -628,7 +652,7 @@ export function simulateSweep({
           ? baseVeOff(peak) < -0.08 ? baseFuelFix(peak) : nitrousFuelFix(peak, 'more')
           : peak.afrCommanded <= COEFF.LEAN_DAMAGE_AFR
           ? `The AFR target is fine; fuel delivery isn't hitting it, so don't just ask for a richer number. Correct the VE table in this range on TUNE → AIRFLOW (log a pull and accept the suggested cells), then check the injector flow rate on TUNE → INJECTORS and the MAF and sensor scaling on TUNE → SENSORS match the parts on BUILD.`
-          : `On TUNE → FUEL, richen the AFR target in these cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)})${peak.boostPsi > 1 ? ' — richer than the NA best-power mixture, because boost needs the charge cooling' : ''}.${missedTarget(peak) ? ' Then correct the VE table there on TUNE → AIRFLOW, so the engine gets what the target asks for.' : ''}`,
+          : `On TUNE → FUEL, richen the AFR target in these cells to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)})${peak.boostPsi > 1 ? ' — richer than the NA best-power mixture, because boost needs the charge cooling' : ''}.${missedTarget(peak) ? ' Then correct the VE table there on TUNE → AIRFLOW, so the engine gets what the target asks for.' : ''}`,
     });
   });
 
@@ -694,7 +718,7 @@ export function simulateSweep({
       fix: spraying(peak) && baseVeOff(peak) > 0.08 ? baseFuelFix(peak)
         : spraying(peak) ? nitrousFuelFix(peak, 'less') : peak.afrCommanded / 14.7 >= COEFF.RICH_DAMAGE_LAMBDA
         ? `The AFR target asked for ${peak.afrCommanded.toFixed(1)}:1 and the engine got ${peak.afr.toFixed(1)}:1, so the fuelling is off, not the target. ${injMismatch ? `Fix the injector flow rate on TUNE → INJECTORS first (its own entry in this log) — it alone makes every pulse ${(injectorCc / ecuInjectorCc).toFixed(1)}× too big. Then correct` : 'Correct'} the VE table on TUNE → AIRFLOW, and check the MAF scalar on TUNE → SENSORS matches the parts on BUILD.`
-        : `The AFR target itself asks for this much fuel. On TUNE → FUEL, lean the target in these cells back to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / fuel.stoich).toFixed(2)}).${missedTarget(peak) ? ' Then check the VE table on TUNE → AIRFLOW and the injector flow rate on TUNE → INJECTORS, because the engine is getting even more than the target.' : ''}`,
+        : `The AFR target itself asks for this much fuel. On TUNE → FUEL, lean the target in these cells back to about ${peak.bestAfr.toFixed(1)}:1 (λ ${(peak.bestAfr / 14.7).toFixed(2)}).${missedTarget(peak) ? ' Then check the VE table on TUNE → AIRFLOW and the injector flow rate on TUNE → INJECTORS, because the engine is getting even more than the target.' : ''}`,
     });
   });
 

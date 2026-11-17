@@ -274,7 +274,7 @@ function beyondReachCells(table, axes, reachAt, kpaOf, kind, advised = () => nul
  * One cell of mixture advice. Scaling the commanded value by target/delivered prices the
  * error the engine actually made, and lands on the number to type in (rule 3 below).
  */
-function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct) {
+function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct, pastRedline = false) {
   // Inside the band the factory's choice stands; outside it, the advice is best power.
   const full = clamp((rowKpa - OPEN_LOOP_KPA) / (MIX_FULL_LOAD_KPA - OPEN_LOOP_KPA), 0, 1);
   // The tight boost band is for port injection: a direct-injected engine's factory runs leaner
@@ -284,7 +284,10 @@ function fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, current, pt, direct
   const partEdge = GASOLINE_STOICH + MIX_NOTABLE_AFR;
   // Direct injection: stoichiometric stays a factory choice at full load too.
   const leanEdge = Math.max(portEdge, partEdge * (1 - full) + portEdge * full, direct ? GASOLINE_STOICH + MIX_DI_MARGIN_AFR : 0);
-  const outside = pt.afr > leanEdge || pt.afr < GASOLINE_STOICH * MIX_RICHEST_LAMBDA;
+  // A column past the redline is never run at its own speed: the engine meets it only blended
+  // into the speeds below, where the log judges it (THE LOG OVERRULES THE BREAKPOINTS below).
+  // Graded at its own speed it priced a mixture no pull delivers, and asked a 21.6:1 target.
+  const outside = !pastRedline && (pt.afr > leanEdge || pt.afr < GASOLINE_STOICH * MIX_RICHEST_LAMBDA);
   const suggestedAfr = outside ? current * (pt.bestAfr / Math.max(0.1, pt.afr)) : current;
   return {
     ri, ci, rpm, map: Number(rowKpa.toFixed(1)), load: rowLoad, bracketOnly, current,
@@ -575,7 +578,7 @@ export function calibrationAdvice({
       // where no spark the table holds is safe: there a factory map enriches to raise the
       // knock limit, and the pull log's knock entry asks for it. One story either way.
       const noSafeSpark = knockCeiling < SPARK_MIN_DEG;
-      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct' && !noSafeSpark));
+      if (sharedAxes) fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, bracketOnly, afr[ri][ci], pt, derived.injection === 'direct' && !noSafeSpark, derived.redline != null && rpm > derived.redline));
     });
   });
 
@@ -592,7 +595,7 @@ export function calibrationAdvice({
           veVal: read('ve', rpm, rowKpa), veActualVal: truthAt ? truthAt(rpm, rowKpa) : undefined,
           timingVal: read('timing', rpm, rowKpa), afrCommanded: afr[ri][ci],
         });
-        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct'));
+        fuelAdv.push(fuelCell(ri, ci, rpm, rowKpa, rowLoad, Math.abs(gradeKpa - rowKpa) > 1e-6, afr[ri][ci], pt, derived.injection === 'direct', derived.redline != null && rpm > derived.redline));
       });
     });
   }
