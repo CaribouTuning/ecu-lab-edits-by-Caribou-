@@ -6,7 +6,7 @@ import { Check, ChevronDown, ChevronRight, Circle, Gauge, ListChecks, Wrench, X 
 import { Button } from '../primitives/Button.jsx';
 import { warm } from '../sim/warm.js';
 import { safeBaseMap } from '../state/safeBaseMap.js';
-import { buildSignature, guidedSteps, offersTuneStart, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
+import { buildSignature, guideStepNow, guidedSteps, offersTuneStart, publishGuideStep, useTuneStartChoice, writeTuneStart } from '../state/tuneStart.js';
 import { useBuild, useSession, useTune } from '../state/StoreProvider.jsx';
 import styles from './TuneStart.module.css';
 
@@ -71,7 +71,7 @@ export function TuneStart({ onGo, force = false, advice = null, page = null }) {
     if (!made) {
       return <section className={styles.bar} aria-busy="true"><div className={styles.barRow}><span className={styles.barText}>Working out the targets: checking a base map for these parts on the dyno…</span></div></section>;
     }
-    return <Guide made={made} build={build} tune={tune} advice={advice} page={page} onGo={onGo} onClose={() => choose('advice')} />;
+    return <Guide sig={sig} made={made} build={build} tune={tune} advice={advice} page={page} onGo={onGo} onClose={() => choose('advice')} />;
   }
   // Chosen: one line, so the safe map or the guide is still there for later.
   if (choice) {
@@ -171,25 +171,27 @@ function BaseMapResult({ made, onClose }) {
 }
 
 /**
- * The guide as one line: progress, and the step that matters on this page (the page's own
- * step where it has one not done, else the next one to do), with a way to its page. Every
- * step opens on All steps, so the table below stays in sight.
- * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, advice: any, page?: string|null, onGo: (page: string) => void, onClose: () => void}} props
+ * The guide as one line: which step of how many, the step to do now (in order: the first not
+ * done), and a way to its page. All steps opens the list, so the table below stays in sight.
+ * @param {{sig: string, made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, advice: any, page?: string|null, onGo: (page: string) => void, onClose: () => void}} props
  */
-function Guide({ made, build, tune, advice, page = null, onGo, onClose }) {
+function Guide({ sig, made, build, tune, advice, page = null, onGo, onClose }) {
   const [open, setOpen] = React.useState(false);
   const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples, advice: advice?.overAdvanced ? advice : null });
   const done = steps.filter((s) => s.done).length;
-  const checkable = steps.filter((s) => s.done !== null).length;
-  const now = steps.find((s) => s.go === page && s.done === false) ?? steps.find((s) => s.done === false) ?? steps.find((s) => s.done === null) ?? steps[steps.length - 1];
+  const now = guideStepNow(steps);
+  const n = steps.indexOf(now) + 1;
   const here = now.go === page;
+  React.useEffect(() => {
+    publishGuideStep({ sig, n, of: steps.length, title: now.short ?? now.title, go: now.go, checkable: now.done !== null });
+  });
   return (
     <section className={styles.bar} data-testid="tune-start-guide" aria-label="Base map guide">
       <div className={styles.barRow}>
-        <span className={styles.progress} aria-label={`${done} of ${checkable} steps done`}>{done}/{checkable}</span>
+        <span className={styles.progress} aria-label={`Step ${n} of ${steps.length}, ${done} done`}>{n}/{steps.length}</span>
         <span className={styles.barText}>
-          <b>{now.short ?? now.title}</b>
-          {here && <span className={styles.barMeta}> · here</span>}
+          <b>{now.title}</b>
+          {here && <span className={styles.barMeta}> · this page</span>}
         </span>
         {!here && <Button size="sm" variant="ghost" onClick={() => onGo(now.go)}>{now.go === 'dyno' ? 'Dyno' : 'Go'}</Button>}
         <button type="button" className={styles.barToggle} aria-expanded={open} onClick={() => setOpen((v) => !v)}>

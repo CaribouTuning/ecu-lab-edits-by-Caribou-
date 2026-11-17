@@ -186,7 +186,7 @@ function PageGuide({ guide, changedCount }) {
         <div className={styles.guideStatus} data-changed={changedCount > 0 || undefined}>
           {changedCount > 0
             ? `${changedCount} setting${changedCount === 1 ? '' : 's'} changed from factory, marked with a dot. Factory puts them all back.`
-            : 'All factory settings. Nothing here needs changing to make a good tune.'}
+            : 'All factory settings.'}
         </div>
       </Info>
     </div>

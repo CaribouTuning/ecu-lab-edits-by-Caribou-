@@ -57,7 +57,7 @@ import { ROUTES } from './routing.js';
 import { useRoute } from './useRoute.js';
 import { ACTIONS } from './state/reducer.js';
 import { buildName, offersBaseMap, originPreset } from './state/baseMap.js';
-import { buildSignature as tuneStartSignature, offersTuneStart, useTuneStartChoice } from './state/tuneStart.js';
+import { buildSignature as tuneStartSignature, offersTuneStart, useGuideStep, useTuneStartChoice } from './state/tuneStart.js';
 import { safeBaseMap } from './state/safeBaseMap.js';
 import { TuneStart } from './components/TuneStart.jsx';
 import { redoLabel, undoLabel } from './state/history.js';
@@ -280,6 +280,7 @@ export function EcuLabApp() {
   const engineMissing = !inCareer && build.engineReady === false;
   // SANDBOX: a new build whose way into the tune is not chosen yet (TuneStart). Hidden in tests, as the card is.
   const tuneStartChoice = useTuneStartChoice(tuneStartSignature(build));
+  const guideNow = useGuideStep(tuneStartSignature(build));
   const tuneStartOpen = offersTuneStart({ mode: session.mode, build }) && tuneStartChoice == null
     && /** @type {any} */ (import.meta).env?.MODE !== 'test';
   // A failed engine (src/sim/damage.js): it neither pulls nor starts until it is rebuilt.
@@ -1775,6 +1776,7 @@ export function EcuLabApp() {
     failed: blown ? FAILURE_MODES[blown].title.toLowerCase() : null,
     running,
     startTune: tuneStartOpen,
+    guide: tuneStartChoice === 'guided' && offersTuneStart({ mode: session.mode, build }) ? guideNow : null,
   });
   // Already where the step happens: it is only said, with nothing to press.
   const stepHere = appView === 'app' && (

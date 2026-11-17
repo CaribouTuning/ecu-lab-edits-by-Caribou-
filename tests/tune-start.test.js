@@ -11,7 +11,8 @@ import * as S from '../src/sim/index.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
 import { boostSteps, safeBaseMap } from '../src/ui/state/safeBaseMap.js';
-import { buildSignature, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
+import { buildSignature, guideStepNow, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
+import { nextStep } from '../src/ui/flow.js';
 import { pull } from './guidedPlayer.js';
 
 const preset = (id) => reducer(makeInitialState(), { type: ACTIONS.APPLY_PRESET, preset: S.applyPreset(S.presetById(id)) });
@@ -75,7 +76,7 @@ describe('the guided base map', () => {
     const st = boltOns(preset('ls1'));
     const m = safeBaseMap(st);
     const before = guidedSteps({ build: st.build, tune: st.tune, target: m.action, samples: m.samples });
-    expect(before.map((s) => s.id)).toEqual(['injectors', 'mixture', 'spark', 'air', 'pull']);
+    expect(before.map((s) => s.id)).toEqual(['injectors', 'maf', 'mixture', 'spark', 'air', 'pull']);
     expect(before.find((s) => s.id === 'pull').done).toBeNull();
     const loaded = reducer(st, m.action);
     const after = guidedSteps({ build: loaded.build, tune: loaded.tune, target: m.action, samples: m.samples });
@@ -86,6 +87,34 @@ describe('the guided base map', () => {
     // Targets for a few speeds, never the whole table.
     expect(before.find((s) => s.id === 'spark').text).toMatch(/° at \d+ RPM, .*° at \d+ RPM, .*° at \d+ RPM/);
   }, 120_000);
+});
+
+describe('the guide on a turbo VQ35DE on 550 cc injectors (a player found it stuck on its first step)', () => {
+  it('takes the injector scaling and the MAF scaling one step at a time, in order', () => {
+    let st = preset('vq35de-revup');
+    st = set(set(st, 'turboOn', true), 'boostCurve', S.RPM.map((r) => Math.round(5 * Math.min(1, Math.max(0, (r - 1500) / 2600)))));
+    st = set(st, 'injIdx', S.INJECTOR_OPTS.findIndex((o) => o.cc === 550));
+    const m = safeBaseMap(st);
+    const steps = (s) => guidedSteps({ build: s.build, tune: s.tune, target: m.action, samples: m.samples });
+    const first = steps(st);
+    expect(first.slice(0, 2).map((x) => x.id)).toEqual(['injectors', 'maf']);
+    expect(guideStepNow(first).id).toBe('injectors');
+    // The injectors set: that step ticks on its own, and the guide moves on to the MAF.
+    const inj = set(st, 'ecuInjectorCc', 550);
+    expect(steps(inj)[0].done).toBe(true);
+    expect(guideStepNow(steps(inj)).id).toBe('maf');
+    // The scalar the step names, as the slider sets it (0.01 a step): the guide moves on again.
+    const want = Number(/set the MAF scalar to (\d+\.\d+)/.exec(steps(inj)[1].text)[1]);
+    const maf = set(inj, 'mafScalar', want);
+    expect(steps(maf)[1].done).toBe(true);
+    const after = steps(maf);
+    expect(guideStepNow(after)).toBe(after.slice(2).find((x) => x.done === false));
+    // The Next bar names the same step as the guide.
+    const g = { n: 3, of: steps(maf).length, title: 'Mixture targets', go: 'fuel', checkable: true };
+    const step = nextStep(/** @type {any} */ ({ mode: 'sandbox', attention: [], guide: g }));
+    expect(step).toMatchObject({ id: 'guide', go: 'tune:fuel' });
+    expect(step.text).toMatch(/step 3 of \d+: Mixture targets/);
+  }, 300_000);
 });
 
 describe('the safe base map follows a tuner\'s order of work', () => {

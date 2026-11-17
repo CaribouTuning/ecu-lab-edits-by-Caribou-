@@ -67,6 +67,46 @@ export function useTuneStartChoice(sig) {
   return kept?.sig === sig ? /** @type {any} */ (kept.choice) : null;
 }
 
+/**
+ * @typedef {object} GuideNow the guide's step now, as TUNE's guide shows it: the Next bar names it
+ * @property {string} sig the build it is for
+ * @property {number} n the step's number, from 1
+ * @property {number} of how many steps
+ * @property {string} title
+ * @property {string} go its TUNE page, or `dyno`
+ * @property {boolean} checkable the game checks it (false: a pull, worked from its log)
+ */
+/** @type {Set<() => void>} */
+const guideListeners = new Set();
+/** @type {GuideNow|null} */
+let guideNow = null;
+/** The guide shows a step: tell the Next bar. @param {GuideNow|null} v */
+export function publishGuideStep(v) {
+  if (JSON.stringify(v) === JSON.stringify(guideNow)) return;
+  guideNow = v;
+  for (const l of guideListeners) l();
+}
+const subscribeGuide = (/** @type {() => void} */ l) => { guideListeners.add(l); return () => { guideListeners.delete(l); }; };
+const readGuide = () => guideNow;
+/**
+ * The guide's step now, for this build.
+ * @param {string} sig
+ * @returns {GuideNow|null}
+ */
+export function useGuideStep(sig) {
+  const v = useSyncExternalStore(subscribeGuide, readGuide, readGuide);
+  return v?.sig === sig ? v : null;
+}
+/**
+ * The step the guide is on: the first not done, in order (a step skipped ahead to is not where
+ * the player is); then the pulls; the last once all are done.
+ * @param {GuideStep[]} steps
+ * @returns {GuideStep}
+ */
+export function guideStepNow(steps) {
+  return steps.find((s) => s.done === false) ?? steps.find((s) => s.done === null) ?? steps[steps.length - 1];
+}
+
 /** How close a cell must come to the target to count, by table. */
 export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6, maf: 0.02 });
 /** A full-load target at or richer than this is worth naming; leaner is the closed-loop side. */
@@ -137,10 +177,15 @@ export function guidedSteps({ build, tune, target, samples, advice = null }) {
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
     {
-      id: 'injectors', title: 'Tell the ECU what is fitted', short: 'What is fitted', go: mafStep && build.ecuInjectorCc === fittedCc ? 'sensors' : 'injectors',
-      text: `On INJECTORS, set the injector scaling to the ${fittedCc} cc/min injectors on the engine${mafStep ? `; on SENSORS, set the MAF scaling to ${mafTarget.toFixed(2)} for the intake and pipework fitted` : ''}. Every fuel sum the ECU makes starts from ${mafStep ? 'these' : 'it'}: wrong, the engine runs rich or lean whatever the tables say, and a rich one hides its knock.`,
-      done: fittedCc != null && build.ecuInjectorCc === fittedCc && (!mafStep || Math.abs((build.mafScalar ?? 1) - mafTarget) <= GUIDE_TOLERANCE.maf),
+      id: 'injectors', title: 'Set the injector scaling', short: 'Injector scaling', go: 'injectors',
+      text: `On INJECTORS, set ECU Injector Scaling to ${fittedCc}, the ${fittedCc} cc/min injectors on the engine. Every fuel sum the ECU makes starts from it: set wrong, the engine runs rich or lean whatever the tables say, and a rich one hides its knock.`,
+      done: fittedCc != null && build.ecuInjectorCc === fittedCc,
     },
+    ...(mafStep ? [{
+      id: 'maf', title: 'Set the MAF scaling', short: 'MAF scaling', go: 'sensors',
+      text: `On SENSORS, set the MAF scalar to ${mafTarget.toFixed(2)}. The ${build.mods?.intake && build.turboOn ? 'intake and the turbo pipework change' : build.turboOn ? 'turbo pipework changes' : 'intake changes'} how the air passes the meter, so it reads ${Math.round((1 - 1 / mafTarget) * 100)}% low; the scalar corrects what it reads. ${mafTarget.toFixed(2)} is the figure the base map was checked with. On a real car it comes from the intake maker's calibration or from the wideband and fuel trims, and the first pull's trims check it here the same way.`,
+      done: Math.abs((build.mafScalar ?? 1) - mafTarget) <= GUIDE_TOLERANCE.maf,
+    }] : []),
     {
       id: 'mixture', title: 'Set the mixture targets first', short: 'Mixture targets', go: 'fuel',
       text: `On FUEL, keep cruise at 14.7 and set ${[naAfr && naAfr < RICH_ENOUGH_AFR ? `the full-load rows to about ${naAfr.toFixed(1)} AFR` : null, boosted && boostAfr ? `the boost rows to about ${boostAfr.toFixed(1)} at full boost` : null].filter(Boolean).join(', and ') || 'the full-load rows no leaner than they are'}. The VE is tuned to hit these, so they come before it. Richer is safe for a first pull; leaner is not.${leanCells.length ? ` TUNE's advisor lists ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} leaner than safe: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`,

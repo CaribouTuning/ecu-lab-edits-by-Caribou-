@@ -35,9 +35,10 @@ function followTheGuide(st0) {
   let st = st0;
   const steps = guidedSteps({ build: st.build, tune: st.tune, target: t, samples: made.samples });
   const ids = steps.map((s) => s.id);
-  // 1. What is fitted: the injectors, and the MAF scaling where the step names it.
-  st = set(st, 'ecuInjectorCc', S.INJECTOR_OPTS[st.build.injIdx].cc);
-  if (/MAF scaling to ([0-9.]+)/.test(steps[0].text)) st = set(st, 'mafScalar', Number(/MAF scaling to ([0-9.]+)/.exec(steps[0].text)[1]));
+  // 1. The injector scaling, the size the step names; then the MAF scalar where a step names one.
+  st = set(st, 'ecuInjectorCc', Number(/set ECU Injector Scaling to (\d+)/.exec(steps[0].text)[1]));
+  const maf = steps.find((x) => x.id === 'maf');
+  if (maf) st = set(st, 'mafScalar', Number(/set the MAF scalar to (\d+\.\d+)/.exec(maf.text)[1]));
   // 2 and 3. Mixture no leaner than the targets, spark no higher, in the full-load rows: the
   // target read where each of the player's own cells sits (the base map may be on finer axes).
   const afrAx = S.layoutById(st.tune.layout).afr;

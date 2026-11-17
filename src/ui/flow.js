@@ -32,6 +32,8 @@
  * @property {boolean} [startTune] SANDBOX: an engine just built, its way into the tune not chosen
  *   yet (a safe base map, the guide or the advice: components/TuneStart.jsx). A tuner makes it
  *   safe before starting it and pulling it.
+ * @property {{n: number, of: number, title: string, go: string, checkable: boolean}|null} [guide]
+ *   SANDBOX: the base map guide's step now (state/tuneStart.js), while the player follows it
  * @property {boolean} [running] a pull is being made: its log is not up yet, so nothing it
  *   found can be said (the result is banked as the sweep starts, its log shown as it ends)
  */
@@ -72,6 +74,11 @@ export function nextStep(f) {
 
   if (f.engineMissing) return { id: 'choose', text: 'No engine yet. Choose one on the build bench, or build your own.', label: 'Build bench', go: 'build' };
   if (f.startTune && !f.fresh) return { id: 'start-tune', text: 'New build: start its tune. Load a safe base map, build one with the guide, or tune from the advice.', label: 'Start the tune', go: 'tune:airflow' };
+  // Following the guide: its step is the step, until it reaches the pulls the log then leads.
+  if (f.guide?.checkable) {
+    const g = f.guide;
+    return { id: 'guide', text: `Base map guide, step ${g.n} of ${g.of}: ${g.title}.`, label: g.go === 'dyno' ? 'Dyno' : 'Open it', go: g.go === 'dyno' ? 'dyno' : `tune:${g.go}` };
+  }
   if (!f.heard && !f.fresh && !f.atDyno) return { id: 'hear', text: 'Start it on the stand and listen to it.', label: 'Run it', go: 'live' };
   if (!f.fresh) return { id: 'pull', text: !f.pulled ? 'Put it on the dyno and run a pull.' : f.changed === false ? 'Run the pull again to bring its curves and log back up.' : 'It has changed since the last pull. Pull it again to see what that did.', label: 'Dyno', go: 'dyno' };
   if (f.attention.length) return fixStep(f.attention[0]);
