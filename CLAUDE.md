@@ -190,10 +190,16 @@ remaining risk is the same Node major with a different libm, which is what step 
   (`boostSteps`) and raised in steps, stopping at a step no map can make clean; nitrous only
   once proven dry. Where it knocks, the knock retard plus `SAFE_KNOCK_MARGIN_DEG` comes out.
   It never changes a part, names the ones that limit the build, and shows its work (`steps`).
-  On the 99 SANDBOX builds 93 run clean, a median 1.9% under the guided player's tune (torque
-  is flat near MBT: a realistic margin leaves a few percent, not ten). The guide follows the
-  same order and holds boost low with TUNE → BOOST's Boost limit by gear (4th is the dyno's),
-  not by editing the build, which would reset the choice (kept per build signature).
+  Before any pull it tells the ECU what is fitted (the injectors' flow, the MAF scaling): run on
+  the wrong injector scaling the checks were rich enough to hide knock. Only real knock counts
+  (`knockPull` less `knockFalse`): false knock is the threshold's, never the timing's. On the
+  99 SANDBOX builds 86 run clean, a median 1.9% under the guided player's tune (torque is flat
+  near MBT: a realistic margin leaves a few percent, not ten); 7 are lean on maxed injectors or
+  pump and 6 knock past what spark can take, and the card says not safe and names the part.
+  The guide follows the same order, defers to the pull log for the full-throttle steps, and its
+  spark and mixture steps read TUNE's advisor (`guidedSteps` `advice`), so they never disagree;
+  tests/tune-guide.test.js follows it literally. It holds boost low with TUNE → BOOST's Boost
+  limit by gear (4th is the dyno's), not by editing the build, which would reset the choice.
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.

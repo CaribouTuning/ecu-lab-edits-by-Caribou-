@@ -1537,7 +1537,7 @@ export function EcuLabApp() {
             </nav>
             <div className={deskApps.tuneMain}>
             {/* SANDBOX, an engine just built: how to start (a safe base map, a guide, or the advice). */}
-            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart onGo={(id) => (id === 'dyno' ? changeTab('dyno') : goSection('tune', id))} /></div>}
+            {!inCareer && <div style={{ padding: '12px 16px 0' }}><TuneStart advice={calAdvice} onGo={(id) => (id === 'dyno' ? changeTab('dyno') : goSection('tune', id))} /></div>}
             {tuneOpen && lockedPage && (() => {
               const course = trainingFor(lockedPage);
               return (

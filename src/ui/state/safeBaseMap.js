@@ -20,7 +20,7 @@
  */
 
 import {
-  BARO_KPA, PSI_TO_KPA, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
+  BARO_KPA, INJECTOR_OPTS, PSI_TO_KPA, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 
 import { baseMapAction } from './baseMap.js';
@@ -80,8 +80,8 @@ function saferTables(st, p) {
   const top = askedKpa(st.build);
   for (const q of p.points) {
     const hidden = (q.protect ?? []).includes?.('knock');
-    if (!((q.knockPull ?? 0) > KNOCK_SEEN_DEG || hidden)) continue;
-    const take = Math.ceil(q.knockPull ?? 0) + SAFE_KNOCK_MARGIN_DEG;
+    if (!(realKnock(q) > KNOCK_SEEN_DEG || hidden)) continue;
+    const take = Math.ceil(realKnock(q)) + SAFE_KNOCK_MARGIN_DEG;
     const want = (q.commandedTiming ?? q.timing) - take;
     const loads = [loadFor(sparkAxes, { mapKpa: q.map, airmassG: q.airCharge ?? 0 })];
     if (hidden && sparkAxes.loadUnit === 'kPa') loads.push(...sparkAxes.load.filter((l) => l > q.map && l <= top + 1));
@@ -117,7 +117,7 @@ function saferTables(st, p) {
   for (const q of p.points) {
     if (spraying(q)) continue;
     const hot = (q.protect ?? []).includes?.('egt');
-    const stuck = (q.knockPull ?? 0) > KNOCK_SEEN_DEG
+    const stuck = realKnock(q) > KNOCK_SEEN_DEG
       && cellsAround(sparkAxes, q.rpm, loadFor(sparkAxes, { mapKpa: q.map, airmassG: q.airCharge ?? 0 })).every(([ri, ci]) => timing[ri][ci] <= SPARK_MIN_DEG + 0.05);
     if (!hot && !stuck) continue;
     const floor = SAFE_RICHEST_LAMBDA * (q.ecuStoich ?? 14.7);
@@ -147,11 +147,18 @@ const SAFE_SPRAY_TRIM_MAX_PCT = 40;
 const SAFE_RICHEN_STEP_AFR = 0.6;
 /** The richest a safe base map goes: λ 0.76, past where more fuel still cools (HP Academy's 0.78-0.80 under high boost, with margin). */
 const SAFE_RICHEST_LAMBDA = 0.76;
+/**
+ * The retard a point's knock control took for knock the engine had: what it pulled less what it
+ * pulled for valvetrain noise the sensor mistook for knock (`knockFalse`). False knock is fixed
+ * at the knock threshold (the log's false-knock entry), never with timing: counting it once
+ * pulled a cammed VQ's spark to the floor.
+ */
+const realKnock = (q) => Math.max(0, (q.knockPull ?? 0) - (q.knockFalse ?? 0));
 /** Knock retard a point must show before the check treats it as knock, degrees. */
 const KNOCK_SEEN_DEG = 0.2;
 
 /** Whether a pull is safe to make again: no knock, and no lean the map could have fixed. */
-const isClean = (p) => !p.points.some((q) => (q.knockPull ?? 0) > KNOCK_SEEN_DEG)
+const isClean = (p) => !p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG)
   && !p.events.some((e) => UNSAFE.has(e.type) && !(e.type !== 'knock' && p.points.some((q) => q.fuelLimited)));
 
 /** How far off target the VE must read before a correction is made, as a share. */
@@ -220,9 +227,13 @@ export function safeBaseMap(state) {
   // The base map on the bench, as LOAD_BASE_MAP puts it there (without the undo history:
   // nothing here is the player's yet).
   /** @type {any} */
+  // Step zero, before the engine is started: the ECU is told what is fitted, the injectors'
+  // flow and the MAF scaling for the intake (a tuner enters injector data first; the check
+  // pulls once ran a 550 cc engine on a 315 cc scaling, rich enough to hide its knock).
+  const fittedCc = INJECTOR_OPTS[state.build.injIdx]?.cc ?? state.build.ecuInjectorCc;
   let st = {
     ...state,
-    build: { ...state.build, mafScalar: base.mafScalar ?? state.build.mafScalar },
+    build: { ...state.build, mafScalar: base.mafScalar ?? state.build.mafScalar, ecuInjectorCc: fittedCc },
     tune: { ...state.tune, ve: base.ve, timing: base.timing, afr: base.afr, ...(base.ecu ? { ecu: base.ecu } : {}), layout: base.layout ?? null },
   };
   /** @type {string[]} what the tuner did, in order, for the player to read */
@@ -278,7 +289,7 @@ export function safeBaseMap(state) {
     }
     // Still knocking (or lean) with nothing left a map can take out: a tuner stops raising the
     // boost here and says why; better fuel or less boost is the build's, not the map's.
-    steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${p.points.some((q) => (q.knockPull ?? 0) > KNOCK_SEEN_DEG) ? 'knocks with the spark as low as the map can take it' : 'runs lean where the map has nothing left to add'}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
+    steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${p.points.some((q) => realKnock(q) > KNOCK_SEEN_DEG) ? 'knocks with the spark as low as the map can take it' : 'runs lean where the map has nothing left to add'}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
     break;
   }
 
@@ -301,16 +312,19 @@ export function safeBaseMap(state) {
   // The proof: the build as asked for, boost at its target and the nitrous armed as the player has it.
   st = restore(st);
   p = pullOf(st); pulls += 1;
-  const clean = isClean(p);
+  // Clean means the log shows no knock and no lean at all. A lean the injectors or the pump
+  // cannot answer is not the map's to fix (the check stops there), but the card must not
+  // call it safe: it says so and names the part.
+  const clean = isClean(p) && !p.events.some((e) => UNSAFE.has(e.type));
   const entry = (e) => ({ type: e.type, msg: String(e.msg), fix: String(e.fix ?? '') });
   return {
-    action: { ...base, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu: st.tune.ecu },
+    action: { ...base, ecuInjectorCc: fittedCc, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu: st.tune.ecu },
     peakHp: p.peakHp,
     pulls,
     steps,
     cleanAt,
     clean,
-    left: clean ? [] : p.events.filter((e) => UNSAFE.has(e.type)).map(entry),
+    left: p.events.filter((e) => UNSAFE.has(e.type)).map(entry),
     parts: p.events.filter((e) => PARTS.has(e.type)).map(entry),
     samples: p.points.map((q) => ({ rpm: q.rpm, map: q.map, airCharge: q.airCharge ?? 0 })),
   };

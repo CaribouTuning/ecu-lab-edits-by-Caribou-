@@ -12,7 +12,7 @@
 
 import { useSyncExternalStore } from 'react';
 
-import { INJECTOR_OPTS, layoutById, loadFor, readTable } from '../../sim/index.js';
+import { BARO_KPA, IDLE_COLUMN_MAX_RPM, INJECTOR_OPTS, OPEN_LOOP_KPA, getCal, layoutById, loadFor, readTable } from '../../sim/index.js';
 
 import { isOwnEngine, offersBaseMap } from './baseMap.js';
 import { boostSteps } from './safeBaseMap.js';
@@ -78,7 +78,9 @@ export function useTuneStartChoice(sig) {
 }
 
 /** How close a cell must come to the target to count, by table. */
-export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6 });
+export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6, maf: 0.02 });
+/** A full-load target at or richer than this is worth naming; leaner is the closed-loop side. */
+const RICH_ENOUGH_AFR = 14.0;
 
 /**
  * @typedef {object} GuideStep
@@ -94,10 +96,12 @@ export const GUIDE_TOLERANCE = Object.freeze({ spark: 1, afr: 0.3, vePct: 6 });
  * Graded only where the checking pull ran (`samples`): the cells the engine uses, read as the
  * ECU reads them, between cells as well as on them. The targets are given for a few speeds,
  * not cell by cell: filling the rest is the player's.
- * @param {{build: any, tune: any, target: {ve: number[][], timing: number[][], afr: number[][], layout?: any}, samples: {rpm: number, map: number, airCharge: number}[]}} s
+ * @param {{build: any, tune: any, target: {ve: number[][], timing: number[][], afr: number[][], layout?: any, mafScalar?: number}, samples: {rpm: number, map: number, airCharge: number}[], advice?: {overAdvanced?: any[], wrongMix?: any[]}|null}} s
+ *   `advice` is TUNE's advisor on the tables as they stand: where it is given, the spark and
+ *   mixture steps name its cells and tick only when it lists none, so the two never disagree
  * @returns {GuideStep[]}
  */
-export function guidedSteps({ build, tune, target, samples }) {
+export function guidedSteps({ build, tune, target, samples, advice = null }) {
   const at = (table, layout, name, q) => {
     const axes = layoutById(layout)[name];
     return readTable(table, axes, q.rpm, loadFor(axes, { mapKpa: q.map, airmassG: q.airCharge }));
@@ -115,6 +119,32 @@ export function guidedSteps({ build, tune, target, samples }) {
   const naAfr = afrAt(full.filter((q) => q.map <= 105));
   const boostAfr = afrAt(boostPts);
   const steps = boostSteps(build);
+  // Spark cells past the knock limit, as TUNE's advisor judges them on the tables as they
+  // stand (the limit moves with the mixture and the air, so a table comparison alone once
+  // ticked a cell the advisor called past it). Without the advisor, the cells above the base
+  // map's, on the rows the engine reaches and past the idle column.
+  /** @type {{load: number, rpm: number, want: number}[]} */
+  const hotCells = [];
+  const sparkAx = layoutById(tune.layout).timing;
+  if (advice?.overAdvanced) {
+    for (const c of advice.overAdvanced) hotCells.push({ load: sparkAx.load[c.ri], rpm: c.rpm, want: c.suggested });
+  } else {
+    const tAx = layoutById(target.layout ?? tune.layout).timing;
+    if (JSON.stringify(sparkAx) === JSON.stringify(tAx) && sparkAx.loadUnit === 'kPa') {
+      const reach = Math.max(BARO_KPA, ...pts.map((q) => q.map));
+      sparkAx.load.forEach((load, ri) => {
+        if (load >= OPEN_LOOP_KPA || load > reach + 1) return;
+        sparkAx.rpm.forEach((rpm, ci) => {
+          if (rpm > IDLE_COLUMN_MAX_RPM && tune.timing[ri][ci] > target.timing[ri][ci] + 0.05) hotCells.push({ load, rpm, want: target.timing[ri][ci] });
+        });
+      });
+    }
+  }
+  // Mixture cells the advisor calls lean.
+  const leanCells = (advice?.wrongMix ?? []).filter((c) => c.suggested < c.current);
+  // The MAF scaling the base map carries for the intake fitted: where the ECU reads the meter.
+  const mafTarget = target.mafScalar ?? build.mafScalar ?? 1;
+  const mafStep = ['blend', 'maf'].includes(getCal(tune.ecu, 'config.airModel') ?? 'blend') && Math.abs(mafTarget - 1) > GUIDE_TOLERANCE.maf;
   const boostTarget = build.turboOn ? Math.max(0, ...build.boostCurve) : 0;
   const airDone = pts.length > 0 && pts.every((q) => Math.abs(mine('ve', q) / theirs('ve', q) - 1) * 100 <= GUIDE_TOLERANCE.vePct);
   // The order a tuner works (HP Academy, Practical Standalone Tuning; webinar 129): what the
@@ -122,21 +152,21 @@ export function guidedSteps({ build, tune, target, samples }) {
   // low load up, and only then full throttle, a turbo at its least boost first.
   return [
     {
-      id: 'injectors', title: 'Tell the ECU what injectors are fitted', go: 'injectors',
-      text: `On INJECTORS, set the injector scaling to the ${fittedCc} cc/min injectors on the engine. Every fuel sum the ECU makes starts from it.`,
-      done: fittedCc != null && build.ecuInjectorCc === fittedCc,
+      id: 'injectors', title: 'Tell the ECU what is fitted', go: mafStep && build.ecuInjectorCc === fittedCc ? 'sensors' : 'injectors',
+      text: `On INJECTORS, set the injector scaling to the ${fittedCc} cc/min injectors on the engine${mafStep ? `; on SENSORS, set the MAF scaling to ${mafTarget.toFixed(2)} for the intake and pipework fitted` : ''}. Every fuel sum the ECU makes starts from ${mafStep ? 'these' : 'it'}: wrong, the engine runs rich or lean whatever the tables say, and a rich one hides its knock.`,
+      done: fittedCc != null && build.ecuInjectorCc === fittedCc && (!mafStep || Math.abs((build.mafScalar ?? 1) - mafTarget) <= GUIDE_TOLERANCE.maf),
     },
     {
       id: 'mixture', title: 'Set the mixture targets first', go: 'fuel',
-      text: `On FUEL, keep cruise at 14.7 and set the full-load rows${naAfr ? ` to about ${naAfr.toFixed(1)} AFR` : ''}${boosted && boostAfr ? `, and the boost rows to about ${boostAfr.toFixed(1)} at full boost` : ''}. The VE is tuned to hit these, so they come before it. Richer is safe for a first pull; leaner is not.`,
-      done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr),
+      text: `On FUEL, keep cruise at 14.7 and set ${[naAfr && naAfr < RICH_ENOUGH_AFR ? `the full-load rows to about ${naAfr.toFixed(1)} AFR` : null, boosted && boostAfr ? `the boost rows to about ${boostAfr.toFixed(1)} at full boost` : null].filter(Boolean).join(', and ') || 'the full-load rows no leaner than they are'}. The VE is tuned to hit these, so they come before it. Richer is safe for a first pull; leaner is not.${leanCells.length ? ` TUNE's advisor lists ${leanCells.length === 1 ? 'a cell' : `${leanCells.length} cells`} leaner than safe: ${leanCells.slice(0, 3).map((c) => `${sparkAx.load[c.ri] ?? c.map} kPa at ${c.rpm} RPM to ${c.suggested}`).join(', ')}.` : ''}`,
+      done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr) && !leanCells.length,
     },
     {
       id: 'spark', title: 'Start the spark safe', go: 'spark',
       text: anchors.length
-        ? `On SPARK, at full load keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and fill the cells between so the column runs smoothly. That is a few degrees under what the engine can take; it is found later, on the dyno, a degree or two at a time.`
+        ? `On SPARK, at full load keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and fill the cells between so the column runs smoothly.${hotCells.length ? ` TUNE's advisor lists ${hotCells.length === 1 ? 'a cell' : `${hotCells.length} cells`} past the knock limit: ${hotCells.slice(0, 3).map((c) => `${c.load} kPa at ${c.rpm} RPM to ${Number(c.want.toFixed(1))}°`).join(', ')}${hotCells.length > 3 ? `, and ${hotCells.length - 3} more it lists` : ''}.` : ''} That is a few degrees under what the engine can take; it is found later, on the dyno, a degree or two at a time.`
         : 'On SPARK, start the full-load timing a few degrees under what you expect the engine to take.',
-      done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark),
+      done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark) && !hotCells.length,
     },
     {
       id: 'air', title: 'Fuel it from low load up', go: 'airflow',
@@ -145,12 +175,12 @@ export function guidedSteps({ build, tune, target, samples }) {
     },
     {
       id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'Make the first full-throttle pull', go: 'dyno',
-      text: `One full-throttle pull${steps.length ? `, the boost held at ${steps[0]} psi` : ''}. Correct VE from that log too; where the log shows knock, take that timing and a couple of degrees more out of those cells before the next pull.`,
+      text: `One full-throttle pull${steps.length ? `, the boost held at ${steps[0]} psi` : ''}, then work the pull log's entries in its order: what it names about the parts and the fuel first (a lean the protection hid, Correct VE from logs), then knock. Where it names knock, take that timing and a couple of degrees more out of those cells; false knock it names is the knock sensor's threshold, never the timing. Pull again until it shows neither.`,
       done: null,
     },
     ...(steps.length > 1 ? [{
       id: 'boost', title: 'Raise the boost a step at a time', go: 'boost',
-      text: `Raise Boost limit by gear for 4th in steps, ${steps.join(' → ')} psi, with a pull at each and its knock and lean fixed before the next. Where it will not run clean, stop: better fuel or less boost goes further, not more timing out. Then set the limit back above your ${boostTarget} psi target.`,
+      text: `Raise Boost limit by gear for 4th in steps, ${steps.join(' → ')} psi, with a pull at each and its log worked the same way before the next. Where it will not run clean, stop: better fuel or less boost goes further, not more timing out. Then set the limit back above your ${boostTarget} psi target.`,
       done: null,
     }] : []),
   ];

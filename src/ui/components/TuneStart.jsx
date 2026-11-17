@@ -28,9 +28,10 @@ const MADE = new Map();
  * @param {object} props
  * @param {(page: string) => void} props.onGo open a TUNE page by id, or `dyno`
  * @param {boolean} [props.force] show it whatever the browser kept (tests)
+ * @param {any} [props.advice] TUNE's advisor on the tables as they stand: the guide names its cells
  * @returns {React.ReactElement|null}
  */
-export function TuneStart({ onGo, force = false }) {
+export function TuneStart({ onGo, force = false, advice = null }) {
   const [build, dispatch] = useBuild();
   const [tune] = useTune();
   const [session] = useSession();
@@ -80,7 +81,7 @@ export function TuneStart({ onGo, force = false }) {
     if (!made) {
       return <section className={styles.card} aria-busy="true"><p className={styles.lead}>Working out the targets: checking a base map for these parts on the dyno…</p></section>;
     }
-    return <Guide made={made} build={build} tune={tune} onGo={onGo} onClose={() => choose('advice')} />;
+    return <Guide made={made} build={build} tune={tune} advice={advice} onGo={onGo} onClose={() => choose('advice')} />;
   }
   // Chosen: one line, so the safe map or the guide is still there for later.
   if (choice) {
@@ -149,7 +150,7 @@ function BaseMapResult({ made, onClose }) {
       <p className={styles.lead}>
         {made.clean
           ? <>Proven on the dyno in {made.pulls} pulls, as a tuner does it, and it ran with no knock and no lean at <b>{made.peakHp} whp</b>. The timing sits under what the engine can take: the log and TUNE show where the rest is.</>
-          : <>As safe as a map can make it, at <b>{made.peakHp} whp</b>, but the parts or the fuel still let it knock or lean at what the build asks for. Change what is listed before pulling hard.</>}
+          : <>As safe as a map can make it, at <b>{made.peakHp} whp</b>, but at what the build asks for it still {made.left.some((e) => /knock/.test(e.type)) ? 'knocks' : 'runs lean'}{made.parts.length ? ': a part is the limit' : ''}. Change what is listed before pulling hard.</>}
       </p>
       <ol className={styles.workLog} aria-label="What was done, in order">
         {made.steps.map((t, i) => <li key={i}>{t}</li>)}
@@ -162,10 +163,10 @@ function BaseMapResult({ made, onClose }) {
 }
 
 /**
- * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, onGo: (page: string) => void, onClose: () => void}} props
+ * @param {{made: import('../state/safeBaseMap.js').SafeBaseMap, build: any, tune: any, advice: any, onGo: (page: string) => void, onClose: () => void}} props
  */
-function Guide({ made, build, tune, onGo, onClose }) {
-  const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples });
+function Guide({ made, build, tune, advice, onGo, onClose }) {
+  const steps = guidedSteps({ build, tune, target: made.action, samples: made.samples, advice: advice?.overAdvanced ? advice : null });
   const done = steps.filter((s) => s.done).length;
   const checkable = steps.filter((s) => s.done !== null).length;
   return (

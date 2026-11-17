@@ -53,8 +53,9 @@ describe('TuneStart', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Build it with the guide/ })); });
     await waitFor(() => expect(screen.getByTestId('tune-start-guide')).toBeTruthy(), { timeout: 60_000 });
     expect(screen.getByText('Start the spark safe')).toBeTruthy();
+    // The first step opens what still needs doing: the injectors, or (they match) the MAF scaling.
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
-    expect(went).toEqual(['injectors']);
+    expect(['injectors', 'sensors']).toContain(went[0]);
   }, 90_000);
 
   it('is not offered for a stock engine', () => {
