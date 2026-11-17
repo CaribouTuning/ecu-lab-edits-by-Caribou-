@@ -179,17 +179,18 @@ remaining risk is the same Node major with a different libm, which is what step 
   asked for (`boostCutLean`, `hiddenKnock` in ecuEvents.js, from `leanTripLambda`/`knockTripDeg`).
   TUNE judges a cell the pull used by the margin the pull measured, to MBT (`judgeAgainstPull`).
 - **SANDBOX starts a built engine's tune three ways** (`components/TuneStart.jsx`, offered by
-  `offersTuneStart` for an engine of the player's own or a factory one with parts changed): a
-  safe base map, a guide, or the advice as always. The safe base map (`state/safeBaseMap.js`) is
-  the start-up map checked on the dyno the way a tuner checks one: where a pull knocks, the
-  knock retard plus `SAFE_KNOCK_MARGIN_DEG` out of the cells it ran; where spark is at its
-  floor or the exhaust runs hot, a richer target; where it leans with fuel to spare, VE from
-  the pull's log. It never changes a part: it names the ones that limit the build. Measured on
-  the 99 SANDBOX builds it lands a median 1.9% under the guided player's tune: torque is flat
-  near MBT, so a realistic margin leaves a few percent, not ten (the user chose realism). The
-  guide (`guidedSteps`) gives targets for three speeds and grades the player's cells only where
-  the checking pull ran. Which way was chosen is kept in localStorage per build signature, as
-  the first-run walkthrough is; in tests it is hidden unless `force`.
+  `offersTuneStart` for an engine of the player's own or a factory one with parts changed, and
+  named by the Next bar until chosen): a safe base map, a guide, or the advice as always. The
+  safe base map (`state/safeBaseMap.js`) is the start-up map proven in a tuner's order (HP
+  Academy, Practical Standalone Tuning step 7; webinar 129): fuel first from low load up (VE
+  from 40 % then 70 % throttle logs), then full throttle; a turbo at its wastegate spring
+  (`boostSteps`) and raised in steps, stopping at a step no map can make clean; nitrous only
+  once proven dry. Where it knocks, the knock retard plus `SAFE_KNOCK_MARGIN_DEG` comes out.
+  It never changes a part, names the ones that limit the build, and shows its work (`steps`).
+  On the 99 SANDBOX builds 93 run clean, a median 1.9% under the guided player's tune (torque
+  is flat near MBT: a realistic margin leaves a few percent, not ten). The guide follows the
+  same order and holds boost low with TUNE → BOOST's Boost limit by gear (4th is the dyno's),
+  not by editing the build, which would reset the choice (kept per build signature).
 - **A start-up map is a start** (`startUpTiming`, `START_UP_RETARD_DEG`): a player's own engine
   and "Load a base start-up map" sit 4° short at full load, so there is timing to find. The
   factory engines and the career's cars keep their factory calibration.

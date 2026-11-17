@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import * as S from '../src/sim/index.js';
 import { makeInitialState } from '../src/ui/state/initialState.js';
 import { ACTIONS, reducer } from '../src/ui/state/reducer.js';
-import { safeBaseMap } from '../src/ui/state/safeBaseMap.js';
+import { boostSteps, safeBaseMap } from '../src/ui/state/safeBaseMap.js';
 import { buildSignature, guidedSteps, offersTuneStart } from '../src/ui/state/tuneStart.js';
 import { pull } from './guidedPlayer.js';
 
@@ -75,7 +75,7 @@ describe('the guided base map', () => {
     const st = boltOns(preset('ls1'));
     const m = safeBaseMap(st);
     const before = guidedSteps({ build: st.build, tune: st.tune, target: m.action, samples: m.samples });
-    expect(before.map((s) => s.id)).toEqual(['injectors', 'air', 'mixture', 'spark', 'pull']);
+    expect(before.map((s) => s.id)).toEqual(['injectors', 'mixture', 'spark', 'air', 'pull']);
     expect(before.find((s) => s.id === 'pull').done).toBeNull();
     const loaded = reducer(st, m.action);
     const after = guidedSteps({ build: loaded.build, tune: loaded.tune, target: m.action, samples: m.samples });
@@ -86,4 +86,34 @@ describe('the guided base map', () => {
     // Targets for a few speeds, never the whole table.
     expect(before.find((s) => s.id === 'spark').text).toMatch(/° at \d+ RPM, .*° at \d+ RPM, .*° at \d+ RPM/);
   }, 120_000);
+});
+
+describe('the safe base map follows a tuner\'s order of work', () => {
+  it('fuels from low load up before any full-throttle run', () => {
+    const m = safeBaseMap(boltOns(preset('vq35de-revup')));
+    expect(m.steps[0]).toMatch(/^Fuel at 40% throttle/);
+    expect(m.steps[1]).toMatch(/^Fuel at 70% throttle/);
+    expect(m.steps[2]).toMatch(/^Full throttle/);
+  }, 120_000);
+
+  it('proves a turbo at its wastegate spring first, then raises the boost in steps', () => {
+    const st0 = preset('vq35de-revup');
+    const st = set(set(set(st0, 'turboOn', true), 'boostCurve', [0, 2, 6, 8, 8, 8, 8, 8]), 'mods', { ...st0.build.mods, intercooler: true });
+    const steps = boostSteps(st.build);
+    expect(steps[steps.length - 1]).toBe(8);
+    expect(steps[0]).toBeLessThan(8);
+    expect(steps).toEqual([...steps].sort((a, b) => a - b));
+    const m = safeBaseMap(st);
+    expect(m.steps.filter((t) => /^Full throttle at/.test(t)).map((t) => Number(/at ([0-9.]+) psi/.exec(t)[1]))).toEqual(steps.slice(0, m.steps.filter((t) => /^Full throttle at/.test(t)).length));
+  }, 300_000);
+
+  it('stops raising the boost at a step no map can make clean, and says the last clean one', () => {
+    const st0 = preset('b58-m0');
+    const st = set(st0, 'boostCurve', st0.build.boostCurve.map((b) => (b > 0 ? b + 4 : b)));
+    const m = safeBaseMap(st);
+    expect(m.clean).toBe(false);
+    const last = m.steps[m.steps.length - 1];
+    expect(last).toMatch(/knocks with the spark as low as the map can take it/);
+    expect(last).toMatch(new RegExp(`highest step it ran clean was ${m.cleanAt} psi`));
+  }, 300_000);
 });

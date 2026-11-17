@@ -76,3 +76,7 @@
 .actions { display: flex; justify-content: flex-end; }
 
 .again { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs-sm); color: var(--ink2); }
+
+/* The safe base map's work, in the order it was done: the workflow, to read and copy. */
+.workLog { margin: 0; padding-left: 20px; font-size: var(--fs-sm); line-height: 1.5; color: var(--ink2); }
+.workLog li + li { margin-top: 2px; }

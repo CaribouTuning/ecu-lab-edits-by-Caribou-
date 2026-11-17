@@ -148,9 +148,12 @@ function BaseMapResult({ made, onClose }) {
       <h2 className={styles.title}>{made.clean ? 'Safe base map loaded' : 'Base map loaded: not safe to lean on yet'}</h2>
       <p className={styles.lead}>
         {made.clean
-          ? <>Checked on the dyno: it ran with no knock and no lean{made.pulls > 1 ? `, after ${made.pulls - 1} round${made.pulls > 2 ? 's' : ''} of taking spark out and adding fuel where it did` : ''}, at <b>{made.peakHp} whp</b>. The timing sits under what the engine can take: pull it, and the log and TUNE show where the rest is.</>
-          : <>The map is as safe as a map can make it, at <b>{made.peakHp} whp</b>, but the parts or the fuel still let it knock or lean. Change what is listed before pulling hard.</>}
+          ? <>Proven on the dyno in {made.pulls} pulls, as a tuner does it, and it ran with no knock and no lean at <b>{made.peakHp} whp</b>. The timing sits under what the engine can take: the log and TUNE show where the rest is.</>
+          : <>As safe as a map can make it, at <b>{made.peakHp} whp</b>, but the parts or the fuel still let it knock or lean at what the build asks for. Change what is listed before pulling hard.</>}
       </p>
+      <ol className={styles.workLog} aria-label="What was done, in order">
+        {made.steps.map((t, i) => <li key={i}>{t}</li>)}
+      </ol>
       <Entries title="Still in the log" items={made.left} />
       <Entries title="Parts that limit this build" items={made.parts} />
       <div className={styles.actions}><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>

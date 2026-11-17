@@ -15,6 +15,7 @@ import { useSyncExternalStore } from 'react';
 import { INJECTOR_OPTS, layoutById, loadFor, readTable } from '../../sim/index.js';
 
 import { isOwnEngine, offersBaseMap } from './baseMap.js';
+import { boostSteps } from './safeBaseMap.js';
 
 /** Where the choice is kept: `{ sig, choice }`. */
 export const TUNE_START_KEY = 'ecu-lab-tune-start-1';
@@ -113,6 +114,12 @@ export function guidedSteps({ build, tune, target, samples }) {
   const afrAt = (list) => (list.length ? theirs('afr', list[Math.floor(list.length / 2)]) : null);
   const naAfr = afrAt(full.filter((q) => q.map <= 105));
   const boostAfr = afrAt(boostPts);
+  const steps = boostSteps(build);
+  const boostTarget = build.turboOn ? Math.max(0, ...build.boostCurve) : 0;
+  const airDone = pts.length > 0 && pts.every((q) => Math.abs(mine('ve', q) / theirs('ve', q) - 1) * 100 <= GUIDE_TOLERANCE.vePct);
+  // The order a tuner works (HP Academy, Practical Standalone Tuning; webinar 129): what the
+  // ECU is told about the parts, the targets the fuel is tuned to, safe spark, then fuel from
+  // low load up, and only then full throttle, a turbo at its least boost first.
   return [
     {
       id: 'injectors', title: 'Tell the ECU what injectors are fitted', go: 'injectors',
@@ -120,26 +127,31 @@ export function guidedSteps({ build, tune, target, samples }) {
       done: fittedCc != null && build.ecuInjectorCc === fittedCc,
     },
     {
-      id: 'air', title: 'Teach it the engine\'s air', go: 'airflow',
-      text: 'Start the engine on the stand, run it across part throttle and a full-throttle pull, then on AIRFLOW press Correct VE from logs. Repeat until the cells it ran stop moving: the VE comes from what the engine logs, never from a guess.',
-      done: pts.length > 0 && pts.every((q) => Math.abs(mine('ve', q) / theirs('ve', q) - 1) * 100 <= GUIDE_TOLERANCE.vePct),
-    },
-    {
-      id: 'mixture', title: 'Richen it for full load', go: 'fuel',
-      text: `On FUEL, keep cruise at 14.7 and richen the full-load rows${naAfr ? ` to about ${naAfr.toFixed(1)} AFR` : ''}${boosted && boostAfr ? `, and the boost rows to about ${boostAfr.toFixed(1)} at full boost` : ''}. Richer than that is safe for a first pull; leaner is not.`,
+      id: 'mixture', title: 'Set the mixture targets first', go: 'fuel',
+      text: `On FUEL, keep cruise at 14.7 and set the full-load rows${naAfr ? ` to about ${naAfr.toFixed(1)} AFR` : ''}${boosted && boostAfr ? `, and the boost rows to about ${boostAfr.toFixed(1)} at full boost` : ''}. The VE is tuned to hit these, so they come before it. Richer is safe for a first pull; leaner is not.`,
       done: full.length > 0 && full.every((q) => mine('afr', q) <= theirs('afr', q) + GUIDE_TOLERANCE.afr),
     },
     {
       id: 'spark', title: 'Start the spark safe', go: 'spark',
       text: anchors.length
-        ? `On SPARK, at full load keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and fill the cells between so the column runs smoothly. That is a few degrees under what the engine can take: the first pull shows how much is left.`
+        ? `On SPARK, at full load keep the timing no higher than about ${anchors.map((q) => `${Math.round(theirs('timing', q))}° at ${Math.round(q.rpm / 100) * 100} RPM`).join(', ')}, and fill the cells between so the column runs smoothly. That is a few degrees under what the engine can take; it is found later, on the dyno, a degree or two at a time.`
         : 'On SPARK, start the full-load timing a few degrees under what you expect the engine to take.',
       done: full.length > 0 && full.every((q) => mine('timing', q) <= theirs('timing', q) + GUIDE_TOLERANCE.spark),
     },
     {
-      id: 'pull', title: 'Make the first pull', go: 'dyno',
-      text: 'On the dyno, one full-throttle pull. If the log shows knock or lean, fix that first; then follow the log and TUNE for the power.',
+      id: 'air', title: 'Fuel it from low load up', go: 'airflow',
+      text: `On the dyno, pull at 40% throttle, then on AIRFLOW press Correct VE from logs; pull again until it holds. Then the same at 70%.${steps.length ? ` Keep the boost at ${steps[0]} psi meanwhile (TUNE → BOOST, Boost limit by gear: 4th is the dyno's gear).` : ''} The mixture matters more than the timing, and a lean cell at full load is what hurts an engine, so the fuel is right before the throttle goes all the way.`,
+      done: airDone,
+    },
+    {
+      id: 'pull', title: steps.length ? `First full-throttle pull at ${steps[0]} psi` : 'Make the first full-throttle pull', go: 'dyno',
+      text: `One full-throttle pull${steps.length ? `, the boost held at ${steps[0]} psi` : ''}. Correct VE from that log too; where the log shows knock, take that timing and a couple of degrees more out of those cells before the next pull.`,
       done: null,
     },
+    ...(steps.length > 1 ? [{
+      id: 'boost', title: 'Raise the boost a step at a time', go: 'boost',
+      text: `Raise Boost limit by gear for 4th in steps, ${steps.join(' → ')} psi, with a pull at each and its knock and lean fixed before the next. Where it will not run clean, stop: better fuel or less boost goes further, not more timing out. Then set the limit back above your ${boostTarget} psi target.`,
+      done: null,
+    }] : []),
   ];
 }

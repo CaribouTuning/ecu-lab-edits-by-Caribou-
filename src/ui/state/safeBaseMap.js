@@ -1,20 +1,26 @@
 /**
- * SANDBOX's "Load a safe base map": what a tuner loads on a freshly built engine before the
- * first power pull. It starts from the base start-up map (baseMap.js, generated from the
- * physics, its full-load spark START_UP_RETARD_DEG short), then is checked on the dyno the
- * way a tuner checks one: a pull, and wherever it knocks or runs lean, less spark and more
- * fuel in those cells, a margin past what the advisor asks for, until a pull is clean.
- * Rich is left alone (rich is safe), and nothing here touches the parts: where a part is the
- * limit (injectors out of duty, valves floating, a turbo too small), the map makes it as safe
- * as a map can and says which part it is.
+ * SANDBOX's "Load a safe base map": what a tuner loads on a freshly built engine and proves on
+ * the dyno before the first power pull, in the order a tuner works (HP Academy, Practical
+ * Standalone Tuning step 7 and webinar 129, "Steady state vs ramp run"):
  *
- * The power it leaves is where the physics puts it: torque changes little within a few
- * degrees of best timing, so a naturally aspirated engine is a few percent short, a boosted
- * one more. It is a start, not a tune: the log and TUNE lead from here.
+ *   1. Fuel first, from low load up: the mixture matters more than the timing, so the VE table
+ *      is corrected from part-throttle runs (40 %, then 70 %) before any full-throttle run.
+ *   2. Full throttle with the spark a few degrees short (the start-up map's START_UP_RETARD_DEG),
+ *      the VE corrected from that log, and wherever it knocks the knock retard plus a margin
+ *      out of the cells it ran.
+ *   3. A turbo is proven at its wastegate spring pressure first, then the boost is raised in
+ *      steps to the target, fuel and knock checked at each ("there's no need to steady state
+ *      tune a turbocharged engine at very high boost levels").
+ *   4. Nitrous only once the engine is proven dry.
+ *
+ * Rich is safe and is left alone; nothing here touches the parts: where a part is the limit
+ * (injectors out of duty, valves floating, a turbo too small), the map is as safe as a map can
+ * be and says which part it is. The pulls are the dyno's sweeps at a fixed throttle, the
+ * game's stand-in for steady-state cells. It is a start, not a tune: the log and TUNE lead on.
  */
 
 import {
-  BARO_KPA, PSI_TO_KPA, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
+  BARO_KPA, PSI_TO_KPA, ecuHardwareOf, getCal, setCal, SPARK_MIN_DEG, applyVeCorrections, calibrationAdvice, intakeCamAt, layoutById, loadFor, simulateSweep, veCorrections, veSamplesFromPull,
 } from '../../sim/index.js';
 
 import { baseMapAction } from './baseMap.js';
@@ -29,10 +35,11 @@ export const SAFE_KNOCK_MARGIN_DEG = 2;
 /** Mixture a lean cell is set richer than the advisor's target by, AFR. */
 export const SAFE_RICH_MARGIN_AFR = 0.2;
 /** Pulls the check may take before it gives up and reports what is left. */
-const MAX_PULLS = 6;
+const MAX_PULLS = 4;
 
 const fullThrottle = (st) => ({ ...st, session: { ...st.session, loadKpa: 100 } });
-const pullOf = (st) => simulateSweep(pullInputs(fullThrottle(st)).args);
+const atThrottle = (st, pct) => ({ ...st, session: { ...st.session, loadKpa: pct } });
+const pullOf = (st, pct = 100) => simulateSweep(pullInputs(atThrottle(st, pct)).args);
 function adviceOf(st, p) {
   const { args, veTruth, mafErrorBase } = pullInputs(fullThrottle(st));
   return calibrationAdvice({
@@ -120,15 +127,11 @@ function saferTables(st, p) {
     }
   }
 
-  // Leaner than asked where the injectors still had fuel to give: the tables', not a part's.
-  const leanByMap = p.points.some((q) => !q.fuelLimited && (q.lambda ?? 0) - (q.afrCommanded ?? 0) / (q.ecuStoich ?? 14.7) > LEAN_SEEN_LAMBDA)
-    || p.events.some((e) => e.type === 'missedmix' || e.type === 'leanprot');
+  // Fuel: the VE cells this pull ran, corrected from its own log toward the targets, rich or
+  // lean, as Correct VE from logs does (points whose fuel the ECU itself changed are left out).
   let ve = st.tune.ve;
-  if (leanByMap) {
-    const { ratio } = veCorrections(veSamplesFromPull(p.points), layoutById(st.tune.layout).ve);
-    const next = applyVeCorrections(st.tune.ve, ratio, 1);
-    if (JSON.stringify(next) !== JSON.stringify(ve)) { ve = next; moved = true; }
-  }
+  const next = veFromLogs(st, [p]);
+  if (next) { ve = next; moved = true; }
   const afr = richer;
   for (const c of adviceOf(st, p).wrongMix) {
     if (!(c.suggested < c.current)) continue;
@@ -146,18 +149,61 @@ const SAFE_RICHEN_STEP_AFR = 0.6;
 const SAFE_RICHEST_LAMBDA = 0.76;
 /** Knock retard a point must show before the check treats it as knock, degrees. */
 const KNOCK_SEEN_DEG = 0.2;
-/** How much leaner than commanded a point must run before the check treats it as lean. */
-const LEAN_SEEN_LAMBDA = 0.03;
 
 /** Whether a pull is safe to make again: no knock, and no lean the map could have fixed. */
 const isClean = (p) => !p.points.some((q) => (q.knockPull ?? 0) > KNOCK_SEEN_DEG)
   && !p.events.some((e) => UNSAFE.has(e.type) && !(e.type !== 'knock' && p.points.some((q) => q.fuelLimited)));
 
+/** How far off target the VE must read before a correction is made, as a share. */
+const VE_SETTLED = 0.02;
+/**
+ * The VE table corrected from these pulls' logs, or null where every cell they ran is already
+ * within VE_SETTLED of its target.
+ * @param {any} st @param {any[]} pulls
+ */
+function veFromLogs(st, pulls) {
+  const axes = layoutById(st.tune.layout).ve;
+  const { ratio } = veCorrections(pulls.flatMap((r) => veSamplesFromPull(r.points)), axes);
+  if (!ratio.some((row) => row.some((r) => r != null && Math.abs(r - 1) > VE_SETTLED))) return null;
+  return applyVeCorrections(st.tune.ve, ratio, 1);
+}
+
+/** The part-throttle runs fuel is corrected at first, low load up, % throttle. */
+const FUEL_FIRST_LOADS = [40, 70];
+/** VE passes at each part-throttle load before moving up. */
+const FUEL_PASSES = 2;
+/** Above this much boost past the spring, a step is put between them, psi. */
+const BOOST_STEP_PSI = 4;
+
+/**
+ * The boosts a tuner proves a turbo at, low to high: the wastegate spring's pressure (the
+ * least it can make), then steps of about BOOST_STEP_PSI to the build's target. An electronic
+ * gate has no spring: it starts at half the target.
+ * @param {any} build
+ * @returns {number[]} psi
+ */
+export function boostSteps(build) {
+  if (!build.turboOn) return [];
+  const target = Math.max(0, ...build.boostCurve);
+  const gate = ecuHardwareOf(build).gate;
+  const low = gate?.type === 'pneumatic' ? Math.min(target, gate.springPsi) : target / 2;
+  const n = Math.max(1, Math.ceil((target - low) / BOOST_STEP_PSI));
+  const out = [];
+  for (let i = 0; i <= n; i += 1) out.push(Number((low + ((target - low) * i) / n).toFixed(1)));
+  return [...new Set(out)];
+}
+/** The build with its boost held to at most this, for a step (the build itself is not changed). */
+const capBoost = (st, psi) => ({ ...st, build: { ...st.build, boostCurve: st.build.boostCurve.map((b) => Math.min(b, psi)) } });
+/** The build with its nitrous armed or not, for a step. */
+const sprayArmed = (st, on) => ({ ...st, session: { ...st.session, liveAux: { ...(st.session.liveAux ?? {}), nitrous: on } } });
+
 /**
  * @typedef {object} SafeBaseMap
  * @property {import('./reducer.js').LoadBaseMapAction} action the LOAD_BASE_MAP that loads it (Undo brings the old tables back)
  * @property {number} peakHp the checking pull's peak, wheel hp
- * @property {number} pulls how many pulls the check took
+ * @property {number} pulls how many pulls the check took, part throttle included
+ * @property {string[]} steps what the tuner did, in order: the workflow, for the player to read
+ * @property {number|null} cleanAt a turbo's highest boost step that ran clean, psi (null: naturally aspirated, or none)
  * @property {boolean} clean whether the last pull ran with no knock and no lean the map could fix
  * @property {{type: string, msg: string, fix: string}[]} parts the parts that limit the build, as the log names them
  * @property {{type: string, msg: string, fix: string}[]} left what the last pull still logged that a map could not take out (knock with the spark at its minimum: the boost or the fuel)
@@ -179,21 +225,90 @@ export function safeBaseMap(state) {
     build: { ...state.build, mafScalar: base.mafScalar ?? state.build.mafScalar },
     tune: { ...state.tune, ve: base.ve, timing: base.timing, afr: base.afr, ...(base.ecu ? { ecu: base.ecu } : {}), layout: base.layout ?? null },
   };
-  let p = pullOf(st);
-  let pulls = 1;
-  while (pulls < MAX_PULLS && !isClean(p)) {
-    const tune = saferTables(st, p);
-    if (!tune) break;
-    st = { ...st, tune };
-    p = pullOf(st);
-    pulls += 1;
+  /** @type {string[]} what the tuner did, in order, for the player to read */
+  const steps = [];
+  let pulls = 0;
+  const steps0 = boostSteps(st.build);
+  const spray = !!st.build.nitrous;
+  /** The conditions of a run: boost held to a step, nitrous off until the engine is proven dry. */
+  const run = (s, { psi = null, nitrous = false } = {}) => {
+    let r = psi != null ? capBoost(s, psi) : s;
+    if (spray) r = sprayArmed(r, nitrous);
+    return r;
+  };
+  const restore = (s) => ({ ...s, build: { ...s.build, boostCurve: state.build.boostCurve }, session: state.session ? { ...s.session, liveAux: state.session.liveAux } : s.session });
+
+  // 1. Fuel first, from low load up, at the least boost the turbo makes.
+  const low = steps0[0] ?? null;
+  for (const load of FUEL_FIRST_LOADS) {
+    let corrected = 0;
+    for (let i = 0; i < FUEL_PASSES; i += 1) {
+      const r = run(st, { psi: low });
+      const p = pullOf(r, load); pulls += 1;
+      const ve = veFromLogs(r, [p]);
+      if (!ve) break;
+      st = { ...st, tune: { ...st.tune, ve } }; corrected += 1;
+    }
+    steps.push(`Fuel at ${load}% throttle${low != null ? ` (${low} psi)` : ''}: ${corrected ? `VE corrected from the log${corrected > 1 ? ` (${corrected} passes)` : ''}` : 'already on target'}.`);
   }
+
+  // 2 and 3. Full throttle: at each boost step (or once, naturally aspirated), fuel and knock.
+  const stages = steps0.length ? steps0 : [null];
+  let p = null;
+  /** The highest boost step that ran clean, psi (null: none yet, or naturally aspirated). */
+  let cleanAt = null;
+  for (const psi of stages) {
+    let took = 0; let fuelled = 0;
+    for (let i = 0; i < MAX_PULLS; i += 1) {
+      const r = run(st, { psi });
+      p = pullOf(r); pulls += 1;
+      const before = r.tune.timing;
+      const tune = isClean(p) && !veFromLogs(r, [p]) ? null : saferTables(r, p);
+      if (!tune) break;
+      if (tune.ve !== r.tune.ve) fuelled += 1;
+      took = Math.max(took, ...before.flatMap((row, ri) => row.map((v, ci) => v - tune.timing[ri][ci])));
+      st = restore({ ...r, tune });
+    }
+    const what = [fuelled ? 'VE corrected from the log' : null, took > 0.05 ? `up to ${took.toFixed(1)}° out where it knocked` : null].filter(Boolean).join(', ');
+    const where = `Full throttle${psi != null ? ` at ${psi} psi${psi === stages[0] && ecuHardwareOf(st.build).gate?.type === 'pneumatic' ? ' (the wastegate spring)' : ''}` : ''}`;
+    if (isClean(p)) {
+      cleanAt = psi;
+      steps.push(`${where}: ${what ? `${what}; then clean` : 'clean, nothing to change'}.`);
+      continue;
+    }
+    // Still knocking (or lean) with nothing left a map can take out: a tuner stops raising the
+    // boost here and says why; better fuel or less boost is the build's, not the map's.
+    steps.push(`${where}: ${what ? `${what}, and ` : ''}it still ${p.points.some((q) => (q.knockPull ?? 0) > KNOCK_SEEN_DEG) ? 'knocks with the spark as low as the map can take it' : 'runs lean where the map has nothing left to add'}. ${psi != null ? (cleanAt != null ? `Boost raised no further: the highest step it ran clean was ${cleanAt} psi.` : 'Boost raised no further.') : ''}`.trim());
+    break;
+  }
+
+  // 4. Nitrous, once the engine is proven dry.
+  if (spray) {
+    let took = 0;
+    for (let i = 0; i < MAX_PULLS; i += 1) {
+      const r = run(st, { nitrous: true });
+      p = pullOf(r); pulls += 1;
+      if (isClean(p)) break;
+      const before = r.tune.timing;
+      const tune = saferTables(r, p);
+      if (!tune) break;
+      took = Math.max(took, ...before.flatMap((row, ri) => row.map((v, ci) => v - tune.timing[ri][ci])));
+      st = restore({ ...r, tune });
+    }
+    steps.push(`Nitrous armed: ${took > 0.05 ? `up to ${took.toFixed(1)}° out where it knocked` : 'checked'}${(getCal(st.tune.ecu, 'nitrous.fuelTrimPct') ?? 0) ? `, spray fuel correction ${getCal(st.tune.ecu, 'nitrous.fuelTrimPct')}%` : ''}.`);
+  }
+
+  // The proof: the build as asked for, boost at its target and the nitrous armed as the player has it.
+  st = restore(st);
+  p = pullOf(st); pulls += 1;
   const clean = isClean(p);
   const entry = (e) => ({ type: e.type, msg: String(e.msg), fix: String(e.fix ?? '') });
   return {
     action: { ...base, ve: st.tune.ve, timing: st.tune.timing, afr: st.tune.afr, ecu: st.tune.ecu },
     peakHp: p.peakHp,
     pulls,
+    steps,
+    cleanAt,
     clean,
     left: clean ? [] : p.events.filter((e) => UNSAFE.has(e.type)).map(entry),
     parts: p.events.filter((e) => PARTS.has(e.type)).map(entry),
