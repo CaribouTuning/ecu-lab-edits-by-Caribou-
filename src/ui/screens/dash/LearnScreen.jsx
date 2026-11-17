@@ -97,10 +97,10 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         <br /><br /><span className={styles.formula}>R</span> — the gas constant for air, 287 J/(kg·K). <i>A property of air itself</i> — never a tuning value; it is the same on every engine on earth.
         <br /><br /><span className={styles.formula}>ρ</span> (rho) — air density in kg/m³. <i>How much air is actually packed into a given space.</i> Cold, dense air is more oxygen and more possible power, which is why the same car makes more power on a cold night.
         <br /><br /><span className={styles.formula}>VE</span> — volumetric efficiency, as a fraction. <i>How good the engine is at filling its own cylinders.</i> A 95% cell means the cylinder took in 95% of what its volume could hold at that pressure.
-        <br /><br /><span className={styles.formula}>V_cyl</span> — swept volume of ONE cylinder in m³ (displacement ÷ cylinders). <span className={styles.formula}>Vd</span> — the whole engine's displacement in m³: a 3.5 L engine is 0.0035 m³.
+        <br /><br /><span className={styles.formula}>V<sub>cyl</sub></span> — swept volume of ONE cylinder in m³ (displacement ÷ cylinders). <span className={styles.formula}>Vd</span> — the whole engine's displacement in m³: a 3.5 L engine is 0.0035 m³.
         <br /><br /><b className={styles.em}>Fuel side</b>
-        <br /><span className={styles.formula}>stoichRatio</span> — the air:fuel mass ratio at which fuel and oxygen exactly consume each other. <i>A chemical property of the fuel, not a choice:</i> 14.7:1 for gasoline, 9.8:1 for E85.
-        <br /><br /><span className={styles.formula}>λ</span> (lambda) — measured AFR ÷ that fuel's stoichRatio. <i>How rich or lean you are, expressed so it means the same thing on any fuel.</i> 1.00 is exactly balanced, 0.85 is 15% more fuel than strictly needed — rich, and where power lives — and 1.10 is lean.
+        <br /><span className={styles.formula}>Stoich</span> (stoichiometric ratio) — the air:fuel mass ratio at which fuel and oxygen exactly consume each other. <i>A chemical property of the fuel, not a choice:</i> 14.7:1 for gasoline, 9.8:1 for E85.
+        <br /><br /><span className={styles.formula}>λ</span> (lambda) — measured AFR ÷ that fuel's stoich. <i>How rich or lean you are, expressed so it means the same thing on any fuel.</i> 1.00 is exactly balanced, 0.85 is 15% more fuel than strictly needed — rich, and where power lives — and 1.10 is lean.
         <br /><br /><span className={styles.formula}>LHV</span> — lower heating value, J/kg. <i>How much energy is in a kilogram of the fuel.</i> Gasoline about 44 MJ/kg, E85 about 29.2 MJ/kg. E85 has less energy per kilogram but you burn far more kilograms, which is why the power comes out similar.
         <br /><br /><span className={styles.formula}>PW</span> — injector pulse width, milliseconds. <i>How long the injector is held open.</i> The ECU does not command fuel; it commands time.
         <br /><br /><b className={styles.em}>Output side</b>
@@ -126,22 +126,22 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
       <Article g="ecu" title="7. Step 1 — how much air is in the cylinder?">
         This is the ideal gas law, and it is the foundation of every speed-density calculation:
         <br /><br /><span className={styles.formula}>ρ = MAP ÷ (R × T)</span><br />
-        <span className={styles.formula}>airCharge = VE × V_cylinder × ρ</span>
+        <span className={styles.formula}>air per cylinder = VE × V<sub>cyl</sub> × ρ</span>
         <br /><br />MAP is manifold pressure (about 101 kPa at wide open naturally aspirated, higher with boost, down to ~20 kPa at idle). R is the gas constant for air, 287 J/(kg·K). T is charge temperature.
         <br /><br />Two consequences worth internalising. <b className={styles.em}>Boost raises MAP</b>, so it directly multiplies air mass. And <b className={styles.em}>compressing air heats it</b>, which lowers density and gives some of that gain back — which is the entire reason intercoolers exist. You can watch both in the datalog's MAP and IAT columns.
       </Article>
 
       <Article g="ecu" title="8. Step 2 — how much fuel does that need?">
         Fuel mass follows directly from air mass and your lambda target:
-        <br /><br /><span className={styles.formula}>fuelMass = airCharge ÷ (λ × stoichRatio)</span>
+        <br /><br /><span className={styles.formula}>fuel per cylinder = air per cylinder ÷ (λ × stoich)</span>
         <br /><br />Nothing is fudged here. Because E85's stoichiometric ratio is 9.8 instead of 14.7, the same lambda target automatically demands about 1.5× the fuel mass — it falls straight out of the chemistry, which is why E85 needs a much bigger fuel system for the same power.
       </Article>
 
       <Article g="ecu" title="9. Step 3 — pulse width, and the hard time limit">
         The ECU never commands "fuel" — it commands a number of milliseconds. That comes from the required fuel mass and the injector's flow rating, plus deadtime (the ~1 ms an injector takes to physically open):
-        <br /><br /><span className={styles.formula}>PW = fuelMass ÷ (injectorCC × density ÷ 60000) + deadtime</span><br />
-        <span className={styles.formula}>cycleTime = 120000 ÷ RPM&nbsp;&nbsp;(ms per 720° cycle)</span><br />
-        <span className={styles.formula}>duty% = PW ÷ cycleTime × 100</span>
+        <br /><br /><span className={styles.formula}>PW = fuel per cylinder ÷ (injector cc/min × fuel density ÷ 60000) + dead time</span><br />
+        <span className={styles.formula}>cycle time = 120000 ÷ RPM&nbsp;&nbsp;(ms per 720° cycle)</span><br />
+        <span className={styles.formula}>duty % = PW ÷ cycle time × 100</span>
         <br /><br />A four-stroke injects once every two crank revolutions, so at 7500 RPM there are only 16 ms in a cycle. An injector needing 15 of them is at 94% duty. Past about 90% there is no time left, and the mixture goes lean <i>no matter what your AFR table says</i>. This is a physical wall, not a calibration choice.
         <br /><br /><b className={styles.em}>Critical:</b> the ECU calculates that pulse width for the injector size it has been <i>told</i> is fitted. Fit bigger injectors without updating the injector scaling on TUNE → INJECTORS and every pulse delivers proportionally more fuel than intended — the engine runs rich everywhere regardless of your tables.
       </Article>
@@ -156,7 +156,7 @@ function LearnScreenInner({ active, onToggle, shelf = null, bare = false }) {
         Fuel energy becomes indicated work on the piston, then the engine pays its own bills. The work is not estimated — the simulator integrates one cylinder through the closed part of its cycle, two crank degrees at a time:
         <br /><br /><span className={styles.formula}>dQ = Wiebe burn fraction × fuel energy</span><br />
         <span className={styles.formula}>dp = (γ−1)/V × dQ − γ × p/V × dV</span><br />
-        <span className={styles.formula}>IMEP = ∮ p dV ÷ V_cyl</span><br />
+        <span className={styles.formula}>IMEP = ∮ p dV ÷ V<sub>cyl</sub></span><br />
         <span className={styles.formula}>PMEP = exhaust pressure − intake pressure</span><br />
         <span className={styles.formula}>BMEP = IMEP − friction − PMEP</span><br />
         <span className={styles.formula}>torque = BMEP × Vd ÷ 4π</span>

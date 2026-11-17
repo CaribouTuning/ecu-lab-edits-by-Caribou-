@@ -57,7 +57,7 @@ function cellReference(kind, row, col, value, axes) {
     return {
       what: 'Cylinder filling efficiency at this manifold pressure — how completely the cylinder fills relative to the pressure available.',
       typical: `Typical here: ${typical}.`,
-      affects: 'Feeds the air-mass calculation (airCharge = VE x V_cyl x MAP/RT). Raising it raises fuel demand and pulse width at this point.',
+      affects: 'Feeds the air-mass calculation (air per cylinder = VE × cylinder volume × MAP ÷ RT). Raising it raises fuel demand and pulse width at this point.',
       note: boosted ? 'Above ~105 kPa you are in boost — these rows only get used once a turbo is fitted.' : null,
     };
   }
