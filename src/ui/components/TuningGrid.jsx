@@ -75,6 +75,19 @@ export function loadAxisText(unit, throttle) {
 }
 
 /**
+ * The cells an advice list names, as a grid's marks: `row:col` to the figure it gives.
+ * @param {Array<{ri?: number, ci?: number, suggested: number}>|null|undefined} cells
+ * @returns {Record<string, number>|null}
+ */
+export function advisedMarks(cells) {
+  if (!cells?.length) return null;
+  /** @type {Record<string, number>} */
+  const out = {};
+  for (const c of cells) if (c.ri != null && c.ci != null) out[`${c.ri}:${c.ci}`] = c.suggested;
+  return out;
+}
+
+/**
  * @param {object} props
  * @param {number[][]} props.data rows of values, indexed [row][col] against `axes`
  * @param {import('../../sim/layouts.js').TableAxes} [props.axes] the table's breakpoints:
@@ -96,9 +109,11 @@ export function loadAxisText(unit, throttle) {
  *   nobody has tuned yet: drawn plain and dashed, so the work left shows
  * @param {string[]|null} [props.unreached] cells (`row:col`) above the boost the engine
  *   makes at that column's speed (state/reach.js): greyed, still editable
+ * @param {Record<string, number>|null} [props.marks] cells (`row:col`) TUNE's advisor names, with the
+ *   figure it gives: edged, the figure under the value, so the cells to change are found on the table
  * @returns {React.ReactElement}
  */
-export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve, untuned = null, unreached = null }) {
+export function TuningGrid({ data, min, max, decimals, selection, setSelection, rangeMode = false, setData, baseline, diffView = false, diffScale = 1, axes = GAME_LAYOUT.ve, untuned = null, unreached = null, marks = null }) {
   const notTuned = React.useMemo(() => new Set(untuned ?? []), [untuned]);
   const notReached = React.useMemo(() => new Set(unreached ?? []), [unreached]);
   const clampR = (r) => Math.min(Math.max(r, 0), axes.load.length - 1);
@@ -107,6 +122,8 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
   // more of it is in view at once.
   const dense = axes.rpm.length > 12;
   const fmt = (v) => (decimals ? v.toFixed(decimals) : Math.round(v));
+  // The advisor's figure to a tenth where it gives one: 19.5° is not 20°.
+  const fmtWant = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   // 96 subtractions, on renders that already walk every cell — not memoised.
   const diff = diffView && baseline ? diffTable(data, baseline) : null;
   const rect = selection ? rectOf(selection, { rows: axes.load.length, cols: axes.rpm.length }) : null;
@@ -278,6 +295,8 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
               </th>
               {data[ri].map((val, ci) => {
                 const untunedHere = notTuned.has(`${ri}:${ci}`);
+                const want = marks?.[`${ri}:${ci}`];
+                const marked = want != null && !diff;
                 const selected = isSelected(ri, ci);
                 return (
                   <td key={ci}>
@@ -285,7 +304,8 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
                       type="button"
                       className={styles.cell}
                       data-rc={`${ri}:${ci}`}
-                      aria-label={`${axes.rpm[ci]} RPM, ${lx.text(load)} ${lx.unit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}`}
+                      aria-label={`${axes.rpm[ci]} RPM, ${lx.text(load)} ${lx.unit}${untunedHere ? ', not tuned' : ''}${notReached.has(`${ri}:${ci}`) ? ', not reached yet' : ''}${marked ? `, the advisor gives ${fmtWant(want)}` : ''}`}
+                      data-mark={marked ? 'true' : undefined}
                       data-untuned={untunedHere ? 'true' : undefined}
                       data-unreached={notReached.has(`${ri}:${ci}`) ? 'true' : undefined}
                       data-anchor={isAnchor(ri, ci) || undefined}
@@ -299,7 +319,7 @@ export function TuningGrid({ data, min, max, decimals, selection, setSelection, 
                         background: untunedHere && !diff ? undefined
                           : !diff ? heat(val, lo, hi) : diff[ri][ci] === 0 ? undefined : diffTint(diff[ri][ci], diffScale),
                       }}
-                    >{diff ? formatDelta(diff[ri][ci], decimals) : fmt(val)}</button>
+                    >{diff ? formatDelta(diff[ri][ci], decimals) : fmt(val)}{marked && <span className={styles.want} aria-hidden="true">→{fmtWant(want)}</span>}</button>
                   </td>
                 );
               })}

@@ -17,7 +17,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
-import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
@@ -85,7 +85,7 @@ export function SparkScreen({ calAdvice, children }) {
             <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} unit="°" title="Ignition timing" commanded={{ label: 'Spark the ECU commanded', read: (p) => p.commandedTiming }} axes={axes}>
-            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} />
+            <TuningGrid data={timing} min={SPARK_MIN_DEG} max={SPARK_MAX_DEG} decimals={0} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.timing} diffView={diffView} diffScale={6} axes={axes} untuned={tune.untuned?.timing ?? null} unreached={unreached} marks={advisedMarks(calAdvice.overAdvanced)} />
           </GridOrSurface>
           {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
           <AdvisorPanel headline={report.headline} tone={report.tone}>

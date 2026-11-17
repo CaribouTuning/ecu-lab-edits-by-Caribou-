@@ -76,6 +76,16 @@
    cell: a tuner may write it ahead of the boost. */
 .cell[data-unreached]:not([aria-pressed='true']) { opacity: 0.35; }
 
+/* A cell TUNE's advisor names: an amber edge, its figure in small type under the value. */
+.cell[data-mark] { box-shadow: inset 0 0 0 2px var(--warn); }
+.cell[data-mark][aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--ink); }
+.want {
+  position: absolute; left: 0; right: 0; bottom: 2px; font-size: 9.5px; font-weight: 700; line-height: 1;
+  color: var(--ink); opacity: 0.85; pointer-events: none;
+}
+.cell[data-mark] { padding-bottom: 8px; }
+.grid[data-dense] .want { font-size: 8.5px; bottom: 1px; }
+
 /* What the colours mean: the scale, from this table's lowest cell to its highest. */
 .key {
   display: flex; align-items: center; gap: 8px; margin-top: 8px;

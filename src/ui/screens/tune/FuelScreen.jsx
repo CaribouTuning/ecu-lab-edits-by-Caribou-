@@ -16,7 +16,7 @@ import { SelectModeBar } from '../../components/SelectModeBar.jsx';
 import { SelectionDock } from '../../components/SelectionDock.jsx';
 import { LayoutSwitch } from '../../components/LayoutSwitch.jsx';
 import { TuneAdvisory } from '../../components/TuneAdvisory.jsx';
-import { TuningGrid } from '../../components/TuningGrid.jsx';
+import { TuningGrid, advisedMarks } from '../../components/TuningGrid.jsx';
 import { GridOrSurface } from '../../components/surface/GridOrSurface.jsx';
 import { ExpandableInfo } from '../../components/ExpandableInfo.jsx';
 import { UndoControls } from '../../components/UndoControls.jsx';
@@ -75,7 +75,7 @@ export function FuelScreen({ calAdvice, children }) {
             <SelectModeBar rangeMode={rangeMode} setRangeMode={setRangeMode} setSelection={setSelection} diffView={diffView} setDiffView={setDiffView} dims={dims} />
           </div>
           <GridOrSurface data={afr} min={10} max={18} decimals={1} unit="AFR" title="Target air-fuel ratio" commanded={{ label: 'AFR the ECU commanded', read: (p) => p.afrCommanded }} axes={axes}>
-            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} />
+            <TuningGrid data={afr} min={10} max={18} decimals={1} selection={selection} setSelection={setSelection} rangeMode={rangeMode} setData={setTable} baseline={baseline.afr} diffView={diffView} diffScale={1} axes={axes} untuned={tune.untuned?.afr ?? null} unreached={unreached} marks={advisedMarks(calAdvice.wrongMix)} />
           </GridOrSurface>
           {/* The advisor reads this table: right under it, where the eye is, not after the settings. */}
           <AdvisorPanel headline={report.headline} tone={report.tone}>
