@@ -146,10 +146,12 @@ const FIT_HOLD = 0.25;
  * @param {(VeCell|null)[][]} cell the per-cell averages; null where the data is too thin
  * @returns {[number, number, number][]} [row, col, factor] for every fitted cell
  */
-function fitRatios(samples, rows, cols, cell) {
+function fitRatios(samples, rows, cols, cell, tie = new Map()) {
   const index = new Map();
   const at = [];
   cell.forEach((row, ri) => row.forEach((c, ci) => { if (c) { index.set(ri * cols.length + ci, at.length); at.push([ri, ci]); } }));
+  // A cell past the end of the log solved as the cell it carries on from: one unknown.
+  for (const [k, t] of tie) if (index.has(t)) index.set(k, /** @type {number} */ (index.get(t)));
   const n = at.length;
   if (!n) return [];
   const N = Array.from({ length: n }, () => new Float64Array(n));
@@ -260,10 +262,27 @@ export function veCorrections(samples, axes) {
     for (const k of keys) out[k] = /** @type {any} */ (a)[k] / a.weight;
     return /** @type {VeCell} */ (out);
   }));
-  const fitted = fitRatios(samples, rows, cols, cell);
+  // Columns past the fastest a log reached (past the redline) carry on the last logged column's
+  // correction, as a tuner carries the trend on: the ECU blends them into the speeds just below,
+  // so held still they left a miss there that a hand edit and the next correction fought over.
+  const maxRpm = samples.reduce((m, s) => Math.max(m, s.rpm), -Infinity);
+  /** @type {Map<number, number>} */
+  const tie = new Map();
+  rows.forEach((_, ri) => {
+    let last = -1;
+    cols.forEach((c, ci) => { if (c <= maxRpm && cell[ri][ci]) last = ci; });
+    if (last < 0) return;
+    cols.forEach((c, ci) => { if (ci > last && c > maxRpm && !cell[ri][ci]) tie.set(ri * cols.length + ci, ri * cols.length + last); });
+  });
+  const fitted = fitRatios(samples, rows, cols, cell, tie);
   for (const [ri, ci, r] of fitted) /** @type {any} */ (cell[ri][ci]).ratio = r;
+  const ratio = cell.map((row) => row.map((c) => (c ? c.ratio : null)));
+  for (const [k, t] of tie) {
+    const src = ratio[Math.floor(t / cols.length)][t % cols.length];
+    if (src != null) ratio[Math.floor(k / cols.length)][k % cols.length] = src;
+  }
   return {
-    ratio: cell.map((row) => row.map((c) => (c ? c.ratio : null))),
+    ratio,
     weight: acc.map((row) => row.map((a) => a.weight)),
     cell,
     cells,

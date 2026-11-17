@@ -112,6 +112,10 @@ export function round(st) {
     st = { ...st, tune: { ...st.tune, ve } }; did.push(`VE +${m[6]}% ${a === b ? `around ${a}` : `${a}-${b}`} kPa ${lo}-${hi} (lean protection)`);
   }
   if (did.some((d) => /lean protection/.test(d))) return { st, did, cannot };
+  // A setup fix (injector flow, the MAF, a part) changes every reading: pull again before the
+  // VE answers a log taken without it, or the table soaks up the setup's error (a custom V6 on
+  // 550 cc injectors the ECU still called 315 had its VE cut 40%, then ran 15:1 lean).
+  if (did.length) return { st, did, cannot };
   // The log's order: where it says Correct VE from logs can do it, that first (when it would
   // change something); the hand edits it names are for the cells the log cannot reach.
   const loadPulls = loads().map((l) => (l === 100 ? p : pull(st, l)));
